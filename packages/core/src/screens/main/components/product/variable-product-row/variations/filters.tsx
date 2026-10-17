@@ -40,8 +40,10 @@ export function VariationsFilterBar({ row }: Props) {
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
-		<HStack className="bg-card-header p-2">
-			<HStack className="flex-1">
+		// The strip is a row of 44 (`min-h-row`) so its sm chips' grown targets fit inside it: a
+		// touch area never reaches past its parent. At Regular the bar keeps its 48 pt height.
+		<HStack className="bg-card-header px-2 py-0.5">
+			<HStack className="min-h-row flex-1 items-center">
 				{!!searchTerm && (
 					<Chip
 						size="sm"
