@@ -29,8 +29,10 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				{trigger === 'label' ? (
 					// A square block the height of the cart row it sits under (the line strip).
+					// The slot under it paints the block's grey (line-strip.tsx).
 					<Button
-						variant="secondary"
+						variant="ghost"
+						// eslint-disable-next-line no-restricted-syntax
 						className="min-w-tile h-auto flex-1 rounded-none px-5"
 						testID="cart-line-edit"
 						onPress={() => setOpenDialog(true)}

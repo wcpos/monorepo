@@ -408,7 +408,18 @@ export const designSystemOwnershipSelectors = [
 			' > JSXAttribute[name.name="className"]' +
 			' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
 		message:
-			'Colour and type on this component are owned by its variant/size props. Use the right variant (e.g. variant="destructive", variant="ghost-quiet", size="xs") — or add the missing variant in packages/components — instead of a className.',
+			'Colour and type on this component are owned by its variant/size props. Use the right variant (e.g. variant="destructive", variant="ghost", size="xs") — or add the missing variant in packages/components — instead of a className.',
+	},
+	{
+		// Height and radius are the size prop's (ruled 2026-10-16: three sizes, no
+		// height class on a Button). Same static-literal scope as the colour selector
+		// above; width (`w-`, `min-w-`, `aspect-`) and layout stay the caller's.
+		selector:
+			'JSXOpeningElement[name.name=/^(Button|IconButton)$/]' +
+			' > JSXAttribute[name.name="className"]' +
+			' > Literal[value=/(^|\\s)(h-|min-h-|max-h-|size-|rounded)/]',
+		message:
+			'Height and radius on this component are owned by its size prop; pick a size (sm/default/lg) or add one in packages/components.',
 	},
 	{
 		selector:

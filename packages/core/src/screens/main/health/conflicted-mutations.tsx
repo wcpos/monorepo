@@ -234,7 +234,7 @@ export function ConflictedMutationsPanel() {
 								</Button>
 								{fixRoute ? (
 									<Button
-										variant="ghost-quiet"
+										variant="ghost"
 										size="sm"
 										testID={`db-conflicted-open-${row.mutationId}`}
 										onPress={() => router.push(fixRoute)}

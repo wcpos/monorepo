@@ -115,7 +115,7 @@ function UserRows() {
 						<Button
 							testID={`user-sheet-user-${credential.uuid}`}
 							variant="ghost"
-							className="min-h-row flex-row justify-start gap-2"
+							className="flex-row justify-start gap-2"
 							onPress={() => void switchUser(credential)}
 						>
 							<Avatar fallback={getInitials(credential.display_name)} size="md" />
@@ -172,7 +172,7 @@ export function UserSheet({
 										<Button
 											testID="user-sheet-switch-register"
 											variant="ghost"
-											className="min-h-row flex-row justify-start gap-2"
+											className="flex-row justify-start gap-2"
 											onPress={() => {
 												onOpenChange(false);
 												onSwitchRegister();
@@ -185,18 +185,18 @@ export function UserSheet({
 								<View className="border-border mt-auto border-t pt-4">
 									<Button
 										testID="user-sheet-sign-out"
-										className="min-h-row"
 										variant="outline-destructive"
 										onPress={logout}
 									>
-										<Text className="text-destructive">{t('register.sign_out')}</Text>
+										{/* The variant owns the label colour: a red Text here went red-on-red when pressed. */}
+										{t('register.sign_out')}
 									</Button>
 								</View>
 								<View className="border-border mt-4 gap-2 border-t pt-4">
 									<Button
 										testID="user-sheet-settings"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
+										variant="ghost"
+										className="flex-row justify-start gap-2"
 										onPress={() => {
 											onOpenChange(false);
 											router.push('/settings');
@@ -207,8 +207,8 @@ export function UserSheet({
 									</Button>
 									<Button
 										testID="user-sheet-support"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
+										variant="ghost"
+										className="flex-row justify-start gap-2"
 										onPress={() => {
 											onOpenChange(false);
 											router.push('/support');
@@ -221,8 +221,8 @@ export function UserSheet({
 									{Platform.isWeb && (
 										<Button
 											testID="user-sheet-wp-admin"
-											variant="ghost-quiet"
-											className="min-h-row flex-row justify-start gap-2"
+											variant="ghost"
+											className="flex-row justify-start gap-2"
 											onPress={() => openExternalURL(`${site.home}/wp-admin`)}
 										>
 											<Icon name="wordpress" className="text-muted-foreground" />
@@ -232,8 +232,8 @@ export function UserSheet({
 									{Platform.isWeb && (
 										<Button
 											testID="user-sheet-desktop-app"
-											variant="ghost-quiet"
-											className="min-h-row flex-row justify-start gap-2"
+											variant="ghost"
+											className="flex-row justify-start gap-2"
 											onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
 										>
 											<Icon name="download" className="text-muted-foreground" />
@@ -242,8 +242,8 @@ export function UserSheet({
 									)}
 									<Button
 										testID="user-sheet-clear-local-data"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
+										variant="ghost"
+										className="flex-row justify-start gap-2"
 										onPress={() => {
 											onOpenChange(false);
 											handleResetPress();

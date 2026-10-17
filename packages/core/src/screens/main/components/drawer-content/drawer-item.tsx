@@ -87,7 +87,6 @@ function PermanentDrawerItem({
 		<Button
 			onPress={onPress}
 			testID={testID}
-			size="xl"
 			className={cn(
 				'h-12 rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused ? 'border-l-primary' : 'web:hover:bg-white/10'
@@ -127,7 +126,6 @@ function StandardDrawerItem({
 		<Button
 			onPress={onPress}
 			testID={testID}
-			size="xl"
 			className={cn(
 				'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused ? 'border-l-primary' : 'web:hover:bg-white/10'

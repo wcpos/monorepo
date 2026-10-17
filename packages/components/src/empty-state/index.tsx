@@ -76,7 +76,7 @@ export function EmptyState({
 					{action && (
 						<Button
 							{...{ ref: actionRef }}
-							variant="ghost-quiet"
+							variant="ghost"
 							size="sm"
 							className="h-auto min-h-9 py-1"
 							testID={action.testID ?? id('action')}

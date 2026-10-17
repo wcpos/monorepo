@@ -72,7 +72,7 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 				{screenSize !== 'lg' && (
 					<Button
 						variant="ghost"
-						className="h-11 w-11 p-0"
+						className="aspect-square px-0"
 						testID={`${testID}-avatar`}
 						onPress={() => setUserOpen(true)}
 					>

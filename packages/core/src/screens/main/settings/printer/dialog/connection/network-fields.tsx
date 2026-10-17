@@ -201,6 +201,8 @@ export function NetworkFields({
 								key={printer.id}
 								testID={`add-printer-network-result-${printer.id}`}
 								variant="outline"
+								// A two-line result row, not a button; it moves onto the shared ListRow/Tile (Phase F2).
+								// eslint-disable-next-line no-restricted-syntax
 								className="h-auto items-start justify-start py-2"
 								onPress={() => {
 									form.setValue('connectionType', 'network');

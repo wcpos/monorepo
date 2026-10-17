@@ -90,7 +90,7 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 							<HStack className="gap-2">
 								<Button
 									testID="view-demo-button"
-									variant="secondary"
+									variant="outline"
 									onPress={() => openExternalURL(demoURL)}
 								>
 									{t('upgrade.view_demo')}

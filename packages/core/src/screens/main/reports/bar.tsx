@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
@@ -40,11 +41,7 @@ export function ScopeHint({
 				{historyLimit ? t('reports.history_limit') : t('reports.pro_scope', { scope: locked })}
 			</Text>
 			{!historyLimit && (
-				<Button
-					testID="reports-see-pro"
-					className="min-h-12"
-					onPress={() => openExternalURL('https://wcpos.com/pro')}
-				>
+				<Button testID="reports-see-pro" onPress={() => openExternalURL('https://wcpos.com/pro')}>
 					{t('reports.see_pro')}
 				</Button>
 			)}
@@ -114,15 +111,13 @@ export function Bar({
 		<View testID="reports-bar" className="bg-background">
 			<View className="h-ctl border-border bg-background flex-row items-center gap-2 border-b pr-2 pl-4">
 				{room === 'closures' ? (
-					<Button
+					<IconButton
+						name="arrowLeft"
 						testID="reports-back-sales"
-						variant="ghost"
-						className="h-12 min-w-12 shrink-0"
+						className="shrink-0"
 						accessibilityLabel={t('reports.sales')}
 						onPress={onBack}
-					>
-						<Icon name="arrowLeft" />
-					</Button>
+					/>
 				) : (
 					<HeaderLeft className="h-12 min-w-12 shrink-0" />
 				)}
@@ -131,9 +126,10 @@ export function Bar({
 						<Button
 							testID="reports-scope"
 							variant="ghost"
-							className="min-h-12 min-w-0 shrink flex-row items-center gap-1 px-1"
+							className="min-w-0 shrink flex-row items-center gap-1 px-1"
 						>
-							<ButtonText numberOfLines={1} className="min-w-0 shrink font-semibold">
+							{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label. */}
+							<Text numberOfLines={1} className="text-foreground min-w-0 shrink font-semibold">
 								{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 									(scope.registerId && binding.registerId
 										? binding.registerName
@@ -144,7 +140,7 @@ export function Bar({
 								{stores.length > 1
 									? ` · ${stores.find((row) => row.id === scope.storeId)?.name ?? store.name}`
 									: ''}
-							</ButtonText>
+							</Text>
 							{!license?.isPro && <Icon name="lock" className="text-muted-foreground" />}
 							<Icon name="chevronDown" className="text-muted-foreground" />
 						</Button>
@@ -205,7 +201,7 @@ export function CashierButton({ scope, onScopeChange }: ScopeProps) {
 	return (
 		<Popover>
 			<PopoverTrigger ref={trigger} asChild>
-				<Button testID="reports-cashier" variant="outline" className="min-h-12">
+				<Button testID="reports-cashier" variant="outline">
 					{cashiers.find((row) => row.id === scope.cashier)?.display_name ?? t('common.cashier')}
 				</Button>
 			</PopoverTrigger>
@@ -215,7 +211,7 @@ export function CashierButton({ scope, onScopeChange }: ScopeProps) {
 						key={row.id ?? 'all'}
 						testID={`reports-cashier-${row.id ?? 'all'}`}
 						variant="ghost"
-						className="min-h-12 flex-row justify-start gap-2 px-3"
+						className="flex-row justify-start gap-2 px-3"
 						onPress={() => {
 							onScopeChange({ ...scope, cashier: row.id });
 							trigger.current?.close();

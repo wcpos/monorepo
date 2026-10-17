@@ -212,9 +212,9 @@ export function PayButton() {
 				testID="checkout-button"
 				size="lg"
 				onPress={handlePay}
-				// The same 56 px as the foot's Open/Close register buttons. `w-full`, not `flex-1`:
-				// the foot's wrapper is a column, where `flex-1` collapses the height to the label.
-				className="min-h-14 w-full"
+				// The sale button (size lg, 56), as the foot's Open/Close register. `w-full`, not
+				// `flex-1`: the foot's wrapper is a column, where `flex-1` would stretch it vertically.
+				className="w-full"
 				loading={loading}
 				disabled={storageDegraded}
 			>

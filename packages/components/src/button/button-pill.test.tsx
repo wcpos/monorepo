@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { ButtonPill, buttonVariants } from './index';
+import { ButtonPill, buttonTextVariants, buttonVariants } from './index';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
@@ -100,14 +100,31 @@ describe('ButtonPill', () => {
 });
 
 describe('Button variants', () => {
-	// The control core rides the floored scale tokens (roadmap#357): the default
-	// size is one control tall and xl is one tile tall, so Compact on a
-	// finger still gets 44. A literal h-10/h-14 here would ignore the step.
-	it('sizes the default on the control token and xl on the tile token', () => {
+	// Three sizes by role (ruled 2026-10-16). The default rides the floored
+	// control token (roadmap#357), so Compact on a finger still gets 44; sm and
+	// lg ride the spacing unit, so they scale with the density step too.
+	it('has exactly three role sizes: sm 36, default on the control token, lg 56', () => {
 		expect(buttonVariants({ size: 'default' })).toContain('h-ctl');
 		expect(buttonVariants({ size: 'default' })).not.toContain('h-10');
-		expect(buttonVariants({ size: 'xl' })).toContain('h-tile');
-		expect(buttonVariants({ size: 'xl' })).not.toContain('h-14');
+		expect(buttonVariants({ size: 'sm' })).toContain('h-9');
+		expect(buttonVariants({ size: 'lg' })).toContain('h-14');
 		expect(buttonVariants({})).toContain('rounded-lg');
+	});
+
+	it('gives ghost a muted label at rest that turns to the foreground on hover and press', () => {
+		// Text merges the context class through cn (tailwind-merge), so the last colour wins.
+		// This file mocks ../lib/utils, so take the real merger.
+		const { cn } = jest.requireActual<typeof import('../lib/utils')>('../lib/utils');
+		const label = (state: { hovered?: boolean; pressed?: boolean }) =>
+			cn(buttonTextVariants({ variant: 'ghost', ...state }));
+		expect(label({})).toContain('text-muted-foreground');
+		expect(label({ hovered: true })).toContain('text-foreground');
+		expect(label({ hovered: true })).not.toContain('text-muted-foreground');
+		expect(label({ pressed: true })).not.toContain('text-muted-foreground');
+	});
+
+	it('sets the sale button label large and semibold', () => {
+		expect(buttonTextVariants({ size: 'lg' })).toContain('text-lg');
+		expect(buttonTextVariants({ size: 'lg' })).toContain('font-semibold');
 	});
 });
