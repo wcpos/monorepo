@@ -4,7 +4,7 @@ import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
 import { settleAggregate, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useRecordField } from '@wcpos/query';
 
@@ -469,8 +469,11 @@ export const useCartSettlement = () => {
 				// document alive for the length of its wait.
 				await continuation.replay(latest);
 			})().catch((error) =>
-				cartLogger.error(String(error), {
-					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				// A background recalculation, not a checkout: no charge is involved, so the
+				// money-path "do not re-charge" code told the cashier the wrong thing.
+				cartLogger.error('Delayed coupon replay failed', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { error: getErrorMessage(error) },
 				})
 			);
 		},
@@ -545,8 +548,9 @@ export const useCartSettlement = () => {
 		cartTotal$,
 		() =>
 			void handleCartTotalChange().catch((error) =>
-				cartLogger.error(String(error), {
-					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				cartLogger.error('Cart recalculation failed', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { error: getErrorMessage(error) },
 				})
 			)
 	);

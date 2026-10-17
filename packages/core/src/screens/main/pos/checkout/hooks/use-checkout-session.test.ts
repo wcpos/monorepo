@@ -8,7 +8,7 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
-import { useCheckoutSession } from './use-checkout-session';
+import { classifyCheckoutFailure, useCheckoutSession } from './use-checkout-session';
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -42,8 +42,14 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
+const mockCheckoutError = jest.fn();
+const mockCheckoutWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
+	getLogger: () => ({
+		success: jest.fn(),
+		error: (...args: unknown[]) => mockCheckoutError(...args),
+		warn: (...args: unknown[]) => mockCheckoutWarn(...args),
+	}),
 }));
 
 const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
@@ -254,7 +260,85 @@ describe('useCheckoutSession', () => {
 		});
 
 		expect(result.current.error).toBe('checkout_poll_timeout');
+		// The start was sent and never settled: genuinely outcome-unknown.
+		expect(mockCheckoutError).toHaveBeenCalledWith(
+			'Contract checkout failed: checkout_poll_timeout',
+			expect.objectContaining({
+				code: 'CHECKOUT201',
+				context: expect.objectContaining({ phase: 'poll' }),
+			})
+		);
 		jest.useRealTimers();
+	});
+
+	it('shows the gateway’s own sentence for a definitive failed status, at warn, cart safe', async () => {
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockResolvedValueOnce({
+			data: {
+				status: 'failed',
+				terminal: true,
+				provider_data: { message: 'Your card was declined.' },
+			},
+		});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await result.current.startCheckout();
+		});
+
+		expect(mockCheckoutError).not.toHaveBeenCalled();
+		expect(mockCheckoutWarn).toHaveBeenCalledWith(
+			'Contract checkout failed: failed',
+			expect.objectContaining({
+				showToast: true,
+				code: 'CHECKOUT101',
+				toast: { title: 'Your card was declined.' },
+			})
+		);
+	});
+
+	it('tells the cashier the cart is safe when the gateway bootstrap fails', async () => {
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockRejectedValueOnce(
+			Object.assign(new Error('Request failed with status code 500'), {
+				response: { status: 500 },
+			})
+		);
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await result.current.startCheckout();
+		});
+
+		// Nothing was sent to the gateway yet, so not "could not confirm… don't charge again".
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		expect(mockCheckoutError).toHaveBeenCalledWith(
+			'Contract checkout failed: Request failed with status code 500',
+			expect.objectContaining({
+				code: 'CHECKOUT101',
+				context: expect.objectContaining({ phase: 'bootstrap', status: 500 }),
+			})
+		);
 	});
 
 	it('handles a stock rejection even when its best-effort refresh fails', async () => {
@@ -395,6 +479,65 @@ describe('useCheckoutSession', () => {
 			});
 
 			expect(mockPost).not.toHaveBeenCalled();
+		});
+	});
+});
+
+describe('classifyCheckoutFailure', () => {
+	const t = (key: string) => key;
+	const offline = Object.assign(new Error('offline'), { isSleeping: true });
+
+	it('says nothing was charged when offline before the start was sent', () => {
+		for (const phase of ['bootstrap', 'start'] as const) {
+			expect(classifyCheckoutFailure(offline, phase, t)).toEqual({
+				level: 'warn',
+				code: 'SYNC121',
+				title: 'pos_checkout.offline_nothing_charged',
+				text2: 'common.reconnect_then_retry',
+			});
+		}
+	});
+
+	it('never says "nothing was charged" once the start went out', () => {
+		expect(classifyCheckoutFailure(offline, 'poll', t)).toEqual({
+			level: 'error',
+			code: 'CHECKOUT201',
+		});
+	});
+
+	it('treats a store refusal of the start as cart-safe, with the store’s sentence', () => {
+		const refused = Object.assign(new Error('400'), {
+			response: { status: 400 },
+			wpMessage: 'Payment gateway is not available for POS checkout.',
+		});
+		expect(classifyCheckoutFailure(refused, 'start', t)).toEqual({
+			level: 'error',
+			code: 'CHECKOUT101',
+			title: 'Payment gateway is not available for POS checkout.',
+		});
+	});
+
+	it('keeps a lost reply or a server error on the start as outcome-unknown', () => {
+		const lost = new Error('Network Error');
+		const crashed = Object.assign(new Error('500'), { response: { status: 500 } });
+		const inFlight = Object.assign(new Error('409'), { response: { status: 409 } });
+		for (const error of [lost, crashed, inFlight]) {
+			expect(classifyCheckoutFailure(error, 'start', t).code).toBe('CHECKOUT201');
+		}
+	});
+
+	it('reports a paid sale whose follow-up threw as PAYMENT101 at warn', () => {
+		expect(classifyCheckoutFailure(new Error('route'), 'completed', t)).toEqual({
+			level: 'warn',
+			code: 'PAYMENT101',
+		});
+	});
+
+	it('falls back to translated copy when a failed status carries no message', () => {
+		expect(classifyCheckoutFailure(new Error('failed'), 'settled', t)).toEqual({
+			level: 'warn',
+			code: 'CHECKOUT101',
+			title: 'pos_checkout.payment_not_completed',
 		});
 	});
 });

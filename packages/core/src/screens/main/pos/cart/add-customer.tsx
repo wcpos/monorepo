@@ -15,7 +15,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -83,7 +83,9 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				}
 			} catch (error) {
 				// Only what follows a successful create reaches here (the success toast, the
-				// order patch); create() failures are reported by create() itself.
+				// order patch); create() failures are reported by create() itself, and a
+				// localPatch rethrow (a scope that moved twice) by localPatch.
+				if (isErrorReported(error)) return;
 				const errorMessage = getErrorMessage(error);
 				cartLogger.error('Failed to save customer', {
 					showToast: true,

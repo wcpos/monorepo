@@ -1,0 +1,58 @@
+import { classifyRefundFailure } from './refund-failure';
+
+const t = (key: string) => key;
+
+describe('classifyRefundFailure', () => {
+	it('says no refund was made when the request never left (offline)', () => {
+		const offline = Object.assign(new Error('offline'), { isSleeping: true });
+
+		expect(classifyRefundFailure(offline, t)).toEqual({
+			level: 'warn',
+			code: 'SYNC121',
+			title: 'orders.refund_offline',
+			text2: 'common.reconnect_then_retry',
+		});
+	});
+
+	it('shows the store’s own sentence for a refusal', () => {
+		const refused = Object.assign(new Error('Request failed with status code 400'), {
+			response: {
+				status: 400,
+				data: {
+					code: 'woocommerce_rest_invalid_refund_amount',
+					message: 'Invalid refund amount.',
+					data: { status: 400 },
+				},
+			},
+		});
+
+		expect(classifyRefundFailure(refused, t)).toEqual({
+			level: 'error',
+			code: 'SYNC211',
+			title: 'Invalid refund amount.',
+		});
+	});
+
+	it('codes a permission refusal as the cashier’s role', () => {
+		const forbidden = Object.assign(new Error('403'), {
+			response: { status: 403, data: { code: 'x', message: 'Sorry, you are not allowed.' } },
+		});
+
+		expect(classifyRefundFailure(forbidden, t).code).toBe('AUTH201');
+	});
+
+	// Each retry mints a new idempotency key, so a lost reply must never read as
+	// "failed, try again" — that is a double refund.
+	it.each([
+		['a lost reply', new Error('Network Error')],
+		['a server error', Object.assign(new Error('500'), { response: { status: 500 } })],
+		['a still-processing conflict', Object.assign(new Error('409'), { response: { status: 409 } })],
+	])('sends the cashier to the order’s refunds after %s', (_label, error) => {
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT999',
+			title: 'orders.refund_outcome_unknown',
+			text2: 'orders.refund_check_before_retry',
+		});
+	});
+});

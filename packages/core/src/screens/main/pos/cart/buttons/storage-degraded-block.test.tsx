@@ -37,6 +37,8 @@ const mockEngineWrite = jest.fn(async () => ({
 }));
 const mockLogger = getLogger(['test']) as unknown as {
 	error: jest.Mock;
+	warn: jest.Mock;
+	debug: jest.Mock;
 	success: jest.Mock;
 };
 
@@ -324,37 +326,47 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 describe('checkout failure report', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('reports a timed-out checkout once, carrying the push state', async () => {
+	it('warns once that a timed-out checkout push is still sending, carrying the push state', async () => {
 		const pushState = { connectivity: 'online', queueDepth: 2, writeSessionHeld: false };
 		mockPushDocument.mockRejectedValue(new WriteOutcomeTimeoutError('mutation-1', pushState));
 
 		render(<PayButton />);
 		fireEvent.click(screen.getByTestId('checkout-button'));
 
-		await waitFor(() => expect(mockLogger.error).toHaveBeenCalledTimes(1));
-		expect(mockLogger.error).toHaveBeenCalledWith(
+		await waitFor(() => expect(mockLogger.warn).toHaveBeenCalledTimes(1));
+		expect(mockLogger.error).not.toHaveBeenCalled();
+		expect(mockLogger.warn).toHaveBeenCalledWith(
 			'Checkout failed',
 			expect.objectContaining({
-				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
-				context: {
+				showToast: true,
+				code: ERROR_CODES.SYNC_UNREACHABLE,
+				toast: { title: expect.stringContaining('still on its way to your store') },
+				context: expect.objectContaining({
 					error: 'Timed out waiting for mutation "mutation-1"',
 					pushState,
-				},
+				}),
 			})
 		);
 	});
 
-	it('reports a refused session as AUTH101, not the generic checkout code', async () => {
+	it('toasts a refused session as AUTH101 without a second row (the engine wrote it)', async () => {
 		mockPushDocument.mockRejectedValue(new WriteDeferredError('mutation-1', 401));
 
 		render(<PayButton />);
 		fireEvent.click(screen.getByTestId('checkout-button'));
 
 		await waitFor(() =>
-			expect(mockLogger.error).toHaveBeenCalledWith(
+			expect(mockLogger.debug).toHaveBeenCalledWith(
 				'Checkout failed',
-				expect.objectContaining({ code: ERROR_CODES.SESSION_EXPIRED })
+				expect.objectContaining({
+					showToast: true,
+					code: ERROR_CODES.SESSION_EXPIRED,
+					// AUTH101's own summary is the sentence, so no explicit title.
+					toast: { type: 'warning' },
+				})
 			)
 		);
+		expect(mockLogger.error).not.toHaveBeenCalled();
+		expect(mockLogger.warn).not.toHaveBeenCalled();
 	});
 });

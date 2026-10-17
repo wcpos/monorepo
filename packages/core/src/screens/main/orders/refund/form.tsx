@@ -15,7 +15,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose } from '@wcpos/components/modal';
@@ -29,10 +28,8 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	calculateLineItemRefund,
@@ -43,6 +40,7 @@ import {
 	formatRefundUnitPrice,
 } from './calculate-refund';
 import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
+import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -388,13 +386,17 @@ export function RefundOrderForm({ order }: Props) {
 			// generic "refund failed" toast on top of it.
 			if (isStorageBlockedError(err)) return;
 
-			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
-			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
-			refundLogger[logLevel](serverMessage, {
+			const report = classifyRefundFailure(err, t);
+			refundLogger[report.level]('Refund failed', {
 				showToast: true,
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				code: report.code,
+				toast: {
+					title: report.title,
+					...(report.text2 !== undefined && { text2: report.text2 }),
+				},
 				context: {
 					orderId: orderData.id,
+					status: err?.response?.status,
 					error: getErrorMessage(err),
 				},
 			});

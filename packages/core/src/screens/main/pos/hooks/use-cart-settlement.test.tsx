@@ -102,12 +102,14 @@ let whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 let referenceGeneration = 0;
 
 const mockCartWarn = jest.fn();
+const mockCartError = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		debug: jest.fn(),
 		info: jest.fn(),
 		warn: (...args: unknown[]) => mockCartWarn(...args),
-		error: jest.fn(),
+		error: (...args: unknown[]) => mockCartError(...args),
 		success: jest.fn(),
 	}),
 }));
@@ -512,6 +514,11 @@ describe('useCartSettlement reference demand (#952)', () => {
 		});
 
 		expect(localPatch).toHaveBeenCalledTimes(2);
+		// A background recalculation is no checkout: never CHECKOUT999 "do not re-charge".
+		expect(mockCartError).toHaveBeenCalledWith('Cart recalculation failed', {
+			code: 'CLIENT999',
+			context: { error: 'resident vanished' },
+		});
 	});
 
 	it('does not ask for a coupon context to settle the money', async () => {

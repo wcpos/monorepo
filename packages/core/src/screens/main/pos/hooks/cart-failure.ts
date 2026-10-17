@@ -2,7 +2,7 @@ import { getErrorMessage } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ExtendedLogger } from '@wcpos/utils/logger';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
-type CartLogger = Pick<ExtendedLogger, 'error' | 'warn'>;
+type CartLogger = Pick<ExtendedLogger, 'error' | 'warn' | 'info'>;
 interface CartFailureReport {
 	/** Already-translated cashier copy for the toast title. */
 	toastTitle: string;
@@ -25,13 +25,17 @@ export function reportCartFailure(
 		context: error === undefined ? context : { ...context, error: getErrorMessage(error) },
 	});
 }
-/** The cashier acted on a line that is no longer in the order (stale row — multi-tab is first-class): warn-level log + toast, no error code. */
+/**
+ * The cashier acted on a line that is no longer in the order (stale row — multi-tab is
+ * first-class). Nothing is wrong: the cart already shows the other tab's change, so this
+ * is an info row and an info toast, no error code.
+ */
 export function reportStaleCartLine(
 	logger: CartLogger,
 	message: string,
 	{ toastTitle, context }: { toastTitle: string; context?: Record<string, unknown> }
 ): void {
-	logger.warn(message, {
+	logger.info(message, {
 		showToast: true,
 		toast: { title: toastTitle },
 		context,

@@ -34,7 +34,7 @@ import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import { pushFailureCode } from '../../contexts/push-failure-code';
+import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -142,11 +142,10 @@ export function EditOrderForm({ order }: Props) {
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
-				// localPatch swallows write errors and resolves undefined - pushing
-				// anyway would sync the unchanged resident and report success
-				if (!patched?.document) {
-					throw new Error('Local patch failed');
-				}
+				// localPatch reports its own failure (row + toast) and resolves undefined.
+				// Pushing anyway would sync the unchanged resident and report success;
+				// reporting it again would put a second row and toast on one failure.
+				if (!patched?.document) return;
 				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (savedDoc) {
@@ -162,15 +161,10 @@ export function EditOrderForm({ order }: Props) {
 					}
 				});
 			} catch (error) {
-				const errorMessage = getErrorMessage(error);
-				mutationLogger.error('Failed to save order', {
-					showToast: true,
-					code: pushFailureCode(error),
-					toast: { title: t('common.failed_to_save_order') },
-					context: {
-						orderId: order.getLatest().payload.id,
-						error: errorMessage,
-					},
+				reportPushFailure(mutationLogger, 'Failed to save order', error, {
+					title: t('common.failed_to_save_order'),
+					stillSendingTitle: t('common.order_still_sending'),
+					context: { orderId: order.getLatest().payload.id },
 				});
 			} finally {
 				setLoading(false);
@@ -253,12 +247,12 @@ export function EditOrderForm({ order }: Props) {
 				: undefined;
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {
-			mutationLogger.error('Error fetching customer', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
-				context: {
-					customerId: customerIdToLoad,
-					error: t('orders.customer_not_found'),
-				},
+			// Nothing is broken — the record has not synced to this device yet — but
+			// the cashier picked a customer and saw nothing happen, so say why.
+			mutationLogger.info('Selected customer is not on this device', {
+				showToast: true,
+				toast: { title: t('orders.customer_not_on_device'), type: 'warning' },
+				context: { customerId: customerIdToLoad },
 			});
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- effect-as-event-handler for the async customer lookup; pre-existing, surfaced when form.watch's compiler bailout went away. The component does not compile regardless (try/finally). Follow-up: fire this from the lookup emission instead.
 			setCustomerIdToLoad(null);

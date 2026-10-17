@@ -72,16 +72,19 @@ export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) =>
 
 		patchTemporaryOrderPayload(newOrder.uuid, data)
 			.then((patched) => {
-				// null = the template this effect captured is gone (repository could not
-				// resolve the uuid). Pre-stage-I this surfaced as a deleted-document throw
-				// from incrementalPatch; keep it loud rather than silently unseeded.
+				// null = the template this effect captured is gone: it was replaced before
+				// the seed landed, and the replacement seeds itself. Nothing is lost.
 				if (!patched) {
-					throw new Error(`Temporary order "${newOrder.uuid}" not found while seeding`);
+					newOrderLogger.debug('New-cart template was replaced before it was seeded', {
+						context: { orderUUID: newOrder.uuid },
+					});
 				}
 			})
 			.catch((error) => {
-				newOrderLogger.error(getErrorMessage(error), {
-					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				// A local write, not a checkout: no money is involved.
+				newOrderLogger.error('New cart could not be prepared on this device', {
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					context: { orderUUID: newOrder.uuid, error: getErrorMessage(error) },
 				});
 			});
 	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);

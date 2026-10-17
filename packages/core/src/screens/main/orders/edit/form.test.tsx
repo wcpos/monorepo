@@ -283,13 +283,16 @@ describe('EditOrderForm customer lookup', () => {
 		render(<EditOrderForm order={order} />);
 
 		act(() => selectCustomer('3'));
-		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.info).not.toHaveBeenCalled();
 
 		act(() => selectedCustomer$.next({ current: null }));
 
-		expect(testLogger.error).toHaveBeenCalledWith('Error fetching customer', {
-			code: 'SYNC999',
-			context: expect.objectContaining({ customerId: 3, error: 'orders.customer_not_found' }),
+		// Not yet synced is not an error, but the cashier is told why nothing happened.
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.info).toHaveBeenCalledWith('Selected customer is not on this device', {
+			showToast: true,
+			toast: { title: 'orders.customer_not_on_device', type: 'warning' },
+			context: { customerId: 3 },
 		});
 		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());
 	});
@@ -405,5 +408,8 @@ describe('EditOrderForm save', () => {
 
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockModalClose).not.toHaveBeenCalled();
+		// localPatch already wrote its SYNC101 row and toast; no second report here.
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
 	});
 });

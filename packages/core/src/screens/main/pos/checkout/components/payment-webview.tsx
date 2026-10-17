@@ -300,17 +300,21 @@ export function PaymentWebview({
 	const adoptSnapshot = React.useCallback(
 		(snapshot: OrderSnapshot | Record<string, unknown>, warnOnOutcome: boolean) => {
 			const refresh = () => {
+				// Catch-up after a PAID sale that already routed; the order syncs on the
+				// next pass, so a miss here is forensic, not a problem for the cashier.
 				void refreshOrder().catch((err) => {
 					if (!warnOnOutcome) return;
-					orderLogger.warn('Post-payment order refresh did not complete', {
+					orderLogger.debug('Post-payment order refresh did not complete', {
 						context: { error: getErrorMessage(err) },
 					});
 				});
 			};
 			void runtime.engine.adoptOrderSnapshot(snapshot).then((outcome) => {
 				if (outcome === 'applied') return;
+				// `protected` (a pending local change) is expected; the refresh below
+				// covers both outcomes.
 				if (warnOnOutcome) {
-					orderLogger.warn('Checkout order snapshot was not applied', {
+					orderLogger.debug('Checkout order snapshot was not applied', {
 						context: { outcome },
 					});
 				}
@@ -482,8 +486,10 @@ export function PaymentWebview({
 				// for the same order must not route and toast a second time.
 				if (paymentReceivedRef.current) return;
 				const payload = event.data.payload;
+				// Both deferrals below arm the server-truth poll, which completes the sale:
+				// lifecycle, not an amber row on a sale that finishes normally.
 				if (!isOrderSnapshot(payload)) {
-					orderLogger.warn('Payment received with an invalid order snapshot', {
+					orderLogger.info('Payment received with an invalid order snapshot', {
 						context: { orderId },
 					});
 					setLoading(false);
@@ -499,7 +505,7 @@ export function PaymentWebview({
 				// finishing, whatever WooCommerce calls it.
 				const payloadStored = storedStatusFor(payload.payment_method);
 				if (!isSettledOrderStatus(payload.status, payloadStored)) {
-					orderLogger.warn(
+					orderLogger.info(
 						'Payment received but the order is not paid; deferring to server truth',
 						{ context: { orderId, status: payload.status, settledOrderStatus: payloadStored } }
 					);
@@ -558,8 +564,10 @@ export function PaymentWebview({
 					}
 					adoptSnapshot(payload, true);
 				} catch (err) {
+					// The payment already succeeded; only the follow-up failed. A warning, never
+					// a red "payment" error a cashier could read as "charge again" (owner, 2026-10-17).
 					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
-					orderLogger.error(errorMessage, {
+					orderLogger.warn(errorMessage, {
 						showToast: true,
 						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 						context: {
@@ -735,7 +743,8 @@ export function PaymentWebview({
 		const timer = setTimeout(() => {
 			if (frameSettledRef.current) return;
 			if (autoReloads === 0 && retryToken === 0) {
-				orderLogger.warn('Payment form did not load in time; reloading it once', {
+				// An automatic retry; the row that matters is the one below if it fails too.
+				orderLogger.debug('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
 				});
 				setAutoReloads(1);
@@ -786,10 +795,20 @@ export function PaymentWebview({
 								return;
 							}
 							setLoading(false);
-							orderLogger.error((payload?.message as string) || 'Payment error', {
+							// The gateway refused (a decline, a missing field): no money moved and
+							// the cart is safe to retry. Its own sentence is the toast title — the
+							// generic PAYMENT999 "confirm whether the payment went through" was
+							// wrong for a sale that plainly did not go through.
+							const gatewayMessage =
+								typeof payload?.message === 'string' && payload.message.trim() !== ''
+									? payload.message
+									: undefined;
+							orderLogger.warn('Payment was not completed by the gateway', {
 								showToast: true,
-								code: ERROR_CODES.PAYMENT_UNEXPECTED,
+								code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+								toast: { title: gatewayMessage ?? t('pos_checkout.payment_not_completed') },
 								context: {
+									gatewayMessage,
 									payloadData: payload?.data,
 									action: data?.action,
 								},

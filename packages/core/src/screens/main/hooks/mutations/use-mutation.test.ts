@@ -5,7 +5,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { type EngineRecord, WriteOutcomeError } from '@wcpos/query';
+import { type EngineRecord, WriteOutcomeError, WriteOutcomeTimeoutError } from '@wcpos/query';
 
 import { useMutation } from './use-mutation';
 
@@ -16,6 +16,8 @@ const mockAwaitWriteOutcome = jest.fn();
 const mockFindEngineResident = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerDebug = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 jest.mock('uuid', () => ({
@@ -28,6 +30,7 @@ jest.mock('@wcpos/query', () => ({
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
 	WriteDeferredError: jest.requireActual('@wcpos/query').WriteDeferredError,
 	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
+	WriteOutcomeTimeoutError: jest.requireActual('@wcpos/query').WriteOutcomeTimeoutError,
 }));
 
 jest.mock('./use-local-mutation', () => ({
@@ -41,8 +44,11 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
+		warn: (...args: unknown[]) => mockLoggerWarn(...args),
+		debug: (...args: unknown[]) => mockLoggerDebug(...args),
 		success: (...args: unknown[]) => mockLoggerSuccess(...args),
 	}),
+	markErrorReported: jest.fn(),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
@@ -199,12 +205,11 @@ describe('useMutation', () => {
 			document: customer,
 			data: { first_name: 'Ada' },
 		});
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			'common.not_updated',
-			expect.objectContaining({
-				context: expect.objectContaining({ documentId: 'customer-local-uuid' }),
-			})
-		);
+		// localPatch already logged and toasted its own failure: no second report.
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerDebug).not.toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
 	});
 
 	it('logs the payload id from a record-shaped patch result', async () => {
@@ -315,11 +320,16 @@ describe('useMutation', () => {
 		await expect(
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toBeInstanceOf(WriteOutcomeError);
-		expect(mockLoggerError).toHaveBeenCalledWith(
+		// The sync observer already wrote the SYNC201 row for this rejection, so the
+		// caller's report is forensic (debug) and owes the cashier only the toast.
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerDebug).toHaveBeenCalledWith(
 			'write-rejected (registration-error-email-exists)',
 			expect.objectContaining({
 				showToast: true,
+				code: 'SYNC201',
 				toast: {
+					type: 'error',
 					title: 'An account is already registered with your email address. Please log in.',
 				},
 				context: expect.objectContaining({
@@ -327,6 +337,31 @@ describe('useMutation', () => {
 						'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
 					reason: 'registration-error-email-exists',
 				}),
+			})
+		);
+	});
+
+	it('warns that a timed-out create is still sending, never "re-enter and save"', async () => {
+		const resident = residentStub({ first_name: 'Ada' });
+		mockInsertEngineResident.mockResolvedValue(resident);
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeTimeoutError('mutation-1', { queueDepth: 1 })
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await expect(
+			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
+		).rejects.toBeInstanceOf(WriteOutcomeTimeoutError);
+		// The create is still queued and may yet land; re-entering it is a duplicate.
+		expect(resident.remove).not.toHaveBeenCalled();
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			'customers create failed',
+			expect.objectContaining({
+				showToast: true,
+				code: 'SYNC121',
+				toast: { title: 'common.still_sending' },
+				context: expect.objectContaining({ pushState: { queueDepth: 1 } }),
 			})
 		);
 	});

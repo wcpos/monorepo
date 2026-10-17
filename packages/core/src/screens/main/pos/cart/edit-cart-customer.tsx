@@ -13,7 +13,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -112,10 +112,11 @@ export function EditCartCustomerForm() {
 		try {
 			const customer = await findCustomerByWooId(runtime, wooCustomerId);
 			if (!customer) {
-				cartLogger.error('Customer record was not found', {
+				// The order's address is already saved above; only the profile copy could
+				// not be made, because the customer record is not on this device.
+				cartLogger.info('Customer record is not on this device; profile not updated', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					toast: { title: t('common.no_customer_found') },
+					toast: { title: t('pos_cart.customer_profile_not_on_device'), type: 'warning' },
 					context: {
 						customerId: wooCustomerId,
 					},
@@ -142,6 +143,8 @@ export function EditCartCustomerForm() {
 			}
 			onOpenChange(false);
 		} catch (error) {
+			// patch() and localPatch report their own failures (a scope that moved twice).
+			if (isErrorReported(error)) return;
 			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save customer', {
 				showToast: true,

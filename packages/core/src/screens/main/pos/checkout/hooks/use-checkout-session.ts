@@ -6,7 +6,7 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import {
@@ -37,6 +37,77 @@ interface CheckoutState {
 	status?: string;
 	provider_data?: Record<string, unknown>;
 	terminal?: boolean;
+}
+
+/**
+ * How far a contract checkout got before it failed — which decides what the
+ * cashier is told. Only a failure after the start request was sent can leave the
+ * outcome unknown; before that nothing was charged.
+ */
+type CheckoutPhase = 'bootstrap' | 'start' | 'poll' | 'settled' | 'completed';
+
+interface CheckoutFailureReport {
+	level: 'warn' | 'error';
+	code: ErrorCode;
+	/** Already-translated toast title, when the code's summary is not the sentence. */
+	title?: string;
+	/** Already-translated second line, when the code's hint would mislead. */
+	text2?: string;
+}
+
+function serverSentence(error: unknown): string | undefined {
+	const message = (error as { wpMessage?: unknown } | null)?.wpMessage;
+	return typeof message === 'string' && message.trim() !== '' ? message : undefined;
+}
+
+/**
+ * The one row and toast for a failed contract checkout. Exported for tests.
+ *
+ * - offline before the start was sent: nothing was charged (SYNC121, warn);
+ * - the gateway setup or the store refusing the start: the cart is safe (CHECKOUT101),
+ *   with the store's own sentence;
+ * - the gateway answering `failed`/`cancelled`: not paid, cart safe (CHECKOUT101, warn);
+ * - paid, but the follow-up (routing, local refresh) threw: PAYMENT101, warn;
+ * - the start sent but its reply lost, or the poll giving up: the outcome is genuinely
+ *   unknown (CHECKOUT201, "check before charging again").
+ */
+export function classifyCheckoutFailure(
+	error: unknown,
+	phase: CheckoutPhase,
+	t: (key: string, options?: Record<string, unknown>) => string,
+	providerMessage?: string
+): CheckoutFailureReport {
+	if (phase === 'completed') {
+		return { level: 'warn', code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED };
+	}
+	// A preflight block means the request never left — but only the bootstrap and
+	// the start can be the request that charges. Offline mid-poll is outcome-unknown.
+	if (isExpectedPreflightBlock(error) && (phase === 'bootstrap' || phase === 'start')) {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.SYNC_UNREACHABLE,
+			title: t('pos_checkout.offline_nothing_charged'),
+			// SYNC121's "changes send automatically" is not true of a payment.
+			text2: t('common.reconnect_then_retry'),
+		};
+	}
+	if (phase === 'settled') {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+			title: providerMessage ?? t('pos_checkout.payment_not_completed'),
+		};
+	}
+	const status = (error as { response?: { status?: number } } | null)?.response?.status;
+	const refused = typeof status === 'number' && status >= 400 && status < 500 && status !== 409;
+	if (phase === 'bootstrap' || (phase === 'start' && refused)) {
+		return {
+			level: 'error',
+			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+			title: serverSentence(error),
+		};
+	}
+	return { level: 'error', code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN };
 }
 
 export function isTerminalCheckoutStatus(status?: string) {
@@ -213,6 +284,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			return;
 		}
 
+		let phase: CheckoutPhase = 'bootstrap';
+		let providerMessage: string | undefined;
 		try {
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -229,6 +302,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			// the gateway and the client cannot recall it — see the PR body.
 			if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 
+			phase = 'start';
 			const response = await http.post(
 				`orders/${orderId}/checkout`,
 				{
@@ -248,6 +322,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			);
 
 			let state = (response?.data || {}) as CheckoutState;
+			phase = 'poll';
 			let attempts = 0;
 			while (!isTerminalCheckoutStatus(state.status) && !state.terminal) {
 				attempts += 1;
@@ -263,6 +338,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			checkoutAttemptIdRef.current = null;
 
 			if (state.status === 'completed') {
+				phase = 'completed';
 				clearStockRejection();
 				checkoutLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
@@ -286,18 +362,36 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				return;
 			}
 
+			// A definitive `failed`/`cancelled` is the store saying "not paid". Any other
+			// terminal answer stays outcome-unknown.
+			if (state.status === 'failed' || state.status === 'cancelled') {
+				phase = 'settled';
+				const message = state.provider_data?.message;
+				providerMessage =
+					typeof message === 'string' && message.trim() !== '' ? message : undefined;
+			}
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
-			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
-			checkoutLogger[logLevel](message, {
+			const report = classifyCheckoutFailure(err, phase, t, providerMessage);
+			checkoutLogger[report.level](`Contract checkout failed: ${message}`, {
 				showToast: true,
-				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
+				code: report.code,
+				...(report.title !== undefined || report.text2 !== undefined
+					? {
+							toast: {
+								...(report.title !== undefined && { title: report.title }),
+								...(report.text2 !== undefined && { text2: report.text2 }),
+							},
+						}
+					: {}),
 				context: {
 					orderId: orderId,
 					gatewayId: resolvedGateway?.id,
+					phase,
+					status: (err as { response?: { status?: number } } | null)?.response?.status,
 				},
 			});
 		} finally {

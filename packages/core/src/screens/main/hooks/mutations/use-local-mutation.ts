@@ -20,10 +20,9 @@ import {
 	RECORD_UUID_META_KEY,
 	remoteIdOrNull,
 } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
 	patchTemporaryOrderPayload,
@@ -390,7 +389,6 @@ async function patchLocalResident<T extends EngineResident>(
  *   `patchLocalResident` and never enter the sync queue.
  */
 export const useLocalMutation = () => {
-	const t = useT();
 	const manager = useQueryRuntime();
 
 	const localPatch = React.useCallback(
@@ -513,10 +511,12 @@ export const useLocalMutation = () => {
 					message = 'rxdb ' + String(err.code);
 					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				}
+				// No explicit title: SYNC101's own summary and hint say what happened and
+				// what to do. "There was an error: rxdb CONFLICT" said neither; the raw
+				// message stays in the row's context.
 				mutationLogger.error('Local mutation failed', {
 					code: errorCode,
 					showToast: true,
-					toast: { title: t('common.there_was_an_error', { message }) },
 					context: {
 						documentId: documentRecordId(document),
 						collectionName: document.collection?.name,
@@ -524,11 +524,13 @@ export const useLocalMutation = () => {
 					},
 				});
 				if (error instanceof ActiveScopeChangedTwiceError) {
+					// Reported above; callers that catch the rethrow must not report it again.
+					markErrorReported(error);
 					throw error;
 				}
 			}
 		},
-		[manager, t]
+		[manager]
 	);
 
 	return { localPatch };
