@@ -14,7 +14,7 @@ type FakeDatabase = {
 	database: ScopeDatabase;
 	resetCalls: string[];
 	close: ReturnType<typeof vi.fn>;
-	pendingMutationCount: ReturnType<typeof vi.fn>;
+	pendingMutationIds: ReturnType<typeof vi.fn>;
 };
 
 function makeFakeDatabase(input?: {
@@ -23,16 +23,18 @@ function makeFakeDatabase(input?: {
 }): FakeDatabase {
 	const resetCalls: string[] = [];
 	const close = vi.fn(async () => {});
-	const pendingMutationCount = vi.fn(async () => input?.pendingMutations ?? 0);
+	const pendingMutationIds = vi.fn(async () =>
+		Array.from({ length: input?.pendingMutations ?? 0 }, (_, i) => `old-${i}`)
+	);
 	const database: ScopeDatabase = {
 		listCollections: () => input?.collections ?? ['products', 'orders', MUTATION_QUEUE_COLLECTION],
 		resetCollection: async (name: string) => {
 			resetCalls.push(name);
 		},
-		pendingMutationCount,
+		pendingMutationIds,
 		close,
 	};
-	return { database, resetCalls, close, pendingMutationCount };
+	return { database, resetCalls, close, pendingMutationIds };
 }
 
 /** Drain pending microtasks without timers (the manager itself has none). */
@@ -443,7 +445,7 @@ describe('StoreScopeManager', () => {
 			expect(fake.resetCalls).toEqual(['products']);
 			expect(fake.resetCalls).not.toContain(MUTATION_QUEUE_COLLECTION);
 			// The data-collection path never even consults the queue.
-			expect(fake.pendingMutationCount).not.toHaveBeenCalled();
+			expect(fake.pendingMutationIds).not.toHaveBeenCalled();
 		});
 
 		it('resets an inactive scope without disturbing the active one', async () => {
@@ -494,7 +496,7 @@ describe('StoreScopeManager', () => {
 					resetCollection: async (name: string) => {
 						order.push(`drop:${name}`);
 					},
-					pendingMutationCount: async () => 0,
+					pendingMutationIds: async () => [],
 					close: async () => {},
 				}),
 			});
@@ -745,12 +747,14 @@ describe('StoreScopeManager', () => {
 });
 
 describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
-	it.each([false, true])(
+	it.each([false, true, 'replaced'])(
 		'refuses a queue reset (confirmed=%s) when a guarded writer appends after the initial count',
 		async (confirmDestroyQueue) => {
 			const { manager, fakes } = makeManager();
 			await manager.switchTo('scope-a');
 			const fake = fakes.get('scope-a')!;
+			let ids = confirmDestroyQueue === 'replaced' ? ['old'] : [];
+			fake.pendingMutationIds.mockImplementation(async () => ids);
 			let release!: () => void;
 			const gate = new Promise<void>((resolve) => {
 				release = resolve;
@@ -759,18 +763,18 @@ describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
 			await manager.runGuarded(async (bound) => {
 				writing = bound.guardWrite(async () => {
 					await gate;
-					fake.pendingMutationCount.mockResolvedValue(1);
+					ids = ['new'];
 				});
 			});
 			const resetting = manager.resetCollection('scope-a', MUTATION_QUEUE_COLLECTION, {
-				confirmDestroyQueue,
+				confirmDestroyQueue: !!confirmDestroyQueue,
 			});
 			await flushMicrotasks();
 			release();
 			await writing;
 			expect(await resetting).toBe('needs-confirmation');
 			expect(fake.resetCalls).toEqual([]);
-			expect(await fake.database.pendingMutationCount()).toBe(1);
+			expect(await fake.database.pendingMutationIds()).toEqual(['new']);
 		}
 	);
 
@@ -782,7 +786,7 @@ describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
 			resetCollection: async (name: string) => {
 				order.push(`drop:${name}`);
 			},
-			pendingMutationCount: async () => 0,
+			pendingMutationIds: async () => [],
 			close: async () => {},
 		};
 		const manager = new StoreScopeManager({ createDatabase: async () => db });
@@ -816,7 +820,7 @@ describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
 		const db = {
 			listCollections: () => ['orders'],
 			resetCollection: async () => {},
-			pendingMutationCount: async () => 0,
+			pendingMutationIds: async () => [],
 			close: async () => {},
 		};
 		const manager = new StoreScopeManager({ createDatabase: async () => db });

@@ -657,6 +657,7 @@ export async function enqueueWriteIntent(input: {
 			continue;
 		}
 		let committed = false;
+		let writeFailed = false;
 		const renew = async () => {
 			if (!legacyQueue && !(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs())))
 				throw voidInProgress();
@@ -665,7 +666,8 @@ export async function enqueueWriteIntent(input: {
 			if (!legacyQueue) {
 				const freshDoc = await collection.findOne(recordId).exec();
 				if (JSON.stringify((await queue.pending()).filter(isRecordRow)) !== queueSnapshot) continue;
-				if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) throw voidInProgress();
+				if (doc && !freshDoc) throw voidInProgress();
+				if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) continue;
 			}
 			await renew();
 			if (prior) {
@@ -784,12 +786,15 @@ export async function enqueueWriteIntent(input: {
 				recordId: mutation.recordId,
 				...(prior ? { supersededMutationId: prior.mutationId } : {}),
 			};
+		} catch (error) {
+			writeFailed = true;
+			throw error;
 		} finally {
 			if (!legacyQueue) {
 				try {
 					await queue.releaseWriter(name, recordId, mutation.mutationId);
 				} catch (error) {
-					if (!committed) throw error;
+					if (!committed && !writeFailed) throw error;
 					try {
 						input.observe?.({
 							type: 'write.admission-release-failed',

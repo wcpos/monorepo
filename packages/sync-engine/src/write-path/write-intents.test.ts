@@ -117,14 +117,20 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
-	it.each(['void between read and admission', 'expired admission'])(
-		'refuses a stale writer: %s',
+	it.each([
+		'void between read and admission',
+		'expired admission',
+		'ordinary edit',
+		'write and release fail',
+	])(
+		'preserves resident and queued work while handling the admission interleaving: %s',
 		async (race) => {
 			const storage = createFakeMutationCollection();
 			let present = true;
+			let edited = false;
 			let now = Date.now();
 			const resident = {
-				toJSON: () => ({ payload: { id: 0 }, sync: {} }),
+				toJSON: () => ({ payload: { id: 0, edited }, sync: {} }),
 				remove: async () => {
 					present = false;
 				},
@@ -150,22 +156,36 @@ describe('enqueueWriteIntent', () => {
 					return admit(name, record, token, time);
 				}
 				const admitted = await admit(name, record, token, time);
+				if (race === 'ordinary edit') {
+					edited = true;
+					return admitted;
+				}
+				if (race === 'write and release fail') {
+					vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('release failed'));
+					vi.spyOn(queue, 'enqueue').mockRejectedValue(new Error('write failed'));
+					return admitted;
+				}
 				now += 30_001;
 				await other.clearExpiredAnnihilation(now);
 				expect(await other.fenceForVoid(name, record, 'other-void', now)).toBe(true);
 				return admitted;
 			});
-			await expect(
-				enqueueWriteIntent({
-					...deps,
-					intent: {
-						collection: 'orders',
-						recordId: 'order-1',
-						operation: 'create',
-						payload: { id: 0 },
-					},
-				})
-			).rejects.toMatchObject({ status: 428 });
+			const writing = enqueueWriteIntent({
+				...deps,
+				intent: {
+					collection: 'orders',
+					recordId: 'order-1',
+					operation: 'create',
+					payload: { id: 0 },
+				},
+			});
+			if (race === 'ordinary edit') {
+				await expect(writing).resolves.toMatchObject({ recordId: 'order-1' });
+				expect(await queue.all()).toHaveLength(1);
+				return;
+			}
+			if (race === 'write and release fail') await expect(writing).rejects.toThrow('write failed');
+			else await expect(writing).rejects.toMatchObject({ status: 428 });
 			expect(await queue.all()).toEqual([]);
 			expect(resident.incrementalModify).not.toHaveBeenCalled();
 		}

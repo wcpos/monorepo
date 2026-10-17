@@ -50,6 +50,7 @@ async function queueWith(...mutations: RecordMutation[]) {
 describe('drainMutationQueue', () => {
 	it.each([
 		'admission',
+		'expired fence',
 		'revision',
 		'remote identity',
 		'resolution claim',
@@ -58,7 +59,7 @@ describe('drainMutationQueue', () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
 		const other = new RecordMutationQueue(storage);
-		const now = Date.now();
+		let now = Date.now();
 		await q.enqueue(mut({ operation: 'create', origin: 'minted' }));
 		await q.enqueue(mut({ mutationId: 'delete', operation: 'delete' }));
 		if (race === 'admission') await other.admitWriter('products', 'rec-A', 'writer', now);
@@ -77,7 +78,13 @@ describe('drainMutationQueue', () => {
 					attempts: 1,
 				});
 			}
-			return remove(id, options);
+			const removed = await remove(id, options);
+			if (race === 'expired fence' && id === 'm1') {
+				now += 120_001;
+				expect(await other.admitWriter('products', 'rec-A', 'writer', now)).toBe(true);
+				await other.enqueue(mut({ mutationId: 'newcomer' }));
+			}
+			return removed;
 		});
 		const removeResident = vi.fn(async () => {});
 		const result = await drainMutationQueue({
@@ -91,7 +98,9 @@ describe('drainMutationQueue', () => {
 		});
 		expect(result.annihilated).toBe(0);
 		expect(removeResident).not.toHaveBeenCalled();
-		expect((await q.pending()).map((row) => row.mutationId)).toEqual(['m1', 'delete']);
+		expect((await q.pending()).map((row) => row.mutationId)).toEqual(
+			race === 'expired fence' ? ['m1', 'delete', 'newcomer'] : ['m1', 'delete']
+		);
 	});
 
 	it('skips a marked row and its successors, then resumes after unmark', async () => {

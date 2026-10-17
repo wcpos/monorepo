@@ -54,7 +54,7 @@ export type ScopeEvent = {
 export type ScopeDatabase = {
 	listCollections(): string[];
 	resetCollection(name: string): Promise<void>;
-	pendingMutationCount(): Promise<number>;
+	pendingMutationIds(): Promise<string[]>;
 	close(): Promise<void>;
 };
 
@@ -481,15 +481,14 @@ export class StoreScopeManager {
 			if (!database.listCollections().includes(name)) {
 				throw new Error(`Cannot reset unknown collection "${name}" in scope ${scopeId}`);
 			}
-			const pending =
-				name === MUTATION_QUEUE_COLLECTION ? await database.pendingMutationCount() : 0;
+			const pending = name === MUTATION_QUEUE_COLLECTION ? await database.pendingMutationIds() : [];
 			if (name === MUTATION_QUEUE_COLLECTION && !opts?.confirmDestroyQueue) {
-				if (pending > 0) {
+				if (pending.length > 0) {
 					this.emit({
 						type: 'needs-confirmation',
 						scopeId,
 						epoch: this.currentEpoch,
-						detail: `${pending} pending mutation(s) would be destroyed by resetting "${name}"`,
+						detail: `${pending.length} pending mutation(s) would be destroyed by resetting "${name}"`,
 					});
 					return 'needs-confirmation';
 				}
@@ -505,7 +504,7 @@ export class StoreScopeManager {
 				await opts?.beforeDrop?.();
 				if (
 					name === MUTATION_QUEUE_COLLECTION &&
-					(await database.pendingMutationCount()) > pending
+					(await database.pendingMutationIds()).some((id) => !pending.includes(id))
 				) {
 					this.emit({
 						type: 'needs-confirmation',

@@ -1,4 +1,4 @@
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map } from 'rxjs';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
@@ -29,21 +29,19 @@ function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
 			: {
 					collections: {
 						[MUTATION_QUEUE_RXDB_COLLECTION]: {
-							count: (query?: { selector?: { status?: string } }) =>
-								query?.selector?.status === 'internal'
-									? {
-											$: queue.internal$ ?? new BehaviorSubject(0),
-											exec: () => Promise.resolve(queue.internal$?.value ?? 0),
-										}
-									: {
-											$: queue.count$,
-											exec: () =>
-												queue.exec
-													? queue.exec()
-													: queue.execError
-														? Promise.reject(queue.execError)
-														: Promise.resolve(queue.count$.value),
-										},
+							find: () => {
+								const rows = (count: number) =>
+									Array.from({ length: count }, (_, i) =>
+										i < (queue.internal$?.value ?? 0) ? { status: 'internal' } : {}
+									);
+								return {
+									$: queue.count$.pipe(map(rows)),
+									exec: async () => {
+										if (queue.execError) throw queue.execError;
+										return rows(queue.exec ? await queue.exec() : queue.count$.value);
+									},
+								};
+							},
 						},
 					},
 				};
@@ -70,10 +68,9 @@ describe('countUnsentChanges', () => {
 			count$: new BehaviorSubject(5),
 			internal$: new BehaviorSubject(2),
 		});
-		const count = jest.spyOn(engine.active()!.database.collections.recordMutations, 'count');
+		const find = jest.spyOn(engine.active()!.database.collections.recordMutations, 'find');
 		await expect(countUnsentChanges(engine)).resolves.toMatchObject({ count: 3 });
-		expect(count).toHaveBeenCalledWith({ selector: { status: 'internal' } });
-		for (const call of count.mock.calls) expect(JSON.stringify(call)).not.toContain('$ne');
+		expect(find).toHaveBeenCalledWith();
 	});
 
 	it('counts the WHOLE queue — every row is a change the server has never seen', () => {

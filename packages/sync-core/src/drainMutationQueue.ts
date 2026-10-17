@@ -273,6 +273,12 @@ async function annihilateNeverPushedChains(input: {
 				for (const row of orderedRemoved) await input.queue.replace(row);
 				continue;
 			}
+			if (
+				!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed'))
+			) {
+				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
+				continue;
+			}
 			if (input.removeResident) {
 				try {
 					await input.removeResident(head, input.signal);

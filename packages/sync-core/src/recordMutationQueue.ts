@@ -441,12 +441,18 @@ export class RecordMutationQueue {
 
 	/** Reset protects admitted writers and durable instructions to finish a committed void. */
 	async pendingResetCount(nowMs: number): Promise<number> {
-		return (await this.storage.list()).filter(
-			(row) =>
-				!isInternalRow(row) ||
-				row.payload.phase === 'committed' ||
-				(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
-		).length;
+		return (await this.pendingResetIds(nowMs)).length;
+	}
+
+	async pendingResetIds(nowMs: number): Promise<string[]> {
+		return (await this.storage.list())
+			.filter(
+				(row) =>
+					!isInternalRow(row) ||
+					row.payload.phase === 'committed' ||
+					(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			)
+			.map((row) => row.mutationId);
 	}
 
 	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {

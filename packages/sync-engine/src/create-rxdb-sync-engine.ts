@@ -1278,7 +1278,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: async () => queueFor(db).pendingResetCount(nowMs()),
+				pendingMutationIds: async () => queueFor(db).pendingResetIds(nowMs()),
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);

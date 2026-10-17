@@ -106,15 +106,12 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 /**
- * A queue collection that answers BOTH readers off the same rows: `count()` (no
+ * A queue collection that answers BOTH readers off the same rows: `find()` (no
  * selector — how Unsent work reads it) and `find({selector})` (how the backlog
  * and needs-a-decision families read it). A row with no `status` counts as
  * pending, exactly as the queue schema treats it.
  */
 function fakeQueue(rows: readonly QueueRow[]) {
-	// The selector parameter is honoured rather than ignored on purpose: a reader
-	// that starts passing one must make the WHOLE-queue count wrong, not just the
-	// call-shape assertion below.
 	const count = jest.fn((query?: { selector?: { status?: string | { $in: string[] } } }) => {
 		const status = query?.selector?.status;
 		const counted =
@@ -128,13 +125,12 @@ function fakeQueue(rows: readonly QueueRow[]) {
 			exec: () => Promise.resolve(counted.length),
 		};
 	});
-	const find = jest.fn((query: { selector: { status: { $in: string[] } } }) => ({
-		$: new BehaviorSubject(
-			rows
-				.filter((row) => query.selector.status.$in.includes(row.status ?? 'pending'))
-				.map((row) => ({ toJSON: () => row }))
-		),
-	}));
+	const find = jest.fn((query?: { selector: { status: { $in: string[] } } }) => {
+		const selected = rows
+			.filter((row) => !query || query.selector.status.$in.includes(row.status ?? 'pending'))
+			.map((row) => ({ ...row, toJSON: () => row }));
+		return { $: new BehaviorSubject(selected), exec: async () => selected };
+	});
 	return { count, find };
 }
 
@@ -161,7 +157,7 @@ function mountQueue(rows: readonly QueueRow[], openCartRecordIds: readonly strin
 
 /** The `$in` list the hook used for the family whose selector names `status`. */
 function statusSelectors(queue: ReturnType<typeof fakeQueue>): string[][] {
-	return queue.find.mock.calls.map((call) => call[0].selector.status.$in);
+	return queue.find.mock.calls.map((call) => call[0]?.selector.status.$in ?? []);
 }
 
 beforeEach(() => {
@@ -185,22 +181,13 @@ describe('Unsent work — "is it safe to reset?"', () => {
 	});
 
 	it('the named read counts all rows minus internal coordination rows', async () => {
-		// The pin: `count()` is called bare. `status` is optional in the queue
-		// schema (absent means pending), so ANY status selector both hides those
-		// rows and quietly adopts another family's exclusions.
+		// Bare find preserves status-less legacy rows; exclusion happens in one snapshot.
 		const { engine, queue } = mountQueue(QUEUE, [OPEN_CART_RECORD]);
 
 		await countUnsentChanges(engine);
 
 		expect(observeUnsentWorkCount).toHaveBeenCalledWith(engine, { snapshot: true });
-		// The whole queue is counted bare; the only other count is the EQUALITY count of the
-		// internal coordination rows (admission/fence rows, #2607) that is subtracted from it.
-		// Never a `$ne`: under the SQLite translator that is null-unsafe and would hide every
-		// status-less (pending) row.
-		const calls = queue.count.mock.calls;
-		expect(calls).toEqual(expect.arrayContaining([[], [{ selector: { status: 'internal' } }]]));
-		for (const call of calls)
-			expect([[], [{ selector: { status: 'internal' } }]]).toContainEqual(call);
+		expect(queue.find.mock.calls).toEqual([[]]);
 	});
 });
 
