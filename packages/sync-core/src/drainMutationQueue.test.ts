@@ -116,21 +116,21 @@ describe('drainMutationQueue', () => {
 				resolutionClaimBy: 'resolver',
 				resolutionClaimUntil: new Date(now + 60_000).toISOString(),
 			});
-		const remove = q.removePending.bind(q);
-		vi.spyOn(q, 'removePending').mockImplementation(async (id, options) => {
+		const mark = q.markForAnnihilation.bind(q);
+		vi.spyOn(q, 'markForAnnihilation').mockImplementation(async (id, ...args) => {
 			if (race === 'pushed after snapshot' && id === 'm1') {
 				await other.replace({
 					...(await other.all()).find((row) => row.mutationId === id)!,
 					attempts: 1,
 				});
 			}
-			const removed = await remove(id, options);
+			const marked = await mark(id, ...args);
 			if (race === 'expired fence' && id === 'm1') {
 				now += 120_001;
 				expect(await other.admitWriter('products', 'rec-A', 'writer', now)).toBe(true);
 				await other.enqueue(mut({ mutationId: 'newcomer' }));
 			}
-			return removed;
+			return marked;
 		});
 		const removeResident = vi.fn(async () => {});
 		const result = await drainMutationQueue({

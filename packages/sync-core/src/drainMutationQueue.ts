@@ -189,13 +189,9 @@ export function isNeverPushedChain(rows: readonly QueuedMutation[]): boolean {
  *    pending carries attempts > 0 — its delete is a REAL void of a REAL order and
  *    must push).
  *
- * Removals are CONDITIONAL and run successors-first, the create LAST, mirroring
- * the enqueue-time ordering: a refused CAS (the row moved under us) restores the
- * rows already removed and leaves the record to the normal drain, so a partial
- * annihilation can never strand an orphaned delete or — worse — a create with no
- * delete behind it. The resident is removed only after the whole chain is gone;
- * if that removal throws, the chain is restored and the record is left to drain
- * (net-neutral phantom, the pre-fix behaviour — never data loss).
+ * Successors are durably marked, never removed before resident deletion commits.
+ * Refusal unmarks them; a crashed pre-commit fence expires back to the full chain.
+ * After resident removal, marked rows are cleanup-only: recovery finishes the void.
  */
 async function annihilateNeverPushedChains(input: {
 	queue: RecordMutationQueue;
@@ -235,7 +231,8 @@ async function annihilateNeverPushedChains(input: {
 		const token = `drain-void:${input.now()}:${Math.random()}`;
 		if (!(await input.queue.fenceForVoid(head.collectionName, head.recordId, token, input.now())))
 			continue;
-		const terminal: QueuedMutation[] = [];
+		const marked: QueuedMutation[] = [];
+		let residentRemoved = false;
 		try {
 			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
 				continue;
@@ -260,54 +257,45 @@ async function annihilateNeverPushedChains(input: {
 					settlementRefused = true;
 					break;
 				}
-				terminal.push(row);
+				marked.push(row);
 			}
 			if (settlementRefused) continue;
-			const removed: QueuedMutation[] = [];
 			let refused = false;
 			for (const row of [...pendingRows].reverse()) {
-				if (await input.queue.removePending(row.mutationId, { requireNeverPushed: true }))
-					removed.push(row);
+				if (await input.queue.markForAnnihilation(row.mutationId, token, input.now()))
+					marked.push(row);
 				else {
 					refused = true;
 					break;
 				}
 			}
-			// `removed` is delete-first … create-last; the restore wants seq order.
-			const orderedRemoved = [...removed].reverse();
-			if (refused) {
-				for (const row of orderedRemoved) await input.queue.replace(row);
+			if (refused) continue;
+			if (!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed')))
 				continue;
-			}
-			if (
-				!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed'))
-			) {
-				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
-				continue;
-			}
 			if (input.removeResident) {
 				try {
 					await input.removeResident(head, input.signal);
 				} catch {
-					// Could not remove the resident — put the chain back and let the normal
-					// drain handle it (a net-neutral phantom, the pre-#1059 behaviour). Never
-					// leave the record with removed queue rows AND a resident: that is the
-					// lost sale this whole write path is built to prevent.
-					await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
 					continue;
 				}
 			}
-			for (const row of terminal) await input.queue.removeMarked(row.mutationId, token);
+			residentRemoved = true;
+			for (const row of marked) await input.queue.removeMarked(row.mutationId, token);
 			annihilated += 1;
-			annihilatedMutations.push(...orderedRemoved);
+			annihilatedMutations.push(...pendingRows);
 			input.emit({
 				type: 'queue.write.annihilate',
 				level: 'info',
 				collection: head.collectionName,
-				fields: { recordId: head.recordId, removed: removed.length, drain: true },
+				fields: { recordId: head.recordId, removed: pendingRows.length, drain: true },
 			});
 		} finally {
-			for (const row of terminal) await input.queue.unmarkForAnnihilation(row.mutationId, token);
+			if (
+				!residentRemoved &&
+				(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'preparing'))
+			) {
+				for (const row of marked) await input.queue.unmarkForAnnihilation(row.mutationId, token);
+			}
 			await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
 		}
 	}
@@ -339,7 +327,7 @@ export async function drainMutationQueue(input: {
 	/**
 	 * Removes the local resident record when a never-pushed create→delete chain is
 	 * annihilated at drain (#1059). Called with the chain's create head after its
-	 * queue rows are gone, so the resident vanishes exactly as it would have under
+	 * queue rows are marked, so the resident vanishes exactly as it would have under
 	 * enqueue-time annihilation (the caller asked for deletion). Absent ⇒ queue-only
 	 * annihilation (the model tests): the pushes are still cancelled, the resident is
 	 * left to the host. Wired by the write-drain lane, which only ticks on the leader,

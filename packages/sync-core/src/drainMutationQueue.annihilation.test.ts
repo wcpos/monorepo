@@ -77,6 +77,64 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it.each(['first successor', 'before commit', 'after resident removal'])(
+		'recovers a crash at %s without losing the chain',
+		async (stage) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const q = new RecordMutationQueue(storage);
+			await q.enqueue(create());
+			await q.enqueue(del());
+			let snapshot: QueuedMutation[] | undefined;
+			const capture = async () => {
+				snapshot ??= structuredClone(await storage.list());
+			};
+			// Snapshot durable state, not a thrown exception: process death runs no finally.
+			const append = storage.appendIfUnchanged.bind(storage);
+			vi.spyOn(storage, 'appendIfUnchanged').mockImplementation(async (row, rev) => {
+				if (stage === 'before commit' && row.payload.phase === 'committed') await capture();
+				const result = await append(row, rev);
+				if (stage === 'first successor' && row.mutationId === 'm-delete' && row.supersededBy)
+					await capture();
+				return result;
+			});
+			const remove = storage.removeIfUnchanged.bind(storage);
+			vi.spyOn(storage, 'removeIfUnchanged').mockImplementation(async (id, rev) => {
+				const result = await remove(id, rev);
+				if (stage === 'first successor' && id === 'm-delete') await capture();
+				return result;
+			});
+			const result = await drainMutationQueue({
+				queue: q,
+				push: async (m) => ok(m),
+				now: () => 1,
+				removeResident: async () => {
+					if (stage === 'after resident removal') await capture();
+				},
+			});
+			expect(result.annihilated).toBe(1);
+			expect(await storage.list()).toEqual([]);
+			expect(
+				snapshot?.filter((row) => row.status !== 'internal').map((row) => row.mutationId)
+			).toEqual(['m-create', 'm-delete']);
+			const disk = new InMemoryRecordMutationStorage();
+			for (const row of snapshot!) await disk.append(row);
+			let resident = stage !== 'after resident removal';
+			const recovered = new RecordMutationQueue(disk);
+			await recovered.clearExpiredAnnihilation(120_002, async () => {
+				resident = false;
+			});
+			expect(resident).toBe(stage !== 'after resident removal');
+			expect((await recovered.pending()).map((row) => [row.mutationId, row.supersededBy])).toEqual(
+				stage === 'after resident removal'
+					? []
+					: [
+							['m-create', undefined],
+							['m-delete', undefined],
+						]
+			);
+		}
+	);
+
 	it('annihilates a never-pushed follower create+void: ZERO pushes, no phantom order', async () => {
 		const q = await queueWith(create(), del());
 		const push = vi.fn(async (m: RecordMutation) => ok(m));
