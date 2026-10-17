@@ -96,15 +96,7 @@ async function fixture(t, options = {}) {
 		if (options.fail?.(url, method)) return new Response('', { status: 503 });
 		if (url.hostname === 'api.cloudflare.com') {
 			assert.equal(init.headers.Authorization, 'Bearer test-token');
-			const objectPrefix = '/client/v4/accounts/d9df0d95f1cee465811e977842e5063a/r2/buckets/wcpos-web-bundles/objects/';
 			const kvPrefix = '/client/v4/accounts/d9df0d95f1cee465811e977842e5063a/storage/kv/namespaces/0ddbce1d02ad40f5868c1e14cfd5b3f2/values/';
-			if (url.pathname.startsWith(objectPrefix)) {
-				const key = decodeURIComponent(url.pathname.slice(objectPrefix.length));
-				if (method === 'GET') return new Response(options.exists ? '{}' : null, { status: options.exists ? 200 : 404 });
-				assert.equal(method, 'PUT');
-				r2.set(key, { body: Buffer.from(init.body), type: init.headers['Content-Type'] });
-				return new Response('{}');
-			}
 			assert.ok(url.pathname.startsWith(kvPrefix));
 			const key = decodeURIComponent(url.pathname.slice(kvPrefix.length));
 			if (method === 'PUT') {
@@ -115,8 +107,21 @@ async function fixture(t, options = {}) {
 			assert.equal(method, 'GET');
 			return kv.has(key) ? Response.json(kv.get(key)) : new Response('', { status: 404 });
 		}
-		assert.equal(init.headers?.Authorization, undefined);
 		assert.equal(url.hostname, 'cdn.wcpos.com');
+		if (url.pathname.startsWith('/upload/')) {
+			assert.equal(method, 'PUT');
+			assert.equal(init.headers.Authorization, 'Bearer test-publish-token');
+			assert.equal(init.headers['Content-Length'], String(Buffer.byteLength(init.body)));
+			const [, , buildId, ...rest] = url.pathname.split('/');
+			const key = `bundles/${buildId}/${decodeURIComponent(rest.join('/'))}`;
+			r2.set(key, { body: Buffer.from(init.body), type: init.headers['Content-Type'] });
+			return Response.json({ key });
+		}
+		if (/^\/b\/[0-9a-f]{16}\/bundle\.json$/.test(url.pathname)) {
+			assert.equal(init.headers?.Authorization, undefined);
+			return new Response(options.exists ? '{}' : null, { status: options.exists ? 200 : 404 });
+		}
+		assert.equal(init.headers?.Authorization, undefined);
 		if (url.pathname === '/manifest') {
 			assert.equal(url.searchParams.get('plugin'), options.appVersion ?? '2.0.0');
 			assert.equal(url.searchParams.get('worker'), '17.6.0');
@@ -132,7 +137,7 @@ async function fixture(t, options = {}) {
 	};
 	return { calls, kv, r2, files, args: {
 		buildDir, appVersion: options.appVersion ?? '2.0.0', monorepoSha: descriptorOptions.monorepoSha,
-		runId: '123', lane: options.release ? undefined : 'next', token: 'test-token', signingPrivateKey, fetch,
+		runId: '123', lane: options.release ? undefined : 'next', token: 'test-token', publishToken: 'test-publish-token', signingPrivateKey, fetch,
 	} };
 }
 

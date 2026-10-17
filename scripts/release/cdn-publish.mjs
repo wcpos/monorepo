@@ -7,10 +7,9 @@ import { parseArgs } from 'node:util';
 
 const ACCOUNT_ID = 'd9df0d95f1cee465811e977842e5063a'; // Account owning the CDN resources.
 const KV_NAMESPACE = '0ddbce1d02ad40f5868c1e14cfd5b3f2'; // cdn-pointers control plane.
-const R2_BUCKET = 'wcpos-web-bundles'; // Immutable build storage shared with the Worker.
 const API_BASE = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}`; // Scoped REST API.
-const MANIFEST_URL = 'https://cdn.wcpos.com/manifest'; // Verify what the public Worker serves.
-const BUNDLE_PREFIX = 'bundles'; // Flat content-addressed layout, independent of lane.
+const CDN_ORIGIN = 'https://cdn.wcpos.com'; // The Worker: uploads go through it (the API edge 403s keys with '...', e.g. [...orderId] chunks) and it verifies what it serves.
+const MANIFEST_URL = `${CDN_ORIGIN}/manifest`; // Verify what the public Worker serves.
 const BUILD_PREFIX = 'build'; // Preserve the web-bundle's emitted file paths.
 const DESCRIPTOR_FILE = 'bundle.json'; // Written last: its presence marks a complete upload.
 const SIGNATURE_FILE = 'bundle.sig'; // Base64 signature stored beside the descriptor.
@@ -119,7 +118,7 @@ async function verifyManifest(fetch, descriptor, ref) {
 }
 
 export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, webBundleCommit,
-	token, signingPrivateKey, fetch }) {
+	token, publishToken, signingPrivateKey, fetch }) {
 	console.log('CDN: hash build and construct descriptor');
 	const files = await readBuild(buildDir);
 	const sri = Object.fromEntries(Object.entries(files).map(([path, bytes]) => [path, computeSri(bytes)]));
@@ -134,9 +133,10 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 	if (!await verifyDescriptorSignature(canonical, signature, publicJwk)) {
 		throw new Error('Descriptor signature failed WebCrypto verification');
 	}
-	const request = async (url, method = 'GET', body, type, allowMissing = false) => {
-		const headers = { Authorization: `Bearer ${token}` };
+	const request = async (url, method = 'GET', body, type, allowMissing = false, bearer = token) => {
+		const headers = bearer ? { Authorization: `Bearer ${bearer}` } : {};
 		if (type) headers['Content-Type'] = type;
+		if (body) headers['Content-Length'] = String(Buffer.byteLength(body));
 		const response = await fetch(url, { method, headers, body });
 		if (!response.ok && !(allowMissing && response.status === 404)) {
 			const detail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
@@ -144,24 +144,25 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 		}
 		return response;
 	};
-	const objectUrl = (key) => `${API_BASE}/r2/buckets/${R2_BUCKET}/objects/${encodePath(key)}`;
+	// Objects are written through the Worker's upload route (bearer = CDN_PUBLISH_TOKEN) and
+	// checked for existence through its public /b/ route; the key under bundles/<id>/ is the path.
+	const upload = (path, body, type) => request(`${CDN_ORIGIN}/upload/${descriptor.build_id}/${encodePath(path)}`,
+		'PUT', body, type, false, publishToken);
 	const kvUrl = (key) => `${API_BASE}/storage/kv/namespaces/${KV_NAMESPACE}/values/${encodeURIComponent(key)}`;
 	const readKv = async (key, missing) => {
 		const response = await request(kvUrl(key), 'GET', undefined, undefined, true);
 		return response.status === 404 ? missing : response.json();
 	};
 	const writeKv = (key, value) => request(kvUrl(key), 'PUT', JSON.stringify(value), CONTENT_TYPES['.json']);
-	const prefix = `${BUNDLE_PREFIX}/${descriptor.build_id}`;
 	// The R2 REST object API answers HEAD with 405, so existence is a GET of the small descriptor.
-	const existing = await request(objectUrl(`${prefix}/${DESCRIPTOR_FILE}`), 'GET', undefined, undefined, true);
+	const existing = await request(`${CDN_ORIGIN}/b/${descriptor.build_id}/${DESCRIPTOR_FILE}`, 'GET', undefined, undefined, true, null);
 	console.log(existing.status === 200 ? 'CDN: completed build exists; skip R2 uploads' : 'CDN: upload build to R2');
 	if (existing.status !== 200) {
 		for (const path of Object.keys(files).sort()) {
-			await request(objectUrl(`${prefix}/${BUILD_PREFIX}/${path}`), 'PUT', files[path],
-				CONTENT_TYPES[extname(path).toLowerCase()] ?? DEFAULT_TYPE);
+			await upload(`${BUILD_PREFIX}/${path}`, files[path], CONTENT_TYPES[extname(path).toLowerCase()] ?? DEFAULT_TYPE);
 		}
-		await request(objectUrl(`${prefix}/${SIGNATURE_FILE}`), 'PUT', Buffer.from(signature), CONTENT_TYPES['.sig']);
-		await request(objectUrl(`${prefix}/${DESCRIPTOR_FILE}`), 'PUT', Buffer.from(canonical), CONTENT_TYPES['.json']);
+		await upload(SIGNATURE_FILE, Buffer.from(signature), CONTENT_TYPES['.sig']);
+		await upload(DESCRIPTOR_FILE, Buffer.from(canonical), CONTENT_TYPES['.json']);
 	}
 	console.log('CDN: write KV descriptor, refs, index and next pointer');
 	await writeKv(`bundle:${descriptor.build_id}`, { descriptor: canonical, signature });
@@ -203,12 +204,13 @@ async function main() {
 		if (!values[name]) throw new Error(`Missing --${name}`);
 	}
 	if (values.lane && values.lane !== NEXT_LANE) throw new Error('--lane must be next when supplied');
-	if (!process.env.CLOUDFLARE_CDN_TOKEN || !process.env.CDN_SIGNING_PRIVATE_KEY) {
-		throw new Error('CLOUDFLARE_CDN_TOKEN and CDN_SIGNING_PRIVATE_KEY are required');
+	if (!process.env.CLOUDFLARE_CDN_TOKEN || !process.env.CDN_PUBLISH_TOKEN || !process.env.CDN_SIGNING_PRIVATE_KEY) {
+		throw new Error('CLOUDFLARE_CDN_TOKEN, CDN_PUBLISH_TOKEN and CDN_SIGNING_PRIVATE_KEY are required');
 	}
 	const descriptor = await publish({ buildDir: values['build-dir'], appVersion: values['app-version'],
 		monorepoSha: values['monorepo-sha'], runId: values['run-id'], lane: values.lane,
 		webBundleCommit: values['web-bundle-commit'], token: process.env.CLOUDFLARE_CDN_TOKEN,
+		publishToken: process.env.CDN_PUBLISH_TOKEN,
 		signingPrivateKey: process.env.CDN_SIGNING_PRIVATE_KEY, fetch: globalThis.fetch });
 	if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `build_id=${descriptor.build_id}\n`);
 	console.log(`CDN: published ${descriptor.build_id}`);

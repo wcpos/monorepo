@@ -4,7 +4,7 @@ name: Publish Web Bundle
 # branch for jsDelivr.
 #
 # The cdn job signs the built artifact, uploads it to cdn.wcpos.com (R2 + KV),
-# and verifies the public manifest and entry hashes. It runs only when both CDN
+# and verifies the public manifest and entry hashes. It runs only when the three CDN
 # secrets are configured. jsDelivr stays the fallback; its publish path is unchanged.
 #
 # ONE jsDelivr REF PER LANE, NAMED AFTER THE LANE (owner ruling, 2026-09-04):
@@ -93,9 +93,10 @@ jobs:
         id: cdn-config
         env:
           CLOUDFLARE_CDN_TOKEN: ${{ secrets.CLOUDFLARE_CDN_TOKEN }}
+          CDN_PUBLISH_TOKEN: ${{ secrets.CDN_PUBLISH_TOKEN }}
           CDN_SIGNING_PRIVATE_KEY: ${{ secrets.CDN_SIGNING_PRIVATE_KEY }}
         run: |
-          if [ -n "$CLOUDFLARE_CDN_TOKEN" ] && [ -n "$CDN_SIGNING_PRIVATE_KEY" ]; then
+          if [ -n "$CLOUDFLARE_CDN_TOKEN" ] && [ -n "$CDN_PUBLISH_TOKEN" ] && [ -n "$CDN_SIGNING_PRIVATE_KEY" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -441,6 +442,7 @@ jobs:
       - name: ☁️ Sign, publish and verify CDN build
         env:
           CLOUDFLARE_CDN_TOKEN: ${{ secrets.CLOUDFLARE_CDN_TOKEN }}
+          CDN_PUBLISH_TOKEN: ${{ secrets.CDN_PUBLISH_TOKEN }}
           CDN_SIGNING_PRIVATE_KEY: ${{ secrets.CDN_SIGNING_PRIVATE_KEY }}
           APP_VERSION: ${{ needs.publish.outputs.app_version }}
           MONOREPO_SHA: ${{ needs.publish.outputs.sha }}
