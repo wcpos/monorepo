@@ -113,7 +113,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'HTTP 502',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -147,7 +148,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'HTTP 502',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -187,7 +189,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'scope database not open',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -221,7 +224,7 @@ describe('useManualSync', () => {
 		});
 	});
 
-	it('falls back to the raw reason for other skips', async () => {
+	it('shows no raw engine reason for other skips', async () => {
 		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'no active scope' });
 
 		const { result } = renderHook(() => useManualSync());
@@ -230,7 +233,6 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'warning',
 			text1: 'Sync didn’t run.',
-			text2: 'no active scope',
 		});
 	});
 
@@ -243,7 +245,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'engine disposed',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 });

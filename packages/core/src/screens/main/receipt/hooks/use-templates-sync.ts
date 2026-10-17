@@ -99,9 +99,10 @@ export function syncTemplates(
 				deferredCollections.add(collection);
 				templatesLogger.debug('Templates sync deferred — app is in background');
 			} else {
-				const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-				templatesLogger[logLevel]('Failed to sync templates', {
-					code: ERROR_CODES.PRINT_UNEXPECTED,
+				// A background refresh the merchant didn't start: receipts keep the last
+				// saved templates and the next wake retries. Offline is forensic.
+				const logLevel = isExpectedPreflightBlock(error) ? 'debug' : 'info';
+				templatesLogger[logLevel]('Receipt templates not refreshed; using the saved templates', {
 					context: { error: error?.message },
 				});
 			}

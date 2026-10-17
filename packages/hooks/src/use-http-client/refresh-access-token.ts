@@ -11,6 +11,12 @@ const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 const REFRESH_COOLDOWN_BASE_MS = 1_000;
 const REFRESH_COOLDOWN_MAX_MS = 60_000;
 let refreshFailureStreak = 0;
+/**
+ * A transient refresh failure retries itself with backoff and the session stays
+ * valid, so it is not a merchant row until it keeps happening: three in a row is
+ * roughly 7 s of a store that will not answer, which is worth saying.
+ */
+const TRANSIENT_REFRESH_FAILURES_BEFORE_REPORT = 3;
 let refreshRetryAtMs = 0;
 
 export function resetRefreshCooldown(): void {
@@ -204,13 +210,25 @@ export async function refreshAccessToken({
 		// a momentary blip would log the cashier out mid-session.
 		const terminal = isTerminalRefreshFailure(error);
 		// Level reflects the settled outcome (#899 rubric): a terminally rejected
-		// refresh token means the user must re-authenticate → error; a transient
-		// blip (5xx/network) will need attention only if it persists → warn.
-		tokenLogger[terminal ? 'error' : 'warn']('Unable to refresh session', {
-			code: terminal ? ERROR_CODES.SESSION_EXPIRED : ERROR_CODES.AUTH_UNEXPECTED,
+		// refresh token means the user must re-authenticate → error AUTH101. A
+		// transient blip (5xx/network) leaves the session valid and retries: debug,
+		// until it persists — then the code of what the store did, never "session
+		// ended" or AUTH999's "contact support".
+		const status = refreshFailureStatus(error);
+		const persisting = refreshFailureStreak >= TRANSIENT_REFRESH_FAILURES_BEFORE_REPORT;
+		const level = terminal ? 'error' : persisting ? 'warn' : 'debug';
+		tokenLogger[level]('Unable to refresh session', {
+			code: terminal
+				? ERROR_CODES.SESSION_EXPIRED
+				: typeof status === 'number' && status >= 500
+					? ERROR_CODES.STORE_SERVER_ERROR
+					: typeof status === 'number'
+						? ERROR_CODES.AUTH_UNEXPECTED
+						: ERROR_CODES.SYNC_UNREACHABLE,
 			context: {
 				error: error instanceof Error ? error.message : String(error),
 				terminal,
+				failureStreak: refreshFailureStreak,
 				userId: wpUser.id,
 				siteUrl: site.url,
 			},

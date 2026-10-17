@@ -33,7 +33,7 @@ export class NetworkAdapter implements PrinterTransport {
 					client.destroy();
 				}
 				if (err) {
-					printerLogger.warn('Raw TCP job failed', {
+					printerLogger.debug('Raw TCP job failed', {
 						context: {
 							...context,
 							elapsedMs: Date.now() - startedAt,

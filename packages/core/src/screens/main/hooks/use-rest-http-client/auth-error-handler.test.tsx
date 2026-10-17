@@ -8,6 +8,10 @@ import { getLogger } from '@wcpos/utils/logger';
 const mockHandleLoginSuccess = jest.fn(async () => undefined);
 let mockAuthResponse: Record<string, unknown> | null = null;
 
+const mockToastShow = jest.fn();
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
 jest.mock('../../../../contexts/translations', () => ({
 	// The real English catalogue, so the assertions below name the exact sentence
 	// a cashier reads — not a key, and not a copy of the string.
@@ -80,8 +84,8 @@ describe('useAuthErrorHandler interactive re-authentication toasts', () => {
 			const [, options] = authLogger.warn.mock.calls[0];
 			expect(options.showToast).toBe(true);
 			expect(options.toast.title).toBe('Session expired — sign in to reconnect to the store.');
-			// `warn` carries no error code, and none was minted for it.
-			expect(options.code).toBeUndefined();
+			// AUTH101 gives the Logs row its instruction: sign in again; nothing is lost.
+			expect(options.code).toBe('AUTH101');
 			// `locked` is the device screen locking — nothing the cashier chose —
 			// so this branch must not be reported at `info` as a mere cancellation.
 			expect(authLogger.info).not.toHaveBeenCalled();

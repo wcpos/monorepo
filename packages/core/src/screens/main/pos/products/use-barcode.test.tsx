@@ -3,7 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import { useBarcode } from './use-barcode';
+import { barcodeLookupErrorCode, useBarcode } from './use-barcode';
 
 const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
@@ -424,7 +424,7 @@ describe('useBarcode online escalation', () => {
 			description: 'pos_products.scan_not_found_description:{"code":"ABC"}',
 			duration: 6000,
 		});
-		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
+		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.not.objectContaining({
 				showToast: expect.anything(),
@@ -523,7 +523,7 @@ describe('useBarcode online escalation', () => {
 			description: 'ABC',
 			duration: 6000,
 		});
-		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
+		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.not.objectContaining({
 				showToast: expect.anything(),
@@ -1379,5 +1379,25 @@ describe('useBarcode online escalation', () => {
 		renderBarcodeHook();
 
 		expect(mockUseBarcodeDetection).toHaveBeenLastCalledWith({ isActive: false });
+	});
+});
+
+describe('barcodeLookupErrorCode', () => {
+	it('calls a lookup that never got a reply "store unreachable", not a product fault', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode request failed: Network request failed')).toBe(
+			'SYNC121'
+		);
+	});
+
+	it('codes a store error SYNC131 and an ended session AUTH101', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode failed: 502 Bad Gateway')).toBe('SYNC131');
+		expect(barcodeLookupErrorCode('resolve/barcode failed: 401 {"code":"jwt"}')).toBe('AUTH101');
+	});
+
+	it('keeps anything else the product code', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode returned found=true without a match')).toBe(
+			'PRODUCT999'
+		);
+		expect(barcodeLookupErrorCode(undefined)).toBe('PRODUCT999');
 	});
 });

@@ -5,7 +5,6 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Form,
@@ -17,8 +16,7 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getLogger } from '@wcpos/utils/logger';
 import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 import { useDocField } from '@wcpos/query';
 
@@ -40,6 +38,7 @@ import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { reportRestoreFailure } from './restore-failure';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
@@ -182,17 +181,11 @@ function GeneralSettingsForm({
 				await localPatch({ document: store, data: patch as never });
 			}
 		} catch (error) {
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-			uiLogger[logLevel]('Failed to restore server settings', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: {
-					error: getErrorMessage(error),
-				},
-			});
+			reportRestoreFailure(uiLogger, error, t);
 		} finally {
 			setLoading(false);
 		}
-	}, [http, localPatch, store]);
+	}, [http, localPatch, store, t]);
 
 	/**
 	 *

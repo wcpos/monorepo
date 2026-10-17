@@ -484,7 +484,7 @@ async function drainRow(
 		});
 		result.failed = 1;
 		deps.logger.error('Queued receipt email failed permanently', {
-			code: 'PRINT999',
+			code: 'PRINT311',
 			context: {
 				type: 'email.queue.failed',
 				localID: doc.localID,
@@ -509,7 +509,8 @@ async function drainRow(
 	});
 	result.deferred = 1;
 	result.transportDown = true;
-	deps.logger.warn('Queued receipt email deferred', {
+	// Retried automatically with backoff; the queue panel shows it pending.
+	deps.logger.debug('Queued receipt email deferred', {
 		context: {
 			type: 'email.queue.deferred',
 			localID: doc.localID,
@@ -559,7 +560,8 @@ async function patch(
 		await doc.incrementalPatch(safe);
 	} catch (error) {
 		if (!latest(doc).deleted) throw error;
-		deps.logger.warn('Could not record a receipt email outcome', {
+		// The merchant already removed the row: an expected outcome, not a problem.
+		deps.logger.debug('Could not record a receipt email outcome', {
 			context: {
 				localID: doc.localID,
 				orderId: doc.orderId,

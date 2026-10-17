@@ -29,7 +29,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { VStack } from '@wcpos/components/vstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
-import { getErrorMessage } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -72,6 +73,8 @@ import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { useStorageFootprint } from './use-storage-footprint';
+
+const databaseLogger = getLogger(['wcpos', 'health', 'database']);
 
 function exhaustiveCollectionOrder<const Order extends readonly CollectionKey[]>(
 	order: Exclude<CollectionKey, Order[number]> extends never ? Order : never
@@ -308,7 +311,12 @@ function CollectionRowView({
 				text1: t('health.database.redownload_failed', {
 					label,
 				}),
-				text2: getErrorMessage(error),
+				text2: t('health.database.redownload_failed_hint'),
+			});
+			// The one row for this failure; the raw message lives here, not in the toast.
+			databaseLogger.error('Clear & re-download failed', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { collection: row.key, error: getErrorMessage(error) },
 			});
 		} finally {
 			setPhase('idle');

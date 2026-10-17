@@ -303,8 +303,10 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			for (const databaseName of entry.databaseNames) {
 				forceFreeDatabaseRegistration(databaseName);
 			}
-			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+			// The app force-releases and carries on, so this is SYNC181 (slow storage,
+			// outcome not yet known) at warn — not a red "syncing hit a problem".
+			engineLogger.warn('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
+				code: ERROR_CODES.LOCAL_DB_STALLED,
 				context: {
 					scopeKey: disposalKey,
 					databaseNames: [...entry.databaseNames],

@@ -95,6 +95,7 @@ export function WPUsers({ site }: WpUsersProps) {
 									// feedback; at minimum it must reach the log pipeline.
 									authLogger.error('Store login failed', {
 										code: ERROR_CODES.AUTH_UNEXPECTED,
+										showToast: true,
 										context: { siteName: site.name, storeID, error },
 									});
 								});

@@ -173,13 +173,13 @@ async function performMetadataSync(gen: number): Promise<void> {
 			return;
 		}
 
-		novuLogger.warn('Novu: Failed to sync subscriber metadata', {
+		novuLogger.debug('Novu: Failed to sync subscriber metadata', {
 			context: { error: result.error },
 		});
 		// Reset on failure so we can retry
 		if (syncedMetadataKey === key) syncedMetadataKey = null;
 	} catch (error) {
-		novuLogger.error('Novu: Error syncing subscriber metadata', {
+		novuLogger.debug('Novu: Error syncing subscriber metadata', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: getErrorMessage(error) },
 		});
@@ -245,7 +245,7 @@ async function fetchAndSyncNotifications(
 		);
 	} catch (error) {
 		if (gen !== generation) return;
-		novuLogger.error(
+		novuLogger.debug(
 			source === 'initial'
 				? 'Novu: Failed to load initial notifications'
 				: 'Novu: Failed to refresh notifications',
@@ -352,11 +352,11 @@ export function startNovuBootstrap({
 			if (gen !== generation) return;
 
 			if (!connected) {
-				novuLogger.warn('Novu: Socket connection timeout, syncing anyway');
+				novuLogger.debug('Novu: Socket connection timeout, syncing anyway');
 			}
 		} catch (error) {
 			if (gen !== generation) return;
-			novuLogger.error('Novu: Socket readiness check failed', {
+			novuLogger.debug('Novu: Socket readiness check failed', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: getErrorMessage(error) },
 			});
@@ -417,7 +417,7 @@ export function stopNovuBootstrap(): void {
  */
 export async function refreshNovuNotifications(): Promise<void> {
 	if (!activeSubscriberId || !activeCollection) {
-		novuLogger.warn('Novu: Not configured, skipping refresh');
+		novuLogger.debug('Novu: Not configured, skipping refresh');
 		return;
 	}
 

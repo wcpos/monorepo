@@ -254,7 +254,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		void clearStoreSession().catch((error: unknown) => {
 			// The same failing storage that lost the rows may refuse this write too;
 			// the till is still signed out, it just replays the report next launch.
-			sessionLogger.warn('Could not clear the incomplete session pointer', {
+			sessionLogger.debug('Could not clear the incomplete session pointer', {
 				context: { error: getErrorMessage(error) },
 			});
 			updateAppState(SIGNED_OUT_SESSION);

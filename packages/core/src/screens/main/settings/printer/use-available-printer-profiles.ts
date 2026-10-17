@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import type { PrinterProfile } from '@wcpos/printer';
 import type { PrinterProfileDocument } from '@wcpos/database';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -50,9 +51,14 @@ export function useAvailablePrinterProfiles() {
 			})
 			.catch((error) => {
 				if (cancelled) return;
-				printerLogger.warn('Unable to load cloud printer settings', {
-					context: { error: getErrorMessage(error) },
-				});
+				// Local printers still work, and this runs on every settings/receipt mount:
+				// lifecycle (offline: forensic), not an amber row.
+				printerLogger[isExpectedPreflightBlock(error) ? 'debug' : 'info'](
+					'Cloud printers could not be loaded; local printers still work',
+					{
+						context: { error: getErrorMessage(error) },
+					}
+				);
 				setCloudPayload(null);
 				setCloudSettled(true);
 			});

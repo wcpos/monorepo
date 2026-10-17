@@ -28,7 +28,6 @@ import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	getReceiptPreviewPaperWidth,
@@ -38,6 +37,7 @@ import { EmailForm } from './email';
 import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
+import { reportPrintFailure } from '../hooks/use-print/print-failure';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { MismatchBadge } from './mismatch-badge';
 import { PrinterSwitcher } from './printer-switcher';
@@ -188,6 +188,8 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		useSystemDialog,
 	} = useResolvedPrinter({ template: templateInfo });
 
+	// Set while an automatic print is in flight, so its failure is reported as PRINT101.
+	const autoPrintingRef = React.useRef(false);
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
@@ -209,14 +211,12 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
 			}),
+		// A closed print dialog is a cancel (debug); a real failure is one coded row and
+		// a toast, so neither a manual Print nor an autoprint can fail silently.
 		onPrintError: (error) =>
-			getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
-				context: {
-					event: 'receipt.print_failed',
-					orderId: order.uuid ?? orderId,
-					error: error.message,
-				},
+			reportPrintFailure(getLogger(['wcpos', 'pos', 'receipt']), 'Receipt print failed', error, t, {
+				autoPrint: autoPrintingRef.current,
+				context: { event: 'receipt.print_failed', orderId: order.uuid ?? orderId },
 			}),
 	});
 
@@ -249,8 +249,14 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			!hasAutoPrintedRef.current
 		) {
 			hasAutoPrintedRef.current = true;
-			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
-			print().catch(() => undefined);
+			// Errors are reported via onPrintError (as PRINT101 while this flag is set);
+			// auto-print must not surface an unhandled rejection.
+			autoPrintingRef.current = true;
+			print()
+				.catch(() => undefined)
+				.finally(() => {
+					autoPrintingRef.current = false;
+				});
 		}
 	}, [hasFinalData, print, uiSettings.autoPrintReceipt]);
 
@@ -361,7 +367,8 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 					</ModalAction>
 					<ModalAction
 						testID="receipt-print-button"
-						onPress={() => print()}
+						// Reported via onPrintError; a rejection here must not go unhandled.
+						onPress={() => void print().catch(() => undefined)}
 						loading={isPrinting || isSyncing}
 					>
 						{t('receipt.print_receipt')}

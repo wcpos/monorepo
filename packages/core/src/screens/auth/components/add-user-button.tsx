@@ -51,7 +51,8 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			}
 			authLogger.debug(`Login successful for site: ${site.name}`);
 			processedResponseRef.current = responseKey;
-			void handleLoginSuccess({ params: response.params });
+			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
+			void handleLoginSuccess({ params: response.params }).catch(() => undefined);
 		} else if (response.type === 'error') {
 			authLogger.error(`Login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,

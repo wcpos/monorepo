@@ -172,8 +172,13 @@ export function PrintingSettings() {
 					type: 'success',
 				});
 			} catch (err) {
+				const { key } = describePrinterError(err);
 				Toast.show({
-					title: t(describePrinterError(err).key),
+					title: t(key),
+					// The generic line names no next step; the specific ones already do.
+					...(key === 'settings.setup_err_generic'
+						? { description: t('settings.setup_err_generic_hint') }
+						: {}),
 					type: 'error',
 				});
 			} finally {

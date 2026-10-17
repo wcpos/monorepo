@@ -16,7 +16,7 @@ import { ListItem } from '@wcpos/components/list-item';
 import { Loader } from '@wcpos/components/loader';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useLoginHandler } from '../hooks/use-login-handler';
@@ -108,6 +108,8 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					}
 				} catch (error) {
 					processedResponseRef.current = null;
+					// handleLoginSuccess already wrote the row and toast for its own failure.
+					if (isErrorReported(error)) return;
 					authLogger.error('Failed to finish re-authentication', {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						showToast: true,

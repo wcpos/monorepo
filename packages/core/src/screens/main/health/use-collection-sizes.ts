@@ -76,7 +76,7 @@ export function useCollectionSizes(
 						next[key] = estimateCollectionBytes(count, lengths);
 					} catch (error) {
 						next[key] = null;
-						healthLogger.warn('Collection size sampling failed; its cell shows no data', {
+						healthLogger.debug('Collection size sampling failed; its cell shows no data', {
 							context: {
 								collection: key,
 								error: getErrorMessage(error),

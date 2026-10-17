@@ -71,7 +71,7 @@ export function useBridge(
 	const onMessage = React.useCallback(
 		async (event: MessageEvent) => {
 			if (event.nativeEvent.url && messageOrigin(event.nativeEvent.url) !== origin) {
-				bridgeLogger.warn('Dropped message from unexpected origin');
+				bridgeLogger.debug('Dropped message from unexpected origin');
 				return;
 			}
 			const parsed = parseMessage(event.nativeEvent.data);
@@ -92,7 +92,7 @@ export function useBridge(
 				return;
 			}
 			if (!isEnvelope(parsed)) {
-				bridgeLogger.warn('Dropped invalid bridge envelope');
+				bridgeLogger.debug('Dropped invalid bridge envelope');
 				return;
 			}
 			const started = Date.now();

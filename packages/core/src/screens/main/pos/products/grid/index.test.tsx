@@ -81,13 +81,13 @@ describe('ProductGrid stale-hit reporting', () => {
 		} as unknown as React.ComponentProps<typeof ProductGrid>;
 		const { rerender } = render(<ProductGrid {...props} />);
 
-		await waitFor(() => expect(getLogger([]).warn).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(getLogger([]).info).toHaveBeenCalledTimes(1));
 		expect(screen.getByTestId('product-grid-footer-count').textContent).toBe('0');
 		expect(screen.getByTestId('product-grid-footer-result-count').textContent).toBe('1');
 		expect(mockGuard).toHaveBeenLastCalledWith(props.actions.extendLimit, 1, props.binding);
 		mockResult = { hits: [staleHit('second')] };
 		rerender(<ProductGrid {...props} />);
 
-		await waitFor(() => expect(getLogger([]).warn).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(getLogger([]).info).toHaveBeenCalledTimes(2));
 	});
 });

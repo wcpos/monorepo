@@ -803,7 +803,9 @@ describe('observeEngineQuery', () => {
 
 				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
 				expect(recreateSearch).toHaveBeenCalledTimes(1);
-				expect(searchError).toHaveBeenCalledWith('Search index divergence detected', {
+				// The first divergence rebuilds itself ("nothing to do"): warn, not error.
+				expect(searchError).not.toHaveBeenCalled();
+				expect(searchWarn).toHaveBeenCalledWith('Search index divergence detected', {
 					code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
 					showToast: false,
 					context: {
@@ -858,8 +860,13 @@ describe('observeEngineQuery', () => {
 
 				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
 				expect(recreateSearch).toHaveBeenCalledTimes(1);
-				expect(searchError).toHaveBeenCalledTimes(2);
-				expect(searchError.mock.calls[1][1]?.context).toMatchObject({
+				// Warn for the self-healing first; error only once it survives the rebuild.
+				expect(searchWarn).toHaveBeenCalledWith(
+					'Search index divergence detected',
+					expect.anything()
+				);
+				expect(searchError).toHaveBeenCalledTimes(1);
+				expect(searchError.mock.calls[0][1]?.context).toMatchObject({
 					alreadyRebuilt: true,
 					falseHitCount: 1,
 				});

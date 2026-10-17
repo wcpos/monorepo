@@ -305,7 +305,9 @@ function matchingSelectors$(
 						const falseHits = findFalseHits(documents);
 						if (falseHits.length === 0) return documents;
 						const alreadyRebuilt = rebuiltSearchIndexes.has(sharedKey);
-						searchLogger.error('Search index divergence detected', {
+						// A rebuild is triggered automatically ("nothing to do"): warn. Only a
+						// divergence that survives a rebuild is an error.
+						searchLogger[alreadyRebuilt ? 'error' : 'warn']('Search index divergence detected', {
 							code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
 							showToast: false,
 							context: {

@@ -59,7 +59,8 @@ export function ReceiptEmailQueueBridge() {
 				post,
 				logger,
 			}).catch((error: unknown) => {
-				logger.warn('Receipt email drain failed', {
+				// Retried on the next interval; a row per tick would only be noise.
+				logger.debug('Receipt email drain failed', {
 					context: { error: getErrorMessage(error) },
 				});
 			});

@@ -218,7 +218,7 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				// Then update Novu
 				await novuMarkAsRead(notificationId);
 			} catch (error) {
-				novuLogger.error('Novu: Failed to mark notification as read', {
+				novuLogger.debug('Novu: Failed to mark notification as read', {
 					code: ERROR_CODES.UNEXPECTED_ERROR,
 					context: { error },
 				});
@@ -249,7 +249,7 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			// Then update Novu
 			await novuMarkAllAsRead();
 		} catch (error) {
-			novuLogger.error('Novu: Failed to mark all notifications as read', {
+			novuLogger.debug('Novu: Failed to mark all notifications as read', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error },
 			});
@@ -276,7 +276,7 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			// Then update Novu
 			await novuMarkAllAsSeen();
 		} catch (error) {
-			novuLogger.error('Novu: Failed to mark all notifications as seen', {
+			novuLogger.debug('Novu: Failed to mark all notifications as seen', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error },
 			});

@@ -6,7 +6,11 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	CLIENT_QUERY_PARAM,
 	formatClientSignal,
@@ -14,6 +18,7 @@ import {
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
+import { storeRequestFailureCode } from '../../../utils/store-request-failure-code';
 import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
 import {
@@ -168,10 +173,15 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				throw new ApiDiscoveryError(t('auth.bad_api_response'));
 			}
 
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			// Offline or no reply is "can't be reached" (SYNC121), a store error its own
+			// code — not AUTH999's "contact support" for a network blip.
+			const code = isExpectedPreflightBlock(error)
+				? ERROR_CODES.SYNC_UNREACHABLE
+				: storeRequestFailureCode(error);
+			const logLevel = ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn';
 			discoveryLogger[logLevel](`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
 				showToast: true,
-				code: ERROR_CODES.AUTH_UNEXPECTED,
+				code,
 				context: { wpApiUrl },
 			});
 			throw error;
@@ -213,6 +223,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					discoveryLogger.error(`Bad API response from ${wpApiUrl}`, {
 						showToast: true,
 						code: ERROR_CODES.AUTH_UNEXPECTED,
+						// The specific reason, not AUTH999's generic summary.
+						toast: { title: t('auth.bad_api_response') },
 						context: { wpApiUrl },
 					});
 					throw new ApiDiscoveryError(t('auth.bad_api_response'));
@@ -223,6 +235,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					discoveryLogger.error(`WordPress API not found at ${wpApiUrl}`, {
 						showToast: true,
 						code: ERROR_CODES.AUTH_UNEXPECTED,
+						toast: { title: t('auth.wordpress_api_not_found') },
 						context: {
 							wpApiUrl,
 						},

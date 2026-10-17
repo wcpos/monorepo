@@ -1782,6 +1782,7 @@ describe('createAppSyncEngine scope cache', () => {
 				markStorageTerminallyFailed,
 				forceFreeDatabaseRegistration,
 				networkError,
+				networkWarn,
 			} = loadCreateAppEngine(() => {
 				const engine = engines.shift();
 				if (!engine) throw new Error('missing engine double');
@@ -1826,7 +1827,12 @@ describe('createAppSyncEngine scope cache', () => {
 			// The successor may only be released AFTER the registration is freed —
 			// a barrier that settles first would race the successor's open into DB8.
 			expect(barrierSettledWhenFreed).toBe(false);
-			expect(networkError).toHaveBeenCalled();
+			// The app force-releases and carries on: SYNC181 at warn, not a red SYNC999.
+			expect(networkError).not.toHaveBeenCalled();
+			expect(networkWarn).toHaveBeenCalledWith(
+				'ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier',
+				expect.objectContaining({ code: 'SYNC181' })
+			);
 		} finally {
 			jest.useRealTimers();
 		}

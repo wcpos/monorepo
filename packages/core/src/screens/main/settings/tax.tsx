@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
@@ -18,8 +17,7 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { SettingsDangerZone } from './components/settings-danger-zone';
@@ -35,6 +33,7 @@ import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { taxClassFromWire, taxClassToWire } from '../hooks/tax-class';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { reportRestoreFailure } from './restore-failure';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
@@ -133,17 +132,11 @@ export function TaxSettings() {
 				},
 			});
 		} catch (error) {
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-			uiLogger[logLevel]('Failed to restore server settings', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: {
-					error: getErrorMessage(error),
-				},
-			});
+			reportRestoreFailure(uiLogger, error, t);
 		} finally {
 			setLoading(false);
 		}
-	}, [http, localPatch, store]);
+	}, [http, localPatch, store, t]);
 
 	/**
 	 *

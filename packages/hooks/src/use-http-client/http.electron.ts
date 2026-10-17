@@ -174,7 +174,7 @@ const setupCancellation = (
 	const cancelInMain = () => {
 		void window.ipcRenderer
 			.invoke('http-request', { type: 'cancel', requestId })
-			.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
+			.catch((error) => httpLogger.debug('Failed to cancel IPC request', { context: { error } }));
 	};
 	signal?.addEventListener('abort', cancelInMain, { once: true });
 

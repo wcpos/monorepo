@@ -92,8 +92,9 @@ export function EmailForm({ order }: Props) {
 				});
 				return true;
 			} catch (error) {
+				// A local database write, not a printing problem.
 				queueLogger.error('Failed to queue receipt email', {
-					code: ERROR_CODES.PRINT_UNEXPECTED,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						orderId: orderID,
 						email,
@@ -116,8 +117,12 @@ export function EmailForm({ order }: Props) {
 			try {
 				// Known-offline: skip the round trip that is guaranteed to fail and
 				// go straight to the durable promise.
-				if (isOffline && (await queueEmail(email, saveEmail, 'offline'))) {
-					return;
+				// A queue write that already failed is reported once; the send below must
+				// not try (and report) it a second time.
+				let queueFailed = false;
+				if (isOffline) {
+					if (await queueEmail(email, saveEmail, 'offline')) return;
+					queueFailed = true;
 				}
 
 				try {
@@ -141,6 +146,7 @@ export function EmailForm({ order }: Props) {
 					const failure = classifyEmailSendError(error);
 					if (
 						failure.kind === 'connectivity' &&
+						!queueFailed &&
 						(await queueEmail(email, saveEmail, 'send-failed', failure))
 					) {
 						return;

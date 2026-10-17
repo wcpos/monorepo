@@ -50,7 +50,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!config.site) {
-			oauthLogger.warn('Auth not ready - no site configured');
+			oauthLogger.debug('Auth not ready - no site configured');
 			return;
 		}
 

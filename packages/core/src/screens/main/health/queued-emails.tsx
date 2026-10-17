@@ -74,14 +74,15 @@ export function QueuedEmailsPanel() {
 			}
 		} catch (error) {
 			const message = getErrorMessage(error);
+			// A local queue write, not a printing problem.
 			logger.error('Receipt email retry failed', {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },
 			});
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.emails.retry_failed'),
-				text2: message,
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);
@@ -105,14 +106,15 @@ export function QueuedEmailsPanel() {
 			});
 		} catch (error) {
 			const message = getErrorMessage(error);
+			// A local queue write, not a printing problem.
 			logger.error('Receipt email removal failed', {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },
 			});
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.emails.remove_failed'),
-				text2: message,
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);

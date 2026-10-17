@@ -458,15 +458,47 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.info).not.toHaveBeenCalled();
 		});
 
-		it('keeps a transient refresh failure at warn (attention only if it persists)', async () => {
+		it('keeps one transient refresh failure forensic: the session is still valid and it retries', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
 			const { config } = makeConfig(post);
 
 			await refreshAccessToken({ ...config, operationId: 'transient-arc' });
 
-			expect(loggerCalls.warn).toHaveBeenCalledWith('Unable to refresh session', expect.anything());
-			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
+			// Never AUTH101 "session ended", never AUTH999 "contact support" for a blip.
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
 			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC131' })
+			);
+		});
+
+		it('warns with the store’s own code once transient refresh failures persist', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const { config } = makeConfig(post);
+
+			// Step past each backoff window so every attempt really reaches the store.
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 3; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: `transient-${attempt}` });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({
+					code: 'SYNC121',
+					context: expect.objectContaining({ failureStreak: 3 }),
+				})
+			);
+			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
 		});
 	});
 });

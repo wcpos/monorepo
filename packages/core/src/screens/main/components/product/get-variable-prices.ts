@@ -79,6 +79,33 @@ function ownerContext(owner: VariablePriceOwner | undefined): Record<string, unk
 	return context;
 }
 
+/**
+ * PRODUCT421 at its registry severity (warn), once per record and problem: the
+ * reader runs during render for several cells per row, so an unguarded log wrote
+ * the same row dozens of times. Bounded so a huge catalogue cannot grow it forever.
+ */
+const reportedPriceProblems = new Set<string>();
+const MAX_REPORTED_PRICE_PROBLEMS = 500;
+
+/** Forget which records were reported — for tests, which share this module's state. */
+export function resetVariablePriceReports(): void {
+	reportedPriceProblems.clear();
+}
+
+function warnPriceProblem(
+	message: string,
+	owner: VariablePriceOwner | undefined,
+	context: Record<string, unknown>
+): void {
+	const ownerId = owner?.recordId ?? owner?.remoteId;
+	const key = `${message}:${String(ownerId)}`;
+	// Only a known record can be de-duplicated; an anonymous read always reports.
+	if (ownerId != null && reportedPriceProblems.has(key)) return;
+	if (reportedPriceProblems.size >= MAX_REPORTED_PRICE_PROBLEMS) reportedPriceProblems.clear();
+	reportedPriceProblems.add(key);
+	uiLogger.warn(message, { code: ERROR_CODES.VARIABLE_PRICE_META_INVALID, context });
+}
+
 const RANGE_KEYS = ['price', 'regular_price', 'sale_price'] as const;
 
 function isVariableRange(value: unknown): value is VariableRange {
@@ -106,10 +133,8 @@ export function getVariablePrices(
 	owner?: VariablePriceOwner
 ): VariablePrices | null {
 	if (!metaData) {
-		uiLogger.error('metaData is not defined', {
-			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-			context: ownerContext(owner),
-		});
+		// A record still loading, not bad price data.
+		uiLogger.debug('metaData is not defined', { context: ownerContext(owner) });
 		return null;
 	}
 
@@ -121,10 +146,11 @@ export function getVariablePrices(
 		// therefore two different states wearing one face, told apart by whether
 		// the augmentation that would have written the key ran at all.
 		if (!augmentationRan(owner)) {
-			uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
-				code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-				context: ownerContext(owner),
-			});
+			warnPriceProblem(
+				"No '_woocommerce_pos_variable_prices' key found in metaData",
+				owner,
+				ownerContext(owner)
+			);
 		}
 		return null;
 	}
@@ -142,24 +168,18 @@ export function getVariablePrices(
 			parsed = JSON.parse(value);
 		}
 		if (!isVariablePrices(parsed)) {
-			uiLogger.error("'_woocommerce_pos_variable_prices' has invalid structure", {
-				code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-				context: {
-					...ownerContext(owner),
-					value: metaDataEntry.value,
-				},
+			warnPriceProblem("'_woocommerce_pos_variable_prices' has invalid structure", owner, {
+				...ownerContext(owner),
+				value: metaDataEntry.value,
 			});
 			return null;
 		}
 		return parsed;
 	} catch (error) {
-		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
-			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-			context: {
-				...ownerContext(owner),
-				value: metaDataEntry.value,
-				error: getErrorMessage(error),
-			},
+		warnPriceProblem("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", owner, {
+			...ownerContext(owner),
+			value: metaDataEntry.value,
+			error: getErrorMessage(error),
 		});
 		return null;
 	}

@@ -300,17 +300,22 @@ export function startSearchReadiness(options: {
 		auditFailureStreaks.delete(key);
 
 		const alreadyRebuilt = rebuiltSearchIndexes.has(key);
-		searchLogger.error('Search index cannot find an indexed document by its own tokens', {
-			code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
-			showToast: false,
-			context: {
-				collection: name,
-				locale,
-				uuid: sample.primary,
-				tokens,
-				...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
-			},
-		});
+		// A rebuild is triggered automatically ("nothing to do"): warn. Only a miss
+		// that survives a rebuild is an error.
+		searchLogger[alreadyRebuilt ? 'error' : 'warn'](
+			'Search index cannot find an indexed document by its own tokens',
+			{
+				code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
+				showToast: false,
+				context: {
+					collection: name,
+					locale,
+					uuid: sample.primary,
+					tokens,
+					...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
+				},
+			}
+		);
 		if (alreadyRebuilt) return;
 		rebuiltSearchIndexes.add(key);
 		try {

@@ -153,6 +153,15 @@ const processErrorHandlers = async (
 				httpLogger.debug(`Error handler ${handler.name} substituted a CanceledError`, {
 					context: { handlerName: handler.name, status: error.response?.status },
 				});
+			} else if (axios.isAxiosError(handlerError) || (handlerError as any)?.isPreFlightBlocked) {
+				// The retry the handler made failed in transport (network, 5xx, a preflight
+				// block): that request's own failure path reports it. Forensic here.
+				httpLogger.debug(`Error handler ${handler.name} threw a request error`, {
+					context: {
+						error: handlerError instanceof Error ? handlerError.message : String(handlerError),
+						originalStatus: error.response?.status,
+					},
+				});
 			} else {
 				httpLogger.error(`Error handler ${handler.name} threw an error`, {
 					code: 'CLIENT999',
