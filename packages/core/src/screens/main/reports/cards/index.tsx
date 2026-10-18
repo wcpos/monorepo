@@ -78,14 +78,14 @@ export function PeriodSection() {
 		<LocalProductsContext.Provider value={products}>
 			<View
 				testID="reports-period-section"
-				className="gap-3"
+				className="gap-4"
 				onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
 			>
 				<Text testID="reports-period-title" role="heading" className="text-lg font-semibold">
 					{text}
 				</Text>
 				{Array.from({ length: Math.ceil(visibleCards.length / columns) }, (_, row) => (
-					<View key={row} className="flex-row gap-3">
+					<View key={row} className="flex-row gap-4">
 						{Array.from({ length: columns }, (_, cell) => {
 							const card = visibleCards[row * columns + cell];
 							return (

@@ -360,7 +360,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		</View>
 	);
 	return (
-		<View testID="reports-till" className="bg-card mx-4 gap-3 rounded-md border px-4 py-3">
+		<View testID="reports-till" className="bg-card gap-3 rounded-md border px-4 py-3">
 			{phone ? (
 				<>
 					{title}

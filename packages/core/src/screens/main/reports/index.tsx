@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -175,22 +175,24 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 			lockedScopeName={t('reports.earlier_days')}
 		/>
 	);
+	const strip = <TillStrip onOpenClosures={() => onRoomChange('closures')} />;
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
-			{/* The till strip is outside the date: it always shows the till now, and is the way into Closures. */}
-			<View className="pt-3">
-				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
-			</View>
 			<View className="min-h-0 flex-1">
 				{/* The date button stays available while the first orders load: it is the only way out
 				    of a slow or stuck range, so the loading shell carries the same title row. A later
-				    query keeps the previous figures until it answers (the provider's drawn handle). */}
+				    query keeps the previous figures until it answers (the provider's drawn handle).
+				    The till strip scrolls with the page as its first row (owner, 2026-10-18), outside
+				    the date: it always shows the till now, and is the way into Closures. */}
 				<Suspense
 					fallback={
-						<View className="px-2">
+						// The same scrolling shell as the settled page: on a short phone the strip
+						// can push the date button below the fold (Codex, #2720).
+						<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+							{strip}
 							<HeroShell title={title} />
-						</View>
+						</ScrollView>
 					}
 				>
 					<ReportsProvider
@@ -199,15 +201,15 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 						refundsHandle={refundsHandle}
 					>
 						<ErrorBoundary
-							FallbackComponent={() => <Reports title={title} />}
+							FallbackComponent={() => <Reports title={title} header={strip} />}
 							resetKeys={[refundsHandle, handle]}
 							// A new sales query can leave the failed refunds handle in place: the
 							// reset asks the engine again rather than rethrowing the old failure.
 							onReset={() => refundsHandle.retry()}
 						>
-							<React.Suspense fallback={<Reports title={title} />}>
+							<React.Suspense fallback={<Reports title={title} header={strip} />}>
 								<ReportsRefunds>
-									<Reports title={title} />
+									<Reports title={title} header={strip} />
 								</ReportsRefunds>
 							</React.Suspense>
 						</ErrorBoundary>

@@ -308,6 +308,27 @@ becomes a page.
 
 A Button is never a toggle. Among pills, full radius belongs to `Chip` and `Badge` alone; a circular control (`Switch`, `RadioGroup`, a `Slider` thumb) is its own shape.
 
+#### Gutters
+Spacing is decided by the system, never per surface (owner, 2026-10-18: the icon rail had been
+left at a 4 px inset and the gap was offered as a choice; it is not one).
+- One scale: 4, 8, 12, 16, 32 (`p-1`, `p-2`, `p-3`, `p-4`, `p-8`). Nothing in between.
+- Every container insets its children from its own edges by the gutter of its density, and the
+  children share that one gutter:
+
+  | Container | Gutter | Today |
+  |---|---|---|
+  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4` |
+  | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
+  | A dense strip: the icon rail, the front drawer's items, a chip row, a bar's own controls | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 |
+  | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
+
+- A container's width follows from its items and its gutter (the icon rail is 48 + 2 × 8 = 64),
+  not the other way round.
+- Nothing sits flush against a container's edge except the container's own border or surface.
+  A lifted item (`bg-card` on the ground) that touches the edge reads as the container, not as an
+  item; that is the tell that a gutter is missing.
+- A new container takes its gutter from this table. A mockup does not offer padding as an option.
+
 #### Page bars
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
 - The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.

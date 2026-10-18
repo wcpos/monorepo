@@ -271,7 +271,7 @@ function Figures({
  * slow or stuck all-results request (it is the only way to a smaller range). */
 export function HeroShell({ title }: { title: React.ReactNode }) {
 	return (
-		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-5">
+		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-4">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 			</View>
@@ -437,7 +437,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	// would be wrong money.
 	if (!store) return <HeroShell title={title} />;
 	return (
-		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-5">
+		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-4">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 				<View className="flex-row items-center gap-2">
