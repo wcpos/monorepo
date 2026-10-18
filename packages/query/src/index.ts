@@ -72,7 +72,13 @@ export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 export { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
-export { OPEN_ORDER_STATUSES, OPEN_ORDERS_SORT, openOrdersSelector } from './open-orders-scope';
+export {
+	OPEN_ORDER_STATUSES,
+	OPEN_ORDERS_SORT,
+	openOrdersSelector,
+	acquireOpenOrdersQueryHandle,
+	type OpenOrdersScope,
+} from './open-orders-scope';
 
 export {
 	projectionReaderFor,

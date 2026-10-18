@@ -189,27 +189,27 @@ export function OrderMoneyDivergenceProvider({
 	/** Supplied by the session-owning layout; cart readers need no app-state provider. */
 	storeContract?: () => string | null;
 }) {
-	const { engine } = useQueryRuntime();
-	const ownership = React.useRef({ engine, epochs: new Map<string, number>() });
+	const runtime = useQueryRuntime();
+	const ownership = React.useRef({ engine: runtime.engine, epochs: new Map<string, number>() });
 	const serverOwnsMoney = React.useCallback(
 		(uuid: string) =>
-			ownership.current.engine === engine &&
-			ownership.current.epochs.get(uuid) === readResidentMoneyEpoch(engine, uuid),
-		[engine]
+			ownership.current.engine === runtime.engine &&
+			ownership.current.epochs.get(uuid) === readResidentMoneyEpoch(runtime.engine, uuid),
+		[runtime.engine]
 	);
 	// State carries the engine it was observed on. Engines are constructed per
 	// site and never reused after disposal, so this identity check can only ever
 	// hide entries — it can never let a stale one back in, which a scope-id check
 	// would (store A → B → A matches again).
 	const [state, setState] = React.useState<DivergenceState>(() => ({
-		engine,
+		engine: runtime.engine,
 		byOrderId: {},
 		serverOwnedOrderIds: NO_SERVER_OWNED,
 		divergedOrderCount: 0,
 	}));
 
 	React.useEffect(() => {
-		return engine.events((event) => {
+		return runtime.engine.events((event) => {
 			const message = event as DivergenceEvent;
 
 			// A SAME-SITE store switch keeps this engine instance and only moves the
@@ -223,15 +223,15 @@ export function OrderMoneyDivergenceProvider({
 			// is a claim about ONE store, and carrying a count across a switch would
 			// escalate the next till for the previous one's misconfiguration.
 			if (message.type === 'scope-switched') {
-				ownership.current = { engine, epochs: new Map() };
+				ownership.current = { engine: runtime.engine, epochs: new Map() };
 				setState((current) =>
 					Object.keys(current.byOrderId).length === 0 &&
 					current.serverOwnedOrderIds.size === 0 &&
 					current.divergedOrderCount === 0 &&
-					current.engine === engine
+					current.engine === runtime.engine
 						? current
 						: {
-								engine,
+								engine: runtime.engine,
 								byOrderId: {},
 								serverOwnedOrderIds: NO_SERVER_OWNED,
 								divergedOrderCount: 0,
@@ -245,8 +245,9 @@ export function OrderMoneyDivergenceProvider({
 			const orderId = message.recordId;
 			if (typeof orderId !== 'string' || orderId === '') return;
 			// Commands must see the event immediately, without waiting for React to render.
-			if (ownership.current.engine !== engine) ownership.current = { engine, epochs: new Map() };
-			ownership.current.epochs.set(orderId, readResidentMoneyEpoch(engine, orderId));
+			if (ownership.current.engine !== runtime.engine)
+				ownership.current = { engine: runtime.engine, epochs: new Map() };
+			ownership.current.epochs.set(orderId, readResidentMoneyEpoch(runtime.engine, orderId));
 
 			const held: OrderMoneyDivergence = {
 				orderId,
@@ -259,10 +260,10 @@ export function OrderMoneyDivergenceProvider({
 			// before — escalation measures how many sales the store disagreed on,
 			// not how many times one sale was saved.
 			setState((current) => {
-				const sameEngine = current.engine === engine;
+				const sameEngine = current.engine === runtime.engine;
 				const alreadySeen = sameEngine && current.serverOwnedOrderIds.has(orderId);
 				return {
-					engine,
+					engine: runtime.engine,
 					byOrderId: withinCap(
 						sameEngine
 							? { ...withoutOrder(current.byOrderId, orderId), [orderId]: held }
@@ -275,9 +276,9 @@ export function OrderMoneyDivergenceProvider({
 				};
 			});
 		});
-	}, [engine]);
+	}, [runtime.engine]);
 
-	const sameEngine = state.engine === engine;
+	const sameEngine = state.engine === runtime.engine;
 	const byOrderId = sameEngine ? state.byOrderId : EMPTY_STATE.byOrderId;
 	const serverOwnedOrderIds = sameEngine ? state.serverOwnedOrderIds : NO_SERVER_OWNED;
 	const divergedOrderCount = sameEngine ? state.divergedOrderCount : 0;
