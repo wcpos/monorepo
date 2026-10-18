@@ -3,8 +3,9 @@
  */
 import { renderHook } from '@testing-library/react';
 
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
+
 import { useActionContext } from './use-action-context';
-import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 
 const mockReadBoundRegister = jest.fn();
 const mockFindOpenSession = jest.fn();
@@ -27,6 +28,7 @@ jest.mock('../../../../contexts/app-state', () => {
 		store: { id: 3 },
 		wpCredentials: { id: 7 },
 		userDB: {},
+		storeDB: 'storeDB',
 		site: { uuid: 'site' },
 	};
 	return { useStoreSession: () => session };
@@ -40,10 +42,8 @@ jest.mock('../../../../services/register/use-register', () => {
 	return { useRegister: () => register };
 });
 jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
 	readBoundRegister: (...args: unknown[]) => mockReadBoundRegister(...args),
-}));
-jest.mock('../../../../services/register-session/session-store', () => ({
-	...jest.requireActual('../../../../services/register-session/session-store'),
 	findOpenSession: (...args: unknown[]) => mockFindOpenSession(...args),
 	// The writing helper, stubbed to write visibly: if the resolver ever used it, the
 	// "never writes" assertion below is what fails, not a fixture type error.
@@ -54,7 +54,7 @@ jest.mock('../../../../services/register-session/session-store', () => ({
 	},
 }));
 jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => 'sessions',
+	useRegisterSessionCollection: () => 'storeDB',
 }));
 jest.mock('./read-stock-document', () => ({ readStockDocument: jest.fn() }));
 jest.mock('../../hooks/use-payment-methods', () => {
@@ -79,7 +79,7 @@ it('resolves the bound register and its open session without writing', async () 
 		sessionId: 'session-1',
 	});
 	expect(mockReadBoundRegister).toHaveBeenCalledWith({}, 'site', 3);
-	expect(mockFindOpenSession).toHaveBeenCalledWith('sessions', 'register-1', true);
+	expect(mockFindOpenSession).toHaveBeenCalledWith('storeDB', 'register-1', true);
 	// The read noun never touches the session document; the writer does that.
 	expect(mockIncrementalPatch).not.toHaveBeenCalled();
 });

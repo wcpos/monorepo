@@ -26,14 +26,26 @@ import { readLedger } from '@wcpos/order-math';
 import { mintRemoteId, POS_META_KEYS } from '@wcpos/sync-core';
 import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
 import { hasPendingLocalWork, type RequirementHandle } from '@wcpos/sync-engine';
+import {
+	backToSelling,
+	closeSession,
+	deriveDrawerTerms,
+	deriveExpected,
+	openSession,
+	recordMovement,
+	RegisterSessionRequiredError,
+	requireOpenSession,
+	retryMovement,
+	sessionRefreshRequests,
+	startCounting,
+	voidMovement,
+	writeClosure,
+} from '@wcpos/query/register-session';
 
 import { useStoreDay } from '../../hooks/use-store-day';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
-import { deriveDrawerTerms, deriveExpected } from './expected';
-import { sessionRefreshRequests } from './refresh';
-import * as actions from './session-store';
 import {
 	useCashMovementCollection,
 	useClosureCollection,
@@ -128,7 +140,7 @@ export function useRegisterSession() {
 		refundRecords: RefundDocumentType[];
 		refundSources: EngineRecord<'refunds'>[];
 	} | null>(null);
-	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const { store, wpCredentials, userDB, storeDB, site } = useStoreSession();
 	const actor = useRegisterActor();
 	const { today, timezone } = useStoreDay();
 	const { engine, locale } = useQueryRuntime();
@@ -424,7 +436,7 @@ export function useRegisterSession() {
 			)[0] ?? null,
 		actions: {
 			openSession: async (input: { expectedFloat: string | null; countedFloat: string }) => {
-				const row = await actions.openSession(sessions!, {
+				const row = await openSession(storeDB, {
 					...input,
 					registerId: binding.registerId!,
 					openedBy: wpCredentials.id ?? 0,
@@ -442,8 +454,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
-				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
-				const row = await actions.startCounting(sessions, session.id);
+				if (!sessions || !session) throw new RegisterSessionRequiredError();
+				const row = await startCounting(storeDB, session.id);
 				recordRegisterFact({
 					kind: 'counting-started',
 					actor,
@@ -453,8 +465,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			backToSelling: async () => {
-				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
-				const row = await actions.backToSelling(sessions, session.id);
+				if (!sessions || !session) throw new RegisterSessionRequiredError();
+				const row = await backToSelling(storeDB, session.id);
 				recordRegisterFact({
 					kind: 'counting-abandoned',
 					actor,
@@ -464,11 +476,11 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
-				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
+				if (!sessions || !session) throw new RegisterSessionRequiredError();
 				const closed =
 					session!.status === 'closed'
 						? session!
-						: await actions.closeSession(sessions!, session!.id, {
+						: await closeSession(storeDB, session!.id, {
 								...input,
 								closedBy: wpCredentials.id,
 								timezone,
@@ -523,8 +535,8 @@ export function useRegisterSession() {
 				const accounting = latestAccounting.current;
 				const latestSession = session!.getLatest();
 				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
-				const closure = await actions.writeClosure({
-					closures: closures!,
+				const closure = await writeClosure({
+					storeDB,
 					resolveCashierName: actorName,
 					timezone,
 					labels: {
@@ -579,8 +591,8 @@ export function useRegisterSession() {
 				amount: string;
 				reason: string;
 			}) => {
-				const id = await actions.requireOpenSession(sessions, binding.registerId, true);
-				const row = await actions.recordMovement(movements!, {
+				const id = await requireOpenSession(storeDB, binding.registerId, true);
+				const row = await recordMovement(storeDB, {
 					...input,
 					sessionId: id!,
 					actor: wpCredentials.id ?? 0,
@@ -597,8 +609,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			voidMovement: async (id: string) => {
-				await actions.requireOpenSession(sessions, binding.registerId, true);
-				const row = await actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
+				await requireOpenSession(storeDB, binding.registerId, true);
+				const row = await voidMovement(storeDB, id, wpCredentials.id ?? 0);
 				recordRegisterFact({
 					kind: 'movement-voided',
 					actor,
@@ -612,7 +624,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			retryMovement: async (id: string) => {
-				const row = await actions.retryMovement(movements!, id);
+				const row = await retryMovement(storeDB, id);
 				recordRegisterFact({
 					kind: 'movement-retry-requested',
 					actor,

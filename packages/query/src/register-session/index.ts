@@ -23,3 +23,28 @@ export type {
 	RefundDocumentType,
 	RegisterSessionRow,
 } from '@wcpos/database';
+
+export { recordRegisterFact, type RegisterFact } from './audit';
+export {
+	attributeRefunds,
+	deriveExpected,
+	deriveDrawerTerms,
+	deriveUnsyncedDelta,
+} from './expected';
+export { failureFacts } from './failure-facts';
+export { adoptSession, drainRegisterSessionQueue, type SessionHttp } from './queue';
+export { refreshSessions, sessionRefreshRequests } from './refresh';
+export {
+	backToSelling,
+	closeSession,
+	findOpenSession,
+	openSession,
+	openSessionSelector,
+	recordMovement,
+	RegisterSessionRequiredError,
+	requireOpenSession,
+	retryMovement,
+	startCounting,
+	voidMovement,
+	writeClosure,
+} from './session-store';

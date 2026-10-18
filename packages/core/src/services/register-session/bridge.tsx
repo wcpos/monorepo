@@ -2,18 +2,21 @@ import * as React from 'react';
 
 import { debounceTime, filter } from 'rxjs';
 
-import { engineCollection, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { readRegister } from '@wcpos/query/register-session';
+import {
+	drainRegisterSessionQueue,
+	failureFacts,
+	readRegister,
+	refreshSessions,
+	sessionRefreshRequests,
+	writeClosure,
+} from '@wcpos/query/register-session';
 
 import { recordRegisterFact } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
-import { writeClosure } from './session-store';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';
-import { failureFacts } from './failure-facts';
-import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions, sessionRefreshRequests } from './refresh';
 import {
 	useCashMovementCollection,
 	useClosureCollection,
@@ -32,7 +35,7 @@ export function sameStore(a: number | null | undefined, b: number | null | undef
 }
 
 export function RegisterSessionBridge() {
-	const { userDB, site, store } = useStoreSession();
+	const { storeDB, userDB, site, store } = useStoreSession();
 	const { engine } = useQueryRuntime();
 	const closures = useClosureCollection();
 	const sessions = useRegisterSessionCollection();
@@ -70,7 +73,7 @@ export function RegisterSessionBridge() {
 				if (session)
 					await staged('closure', () =>
 						writeClosure({
-							closures,
+							storeDB,
 							userDB,
 							siteUuid: site.uuid!,
 							session,
@@ -84,19 +87,14 @@ export function RegisterSessionBridge() {
 			if (!online) return;
 			await staged('drain', () =>
 				drainRegisterSessionQueue({
-					sessions,
-					movements,
-					closures,
+					storeDB,
 					userDB,
 					siteUuid: site.uuid!,
-					orders: engineCollection(engine.active()?.database, 'orders'),
+					engine,
 					http,
 				})
 			);
-			if (registerId)
-				await staged('refresh', () =>
-					refreshSessions({ registerId, sessions, movements, closures, http })
-				);
+			if (registerId) await staged('refresh', () => refreshSessions({ registerId, storeDB, http }));
 		};
 		const report = (error: unknown) => {
 			const { status, errorCode, message } = failureFacts(error);
@@ -150,6 +148,7 @@ export function RegisterSessionBridge() {
 		movements,
 		closures,
 		userDB,
+		storeDB,
 		site.uuid,
 		store.id,
 		engine,

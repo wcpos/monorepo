@@ -15,7 +15,7 @@ import {
 	retryMovement,
 	startCounting,
 	voidMovement,
-} from './session-store';
+} from '../../src/register-session/session-store';
 
 let db: StoreDatabase;
 beforeEach(async () => {
@@ -40,14 +40,14 @@ const input = {
 	businessDay: { year: 2026, month: 9, day: 16 },
 };
 it('opens pending and retains the pending transition through each local state', async () => {
-	const doc = await openSession(db.register_sessions, input);
+	const doc = await openSession(db, input);
 	expect(doc).toMatchObject({ status: 'open', sync_status: 'pending', counted_float: '100' });
-	await startCounting(db.register_sessions, doc.id);
+	await startCounting(db, doc.id);
 	expect(doc.getLatest()).toMatchObject({ status: 'counting', pending_status: 'counting' });
-	await backToSelling(db.register_sessions, doc.id);
+	await backToSelling(db, doc.id);
 	expect(doc.getLatest()).toMatchObject({ status: 'open', pending_status: 'open' });
-	await startCounting(db.register_sessions, doc.id);
-	await closeSession(db.register_sessions, doc.id, { counted: { cash: '105' } });
+	await startCounting(db, doc.id);
+	await closeSession(db, doc.id, { counted: { cash: '105' } });
 	expect(doc.getLatest()).toMatchObject({
 		status: 'closed',
 		pending_status: 'closed',
@@ -55,8 +55,8 @@ it('opens pending and retains the pending transition through each local state', 
 	});
 });
 it('void inserts a write-once reversal and marks its target', async () => {
-	const session = await openSession(db.register_sessions, input);
-	const row = await recordMovement(db.cash_movements, {
+	const session = await openSession(db, input);
+	const row = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_out',
 		amount: '7',
@@ -64,11 +64,11 @@ it('void inserts a write-once reversal and marks its target', async () => {
 		actor: 7,
 	});
 	const [reversal, concurrent] = await Promise.all([
-		voidMovement(db.cash_movements, row.id, 7),
-		voidMovement(db.cash_movements, row.id, 7),
+		voidMovement(db, row.id, 7),
+		voidMovement(db, row.id, 7),
 	]);
 	expect(concurrent.id).toBe(reversal.id);
-	const repeated = await voidMovement(db.cash_movements, row.id, 7);
+	const repeated = await voidMovement(db, row.id, 7);
 	expect(reversal).toMatchObject({ type: 'void', voids: row.id, sync_status: 'pending' });
 	expect(repeated.id).toBe(reversal.id);
 	expect(await db.cash_movements.count().exec()).toBe(2);
@@ -77,29 +77,29 @@ it('void inserts a write-once reversal and marks its target', async () => {
 
 it('gates counting and missing sessions, and retains the server baseline before money actions', async () => {
 	expect(await requireOpenSession(undefined, null, false)).toBeNull();
-	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
+	await expect(requireOpenSession(db, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
 	});
-	const row = await openSession(db.register_sessions, input);
+	const row = await openSession(db, input);
 	await row.incrementalPatch({ server_expected: { cash: '100' }, server_sales_count: 2 });
-	expect(await requireOpenSession(db.register_sessions, 'register', true)).toBe(row.id);
+	expect(await requireOpenSession(db, 'register', true)).toBe(row.id);
 	expect(row.getLatest().toJSON()).toMatchObject({
 		server_expected: { cash: '100' },
 		server_sales_count: 2,
 	});
-	await startCounting(db.register_sessions, row.id);
-	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
+	await startCounting(db, row.id);
+	await expect(requireOpenSession(db, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
 	});
 	await row.incrementalPatch({ status: 'open', sync_status: 'failed' });
-	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
+	await expect(requireOpenSession(db, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
 	});
 });
 
 it('re-queues a refused movement so the outbox will send it again', async () => {
-	const session = await openSession(db.register_sessions, input);
-	const row = await recordMovement(db.cash_movements, {
+	const session = await openSession(db, input);
+	const row = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_in',
 		amount: '20',
@@ -113,7 +113,7 @@ it('re-queues a refused movement so the outbox will send it again', async () => 
 		sync_next_at: null,
 	});
 
-	await retryMovement(db.cash_movements, row.id);
+	await retryMovement(db, row.id);
 
 	expect(row.getLatest().toJSON()).toMatchObject({
 		sync_status: 'pending',
@@ -126,20 +126,28 @@ it('re-queues a refused movement so the outbox will send it again', async () => 
 
 // Revert: remove business_day from openSession's inserted row.
 it('stamps the supplied store day rather than the device UTC day', async () => {
-	const row = await openSession(db.register_sessions, input);
+	const row = await openSession(db, input);
 	expect(row.toJSON()).toMatchObject({ business_day: '2026-09-16' });
 });
 
 // Revert: close a legacy overnight session without stamping its opening store day.
 it('derives the opening business day when closing a legacy session', async () => {
-	const doc = await openSession(db.register_sessions, input);
+	const doc = await openSession(db, input);
 	await doc.incrementalModify((value) => {
 		delete value.business_day;
 		return { ...value, opened_at_gmt: '2026-09-17T02:00:00Z' };
 	});
-	await closeSession(db.register_sessions, doc.id, {
+	await closeSession(db, doc.id, {
 		counted: { cash: '100' },
 		...{ timezone: 'America/Los_Angeles' },
 	});
 	expect(doc.getLatest().business_day).toBe('2026-09-16');
+});
+
+// Revert: accept a missing database or resolve the old collection instead of the handle.
+it('rejects an unavailable store database for enabled session reads and writes', async () => {
+	expect(() => openSession(undefined, input)).toThrow('Store database is unavailable');
+	await expect(requireOpenSession(undefined, 'register', true)).rejects.toMatchObject({
+		name: 'StoreDatabaseUnavailableError',
+	});
 });

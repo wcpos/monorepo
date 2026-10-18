@@ -17,15 +17,14 @@ import {
 	startCounting,
 	voidMovement,
 	writeClosure,
-} from './session-store';
-import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions } from './refresh';
+} from '../../src/register-session/session-store';
+import { drainRegisterSessionQueue } from '../../src/register-session/queue';
+import { refreshSessions } from '../../src/register-session/refresh';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
 let userDB: UserDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
-jest.mock('../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 beforeEach(async () => {
 	jest.clearAllMocks();
@@ -54,29 +53,36 @@ afterEach(async () => {
 	await userDB.remove();
 });
 const open = () =>
-	openSession(db.register_sessions, {
+	openSession(db, {
 		registerId: 'register',
 		expectedFloat: null,
 		countedFloat: '100',
 		openedBy: 7,
 		businessDay: { year: 2026, month: 9, day: 16 },
 	});
-const drain = () =>
+const drain = (storeDB = { collections: db.collections }) =>
 	drainRegisterSessionQueue({
-		sessions: db.register_sessions,
-		movements: db.cash_movements,
-		closures: db.closures,
+		storeDB,
 		userDB,
 		siteUuid: 'site',
-		orders: null,
+		engine: { active: () => null },
 		http,
 	});
 it('acknowledges a create, never resends it, and shares the in-flight drain', async () => {
 	const row = await open();
 	http.post.mockResolvedValue({ status: 201, data: { ...row.toJSON(), status: 'open' } });
+	const { replacement } = await db.addCollections({
+		replacement: { schema: registerSessionsLiteral, autoMigrate: false },
+	});
+	const storeDB = { collections: { ...db.collections } };
 	const first = drain();
-	expect(drain()).toBe(first);
-	await first;
+	// Handles share a flight only while they resolve to the same collection.
+	expect(drain(storeDB)).toBe(first);
+	storeDB.collections.register_sessions = replacement;
+	const next = drain(storeDB);
+	expect(next).not.toBe(first);
+	expect(drain(storeDB)).toBe(next);
+	await Promise.all([first, next]);
 	expect(row.getLatest().sync_status).toBe('synced');
 	await drain();
 	expect(http.post).toHaveBeenCalledTimes(1);
@@ -134,7 +140,7 @@ it('marks a losing create failed and adopts the server session', async () => {
 });
 it('backs off a 5xx without posting dependent movements', async () => {
 	const row = await open();
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: row.id,
 		type: 'paid_out',
 		amount: '5',
@@ -151,14 +157,14 @@ it('backs off a 5xx without posting dependent movements', async () => {
 it('sends movements after create but before a deferred counting transition', async () => {
 	const row = await open();
 	await row.incrementalPatch({ server_expected: { cash: '100' } });
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: row.id,
 		type: 'paid_out',
 		amount: '5',
 		reason: 'Milk',
 		actor: 7,
 	});
-	await startCounting(db.register_sessions, row.id);
+	await startCounting(db, row.id);
 	http.post.mockImplementation(async (url, body) => ({
 		data:
 			url === 'movements'
@@ -196,9 +202,8 @@ it('sends movements after create but before a deferred counting transition', asy
 	await refreshSessions({
 		registerId: 'register',
 		http,
-		sessions: db.register_sessions,
-		movements: db.cash_movements,
-		closures: db.closures,
+
+		storeDB: db,
 	});
 	const refreshed = row.getLatest().toJSON();
 	expect(refreshed).toMatchObject({
@@ -258,7 +263,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		status: 'counting',
 		approved_counted: { cash: '80', card: '10' },
 	});
-	await closeSession(db.register_sessions, row.id, { counted: { cash: '80', card: '10' } });
+	await closeSession(db, row.id, { counted: { cash: '80', card: '10' } });
 	http.post.mockRejectedValue({
 		response: {
 			status: 403,
@@ -301,7 +306,7 @@ it('prunes movements together with their expired closed session', async () => {
 		sync_status: 'synced',
 		closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
 	});
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: row.id,
 		type: 'paid_in',
 		amount: '5',
@@ -313,10 +318,8 @@ it('prunes movements together with their expired closed session', async () => {
 
 	await refreshSessions({
 		registerId: 'register',
-		closures: db.closures,
+		storeDB: db,
 		http,
-		sessions: db.register_sessions,
-		movements: db.cash_movements,
 	});
 
 	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
@@ -342,7 +345,7 @@ it.each(['pending', 'failed'] as const)(
 			sync_status: 'synced',
 			closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
 		});
-		const movement = await recordMovement(db.cash_movements, {
+		const movement = await recordMovement(db, {
 			sessionId: row.id,
 			type: 'paid_in',
 			amount: '5',
@@ -354,10 +357,8 @@ it.each(['pending', 'failed'] as const)(
 
 		await refreshSessions({
 			registerId: 'register',
-			closures: db.closures,
+			storeDB: db,
 			http,
-			sessions: db.register_sessions,
-			movements: db.cash_movements,
 		});
 
 		// The cash physically moved and the server never took the row: the device holds the
@@ -370,7 +371,7 @@ it.each(['pending', 'failed'] as const)(
 it('does not call a local write failure after the store accepted a movement a delivery retry', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_in',
 		amount: '20',
@@ -395,7 +396,7 @@ it('does not call a local write failure after the store accepted a movement a de
 it('logs a retryable outbox failure at debug and a permanent one at its registered level, with the transport facts', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_in',
 		amount: '20',
@@ -466,7 +467,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 it('gives a refused reversal its own code, below error, because the original still stands', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
-	const target = await recordMovement(db.cash_movements, {
+	const target = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_out',
 		amount: '5',
@@ -474,7 +475,7 @@ it('gives a refused reversal its own code, below error, because the original sti
 		actor: 7,
 	});
 	await target.incrementalPatch({ sync_status: 'synced' });
-	await voidMovement(db.cash_movements, target.id, 7);
+	await voidMovement(db, target.id, 7);
 	http.post.mockRejectedValueOnce({
 		response: { status: 409, data: { code: 'wcpos_movement_void_refused' } },
 	});
@@ -505,7 +506,7 @@ it('names a refused open and a refused close apart', async () => {
 		status: 'counting',
 		sync_status: 'synced',
 	});
-	await closeSession(db.register_sessions, other.id, { counted: { cash: '100' } });
+	await closeSession(db, other.id, { counted: { cash: '100' } });
 	http.post.mockRejectedValueOnce({
 		response: { status: 400, data: { code: 'rest_invalid_param' } },
 	});
@@ -525,7 +526,7 @@ it('names a refused open and a refused close apart', async () => {
 it('does not call a refused counting transition a refused close', async () => {
 	const row = await open();
 	await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
-	await startCounting(db.register_sessions, row.id);
+	await startCounting(db, row.id);
 	http.post.mockRejectedValueOnce({
 		response: { status: 400, data: { code: 'rest_invalid_param' } },
 	});
@@ -602,7 +603,7 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 		sync_status: 'synced',
 		status: 'counting',
 	});
-	await closeSession(db.register_sessions, row.id, { counted: { cash: '80' } });
+	await closeSession(db, row.id, { counted: { cash: '80' } });
 	http.post.mockRejectedValue({
 		response: {
 			status: 403,
@@ -647,7 +648,7 @@ it('chains outbox attempts on one operation id the ledger can follow', async () 
 it('does not let a permanently failed close block a successor', async () => {
 	const predecessor = await open();
 	await predecessor.incrementalPatch({ server_status: 'counting', status: 'counting' });
-	await closeSession(db.register_sessions, predecessor.id, { counted: { cash: '100' } });
+	await closeSession(db, predecessor.id, { counted: { cash: '100' } });
 	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'close_refused' } } });
 	await drain();
 	expect(predecessor.getLatest().sync_status).toBe('failed');
@@ -660,14 +661,14 @@ it('does not let a permanently failed close block a successor', async () => {
 it('permanently fails a reversal with its refused target error', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
-	const target = await recordMovement(db.cash_movements, {
+	const target = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_out',
 		amount: '5',
 		reason: 'Milk',
 		actor: 7,
 	});
-	const reversal = await voidMovement(db.cash_movements, target.id, 7);
+	const reversal = await voidMovement(db, target.id, 7);
 	http.post.mockRejectedValueOnce({
 		response: { status: 403, data: { code: 'movement_refused' } },
 	});
@@ -684,9 +685,9 @@ it('permanently fails a reversal with its refused target error', async () => {
 async function closure() {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open' });
-	const closed = await closeSession(db.register_sessions, session.id, { counted: { cash: '100' } });
+	const closed = await closeSession(db, session.id, { counted: { cash: '100' } });
 	const row = await writeClosure({
-		closures: db.closures,
+		storeDB: db,
 		userDB,
 		siteUuid: 'site',
 		session: closed.toJSON(true),
@@ -767,7 +768,7 @@ it('waits for pending movements and dirty named orders before acknowledging a cl
 		server_status: 'closed',
 		pending_status: null,
 	});
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_in',
 		amount: '20',
@@ -779,13 +780,15 @@ it('waits for pending movements and dirty named orders before acknowledging a cl
 	const order = { local: { dirty: true } };
 	const drainWithOrder = () =>
 		drainRegisterSessionQueue({
-			sessions: db.register_sessions,
-			movements: db.cash_movements,
-			closures: db.closures,
+			storeDB: db,
 			userDB,
 			siteUuid: 'site',
 			http,
-			orders: { findOne: () => ({ exec: async () => order }) } as never,
+			engine: {
+				active: () => ({
+					database: { collections: { orders: { findOne: () => ({ exec: async () => order }) } } },
+				}),
+			} as never,
 		});
 	await drainWithOrder();
 	expect(http.post).not.toHaveBeenCalled();
@@ -837,7 +840,7 @@ it('blocks a failed named movement and dead-letters the closure after six due at
 		server_status: 'closed',
 		pending_status: null,
 	});
-	const movement = await recordMovement(db.cash_movements, {
+	const movement = await recordMovement(db, {
 		sessionId: session.id,
 		type: 'paid_out',
 		amount: '5',
@@ -932,7 +935,7 @@ it.each([
 	async (as_of_gmt, date, expectedAt) => {
 		const row = await open();
 		await row.incrementalPatch({ sync_status: 'synced' });
-		const movement = await recordMovement(db.cash_movements, {
+		const movement = await recordMovement(db, {
 			sessionId: row.id,
 			type: 'paid_in',
 			amount: '20',
@@ -951,9 +954,8 @@ it.each([
 		await refreshSessions({
 			registerId: 'register',
 			http,
-			sessions: db.register_sessions,
-			movements: db.cash_movements,
-			closures: db.closures,
+
+			storeDB: db,
 		});
 		expect(row.getLatest().toJSON()).toMatchObject({
 			server_expected_at: expectedAt,
@@ -989,9 +991,8 @@ it('persists snapshot membership arrays and clears them when an older detail omi
 		await refreshSessions({
 			registerId: 'register',
 			http,
-			sessions: db.register_sessions,
-			movements: db.cash_movements,
-			closures: db.closures,
+
+			storeDB: db,
 		});
 		expect(row.getLatest().toJSON()).toMatchObject({
 			server_order_ids: ids.order_ids ?? null,

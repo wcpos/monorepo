@@ -5,11 +5,10 @@ import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { of, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { drainRegisterSessionQueue, refreshSessions } from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
 import { RegisterSessionBridge, sameStore } from './bridge';
-import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions } from './refresh';
 
 const sessions = {
 	find: () => ({ $: of([]) }),
@@ -23,6 +22,7 @@ jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
 const userDB = {};
+const storeDB = {};
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
 	engineCollection: () => null,
@@ -32,14 +32,13 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../contexts/app-state', () => {
 	const session = () => ({
 		userDB,
+		storeDB,
 		site,
 		store: { id: storeId, register_sessions: true },
 		wpCredentials: { capabilities: [] },
 	});
 	return { useStoreSession: session, useAppState: session };
 });
-jest.mock('@wcpos/query/register-session', () => ({ readRegister: async () => registerDoc }));
-jest.mock('./session-store', () => ({ writeClosure: (...args: unknown[]) => closure(...args) }));
 const movements = sessions;
 const http = {};
 
@@ -57,9 +56,12 @@ jest.mock('./use-register-session-collections', () => ({
 	useRegisterSessionCollection: () => sessions,
 	useCashMovementCollection: () => movements,
 }));
-jest.mock('./queue', () => ({ drainRegisterSessionQueue: jest.fn() }));
 const mockRefreshRequests = new Subject<unknown>();
-jest.mock('./refresh', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readRegister: async () => registerDoc,
+	writeClosure: (...args: unknown[]) => closure(...args),
+	drainRegisterSessionQueue: jest.fn(),
 	refreshSessions: jest.fn(),
 	get sessionRefreshRequests() {
 		return mockRefreshRequests;

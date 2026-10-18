@@ -1,6 +1,6 @@
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
-import type { EngineCollection } from '@wcpos/query';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import type {
 	CashMovementCollection,
 	CashMovementDocument,
@@ -13,15 +13,17 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
+import { backoffMs, MAX_SEND_ATTEMPTS } from '@wcpos/utils/outbox-backoff';
+
+import { engineCollection, type EngineCollection } from '../records/engine-collection';
+import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
 	adoptCounters,
 	mintClosureNumber,
 	readCounters,
 	readRegister,
 	type RegisterCounters,
-} from '@wcpos/query/register-session';
-
-import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
+} from './register-document';
 import { failureFacts } from './failure-facts';
 import { recordRegisterFact } from './audit';
 
@@ -119,7 +121,29 @@ async function acknowledge(
 		};
 	});
 }
-export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
+export function drainRegisterSessionQueue({
+	storeDB,
+	engine,
+	...input
+}: {
+	storeDB: RegisterStoreDatabase;
+	engine: Pick<RxdbSyncEngine, 'active'>;
+	userDB: UserDatabase;
+	siteUuid: string;
+	http: SessionHttp;
+}): Promise<void> {
+	const {
+		register_sessions: sessions,
+		cash_movements: movements,
+		closures,
+	} = registerCollections(storeDB);
+	const deps: Deps = {
+		...input,
+		sessions,
+		movements,
+		closures,
+		orders: engineCollection(engine.active()?.database, 'orders'),
+	};
 	const running = inFlight.get(deps.sessions);
 	if (running) return running;
 	const promise = drain(deps).finally(() => inFlight.delete(deps.sessions));
@@ -244,7 +268,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;
-				await adoptSession(sessions, server);
+				await adoptSessionRow(sessions, server);
 				recordRegisterFact({
 					kind: 'session-adopted',
 					sessionId: server.id,
@@ -489,7 +513,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 			await row.incrementalPatch({ synced_rows_at: new Date().toISOString() });
 	}
 }
-export async function adoptSession(
+export async function adoptSessionRow(
 	sessions: RegisterSessionCollection,
 	server: RegisterSessionRow & { movements?: unknown; expected?: unknown; sales_count?: unknown }
 ) {
@@ -512,4 +536,11 @@ export async function adoptSession(
 		server_status: row.status,
 		pending_status: null,
 	});
+}
+
+export function adoptSession(
+	storeDB: RegisterStoreDatabase,
+	server: Parameters<typeof adoptSessionRow>[1]
+) {
+	return adoptSessionRow(registerCollections(storeDB).register_sessions, server);
 }

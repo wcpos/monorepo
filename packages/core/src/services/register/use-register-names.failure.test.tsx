@@ -14,6 +14,7 @@ jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
 jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
 	getRegisterSnapshot: () => null,
 	getBoundRegisterId: (_siteUuid: string, _storeId?: number) => null,
 	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) => null,

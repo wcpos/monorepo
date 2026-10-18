@@ -727,8 +727,8 @@ describe('VoidButton', () => {
 
 	it('voids an unpaid order with sessions on and none open: the row carries no session', async () => {
 		const { RegisterSessionRequiredError } = jest.requireActual<
-			typeof import('../../../../../services/register-session/session-store')
-		>('../../../../../services/register-session/session-store');
+			typeof import('@wcpos/query/register-session')
+		>('@wcpos/query/register-session');
 		mockResolveSession = async () => {
 			throw new RegisterSessionRequiredError();
 		};
