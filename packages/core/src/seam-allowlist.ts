@@ -1661,10 +1661,15 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 2",
 	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 3",
 	'screens/main/pos/products/footer.tsx :: raw query construction :: ProductsFooter :: count :: 1',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	"screens/main/contexts/use-push-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: enqueueDocumentWrite :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: usePushDocument :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: write plane outside a command module :: enqueueDocumentWrite :: runtime.engine.write :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 712;
+export const SEAM_RETIRED_FLOOR = 716;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'7ed4e9f3a8408157912b9659e0769fb26cb3324176612a893dd695929cde18d9';
+	'f877b17080b855ac18a2242a8d3ed888eb22c15468b66f389057126d901b3016';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1699,7 +1704,11 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: enqueueDocumentWrite :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: usePushDocument :: findEngineResident :: 1',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 7;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 10;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'0448a89f88735b0cdc56343147ab39848896a2ba558880b831d22c079baeea84';
+	'a244d299bcabd4c339ec9394287b328f233a277af0bb5cd54e673fffb2f48428';
