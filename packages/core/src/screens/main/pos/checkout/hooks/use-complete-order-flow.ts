@@ -29,7 +29,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
-	const { setCurrentOrderID, getCurrentOrderRecord } = useCurrentOrderActions();
+	const { setCurrentOrderID, getCurrentOrderID } = useCurrentOrderActions();
 
 	return React.useCallback(
 		async (order: EngineRecord<'orders'>, outcome: SaleOutcome, queue?: OrderMutationContext) => {
@@ -46,7 +46,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			if (result !== 'completed' && result !== 'sent') return;
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
-			if (getCurrentOrderRecord().uuid !== order.uuid) {
+			if (getCurrentOrderID() !== order.uuid) {
 				leaveCheckout(order.uuid);
 				return;
 			}
@@ -77,7 +77,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			router,
 			screenSize,
 			setCurrentOrderID,
-			getCurrentOrderRecord,
+			getCurrentOrderID,
 			uiSettings.autoShowReceipt,
 		]
 	);

@@ -66,6 +66,8 @@ export const useCurrentOrderRecord = (): CurrentOrderRecord => {
 };
 
 export interface CurrentOrderActions {
+	/** Selected ID, even after its record leaves the open-orders query. */
+	getCurrentOrderID: () => string | undefined;
 	getCurrentOrderRecord: () => CurrentOrderRecord;
 	setCurrentOrderID: (id: string) => void;
 }

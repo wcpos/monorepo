@@ -159,6 +159,7 @@ jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({
 		setCurrentOrderID: mockSetCurrentOrderID,
 		getCurrentOrderRecord: () => order,
+		getCurrentOrderID: () => order.uuid,
 	}),
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({

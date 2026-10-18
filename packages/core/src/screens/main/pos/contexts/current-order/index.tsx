@@ -139,9 +139,11 @@ export function CurrentOrderProvider({
 	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
 	const currentOrderRecordRef = React.useRef(currentOrderRecord);
+	const currentOrderIDRef = React.useRef(internalOrderId);
 	React.useLayoutEffect(() => {
 		currentOrderRecordRef.current = currentOrderRecord;
-	}, [currentOrderRecord]);
+		currentOrderIDRef.current = internalOrderId;
+	}, [currentOrderRecord, internalOrderId]);
 
 	React.useLayoutEffect(() => {
 		routeOrderUUIDRef.current = currentOrderUUID;
@@ -155,6 +157,7 @@ export function CurrentOrderProvider({
 	const actions = React.useMemo<CurrentOrderActions>(
 		() => ({
 			getCurrentOrderRecord: () => currentOrderRecordRef.current,
+			getCurrentOrderID: () => currentOrderIDRef.current,
 			setCurrentOrderID,
 		}),
 		[setCurrentOrderID]

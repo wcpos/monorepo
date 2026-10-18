@@ -48,8 +48,10 @@ const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 let mockSelectedOrder = 'uuid-42';
+let mockOrderRemoved = false;
 beforeEach(() => {
 	mockSelectedOrder = 'uuid-42';
+	mockOrderRemoved = false;
 });
 let mockAutoShowReceipt = false;
 let mockScreenSize = 'lg';
@@ -76,7 +78,8 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({
 		setCurrentOrderID: mockSetCurrentOrderID,
-		getCurrentOrderRecord: () => ({ uuid: mockSelectedOrder }),
+		getCurrentOrderRecord: () => ({ uuid: mockOrderRemoved ? 'new-order' : mockSelectedOrder }),
+		getCurrentOrderID: () => mockSelectedOrder,
 	}),
 }));
 
@@ -338,5 +341,29 @@ it.each(['stage', 'modal'] as const)(
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['stage', 'modal'] as const)(
+	'routes the %s completion after A disappears from open orders',
+	async (host) => {
+		jest.clearAllMocks();
+		mockAutoShowReceipt = host === 'modal';
+		mockScreenSize = 'sm';
+		mockRequire.mockImplementation(() => {
+			mockOrderRemoved = true;
+			return { ready: Promise.resolve(), release: jest.fn() };
+		});
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record, host));
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		if (host === 'stage') {
+			expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+		} else {
+			expect(mockReplace).toHaveBeenCalledWith({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+				params: { orderId: 'uuid-42' },
+			});
+		}
 	}
 );

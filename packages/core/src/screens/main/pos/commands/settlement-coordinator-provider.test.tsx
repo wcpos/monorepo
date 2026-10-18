@@ -9,6 +9,7 @@ import * as orderMath from '@wcpos/order-math';
 import { createCartConfig } from '@wcpos/order-math';
 
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary } from './boundary-commit';
 import { config } from '../../../../../jest/cart-write';
@@ -687,5 +688,44 @@ it.each([
 		}
 		expect(stockChanges[collection].observed).toBe(false);
 		expect(databases.observed).toBe(false);
+	}
+);
+
+it.each([true, false])(
+	'settles offline authorization=%s after a tax reduction',
+	async (recorded_offline) => {
+		const rates = [{ id: 1, rate: '20', class: 'standard', shipping: true, priority: 1 }];
+		currentConfig = createCartConfig({ ...config, calcTaxes: true, rates, allRates: rates });
+		const a = record({
+			status: 'pos-partial',
+			total: '12',
+			line_items: [],
+			shipping_lines: [{ method_id: 'flat_rate', total: '10' }],
+			meta_data: orderMath.withLedger(
+				[],
+				[{ ...row, status: 'authorized', recorded_offline, amount: '11' }]
+			),
+		});
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			expect(commitAtBoundary).not.toHaveBeenCalled();
+			const reduced = [{ ...rates[0], rate: '10' }];
+			currentConfig = createCartConfig({
+				...config,
+				calcTaxes: true,
+				rates: reduced,
+				allRates: reduced,
+			});
+			mockInputs = { ...mockInputs, rates: reduced };
+			view.rerender(<SettlementCoordinatorProvider />);
+			await flush();
+			expect(a.payload.status).toBe(recorded_offline ? 'completed' : 'pos-partial');
+			expect(a.payload.total).toBe(recorded_offline ? '11' : '12');
+			expect(commitAtBoundary).toHaveBeenCalledTimes(recorded_offline ? 1 : 0);
+		} finally {
+			view.unmount();
+		}
 	}
 );
