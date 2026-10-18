@@ -298,6 +298,87 @@ it('keeps a cashier transition that lands while the list row is being adopted', 
 		sync_status: 'pending',
 	});
 });
+/** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
+const serverMovementRow = (local: {
+	id: string;
+	session_id: string;
+	type: string;
+	amount: string;
+	reason: string;
+	created_at_gmt: string;
+	created_by?: number | null;
+	voids?: string | null;
+}) => ({
+	id: local.id,
+	session_id: local.session_id,
+	type: local.type,
+	amount: local.amount,
+	reason: local.reason,
+	actor: local.created_by ?? 0,
+	voids: local.voids ?? null,
+	voided_by: null,
+	created_at_gmt: local.created_at_gmt,
+});
+it('adopts a server movement row in the local shape: `actor` is `created_by`, nothing else', async () => {
+	const row = await open();
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	http.post.mockImplementation(async (url) => ({
+		data:
+			url === 'movements'
+				? serverMovementRow(movement.toJSON())
+				: { ...row.getLatest().toJSON(), status: 'open' },
+	}));
+	await drain();
+	expect(movement.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', created_by: 7 });
+	expect(movement.getLatest().toJSON()).not.toHaveProperty('actor');
+});
+it('a refresh keeps a reversal claim the server has not acknowledged, and the cashier', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	http.post.mockImplementation(async (url) => ({
+		data:
+			url === 'movements'
+				? serverMovementRow(target.toJSON())
+				: { ...row.getLatest().toJSON(), status: 'open' },
+	}));
+	await drain();
+	expect(target.getLatest().sync_status).toBe('synced');
+	// The void claims the target locally; its reversal is still pending when the refresh lands.
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().toJSON()).toMatchObject({
+		sync_status: 'synced',
+		created_by: 7,
+		voided_by: reversal.id,
+	});
+	expect(target.getLatest().toJSON()).not.toHaveProperty('actor');
+	expect(reversal.getLatest().sync_status).toBe('pending');
+});
 it('closes a predecessor before creating its successor on the same register', async () => {
 	const predecessor = await open();
 	await predecessor.incrementalPatch({

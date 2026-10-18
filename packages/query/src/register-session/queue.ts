@@ -27,6 +27,53 @@ import {
 import { failureFacts } from './failure-facts';
 import { recordRegisterFact } from './audit';
 
+/**
+ * A cash movement as the server serves it (`Cash_Movement_Store`: `SELECT *`, and the POST
+ * echo): the table's columns, with the cashier under `actor`. It has no `created_by` and no
+ * outbox fields, so it is never written to the collection as-is — `movementFromServer` maps it.
+ */
+export type ServerMovementRow = Omit<CashMovementRow, 'created_by' | keyof typeof synced> & {
+	actor: number | null;
+};
+
+/** The server's movement row in the local shape: `actor` is `created_by`; unknown keys drop. */
+export function movementFromServer(server: ServerMovementRow) {
+	const { id, session_id, type, amount, reason, created_at_gmt, actor, voids, voided_by } = server;
+	return {
+		id,
+		session_id,
+		type,
+		amount,
+		reason,
+		created_at_gmt,
+		created_by: actor ?? null,
+		voids: voids ?? null,
+		voided_by: voided_by ?? null,
+	};
+}
+
+/**
+ * Adopt a server movement row over the local one. Merged, never replaced (see
+ * `adoptSessionRow`): a local reversal claim (`voided_by`) the server has not acknowledged yet
+ * must survive the refresh, or the closure renders the movement as never voided.
+ */
+export async function adoptMovementRow(
+	movements: CashMovementCollection,
+	server: ServerMovementRow
+) {
+	const adopted = { ...movementFromServer(server), ...synced };
+	const local = await movements.findOne(adopted.id).exec();
+	if (!local) {
+		await movements.incrementalUpsert(adopted);
+		return;
+	}
+	await local.incrementalModify((current) =>
+		current.sync_status === 'pending'
+			? current
+			: { ...current, ...adopted, voided_by: current.voided_by || adopted.voided_by }
+	);
+}
+
 export type SessionHttp = {
 	get: (
 		url: string,
@@ -371,11 +418,12 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					...(row.voids ? { voids: row.voids } : {}),
 				});
 				try {
+					const accepted = movementFromServer(response.data as ServerMovementRow);
 					await row.incrementalModify((local) => ({
 						...local,
-						...(response.data as CashMovementRow),
+						...accepted,
 						...synced,
-						voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
+						voided_by: local.voided_by || accepted.voided_by,
 					}));
 				} catch (error) {
 					// The store already accepted this movement; see the `persist` note in send().
