@@ -20,14 +20,19 @@ export type GapsCheck = CheckBase & {
 	kind: 'gaps';
 	/** Sum of `missing` across every gap: the receipt numbers that were never used. */
 	missing: number;
+	/** Distinct tills with a gap, not counting sales without a till stamp. */
 	tills: number;
+	/** Some gap is on sales without a till stamp. */
+	unstamped: boolean;
 	/** Sorted by till, then `after`. */
 	rows: RegisterGap[];
 };
 export type DuplicatesCheck = CheckBase & {
 	kind: 'duplicates';
-	/** Distinct tills whose counter restarted. */
+	/** Distinct tills whose counter restarted, not counting sales without a till stamp. */
 	tills: number;
+	/** Some repeated number is on sales without a till stamp. */
+	unstamped: boolean;
 	/** Sorted by till, then counter, so a till's rows are adjacent. */
 	rows: RegisterDuplicate[];
 };
@@ -64,11 +69,22 @@ export function sumMissing(gaps: readonly { missing: number }[]): number {
 	return gaps.reduce((total, gap) => total + gap.missing, 0);
 }
 
-function distinctTills(rows: readonly { till: string }[]): number {
-	return new Set(rows.map((row) => row.till)).size;
+/**
+ * Real devices among the rows, and whether any row is from the register-id placeholder
+ * the server uses for a sale with no till stamp (that bucket is not a till to count).
+ */
+function tillsOf(
+	rows: readonly { till: string }[],
+	registerId: string
+): { tills: number; unstamped: boolean } {
+	const stamped = rows.filter((row) => !isUnstampedTill(row.till, registerId));
+	return {
+		tills: new Set(stamped.map((row) => row.till)).size,
+		unstamped: stamped.length < rows.length,
+	};
 }
 
-export function gapsCheck(gaps: readonly RegisterGap[]): GapsCheck {
+export function gapsCheck(gaps: readonly RegisterGap[], registerId: string): GapsCheck {
 	const rows = [...gaps].sort((a, b) => byTill(a, b) || a.after - b.after);
 	const failing = rows.length > 0;
 	return {
@@ -76,15 +92,24 @@ export function gapsCheck(gaps: readonly RegisterGap[]): GapsCheck {
 		failing,
 		notable: failing,
 		missing: sumMissing(rows),
-		tills: distinctTills(rows),
+		...tillsOf(rows, registerId),
 		rows,
 	};
 }
 
-export function duplicatesCheck(duplicates: readonly RegisterDuplicate[]): DuplicatesCheck {
+export function duplicatesCheck(
+	duplicates: readonly RegisterDuplicate[],
+	registerId: string
+): DuplicatesCheck {
 	const rows = [...duplicates].sort((a, b) => byTill(a, b) || a.counter - b.counter);
 	const failing = rows.length > 0;
-	return { kind: 'duplicates', failing, notable: failing, tills: distinctTills(rows), rows };
+	return {
+		kind: 'duplicates',
+		failing,
+		notable: failing,
+		...tillsOf(rows, registerId),
+		rows,
+	};
 }
 
 /** Sales sharing one counter: the server's true count, else the (capped) sample of ids. */
@@ -154,8 +179,8 @@ export function orderChecks(checks: readonly RegisterCheck[]): RegisterCheck[] {
 export function registerChecks(register: RegisterReport): RegisterCheck[] {
 	const closures = closuresCheck(register);
 	return orderChecks([
-		gapsCheck(register.gaps),
-		duplicatesCheck(register.duplicates),
+		gapsCheck(register.gaps, register.id),
+		duplicatesCheck(register.duplicates, register.id),
 		clockCheck(register.skew, register.skew_counts),
 		...(closures ? [closures] : []),
 	]);

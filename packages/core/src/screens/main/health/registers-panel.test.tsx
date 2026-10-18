@@ -198,8 +198,9 @@ it('lists failing checks first, in the order gaps, duplicates, clock, closures',
 	// A passing row is not pressable and has no chevron.
 	expect(within(register()).queryByTestId('health-register-check-gaps-trigger')).toBeNull();
 	expect(screen.getByTestId('health-register-check-gaps').textContent).toBe('No skipped numbers');
+	// Closures are not windowed, so the passing row says what it covers.
 	expect(screen.getByTestId('health-register-check-closures').textContent).toBe(
-		'Closures numbered in order'
+		'Closures numbered in orderCovers every closure, not only the last 30 days.'
 	);
 });
 
@@ -325,6 +326,13 @@ it('says No till recorded when the server fell back to the register id as the ti
 		],
 	});
 	render(<RegistersPanel />);
+	// The placeholder bucket is not a till, so the titles do not count it as one.
+	expect(screen.getByTestId('health-register-check-gaps').textContent).toContain(
+		'1 skipped number on sales with no till recorded'
+	);
+	expect(screen.getByTestId('health-register-check-duplicates').textContent).toContain(
+		'Counter restarted on sales with no till recorded'
+	);
 	open('gaps');
 	open('duplicates');
 	expect(screen.getByTestId('health-register-gap').textContent).toBe(
@@ -333,6 +341,22 @@ it('says No till recorded when the server fell back to the register id as the ti
 	expect(screen.getByTestId('health-register-duplicate').textContent).toBe(
 		'No till recorded — 2 sales numbered #2orders 1007, 1008'
 	);
+});
+
+it('counts only real tills in the title when stamped and unstamped sales both repeat a number', () => {
+	withRegisters({
+		...clean,
+		duplicates: [
+			{ till: 'till-1', counter: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
+			{ till: TILL_A, counter: 1, order_ids: [11, 12], order_numbers: ['1011', '1012'] },
+		],
+	});
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-duplicates').textContent).toContain(
+		'Counter restarted on 1 till'
+	);
+	open('duplicates');
+	expect(screen.getAllByTestId('health-register-duplicate')).toHaveLength(2);
 });
 
 it('leaves deleted orders out of order lists and names them on skew rows', () => {
@@ -362,7 +386,7 @@ it('takes clock counts from skew_counts when the server sends them', () => {
 	withRegisters({ ...clean, skew: [behindSkew], skew_counts: { ahead: 0, behind: 12 } });
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-register-check-clock').textContent).toContain(
-		'12 offline sales synced later than they were made. Nothing to do.'
+		"12 sales were received later than their till's time"
 	);
 });
 
@@ -399,17 +423,25 @@ it('fails the clock check on a clock running ahead and lists only the ahead sale
 	]);
 });
 
-it('passes the clock check on behind-only sales and keeps them one tap away', () => {
+it('passes the clock check on behind-only sales without claiming the clocks agree', () => {
 	withRegisters({ ...clean, skew: [behindSkew] });
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-clock');
-	expect(check.textContent).toContain('Till clocks agree with your server');
-	expect(check.textContent).toContain(
-		'1 offline sale synced later than it was made. Nothing to do.'
+	// A late sale is usually offline, but the payload cannot rule out a clock running behind.
+	expect(check.textContent).toBe(
+		"No till clock runs ahead1 sale was received later than its till's time, usually an offline sale synced later. If that till was online, check its clock."
 	);
 	expect(check.querySelector('[data-icon="circleCheck"]')).not.toBeNull();
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew')).toHaveLength(1);
+});
+
+it('says the till clocks agree only when no sale is out of step', () => {
+	withRegisters({ ...clean, gaps: [{ till: TILL_A, after: 1, before: 3, missing: 1 }] });
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-clock').textContent).toBe(
+		'Till clocks agree with your server'
+	);
 });
 
 it('omits the closures check when the plugin sends no closure lists', () => {
@@ -432,6 +464,9 @@ it('fails the closures check from whichever closure list is non-empty', () => {
 	const check = screen.getByTestId('health-register-check-closures');
 	expect(check.textContent).toContain(
 		'3 closure numbers skipped · 1 closure printed with a different number'
+	);
+	expect(check.textContent).toContain(
+		'Closures are never renumbered, and this check covers every closure, not only the last 30 days.'
 	);
 	open('closures');
 	expect(screen.getAllByTestId('health-register-closure').map((row) => row.textContent)).toEqual([

@@ -109,23 +109,32 @@ function skewRow(t: T, skew: RegisterSkew) {
 	);
 }
 
-function CheckView({ check, registerId }: { check: RegisterCheck; registerId: string }) {
+function CheckView({
+	check,
+	registerId,
+	days,
+}: {
+	check: RegisterCheck;
+	registerId: string;
+	days: number;
+}) {
 	const t = useT();
 	const testID = `health-register-check-${check.kind}`;
 	if (!check.failing) {
-		// Only the clock has something to show when it passes: sales received late.
+		// Only the clock has rows to show when it passes: sales received late. A late sale
+		// is usually an offline one, but the payload cannot rule out a clock running behind,
+		// so that row does not claim the clocks agree.
 		const behind = check.kind === 'clock' ? check.behind : [];
+		const title = behind.length > 0 ? 'health.registers.clock_pass_behind' : PASS_TITLE[check.kind];
+		let sub: string | undefined;
+		if (check.kind === 'clock' && behind.length > 0) {
+			sub = t('health.registers.clock_behind', { count: check.behindCount });
+		} else if (check.kind === 'closures') {
+			// Closures are not windowed; the section sub's "last N days" does not cover them.
+			sub = t('health.registers.closures_scope', { days });
+		}
 		return (
-			<CheckRow
-				attention={false}
-				testID={testID}
-				title={t(PASS_TITLE[check.kind])}
-				sub={
-					check.kind === 'clock' && behind.length > 0
-						? t('health.registers.clock_behind', { count: check.behindCount })
-						: undefined
-				}
-			>
+			<CheckRow attention={false} testID={testID} title={t(title)} sub={sub}>
 				{behind.length > 0 ? behind.map((skew) => skewRow(t, skew)) : null}
 			</CheckRow>
 		);
@@ -136,10 +145,17 @@ function CheckView({ check, registerId }: { check: RegisterCheck; registerId: st
 				<CheckRow
 					attention
 					testID={testID}
-					title={t('health.registers.gaps_title', {
-						missing: t('health.registers.gaps_count', { count: check.missing }),
-						tills: t('health.registers.till_count', { count: check.tills }),
-					})}
+					title={
+						// Every gap on sales without a till stamp: there is no till to count.
+						check.tills === 0
+							? t('health.registers.gaps_title_no_till', {
+									missing: t('health.registers.gaps_count', { count: check.missing }),
+								})
+							: t('health.registers.gaps_title', {
+									missing: t('health.registers.gaps_count', { count: check.missing }),
+									tills: t('health.registers.till_count', { count: check.tills }),
+								})
+					}
 					sub={t('health.registers.gaps_sub')}
 				>
 					{check.rows.map((gap, index) => (
@@ -160,7 +176,11 @@ function CheckView({ check, registerId }: { check: RegisterCheck; registerId: st
 				<CheckRow
 					attention
 					testID={testID}
-					title={t('health.registers.duplicates_title', { count: check.tills })}
+					title={
+						check.tills === 0
+							? t('health.registers.duplicates_title_no_till')
+							: t('health.registers.duplicates_title', { count: check.tills })
+					}
 					sub={t('health.registers.duplicates_sub')}
 				>
 					{check.rows.map((duplicate, index) => {
@@ -217,7 +237,7 @@ function CheckView({ check, registerId }: { check: RegisterCheck; registerId: st
 					attention
 					testID={testID}
 					title={parts.join(' · ')}
-					sub={t('health.registers.closures_sub')}
+					sub={t('health.registers.closures_sub', { days })}
 				>
 					{check.gaps.map((gap, index) => (
 						<Text
@@ -291,7 +311,7 @@ function RegisterBlock({ register, days }: { register: RegisterReport; days: num
 				/>
 			) : (
 				state.checks.map((check) => (
-					<CheckView key={check.kind} check={check} registerId={register.id} />
+					<CheckView key={check.kind} check={check} registerId={register.id} days={days} />
 				))
 			)}
 		</VStack>

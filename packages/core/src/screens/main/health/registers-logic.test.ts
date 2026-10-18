@@ -45,60 +45,89 @@ const kinds = (register: RegisterReport) => registerChecks(register).map((check)
 
 describe('gapsCheck', () => {
 	it('sums missing numbers, counts distinct tills and sorts by till then after', () => {
-		const check = gapsCheck([
-			{ till: 'b', after: 1, before: 3, missing: 1 },
-			{ till: 'a', after: 10, before: 14, missing: 3 },
-			{ till: 'a', after: 2, before: 4, missing: 1 },
-		]);
+		const check = gapsCheck(
+			[
+				{ till: 'b', after: 1, before: 3, missing: 1 },
+				{ till: 'a', after: 10, before: 14, missing: 3 },
+				{ till: 'a', after: 2, before: 4, missing: 1 },
+			],
+			'reg-1'
+		);
 		expect(check.failing).toBe(true);
 		expect(check.notable).toBe(true);
 		expect(check.missing).toBe(5);
 		expect(check.tills).toBe(2);
+		expect(check.unstamped).toBe(false);
 		expect(check.rows.map((gap) => `${gap.till}:${gap.after}`)).toEqual(['a:2', 'a:10', 'b:1']);
 	});
 
 	it('passes with no gaps', () => {
-		expect(gapsCheck([])).toEqual({
+		expect(gapsCheck([], 'reg-1')).toEqual({
 			kind: 'gaps',
 			failing: false,
 			notable: false,
 			missing: 0,
 			tills: 0,
+			unstamped: false,
 			rows: [],
 		});
+	});
+
+	it('does not count sales without a till stamp as a till', () => {
+		const unstampedOnly = gapsCheck([{ till: 'reg-1', after: 1, before: 3, missing: 1 }], 'reg-1');
+		expect(unstampedOnly).toMatchObject({ tills: 0, unstamped: true, missing: 1 });
+		const mixed = gapsCheck(
+			[
+				{ till: 'reg-1', after: 1, before: 3, missing: 1 },
+				{ till: 'a', after: 4, before: 7, missing: 2 },
+			],
+			'reg-1'
+		);
+		expect(mixed).toMatchObject({ tills: 1, unstamped: true, missing: 3 });
 	});
 });
 
 describe('duplicatesCheck', () => {
 	it('sorts rows by till then counter, so a till’s rows are adjacent', () => {
-		const check = duplicatesCheck([
-			duplicate('b', 1, [21, 22]),
-			duplicate('a', 3, [13, 14]),
-			duplicate('a', 1, [11, 12]),
-		]);
+		const check = duplicatesCheck(
+			[duplicate('b', 1, [21, 22]), duplicate('a', 3, [13, 14]), duplicate('a', 1, [11, 12])],
+			'reg-1'
+		);
 		expect(check.rows.map((row) => `${row.till}:${row.counter}`)).toEqual(['a:1', 'a:3', 'b:1']);
 	});
 
 	it('counts the tills that restarted, not the repeated counters', () => {
-		const check = duplicatesCheck([
-			duplicate('a', 1, [1, 2]),
-			duplicate('a', 2, [3, 4]),
-			duplicate('b', 1, [5, 6]),
-		]);
+		const check = duplicatesCheck(
+			[duplicate('a', 1, [1, 2]), duplicate('a', 2, [3, 4]), duplicate('b', 1, [5, 6])],
+			'reg-1'
+		);
 		expect(check.failing).toBe(true);
 		expect(check.notable).toBe(true);
 		expect(check.tills).toBe(2);
+		expect(check.unstamped).toBe(false);
 		expect(check.rows).toHaveLength(3);
 	});
 
 	it('passes, not notable, with no duplicates', () => {
-		expect(duplicatesCheck([])).toEqual({
+		expect(duplicatesCheck([], 'reg-1')).toEqual({
 			kind: 'duplicates',
 			failing: false,
 			notable: false,
 			tills: 0,
+			unstamped: false,
 			rows: [],
 		});
+	});
+
+	it('does not count sales without a till stamp as a till that restarted', () => {
+		expect(duplicatesCheck([duplicate('reg-1', 1, [1, 2])], 'reg-1')).toMatchObject({
+			failing: true,
+			tills: 0,
+			unstamped: true,
+		});
+		expect(
+			duplicatesCheck([duplicate('reg-1', 1, [1, 2]), duplicate('a', 1, [3, 4])], 'reg-1')
+		).toMatchObject({ tills: 1, unstamped: true });
 	});
 
 	it('counts sales from the server total when sent, else from the capped sample', () => {
@@ -206,7 +235,7 @@ describe('check order', () => {
 	});
 
 	it('orderChecks does not mutate its input', () => {
-		const checks = [gapsCheck([]), clockCheck([skew(1, 'ahead')])];
+		const checks = [gapsCheck([], 'reg-1'), clockCheck([skew(1, 'ahead')])];
 		orderChecks(checks);
 		expect(checks.map((check) => check.kind)).toEqual(['gaps', 'clock']);
 	});
@@ -270,6 +299,14 @@ describe('helpers', () => {
 	it('treats a till equal to the register id as a sale without a till stamp', () => {
 		expect(isUnstampedTill('reg-1', 'reg-1')).toBe(true);
 		expect(isUnstampedTill('3c9a1f2e-0000', 'reg-1')).toBe(false);
+	});
+
+	it('threads the register id into the till counts', () => {
+		const [gaps] = registerChecks({
+			...clean,
+			gaps: [{ till: 'reg-1', after: 1, before: 3, missing: 1 }],
+		});
+		expect(gaps).toMatchObject({ kind: 'gaps', tills: 0, unstamped: true });
 	});
 
 	it('leaves deleted orders out of an order list', () => {
