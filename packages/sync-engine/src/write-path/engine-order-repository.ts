@@ -331,7 +331,10 @@ export class EngineOrderRepository {
 				if (!localEntry) continue;
 				const index = serverMeta.findIndex((meta) => meta?.key === key);
 				if (index === -1) serverMeta.push(localEntry);
-				else serverMeta[index] = localEntry;
+				// The local value wins, but a Woo-assigned id on the server's entry is kept: a
+				// resident entry written before its acknowledgement has none, and a later full
+				// meta save without the id would make Woo append a duplicate row.
+				else serverMeta[index] = { ...localEntry, id: localEntry.id ?? serverMeta[index].id };
 			}
 			if (serverMeta.length > 0) {
 				entry.storedDocument = {
