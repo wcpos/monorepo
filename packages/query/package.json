@@ -12,6 +12,7 @@
 		"./collection-map": "./src/collection-map.ts",
 		"./register-session": "./src/register-session/index.ts",
 		"./temporary-order": "./src/temporary-order/index.ts",
+		"./store-local": "./src/store-local/index.ts",
 		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",
 		"./user-db": "./src/user-db/index.ts",

@@ -6,17 +6,17 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
+import {
+	pendingCompletions,
+	recordCompletionAttempt,
+	resolveCompletionAttempt,
+} from '@wcpos/query/store-local';
+import * as journal from '@wcpos/query/store-local';
 
 import { createDispatchToken } from '../../../../extensions/actions/registry';
 import * as mutationQueue from '../hooks/order-mutation-queue';
 import * as actions from '../../../../extensions/actions/dispatch';
 import { CHECKOUT_COMPLETE_EVENT, createActionContext } from '../../../../extensions/actions';
-import {
-	pendingCompletions,
-	recordCompletionAttempt,
-	resolveCompletionAttempt,
-} from './completion-journal';
-import * as journal from './completion-journal';
 import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,

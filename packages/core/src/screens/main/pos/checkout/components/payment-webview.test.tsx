@@ -8,12 +8,12 @@ import { BehaviorSubject, map, take } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { recordCompletionAttempt } from '@wcpos/query/store-local';
 
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { LegacyTab } from '../tender/legacy-tab';
 import { commitGatewaySale } from '../commit-gateway-sale';
 import { isSettledOrderStatus, persistSaleProvenance } from '../sale-completion';
-import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
@@ -2304,7 +2304,8 @@ jest.mock('../../contexts/current-order/context', () => ({
 }));
 
 // Journal storage is exercised against RxDB in the owner/journal suites.
-jest.mock('../completion-journal', () => ({
+jest.mock('@wcpos/query/store-local', () => ({
+	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
