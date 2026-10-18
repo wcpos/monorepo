@@ -34,7 +34,7 @@ jest.mock('../../../contexts/app-state', () => ({
 		userDB: mockUserDB,
 	}),
 }));
-jest.mock('../../../contexts/app-state/hydration-steps', () => ({
+jest.mock('../../../contexts/app-state/connect-probes', () => ({
 	testAuthorizationMethod: (...args: unknown[]) => mockTestAuthorizationMethod(...args),
 	runConnectCompatibilityProbes: (...args: unknown[]) => mockRunConnectCompatibilityProbes(...args),
 }));

@@ -1,6 +1,12 @@
-import { getEngineScopeSwitcher } from './engine-scope-port';
+import {
+	clearSessionPointer,
+	commitSessionPointer,
+	type CurrentSessionIDs,
+	type HydratedStoreSession,
+	type UserDatabase,
+} from '@wcpos/query/user-db';
 
-import type { CurrentSessionIDs, hydrateUserSession, SessionAppState } from './hydration-steps';
+import { getEngineScopeSwitcher } from './engine-scope-port';
 
 /**
  * The five fields an active store session consists of. Login and store-switch
@@ -60,8 +66,6 @@ export function assertStoreSession(state: SessionFields): void {
 	}
 }
 
-type HydratedStoreSession = Awaited<ReturnType<typeof hydrateUserSession>>;
-
 /**
  * The one place the durable session pointer is committed, in the one order that keeps a
  * cashier off a partial store: refuse an incomplete session (AUTH131 at the caller), move the
@@ -70,12 +74,12 @@ type HydratedStoreSession = Awaited<ReturnType<typeof hydrateUserSession>>;
  * Persistence failure after activation propagates; there is no rollback.
  */
 export async function commitStoreSession(
-	appState: SessionAppState,
+	userDB: UserDatabase,
 	next: { ids: CurrentSessionIDs; session: HydratedStoreSession }
 ): Promise<HydratedStoreSession> {
 	assertStoreSession(next.session);
 	await getEngineScopeSwitcher()?.(next.session);
-	await appState.set('current', () => next.ids);
+	await commitSessionPointer(userDB, next.ids);
 	return next.session;
 }
 
@@ -87,7 +91,7 @@ export const SIGNED_OUT_SESSION: HydratedStoreSession = Object.freeze({
 	extraData: undefined,
 });
 
-export async function clearStoreSession(appState: SessionAppState): Promise<HydratedStoreSession> {
-	await appState.set('current', () => null);
+export async function clearStoreSession(userDB: UserDatabase): Promise<HydratedStoreSession> {
+	await clearSessionPointer(userDB);
 	return SIGNED_OUT_SESSION;
 }

@@ -13,3 +13,14 @@ export type {
 	ReadonlyUserRecord,
 	ReadonlyWpCredentialsRecord,
 } from './records';
+export * from './session';
+export * from './state';
+// Core's remaining hydration orchestration keeps these types until U4b.
+export type {
+	SiteDocument,
+	StoreDatabase,
+	StoreDocument,
+	UserDatabase,
+	UserDocument,
+	WPCredentialsDocument,
+} from '@wcpos/database';

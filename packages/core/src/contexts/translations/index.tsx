@@ -3,6 +3,7 @@ import * as React from 'react';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
+import type { TranslationsState, UserDatabase } from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -17,7 +18,11 @@ type I18nInstance = ReturnType<typeof createInstance>;
 // One instance per translations state (one per user database), created outside React.
 const instances = new WeakMap<object, I18nInstance>();
 
-function instanceFor(translationsState: object, locale: string): I18nInstance {
+function instanceFor(
+	translationsState: TranslationsState,
+	locale: string,
+	userDB: UserDatabase
+): I18nInstance {
 	const existing = instances.get(translationsState);
 	if (existing) return existing;
 	const instance = createInstance();
@@ -43,6 +48,7 @@ function instanceFor(translationsState: object, locale: string): I18nInstance {
 				suffix: '}',
 			},
 			backend: {
+				userDB,
 				translationsState,
 			},
 		})
@@ -56,7 +62,7 @@ function instanceFor(translationsState: object, locale: string): I18nInstance {
 }
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
-	const { translationsState } = useAppState();
+	const { translationsState, userDB } = useAppState();
 	const { locale } = useLocale();
 
 	/**
@@ -89,7 +95,7 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 	 * instance — hundreds of instances a second, each reading the catalogue, and a
 	 * splash that never ended (seen on `next` after the SDK 58 upgrade, 2026-09-28).
 	 */
-	const i18nInstance = instanceFor(translationsState, locale);
+	const i18nInstance = instanceFor(translationsState, locale, userDB);
 	const requestedLocale = React.useRef(locale);
 
 	/**

@@ -1,4 +1,4 @@
-import type { hydrateUserSession } from './hydration-steps';
+import type { HydratedStoreSession } from '@wcpos/query/user-db';
 
 /**
  * Host port for the sync engine's scope transition. The app that owns the
@@ -7,9 +7,7 @@ import type { hydrateUserSession } from './hydration-steps';
  * that cannot reach the new scope aborts before persistence. Activation can
  * precede persistence; a later persistence failure does not roll it back.
  */
-export type EngineScopeSwitcher = (
-	session: Awaited<ReturnType<typeof hydrateUserSession>>
-) => Promise<void>;
+export type EngineScopeSwitcher = (session: HydratedStoreSession) => Promise<void>;
 
 let engineScopeSwitcher: EngineScopeSwitcher | null = null;
 

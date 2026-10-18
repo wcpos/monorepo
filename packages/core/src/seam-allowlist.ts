@@ -1236,7 +1236,16 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/hooks/use-store-label.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"screens/main/hooks/use-store-label.ts :: storage import ::  :: from '@wcpos/database' :: 2",
 	"screens/main/pos/cart/register-panel.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (e5): the store session, the session pointer and the state slots are owned by @wcpos/query/user-db.
+	'contexts/app-state/hydration-steps.ts :: raw query construction :: hydrateUserSession :: userDB.sites.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: raw query construction :: hydrateUserSession :: userDB.stores.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: raw query construction :: hydrateUserSession :: userDB.wp_credentials.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator :: hydrateUserSession :: db.addState :: 1',
+	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from 'rxdb' :: 1",
+	"contexts/app-state/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'contexts/app-state/index.tsx :: storage token :: AppStateProvider :: state.storeDB?.collections :: 1',
+	"screens/main/contexts/extra-data/context.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 316;
+export const SEAM_RETIRED_FLOOR = 324;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1960931220d8255101664ba147a0f00a93acab80154a455fbd9fea40890cd3d1';
+	'c7b1e91517f9a238ebb3ba39bf7565642e872603d7ea014fa3a7e4a1b82b7855';

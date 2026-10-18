@@ -33,6 +33,7 @@ import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-s
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider, readStorePaymentsContract, useDocField } from '@wcpos/query';
+import type { WPCredentialsDocument } from '@wcpos/query/user-db';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
@@ -146,7 +147,8 @@ function AppStack() {
 				paymentsContract: () => readStorePaymentsContract(session.extraData),
 				...createSessionFetcherOptions(
 					session.site.getLatest(),
-					session.wpCredentials,
+					// The host refresh adapter still owns writes to this same RxDB instance.
+					session.wpCredentials as WPCredentialsDocument,
 					t('auth.session_renewed_automatically')
 				),
 			});
