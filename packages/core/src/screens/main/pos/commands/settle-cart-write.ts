@@ -10,8 +10,8 @@ import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 import type { CartConfig } from '@wcpos/order-math';
 
 import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
+import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
 
-import type { ActionRefusal } from '../../../../extensions/actions';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
@@ -91,7 +91,10 @@ export function settleCartWrite<T>(
 	if (!deps.commitAtBoundary) return written;
 	return Promise.resolve(written).then(async (value) => {
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
-		if (boundary && value) await deps.commitAtBoundary!(document, boundary, input.queue!);
+		if (boundary && value) {
+			const outcome = await deps.commitAtBoundary!(document, boundary, input.queue!);
+			if (isActionRefusal(outcome)) return outcome;
+		}
 		return value;
 	});
 }

@@ -1,13 +1,15 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import * as orderMath from '@wcpos/order-math';
 import { createCartConfig } from '@wcpos/order-math';
 
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { useBoundaryCommit } from './use-boundary-commit';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
@@ -67,6 +69,9 @@ jest.mock('./boundary-commit', () => ({
 		await write(() => patch);
 	}),
 }));
+jest.mock('../checkout/hooks/use-complete-order-flow', () => ({
+	useCompleteOrderFlowForOrder: () => jest.fn(),
+}));
 const report = jest.fn();
 let currentConfig = config;
 const readConfig = () => currentConfig;
@@ -93,7 +98,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 }, extraData }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registerId: 'register', status: 'bound' }),
+	useRegisterBinding: jest.fn(() => ({ registerId: 'register', status: 'bound' })),
 }));
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: (...args: unknown[]) => {
@@ -107,6 +112,7 @@ jest.mock('../hooks/use-cart-config', () => ({
 }));
 jest.mock('../contexts/order-money-divergence', () => ({
 	useServerOwnsMoneyReader: () => ownsMoney,
+	useStoreContractReader: () => () => null,
 }));
 jest.mock('../contexts/order-engine-warnings', () => ({ useReportEngineWarnings: () => report }));
 jest.mock('./plain-patch', () => ({
@@ -729,3 +735,69 @@ it.each([true, false])(
 		}
 	}
 );
+
+it('maps an unknown binding to none in both cart and coordinator boundary commits', async () => {
+	const binding = useRegisterBinding();
+	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
+	try {
+		await flush();
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			hook.result.current(
+				a as CurrentOrderRecord,
+				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+				queue
+			)
+		);
+		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls)
+			expect(ctx.bindingStatus).toBe('none');
+	} finally {
+		view.unmount();
+		hook.unmount();
+		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
+});
+
+it('passes the coupon reference validity check through to the boundary writer', async () => {
+	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+	context.coupons = new Map([
+		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+	]);
+	references.next({ ready: true, generation: 'before' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ product_id: 1, quantity: 1, total: '10', subtotal: '10' }],
+		coupon_lines: [{ code: 'summer' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '9' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		const { allowed } = jest.mocked(commitAtBoundary).mock.calls[0][1];
+		expect(allowed).toEqual(expect.any(Function));
+		expect(allowed!(a.payload)).toBe(true);
+		act(() => references.next({ ready: false, generation: 'after' }));
+		expect(allowed!(a.payload)).toBe(false);
+	} finally {
+		view.unmount();
+	}
+});

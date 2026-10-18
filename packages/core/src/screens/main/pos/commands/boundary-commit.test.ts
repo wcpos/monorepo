@@ -20,6 +20,8 @@ import { createActionContext, registerActionHook } from '../../../../extensions/
 import { pendingCompletions } from '../checkout/completion-journal';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { enqueueCartAction } from '../hooks/enqueue-cart-action';
+import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary } from './boundary-commit';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
@@ -362,3 +364,88 @@ it.each(['amount', 'status', 'refund'])(
 		}
 	}
 );
+
+it('presents a refused boundary to the cashier while retaining the cart edit', async () => {
+	const order = orderFor('8');
+	const data = { line_items: [{ total: '4', subtotal: '4' }] };
+	resolveSession.mockRejectedValue(new RegisterSessionRequiredError());
+	const outcome = await enqueueCartAction(
+		order,
+		(document, queue) =>
+			settleCartWrite(
+				{ document, data, queue },
+				{
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					localPatch: async ({ changes }) => {
+						Object.assign(order.payload, changes(order.payload));
+						return order;
+					},
+					commitAtBoundary: (target, result, slot) =>
+						commitAtBoundary(
+							{
+								...ctx,
+								bindingStatus: 'bound',
+								configForOrder: () => config,
+								serverOwnsMoney: () => false,
+								complete: jest.fn(),
+							},
+							{
+								order: target as EngineRecord<'orders'>,
+								result,
+								queue: slot,
+								write: (changes) => ctx.localPatch({ document: order, changes }),
+							}
+						),
+				}
+			),
+		{ ctx: ctx.actionCtx, context: {} }
+	);
+	expect(order.payload).toMatchObject({ ...data, total: '10', status: 'pos-partial' });
+	expect(outcome).toBe(false);
+	expect(log).toHaveBeenCalledWith(
+		'warn',
+		'pos_checkout.open_register_first',
+		expect.objectContaining({ showToast: true })
+	);
+});
+
+it('supersedes coupon completion when references change during the guard window', async () => {
+	const order = orderFor();
+	order.payload.coupon_lines = [{ code: 'summer' }];
+	let generation = 0;
+	const complete = jest.fn();
+	resolveSession.mockImplementationOnce(async () => {
+		generation++;
+		return { registerId: 'register', sessionId: 'session' };
+	});
+	const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+		commitAtBoundary(
+			{
+				...ctx,
+				bindingStatus: 'bound',
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+				complete,
+			},
+			{
+				order,
+				queue,
+				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+				allowed: () => generation === 0,
+				coupons: {
+					coupons: new Map([
+						['summer', { code: 'summer', discount_type: 'fixed_cart', amount: '1' }],
+					]),
+					productCategories: new Map(),
+					categoryParents: new Map(),
+				},
+				write: (changes) => ctx.localPatch({ document: order, changes }),
+			}
+		)
+	);
+	expect(outcome).toBe('superseded');
+	expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
+	expect(complete).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});

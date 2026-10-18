@@ -31,13 +31,15 @@ export function useBoundaryCommit(write: ReturnType<typeof useSaleContext>['loca
 					configForOrder,
 					serverOwnsMoney,
 					storeContract,
-					bindingStatus: status === 'unknown' ? 'choose' : status,
+					bindingStatus: status === 'unknown' ? 'none' : status,
 					complete: (target, slot) => complete(target, { source: 'zero-balance' }, slot),
 				},
 				{
 					order: order as EngineRecord<'orders'>,
 					result,
 					queue,
+					// Coupon carts belong to the continuation, including arrivals during guards.
+					allowed: (payload) => !payload.coupon_lines?.some((line) => line.code != null),
 					write: (changes) => write({ document: order, changes }),
 				}
 			),

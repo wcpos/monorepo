@@ -38,11 +38,13 @@ export async function commitAtBoundary(
 	{
 		order,
 		coupons,
+		allowed,
 		queue,
 		write,
 	}: {
 		write: Parameters<typeof writeZeroBalanceCompletion>[1]['write'];
 		coupons?: CouponContext;
+		allowed?: (payload: OrderPayload) => boolean;
 		order: EngineRecord<'orders'>;
 		result: BoundaryResult;
 		queue: OrderMutationContext;
@@ -67,6 +69,7 @@ export async function commitAtBoundary(
 				complete: ctx.complete,
 				changes: (payload) => {
 					overpaid = undefined;
+					if (allowed && !allowed(payload)) return null;
 					if (
 						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
 						ctx.serverOwnsMoney(order.uuid)

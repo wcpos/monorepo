@@ -139,7 +139,7 @@ export function SettlementCoordinatorProvider() {
 							configForOrder: read,
 							serverOwnsMoney,
 							storeContract: () => readStorePaymentsContract(extraData),
-							bindingStatus: bindingStatus === 'unknown' ? 'choose' : bindingStatus,
+							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							complete: (order, slot) =>
 								completeSale(
 									saleContext,
@@ -155,6 +155,7 @@ export function SettlementCoordinatorProvider() {
 							queue,
 							write,
 							coupons,
+							allowed,
 						}
 					);
 				report(warnings, { orderId: uuid, site: 'settlement-coordinator' });
