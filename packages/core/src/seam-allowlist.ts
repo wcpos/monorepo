@@ -1697,10 +1697,18 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/products/products.tsx :: resident helper write ::  :: useMutation :: 1',
 	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 1',
 	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 2',
+	// ADR 0033 per-screen (h6): the orders screen's edit, reopen and refresh go through a command and the named read.
+	'screens/main/orders/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/edit/form.tsx :: resident helper write :: EditOrderForm :: useLocalMutation :: 1',
+	"screens/main/orders/edit/form.tsx :: storage import :: EditOrderForm :: from '@wcpos/database' :: 1",
+	'screens/main/orders/force-refresh-filter-customer.ts :: require plane outside a named read :: forceRefreshFilterCustomer :: manager.engine.require :: 1',
+	'screens/main/orders/order-menu.tsx :: require plane outside a named read :: OrderActionsMenu :: runtime.engine.require :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write :: useReopenOrder :: useLocalMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 744;
+export const SEAM_RETIRED_FLOOR = 751;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'3d32e7e28cf7c2980623feefb8298f4297bc1523018b34ebcb71706b2abc76de';
+	'a15ad2de631f80bf8ef26f2fa06ece27fec8bfab63224beb03fa751cbf1fe7cc';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

@@ -1,4 +1,4 @@
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshRecordByWooId } from '@wcpos/query/record-readers';
 
 type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
@@ -8,18 +8,10 @@ export async function forceRefreshFilterCustomer(
 	wooId: number,
 	role: 'customer' | 'cashier'
 ): Promise<void> {
-	const handle = manager.engine.require({
+	// Filter-label refresh is fire-and-forget; the engine reports demand failures separately.
+	await refreshRecordByWooId(manager.engine, {
 		id: `orders-filter:${role}:${wooId}`,
 		collection: 'customers',
-		kind: 'targeted-records',
-		remoteIds: [wooId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-		forceRefresh: true,
-	});
-	try {
-		await handle.ready;
-	} catch {
-		// Filter-label refresh is fire-and-forget; the engine reports demand failures separately.
-	} finally {
-		handle.release();
-	}
+		wooId,
+	}).catch(() => undefined);
 }
