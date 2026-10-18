@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { readLedger } from '@wcpos/order-math';
 import { useQueryRuntime } from '@wcpos/query';
+import { restoreVoidedOrder, voidOrder, type VoidOrderResult } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -23,7 +24,6 @@ import { getTerminalPaymentsService } from '../../../../services/terminal-paymen
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import '../cart/void-audit-hook';
 import '../cart/void-guards';
-import { restoreVoidedOrder, voidOrder, type VoidOrderResult } from '../cart/void-order';
 import { useCurrentOrderActions, useCurrentOrderRecord } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);

@@ -16,3 +16,9 @@ export {
 	type PayloadChanges,
 	type LocalPatchProps,
 } from './resident';
+export {
+	voidOrder,
+	restoreVoidedOrder,
+	type VoidOrderInput,
+	type VoidOrderResult,
+} from './void-order';

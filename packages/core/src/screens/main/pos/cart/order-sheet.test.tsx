@@ -71,12 +71,11 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: jest.fn() }) }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: { write: mockDelete } }),
+}));
 jest.mock('@wcpos/query/register-session', () => ({
 	getCurrentBoundRegisterId: () => undefined,
-}));
-jest.mock('../../hooks/mutations/request-server-delete', () => ({
-	requestServerDelete: () => mockDelete(),
 }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({}));
 jest.mock('../../hooks/use-storage-health', () => ({
