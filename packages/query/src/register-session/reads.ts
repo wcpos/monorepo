@@ -29,6 +29,7 @@ import { observeEngineQuery } from '../engine-query';
 import { declareRequirements } from '../requirement-bridge';
 import { observeFollowedCollection } from '../use-local-collection';
 
+import type { RxCollection } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { RegisterStoreDatabase } from './store-database';
 
@@ -110,7 +111,7 @@ function closureQuery(
 					},
 				}
 			: identity.id
-	).$ as Observable<ReadonlyClosureDocument | null>;
+	).$ as unknown as Observable<ReadonlyClosureDocument | null>;
 }
 
 /** Absent → null. Reports may know the local UUID, the server identity, or both. */
