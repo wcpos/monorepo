@@ -63,6 +63,12 @@ export interface TaxLocationContextProps {
 	rates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
+	/**
+	 * Whether a current order is in scope. False on the standalone Products screen, where the
+	 * location is the shop base whatever `taxBasedOn` says. Published here, deduped with the
+	 * rest, so a consumer need not subscribe to the order itself (it ticks on every cart write).
+	 */
+	hasOrder: boolean;
 }
 
 /** Combined tax settings and location contract returned by `useTaxRates()`. */
@@ -270,8 +276,8 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	}, [allRates, location]);
 
 	const value = React.useMemo<TaxLocationContextProps>(
-		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location }),
-		[rates, taxBasedOn, location]
+		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location, hasOrder }),
+		[rates, taxBasedOn, location, hasOrder]
 	);
 
 	return <TaxLocationContext.Provider value={value}>{children}</TaxLocationContext.Provider>;

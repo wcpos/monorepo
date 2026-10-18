@@ -25,7 +25,9 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 	 *
 	 */
 	const mergedOptions = React.useMemo(() => {
-		const opts = defaults(options, {
+		// Into a fresh object: `defaults` mutates its first argument, so a caller's constant
+		// options would keep the first store's separators for good.
+		const opts = defaults({}, options, {
 			thousandSeparator,
 			decimalSeparator,
 			decimalScale: decimalPrecision,
