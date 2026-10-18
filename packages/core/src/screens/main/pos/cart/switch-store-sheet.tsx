@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { StatusBadge } from '@wcpos/components/status-badge';
-import { Button } from '@wcpos/components/button';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Loader } from '@wcpos/components/loader';
 import { Portal } from '@wcpos/components/portal';
@@ -88,20 +88,14 @@ function StoreRows({
 	return (
 		<ScrollView contentContainerClassName="px-4 pb-4">
 			{stores.map((next) => (
-				<View key={next.localID} className="border-border border-b">
-					<Button
-						testID={`switch-store-row-${next.localID}`}
-						variant="ghost"
-						className="flex-row justify-between"
-						disabled={isSwitching || next.localID === store.localID}
-						onPress={() => void onSwitch(next)}
-					>
-						<Text numberOfLines={1} className="min-w-0 flex-1">
-							{next.name}
-						</Text>
-						{next.localID === store.localID && <StatusBadge label={t('register.current')} />}
-					</Button>
-				</View>
+				<MenuRow
+					key={next.localID}
+					testID={`switch-store-row-${next.localID}`}
+					disabled={isSwitching || next.localID === store.localID}
+					onPress={() => void onSwitch(next)}
+					label={next.name}
+					trailing={next.localID === store.localID && <StatusBadge label={t('register.current')} />}
+				/>
 			))}
 		</ScrollView>
 	);

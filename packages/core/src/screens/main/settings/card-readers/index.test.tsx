@@ -28,7 +28,7 @@ const mockBootstrap = jest.fn(async () => ({ token: 'connection' }));
 let mockProviderClose: (() => void) | undefined;
 let mockMethods: PaymentMethodDescriptor[] = [];
 let mockCaps = { canAcceptReaderTerms: true };
-let mockOS = 'web';
+const mockPlatform = jest.requireMock('react-native').Platform;
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
@@ -51,9 +51,7 @@ jest.mock('react-native', () => {
 		...actual,
 		Platform: {
 			...actual.Platform,
-			get OS() {
-				return mockOS;
-			},
+			OS: 'web',
 		},
 	};
 });
@@ -158,6 +156,7 @@ jest.mock('@wcpos/components/badge', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -200,7 +199,7 @@ beforeEach(() => {
 	remembered$.next({});
 	mockMethods = [deviceMethod];
 	mockCaps = { canAcceptReaderTerms: true };
-	mockOS = 'web';
+	mockPlatform.OS = 'web';
 	mockBootstrap.mockClear();
 	registerDriver(createSimulatedDriver());
 });
@@ -514,7 +513,7 @@ describe('Tap to Pay row', () => {
 	});
 
 	it('is not offered for the simulated provider on a device', async () => {
-		mockOS = 'android';
+		mockPlatform.OS = 'android';
 		mockMethods = [deviceMethod];
 		render(<CardReadersSettings />);
 		await flush();
@@ -527,7 +526,7 @@ describe('Tap to Pay row', () => {
 		await flush();
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeNull();
 		web.unmount();
-		mockOS = 'android';
+		mockPlatform.OS = 'android';
 		mockCaps = { canAcceptReaderTerms: false };
 		const android = render(<CardReadersSettings />);
 		await flush();
@@ -535,7 +534,7 @@ describe('Tap to Pay row', () => {
 		// Named for the platform: an Android phone never reads "on iPhone".
 		expect(screen.getByText('Tap to Pay on Android')).toBeTruthy();
 		android.unmount();
-		mockOS = 'ios';
+		mockPlatform.OS = 'ios';
 		mockCaps = { canAcceptReaderTerms: false };
 		const cashier = render(<CardReadersSettings />);
 		await flush();

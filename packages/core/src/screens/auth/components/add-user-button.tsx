@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/components/button';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
@@ -87,15 +87,12 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 	// In the user sheet it is one of the sheet's quiet rows; on the connect screen, the
 	// dashed add-another row under the users.
 	return compact ? (
-		<Button
+		<MenuRow
 			testID="user-sheet-another-account"
-			variant="ghost"
-			className="flex-row justify-start gap-2"
 			disabled={disabled}
 			onPress={handlePress}
-		>
-			{label}
-		</Button>
+			label={label}
+		/>
 	) : (
 		<ListItem
 			testID="add-user-button"

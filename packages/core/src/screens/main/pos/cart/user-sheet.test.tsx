@@ -123,6 +123,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
@@ -176,9 +177,9 @@ it.each([
 it('keeps settings, support and external links reachable below sign out', () => {
 	const { openExternalURL } = jest.requireMock('@wcpos/utils/open-external-url');
 	render(<UserSheet open onOpenChange={jest.fn()} />);
-	const ids = Array.from(document.querySelectorAll('button[data-testid]')).map((node) =>
-		node.getAttribute('data-testid')
-	);
+	const ids = Array.from(
+		document.querySelectorAll('button[data-testid], [role="menuitem"][data-testid]')
+	).map((node) => node.getAttribute('data-testid'));
 	expect(ids.slice(ids.indexOf('user-sheet-sign-out'))).toEqual([
 		'user-sheet-sign-out',
 		'user-sheet-settings',
@@ -258,9 +259,8 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	render(
 		<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} portalHost={null} />
 	);
-	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
-	expect(button.disabled).toBe(blocked);
-	expect(button.getAttribute('aria-disabled')).toBe(String(blocked));
+	const button = screen.getByTestId('user-sheet-switch-register');
+	expect(button.getAttribute('aria-disabled') === 'true').toBe(blocked);
 	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(attributed === true);
 	expect(!!screen.queryByText('register.switch_register_unavailable_here')).toBe(
 		attributed === undefined
@@ -275,9 +275,8 @@ it('allows switching from an empty attributed template', () => {
 	};
 	const switchRegister = jest.fn();
 	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
-	expect(button.disabled).toBe(false);
-	expect(button.getAttribute('aria-disabled')).toBe('false');
+	const button = screen.getByTestId('user-sheet-switch-register');
+	expect(button.getAttribute('aria-disabled')).not.toBe('true');
 	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(1);
@@ -302,8 +301,7 @@ it.each(['pos-partial', 'ledger'])(
 			});
 		const switchRegister = jest.fn();
 		render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-		const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
-		expect(button.disabled).toBe(true);
+		const button = screen.getByTestId('user-sheet-switch-register');
 		expect(button.getAttribute('aria-disabled')).toBe('true');
 		expect(screen.getByText('register.switch_register_blocked_cart')).toBeTruthy();
 		fireEvent.click(button);

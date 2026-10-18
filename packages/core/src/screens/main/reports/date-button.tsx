@@ -6,6 +6,7 @@ import { format, parseISO, subDays } from 'date-fns';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
@@ -204,25 +205,46 @@ export function DateButton({
 				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
 				<PickerBody phone={phone} maxHeight={bodyMaxHeight}>
 					<View className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}>
-						{Object.entries(ranges).map(([key, range]) => (
-							<Button
-								key={key}
-								testID={`reports-period-${key}`}
-								variant="ghost"
-								className={`flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
-								onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
-							>
-								<View className="w-5 items-center">
-									{selected === key && <Icon name="check" size="sm" />}
+						{Object.entries(ranges).map(([key, range]) =>
+							phone ? (
+								<Button
+									key={key}
+									testID={`reports-period-${key}`}
+									variant="ghost"
+									className={`flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
+									onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+								>
+									<View className="w-5 items-center">
+										{selected === key && <Icon name="check" size="sm" />}
+									</View>
+									<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
+										{labels[key as keyof typeof labels]}
+									</ButtonText>
+									{!license?.isPro && key !== 'today' && (
+										<Icon name="lock" size="sm" className="text-muted-foreground" />
+									)}
+								</Button>
+							) : (
+								<View
+									key={key}
+									className={!license?.isPro && key !== 'today' ? 'opacity-50' : undefined}
+								>
+									<MenuRow
+										testID={`reports-period-${key}`}
+										choice
+										selected={selected === key}
+										label={labels[key as keyof typeof labels]}
+										onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+										trailing={
+											!license?.isPro &&
+											key !== 'today' && (
+												<Icon name="lock" size="sm" className="text-muted-foreground" />
+											)
+										}
+									/>
 								</View>
-								<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
-									{labels[key as keyof typeof labels]}
-								</ButtonText>
-								{!license?.isPro && key !== 'today' && (
-									<Icon name="lock" size="sm" className="text-muted-foreground" />
-								)}
-							</Button>
-						))}
+							)
+						)}
 					</View>
 					<View
 						className={phone ? '-mx-2 self-center' : 'self-center'}

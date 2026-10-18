@@ -8,6 +8,7 @@ import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import {
 	Dialog,
@@ -192,24 +193,19 @@ export function CardReadersSettings() {
 							</DialogHeader>
 							<VStack className="gap-1 px-4">
 								{devices.map((method) => (
-									<Button
+									<MenuRow
 										key={method.id}
-										variant="ghost"
-										className="flex-row justify-start gap-3 px-1"
+										choice
+										selected={false}
 										onPress={() => {
 											setPicking(false);
 											void actions.start(method);
 										}}
 										testID={`card-readers-connect-${method.id}`}
-									>
-										<View className="bg-muted size-10 items-center justify-center rounded-lg">
-											<Icon name="creditCard" variant="muted" size="lg" />
-										</View>
-										<Text className="flex-1 text-lg font-semibold" numberOfLines={1} decodeHtml>
-											{method.title}
-										</Text>
-										<Icon name="chevronRight" variant="muted" />
-									</Button>
+										leading={<Icon name="creditCard" variant="muted" size="lg" />}
+										label={<MenuRow.Label decodeHtml>{method.title}</MenuRow.Label>}
+										trailing={<Icon name="chevronRight" variant="muted" />}
+									/>
 								))}
 								<DialogClose className="mt-2 h-14" testID="card-readers-provider-cancel">
 									<ButtonText>{t('common.cancel')}</ButtonText>
