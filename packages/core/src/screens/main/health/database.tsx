@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
 import {
@@ -42,6 +42,7 @@ import { useCollectionCheck, useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useUnresolvedConflictKeys } from './use-unresolved-conflicts';
 import { useT } from '../../../contexts/translations';
+import { AreaPage } from '../components/navigation-area/area-page';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
 import { useCensusTotals } from '../hooks/use-census-totals';
@@ -230,9 +231,12 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
  * Below this width the collection column wrapped one character per line (portrait iPad
  * with the drawer rail open). The choice used to be the `md:` window breakpoint, but the
  * width that matters is the table's own: a tablet rail or an open drawer narrows the
- * content column without changing the window.
+ * content column without changing the window. 600 (the collection column keeps 120): inside
+ * the page card (2026-10-18) the table measures about 638 in a 1024 window (rail 56, area
+ * rail 224, page and card padding 106), which must keep the table, with room for a web
+ * scrollbar; a 768 window measures about 382 and takes the compact rows, as it did before.
  */
-const TABLE_LAYOUT_MIN_WIDTH = 640;
+const TABLE_LAYOUT_MIN_WIDTH = 600;
 
 /** Measured container width → whether the table layout fits; compact until measured. */
 function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent) => void } {
@@ -629,13 +633,12 @@ export function DatabaseScreen() {
 	const censusProgress = censusWindowProgress(censusWindow, nowMs);
 
 	return (
-		<ScrollView className="flex-1">
-			<VStack
-				testID="screen-health-database"
-				className="mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8"
-			>
-				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
-
+		<AreaPage
+			title={t('common.database')}
+			description={t('health.database.subtitle')}
+			testID="screen-health-database"
+		>
+			<VStack className="gap-4">
 				{/* Summary strip — shared Store health stat header */}
 				<StatHeader testID="db-stats">
 					<Stat
@@ -871,8 +874,7 @@ export function DatabaseScreen() {
 				</HStack>
 
 				<RegistersPanel />
-				<View className="h-4" />
 			</VStack>
-		</ScrollView>
+		</AreaPage>
 	);
 }

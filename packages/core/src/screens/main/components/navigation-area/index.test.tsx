@@ -26,6 +26,10 @@ jest.mock('../../../../contexts/theme', () => ({
 }));
 
 jest.mock('expo-haptics', () => ({}));
+// The index re-exports `AreaPage`, whose boundary's fallback pulls the overlay stack in.
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
