@@ -257,11 +257,12 @@ jest.mock('@wcpos/components/table', () => {
 });
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	runResetRefill: jest.fn(),
+	resetCollectionsAndRefill: jest.requireActual('@wcpos/query').resetCollectionsAndRefill,
 	useQueryRuntime: () => ({
 		engine: {
 			active: jest.fn(),
 			scope: { resetCollection: jest.fn().mockResolvedValue('reset') },
+			require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
 			sync: mockSync,
 			checkCollection: mockCheckCollection,
 		},

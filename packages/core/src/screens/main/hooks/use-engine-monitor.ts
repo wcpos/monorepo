@@ -12,32 +12,32 @@ import type { EngineStatus } from '@wcpos/sync-engine';
 export type { EngineCollectionCounts, EngineMutationCounts } from '@wcpos/query';
 
 export function useEngineStatus(): EngineStatus {
-	const { engine } = useQueryRuntime();
-	const [status, setStatus] = React.useState<EngineStatus>(() => engine.status());
+	const runtime = useQueryRuntime();
+	const [status, setStatus] = React.useState<EngineStatus>(() => runtime.engine.status());
 
 	React.useEffect(() => {
 		// The engine owns this external subscription; bind it to the hook lifecycle.
-		return engine.statusChanges(setStatus);
-	}, [engine]);
+		return runtime.engine.statusChanges(setStatus);
+	}, [runtime.engine]);
 
 	return status;
 }
 
 export function useCollectionCounts(): EngineCollectionCounts {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineCollectionCounts>(emptyCollectionCounts);
 
 	React.useEffect(() => {
 		// RxDB count streams are external subscriptions and must follow the active engine lifecycle.
-		const subscription = observeCollectionCounts(engine).subscribe(setCounts);
+		const subscription = observeCollectionCounts(runtime.engine).subscribe(setCounts);
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [runtime.engine]);
 
 	return counts;
 }
 
 export function useMutationCounts(): EngineMutationCounts {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineMutationCounts>({
 		syncBacklog: 0,
 		syncBacklogSales: 0,
@@ -48,9 +48,9 @@ export function useMutationCounts(): EngineMutationCounts {
 
 	React.useEffect(() => {
 		// RxDB mutation selectors are external subscriptions and must follow the active engine lifecycle.
-		const subscription = observeQueueCounts(engine).subscribe(setCounts);
+		const subscription = observeQueueCounts(runtime.engine).subscribe(setCounts);
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [runtime.engine]);
 
 	return counts;
 }

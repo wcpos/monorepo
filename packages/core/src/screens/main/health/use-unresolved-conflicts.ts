@@ -134,9 +134,9 @@ function conflictedResource(engine: RxdbSyncEngine): ObservableResource<Unresolv
  * the house data-flow (ObservableResource + Suspense).
  */
 export function useUnresolvedConflicts(): UnresolvedConflictsRead {
-	const { engine } = useQueryRuntime();
-	const result = useObservableSuspense(conflictedResource(engine));
-	if (result.readError) resourceByEngine.delete(engine);
+	const runtime = useQueryRuntime();
+	const result = useObservableSuspense(conflictedResource(runtime.engine));
+	if (result.readError) resourceByEngine.delete(runtime.engine);
 	return result;
 }
 
@@ -147,12 +147,12 @@ export function useUnresolvedConflicts(): UnresolvedConflictsRead {
  * shape the dead-letter keys take, same reason.
  */
 export function useUnresolvedConflictKeys(): Set<string> {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [keys, setKeys] = React.useState<Set<string>>(() => new Set());
 
 	React.useEffect(() => {
 		// The engine owns this external subscription; bind it to the hook lifecycle.
-		const subscription = observeQueueRows(engine, { statuses: PARKED_QUEUE_STATUSES })
+		const subscription = observeQueueRows(runtime.engine, { statuses: PARKED_QUEUE_STATUSES })
 			.pipe(
 				map(
 					(rows) =>
@@ -169,7 +169,7 @@ export function useUnresolvedConflictKeys(): Set<string> {
 			)
 			.subscribe(setKeys);
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [runtime.engine]);
 
 	return keys;
 }

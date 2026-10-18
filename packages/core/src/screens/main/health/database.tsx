@@ -32,7 +32,7 @@ import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { cn } from '@wcpos/components/lib/utils';
-import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, resetCollectionsAndRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
@@ -90,11 +90,6 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'coupons',
 	'taxRates',
 ]);
-
-/** Engine row key → the legacy collection key the reset funnel speaks. */
-const ROW_TO_LEGACY = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.legacyName])
-) as Record<CollectionKey, string>;
 
 const ROW_LABEL_KEYS = Object.fromEntries(
 	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.labelKey])
@@ -280,7 +275,7 @@ function CollectionRowView({
 	wide: boolean;
 }) {
 	const t = useT();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { syncing, busy } = useManualSync();
 	const { checking, check } = useCollectionCheck();
 	const [confirming, setConfirming] = React.useState(false);
@@ -299,18 +294,8 @@ function CollectionRowView({
 		setConfirming(false);
 		setPhase('clearing');
 		try {
-			// Clearing products must also clear the separate variations collection, or
-			// stale child docs survive — the same pairing the app-wide reset funnel uses.
-			const engineNames: CollectionKey[] =
-				row.key === 'products' ? ['variations', 'products'] : [row.key];
-			const legacyNames = engineNames.map((name) => ROW_TO_LEGACY[name]);
-			// Reseed + drain the dropped collections immediately (the merchant expects
-			// a re-download, not just a delete) — the established refill path.
-			for (const name of engineNames) {
-				// The dialog IS the queue-destroy confirmation, so force past it.
-				await engine.scope.resetCollection(name, { confirmDestroyQueue: true });
-			}
-			await runResetRefill(engine, legacyNames);
+			// The dialog IS the queue-destroy confirmation, so force past it.
+			await resetCollectionsAndRefill(runtime.engine, row.key, { confirmDestroyQueue: true });
 			const successMessage =
 				row.key === 'refunds'
 					? t('health.database.redownload_done_refunds')

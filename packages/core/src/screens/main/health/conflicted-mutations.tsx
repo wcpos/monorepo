@@ -28,6 +28,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
+import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -63,7 +64,7 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
 export function ConflictedMutationsPanel() {
 	const t = useT();
 	const router = useRouter();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { syncing, sync } = useManualSync();
 	const { rows, readError } = useUnresolvedConflicts();
 	const nowMs = useNowMs(30_000);
@@ -98,7 +99,7 @@ export function ConflictedMutationsPanel() {
 	) => {
 		setBusyId(row.mutationId);
 		try {
-			await engine.resolveConflict(row.mutationId, resolution);
+			await resolveQueuedChange(runtime.engine, row.mutationId, resolution);
 			logger.info('conflict resolved', {
 				context: {
 					mutationId: row.mutationId,

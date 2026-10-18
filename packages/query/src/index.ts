@@ -62,7 +62,11 @@ export {
 export { useSearchFields } from './use-search-fields';
 export { searchBlobFor, searchRows, type SearchBlob } from './search-blob';
 export { warmSearchBlobs } from './search-warmup';
-export { declareRequirements, runResetRefill } from './requirement-bridge';
+export {
+	declareRequirements,
+	runResetRefill,
+	resetCollectionsAndRefill,
+} from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';
 

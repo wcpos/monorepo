@@ -26,6 +26,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
+import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -58,7 +59,7 @@ const logger = getLogger(['wcpos', 'health', 'deadLetters']);
  */
 export function RejectedMutationsPanel() {
 	const t = useT();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { rows, readError } = useRejectedMutations();
 	const nowMs = useNowMs(30_000);
 	const relative = useRelativeTime();
@@ -89,7 +90,7 @@ export function RejectedMutationsPanel() {
 	const settle = async (row: RejectedMutation, resolution: 'requeue-rebuilt' | 'discard') => {
 		setBusyId(row.mutationId);
 		try {
-			await engine.resolveConflict(row.mutationId, resolution);
+			await resolveQueuedChange(runtime.engine, row.mutationId, resolution);
 			logger.info('dead letter resolved', {
 				context: {
 					mutationId: row.mutationId,

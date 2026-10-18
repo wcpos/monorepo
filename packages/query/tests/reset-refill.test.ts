@@ -1,4 +1,8 @@
-import { resetRefillRequirements, runResetRefill } from '../src/requirement-bridge';
+import {
+	resetCollectionsAndRefill,
+	resetRefillRequirements,
+	runResetRefill,
+} from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
 import type { RxDatabase } from 'rxdb';
@@ -89,4 +93,126 @@ it('forces the history walk when refunds are reset', () => {
 			priority: 1000,
 		},
 	]);
+});
+
+describe('resetCollectionsAndRefill', () => {
+	let database: RxDatabase;
+
+	beforeEach(async () => {
+		database = await createEngineDatabase();
+	});
+
+	afterEach(async () => {
+		await database.close();
+	});
+
+	it('awaits variations then products before starting refill', async () => {
+		const engine = createFakeEngine(database);
+		const events: string[] = [];
+		jest.spyOn(engine.scope, 'resetCollection').mockImplementation(async (name) => {
+			events.push(`reset:${name}`);
+			await Promise.resolve();
+			events.push(`done:${name}`);
+			return 'reset';
+		});
+		const sync = engine.sync.bind(engine);
+		jest.spyOn(engine, 'sync').mockImplementation(async (reason) => {
+			events.push(`sync:${reason}`);
+			return sync(reason);
+		});
+
+		await expect(
+			resetCollectionsAndRefill(engine, 'products', { confirmDestroyQueue: true })
+		).resolves.toBe('reset');
+		expect(engine.scope.resetCollection).toHaveBeenNthCalledWith(1, 'variations', {
+			confirmDestroyQueue: true,
+		});
+		expect(engine.scope.resetCollection).toHaveBeenNthCalledWith(2, 'products', {
+			confirmDestroyQueue: true,
+		});
+		expect(events).toEqual([
+			'reset:variations',
+			'done:variations',
+			'reset:products',
+			'done:products',
+			'sync:product-browse-window-seed',
+			'sync:scheduler-drain',
+		]);
+	});
+
+	it.each(['categories', 'tags', 'brands', 'taxRates', 'coupons', 'refunds'] as const)(
+		'maps %s to its legacy refill name',
+		async (name) => {
+			const engine = createFakeEngine(database);
+			jest.spyOn(engine.scope, 'resetCollection').mockResolvedValue('reset');
+			await expect(resetCollectionsAndRefill(engine, name)).resolves.toBe('reset');
+			expect(engine.scope.resetCollection).toHaveBeenCalledTimes(1);
+			expect(engine.scope.resetCollection).toHaveBeenCalledWith(name, {});
+			expect(engine.requireCalls).toEqual([
+				{
+					id: `${name}:collection-reset`,
+					collection: name,
+					kind: 'refresh',
+					priority: 1000,
+					...(name === 'taxRates' ? {} : { forceRefresh: true }),
+				},
+			]);
+			expect(engine.syncCalls).toEqual(['scheduler-drain']);
+		}
+	);
+
+	it('refills a standalone variations reset without resetting products', async () => {
+		const engine = createFakeEngine(database);
+		jest.spyOn(engine.scope, 'resetCollection').mockResolvedValue('reset');
+		await resetCollectionsAndRefill(engine, 'variations');
+		expect(engine.scope.resetCollection).toHaveBeenCalledTimes(1);
+		expect(engine.scope.resetCollection).toHaveBeenCalledWith('variations', {});
+		expect(engine.syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
+	});
+
+	it.each([undefined, false])(
+		'does not implicitly confirm queue destruction (%s)',
+		async (confirmDestroyQueue) => {
+			const engine = createFakeEngine(database);
+			jest.spyOn(engine.scope, 'resetCollection').mockResolvedValue('needs-confirmation');
+			await expect(
+				resetCollectionsAndRefill(engine, 'products', { confirmDestroyQueue })
+			).resolves.toBe('needs-confirmation');
+			expect(engine.scope.resetCollection).toHaveBeenCalledTimes(1);
+			expect(engine.scope.resetCollection).toHaveBeenCalledWith('variations', {
+				confirmDestroyQueue,
+			});
+			expect(engine.requireCalls).toEqual([]);
+			expect(engine.syncCalls).toEqual([]);
+		}
+	);
+
+	it('does not refill if the second reset needs confirmation', async () => {
+		const engine = createFakeEngine(database);
+		jest
+			.spyOn(engine.scope, 'resetCollection')
+			.mockResolvedValueOnce('reset')
+			.mockResolvedValueOnce('needs-confirmation');
+		await expect(resetCollectionsAndRefill(engine, 'products')).resolves.toBe('needs-confirmation');
+		expect(engine.syncCalls).toEqual([]);
+		expect(engine.requireCalls).toEqual([]);
+	});
+
+	it('propagates a reset failure without resetting more collections or refilling', async () => {
+		const engine = createFakeEngine(database);
+		const error = new Error('reset failed');
+		jest.spyOn(engine.scope, 'resetCollection').mockRejectedValue(error);
+		await expect(resetCollectionsAndRefill(engine, 'products')).rejects.toBe(error);
+		expect(engine.scope.resetCollection).toHaveBeenCalledTimes(1);
+		expect(engine.syncCalls).toEqual([]);
+		expect(engine.requireCalls).toEqual([]);
+	});
+
+	it('propagates a refill failure', async () => {
+		const engine = createFakeEngine(database);
+		const error = new Error('refill failed');
+		jest.spyOn(engine.scope, 'resetCollection').mockResolvedValue('reset');
+		jest.spyOn(engine, 'sync').mockRejectedValue(error);
+		await expect(resetCollectionsAndRefill(engine, 'products')).rejects.toBe(error);
+	});
 });

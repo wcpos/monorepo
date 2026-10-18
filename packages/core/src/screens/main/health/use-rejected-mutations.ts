@@ -173,8 +173,8 @@ function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMu
  * suspend-before-commit that would otherwise hang the panel.
  */
 export function useRejectedMutations(): RejectedMutationsRead {
-	const { engine } = useQueryRuntime();
-	const result = useObservableSuspense(rejectedResource(engine));
-	if (result.readError) resourceByEngine.delete(engine);
+	const runtime = useQueryRuntime();
+	const result = useObservableSuspense(rejectedResource(runtime.engine));
+	if (result.readError) resourceByEngine.delete(runtime.engine);
 	return result;
 }
