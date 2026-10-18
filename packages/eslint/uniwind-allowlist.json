@@ -172,9 +172,6 @@
   "packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
     "duration-literal": 3
   },
-  "packages/core/src/screens/main/settings/index.tsx": {
-    "bare-Suspense": 1
-  },
   "packages/core/src/screens/main/settings/printing/printer-row.tsx": {
     "group-*": 1
   },

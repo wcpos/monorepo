@@ -11,6 +11,8 @@ import { ManagementBar } from '../management-bar';
 
 import type { Href } from 'expo-router';
 
+export { AreaPage, type AreaPageMode } from './area-page';
+
 export type NavigationAreaItem = {
 	href: Extract<Href, string>;
 	label: string;
@@ -59,13 +61,13 @@ export function NavigationAreaLayout({
 	areaLabel: string;
 	testID: string;
 	screenTestID?: string;
-	/** Every area is on the page bar, so its rail and list sit on `bg-background`. */
+	/** Every area is on the page bar, so its rail, list and page column sit on `bg-background`. */
 	barTestID: string;
 	barNotice?: React.ReactNode;
 	/**
-	 * The area's leaf pages render their own large heading (`SettingsPage`), so on a phone the
+	 * The area's leaf pages render their own large heading (`AreaPage`), so on a phone the
 	 * bar shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
-	 * An area whose pages carry no heading yet (Health) keeps the bar title until they do.
+	 * An area whose pages carry no heading keeps the bar title.
 	 */
 	leafPagesCarryTitle?: boolean;
 	children: React.ReactNode;
@@ -113,7 +115,9 @@ export function NavigationAreaLayout({
 			>
 				<NavigationItems items={items} showChevron={false} />
 			</View>
-			<View testID={screenTestID} className="bg-card min-w-0 flex-1">
+			{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
+			    rail's selected row (`bg-card`) and the page card read as the same surface. */}
+			<View testID={screenTestID} className="bg-background min-w-0 flex-1">
 				{children}
 			</View>
 		</View>

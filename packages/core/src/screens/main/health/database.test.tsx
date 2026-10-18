@@ -53,6 +53,9 @@ let mockCensusTotals: Record<
 	{ total: number; updatedAtMs: number; freshUntilMs: number; fresh: boolean }
 > = { ...defaultCensusTotals };
 
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
@@ -473,12 +476,22 @@ describe('DatabaseScreen coverage', () => {
 		expect(classes('db-row-cached-images').at(-1)).toBe(row.at(-1));
 	});
 
-	it('keeps the wider health layout with the shared screen spacing', () => {
-		const { getByTestId } = render(<DatabaseScreen />);
+	it('is an area page: the heading and its subtitle open the card', () => {
+		const { getAllByText, getByTestId } = render(<DatabaseScreen />);
+		const subtitle =
+			'Your store, on this device — sales keep working even if your server does not.';
 
-		expect(getByTestId('screen-health-database').className).toBe(
-			'mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8'
-		);
+		// Once, in the heading block, ahead of the summary strip — not repeated in the body.
+		expect(getAllByText(subtitle)).toHaveLength(1);
+		const text = getByTestId('screen-health-database').textContent ?? '';
+		expect(text.startsWith(`Database${subtitle}`)).toBe(true);
+	});
+
+	it('keeps the table at the column a 1024 window leaves inside the page card', () => {
+		const { getByTestId } = render(<DatabaseScreen />);
+		act(() => mockLayoutHandlers['db-table']({ nativeEvent: { layout: { width: 620 } } }));
+		expect(getByTestId('db-row-products').className).toContain('flex');
+		expect(getByTestId('db-row-products').className).not.toContain('hidden');
 	});
 
 	it('does not disclose metadata for other store scopes', () => {

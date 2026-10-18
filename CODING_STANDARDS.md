@@ -313,6 +313,7 @@ A Button is never a toggle. Among pills, full radius belongs to `Chip` and `Badg
 - The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
+- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
 
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 
