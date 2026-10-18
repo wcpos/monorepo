@@ -48,6 +48,8 @@ export async function refreshSessions({
 			movements: ServerMovementRow[];
 			// Omitted for a cashier without the reports capability: the count is blind.
 			expected?: Record<string, string>;
+			// The same snapshot's drawer terms, under the same gate; older plugins omit them.
+			terms?: RegisterSessionRow['server_terms'];
 			sales_count?: number;
 		};
 		// Capture the server snapshot boundary before any local persistence awaits.
@@ -59,6 +61,7 @@ export async function refreshSessions({
 			...detail,
 			// A cashier counting blind is not served the expected figure at all.
 			server_expected: detail.expected ?? null,
+			server_terms: detail.terms ?? null,
 			server_expected_at: serverExpectedAt,
 			server_movement_ids: (detail.movements ?? []).map(({ id }) => id),
 			server_order_ids: detail.order_ids ?? null,

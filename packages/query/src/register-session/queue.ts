@@ -601,11 +601,16 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 }
 export async function adoptSessionRow(
 	sessions: RegisterSessionCollection,
-	server: RegisterSessionRow & { movements?: unknown; expected?: unknown; sales_count?: unknown }
+	server: RegisterSessionRow & {
+		movements?: unknown;
+		expected?: unknown;
+		terms?: unknown;
+		sales_count?: unknown;
+	}
 ) {
 	/**
 	 * The server row carries columns the local schema does not declare (`created_at_gmt`, and
-	 * the detail route's `movements` / `expected` / `sales_count`); the collection is
+	 * the detail route's `movements` / `expected` / `terms` / `sales_count`); the collection is
 	 * `additionalProperties: false`, so an unfiltered upsert throws VD2 and no server session
 	 * can ever be adopted.
 	 */

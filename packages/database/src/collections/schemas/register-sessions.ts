@@ -70,6 +70,48 @@ export const registerSessionsLiteral = {
 		},
 		server_expected_at: { type: ['string', 'null'], default: null },
 		server_sales_count: { type: ['number', 'null'], default: null },
+		/**
+		 * The drawer terms of the same snapshot as `server_expected`, as the detail route serves
+		 * them (four-decimal strings). Null when the server omits them: a blind cashier, or an
+		 * older plugin, and the till strip then derives the terms from this device's rows.
+		 */
+		server_terms: {
+			type: ['object', 'null'],
+			default: null,
+			properties: {
+				float: { type: 'string' },
+				cash_sales: {
+					type: 'object',
+					properties: { amount: { type: 'string' }, count: { type: 'number' } },
+					required: ['amount', 'count'],
+				},
+				paid_in: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: { amount: { type: 'string' }, reason: { type: ['string', 'null'] } },
+						required: ['amount'],
+					},
+				},
+				paid_out: {
+					type: 'object',
+					properties: {
+						amount: { type: 'string' },
+						count: { type: 'number' },
+						note: { type: ['string', 'null'] },
+					},
+					required: ['amount', 'count'],
+				},
+				cash_refunds: {
+					type: 'object',
+					properties: { amount: { type: 'string' }, count: { type: 'number' } },
+					required: ['amount', 'count'],
+				},
+				no_sales: { type: 'number' },
+				voids: { type: 'number' },
+			},
+			required: ['float', 'cash_sales', 'paid_in', 'paid_out', 'cash_refunds', 'no_sales', 'voids'],
+		},
 		...sessionOutboxProperties,
 	},
 	required: [

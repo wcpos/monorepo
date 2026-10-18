@@ -23,6 +23,16 @@ type Movement = {
 	voided_by?: string | null;
 	voids?: string | null;
 };
+/** The detail route's drawer terms, from the same snapshot as `server_expected`. */
+type ServerTerms = {
+	float: string;
+	cash_sales: { amount: string; count: number };
+	paid_in: readonly { amount: string; reason?: string | null }[];
+	paid_out: { amount: string; count: number; note?: string | null };
+	cash_refunds: { amount: string; count: number };
+	no_sales: number;
+	voids: number;
+};
 /** Shared drawer/closure debits, in four-decimal minor units. */
 export function attributeRefunds(
 	sessionId: string,
@@ -103,6 +113,7 @@ export function deriveExpected(
 			id: string;
 			counted_float: string;
 			server_expected?: Record<string, string> | null;
+			server_terms?: ServerTerms | null;
 			server_ledger_rows?: readonly { id?: string; status?: string }[] | null;
 		};
 		movements: readonly Movement[];
@@ -149,8 +160,13 @@ export function deriveExpected(
 	);
 }
 
-/** The display terms use the same session attribution and four-decimal arithmetic. */
-export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
+type BaselineHas = (id: string | number | null | undefined) => boolean;
+const sumMinor = (rows: readonly { amount: string }[]) =>
+	rows.reduce((total, row) => total + toMinor(row.amount, 4), 0);
+const display = (amount: string) => fromMinor(toMinor(amount, 4), 4);
+
+/** The terms over one view of the rows, in four-decimal minor units. */
+function localTerms(input: Parameters<typeof deriveExpected>[0]) {
 	const { session, movements, ledgerRowsBySession, refundRecords = [] } = input;
 	const own = movements.filter((row) => row.session_id === session.id);
 	const voids = new Set(own.filter((row) => row.type === 'void').map((row) => row.voids));
@@ -158,63 +174,131 @@ export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
 	const cash = ledgerRowsBySession.filter(
 		(row) => row.session_id === session.id && row.status === 'captured' && row.kind === 'cash'
 	);
-	const paidOut = live.filter((row) => row.type === 'paid_out');
-	const total = (rows: readonly { amount: string }[]) =>
-		fromMinor(
-			rows.reduce((sum, row) => sum + toMinor(row.amount, 4), 0),
-			4
-		);
 	const refunds = attributeRefunds(session.id, ledgerRowsBySession, refundRecords);
 	return {
-		float: fromMinor(toMinor(session.counted_float, 4), 4),
-		cashSales: {
-			amount: total(cash),
-			// Distinct orders when rows carry their order; a split cash payment is one sale.
-			count: cash.every((row) => row.order)
-				? new Set(cash.map((row) => row.order)).size
-				: cash.length,
-		},
-		paidIn: live
-			.filter((row) => row.type === 'paid_in')
-			.map((row) => ({
-				amount: fromMinor(toMinor(row.amount, 4), 4),
-				note: row.reason,
-			})),
-		paidOut: {
-			amount: total(paidOut),
-			count: paidOut.length,
-			note: paidOut.length === 1 ? paidOut[0].reason : undefined,
-		},
-		cashRefunds: {
-			amount: fromMinor(refunds.byMethod.cash ?? 0, 4),
-			count: refunds.countByMethod.cash ?? 0,
-		},
+		float: toMinor(session.counted_float, 4),
+		cashSales: sumMinor(cash),
+		// Distinct orders when rows carry their order; a split cash payment is one sale.
+		cashSalesCount: cash.every((row) => row.order)
+			? new Set(cash.map((row) => row.order)).size
+			: cash.length,
+		paidIn: live.filter((row) => row.type === 'paid_in'),
+		paidOut: live.filter((row) => row.type === 'paid_out'),
+		cashRefunds: refunds.byMethod.cash ?? 0,
+		cashRefundsCount: refunds.countByMethod.cash ?? 0,
 		noSales: live.filter((row) => row.type === 'no_sale').length,
 		voids: live.filter((row) => row.type === 'void').length,
-		expected: deriveExpected(input).cash,
 	};
 }
 
-export function deriveUnsyncedDelta(
+/**
+ * The display terms use the same session attribution and four-decimal arithmetic as
+ * `deriveExpected`. Given the server's terms and the baseline, each term is the server's figure
+ * plus this device's unsynced delta, computed exactly as `deriveUnsyncedDelta` computes it, so
+ * the chips add up to the anchored total on a register shared by several devices.
+ */
+export function deriveDrawerTerms(
 	input: Parameters<typeof deriveExpected>[0],
-	baselineHas: (id: string | number | null | undefined) => boolean
-): Record<string, string> {
-	// Compare the full local view with only the part already represented in the baseline.
-	// Restoring a synced target's pending void marker makes its reversal a signed debit.
-	const full = deriveExpected(input);
-	for (const row of input.ledgerRowsBySession) {
-		if (row.session_id !== input.session.id || !baselineHas(row.id)) continue;
-		const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
-		if (
-			['voided', 'failed'].includes(row.status) &&
-			snapshot &&
-			['captured', 'authorized'].includes(snapshot.status ?? '')
-		) {
-			const method = row.kind === 'cash' ? 'cash' : row.method_id;
-			full[method] = fromMinor(toMinor(full[method] ?? '0', 4) - toMinor(row.amount, 4), 4);
-		}
+	baselineHas?: BaselineHas
+) {
+	const expected = deriveExpected(input, baselineHas).cash;
+	const full = localTerms(input);
+	const server = input.session.server_terms;
+	if (!server || !baselineHas) {
+		return {
+			float: fromMinor(full.float, 4),
+			cashSales: { amount: fromMinor(full.cashSales, 4), count: full.cashSalesCount },
+			paidIn: full.paidIn.map((row) => ({ amount: display(row.amount), note: row.reason })),
+			paidOut: {
+				amount: fromMinor(sumMinor(full.paidOut), 4),
+				count: full.paidOut.length,
+				note: full.paidOut.length === 1 ? full.paidOut[0].reason : undefined,
+			},
+			cashRefunds: { amount: fromMinor(full.cashRefunds, 4), count: full.cashRefundsCount },
+			noSales: full.noSales,
+			voids: full.voids,
+			expected,
+		};
 	}
-	const known = deriveExpected({
+	const known = localTerms(baselineView(input, baselineHas));
+	const plus = (amount: string, delta: number) => fromMinor(toMinor(amount, 4) + delta, 4);
+	const voidedCash = sumMinor(
+		voidedBaselineLegs(input, baselineHas).filter((row) => row.kind === 'cash')
+	);
+	// Paid-ins are listed: the server's, less any this device has since voided, then the new ones.
+	const paidIn = server.paid_in.map((row) => ({
+		amount: display(row.amount),
+		note: row.reason ?? undefined,
+	}));
+	const fullIds = new Set(full.paidIn.map((row) => row.id));
+	for (const row of known.paidIn.filter(({ id }) => !fullIds.has(id))) {
+		const at = paidIn.findIndex(
+			(entry) =>
+				toMinor(entry.amount, 4) === toMinor(row.amount, 4) &&
+				(entry.note ?? null) === (row.reason ?? null)
+		);
+		// The server lists no ids; with no matching entry the debit still has to show.
+		if (at >= 0) paidIn.splice(at, 1);
+		else paidIn.push({ amount: fromMinor(-toMinor(row.amount, 4), 4), note: row.reason });
+	}
+	for (const row of full.paidIn.filter(({ id }) => !baselineHas(id)))
+		paidIn.push({ amount: display(row.amount), note: row.reason });
+	const paidOutCount = server.paid_out.count + full.paidOut.length - known.paidOut.length;
+	// With one paid-out left, it is the one new here, or else the server's only one.
+	const fresh = full.paidOut.filter(({ id }) => !baselineHas(id));
+	const paidOutNote =
+		paidOutCount !== 1
+			? undefined
+			: fresh.length === 1
+				? fresh[0].reason
+				: server.paid_out.count === 1
+					? (server.paid_out.note ?? undefined)
+					: undefined;
+	return {
+		// Both views share the session's float; the server's figure is the anchor.
+		float: display(server.float),
+		cashSales: {
+			amount: plus(server.cash_sales.amount, full.cashSales - voidedCash - known.cashSales),
+			count: server.cash_sales.count + full.cashSalesCount - known.cashSalesCount,
+		},
+		paidIn,
+		paidOut: {
+			amount: plus(server.paid_out.amount, sumMinor(full.paidOut) - sumMinor(known.paidOut)),
+			count: paidOutCount,
+			note: paidOutNote,
+		},
+		cashRefunds: {
+			amount: plus(server.cash_refunds.amount, full.cashRefunds - known.cashRefunds),
+			count: server.cash_refunds.count + full.cashRefundsCount - known.cashRefundsCount,
+		},
+		noSales: server.no_sales + full.noSales - known.noSales,
+		voids: server.voids + full.voids - known.voids,
+		expected,
+	};
+}
+
+/**
+ * Baseline-held legs this device has voided or failed since the snapshot counted them: the
+ * baseline view keeps their local status, so the full view must debit them itself.
+ */
+function voidedBaselineLegs(input: Parameters<typeof deriveExpected>[0], baselineHas: BaselineHas) {
+	return input.ledgerRowsBySession.filter((row) => {
+		if (row.session_id !== input.session.id || !baselineHas(row.id)) return false;
+		const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
+		return (
+			['voided', 'failed'].includes(row.status) &&
+			!!snapshot &&
+			['captured', 'authorized'].includes(snapshot.status ?? '')
+		);
+	});
+}
+
+/** Only the part of the local view the baseline already represents. */
+function baselineView(
+	input: Parameters<typeof deriveExpected>[0],
+	baselineHas: BaselineHas
+): Parameters<typeof deriveExpected>[0] {
+	return {
 		...input,
 		movements: input.movements
 			.filter((row) => baselineHas(row.id))
@@ -236,7 +320,21 @@ export function deriveUnsyncedDelta(
 				),
 			})),
 		refundRecords: input.refundRecords?.filter((row) => baselineHas(row.id)),
-	});
+	};
+}
+
+export function deriveUnsyncedDelta(
+	input: Parameters<typeof deriveExpected>[0],
+	baselineHas: BaselineHas
+): Record<string, string> {
+	// Compare the full local view with only the part already represented in the baseline.
+	// Restoring a synced target's pending void marker makes its reversal a signed debit.
+	const full = deriveExpected(input);
+	for (const row of voidedBaselineLegs(input, baselineHas)) {
+		const method = row.kind === 'cash' ? 'cash' : row.method_id;
+		full[method] = fromMinor(toMinor(full[method] ?? '0', 4) - toMinor(row.amount, 4), 4);
+	}
+	const known = deriveExpected(baselineView(input, baselineHas));
 	return Object.fromEntries(
 		Object.keys({ ...full, ...known }).map((method) => [
 			method,

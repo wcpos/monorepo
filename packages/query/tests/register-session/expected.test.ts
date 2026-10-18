@@ -1,3 +1,5 @@
+import { toMinor } from '@wcpos/order-math';
+
 import {
 	attributeRefunds,
 	deriveDrawerTerms,
@@ -354,5 +356,137 @@ it.each(['synced', 'pending'])('reverses a voided %s movement only once', (syncS
 	).toBe(syncStatus === 'synced' ? '80.0000' : '100');
 	expect(deriveUnsyncedDelta(input, baselineHas)).toEqual({
 		cash: syncStatus === 'synced' ? '-20.0000' : '0.0000',
+	});
+});
+
+describe('drawer terms anchored to the server terms', () => {
+	// Two devices on one register: the other device's 500 of sales and 50 paid in are only on
+	// the server. The strip once showed 100 + 579 = 724 because its chips were this device's own.
+	const serverTerms = {
+		float: '100.0000',
+		cash_sales: { amount: '579.0000', count: 3 },
+		paid_in: [{ amount: '50.0000', reason: 'change' }],
+		paid_out: { amount: '5.0000', count: 1, note: 'milk' },
+		cash_refunds: { amount: '0.0000', count: 0 },
+		no_sales: 0,
+		voids: 0,
+	};
+	const leg = (id: string, order: string, amount: string, status = 'captured') => ({
+		id,
+		order,
+		session_id: 'S',
+		kind: 'cash',
+		method_id: 'cash',
+		status,
+		amount,
+		refunded_amount: '0.0000',
+	});
+	const session = {
+		id: 'S',
+		counted_float: '100.0000',
+		server_expected: { cash: '724.0000' },
+		server_terms: serverTerms,
+		server_ledger_rows: [{ id: 'leg1', status: 'captured' }],
+	};
+	const outMilk = { id: 'out1', session_id: 'S', type: 'paid_out', amount: '5', reason: 'milk' };
+	const baseline = new Set<string | number | null | undefined>(['leg1', 'out1']);
+	const baselineHas = (id: string | number | null | undefined) => baseline.has(id);
+	const sum = (terms: ReturnType<typeof deriveDrawerTerms>) =>
+		toMinor(terms.float, 4) +
+		toMinor(terms.cashSales.amount, 4) +
+		terms.paidIn.reduce((total, row) => total + toMinor(row.amount, 4), 0) -
+		toMinor(terms.paidOut.amount, 4) -
+		toMinor(terms.cashRefunds.amount, 4);
+
+	it('shows the server terms when the baseline holds every local row', () => {
+		const input = {
+			session,
+			movements: [outMilk],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000')],
+		};
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms).toEqual({
+			float: '100.0000',
+			cashSales: { amount: '579.0000', count: 3 },
+			paidIn: [{ amount: '50.0000', note: 'change' }],
+			paidOut: { amount: '5.0000', count: 1, note: 'milk' },
+			cashRefunds: { amount: '0.0000', count: 0 },
+			noSales: 0,
+			voids: 0,
+			expected: deriveExpected(input, baselineHas).cash,
+		});
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+		expect(toMinor(terms.expected, 4)).toBe(toMinor('724', 4));
+	});
+
+	it('adds an unsynced cash sale and paid-in to the matching terms', () => {
+		const input = {
+			session,
+			movements: [
+				outMilk,
+				{ id: 'in2', session_id: 'S', type: 'paid_in', amount: '10', reason: 'top-up' },
+			],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000'), leg('leg2', 'o9', '20.0000')],
+		};
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms.cashSales).toEqual({ amount: '599.0000', count: 4 });
+		expect(terms.paidIn).toEqual([
+			{ amount: '50.0000', note: 'change' },
+			{ amount: '10.0000', note: 'top-up' },
+		]);
+		expect(terms.paidOut).toEqual({ amount: '5.0000', count: 1, note: 'milk' });
+		expect(terms.expected).toBe('754.0000');
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
+	it('takes a baseline-captured leg voided here out of cash sales', () => {
+		const input = {
+			session,
+			movements: [outMilk],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000', 'voided')],
+		};
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms.cashSales.amount).toBe('500.0000');
+		expect(terms.expected).toBe('645.0000');
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
+	it('drops a baseline paid-in voided here from the server list', () => {
+		const input = {
+			session,
+			movements: [
+				outMilk,
+				{ id: 'in1', session_id: 'S', type: 'paid_in', amount: '50', reason: 'change' },
+				{ id: 'v1', session_id: 'S', type: 'void', amount: '50', voids: 'in1' },
+			],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000')],
+		};
+		const has = (id: string | number | null | undefined) => id === 'in1' || baselineHas(id);
+		const terms = deriveDrawerTerms(input, has);
+		expect(terms.paidIn).toEqual([]);
+		expect(terms.voids).toBe(1);
+		expect(terms.expected).toBe('674.0000');
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
+	it('derives the local terms when the server sends none', () => {
+		const input = {
+			session: { ...session, server_terms: null },
+			movements: [outMilk],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000')],
+		};
+		const { expected, ...chips } = deriveDrawerTerms(input, baselineHas);
+		const { expected: _local, ...today } = deriveDrawerTerms(input);
+		expect(chips).toEqual(today);
+		expect(chips).toEqual({
+			float: '100.0000',
+			cashSales: { amount: '79.0000', count: 1 },
+			paidIn: [],
+			paidOut: { amount: '5.0000', count: 1, note: 'milk' },
+			cashRefunds: { amount: '0.0000', count: 0 },
+			noSales: 0,
+			voids: 0,
+		});
+		expect(expected).toBe(deriveExpected(input, baselineHas).cash);
 	});
 });

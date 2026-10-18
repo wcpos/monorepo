@@ -240,8 +240,18 @@ const serverListRow = (local: Record<string, unknown>) => ({
 	...Object.fromEntries(SERVER_SESSION_COLUMNS.map((key) => [key, local[key] ?? null])),
 	created_at_gmt: local.opened_at_gmt,
 });
+const serverTerms = (cashSales: string) => ({
+	float: '100.0000',
+	cash_sales: { amount: cashSales, count: 2 },
+	paid_in: [{ amount: '5.0000', reason: null }],
+	paid_out: { amount: '5.0000', count: 1, note: 'milk' },
+	cash_refunds: { amount: '0.0000', count: 0 },
+	no_sales: 0,
+	voids: 0,
+});
 const anchor = {
 	server_expected: { cash: '679' },
+	server_terms: serverTerms('579.0000'),
 	server_expected_at: '2026-10-18T09:00:00.000Z',
 	server_ledger_row_ids: ['row-1'],
 	server_movement_ids: ['movement-1'],
@@ -262,6 +272,7 @@ it('keeps the server anchor through the list adoption while the detail read is i
 			data: {
 				...listRow,
 				expected: { cash: '679' },
+				terms: serverTerms('580.0000'),
 				as_of_gmt: '2026-10-18T09:05:00Z',
 				movements: [],
 			},
@@ -271,6 +282,7 @@ it('keeps the server anchor through the list adoption while the detail read is i
 	expect(betweenReads).toMatchObject({ ...anchor, approval_required: true });
 	expect(row.getLatest().toJSON()).toMatchObject({
 		server_expected: { cash: '679' },
+		server_terms: serverTerms('580.0000'),
 		server_expected_at: '2026-10-18T09:05:00.000Z',
 		server_movement_ids: [],
 		approval_required: true,

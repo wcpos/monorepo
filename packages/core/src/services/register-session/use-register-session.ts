@@ -236,7 +236,6 @@ export function useRegisterSession() {
 				refundRecords: data?.refundRecords,
 			}
 		: undefined;
-	const terms = drawerInput ? deriveDrawerTerms(drawerInput) : undefined;
 	const baselineHas = baselineContains(
 		accountingOrders.map(({ record }) => record),
 		data?.refundSources ?? [],
@@ -271,6 +270,8 @@ export function useRegisterSession() {
 			sessionRefreshRequests.next({ storeDB, registerId: binding.registerId });
 	}, [baselineStale, storeDB, binding.registerId]);
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
+	// The same anchor as `expected`, so the strip's terms add up to its total.
+	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
