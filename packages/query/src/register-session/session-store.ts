@@ -152,6 +152,16 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 	const movements = registerCollections(storeDB).cash_movements;
 	const row = await movements.findOne(movementId).exec();
 	if (!row) throw new Error('invalid_retry_target');
+	// A refused reversal's claim on its target was dropped by the refresh that followed the
+	// refusal; retrying the reversal restores it, or a close before the server's next snapshot
+	// records the target as never voided.
+	if (row.voids) {
+		const target = await movements.findOne(row.voids).exec();
+		await target?.incrementalModify((doc) => {
+			doc.voided_by ??= row.id;
+			return doc;
+		});
+	}
 	return row.incrementalPatch({ ...pending });
 }
 export function recordMovement(

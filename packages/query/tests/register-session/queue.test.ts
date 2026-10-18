@@ -14,6 +14,7 @@ import {
 	closeSession,
 	openSession,
 	recordMovement,
+	retryMovement,
 	startCounting,
 	voidMovement,
 	writeClosure,
@@ -398,6 +399,38 @@ it('a refresh drops a reversal claim whose reversal the server refused', async (
 	);
 	await refreshSessions({ registerId: 'register', http, storeDB: db });
 	expect(target.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', voided_by: null });
+	// Retrying the refused reversal restores the claim, so a close before the server's next
+	// snapshot still records the target as voided; the claim then stands through a refresh.
+	await retryMovement(db, reversal.id);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+});
+it('a refresh keeps a claim whose reversal row is not written yet (voidMovement mid-flight)', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	// `voidMovement` claims the target first and inserts the reversal after; this is the gap.
+	await target.incrementalPatch({ sync_status: 'synced', voided_by: 'reversal-not-yet-written' });
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().voided_by).toBe('reversal-not-yet-written');
 });
 it('a refresh adopts a void made on another device, and keeps a movement posted meanwhile', async () => {
 	const row = await open();

@@ -71,21 +71,26 @@ export function movementFromServer(server: ServerMovementRow): MovementContent {
 export function mergeServerMovement(
 	local: CashMovementRow,
 	server: MovementContent,
-	claimPending: boolean
+	claimStands: boolean
 ) {
 	return {
 		...local,
 		...server,
 		...synced,
-		voided_by: server.voided_by ?? (claimPending ? local.voided_by : null),
+		voided_by: server.voided_by ?? (claimStands ? local.voided_by : null),
 	};
 }
 
-/** Whether the reversal a local claim names is still pending; a missing or failed one is not. */
-async function reversalPending(movements: CashMovementCollection, local: CashMovementRow) {
+/**
+ * Whether a local reversal claim still stands: only a reversal row the server REFUSED
+ * (`failed`) retires it. A pending one is on its way; a synced one the server already
+ * reflects; and a row not written yet is `voidMovement` mid-flight — it claims the target
+ * first and inserts the reversal after, so a refresh in between must not undo the claim.
+ */
+async function claimStands(movements: CashMovementCollection, local: CashMovementRow) {
 	if (!local.voided_by) return false;
 	const reversal = await movements.findOne(local.voided_by).exec();
-	return reversal?.getLatest().sync_status === 'pending';
+	return reversal?.getLatest().sync_status !== 'failed';
 }
 
 /** Adopt a server movement row over the local one: merged, never replaced (see `adoptSessionRow`). */
@@ -102,7 +107,7 @@ export async function adoptMovementRow(
 	await local.incrementalModify(async (current) =>
 		current.sync_status === 'pending'
 			? current
-			: mergeServerMovement(current, adopted, await reversalPending(movements, current))
+			: mergeServerMovement(current, adopted, await claimStands(movements, current))
 	);
 }
 
@@ -452,7 +457,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 				try {
 					const accepted = movementFromServer(response.data as ServerMovementRow);
 					await row.incrementalModify(async (local) =>
-						mergeServerMovement(local, accepted, await reversalPending(movements, local))
+						mergeServerMovement(local, accepted, await claimStands(movements, local))
 					);
 				} catch (error) {
 					// The store already accepted this movement; see the `persist` note in send().
