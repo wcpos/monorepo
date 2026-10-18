@@ -15,7 +15,7 @@ import { useAddVariation } from '../../hooks/use-add-variation';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { TileImage } from './tile-image';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 
 interface GridFields {
 	name: boolean;

@@ -56,7 +56,13 @@ const mockFooterRenders: { count: number; total: number | null }[] = [];
 // The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
 jest.mock('../handle-footer', () => ({
-	HandleProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
+	HandleProductsFooter: ({
+		drawnCount: count,
+		total,
+	}: {
+		drawnCount: number;
+		total: number | null;
+	}) => {
 		mockFooterRenders.push({ count, total });
 		return (
 			<footer

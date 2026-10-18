@@ -124,7 +124,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 	// as the count; an absent list leaves the drawn handle's total to the footer.
 	const footer = React.useMemo<OwnFooterNumbers>(
 		() => ({
-			count: hits.length,
+			drawnCount: hits.length,
 			total: parentCount === undefined ? undefined : Math.max(parentCount, hits.length),
 			children: (
 				<Text className="text-muted-foreground text-sm" numberOfLines={1}>

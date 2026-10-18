@@ -9,12 +9,12 @@ import { ProductsFooter, type ProductsFooterProps } from './footer';
  * under the counts.
  */
 export type OwnFooterNumbers = {
-	count: number;
+	drawnCount: number;
 	total?: number | null;
 	children?: React.ReactNode;
 };
 
-export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ count: 0 });
+export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ drawnCount: 0 });
 
 /**
  * A ProductsFooter whose numbers come from `OwnFooterContext`, so the component handed to
@@ -23,9 +23,13 @@ export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ count: 0
  * and its sync button, mid-sync — on every page.
  */
 export function OwnFooter(props: ProductsFooterProps) {
-	const { count, total, children } = React.useContext(OwnFooterContext);
+	const { drawnCount, total, children } = React.useContext(OwnFooterContext);
 	return (
-		<ProductsFooter {...props} drawnCount={count} total={total === undefined ? props.total : total}>
+		<ProductsFooter
+			{...props}
+			drawnCount={drawnCount}
+			total={total === undefined ? props.total : total}
+		>
 			{children ?? props.children}
 		</ProductsFooter>
 	);

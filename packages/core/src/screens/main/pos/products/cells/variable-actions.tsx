@@ -9,7 +9,7 @@ import { useProductsStockStatusFilter, VariationsPopover } from './variations-po
 import { useAddVariation } from '../../hooks/use-add-variation';
 import { useT } from '../../../../../contexts/translations';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 
 /**
  *

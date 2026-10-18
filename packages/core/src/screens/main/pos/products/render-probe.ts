@@ -222,7 +222,7 @@ export function logResultEmission(
 type Stamp = ReturnType<typeof stamp>;
 type Bucket = {
 	key: string;
-	count: number;
+	times: number;
 	ids: string[];
 	context: Record<string, unknown>;
 	at: Stamp;
@@ -241,8 +241,8 @@ const BATCH_WINDOW_MS = 250;
 function enqueue(key: string, context: Record<string, unknown>, id?: string): void {
 	const at = stamp();
 	const bucketKey = `${key}|${at.syncFlips}|${at.emission}`;
-	const bucket = pending.get(bucketKey) ?? { key, count: 0, ids: [], context, at };
-	bucket.count += 1;
+	const bucket = pending.get(bucketKey) ?? { key, times: 0, ids: [], context, at };
+	bucket.times += 1;
 	if (id && bucket.ids.length < IDS_PER_ROW) bucket.ids.push(id);
 	pending.set(bucketKey, bucket);
 	if (flushTimer === null) flushTimer = setTimeout(flush, BATCH_WINDOW_MS);
@@ -257,7 +257,7 @@ function flush(): void {
 	const rows = [...pending.values()];
 	pending.clear();
 	for (const bucket of rows) {
-		probe.debug(`${bucket.key} ×${bucket.count}`, {
+		probe.debug(`${bucket.key} ×${bucket.times}`, {
 			context: { ...bucket.at, ...bucket.context, ids: bucket.ids },
 		});
 	}

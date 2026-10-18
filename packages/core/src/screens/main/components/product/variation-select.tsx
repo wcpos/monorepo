@@ -19,11 +19,11 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import type { ProductDocument } from '@wcpos/database';
+import type { ProductPayload } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 
-type Attribute = NonNullable<ProductDocument['attributes']>[number];
+type Attribute = NonNullable<ProductPayload['attributes']>[number];
 
 interface Props {
 	attribute: Attribute;

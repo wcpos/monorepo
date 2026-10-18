@@ -1711,10 +1711,32 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/orders/view/use-order-refunds.ts :: engine handle aliased :: useOrderRefunds :: { engine } = useQueryRuntime() :: 1',
 	"screens/main/orders/view/use-order-refunds.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
 	"screens/main/orders/view/use-order-refunds.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (i1): the POS products screen's types come from @wcpos/query; its props stop borrowing storage names.
+	'screens/main/components/product/variable-product-row/variations/footer.tsx :: raw query construction :: VariationTableFooter :: count :: 1',
+	"screens/main/components/product/variation-select.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: held?.count :: 1',
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: live.count :: 1',
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: shown.count :: 1',
+	"screens/main/pos/products/cells/variable-actions.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variation-actions.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/utils.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/variations.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/filter-bar/quick-filter-editor.tsx :: record collection back-reference :: TermValueEditor :: collection :: 1',
+	'screens/main/pos/products/handle-footer.tsx :: raw query construction :: HandleProductsFooter :: count :: 1',
+	'screens/main/pos/products/own-footer.tsx :: raw query construction :: OwnFooter :: count :: 1',
+	'screens/main/pos/products/render-probe.ts :: raw query construction :: enqueue :: bucket.count :: 1',
+	'screens/main/pos/products/render-probe.ts :: raw query construction :: flush :: bucket.count :: 1',
+	"screens/main/pos/products/rows/variation-row.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/tiles/inline-variable-tile.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/tiles/product-grid.tsx :: raw query construction :: GridStatusFooter :: count :: 1',
+	"screens/main/pos/products/tiles/product-grid.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	"screens/main/pos/products/tiles/variation-tile.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/ui-settings-form.tsx :: raw query construction :: BrowseByField :: row.count :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 756;
+export const SEAM_RETIRED_FLOOR = 777;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'759ff1eb535d25a5379422924ec14af8f0ae21212bbaf2da8294ef045b55ea36';
+	'9c66c41c9e00027922b3a8ba93ab9e3a3c5cc99dc1d1b35260daea2c66b6a02d';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
