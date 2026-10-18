@@ -1705,10 +1705,16 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/orders/order-menu.tsx :: require plane outside a named read :: OrderActionsMenu :: runtime.engine.require :: 1',
 	'screens/main/orders/use-reopen-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/orders/use-reopen-order.ts :: resident helper write :: useReopenOrder :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (h7): the order refunds handle is owned by @wcpos/query; the refund mutation refreshes through named reads.
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 1',
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 2',
+	'screens/main/orders/view/use-order-refunds.ts :: engine handle aliased :: useOrderRefunds :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/orders/view/use-order-refunds.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/orders/view/use-order-refunds.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 751;
+export const SEAM_RETIRED_FLOOR = 756;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'a15ad2de631f80bf8ef26f2fa06ece27fec8bfab63224beb03fa751cbf1fe7cc';
+	'759ff1eb535d25a5379422924ec14af8f0ae21212bbaf2da8294ef045b55ea36';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

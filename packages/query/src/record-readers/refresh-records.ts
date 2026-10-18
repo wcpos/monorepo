@@ -1,3 +1,4 @@
+import { mintRemoteId } from '@wcpos/sync-core';
 import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 import { fetchFreshRecords } from '../reads/refresh-demands';
@@ -27,4 +28,24 @@ export function refreshRecordByWooId(
 	return fetchFreshRecords(engine, [
 		{ id: request.id, collection: request.collection, wooIds: [request.wooId] },
 	]);
+}
+
+/** Force an order's refunds refresh, preserving release outcomes for the caller's loop. */
+export async function refreshOrderRefunds(
+	engine: RxdbSyncEngine,
+	request: { id: string; orderId: number }
+): Promise<'settled' | 'released'> {
+	const handle = engine.require({
+		id: request.id,
+		kind: 'refunds-by-parent',
+		collection: 'refunds',
+		parentRemoteId: mintRemoteId(request.orderId, 'refund parent'),
+		forceRefresh: true,
+	});
+	try {
+		const result = await handle.ready;
+		return result?.action === 'released' ? 'released' : 'settled';
+	} finally {
+		handle.release();
+	}
 }
