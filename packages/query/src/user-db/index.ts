@@ -15,7 +15,7 @@ export type {
 } from './records';
 export * from './session';
 export * from './state';
-// Core's remaining hydration orchestration keeps these types until U4b.
+// Legacy callers outside hydration still use the document types.
 export type {
 	SiteDocument,
 	StoreDatabase,
@@ -24,3 +24,4 @@ export type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
+export * from './hydration';

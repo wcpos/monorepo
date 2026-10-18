@@ -541,6 +541,9 @@ it('requires current violations to match the frozen set minus explicit retiremen
 
 it('keeps retirements within the frozen set and pins every append-only entry', () => {
 	expect(SEAM_RETIRED_FINGERPRINTS.filter((fingerprint) => !frozen.has(fingerprint))).toEqual([]);
+	// A fingerprint retired twice (a conflict resolution that appended what the other side had
+	// already appended) would over-report progress and hide a real retirement under its ordinal.
+	expect(new Set(SEAM_RETIRED_FINGERPRINTS).size).toBe(SEAM_RETIRED_FINGERPRINTS.length);
 	expect(SEAM_RETIRED_FINGERPRINTS.length).toBeGreaterThanOrEqual(SEAM_RETIRED_FLOOR);
 	expect(
 		createHash('sha256')

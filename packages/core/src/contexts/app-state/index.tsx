@@ -18,7 +18,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { switchUserSessionStore } from './hydration-steps';
+import { switchUserSessionStore, toHydrationContext } from './hydration-steps';
 import {
 	clearStoreSession as clearPersistedStoreSession,
 	commitStoreSession,
@@ -139,10 +139,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			});
 			try {
 				updateAppState(
-					(await commitStoreSession(state.userDB!, {
-						ids: { siteID, wpCredentialsID, storeID },
-						session: sessionData,
-					})) as Partial<HydrationContext>
+					toHydrationContext(
+						await commitStoreSession(state.userDB!, {
+							ids: { siteID, wpCredentialsID, storeID },
+							session: sessionData,
+						})
+					)
 				);
 			} catch (error) {
 				if (error instanceof IncompleteStoreSessionError) {
@@ -161,7 +163,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * recovery below, so anything added to signing out reaches both.
 	 */
 	const clearStoreSession = React.useCallback(async () => {
-		updateAppState((await clearPersistedStoreSession(state.userDB!)) as Partial<HydrationContext>);
+		updateAppState(toHydrationContext(await clearPersistedStoreSession(state.userDB!)));
 	}, [state.userDB, updateAppState]);
 
 	const logout = React.useCallback(async () => {
@@ -205,7 +207,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				}
 				throw error;
 			}
-			updateAppState(sessionData as Partial<HydrationContext>);
+			updateAppState(toHydrationContext(sessionData));
 		},
 		[state.appState, state.userDB, updateAppState]
 	);
@@ -255,7 +257,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			sessionLogger.warn('Could not clear the incomplete session pointer', {
 				context: { error: getErrorMessage(error) },
 			});
-			updateAppState(SIGNED_OUT_SESSION as Partial<HydrationContext>);
+			updateAppState(toHydrationContext(SIGNED_OUT_SESSION));
 		});
 	}, [missingSessionFields, state.storeDB, state.appState, clearStoreSession, updateAppState]);
 
