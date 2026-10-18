@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { format } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import { Button } from '@wcpos/components/button';
+import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -95,21 +96,19 @@ export function Bar({
 		name: string,
 		checked: boolean
 	) => (
-		<Button
-			key={id}
-			testID={id}
-			variant="ghost"
-			className={`min-h-12 flex-row justify-start gap-2 px-3 ${!license?.isPro && !allowed ? 'opacity-50' : ''}`}
-			onPress={() => choose(changes, allowed, name)}
-		>
-			<View className="w-5 items-center">{checked && <Icon name="check" size="sm" />}</View>
-			<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
-				{label}
-			</ButtonText>
-			{!license?.isPro && !allowed && (
-				<Icon name="lock" size="sm" className="text-muted-foreground" />
-			)}
-		</Button>
+		<View key={id} className={!license?.isPro && !allowed ? 'opacity-50' : undefined}>
+			<MenuRow
+				testID={id}
+				choice
+				selected={checked}
+				label={label}
+				onPress={() => choose(changes, allowed, name)}
+				trailing={
+					!license?.isPro &&
+					!allowed && <Icon name="lock" size="sm" className="text-muted-foreground" />
+				}
+			/>
+		</View>
 	);
 	// Closures returns to Sales: the page bar's crumb on a phone, an arrow before the scope on
 	// wider widths, where the page bar carries no back (its ledger line 3).
@@ -158,41 +157,47 @@ export function Bar({
 								</Button>
 							</PopoverTrigger>
 							<PopoverContent testID="reports-scope-menu">
-								{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map((row) =>
-									option(
-										`reports-register-${row.id || 'all'}`,
-										row.name,
-										{ registerId: row.id },
-										!!row.id && row.id === binding.registerId,
-										t('reports.other_registers'),
-										row.id === scope.registerId
-									)
-								)}
+								<MenuRowGroup accessibilityLabel={t('common.register')}>
+									{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map(
+										(row) =>
+											option(
+												`reports-register-${row.id || 'all'}`,
+												row.name,
+												{ registerId: row.id },
+												!!row.id && row.id === binding.registerId,
+												t('reports.other_registers'),
+												row.id === scope.registerId
+											)
+									)}
+								</MenuRowGroup>
 								{stores.length > 1 && (
 									<Text className="text-muted-foreground p-2">{t('common.store')}</Text>
 								)}
-								{stores.length > 1 &&
-									stores.map((row) =>
-										option(
-											`reports-store-${row.id}`,
-											row.name ?? '',
-											{
-												storeId: row.id,
-												// Reselecting the bound store while already on it keeps the register scope (a chosen Pro
-												// register, or `unbound` on an unbound Free till); returning to it from another store
-												// restores the binding, so another store's register never rides along.
-												registerId:
-													row.id === store.id
-														? (scope.storeId ?? store.id) === store.id
-															? scope.registerId
-															: (binding.registerId ?? '')
-														: '',
-											},
-											row.id === store.id,
-											t('reports.other_stores'),
-											row.id === (scope.storeId ?? store.id)
-										)
-									)}
+								{stores.length > 1 && (
+									<MenuRowGroup accessibilityLabel={t('common.store')}>
+										{stores.map((row) =>
+											option(
+												`reports-store-${row.id}`,
+												row.name ?? '',
+												{
+													storeId: row.id,
+													// Reselecting the bound store while already on it keeps the register scope (a chosen Pro
+													// register, or `unbound` on an unbound Free till); returning to it from another store
+													// restores the binding, so another store's register never rides along.
+													registerId:
+														row.id === store.id
+															? (scope.storeId ?? store.id) === store.id
+																? scope.registerId
+																: (binding.registerId ?? '')
+															: '',
+												},
+												row.id === store.id,
+												t('reports.other_stores'),
+												row.id === (scope.storeId ?? store.id)
+											)
+										)}
+									</MenuRowGroup>
+								)}
 								<ScopeHint locked={license?.isPro ? '' : locked} />
 							</PopoverContent>
 						</Popover>
@@ -218,25 +223,21 @@ export function CashierButton({ scope, onScopeChange }: ScopeProps) {
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent>
-				{[{ id: undefined, display_name: t('reports.all_cashiers') }, ...cashiers].map((row) => (
-					<Button
-						key={row.id ?? 'all'}
-						testID={`reports-cashier-${row.id ?? 'all'}`}
-						variant="ghost"
-						className="flex-row justify-start gap-2 px-3"
-						onPress={() => {
-							onScopeChange({ ...scope, cashier: row.id });
-							trigger.current?.close();
-						}}
-					>
-						<View className="w-5 items-center">
-							{row.id === scope.cashier && <Icon name="check" size="sm" />}
-						</View>
-						<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
-							{row.display_name ?? ''}
-						</ButtonText>
-					</Button>
-				))}
+				<MenuRowGroup accessibilityLabel={t('common.cashier')}>
+					{[{ id: undefined, display_name: t('reports.all_cashiers') }, ...cashiers].map((row) => (
+						<MenuRow
+							key={row.id ?? 'all'}
+							testID={`reports-cashier-${row.id ?? 'all'}`}
+							choice
+							selected={row.id === scope.cashier}
+							label={row.display_name ?? ''}
+							onPress={() => {
+								onScopeChange({ ...scope, cashier: row.id });
+								trigger.current?.close();
+							}}
+						/>
+					))}
+				</MenuRowGroup>
 			</PopoverContent>
 		</Popover>
 	);

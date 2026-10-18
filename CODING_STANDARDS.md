@@ -334,6 +334,8 @@ nothing wraps. The same shape is the Printers row and the Card readers row.
   under the header on a phone, never in the header row.
 
 #### Where the shared component is
+`MenuRow` (`menu-row/`) is the shared action/choice row inside sheets, popovers and side-panel menus: `rounded-md`, one size, a check slot for `choice`, destructive last and red. `MenuRowSeparator` separates groups, never individual rows.
+
 `packages/components/src/<name>/` with its `LEDGER.md`. Before styling anything on a screen,
 check that folder: if the element exists, use it as is; if it needs a new state, add the state
 there with a test and a line in the ledger; if it does not exist, say so before building a local

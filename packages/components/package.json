@@ -46,6 +46,7 @@
     "./list-row": "./src/list-row/index.tsx",
     "./loader": "./src/loader/index.tsx",
     "./logo": "./src/logo/index.tsx",
+    "./menu-row": "./src/menu-row/index.tsx",
     "./nav-item": "./src/nav-item/index.tsx",
     "./notice": "./src/notice/index.tsx",
     "./numpad": "./src/numpad/index.tsx",

@@ -25,7 +25,10 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
+	Text: require('react-native').Text,
+}));
 // The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
@@ -365,6 +368,8 @@ it.each([
 	isPro = true;
 	draw();
 	fireEvent.click(screen.getByTestId(trigger));
+	expect(screen.getByTestId(option).getAttribute('role')).toBe('radio');
+	expect(screen.getByTestId(option).closest('[role="radiogroup"]')).not.toBeNull();
 	fireEvent.click(screen.getByTestId(option));
 	expect(change).toHaveBeenCalled();
 	expect(screen.queryByTestId(option)).toBeNull();

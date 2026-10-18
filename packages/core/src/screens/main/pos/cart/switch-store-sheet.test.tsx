@@ -70,9 +70,11 @@ jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
 	ScrollView: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
@@ -103,7 +105,10 @@ it('blocks the app and refuses dismissal while a switch is hydrating', () => {
 	expect(screen.getByTestId('store-switch-overlay')).toBeTruthy();
 	fireEvent.click(screen.getByTestId('dismiss'));
 	expect(onOpenChange).not.toHaveBeenCalled();
-	expect((screen.getByTestId('switch-store-row-store-2') as HTMLButtonElement).disabled).toBe(true);
+	const row = screen.getByTestId('switch-store-row-store-2');
+	expect(row.getAttribute('aria-disabled')).toBe('true');
+	fireEvent.click(row);
+	expect(mockSwitch).not.toHaveBeenCalled();
 });
 
 it('keeps the sheet open and shows a toast when hydration fails', async () => {
@@ -115,3 +120,5 @@ it('keeps the sheet open and shows a toast when hydration fails', async () => {
 	expect(mockReplace).not.toHaveBeenCalled();
 	expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

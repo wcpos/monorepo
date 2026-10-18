@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Text } from '@wcpos/components/text';
 import {
 	Dialog,
@@ -57,17 +57,13 @@ export function HelpSheet({
 									(binding) => binding.command === command.id
 								)?.keys;
 								return (
-									<View key={command.id} className="border-border border-b">
-										<Button
-											variant="ghost"
-											testID={`hotkeys-help-row-${command.id}`}
-											className="flex-row justify-between gap-3"
-											disabled={command.when?.(ctx) === false}
-											onPress={() => run(command.id)}
-										>
-											<Text numberOfLines={1} className="min-w-0 flex-1">
-												{t(command.label)}
-											</Text>
+									<MenuRow
+										key={command.id}
+										testID={`hotkeys-help-row-${command.id}`}
+										disabled={command.when?.(ctx) === false}
+										onPress={() => run(command.id)}
+										label={t(command.label)}
+										trailing={
 											<View className="flex-row gap-1">
 												{keys &&
 													describeChord(keys).map((cap) => (
@@ -79,8 +75,8 @@ export function HelpSheet({
 														</Text>
 													))}
 											</View>
-										</Button>
-									</View>
+										}
+									/>
 								);
 							})}
 					</DialogBody>
