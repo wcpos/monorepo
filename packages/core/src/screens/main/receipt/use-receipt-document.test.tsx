@@ -71,8 +71,17 @@ jest.mock('../../../services/register-session/use-session-report', () => ({
 	useSessionReport: () => ({ print: jest.fn() }),
 }));
 const mockFindClosure = jest.fn();
-jest.mock('../../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => ({ findOne: mockFindClosure }),
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readClosure: async (_db: unknown, identity: { id?: string; serverClosureId?: string }) =>
+		mockFindClosure({
+			selector: {
+				$or: [
+					{ id: identity.id ?? identity.serverClosureId },
+					{ server_closure_id: identity.serverClosureId ?? identity.id },
+				],
+			},
+		}).exec(),
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({

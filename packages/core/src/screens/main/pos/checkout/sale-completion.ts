@@ -1,5 +1,5 @@
 import { POS_META_KEYS } from '@wcpos/sync-core';
-import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
+import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
@@ -47,7 +47,6 @@ export interface SaleContext {
 	storeDB: StoreDatabase;
 	siteUuid: string;
 	storeId?: number;
-	sessions: RegisterSessionCollection | undefined;
 	sessionsOn: boolean;
 	runtime: ReturnType<typeof useQueryRuntime>;
 	dp: number;

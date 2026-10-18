@@ -2269,20 +2269,24 @@ jest.mock('../hooks/use-sale-context', () => ({
 				// The session gate reads the bound register and its open session the way the app does.
 				resolveSession: async () => {
 					const { readBoundRegister } = jest.requireActual<
-						typeof import('../../../../../services/register/register-document')
-					>('../../../../../services/register/register-document');
+						typeof import('@wcpos/query/register-session')
+					>('@wcpos/query/register-session');
 					const { findOpenSession } = jest.requireActual<
-						typeof import('../../../../../services/register-session/session-store')
-					>('../../../../../services/register-session/session-store');
+						typeof import('@wcpos/query/register-session')
+					>('@wcpos/query/register-session');
 					const registerId =
 						(await readBoundRegister(mockRegisterDB as never, 'site', 1))?.id ?? null;
-					const session = await findOpenSession(mockSessions as never, registerId, mockSessionsOn);
+					const session = await findOpenSession(
+						{ collections: { register_sessions: mockSessions } },
+						registerId,
+						mockSessionsOn
+					);
 					return { registerId, sessionId: session?.id ?? null };
 				},
 			}),
 		userDB: mockRegisterDB,
 		sessionsOn: mockSessionsOn,
-		sessions: mockSessions,
+		storeDB: mockSessionStoreDB,
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
@@ -2309,6 +2313,7 @@ jest.mock('../completion-journal', () => ({
 let mockSessionsOn = false;
 const mockOpenSession = new BehaviorSubject<{ id: string; status?: string } | null>(null);
 const mockSessions = { findOne: jest.fn() };
+const mockSessionStoreDB = { collections: { register_sessions: mockSessions } };
 type SessionFixture = {
 	id: string;
 	register_id: string;

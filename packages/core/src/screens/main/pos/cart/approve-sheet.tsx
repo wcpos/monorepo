@@ -6,9 +6,10 @@ import { Input } from '@wcpos/components/input';
 import { Toast } from '@wcpos/components/toast';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import type { ClosureDocument } from '@wcpos/database';
+import { recordApproval } from '@wcpos/query/register-session';
 
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -21,10 +22,13 @@ export function ApproveSheet({
 	onOpenChange,
 }: {
 	counted: Record<string, string>;
-	onClosed: (closure: ClosureDocument) => void;
+	onClosed: (
+		closure: Awaited<ReturnType<ReturnType<typeof useRegisterSession>['actions']['closeSession']>>
+	) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const actor = useRegisterActor();
+	const { storeDB } = useStoreSession();
 	const { session, actions } = useRegisterSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -57,11 +61,9 @@ export function ApproveSheet({
 				approvedBy: response.data.approved_by,
 			});
 			setPassword('');
-			await session.incrementalPatch({
-				approved_by: response.data.approved_by,
-				approved_counted: response.data.approved_counted,
-				approval_required: false,
-				sync_error: null,
+			await recordApproval(storeDB, session.id, {
+				approvedBy: response.data.approved_by,
+				approvedCounted: response.data.approved_counted,
 			});
 			onClosed(await actions.closeSession({ counted }));
 			onOpenChange(false);

@@ -11,11 +11,11 @@ import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from 
 import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-
 import {
-	openSessionSelector,
+	observeOpenSessionPresence,
 	RegisterSessionRequiredError,
-} from '../../../../../services/register-session/session-store';
+} from '@wcpos/query/register-session';
+
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { SESSION_REQUIRED_REASON } from '../tender/tender-guards';
@@ -367,15 +367,12 @@ export function PaymentWebview({
 		if (preparation?.key !== preparationKey || !sessionsOn) return;
 		const sessionId = preparation.status === 'ready' ? preparation.sessionId : null;
 		if (!sessionId && !preparation.sessionRequired) return;
-		const id = registerId ?? '';
-		const selector = {
-			...openSessionSelector,
-			...(sessionId ? { id: sessionId } : { register_id: id }),
-		};
-		const subscription = ctx.sessions
-			?.findOne({ selector })
-			.$.pipe(
-				filter((session) => (sessionId ? !session : !!session)),
+		const subscription = observeOpenSessionPresence(
+			ctx.storeDB,
+			sessionId ? { sessionId } : { registerId: registerId ?? '' }
+		)
+			.pipe(
+				filter((present) => present !== null && (sessionId ? !present : present)),
 				take(1)
 			)
 			.subscribe(() => {
@@ -386,7 +383,7 @@ export function PaymentWebview({
 				presentSessionRequired(orderLogger, t);
 			});
 		return () => subscription?.unsubscribe();
-	}, [ctx.sessions, registerId, preparationKey, preparation, sessionsOn]);
+	}, [ctx.storeDB, registerId, preparationKey, preparation, sessionsOn]);
 
 	/**
 	 *

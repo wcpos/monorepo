@@ -37,12 +37,10 @@ const mockBound = jest.fn(),
 	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
 	mockInfo = jest.fn();
-jest.mock('../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
 	readRegister: async () => ({ sites: { site: { register_id: 'register-A' } } }),
 	nextSaleCounter: async () => 7,
-}));
-jest.mock('../../../../services/register-session/session-store', () => ({
 	requireOpenSession: (...args: unknown[]) => mockSession(...args),
 }));
 jest.mock('./provenance/stamp-completion', () => ({

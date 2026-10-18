@@ -3,17 +3,19 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/register-session';
+
 import * as audit from '../../../../services/register-session/audit';
-import {
-	backToSelling as resumeSelling,
-	startCounting,
-} from '../../../../services/register-session/session-store';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
+}));
+jest.mock('../../../../services/register-session/audit', () => ({
+	__esModule: true,
+	...jest.requireActual('../../../../services/register-session/audit'),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
@@ -266,13 +268,14 @@ it('requires approval for the same count after returning to selling and counting
 				},
 			}),
 		}),
-	} as unknown as Parameters<typeof resumeSelling>[0];
+	};
+	const storeDB = { collections: { register_sessions: sessions } };
 	backToSelling.mockImplementationOnce(async () => {
-		await resumeSelling(sessions, 's');
+		await resumeSelling(storeDB, 's');
 	});
 	const view = render(<RegisterCount onClosed={jest.fn()} />);
 	await act(async () => fireEvent.click(screen.getByTestId('count-back')));
-	await startCounting(sessions, 's');
+	await startCounting(storeDB, 's');
 	view.unmount();
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('463.30');

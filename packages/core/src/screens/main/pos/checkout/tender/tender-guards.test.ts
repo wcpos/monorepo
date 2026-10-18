@@ -1,3 +1,5 @@
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
+
 import {
 	createActionContext,
 	dispatchAction,
@@ -10,7 +12,6 @@ import {
 	registerActionHook,
 	resetActionRegistry,
 } from '../../../../../extensions/actions/registry';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { conditionsGate, registerGate, sessionGate } from './tender-guards';
 
 import type { ActionEventInput } from '../../../../../extensions/actions';

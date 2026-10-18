@@ -9,7 +9,8 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./testing": "./src/testing.ts",
-		"./collection-map": "./src/collection-map.ts"
+		"./collection-map": "./src/collection-map.ts",
+		"./register-session": "./src/register-session/index.ts"
 	},
 	"type": "module",
 	"files": [
@@ -24,10 +25,13 @@
 	},
 	"dependencies": {
 		"@wcpos/order-math": "workspace:*",
+		"@date-fns/tz": "^1.5.0",
 		"@wcpos/database": "workspace:*",
+		"@wcpos/order-math": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
+		"date-fns": "^4.4.0",
 		"lodash": "^4.18.1",
 		"observable-hooks": "^4.2.4",
 		"rxdb": "17.6.0",
@@ -37,6 +41,7 @@
 		"@testing-library/react": "^16.3.3",
 		"@types/jest": "^30.0.0",
 		"@types/lodash": "^4.17.26",
+		"ajv": "^8.20.0",
 		"jest": "^30.5.2",
 		"jest-environment-jsdom": "^30.5.2",
 		"ts-jest": "29.4.12"

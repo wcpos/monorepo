@@ -727,8 +727,8 @@ describe('VoidButton', () => {
 
 	it('voids an unpaid order with sessions on and none open: the row carries no session', async () => {
 		const { RegisterSessionRequiredError } = jest.requireActual<
-			typeof import('../../../../../services/register-session/session-store')
-		>('../../../../../services/register-session/session-store');
+			typeof import('@wcpos/query/register-session')
+		>('@wcpos/query/register-session');
 		mockResolveSession = async () => {
 			throw new RegisterSessionRequiredError();
 		};
@@ -859,9 +859,7 @@ it('stamps the original register through the real writer when binding switches d
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
 		'../../../hooks/mutations/use-local-mutation'
 	);
-	const { readBoundRegister } = jest.requireActual(
-		'../../../../../services/register/register-document'
-	);
+	const { readBoundRegister } = jest.requireActual('@wcpos/query/register-session');
 	await readBoundRegister(
 		{
 			getLocal: async () => ({

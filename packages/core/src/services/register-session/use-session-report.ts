@@ -5,10 +5,10 @@ import { useObservableState } from 'observable-hooks';
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
 import type { ClosureDocument, ClosureRow, WPCredentialsDocument } from '@wcpos/database';
+import { readClosure } from '@wcpos/query/register-session';
 
 import { useStoreSession } from '../../contexts/app-state';
 import { recordRegisterFact, useRegisterActor } from './audit';
-import { useClosureCollection } from './use-register-session-collections';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument, buildXReportDocument } from './closure-document';
 import { useClosureDocumentContext } from './use-closure-document-context';
@@ -25,12 +25,11 @@ export function useSessionReport(
 	previewEnabled = true
 ) {
 	const actor = useRegisterActor();
-	const { site } = useStoreSession();
+	const { site, storeDB } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
 	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
 	const { session, expected, blind, binding, movements, salesCount } = useRegisterSession();
 	const snapshot = useDocField(closure, (row) => row) ?? knownClosure;
-	const collection = useClosureCollection();
 	const { resolvedPrinter } = useResolvedPrinter({ template: REPORT_TEMPLATE });
 	const context = useClosureDocumentContext();
 	const localReport = snapshot
@@ -56,7 +55,7 @@ export function useSessionReport(
 		previewEnabled,
 		isReprint,
 		getLocalClosure: snapshot
-			? async () => closure ?? (await collection?.findOne(snapshot.id).exec()) ?? null
+			? async () => closure ?? (await readClosure(storeDB, { id: snapshot.id }))
 			: undefined,
 		document: snapshot
 			? `closure:${snapshot.server_closure_id ?? snapshot.id}`

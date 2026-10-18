@@ -3,7 +3,7 @@ import {
 	deriveDrawerTerms,
 	deriveExpected,
 	deriveUnsyncedDelta,
-} from './expected';
+} from '../../src/register-session/expected';
 
 it('derives captured session cash and card net of refunds and non-voided movements', () => {
 	const result = deriveExpected({

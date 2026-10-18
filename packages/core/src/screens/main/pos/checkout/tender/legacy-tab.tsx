@@ -52,7 +52,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 		return (
 			<VStack space="sm" className="p-4">
 				<View className="border-warning bg-warning/10 rounded-md border p-3">
-					<Text className="text-warning text-sm">{t('pos_checkout.legacy_not_with_split')}</Text>
+					<Text className="text-warn-text text-sm">{t('pos_checkout.legacy_not_with_split')}</Text>
 				</View>
 				{flow.legacyMethods.map((method) => (
 					<Text

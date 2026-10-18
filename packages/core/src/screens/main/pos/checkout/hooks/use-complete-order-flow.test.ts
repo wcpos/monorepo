@@ -4,14 +4,13 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { withLedger } from '@wcpos/order-math';
+import type { RegisterDocument } from '@wcpos/query/register-session';
 
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { createActionContext } from '../../../../../extensions/actions';
 import { row } from '../payments/device/fixtures.test-utils';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
-
-import type { RegisterDocument } from '../../../../../services/register/register-document';
 
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();

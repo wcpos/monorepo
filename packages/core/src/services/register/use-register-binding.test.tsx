@@ -6,8 +6,13 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { getLogger } from '@wcpos/utils/logger';
 import type { UserDatabase } from '@wcpos/database';
+import {
+	bindRegister,
+	ensureRegister,
+	readBoundRegister,
+	readRegister,
+} from '@wcpos/query/register-session';
 
-import { bindRegister, ensureRegister, readBoundRegister, readRegister } from './register-document';
 import {
 	useRegisterBinding,
 	useRegisterBindingSession,

@@ -1,40 +1,36 @@
 import { Subject } from 'rxjs';
 
-import type {
-	CashMovementCollection,
-	CashMovementRow,
-	ClosureCollection,
-	RegisterSessionCollection,
-	RegisterSessionRow,
-} from '@wcpos/database';
+import type { CashMovementRow, RegisterSessionRow } from '@wcpos/database';
 
+import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { recordRegisterFact } from './audit';
-import { adoptSession, type SessionHttp, synced } from './queue';
+import { adoptSessionRow, type SessionHttp, synced } from './queue';
 
 export const sessionRefreshRequests = new Subject<{
-	sessions: RegisterSessionCollection;
+	storeDB: RegisterStoreDatabase;
 	registerId: string;
 }>();
 
 export async function refreshSessions({
 	registerId,
 	http,
-	sessions,
-	movements,
-	closures,
+	storeDB,
 }: {
 	registerId: string;
 	http: SessionHttp;
-	sessions: RegisterSessionCollection;
-	movements: CashMovementCollection;
-	closures: ClosureCollection;
+	storeDB: RegisterStoreDatabase;
 }) {
+	const {
+		register_sessions: sessions,
+		cash_movements: movements,
+		closures,
+	} = registerCollections(storeDB);
 	const response = await http.get('sessions', {
 		params: { register_id: registerId, status: 'all', per_page: 30 },
 	});
 	const rows = (response.data as RegisterSessionRow[]).slice(0, 30);
 	for (const row of rows) {
-		await adoptSession(sessions, row);
+		await adoptSessionRow(sessions, row);
 		if (row.status === 'closed') continue;
 		const detailResponse = await http.get(`sessions/${row.id}`);
 		const detail = detailResponse.data as RegisterSessionRow & {
@@ -54,7 +50,7 @@ export async function refreshSessions({
 			? detail.as_of_gmt.replace(/Z?$/, 'Z')
 			: detailResponse.headers?.date;
 		const serverExpectedAt = typeof boundary === 'string' ? new Date(boundary).toISOString() : null;
-		await adoptSession(sessions, {
+		await adoptSessionRow(sessions, {
 			...detail,
 			// A cashier counting blind is not served the expected figure at all.
 			server_expected: detail.expected ?? null,

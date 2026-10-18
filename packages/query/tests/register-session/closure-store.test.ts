@@ -7,15 +7,17 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
+import { ensureRegister, readClosure, readRegister } from '@wcpos/query/register-session';
 
-import { ensureRegister, readRegister } from '../register/register-document';
 import {
 	closeSession,
 	openSession,
 	recordMovement,
+	refreshClosureRow,
+	setClosureReceiptSnapshot,
 	voidMovement,
 	writeClosure,
-} from './session-store';
+} from '../../src/register-session/session-store';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
@@ -44,7 +46,7 @@ afterEach(async () => {
 	await userDB.remove();
 });
 async function seed() {
-	let session = await openSession(db.register_sessions, {
+	let session = await openSession(db, {
 		registerId: 'register',
 		expectedFloat: '100',
 		countedFloat: '100',
@@ -56,16 +58,16 @@ async function seed() {
 		['paid_out', '5'],
 		['paid_out', '7'],
 	] as const) {
-		const row = await recordMovement(db.cash_movements, {
+		const row = await recordMovement(db, {
 			sessionId: session.id,
 			type,
 			amount,
 			reason: '',
 			actor: 7,
 		});
-		if (amount === '7') await voidMovement(db.cash_movements, row.id, 7);
+		if (amount === '7') await voidMovement(db, row.id, 7);
 	}
-	session = await closeSession(db.register_sessions, session.id, {
+	session = await closeSession(db, session.id, {
 		counted: { cash: '150' },
 		closedBy: 7,
 	});
@@ -119,7 +121,7 @@ async function seed() {
 		},
 	];
 	return {
-		closures: db.closures,
+		storeDB: db,
 		userDB,
 		siteUuid: 'site',
 		session,
@@ -302,7 +304,8 @@ it('retains the actor and movement data needed by the local closure document', a
 	expect(row.breakdowns.opened_by).toBe(7);
 	const movements = row.breakdowns.movements as Record<string, unknown>[];
 	expect(movements[0]).toMatchObject({ created_by: 7, created_at_gmt: expect.any(String) });
-	const { buildClosureDocument } = await import('./closure-document');
+	const { buildClosureDocument } =
+		await import('../../../core/src/services/register-session/closure-document');
 	const doc = buildClosureDocument(row.toMutableJSON(), {
 		store: { name: 'Shop' },
 		currency: 'USD',
@@ -330,4 +333,26 @@ it('derives a legacy closure day from opening in store time', async () => {
 		...{ timezone: 'America/Los_Angeles' },
 	});
 	expect(closure.business_day).toBe('2026-09-16');
+});
+
+it('patches only the receipt snapshot and corrections count, including server identity', async () => {
+	const closure = await writeClosure(await seed());
+	await closure.incrementalPatch({ server_closure_id: 'remote' });
+	const before = closure.getLatest().toJSON();
+	await setClosureReceiptSnapshot(db, closure.id, '{}');
+	await refreshClosureRow(db, 'remote', 3);
+	await expect(readClosure(db, { serverClosureId: 'remote' })).resolves.toMatchObject({
+		id: closure.id,
+	});
+	expect(closure.getLatest().toJSON()).toEqual({
+		...before,
+		receipt_snapshot: '{}',
+		corrections_count: 3,
+	});
+	await expect(setClosureReceiptSnapshot(null, closure.id, '{}')).rejects.toMatchObject({
+		name: 'StoreDatabaseUnavailableError',
+	});
+	await expect(refreshClosureRow(null, 'remote', 3)).rejects.toMatchObject({
+		name: 'StoreDatabaseUnavailableError',
+	});
 });

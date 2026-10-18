@@ -13,9 +13,20 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
+	useStoreSession: () => ({
+		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
+		storeDB: {
+			collections: {
+				register_sessions: { findOne: () => ({ exec: async () => ({ incrementalPatch: patch }) }) },
+			},
+		},
+	}),
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+jest.mock('../../../../services/register-session/audit', () => ({
+	__esModule: true,
+	...jest.requireActual('../../../../services/register-session/audit'),
+}));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
@@ -83,7 +94,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's', register_id: 'r', incrementalPatch: patch },
+		session: { id: 's', register_id: 'r' },
 		actions: { closeSession },
 	}),
 }));
