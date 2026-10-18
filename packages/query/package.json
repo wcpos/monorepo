@@ -11,6 +11,7 @@
 		"./testing": "./src/testing.ts",
 		"./collection-map": "./src/collection-map.ts",
 		"./register-session": "./src/register-session/index.ts",
+		"./register-session/new-till-flag": "./src/register-session/new-till-flag.ts",
 		"./temporary-order": "./src/temporary-order/index.ts",
 		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",

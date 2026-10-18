@@ -58,15 +58,22 @@ export async function readRegister(userDB: UserDatabase): Promise<RegisterDocume
 	return register;
 }
 
+/** The till's own identity: what a mint and a re-mint both draw fresh. */
+function mintTillIdentity(): Pick<RegisterDocument, 'id' | 'name' | 'created_at'> {
+	const id = mintUuid().toLowerCase();
+	return {
+		id,
+		name: `Register ${id.slice(-4).toUpperCase()}`,
+		created_at: new Date().toISOString(),
+	};
+}
+
 export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocument> {
 	const existing = await readRegister(userDB);
 	if (existing) return existing;
-	const id = mintUuid().toLowerCase();
 	const data: RegisterDocument = {
-		id,
-		name: `Register ${id.slice(-4).toUpperCase()}`,
+		...mintTillIdentity(),
 		platform: AppInfo.platform,
-		created_at: new Date().toISOString(),
 		sites: {},
 	};
 	try {
@@ -79,6 +86,49 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
 		if (winner) return winner;
 		throw error;
 	}
+}
+
+/**
+ * Give a cloned installation its own identity: a new till id and name, and every
+ * site's sale counter back at zero, so its sales never share a till or a counter with
+ * the copy it came from. What is kept as-is: the store bindings (`register_id`,
+ * `register_store_id`) and each register's closure counters, which the server
+ * validates against its own floor. What is not: a pending closure reservation, which
+ * is the source till's closure in flight, not this one's. Without a document this is
+ * a plain mint.
+ */
+export async function remintRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) return ensureRegister(userDB);
+	const updated = await doc.incrementalModify((data) => ({
+		...data,
+		...mintTillIdentity(),
+		sites: Object.fromEntries(
+			Object.entries(data.sites).map(([site, bucket]) => [
+				site,
+				{
+					...bucket,
+					sale_counter: 0,
+					...(bucket.registers
+						? {
+								registers: Object.fromEntries(
+									Object.entries(bucket.registers).map(
+										([register, { closure_reservation: _pending, ...counters }]) => [
+											register,
+											counters,
+										]
+									)
+								),
+							}
+						: {}),
+				},
+			])
+		),
+	}));
+	const register = updated.toJSON(true).data;
+	currentRegisterId = register.id;
+	currentRegister = register;
+	return register;
 }
 
 export function observeRegister$(userDB: UserDatabase) {

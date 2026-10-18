@@ -14,6 +14,7 @@ export {
 	readBoundRegister,
 	readCounters,
 	readRegister,
+	remintRegister,
 	unbindRegister,
 } from './register-document';
 export type { RegisterCounters, RegisterDocument } from './register-document';
