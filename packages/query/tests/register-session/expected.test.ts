@@ -458,6 +458,18 @@ describe('drawer terms anchored to the server terms', () => {
 		expect(split.cashSales.count).toBe(3);
 	});
 
+	it('counts a void-and-retender on one baseline order as the server counted it', () => {
+		const input = {
+			session,
+			movements: [outMilk],
+			// The counted leg is voided here and the same order is paid again, unsynced.
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000', 'voided'), leg('leg2', 'o1', '70.0000')],
+		};
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms.cashSales).toEqual({ amount: '570.0000', count: 3 });
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
 	const voidedChange = [
 		outMilk,
 		{ id: 'in1', session_id: 'S', type: 'paid_in', amount: '50', reason: 'change' },

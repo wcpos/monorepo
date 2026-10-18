@@ -243,18 +243,29 @@ export function deriveDrawerTerms(
 	const known = localTerms(baselineView(input, baselineHas));
 	const plus = (amount: string, delta: number) => fromMinor(toMinor(amount, 4) + delta, 4);
 	const voidedLegs = voidedBaselineLegs(input, baselineHas).filter((row) => row.kind === 'cash');
-	// A voided leg's sale leaves the count once its order has no captured cash leg left.
-	const capturedOrders = new Set(
-		input.ledgerRowsBySession
-			.filter(
-				(row) =>
-					row.session_id === input.session.id && row.status === 'captured' && row.kind === 'cash'
-			)
-			.map((row) => row.order)
+	/**
+	 * Sales are counted by order sets, not by subtracting counts: an order the baseline counted
+	 * (its leg captured in the snapshot, even if voided here) and that still has a captured cash
+	 * leg here is the server's sale, whichever leg now carries it, so a void-and-retender on one
+	 * order adds nothing. A leg without its order is its own sale.
+	 */
+	const own = (row: LedgerRow) => row.session_id === input.session.id && row.kind === 'cash';
+	const sale = (row: LedgerRow) => row.order ?? `leg:${row.id}`;
+	const ordersNow = new Set(
+		input.ledgerRowsBySession.filter((row) => own(row) && row.status === 'captured').map(sale)
 	);
-	const voidedSales = voidedLegs.every((row) => row.order)
-		? new Set(voidedLegs.map((row) => row.order).filter((order) => !capturedOrders.has(order))).size
-		: voidedLegs.length;
+	const ordersKnown = new Set(
+		input.ledgerRowsBySession
+			.filter((row) => {
+				if (!own(row) || !baselineHas(row.id)) return false;
+				const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
+				return (snapshot?.status ?? row.status) === 'captured';
+			})
+			.map(sale)
+	);
+	const salesDelta =
+		[...ordersNow].filter((order) => !ordersKnown.has(order)).length -
+		[...ordersKnown].filter((order) => !ordersNow.has(order)).length;
 	// Paid-ins are listed: the server's, less any this device has since voided, then the new ones.
 	const paidIn = server.paid_in.map((row) => ({
 		id: row.id,
@@ -305,7 +316,7 @@ export function deriveDrawerTerms(
 				server.cash_sales.amount,
 				full.cashSales - sumMinor(voidedLegs) - known.cashSales
 			),
-			count: server.cash_sales.count + full.cashSalesCount - known.cashSalesCount - voidedSales,
+			count: server.cash_sales.count + salesDelta,
 		},
 		paidIn: paidIn.map(({ minor, note }) => ({ amount: fromMinor(minor, 4), note })),
 		paidOut: {
