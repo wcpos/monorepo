@@ -310,6 +310,23 @@ describe('refreshStockFor', () => {
 });
 
 describe('fetchFreshRecords', () => {
+	it.each(['customers', 'orders'] as const)('supports forced %s refreshes', async (collection) => {
+		const pending = fetchFreshRecords(engine, [
+			{ id: 'record-refresh:37', collection, wooIds: [37] },
+		]);
+		expect(mockRequire).toHaveBeenCalledWith({
+			id: 'record-refresh:37',
+			collection,
+			kind: 'targeted-records',
+			remoteIds: ['37'],
+			forceRefresh: true,
+		});
+		expect(releases[0]).not.toHaveBeenCalled();
+		readyControls[0].resolve();
+		await pending;
+		expect(releases[0]).toHaveBeenCalledTimes(1);
+	});
+
 	const requests = [
 		{ id: 'barcode:code:ambiguous:products', collection: 'products' as const, wooIds: [12] },
 		{ id: 'barcode:code:ambiguous:variations', collection: 'variations' as const, wooIds: [14] },

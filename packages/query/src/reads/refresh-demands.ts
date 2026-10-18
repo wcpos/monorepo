@@ -8,7 +8,11 @@ import { engineCollection } from '../records/engine-collection';
 
 export async function fetchFreshRecords(
 	engine: RxdbSyncEngine,
-	requests: readonly { id: string; collection: 'products' | 'variations'; wooIds: number[] }[]
+	requests: readonly {
+		id: string;
+		collection: 'products' | 'variations' | 'customers' | 'orders';
+		wooIds: number[];
+	}[]
 ): Promise<void> {
 	const handles = [];
 	try {

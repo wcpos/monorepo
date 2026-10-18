@@ -27,7 +27,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -58,25 +58,20 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'customers'>
 
 	const handleRefresh = React.useCallback(() => {
 		if (!customer.id) return;
-		const handle = runtime.engine.require({
+		void refreshRecordByWooId(runtime.engine, {
 			id: `customer-actions:refresh:${customer.id}`,
 			collection: 'customers',
-			kind: 'targeted-records',
-			remoteIds: [customer.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		void handle.ready
-			.finally(() => handle.release())
-			.catch((error) => {
-				syncLogger.error('Failed to refresh customer', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					showToast: true,
-					context: {
-						customerId: customer.id,
-						error: getErrorMessage(error),
-					},
-				});
+			wooId: customer.id,
+		}).catch((error) => {
+			syncLogger.error('Failed to refresh customer', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				showToast: true,
+				context: {
+					customerId: customer.id,
+					error: getErrorMessage(error),
+				},
 			});
+		});
 	}, [customer.id, runtime]);
 
 	/**

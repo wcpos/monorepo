@@ -5,4 +5,4 @@ export {
 } from './use-engine-document';
 export { readResidentRecord } from './read-resident-record';
 export { readCustomerByWooId } from './read-customer-by-woo-id';
-export { refreshCollection } from './refresh-records';
+export { refreshCollection, refreshRecordByWooId } from './refresh-records';
