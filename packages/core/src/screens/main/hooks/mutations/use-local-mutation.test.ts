@@ -1262,11 +1262,11 @@ describe('cart changes at the resident modifier', () => {
 	);
 });
 
-// Exercise the provider through the real plainPatch and outbound write contract.
+// Exercise the app-session bridge (no POS provider) through the real plainPatch and outbound write contract.
 describe('durable divergence ownership', () => {
-	const { OrderMoneyDivergenceProvider, useServerOwnsMoneyReader } = jest.requireActual<
-		typeof import('../../pos/contexts/order-money-divergence')
-	>('../../pos/contexts/order-money-divergence');
+	const { MoneyOwnerHintBridge } = jest.requireActual<
+		typeof import('../../components/money-owner-hint-bridge')
+	>('../../components/money-owner-hint-bridge');
 	const query = jest.requireMock('@wcpos/query');
 	const originalRuntime = query.useQueryRuntime;
 	beforeEach(() => {
@@ -1296,7 +1296,7 @@ describe('durable divergence ownership', () => {
 			},
 		};
 		mockFindOneExec.mockResolvedValue(resident);
-		renderHook(() => useServerOwnsMoneyReader(), { wrapper: OrderMoneyDivergenceProvider });
+		renderHook(() => MoneyOwnerHintBridge());
 		await act(async () => {
 			divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
 			await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1334,18 +1334,14 @@ describe('durable divergence ownership', () => {
 				},
 			};
 			mockFindOneExec.mockResolvedValue(scenario === 'missing' ? null : resident);
-			const { result } = renderHook(() => useServerOwnsMoneyReader(), {
-				wrapper: OrderMoneyDivergenceProvider,
-			});
+			renderHook(() => MoneyOwnerHintBridge());
 			await act(async () => {
 				divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
 				if (scenario !== 'failure')
 					divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
-				expect(result.current('hint-order')).toBe(true);
 				if (scenario === 'switched') divergenceListener({ type: 'scope-switched' });
 				await new Promise((resolve) => setTimeout(resolve, 0));
 			});
-			expect(result.current('hint-order')).toBe(['missing', 'failure'].includes(scenario));
 			expect(log.warn).toHaveBeenCalledTimes(scenario === 'failure' ? 1 : 0);
 			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'new' || scenario === 'failure' ? 1 : 0);
 			if (scenario === 'new' || scenario === 'failure') {
@@ -1389,4 +1385,20 @@ describe('protected order meta at the mutation boundary', () => {
 			);
 		}
 	);
+});
+
+it('keeps the provider latch immediate without invoking the mutation path', async () => {
+	const { OrderMoneyDivergenceProvider, useServerOwnsMoneyReader } = jest.requireActual<
+		typeof import('../../pos/contexts/order-money-divergence')
+	>('../../pos/contexts/order-money-divergence');
+	mockFindOneExec.mockClear();
+	const { result } = renderHook(() => useServerOwnsMoneyReader(), {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	await act(async () => {
+		divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+		expect(result.current('hint-order')).toBe(true);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockFindOneExec).not.toHaveBeenCalled();
 });

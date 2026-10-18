@@ -32,7 +32,7 @@ export function MetaDataForm({
 	hiddenKeys,
 }: MetaDataFormProps) {
 	const t = useT();
-	const { control, setValue, getValues } = useFormContext();
+	const { control, setValue, getValues, setError, clearErrors } = useFormContext();
 	const { fields, append, remove } = useFieldArray({
 		control,
 		name,
@@ -67,7 +67,23 @@ export function MetaDataForm({
 									<FormField
 										control={control}
 										name={`${name}.${index}.key`}
-										render={({ field }) => <FormInput label={t('common.key')} {...field} />}
+										render={({ field }) => (
+											<FormInput
+												label={t('common.key')}
+												{...field}
+												onChange={(key) => {
+													if (hiddenKeys?.includes(String(key))) {
+														setError(field.name, {
+															type: 'validate',
+															message: t('common.meta_key_protected'),
+														});
+														return;
+													}
+													clearErrors(field.name);
+													field.onChange(key);
+												}}
+											/>
+										)}
 									/>
 									{withDisplayValues && (
 										<FormField

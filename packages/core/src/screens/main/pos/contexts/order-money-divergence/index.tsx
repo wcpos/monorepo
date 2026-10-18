@@ -1,14 +1,6 @@
 import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
-import type { MetaDataEntry } from '@wcpos/order-math';
-import { getLogger } from '@wcpos/utils/logger';
-
-import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
-
-import type { MutationDocument } from '../../../hooks/mutations/use-local-mutation';
-
-const logger = getLogger(['wcpos', 'pos', 'money-owner']);
 
 /**
  * The save-time money mirror, held for the cashier (R1, ADR 0032).
@@ -184,7 +176,6 @@ function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
 
 export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
 	const { engine } = useQueryRuntime();
-	const manager = useQueryRuntime();
 	const ownership = React.useRef({ engine, ids: new Set<string>() });
 	const serverOwnsMoney = React.useCallback(
 		(uuid: string) => ownership.current.engine === engine && ownership.current.ids.has(uuid),
@@ -240,32 +231,6 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// Commands must see the event immediately, without waiting for React to render.
 			if (ownership.current.engine !== engine) ownership.current = { engine, ids: new Set() };
 			ownership.current.ids.add(orderId);
-			const pendingOwnership = ownership.current;
-			void enqueueOrderMutation(orderId, async () => {
-				if (ownership.current !== pendingOwnership) return;
-				// Lazy: `plain-patch` reaches `uuid` (ESM-only), which jest cannot require from the
-				// many suites that import this provider; the write is rare and already async.
-				const { findEngineResident, plainPatch } = await import('../../commands/plain-patch');
-				const document = await findEngineResident(manager, 'orders', orderId);
-				if (!document) return;
-				await plainPatch(manager, 'orders', {
-					document: document as unknown as MutationDocument,
-					changes: (payload) => {
-						if (ownership.current !== pendingOwnership) return {};
-						const meta = (payload.meta_data ?? []) as MetaDataEntry[];
-						const hint = meta.find(({ key }) => key === '_wcpos_money_owner_hint');
-						if (hint?.value === 'server') return {};
-						return {
-							meta_data: hint
-								? meta.map((entry) => (entry === hint ? { ...entry, value: 'server' } : entry))
-								: [...meta, { key: '_wcpos_money_owner_hint', value: 'server' }],
-						};
-					},
-				});
-				pendingOwnership.ids.delete(orderId);
-			}).catch((error) =>
-				logger.warn('Failed to persist server money ownership', { context: { orderId, error } })
-			);
 
 			const held: OrderMoneyDivergence = {
 				orderId,
@@ -294,7 +259,7 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 				};
 			});
 		});
-	}, [engine, manager]);
+	}, [engine]);
 
 	const sameEngine = state.engine === engine;
 	const byOrderId = sameEngine ? state.byOrderId : EMPTY_STATE.byOrderId;

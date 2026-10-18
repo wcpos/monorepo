@@ -350,3 +350,20 @@ it('rolls back the cashier after a failed hand-off without losing concurrent own
 	expect(sentCashiers).toEqual(['9']);
 	expect(resident.payload.meta_data).toEqual([...meta, hint]);
 });
+
+it('rejects renaming an ordinary row to a protected key', async () => {
+	render(
+		<EditOrderMetaForm
+			order={order as never}
+			formData={{
+				...payload,
+				cashier_id: '7',
+				meta_data: [...meta, { key: 'ordinary', value: 'keep' }],
+			}}
+		/>
+	);
+	const input = screen.getByDisplayValue('ordinary');
+	fireEvent.change(input, { target: { value: '_pos_user' } });
+	expect(screen.queryByDisplayValue('_pos_user')).toBeNull();
+	expect(screen.getByDisplayValue('ordinary')).toBe(input);
+});

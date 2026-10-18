@@ -17,3 +17,19 @@ it.each([
 		).toEqual([{ key, value, id }]);
 	}
 );
+
+it.each(['server', 'mutation'] as const)(
+	'deduplicates protected aliases by row identity: %s',
+	(source) => {
+		const genuine = { id: 9, key: '_pos_user', value: 'cashier' };
+		const alias = { id: 3, key: '_pos_user', value: 'renamed ordinary row' };
+		expect(mergeProtectedOrderMeta([genuine], [alias, genuine], source)).toEqual([genuine]);
+		expect(
+			mergeProtectedOrderMeta([], [{ key: '_pos_user', value: 'alias' }, genuine], source)
+		).toEqual([genuine]);
+		const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+		expect(mergeProtectedOrderMeta([hint], [{ ...hint, value: null }, hint], source)).toEqual([
+			hint,
+		]);
+	}
+);

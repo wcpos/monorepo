@@ -13,30 +13,42 @@ export function mergeProtectedOrderMeta(
 	incomingMeta: MetaDataEntry[],
 	source: 'server' | 'mutation' = 'server'
 ) {
-	const serverMeta = [...incomingMeta];
+	let serverMeta = [...incomingMeta];
 	const keys = source === 'mutation' ? PROTECTED_ORDER_META_KEYS : POS_ORDER_IDENTITY_META_KEYS;
 	for (const key of keys) {
-		const localEntry = localMeta.find((meta) => meta?.key === key);
-		if (!localEntry) continue;
-		const index = serverMeta.findIndex((meta) => meta?.key === key);
-		if (index === -1) {
-			if (source === 'mutation') serverMeta.splice(localMeta.indexOf(localEntry), 0, localEntry);
-			else serverMeta.push(localEntry);
-			continue;
-		}
+		const localRows = localMeta.filter((meta) => meta?.key === key);
+		const incomingRows = serverMeta.filter((meta) => meta?.key === key);
+		const localEntry = localRows.find((meta) => meta.id != null) ?? localRows[0];
+		const incoming =
+			incomingRows.find((meta) => meta.id != null && meta.id === localEntry?.id) ??
+			incomingRows.find((meta) => meta.id != null) ??
+			incomingRows[0];
+		if (!localEntry && !incoming) continue;
+		const index = incoming
+			? serverMeta.slice(0, serverMeta.indexOf(incoming)).filter((meta) => meta?.key !== key).length
+			: source === 'mutation'
+				? localMeta.indexOf(localEntry)
+				: serverMeta.length;
+		serverMeta = serverMeta.filter((meta) => meta?.key !== key);
+
 		// Editor identity changes win; server adoption retains the resident identity.
 		// Money ownership is one-way at either boundary.
-		const incoming = serverMeta[index];
 		const moneyOwner = key === '_wcpos_money_owner_hint' || key === '_wcpos_money_owner';
 		const takeIncoming = moneyOwner
 			? incoming?.value === 'server' ||
-				(localEntry.value !== 'server' && source === 'mutation' && incoming?.value != null)
+				(localEntry?.value !== 'server' && source === 'mutation' && incoming?.value != null)
 			: source === 'mutation' && incoming?.value != null;
-		const winner = takeIncoming ? incoming : localEntry;
+		const winner = (takeIncoming ? incoming : localEntry) ?? incoming!;
 		// A Woo-assigned id is kept whichever value wins: a resident entry written before
 		// its acknowledgement has none, and a later full meta save without the id would
 		// make Woo append a duplicate row.
-		serverMeta[index] = { ...winner, id: winner.id ?? localEntry.id ?? incoming?.id };
+		serverMeta.splice(index, 0, {
+			...winner,
+			...(moneyOwner && [...localRows, ...incomingRows].some((meta) => meta.value === 'server')
+				? { value: 'server' }
+				: {}),
+			id: winner.id ?? localEntry?.id ?? incoming?.id,
+		});
 	}
 	return serverMeta;
 }

@@ -15,6 +15,7 @@ import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
 import { SearchMetaKeysBridge } from '@wcpos/core/screens/main/components/search-meta-keys-bridge';
 import { SearchWarmupBridge } from '@wcpos/core/screens/main/components/search-warmup-bridge';
+import { MoneyOwnerHintBridge } from '@wcpos/core/screens/main/components/money-owner-hint-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
 import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bridge';
@@ -221,6 +222,7 @@ function AppStack() {
 				    the root error boundary, which renders above every provider and so
 				    cannot ask the engine itself (#1098). */}
 				<UnsentChangesBridge />
+				<MoneyOwnerHintBridge />
 				{/* Receipt emails queued while offline drain from here (#165) — above the
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
