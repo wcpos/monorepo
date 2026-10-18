@@ -17,12 +17,15 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'@wcpos/core/screens/main/products',
-	() => ({ ProductsScreen: () => <div data-testid="products-screen" /> }),
+	'@wcpos/core/screens/main/rest/lazy',
+	() => ({
+		loadRest: () =>
+			Promise.resolve({ ProductsScreen: () => <div data-testid="products-screen" /> }),
+	}),
 	{ virtual: true }
 );
-it('exports the screen without wrapping the management bar in the guard', () => {
+it('exports the screen without wrapping the management bar in the guard', async () => {
 	render(<ProductsRoute />);
-	expect(screen.getByTestId('products-screen')).toBeTruthy();
+	expect(await screen.findByTestId('products-screen')).toBeTruthy();
 	expect(screen.queryByTestId('route-guard')).toBeNull();
 });
