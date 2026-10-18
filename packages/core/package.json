@@ -93,7 +93,7 @@
 		"react-native-safe-area-context": "~5.10.1",
 		"react-native-screens": "~4.30.0",
 		"react-native-svg": "15.16.0",
-		"victory-native": "^41.20.2"
+		"victory-native": "^42.0.1"
 	},
 	"peerDependenciesMeta": {
 		"react-native-ble-plx": {
@@ -153,6 +153,6 @@
 		"react-native-screens": "~4.30.0",
 		"react-native-svg": "15.16.0",
 		"ts-jest": "29.4.12",
-		"victory-native": "^41.26.0"
+		"victory-native": "^42.0.1"
 	}
 }
