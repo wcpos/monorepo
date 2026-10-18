@@ -1,3 +1,5 @@
+import { isRecordClosed } from '@wcpos/query';
+
 import { createDispatchToken, type DispatchToken } from '../../../../extensions/actions/registry';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -58,7 +60,7 @@ export function enqueueOrderMutation<T>(
  * falls back to the record it was called with.
  */
 function isClosed(record: CurrentOrderRecord): boolean {
-	return (record as unknown as { collection?: { closed?: boolean } }).collection?.closed === true;
+	return isRecordClosed(record);
 }
 
 /** Tests only: forget every queue and every remembered saved record. */
