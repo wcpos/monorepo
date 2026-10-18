@@ -1,12 +1,13 @@
 import * as React from 'react';
 
+import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
+
 import {
 	engineCollectionNameFor,
 	type LegacyCollectionName,
-	readCoverageGeneration,
-	useQueryRuntime,
-} from '@wcpos/query';
-import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
+} from '../engine-adapter/collection-map';
+import { readCoverageGeneration } from '../engine-query';
+import { useQueryRuntime } from '../provider';
 
 export function useCoverageGeneration(
 	engine: RxdbSyncEngine,

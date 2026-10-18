@@ -1,14 +1,14 @@
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { normalizeQuerySortField } from '@wcpos/query/query-state';
+import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Products } from './products';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 import { QueryStateProvider } from '../../../query';
-import { normalizeQuerySortField } from '../../../query/query-state-translator';
 
 import type { QueryStateOf } from '../../../query';
-import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 const PRODUCTS_PAGE_SIZE = 10;
 const PRODUCT_SORT_FIELDS = [

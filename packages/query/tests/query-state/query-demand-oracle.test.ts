@@ -1,6 +1,9 @@
-import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
+import {
+	compileQuery,
+	requirementsForCompiledQuery,
+} from '../../src/query-state/query-state-translator';
 
-import type { CollectionKey, QueryStateOf } from './query-state-types';
+import type { CollectionKey, QueryStateOf } from '../../src/query-state/query-state-types';
 
 type CompilableState<C extends CollectionKey> = Omit<QueryStateOf<C>, 'limit'> & {
 	limit?: number;

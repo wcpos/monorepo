@@ -15,6 +15,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 import { queryHandleAnswers$ } from '@wcpos/query';
 import type { QueryHandle } from '@wcpos/query';
+import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { ManagementBar } from '../components/management-bar';
 import { QuerySearchInput } from '../components/query-search-input';
@@ -63,7 +64,6 @@ import { useRowKeyboard } from './use-row-keyboard';
 
 import type { Row } from '../../../table-types';
 import type { DataTableFeatures } from '../components/data-table';
-import type { SortFieldsByCollection } from '../../../query/query-state-types';
 import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../query';
 const cells = {
 	actions: Actions,

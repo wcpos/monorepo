@@ -1,7 +1,7 @@
-import initialSettings from '../../contexts/ui-settings/initial-settings.json';
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
+import { normalizeQuerySortField } from '@wcpos/query/query-state';
+import type { QueryStateOf, SortFieldsByCollection } from '@wcpos/query/query-state';
 
-import type { QueryStateOf, SortFieldsByCollection } from '../../../../query/query-state-types';
+import initialSettings from '../../contexts/ui-settings/initial-settings.json';
 
 const POS_PRODUCT_SORT_FIELDS = [
 	'name',

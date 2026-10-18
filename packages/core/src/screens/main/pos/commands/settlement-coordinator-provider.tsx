@@ -21,6 +21,7 @@ import {
 	useQueryRuntime,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { useCoverageGeneration } from '@wcpos/query/query-state';
 
 import { couponReferences } from './coupon-continuation';
 import { readCouponContext } from '../hooks/use-coupon-context';
@@ -33,7 +34,6 @@ import {
 } from './settlement-coordinator';
 import { useT } from '../../../../contexts/translations';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { useCoverageGeneration } from '../../../../query/scope-key';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import {
 	getCheckoutModeSnapshot,

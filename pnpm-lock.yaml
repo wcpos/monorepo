@@ -1082,6 +1082,9 @@ importers:
       jest-environment-jsdom:
         specifier: ^30.4.1
         version: 30.4.1
+      mingo:
+        specifier: 7.2.4
+        version: 7.2.4
       ts-jest:
         specifier: 29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.2)(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@25.9.3))(typescript@5.9.3)

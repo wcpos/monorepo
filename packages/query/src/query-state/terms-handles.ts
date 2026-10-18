@@ -6,15 +6,13 @@
 
 import * as React from 'react';
 
-import {
-	engineCollectionNameFor,
-	type EngineQueryDescriptor,
-	type QueryHandle,
-	type QueryResult,
-	useQueryRuntime,
-} from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
+import { engineCollectionNameFor } from '../engine-adapter/collection-map';
+import { type EngineQueryDescriptor } from '../engine-query';
+import { type QueryHandle } from '../query-handle';
+import { type QueryResult } from '../query-result';
+import { useQueryRuntime } from '../provider';
 import {
 	acquireEmptyQueryHandle,
 	acquireEngineQueryHandle,

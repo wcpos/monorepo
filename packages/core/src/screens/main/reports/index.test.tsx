@@ -8,7 +8,8 @@ import { utc } from '@date-fns/utc';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { compileQuery } from '../../../query/query-state-translator';
+import { compileQuery } from '@wcpos/query/query-state';
+
 import { ReportsScreen } from './index';
 
 import type { QueryHandle, QueryStateOf } from '../../../query';

@@ -27,7 +27,7 @@ function handle() {
 		declareOnce: () => firstValueFrom(readiness),
 	};
 }
-jest.mock('../../../../query/query-handles', () => ({
+jest.mock('@wcpos/query/query-state', () => ({
 	canonicalQueryKey: JSON.stringify,
 	acquireDemandQueryHandle: (_engine: unknown, key: string) => {
 		if (!handles.has(key)) handles.set(key, handle());

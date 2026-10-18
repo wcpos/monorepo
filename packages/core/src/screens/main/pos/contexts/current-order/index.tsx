@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import type { QueryHandle, QueryResult } from '@wcpos/query';
+import { useQuerySnapshot } from '@wcpos/query/query-state';
 
-import { useQuerySnapshot } from '../../../../../query/query-handles';
 import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,

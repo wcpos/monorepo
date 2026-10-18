@@ -19,14 +19,13 @@ import {
 	useQueryRuntime,
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
 import {
 	acquireEmptyQueryHandle,
 	canonicalQueryKey,
+	compileQuery,
 	demandPlanFor,
-} from '../../../../../query/query-handles';
-import { compileQuery } from '../../../../../query/query-state-translator';
-import { useScopeKey } from '../../../../../query/scope-key';
+	useScopeKey,
+} from '@wcpos/query/query-state';
 
 import type { RxCollection } from 'rxdb';
 

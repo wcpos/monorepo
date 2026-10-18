@@ -14,6 +14,7 @@
 		"./register-session/new-till-flag": "./src/register-session/new-till-flag.ts",
 		"./temporary-order": "./src/temporary-order/index.ts",
 		"./record-readers": "./src/record-readers/index.ts",
+		"./query-state": "./src/query-state/index.ts",
 		"./store-local": "./src/store-local/index.ts",
 		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",
@@ -55,6 +56,7 @@
 		"ajv": "^8.20.0",
 		"jest": "^30.5.2",
 		"jest-environment-jsdom": "^30.5.2",
+		"mingo": "7.2.4",
 		"ts-jest": "29.4.12",
 		"z-schema": "12.4.6"
 	}

@@ -6,6 +6,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
+import type { FiltersOf, QueryStateOf } from '@wcpos/query/query-state';
 
 import { quickFilterToQueryPatch } from './apply-quick-filter';
 import { getPOSProductSort } from '../pos-product-sort';
@@ -22,7 +23,6 @@ import {
 
 import type { QuickFilter } from './filter-bar-layout';
 import type { QueryHandle, SnapshotFields } from '../../../../../query';
-import type { FiltersOf, QueryStateOf } from '../../../../../query/query-state-types';
 
 const PREVIEW_LIMIT = 200;
 // The preview draws the rows and nothing else: no spinner, no total, no paging.

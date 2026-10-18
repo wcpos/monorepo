@@ -24,27 +24,26 @@ import {
 	queryHandleCount,
 } from '@wcpos/query/testing';
 import type { FakeEngine } from '@wcpos/query/testing';
-
-import { useAppliedCouponReferenceDemand } from './coupon-reference-demand';
-import * as queryHandles from './query-handles';
-import {
-	useCollectionQueryHandle,
-	useDrawnHandle,
-	useLogsQueryHandle,
-	useProductsQueryHandle,
-	useQuerySnapshot,
-} from './query-handles';
-import { useScopeKey } from './scope-key';
-import { useSearchSelect } from './search-select';
 import {
 	EXISTENCE_RECHECK_MS,
 	useAllTermsHandle,
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useLogsQueryHandle,
 	useProductsCarryingTermsHandle,
-} from './terms-handles';
-import * as queryStateTranslator from './query-state-translator';
-import { createStoreDatabase } from '../../../query/tests/helpers/db';
+	useProductsQueryHandle,
+	useQuerySnapshot,
+	useScopeKey,
+} from '@wcpos/query/query-state';
+import type { QueryStateOf } from '@wcpos/query/query-state';
 
-import type { QueryStateOf } from './query-state-types';
+// Spies must target the defining modules, not the public barrel's re-export getters.
+import * as queryHandles from '../../../query/src/query-state/query-handles';
+import * as queryStateTranslator from '../../../query/src/query-state/query-state-translator';
+import { useSearchSelect } from './search-select';
+import { createStoreDatabase } from '../../../query/tests/helpers/db';
+import { useAppliedCouponReferenceDemand } from './coupon-reference-demand';
+
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 Object.assign(globalThis, { TextDecoder, TextEncoder });

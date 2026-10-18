@@ -1,13 +1,13 @@
 import * as React from 'react';
 
-import { usePersistedState } from '../contexts/persisted-state';
-
 import type {
 	CollectionKey,
 	FiltersOf,
 	QueryStateActions,
 	QueryStateOf,
-} from './query-state-types';
+} from '@wcpos/query/query-state';
+
+import { usePersistedState } from '../contexts/persisted-state';
 
 const DEFAULT_FILTERS = {
 	refunds: {},

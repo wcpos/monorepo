@@ -15,8 +15,7 @@ import {
 	type QuerySnapshot,
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
-import { useDrawnHandle, useQueryHandleFields, useQuerySnapshot } from './query-handles';
+import { useDrawnHandle, useQueryHandleFields, useQuerySnapshot } from '@wcpos/query/query-state';
 
 import type { RxCollection } from 'rxdb';
 
