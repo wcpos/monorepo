@@ -14,7 +14,7 @@ import { startWith } from 'rxjs';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { EngineRecord } from '@wcpos/query';
-import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
+import { observeLocalRecordsById, useDocField, useQueryRuntime } from '@wcpos/query';
 
 import {
 	calendarDate,
@@ -357,7 +357,7 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const { filters } = useQueryState<'orders'>();
 	const { result } = useQuerySnapshot(useDrawnHandle(refundsHandle), []);
 	const refunds = result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload);
-	const { engine, locale } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const parentIds = [
 		...new Set(
 			result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload.parent_id)
@@ -367,17 +367,16 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 		.join(',');
 	const source = React.useMemo(
 		() =>
-			observeEngineQuery(engine, {
-				collection: 'orders',
-				selector: { id: { $in: parentIds ? parentIds.split(',').map(Number) : [] } },
-				limit: Number.MAX_SAFE_INTEGER,
-			}).pipe(startWith(undefined)),
-		[engine, locale, parentIds]
+			observeLocalRecordsById(
+				runtime.engine,
+				'orders',
+				parentIds ? parentIds.split(',').map(Number) : []
+			).pipe(startWith(undefined)),
+		[runtime.engine, runtime.locale, parentIds]
 	);
 	const local = useObservableState(source);
 	const parents = new Map([
-		...(local?.hits.map(({ record }) => {
-			const order = record as EngineRecord<'orders'>;
+		...(local?.map((order) => {
 			return [order.payload.id, { ...order.payload, uuid: order.uuid }] as const;
 		}) ?? []),
 		...data.allOrders.map((order) => [order.id, order] as const),

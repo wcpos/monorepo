@@ -53,6 +53,7 @@ export {
 	refreshClosureRow,
 	recordClosurePrint,
 } from './session-store';
+export { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
 
 export {
 	createSessionAccountingState,

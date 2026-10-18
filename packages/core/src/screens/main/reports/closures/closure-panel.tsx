@@ -8,11 +8,11 @@ import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import {
+	CLOSURE_DOCUMENT_LIMIT,
 	type ClosureRow,
 	readClosure,
 	setClosureReceiptSnapshot,
 } from '@wcpos/query/register-session';
-import { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
 import { log } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../contexts/app-state';

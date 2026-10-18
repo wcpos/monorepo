@@ -1546,10 +1546,25 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/hooks/use-collection.ts :: query escape hatch ::  :: from '@wcpos/query' :: 2",
 	"screens/main/hooks/use-collection.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"screens/main/hooks/use-collection.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	// ADR 0033 per-screen (g7): the reports screens read local records by Woo id through a named read; storage types come from the register-session subpath.
+	'screens/main/reports/cards/test-utils.tsx :: record collection back-reference ::  :: query.collection :: 1',
+	'screens/main/reports/cards/use-local-categories.ts :: engine handle aliased :: useLocalCategories :: { engine, locale } = useQueryRuntime() :: 1',
+	"screens/main/reports/cards/use-local-categories.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/reports/cards/use-local-products.ts :: engine handle aliased :: useLocalProducts :: { engine, locale } = useQueryRuntime() :: 1',
+	"screens/main/reports/cards/use-local-products.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/reports/closures/closure-list.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/closures/closure-panel.tsx :: storage import ::  :: from '@wcpos/database/collections/schemas/closures' :: 1",
+	"screens/main/reports/closures/export-csv.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/closures/recount-sheet.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/closures/session-card.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/closures/session-cards.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/closures/use-last-closure.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/reports/context.tsx :: engine handle aliased :: ReportsRefunds :: { engine, locale } = useQueryRuntime() :: 1',
+	"screens/main/reports/context.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 605;
+export const SEAM_RETIRED_FLOOR = 619;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'e7c58c45e7739420661bd3f5cf4d5464c1e2178f6d105f332c1f3690eba027de';
+	'874e1ae5cd4cc26c41ae1681664519234428478c65844bd90e0da7672bee59e4';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

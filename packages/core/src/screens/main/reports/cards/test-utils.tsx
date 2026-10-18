@@ -99,24 +99,20 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
-	observeEngineQuery: (
-		_engine: unknown,
-		query: { collection: string; selector: { id: { $in: number[] } } }
-	) =>
+	observeLocalRecordsById: (_engine: unknown, name: string, ids: readonly number[]) =>
 		(
-			(query.collection === 'products/categories' ? mockCategories : mockProducts) as Observable<
+			(name === 'products/categories' ? mockCategories : mockProducts) as Observable<
 				LocalProduct[] | undefined
 			>
 		).pipe(
 			jest.requireActual('rxjs').filter((products: unknown) => products !== undefined),
-			jest.requireActual('rxjs').map(
-				(products: LocalProduct[] | undefined) =>
-					products && {
-						hits: products
-							.filter((p) => query.selector.id.$in.includes(p.id!))
-							.map((payload) => ({ record: { payload } })),
-					}
-			)
+			jest
+				.requireActual('rxjs')
+				.map((products: LocalProduct[] | undefined) =>
+					products
+						?.filter((p) => ids.includes(p.id!))
+						.map((payload) => ({ uuid: String(payload.id), payload }))
+				)
 		),
 	useDocField: (source: unknown, select: (source: unknown) => unknown) => source && select(source),
 }));

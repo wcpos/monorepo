@@ -1,4 +1,4 @@
-import type { ClosureRow } from '@wcpos/database';
+import type { ClosureRow } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 export function csvCell(value: unknown) {
