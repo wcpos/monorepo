@@ -1,3 +1,5 @@
+import { decode } from 'html-entities';
+
 import { calculateTaxesForValue } from '@wcpos/order-math/internal';
 import type { CartConfig } from '@wcpos/order-math';
 
@@ -102,9 +104,25 @@ export type NoRateCause = 'no-country' | 'not-covered' | 'no-rate-for-country';
 export function noRateCause(allRates: TaxRateData[], location: TaxLocation): NoRateCause {
 	const country = (location.country ?? '').toUpperCase();
 	if (!country) return 'no-country';
-	return allRates.some((rate) => (rate.country ?? '').toUpperCase() === country)
+	// A worldwide rate (no country) covers every country: one that filterTaxRates dropped for its
+	// city or postcode is still a rate for this country that misses this address.
+	return allRates.some((rate) => !rate.country || rate.country.toUpperCase() === country)
 		? 'not-covered'
 		: 'no-rate-for-country';
+}
+
+/**
+ * The country's name for the postal line and the failure copy. An order may store the code in
+ * any case (`us`, `Gb`), as `filterTaxRates` tolerates; `countries.json` carries WooCommerce's
+ * HTML-encoded names (`Cura&ccedil;ao`). Falls back to the code as stored.
+ */
+export function countryDisplayName(
+	countries: readonly { code: string; name: string }[],
+	code: string
+): string {
+	const upper = (code ?? '').toUpperCase();
+	const name = countries.find((country) => country.code === upper)?.name;
+	return name ? decode(name) : code;
 }
 
 /** "Portland OR 97201, United States (US)": whatever of city, state, postcode and country exists. */

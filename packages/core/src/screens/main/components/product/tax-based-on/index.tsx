@@ -10,26 +10,24 @@ import { DisplayCurrentTaxRates } from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';
 import { useExtraData } from '../../../contexts/extra-data';
 import { useTaxLocation, useTaxSettings } from '../../../contexts/tax-rates';
-import { useCurrentOrderOptional } from '../../../pos/contexts/current-order/context';
 import { useCartConfig } from '../../../pos/hooks/use-cart-config';
 
 /**
  *
  */
 export function TaxBasedOn() {
-	const { rates, taxBasedOn, location } = useTaxLocation();
+	// `hasOrder` is false on the standalone Products screen: there the address is the shop base
+	// whatever the setting says (`orderTaxLocation`).
+	const { rates, taxBasedOn, location, hasOrder } = useTaxLocation();
 	const { allRates } = useTaxSettings();
 	const t = useT();
 	/**
 	 * Everything the panel reads from the tax, cart and order providers is read HERE and passed
 	 * down: on native the popover's content renders at the app's root PortalHost, outside those
 	 * providers (the portal re-provides only the popover's own context), so a hook inside the
-	 * panel would throw or, for the optional order, silently read nothing. Web keeps context
+	 * panel would throw. Web keeps context
 	 * through Radix, which is why only a device shows it.
 	 */
-	// The standalone Products screen has no order: there the address is the shop base whatever
-	// the setting says (`orderTaxLocation`).
-	const hasOrder = Boolean(useCurrentOrderOptional());
 	const config = useCartConfig();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as

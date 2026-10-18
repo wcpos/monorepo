@@ -2,6 +2,7 @@ import { createCartConfig } from '@wcpos/order-math';
 
 import {
 	classLedgers,
+	countryDisplayName,
 	derivationFailure,
 	noRateCause,
 	postalLine,
@@ -148,12 +149,35 @@ describe('noRateCause', () => {
 	});
 
 	it('says the store has no rate for the country when none names it', () => {
-		expect(noRateCause([rate({ country: 'GB' }), rate({ country: '' })], oregon)).toBe(
-			'no-rate-for-country'
-		);
+		expect(noRateCause([rate({ country: 'GB' })], oregon)).toBe('no-rate-for-country');
+	});
+
+	it('counts a worldwide rate pinned to another city as covering the country, not missing it', () => {
+		expect(
+			noRateCause([rate({ country: 'GB' }), rate({ country: '', cities: ['SEATTLE'] })], oregon)
+		).toBe('not-covered');
 	});
 
 	it('names no country when the address has none', () => {
 		expect(noRateCause([rate({})], { ...oregon, country: '' })).toBe('no-country');
+	});
+});
+
+describe('countryDisplayName', () => {
+	const countries = [
+		{ code: 'US', name: 'United States (US)' },
+		{ code: 'CW', name: 'Cura&ccedil;ao' },
+	];
+
+	it('looks the code up in any case', () => {
+		expect(countryDisplayName(countries, 'us')).toBe('United States (US)');
+	});
+
+	it("decodes WooCommerce's HTML-encoded names", () => {
+		expect(countryDisplayName(countries, 'CW')).toBe('Curaçao');
+	});
+
+	it('falls back to the code as stored', () => {
+		expect(countryDisplayName(countries, 'xx')).toBe('xx');
 	});
 });

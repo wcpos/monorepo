@@ -14,6 +14,7 @@ import type { CartConfig } from '@wcpos/order-math';
 
 import {
 	classLedgers,
+	countryDisplayName,
 	derivationFailure,
 	noRateCause,
 	postalLine,
@@ -74,8 +75,8 @@ function TaxDerivation({
 	// (`orderTaxLocation`), so it is labelled and judged as the shop's.
 	const isOrderAddress = hasOrder && taxBasedOn !== 'base';
 	const countries = useCountries();
-	const countryName =
-		countries.find((country) => country.code === location.country)?.name ?? location.country;
+	// The lookup normalises case and decodes; the field strip keeps the code as stored.
+	const countryName = countryDisplayName(countries, location.country);
 	const { format } = useNumberFormat(PERCENT_FORMAT);
 	const percent = (value: number) => `${format(roundPercent(value))}%`;
 

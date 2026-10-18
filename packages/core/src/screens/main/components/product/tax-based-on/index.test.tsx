@@ -50,14 +50,11 @@ const mockLocation = {
 	rates: [{ id: 1, name: 'VAT', rate: '20.0000', class: 'standard', country: 'GB' }],
 	taxBasedOn: 'base',
 	location: { country: 'GB', state: '', city: '', postcode: '' },
+	hasOrder: false,
 };
 jest.mock('../../../contexts/tax-rates', () => ({
 	useTaxLocation: () => mockLocation,
 	useTaxSettings: () => ({ allRates: mockLocation.rates }),
-}));
-let mockOrder: object | undefined;
-jest.mock('../../../pos/contexts/current-order/context', () => ({
-	useCurrentOrderOptional: () => mockOrder,
 }));
 jest.mock('../../../pos/hooks/use-cart-config', () => ({
 	useCartConfig: () =>
@@ -84,7 +81,7 @@ jest.mock('../../../hooks/use-number-format', () => ({
 beforeEach(() => {
 	jest.useFakeTimers();
 	mockPush.mockClear();
-	mockOrder = undefined;
+	mockLocation.hasOrder = false;
 	mockLocation.taxBasedOn = 'base';
 });
 afterEach(() => jest.useRealTimers());
@@ -133,7 +130,7 @@ describe.each([false, true])('phone: %s', (phone) => {
 	});
 
 	it('an order with no billing address breaks the chain at the address', () => {
-		mockOrder = {};
+		mockLocation.hasOrder = true;
 		mockLocation.taxBasedOn = 'billing';
 		const { location, rates } = mockLocation;
 		mockLocation.location = { country: '', state: '', city: '', postcode: '' };

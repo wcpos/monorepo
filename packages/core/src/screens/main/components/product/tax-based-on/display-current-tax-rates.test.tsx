@@ -121,6 +121,25 @@ it("reads the order's address on an order, with its postal line", () => {
 	expect(screen.getByText(/· common\.tax_why_state$/)).toBeTruthy();
 });
 
+it("without an order the address is the shop's, whatever the setting", () => {
+	render(<DisplayCurrentTaxRates {...props({ taxBasedOn: 'shipping', hasOrder: false })} />);
+	expect(screen.getByText('common.shop_address')).toBeTruthy();
+	expect(screen.queryByText('common.address_on_the_order')).toBeNull();
+});
+
+it('names the country from a code stored in lower case, and keeps the code as stored', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({
+				location: { country: 'us', state: '', city: '', postcode: '' },
+				rates: [rate({ country: 'US' })],
+			})}
+		/>
+	);
+	expect(screen.getByText('United States (US)')).toBeTruthy();
+	expect(screen.getByText('us')).toBeTruthy();
+});
+
 it('breaks at the rates when the address matched none, naming the country', () => {
 	render(
 		<DisplayCurrentTaxRates
