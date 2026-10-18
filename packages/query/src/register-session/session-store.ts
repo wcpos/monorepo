@@ -152,9 +152,11 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 	const movements = registerCollections(storeDB).cash_movements;
 	const row = await movements.findOne(movementId).exec();
 	if (!row) throw new Error('invalid_retry_target');
+	const retried = await row.incrementalPatch({ ...pending });
 	// A refused reversal's claim on its target was dropped by the refresh that followed the
 	// refusal; retrying the reversal restores it, or a close before the server's next snapshot
-	// records the target as never voided.
+	// records the target as never voided. The reversal is pending BEFORE the claim is written,
+	// so a refresh landing between the two writes sees a pending reversal and lets it stand.
 	if (row.voids) {
 		const target = await movements.findOne(row.voids).exec();
 		await target?.incrementalModify((doc) => {
@@ -162,7 +164,7 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 			return doc;
 		});
 	}
-	return row.incrementalPatch({ ...pending });
+	return retried;
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,
