@@ -125,9 +125,10 @@ export function NavigationAreaLayout({
 		);
 	}
 
-	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title and
-	// the rail carries the bell and the avatar. What the bar held besides stays: the top inset,
-	// the held-session banner, the upgrade notice and the redirect-login sheet.
+	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title, the
+	// rail carries the avatar, and these pages need neither the bell nor the offline badge (his
+	// call: the POS and the list pages keep theirs). What the bar held besides stays: the top
+	// inset, the held-session banner, the upgrade notice and the redirect-login sheet.
 	return (
 		<View className="bg-background flex-1" style={{ paddingTop: insets.top }}>
 			<SessionHoldBanner />

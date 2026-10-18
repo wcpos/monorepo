@@ -56,6 +56,10 @@ it('insets the caption row by the gutter plus the cell padding', () => {
 	expect(inset('page')).toBe('px-7');
 	expect(inset()).toBe('px-5');
 	expect(inset('dense')).toBe('px-5');
+	// The phone card has no side gutter, so the caption sits on the cell's 12 alone.
+	mockPhone = true;
+	expect(inset('page')).toBe('px-3');
+	expect(inset('dense')).toBe('px-3');
 });
 
 it.each(['page', 'dense'] as const)('runs edge to edge on a phone (%s)', (gutter) => {
