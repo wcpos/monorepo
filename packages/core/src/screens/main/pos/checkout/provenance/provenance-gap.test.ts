@@ -1,8 +1,7 @@
 import type { UserDatabase } from '@wcpos/database';
+import type { RegisterDocument } from '@wcpos/query/register-session';
 
 import { reportProvenanceGap } from './provenance-gap';
-
-import type { RegisterDocument } from '../../../../../services/register/register-document';
 
 const mockWarn = jest.fn();
 let mockRegister: RegisterDocument;

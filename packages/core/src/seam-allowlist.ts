@@ -1040,7 +1040,27 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'services/novu/notification-sync.ts :: record mutator :: syncNotificationToRxDB :: collection.upsert :: 1',
 	'services/novu/notification-sync.ts :: record mutator :: syncNotificationToRxDB :: existing.incrementalModify :: 1',
 	"services/novu/notification-sync.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (c1): the register document lives in @wcpos/query/register-session.
+	"services/register-session/closure-document.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"services/register-session/settled-figures.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'services/register/register-document.ts :: record mutator :: adoptCounters :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: adoptCounters :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: advancePerpetual :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: advancePerpetual :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: bindRegister :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: bindRegister :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: ensureRegister :: userDB.insertLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: mintClosureNumber :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: mintClosureNumber :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: nextSaleCounter :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: nextSaleCounter :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: observeRegister$ :: userDB .getLocal$ :: 1',
+	'services/register/register-document.ts :: record mutator :: readRegister :: userDB.getLocal :: 1',
+	'services/register/register-document.ts :: record mutator :: unbindRegister :: doc.incrementalModify :: 1',
+	'services/register/register-document.ts :: record mutator :: unbindRegister :: userDB.getLocal :: 1',
+	"services/register/register-document.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"services/register/register-document.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 130;
+export const SEAM_RETIRED_FLOOR = 149;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'60cdfa990263fa2c60fb3f385b2780c7b844e4eb93522fe9fd7bef0cba2c4415';
+	'ed3c522a2716154e15175a3c55b08a6c2ae4140aba4cf5237a5115d8b4b4abec';

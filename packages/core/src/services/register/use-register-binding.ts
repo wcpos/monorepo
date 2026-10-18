@@ -1,10 +1,6 @@
 import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-
-import { recordRegisterFact, useRegisterActor } from '../register-session/audit';
-import { useStoreSession } from '../../contexts/app-state';
-import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
 	adoptCounters,
 	bindRegister,
@@ -14,7 +10,11 @@ import {
 	readCounters,
 	type RegisterCounters,
 	unbindRegister,
-} from './register-document';
+} from '@wcpos/query/register-session';
+
+import { recordRegisterFact, useRegisterActor } from '../register-session/audit';
+import { useStoreSession } from '../../contexts/app-state';
+import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 
 type Register = {
 	id: string;

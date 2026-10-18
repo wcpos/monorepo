@@ -72,7 +72,7 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
-jest.mock('../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	getCurrentBoundRegisterId: () => undefined,
 }));
 jest.mock('../../hooks/mutations/request-server-delete', () => ({

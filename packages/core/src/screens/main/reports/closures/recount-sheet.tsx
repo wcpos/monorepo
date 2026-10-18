@@ -9,12 +9,12 @@ import type { ClosureRow } from '@wcpos/database';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
+import { mintUuid } from '@wcpos/query/register-session';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
-import { mintUuid } from '../../../../services/register/register-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { ApprovalFields } from '../../pos/cart/approve-sheet';
 import { RegisterAmount } from '../../pos/cart/movement-sheet';

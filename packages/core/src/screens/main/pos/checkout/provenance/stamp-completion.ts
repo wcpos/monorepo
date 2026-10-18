@@ -8,8 +8,7 @@ import {
 	withSaleProvenance,
 } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
-
-import { nextSaleCounter, readRegister } from '../../../../../services/register/register-document';
+import { nextSaleCounter, readRegister } from '@wcpos/query/register-session';
 
 export async function completionMeta(
 	order: { id?: number | null; uuid?: string; meta_data?: MetaDataEntry[] },

@@ -39,7 +39,7 @@ jest.mock('../../../../services/register/use-register', () => {
 	const register = { id: 'till' };
 	return { useRegister: () => register };
 });
-jest.mock('../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	readBoundRegister: (...args: unknown[]) => mockReadBoundRegister(...args),
 }));
 jest.mock('../../../../services/register-session/session-store', () => ({

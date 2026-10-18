@@ -16,13 +16,13 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-
 import {
 	advancePerpetual,
 	mintClosureNumber,
+	mintUuid,
 	readRegister,
-	mintUuid as uuid,
-} from '../register/register-document';
+} from '@wcpos/query/register-session';
+
 import { attributeRefunds, deriveExpected } from './expected';
 
 export const pending = {
@@ -79,7 +79,7 @@ export function openSession(
 ) {
 	const { year, month, day } = input.businessDay;
 	return sessions.insert({
-		id: uuid(),
+		id: mintUuid(),
 		register_id: input.registerId,
 		store_id: input.storeId ?? null,
 		status: 'open',
@@ -163,7 +163,7 @@ export function recordMovement(
 	}
 ) {
 	return movements.insert({
-		id: uuid(),
+		id: mintUuid(),
 		session_id: input.sessionId,
 		type: input.type,
 		amount: input.amount,
@@ -181,7 +181,7 @@ export async function voidMovement(
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
 	// Repeated Undo taps share one durable reversal: the target's voided_by names it.
-	const id = uuid();
+	const id = mintUuid();
 	const claimed = await row.incrementalModify((doc) => {
 		doc.voided_by ??= id;
 		return doc;

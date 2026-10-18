@@ -4,6 +4,7 @@ import { readLedger } from '@wcpos/order-math';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getCurrentBoundRegisterId } from '@wcpos/query/register-session';
 
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { useActionContext } from './use-action-context';
@@ -15,7 +16,6 @@ import {
 	ORDER_VOID_GUARD_IDS,
 	presentActionRefusal,
 } from '../../../../extensions/actions';
-import { getCurrentBoundRegisterId } from '../../../../services/register/register-document';
 import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 import { getTerminalPaymentsService } from '../../../../services/terminal-payments';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';

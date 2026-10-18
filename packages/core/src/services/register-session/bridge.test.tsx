@@ -38,7 +38,7 @@ jest.mock('../../contexts/app-state', () => {
 	});
 	return { useStoreSession: session, useAppState: session };
 });
-jest.mock('../register/register-document', () => ({ readRegister: async () => registerDoc }));
+jest.mock('@wcpos/query/register-session', () => ({ readRegister: async () => registerDoc }));
 jest.mock('./session-store', () => ({ writeClosure: (...args: unknown[]) => closure(...args) }));
 const movements = sessions;
 const http = {};

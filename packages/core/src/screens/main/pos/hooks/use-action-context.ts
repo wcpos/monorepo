@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { readBoundRegister } from '@wcpos/query/register-session';
 
 import { readStockDocument } from './read-stock-document';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
@@ -13,7 +14,6 @@ import {
 	createActionContext,
 } from '../../../../extensions/actions';
 import { useRegister } from '../../../../services/register/use-register';
-import { readBoundRegister } from '../../../../services/register/register-document';
 import { findOpenSession } from '../../../../services/register-session/session-store';
 import { useRegisterSessionCollection } from '../../../../services/register-session/use-register-session-collections';
 

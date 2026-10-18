@@ -13,8 +13,8 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
+import { ensureRegister } from '@wcpos/query/register-session';
 
-import { ensureRegister } from '../register/register-document';
 import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument } from './closure-document';

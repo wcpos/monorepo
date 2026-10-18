@@ -31,13 +31,13 @@ import type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
+import { ensureRegister } from '@wcpos/query/register-session';
 
 import {
 	mergeServerOwnedStoreFields,
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '../../utils/merge-stores';
-import { ensureRegister } from '../../services/register/register-document';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
 import { commitStoreSession, IncompleteStoreSessionError } from './store-session';

@@ -18,7 +18,7 @@ import {
 	readCounters,
 	readRegister,
 	unbindRegister,
-} from './register-document';
+} from '../../src/register-session';
 
 jest.mock('uuid', () => ({ v4: () => 'ABCDEF00-0000-4000-8000-00000000ABCD' }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -51,7 +51,7 @@ it('increments atomically without duplicate counters', async () => {
 });
 it('completion metadata is retained on retry without incrementing the counter', async () => {
 	const { completionMeta } =
-		await import('../../screens/main/pos/checkout/provenance/stamp-completion');
+		await import('../../../core/src/screens/main/pos/checkout/provenance/stamp-completion');
 	await ensureRegister(db);
 	const first = await completionMeta(
 		{ meta_data: [{ key: 'custom', value: 'keep' }] },
@@ -87,7 +87,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 it('caches the register identity and mints v4 with random bytes when randomUUID is absent', async () => {
-	const { getRegisterId } = await import('./register-document');
+	const { getRegisterId } = await import('../../src/register-session');
 	jest.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(undefined as never);
 	const register = await ensureRegister(db);
 	expect(register.id).toMatch(
@@ -121,7 +121,7 @@ it.each([null, { id: 'server-register', name: 'Front' }])(
 	'completion uses the bound register, not the till: %j',
 	async (bound) => {
 		const { completionMeta } =
-			await import('../../screens/main/pos/checkout/provenance/stamp-completion');
+			await import('../../../core/src/screens/main/pos/checkout/provenance/stamp-completion');
 		await ensureRegister(db);
 		if (bound) await bindRegister(db, 'site', bound, 1);
 		const meta = await completionMeta({}, { userDB: db, siteUuid: 'site' });

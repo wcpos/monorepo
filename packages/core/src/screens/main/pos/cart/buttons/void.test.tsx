@@ -859,9 +859,7 @@ it('stamps the original register through the real writer when binding switches d
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
 		'../../../hooks/mutations/use-local-mutation'
 	);
-	const { readBoundRegister } = jest.requireActual(
-		'../../../../../services/register/register-document'
-	);
+	const { readBoundRegister } = jest.requireActual('@wcpos/query/register-session');
 	await readBoundRegister(
 		{
 			getLocal: async () => ({
