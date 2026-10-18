@@ -100,8 +100,9 @@ export function renderBarcode(
 ): string {
 	const text = value.trim();
 	if (!text) return '';
+	const safeKind = kind === 'qrcode' ? 'qrcode' : 'barcode';
 	const library = getBarcodeLibrary();
-	if (!library) return renderBarcodePending(kind, text);
+	if (!library) return renderBarcodePending(safeKind, text);
 
 	try {
 		const svg = library.toSVG({
@@ -109,13 +110,13 @@ export function renderBarcode(
 			text,
 			height: safeInteger(height, 40, 1, 600) / 10,
 			scale: 2,
-			includetext: kind === 'barcode',
+			includetext: safeKind === 'barcode',
 			textsize: 10,
 		});
 
-		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars, kind)}</div>`;
+		return `<div data-barcode-kind="${safeKind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars, safeKind)}</div>`;
 	} catch (error) {
-		return renderBarcodeError(kind, barcodeType, text, error);
+		return renderBarcodeError(safeKind, barcodeType, text, error);
 	}
 }
 
@@ -139,7 +140,8 @@ export function renderQrCode(value: string, size: number, paperWidthChars?: numb
 }
 
 function renderBarcodePending(kind: 'barcode' | 'qrcode', text: string): string {
-	return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" data-barcode-pending="true" style="text-align: center; padding: 8px 0"><code>${escapeHtml(text)}</code></div>`;
+	const safeKind = kind === 'qrcode' ? 'qrcode' : 'barcode';
+	return `<div data-barcode-kind="${safeKind}" data-barcode-value="${escapeHtml(text)}" data-barcode-pending="true" style="text-align: center; padding: 8px 0"><code>${escapeHtml(text)}</code></div>`;
 }
 
 function renderBarcodeError(
@@ -148,6 +150,7 @@ function renderBarcodeError(
 	text: string,
 	error: unknown
 ): string {
+	const safeKind = kind === 'qrcode' ? 'qrcode' : 'barcode';
 	const title = kind === 'qrcode' ? 'QR code error' : 'Barcode error';
 	const normalizedType = barcodeType.trim().toLowerCase() || kind;
 	const summary =
@@ -155,7 +158,7 @@ function renderBarcodeError(
 	const detail = error instanceof Error && error.message.trim() ? error.message.trim() : '';
 	const detailHtml = detail ? `<div style="font-size: 0.9em">${escapeHtml(detail)}</div>` : '';
 
-	return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" data-barcode-error="true" style="text-align: center; padding: 8px 0; color: #b91c1c"><strong>${title}</strong><div>${escapeHtml(summary)}</div>${detailHtml}<code>${escapeHtml(text)}</code></div>`;
+	return `<div data-barcode-kind="${safeKind}" data-barcode-value="${escapeHtml(text)}" data-barcode-error="true" style="text-align: center; padding: 8px 0; color: #b91c1c"><strong>${title}</strong><div>${escapeHtml(summary)}</div>${detailHtml}<code>${escapeHtml(text)}</code></div>`;
 }
 
 function renderRow(node: RowNode, widthChars: number): string {

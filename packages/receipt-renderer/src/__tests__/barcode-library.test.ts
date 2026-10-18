@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resetBarcodeLibraryForTests } from '../barcode-library';
 import { getBarcodeLibrary, loadBarcodeLibrary, renderThermalPreview } from '../index';
+import { renderBarcode } from '../render-html';
 
 const template = '<receipt><barcode type="code128">ABC</barcode></receipt>';
 
@@ -32,5 +33,23 @@ describe('barcode library', () => {
 		expect(await second).toBe(await first);
 		expect(await loadBarcodeLibrary()).toBe(await first);
 		expect(getBarcodeLibrary()).toBe(await first);
+	});
+
+	it('renders a hostile barcode kind as a code-chosen constant', async () => {
+		const hostileKind = 'qrcode"><img src=x onerror=alert(1)>' as never;
+		const pending = renderBarcode('code128', 'ABC', 40, hostileKind);
+
+		expect(pending).toContain('data-barcode-pending="true"');
+		expect(pending).not.toContain('<img');
+		expect(pending).not.toContain('onerror');
+		expect(pending).toContain('data-barcode-kind="barcode"');
+
+		await loadBarcodeLibrary();
+		const svg = renderBarcode('code128', 'ABC', 40, hostileKind);
+
+		expect(svg).toContain('<svg');
+		expect(svg).not.toContain('<img');
+		expect(svg).not.toContain('onerror');
+		expect(svg).toContain('data-barcode-kind="barcode"');
 	});
 });
