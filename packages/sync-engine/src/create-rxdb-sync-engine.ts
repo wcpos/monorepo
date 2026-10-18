@@ -58,6 +58,7 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
+import { MUTATION_QUEUE_RXDB_COLLECTION } from './collections/engine-collections';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
@@ -158,6 +159,7 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
+import type { QueueRow } from './queue-rows';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -613,6 +615,11 @@ export type RxdbSyncEngine = {
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
 	db$(cb: (db: RxDatabase | null) => void): Unsubscribe;
+	/** Live non-internal queue; null means no active scope. Errors remain distinguishable from empty. */
+	queueRows$(
+		listener: (rows: readonly QueueRow[] | null) => void,
+		onError?: (error: unknown) => void
+	): Unsubscribe;
 	scope: {
 		/** Pause/resume; serialized; works offline. Same-site only. */
 		switch(identity: StoreScopeIdentity): Promise<ActiveScope>;
@@ -2428,6 +2435,36 @@ export function createRxdbSyncEngine(
 			}
 			return () => {
 				dbSubscribers.delete(cb);
+			};
+		},
+		queueRows$: (listener, onError) => {
+			let subscription: { unsubscribe(): void } | undefined;
+			const stop = engine.db$((database) => {
+				subscription?.unsubscribe();
+				if (!database) {
+					listener(null);
+					return;
+				}
+				try {
+					subscription = database.collections[MUTATION_QUEUE_RXDB_COLLECTION].find().$.subscribe({
+						next: (documents) =>
+							listener(
+								documents.flatMap((document) => {
+									const row = document.toJSON() as QueuedMutation;
+									return row.status === 'internal'
+										? []
+										: [{ ...row, status: row.status ?? 'pending' }];
+								})
+							),
+						error: onError,
+					});
+				} catch (error) {
+					onError?.(error);
+				}
+			});
+			return () => {
+				stop();
+				subscription?.unsubscribe();
 			};
 		},
 		scope: {

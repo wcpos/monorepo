@@ -685,3 +685,71 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		await engine.dispose();
 	});
 });
+
+describe('typed queue door', () => {
+	it('emits the current non-internal rows, normalizes legacy status, follows changes and scope, and releases subscriptions', async () => {
+		const { a, b } = freshIdentities();
+		const engine = engineWith(undefined, a);
+		const seen: unknown[] = [];
+		try {
+			const stop = engine.queueRows$((rows) => seen.push(rows));
+			expect(seen).toEqual([null]);
+			const { database } = await engine.whenActive();
+			await enqueueMutation(database, 'visible');
+			await vi.waitFor(() =>
+				expect(seen.at(-1)).toMatchObject([{ mutationId: 'visible', status: 'pending' }])
+			);
+			const queue = database.collections.recordMutations;
+			const row = await queue.findOne('visible').exec();
+			await row.incrementalPatch({ status: 'rejected' });
+			await vi.waitFor(() => expect(seen.at(-1)).toMatchObject([{ status: 'rejected' }]));
+			await row.getLatest().incrementalPatch({ status: 'internal' });
+			await vi.waitFor(() => expect(seen.at(-1)).toEqual([]));
+			await row.getLatest().incrementalModify((value: { status?: string }) => {
+				delete value.status;
+				return value;
+			});
+			await vi.waitFor(() => expect(seen.at(-1)).toMatchObject([{ status: 'pending' }]));
+			const current: unknown[] = [];
+			const stopCurrent = engine.queueRows$((rows) => current.push(rows));
+			await vi.waitFor(() => expect(current.at(-1)).toMatchObject([{ mutationId: 'visible' }]));
+			stopCurrent();
+			await engine.scope.switch(b);
+			await vi.waitFor(() => expect(seen.at(-1)).toEqual([]));
+			await engine.scope.switch(a);
+			await vi.waitFor(() => expect(seen.at(-1)).toMatchObject([{ mutationId: 'visible' }]));
+			const disposedRows: unknown[] = [];
+			engine.queueRows$((rows) => disposedRows.push(rows));
+			stop();
+			const count = seen.length;
+			await enqueueMutation(database, 'after-unsubscribe');
+			await engine.dispose();
+			expect(seen).toHaveLength(count);
+			expect(disposedRows.at(-1)).toBeNull();
+			const disposedCount = disposedRows.length;
+			await Promise.resolve();
+			expect(disposedRows).toHaveLength(disposedCount);
+		} finally {
+			if (!engine.status().disposed) await engine.dispose();
+		}
+	});
+});
+
+it('queueRows$ forwards a failed queue read rather than reporting no work', async () => {
+	const engine = engineWith();
+	try {
+		const { database } = await engine.whenActive();
+		const failure = new Error('queue storage unavailable');
+		vi.spyOn(database.collections.recordMutations, 'find').mockImplementationOnce(() => {
+			throw failure;
+		});
+		const next = vi.fn();
+		const error = vi.fn();
+		const stop = engine.queueRows$(next, error);
+		expect(error).toHaveBeenCalledWith(failure);
+		expect(next).not.toHaveBeenCalled();
+		stop();
+	} finally {
+		await engine.dispose();
+	}
+});

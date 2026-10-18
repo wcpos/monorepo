@@ -2,21 +2,22 @@
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
+import { TERMINAL_QUEUE_STATUSES } from '@wcpos/query';
 
 import { getOrderSaveState, markOrderSaveRejected, resetCheckoutMode } from './checkout-mode';
 import { useRejectedOrderSavesSync } from './use-rejected-order-saves';
 
 const mockRows = new BehaviorSubject<unknown[]>([]);
-const mockFind = jest.fn(() => ({ $: mockRows }));
-const mockDbUnsubscribe = jest.fn();
-const mockEngine = {
-	db$: (callback: (database: unknown) => void) => {
-		callback({ collections: { [MUTATION_QUEUE_RXDB_COLLECTION]: { find: mockFind } } });
-		return mockDbUnsubscribe;
-	},
-};
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: mockEngine }) }));
+const mockObserveQueueRows = jest.fn((_engine?: unknown, _selection?: unknown) =>
+	mockRows.asObservable()
+);
+const mockEngine = {};
+jest.mock('@wcpos/query', () => ({
+	TERMINAL_QUEUE_STATUSES: ['conflicted', 'needs-revision', 'rejected'],
+	observeQueueRows: (engine: unknown, selection: unknown) =>
+		mockObserveQueueRows(engine, selection),
+	useQueryRuntime: () => ({ engine: mockEngine }),
+}));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
@@ -29,22 +30,18 @@ it('holds durable rows, clears disappeared rows, and leaves unseen rejections al
 	const rejection = { status: 403, reason: 'refused', message: 'No permission' };
 	markOrderSaveRejected('unseen', rejection);
 	const { unmount } = renderHook(() => useRejectedOrderSavesSync(1));
-	expect(mockFind).toHaveBeenCalledWith({
-		selector: {
-			status: { $in: ['rejected', 'conflicted', 'needs-revision'] },
-			collectionName: { $eq: 'orders' },
-		},
+	expect(mockObserveQueueRows).toHaveBeenCalledWith(mockEngine, {
+		statuses: TERMINAL_QUEUE_STATUSES,
+		collectionName: 'orders',
 	});
 	expect(getOrderSaveState('unseen')).toEqual({ kind: 'rejected', ...rejection });
 	act(() =>
 		mockRows.next([
 			{
-				toJSON: () => ({
-					recordId: 'a',
-					rejectedStatus: 403,
-					rejectedReason: 'refused',
-					rejectedMessage: 'No permission',
-				}),
+				recordId: 'a',
+				rejectedStatus: 403,
+				rejectedReason: 'refused',
+				rejectedMessage: 'No permission',
 			},
 			{ recordId: 'b' },
 		])
@@ -61,7 +58,6 @@ it('holds durable rows, clears disappeared rows, and leaves unseen rejections al
 	expect(getOrderSaveState('b')).toBeNull();
 	expect(getOrderSaveState('unseen')).toEqual({ kind: 'rejected', ...rejection });
 	unmount();
-	expect(mockDbUnsubscribe).toHaveBeenCalledTimes(1);
 	expect(mockRows.observed).toBe(false);
 });
 
@@ -76,6 +72,6 @@ it('re-reads the durable rows when the store id changes after a checkout reset',
 	act(() => resetCheckoutMode());
 	expect(getOrderSaveState('a')).toBeNull();
 	rerender({ storeId: 2 });
-	expect(mockFind).toHaveBeenCalledTimes(2);
+	expect(mockObserveQueueRows).toHaveBeenCalledTimes(2);
 	expect(getOrderSaveState('a')?.kind).toBe('rejected');
 });
