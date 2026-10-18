@@ -38,7 +38,8 @@ export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' |
 	portalHost?: string;
 	inline?: boolean;
 	closeLabel?: string;
-	closeButtonProps?: Omit<React.ComponentProps<typeof IconButton>, 'name'>;
+	// `closeLabel` names the close control, so its props never carry a second name.
+	closeButtonProps?: Omit<React.ComponentProps<typeof IconButton>, 'name' | 'accessibilityLabel'>;
 	children: React.ReactNode;
 };
 type DialogPresentation = Exclude<OverlayPresentation, 'anchored'>;
@@ -191,9 +192,10 @@ function DialogPanel(allProps: DialogContentProps) {
 						name="xmark"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
 						iconClassName={cn('size-4.5', closeIconClassName)}
-						aria-label={closeLabel ?? labels.close}
 						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}
 						{...closeProps}
+						// After the spread: the type omits it, but a runtime object could still carry one.
+						accessibilityLabel={closeLabel ?? labels.close}
 					/>
 				</DialogClose>
 			</View>

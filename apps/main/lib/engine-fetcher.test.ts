@@ -42,6 +42,7 @@ function createFetcherHarness(
 			useJwtAsParam?: boolean;
 			bareAuthParam?: boolean;
 			useProtocolHeaders?: boolean;
+			useInstanceHeader?: boolean;
 		};
 		clockSkew?: { generation: number; evaluated: boolean };
 		scope?: { storeId?: number | string | null };
@@ -217,7 +218,7 @@ describe('createEngineFetcher', () => {
 		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=2&per_page=50');
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1',
 			expect.any(Object)
 		);
 	});
@@ -235,7 +236,7 @@ describe('createEngineFetcher', () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3',
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -274,7 +275,7 @@ describe('createEngineFetcher', () => {
 
 		expect(total).toBe(17);
 		expect(fetch).toHaveBeenCalledWith(
-			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1`,
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 		expect(recordTransport).toHaveBeenCalledTimes(1);
@@ -1482,3 +1483,28 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 });
+
+it.each([true, false, undefined])(
+	'gates the web instance header on the site verdict: %s',
+	async (flag) => {
+		const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+		const platform = jest.replaceProperty(AppInfo, 'platform', 'web');
+		try {
+			const fetch = jest.fn(async () => new Response('{}'));
+			const { fetcher } = createFetcherHarness({
+				auth: { ...BASE_AUTH, useInstanceHeader: flag },
+				fetch,
+			});
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick', {
+				headers: { 'X-WCPOS-Instance': 'till' },
+			});
+			expect(
+				new Headers((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers).get(
+					'X-WCPOS-Instance'
+				)
+			).toBe(flag ? 'till' : null);
+		} finally {
+			platform.restore();
+		}
+	}
+);

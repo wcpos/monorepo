@@ -111,6 +111,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -214,6 +215,10 @@ jest.mock('./template-row', () => ({
 	TemplateRow: () => null,
 }));
 
+jest.mock('@wcpos/query', () => ({
+	observeTemplatePrinterOverrides: () => ({ pipe: () => new Map<string, string>() }),
+}));
+
 jest.mock('./use-ensure-system-printer', () => ({
 	useEnsureSystemPrinter: jest.fn(),
 }));
@@ -228,17 +233,7 @@ jest.mock('../../receipt/hooks/use-active-templates', () => ({
 
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
-		storeDB: {
-			collections: {
-				printer_profiles: {
-					find: () => ({ $: [cloudProfile] }),
-					findOne: jest.fn(),
-				},
-				template_printer_overrides: {
-					find: () => ({ $: { pipe: () => new Map<string, string>() } }),
-				},
-			},
-		},
+		storeDB: {},
 	});
 	return { useAppState, useStoreSession: useAppState };
 });

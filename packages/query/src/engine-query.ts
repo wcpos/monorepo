@@ -2,7 +2,12 @@ import { combineLatest, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { foldSearchText, searchTerms } from '@wcpos/sync-core';
-import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type {
+	CoverageTarget,
+	CoverageVerdict,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 import {
 	engineCollectionNameFor,
@@ -92,6 +97,14 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 	});
 }
 
+/** Identity used to invalidate reference demand after a scope switch or collection reset. */
+export function readCoverageGeneration(
+	engine: RxdbSyncEngine,
+	collection: SyncCollectionName
+): number {
+	return engine.status().collections[collection].coverageGeneration;
+}
+
 /**
  * The engine's coverage verdict for one target, as an Observable.
  *
@@ -170,9 +183,9 @@ function searchTermOf(descriptor: EngineQueryDescriptor): string {
  * identity (a store switch, a collection recreated by a reset); `null` while any is absent.
  * Every leg of one read hangs off ONE binding, so a store switch rebinds them together.
  */
-function observeBinding(
+export function observeBinding(
 	engine: RxdbSyncEngine,
-	collections: LegacyCollectionName[]
+	collections: (LegacyCollectionName | 'recordMutations')[]
 ): Observable<AdapterDatabase | null> {
 	return observeEngineDatabases(engine).pipe(
 		map((database) => {
@@ -180,7 +193,10 @@ function observeBinding(
 			return {
 				database: adapterDatabase,
 				collections: collections.map(
-					(name) => adapterDatabase?.collections[engineCollectionNameFor(name)]
+					(name) =>
+						adapterDatabase?.collections[
+							name === 'recordMutations' ? name : engineCollectionNameFor(name)
+						]
 				),
 			};
 		}),

@@ -7,15 +7,15 @@ import { Text } from '../text';
 
 export type KeypadKeyDescriptor = {
 	value: string;
-	label?: string;
-	icon?: IconName;
 	testID?: string;
 	// An icon-only key carries no name of its own and the string is the caller's to
 	// translate; the machine value is not a name (the page-bar review's lesson, #2188).
-	accessibilityLabel?: string;
 	span?: 2;
 	disabled?: boolean;
-};
+} & (
+	| { label: string; icon?: never; accessibilityLabel?: string }
+	| { icon: IconName; label?: never; accessibilityLabel: string }
+);
 type KeypadProps = ViewProps & {
 	rows: readonly (readonly KeypadKeyDescriptor[])[];
 	onPress: (value: string) => void;
@@ -35,7 +35,7 @@ export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...prop
 							role="button"
 							disabled={!!key.disabled}
 							testID={key.testID ?? id(`key-${key.value}`) ?? `keypad-key-${key.value}`}
-							accessibilityLabel={key.accessibilityLabel ?? key.label ?? key.value}
+							accessibilityLabel={key.accessibilityLabel ?? key.label}
 							onPress={() => onPress(key.value)}
 							className={cn(
 								'border-border bg-card active:bg-muted web:hover:bg-muted flex-1 items-center justify-center rounded-lg border',

@@ -125,7 +125,7 @@ export function Version() {
 				<Pressable>
 					<Text
 						className={cn(
-							'text-sidebar-foreground text-3xs p-2 px-4 opacity-50 active:opacity-100',
+							'text-sidebar-foreground p-2 px-4 text-xs opacity-50 active:opacity-100',
 							screenSize === 'lg' && 'px-0 text-center'
 						)}
 					>

@@ -2,15 +2,15 @@ import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	drainReceiptEmailQueue,
+	observeReceiptEmailQueueAvailability,
 	receiptEmailPostRequest,
-	type ReceiptEmailQueuePort,
 	type ReceiptEmailRow,
-} from './queue';
-import { useReceiptEmailQueueCollection } from './use-receipt-email-queue-collection';
+} from '@wcpos/query/receipt-email-queue';
+
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { useAppState } from '../../../../contexts/app-state';
 
 const logger = getLogger(['wcpos', 'receipt', 'emailQueue']);
 
@@ -34,7 +34,7 @@ const DRAIN_INTERVAL_MS = 60_000;
 export function ReceiptEmailQueueBridge() {
 	const { status } = useOnlineStatus();
 	const http = useRestHttpClient();
-	const collection = useReceiptEmailQueueCollection();
+	const { storeDB } = useAppState();
 
 	// Only a reachable STORE can take a send. 'online-website-unavailable' means
 	// the device has a network and the store still does not answer.
@@ -46,16 +46,17 @@ export function ReceiptEmailQueueBridge() {
 	);
 
 	React.useEffect(() => {
-		if (!online || !collection) return;
+		if (!online || !storeDB) return;
 
 		// Effect (last resort per project.mdc): the drain is an imperative side
 		// effect on a schedule, with no value to render and no observable seam to
 		// derive it from.
 		let cancelled = false;
+		let available = false;
 		const drain = () => {
-			if (cancelled) return;
+			if (cancelled || !available) return;
 			void drainReceiptEmailQueue({
-				collection: collection as unknown as ReceiptEmailQueuePort,
+				storeDB,
 				post,
 				logger,
 			}).catch((error: unknown) => {
@@ -65,13 +66,17 @@ export function ReceiptEmailQueueBridge() {
 			});
 		};
 
-		drain();
+		const availability = observeReceiptEmailQueueAvailability(storeDB).subscribe((ready) => {
+			available = ready;
+			drain();
+		});
 		const interval = setInterval(drain, DRAIN_INTERVAL_MS);
 		return () => {
 			cancelled = true;
+			availability.unsubscribe();
 			clearInterval(interval);
 		};
-	}, [collection, online, post]);
+	}, [storeDB, online, post]);
 
 	return null;
 }

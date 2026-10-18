@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import * as SwitchPrimitives from '@rn-primitives/switch';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -151,38 +151,56 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 			},
 		],
 	}));
-	// A plain style object belongs to the wrapper (layout, margins, overrides); a
-	// pressed-state style function stays on the primitive that owns the press.
-	const wrapperStyle = typeof style === 'function' ? undefined : style;
-	const pressableStyle = typeof style === 'function' ? style : undefined;
+	// Every caller style lands on the painted track, the switch the cashier sees: a pressed-state
+	// style function is resolved here from the press area's own pressed state, because the press
+	// area under the finger is a transparent square, not the track.
+	const [pressed, setPressed] = React.useState(false);
+	// Native has no hover; the app's react-native-web typings add `hovered` to the state, so the
+	// state is built once and carries it for both typings.
+	const pressState = { pressed, hovered: false };
+	const wrapperStyle = typeof style === 'function' ? style(pressState) : style;
+	const { onPressIn, onPressOut } = props;
 	return (
 		<Animated.View
 			style={[animatedRootStyle, wrapperStyle]}
 			// The caller's classes land on the wrapper that owns the layout and paints the
-			// track, as they do on the web root; the primitive underneath is only the hit area.
+			// track, as they do on the web root: the row lays out the drawn 20 × 34 track only.
 			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45', className)}
 			onLayout={({ nativeEvent: { layout } }) => {
 				trackWidth.value = layout.width;
 			}}
 		>
-			<SwitchPrimitives.Root
-				// No size of its own: it fills whatever the wrapper measures, so a caller's
-				// width lands on the same track the thumb's travel is read from.
-				className="absolute inset-0 flex-row items-center bg-transparent p-0.5"
-				style={pressableStyle}
-				{...props}
-				ref={ref}
+			<Animated.View
+				style={animatedThumbStyle}
+				onLayout={({ nativeEvent: { layout } }) => {
+					thumbWidth.value = layout.width;
+					padding.value = layout.x;
+				}}
 			>
-				<Animated.View
-					style={animatedThumbStyle}
-					onLayout={({ nativeEvent: { layout } }) => {
-						thumbWidth.value = layout.width;
-						padding.value = layout.x;
+				<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
+			</Animated.View>
+			{/* The finger gets at least 44 × 44 (§ Design 2, both HIGs) while the row still lays
+			    out the drawn track: the press area fills the track and grows to the control token,
+			    centred over it and overflowing it, out of layout. Not hitSlop: iOS drops a touch
+			    outside a parent that nothing overflows, so slop past a 20 pt row never reaches the
+			    switch; a real overflowing child is hit-tested on iOS and Android alike. The row a
+			    switch sits in is at least 44 on native (FormSwitch, SwitchWithLabel), so stacked
+			    switches' squares never overlap. */}
+			<View pointerEvents="box-none" className="absolute inset-0 items-center justify-center">
+				<SwitchPrimitives.Root
+					className="min-h-ctl min-w-ctl h-full w-full bg-transparent"
+					{...props}
+					onPressIn={(event) => {
+						setPressed(true);
+						onPressIn?.(event);
 					}}
-				>
-					<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
-				</Animated.View>
-			</SwitchPrimitives.Root>
+					onPressOut={(event) => {
+						setPressed(false);
+						onPressOut?.(event);
+					}}
+					ref={ref}
+				/>
+			</View>
 		</Animated.View>
 	);
 }
@@ -216,7 +234,8 @@ function SwitchWithLabel({ label, size, ref, onCheckedChange, ...props }: Switch
 	};
 
 	return (
-		<HStack className="w-full">
+		// At least a row tall on native, so the switch's 44 pt square stays inside its own row.
+		<HStack className="native:min-h-row w-full">
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
 			<Label
 				nativeID={props.nativeID}

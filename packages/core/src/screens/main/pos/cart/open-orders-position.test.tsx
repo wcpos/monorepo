@@ -18,6 +18,7 @@ let mockStage = 'cart';
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
+jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,
@@ -43,7 +44,6 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1', isNew: mockIsNew } }),
 }));
-jest.mock('../hooks/use-cart-settlement', () => ({ useCartSettlement: () => undefined }));
 jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
@@ -97,7 +97,6 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/button', () => ({
-	ButtonGroupSeparator: () => <div />,
 	Button: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 }));
 jest.mock('@wcpos/components/text', () => ({
@@ -137,7 +136,7 @@ describe('open orders position', () => {
 jest.mock('../checkout/checkout-mode', () => ({
 	useOrderCheckoutStage: (record: { isNew?: boolean }) => (record.isNew ? 'cart' : mockStage),
 }));
-jest.mock('./checkout-ledger', () => ({ CheckoutLedger: () => <div data-testid="cart-card" /> }));
+jest.mock('./stilled-cart', () => ({ StilledCart: () => <div data-testid="cart-card" /> }));
 
 it('hides the open-order tabs while the register is closed or counting', () => {
 	mockIsNew = false;

@@ -207,7 +207,7 @@ describe('createTokenRefreshHandler', () => {
 			await handler.handle(ctx);
 
 			expect(mockPost).toHaveBeenCalledWith(
-				'https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
+				'https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3',
 				expect.any(Object),
 				expect.any(Object)
 			);

@@ -29,8 +29,10 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				{trigger === 'label' ? (
 					// A square block the height of the cart row it sits under (the line strip).
+					// The slot under it paints the block's grey (line-strip.tsx).
 					<Button
-						variant="secondary"
+						variant="ghost"
+						// eslint-disable-next-line no-restricted-syntax
 						className="min-w-tile h-auto flex-1 rounded-none px-5"
 						testID="cart-line-edit"
 						onPress={() => setOpenDialog(true)}
@@ -40,7 +42,7 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 				) : (
 					<Tooltip>
 						<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-							<IconButton name="ellipsisVertical" />
+							<IconButton name="ellipsisVertical" accessibilityLabel={t('pos_cart.edit_line')} />
 						</TooltipTrigger>
 						{/* Every caller builds this title from a server-supplied name — a product,
 					    a fee, a shipping method — so both places it renders decode. */}

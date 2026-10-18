@@ -95,6 +95,16 @@ function deps(
 }
 
 describe('reconcileCustomerLink', () => {
+	it('drops once when the stamp loses to a queued delete, without retrying', async () => {
+		const d = deps({ customer: { remoteId: 91 } });
+		d.value.stampCustomer = jest
+			.fn()
+			.mockRejectedValue(Object.assign(new Error('void'), { code: 'write-superseded-by-delete' }));
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('dropped');
+		expect(d.drops).toEqual([ORDER]);
+		expect(d.value.stampCustomer).toHaveBeenCalledTimes(1);
+	});
+
 	it('waits, without touching the order, while the customer has no Woo id (offline)', async () => {
 		const d = deps({ customer: { remoteId: null } });
 		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('waiting');

@@ -7,10 +7,10 @@ import { render, screen } from '@testing-library/react';
 
 import { Cashier } from './cashier';
 
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children }: { children?: React.ReactNode }) => (
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({ label }: { label: string }) => (
 		<button data-testid="cashier-pill" type="button">
-			{children}
+			{label}
 		</button>
 	),
 }));

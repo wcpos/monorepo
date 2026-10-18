@@ -2,16 +2,18 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
 
+import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { dispatchAction } from '../../../../extensions/actions';
-import { cartRestartsOnAdd, restartStamp } from './cart-restart';
+import { cartRestartsOnAdd, isCartEmpty, restartStamp } from './cart-restart';
 import { enqueueCartAction } from './enqueue-cart-action';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -22,7 +24,6 @@ import {
 	findEngineResident,
 	insertEngineResident,
 	patchEngineResident,
-	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -59,12 +60,10 @@ type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>
  */
 function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	const record = resident as unknown as {
-		local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 		sync?: { revision?: unknown };
 		remoteId?: unknown;
 	};
-	if (record.local?.dirty === true) return true;
-	if ((record.local?.pendingMutationIds?.length ?? 0) > 0) return true;
+	if (hasPendingLocalWork(resident)) return true;
 	if (record.remoteId !== null && record.remoteId !== undefined) return true;
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }
@@ -79,7 +78,7 @@ export const useAddItemToOrder = () => {
 	// render-time subscription re-rendered the whole grid on every cart write.
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
+	const { localPatch, settleIntent } = useCartWrite();
 	const { ctx, actor } = useActionContext();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
@@ -169,7 +168,7 @@ export const useAddItemToOrder = () => {
 					manager: runtime,
 					collection: 'orders',
 					recordId,
-					changes: {
+					changes: settleIntent(orphanedSkeleton as unknown as CurrentOrderRecord, {
 						[type]: buildCartLines(
 							recordId,
 							(priorPayload[type] as CartLine[] | undefined) ?? [],
@@ -178,15 +177,20 @@ export const useAddItemToOrder = () => {
 						),
 						meta_data: ensurePosOrderIdentityMeta(
 							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
-							identity
+							identity,
+							true
 						),
-					},
+					}),
 				});
 			} else {
 				const orderData = order.toMutableJSON().payload;
 				const orderJSON: Record<string, unknown> = {
 					...orderData,
-					meta_data: ensurePosOrderIdentityMeta(orderData.meta_data, identity),
+					meta_data: ensurePosOrderIdentityMeta(
+						orderData.meta_data,
+						identity,
+						isCartEmpty(orderData)
+					),
 					date_created_gmt,
 					[type]: [data],
 				};
@@ -194,7 +198,7 @@ export const useAddItemToOrder = () => {
 					manager: runtime,
 					collection: 'orders',
 					recordId,
-					payload: orderJSON,
+					payload: settleIntent(order, orderJSON),
 				});
 			}
 			const payload = resident.toMutableJSON().payload as Record<string, unknown>;
@@ -231,7 +235,7 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, identity, runtime, setCurrentOrderID]
+		[buildCartLines, identity, runtime, setCurrentOrderID, settleIntent]
 	);
 
 	/**
@@ -295,7 +299,10 @@ export const useAddItemToOrder = () => {
 							// the start of the sale in front of the cashier, not of the abandoned
 							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
 							const restart = cartRestartsOnAdd(latest.payload)
-								? restartStamp(new Date(), resolveDayTimezone(store, site).timezone)
+								? {
+										...restartStamp(new Date(), resolveDayTimezone(store, site).timezone),
+										meta_data: ensurePosOrderIdentityMeta(latest.payload.meta_data, identity, true),
+									}
 								: {};
 							result = await localPatch({
 								document: latest,
@@ -321,6 +328,7 @@ export const useAddItemToOrder = () => {
 			ctx,
 			actor,
 			getCurrentOrderRecord,
+			identity,
 			localPatch,
 			runtime,
 			saveNewOrder,

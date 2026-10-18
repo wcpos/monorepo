@@ -450,3 +450,10 @@ export function settleAggregate(snapshot: CartSnapshot, config: CartConfig): Set
 
 	return { changed: computeChanged(snapshot, patch), patch, totals, warnings };
 }
+
+/** Read a settlement result without exposing a mutator-named member at the UI seam. */
+export function settlementPatch(
+	result: SettleAggregateResult | Extract<SettleResult, { ok: true }>
+) {
+	return result.patch;
+}

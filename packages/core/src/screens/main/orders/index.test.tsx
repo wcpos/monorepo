@@ -461,7 +461,7 @@ jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
-jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/upgrade-notice', () => ({ UpgradeNotice: () => null }));
 jest.mock('../components/pro-guard', () => ({
 	withProAccess: (Component: React.ComponentType<object>, page: string) =>
 		function Guarded(props: object) {

@@ -28,6 +28,7 @@
 
 import {
 	drainMutationQueue,
+	paymentsContractAtLeast,
 	pushEndpointResolver,
 	pushRecordMutation,
 	reconcileCreateAck,
@@ -311,6 +312,7 @@ export type WriteDrainReport = {
 };
 
 export type WriteDrainLaneDeps = {
+	paymentsContract?: () => string | null;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: EngineSourceFetcher;
@@ -340,6 +342,7 @@ export type WriteDrainLaneDeps = {
 };
 
 export type WriteDrainLane = {
+	sessionRestored(): void;
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
 };
 
@@ -350,6 +353,7 @@ export type WriteDrainLane = {
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	const facetFor = deps.writeFacetFor ?? writeFacetFor;
+	let restoredScope: string | null = null;
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
 
 	/** Drain one guarded tick for the active store scope. */
@@ -457,7 +461,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				const wrote = await bound
 					.guardWrite(async () => {
 						const now = deps.now !== undefined ? deps.now() : Date.now();
+						const retryImmediately = restoredScope === bound.scopeId;
+						if (retryImmediately) restoredScope = null;
 						const result = await drainMutationQueue({
+							retryImmediately,
 							queue,
 							signal: tickAbort.signal,
 							...(sessionHold?.scopeId === bound.scopeId && now < sessionHold.probeAt
@@ -478,6 +485,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const row = doc?.toJSON() as { status?: unknown } | undefined;
 								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
+							hasServerIdentity: async (mutation) => {
+								const facet = facetFor(mutation.collectionName);
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								return !!facet && remoteIdOrNull(doc?.toJSON()[facet.remoteIdField]) !== null;
+							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
@@ -496,7 +510,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								await facet.onDeleteAck(
 									database,
 									{ mutationId: mutation.mutationId, recordId: mutation.recordId },
-									signal
+									signal,
+									(error) =>
+										deps.diagnostics({
+											type: 'void.cleanup-failed',
+											level: 'error',
+											collection: mutation.collectionName,
+											message: String(error instanceof Error ? error.message : error),
+											fields: { recordId: mutation.recordId, step: 'refunds' },
+										})
 								);
 							},
 							// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the
@@ -577,6 +599,14 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}
 								return pushRecordMutation({
 									mutation: outbound,
+									...(outbound.collectionName === 'orders' &&
+									outbound.operation !== 'delete' &&
+									paymentsContractAtLeast(deps.paymentsContract?.(), '1.3')
+										? {
+												expectedEpoch: outbound.expectedEpoch,
+												tillAggregate: tillAggregates.get(outbound.mutationId),
+											}
+										: {}),
 									resolveEndpoint,
 									barcodeSelectors: barcodeSelectorsFor(
 										scopeBarcodeSelectors(),
@@ -622,7 +652,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										}
 										await facet.upsertServerDocument(
 											database,
-											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors())
+											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors()),
+											{ source: 'ack', mutationId: mutation.mutationId, recordId }
 										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',
@@ -722,7 +753,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
-						if (result.sessionExpired) {
+						if (result.sessionExpired && restoredScope !== bound.scopeId) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
 								? Math.min(SESSION_PROBE_MAX_MS, previous.delayMs * 2)
@@ -791,6 +822,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								recordId: cancelled.recordId,
 								mutationId: cancelled.mutationId,
 							});
+							if (cancelled.status === 'internal') await queue.acknowledge([cancelled.mutationId]);
 						}
 						for (const conflict of result.conflicts) {
 							deps.emitWriteEvent({
@@ -892,5 +924,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 	}
 
-	return { tick: runTick };
+	return {
+		tick: runTick,
+		sessionRestored: () => {
+			restoredScope = deps.manager.activeScope;
+			sessionHold = null;
+			deps.setSessionHeld?.(null);
+		},
+	};
 }

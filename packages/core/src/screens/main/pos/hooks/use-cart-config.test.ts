@@ -4,19 +4,33 @@
 import { renderHook } from '@testing-library/react';
 
 import { useCartConfig } from './use-cart-config';
+import { cartConfigForOrder, orderTaxLocation } from '../commands/cart-config-for-order';
+let mockOrder: { payload: Record<string, unknown> } | undefined;
+let mockTaxBasedOn = 'billing';
+jest.mock('../contexts/current-order/context', () => ({
+	useCurrentOrderOptional: () => mockOrder,
+}));
 
 let mockShippingTaxClass: string | undefined;
 
 jest.mock('@wcpos/query', () => ({
+	useRecordField: (
+		record: typeof mockOrder,
+		selector: (record: NonNullable<typeof mockOrder>) => unknown
+	) => record && selector(record),
 	useDocField: (
 		_document: unknown,
 		selector: (doc: {
 			woocommerce_calc_discounts_sequentially?: string;
 			calc_discounts_sequentially?: string;
 			taxClasses?: { slug: string }[];
+			tax_based_on?: string;
+			store_country?: string;
 		}) => unknown
 	) =>
 		selector({
+			tax_based_on: mockTaxBasedOn,
+			store_country: 'AU',
 			woocommerce_calc_discounts_sequentially: 'no',
 			calc_discounts_sequentially: 'no',
 			// The `wc/v3 taxes/classes` shape, standard first — the 'inherit' candidate order.
@@ -36,10 +50,19 @@ jest.mock('../../contexts/tax-rates', () => {
 	// Held in the factory closure so the arrays keep their identity across renders,
 	// as the real provider's memos do. Rebuilding them here would make this suite
 	// unable to tell a stable memo from a broken one.
-	const rates: unknown[] = [];
-	const allRates: unknown[] = [];
+	const location = { country: 'AU', state: '', city: '', postcode: '' };
+	const allRates = [
+		{ id: 1, country: 'AU', rate: '10', class: 'standard' },
+		{ id: 2, country: 'NZ', rate: '15', class: 'standard' },
+	];
 	return {
-		useTaxLocation: () => ({ rates }),
+		useTaxLocation: () => {
+			Object.assign(
+				location,
+				orderTaxLocation({ country: 'AU' }, mockTaxBasedOn, mockOrder?.payload).location
+			);
+			return { location };
+		},
 		useTaxSettings: () => ({
 			allRates,
 			shippingTaxClass: mockShippingTaxClass,
@@ -91,3 +114,44 @@ describe('useCartConfig — identity', () => {
 		expect(Object.isFrozen(first)).toBe(true);
 	});
 });
+
+it.each(['billing', 'shipping', 'base', 'override', 'fallback'])(
+	'matches the pure builder for %s',
+	(basis) => {
+		mockTaxBasedOn = basis === 'override' ? 'billing' : basis;
+		mockShippingTaxClass = 'standard';
+		mockOrder = {
+			payload: {
+				billing: { country: 'AU' },
+				shipping: { country: 'NZ' },
+				meta_data:
+					basis === 'override' ? [{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' }] : [],
+			},
+		};
+		if (basis === 'fallback') mockOrder = undefined;
+		const { result } = renderHook(() => useCartConfig());
+		expect(result.current.rates.map((rate) => rate.id)).toEqual([
+			basis === 'shipping' || basis === 'override' ? 2 : 1,
+		]);
+		expect(result.current).toEqual(
+			cartConfigForOrder({
+				settings: {
+					taxBasedOn: mockTaxBasedOn,
+					calcTaxes: true,
+					pricesIncludeTax: false,
+					taxRoundAtSubtotal: false,
+					priceNumDecimals: 2,
+					shippingTaxClass: 'standard',
+					taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
+					calcDiscountsSequentially: false,
+				},
+				rates: [
+					{ id: 1, country: 'AU', rate: '10', class: 'standard' },
+					{ id: 2, country: 'NZ', rate: '15', class: 'standard' },
+				],
+				baseLocation: { country: 'AU' },
+				order: mockOrder?.payload,
+			})
+		);
+	}
+);

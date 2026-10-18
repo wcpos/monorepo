@@ -1,13 +1,14 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { ListItem } from '@wcpos/components/list-item';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { hasTargetKind, type OsPrinterTargetKind } from './discovered-printer-filters';
+import { RadioDot } from '../../components/radio-dot';
 
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
@@ -73,24 +74,18 @@ export function OsPrintersSection({
 			{filtered.map((p) => {
 				const selected = p.address === selectedAddress;
 				return (
-					<Pressable
+					<ListItem
 						key={p.id}
 						testID={`${testIdPrefix}-${p.id}`}
 						onPress={() => {
 							form.setValue('address', p.address ?? '', { shouldValidate: true });
 							form.setValue('name', p.name);
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
-							selected ? 'border-primary bg-primary/5' : 'border-border'
-						}`}
+						selected={selected}
+						leading={<RadioDot selected={selected} />}
 					>
-						<View
-							className={`h-4 w-4 rounded-full border-2 ${
-								selected ? 'border-primary bg-primary' : 'border-border'
-							}`}
-						/>
 						<Text className="text-sm">{p.name}</Text>
-					</Pressable>
+					</ListItem>
 				);
 			})}
 		</VStack>

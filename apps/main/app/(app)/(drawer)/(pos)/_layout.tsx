@@ -6,9 +6,9 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
-import { useDocField } from '@wcpos/query';
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
+import { readStorePaymentsContract, useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
@@ -29,6 +29,8 @@ import {
 	useOpenOrdersHandle,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
+import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/commands/settlement-coordinator-provider';
+import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
@@ -41,7 +43,8 @@ export const unstable_settings = {
 };
 
 export default function POSLayout() {
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, extraData } = useStoreSession();
+	const storeContract = React.useCallback(() => readStorePaymentsContract(extraData), [extraData]);
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	useResetCheckoutModeOnStoreChange(storeID);
@@ -121,7 +124,7 @@ export default function POSLayout() {
 	// BOUNDARY — nothing pushes into it from outside React; every entry comes from
 	// an engine call a cart hook just made, below this point.
 	return (
-		<OrderMoneyDivergenceProvider>
+		<OrderMoneyDivergenceProvider storeContract={storeContract}>
 			<OrderEngineWarningsProvider>
 				<ErrorBoundary onReset={retryOwnedReads} resetKeys={[openOrdersHandle]}>
 					<Suspense>
@@ -190,52 +193,55 @@ function POSStack() {
 		<TaxRatesProvider>
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
-			<View
-				ref={registerPOSContainer}
-				className="bg-background flex-1"
-				style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
-			>
-				<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
-				{showUpgrade && (
-					<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
-						<UpgradeNotice setShowUpgrade={setShowUpgrade} />
-					</View>
-				)}
-				<SafeAreaInsetsContext.Provider value={stackInsets}>
-					<Stack
-						screenOptions={{
-							animation: 'none',
-							headerShown: false,
-							contentStyle: { backgroundColor: screenBackgroundColor },
-						}}
-					>
-						<Stack.Screen name="index" />
-						<Stack.Screen
-							name="(modals)/cart/[orderId]/checkout"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
+			<CartConfigProvider>
+				<SettlementCoordinatorProvider />
+				<View
+					ref={registerPOSContainer}
+					className="bg-background flex-1"
+					style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
+				>
+					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
+					{showUpgrade && (
+						<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
+							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
+						</View>
+					)}
+					<SafeAreaInsetsContext.Provider value={stackInsets}>
+						<Stack
+							screenOptions={{
+								animation: 'none',
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
 							}}
-						/>
-						<Stack.Screen
-							name="(modals)/cart/receipt/[orderId]"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
-							}}
-						/>
-					</Stack>
-				</SafeAreaInsetsContext.Provider>
-			</View>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
+						>
+							<Stack.Screen name="index" />
+							<Stack.Screen
+								name="(modals)/cart/[orderId]/checkout"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/cart/receipt/[orderId]"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+						</Stack>
+					</SafeAreaInsetsContext.Provider>
+				</View>
+				{/**
+				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+				 * so that dialogs like add/edit product etc can access the context
+				 */}
+				<ErrorBoundary>
+					<PortalHost name="pos" />
+				</ErrorBoundary>
+			</CartConfigProvider>
 		</TaxRatesProvider>
 	);
 }

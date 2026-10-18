@@ -1,6 +1,6 @@
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, type Subscription } from 'rxjs';
 
-import type { NotificationCollection } from '@wcpos/database';
+import { observeNotificationsReplaced, type StoreLocalDatabase } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -52,7 +52,7 @@ export interface NovuBootstrapStatus {
 export interface StartNovuBootstrapParams {
 	subscriberId: string;
 	subscriberMetadata: NovuSubscriberMetadata;
-	notificationsCollection: NotificationCollection;
+	database: NonNullable<StoreLocalDatabase>;
 }
 
 const IDLE_STATUS: NovuBootstrapStatus = {
@@ -78,8 +78,9 @@ function patchStatus(patch: Partial<NovuBootstrapStatus>): void {
 let activeSubscriberId: string | null = null;
 /** Latest metadata seen for the running session */
 let activeMetadata: NovuSubscriberMetadata | null = null;
-/** Collection the running session writes notifications into */
-let activeCollection: NotificationCollection | null = null;
+/** Database the running session writes notifications into */
+let activeDatabase: StoreLocalDatabase = null;
+let replacementSubscription: Subscription | null = null;
 /** WebSocket event unsubscribe for the running session */
 let activeUnsubscribe: (() => void) | null = null;
 /** Payload key of the last metadata successfully handed to the server */
@@ -232,11 +233,11 @@ async function fetchAndSyncNotifications(
 		const notifications = await fetchNotifications();
 		if (gen !== generation) return;
 
-		const collection = activeCollection;
+		const database = activeDatabase;
 		const subscriberId = activeSubscriberId;
-		if (!collection || !subscriberId) return;
+		if (!database || !subscriberId) return;
 
-		await syncNotificationsToRxDB(collection, subscriberId, notifications);
+		await syncNotificationsToRxDB(database, subscriberId, notifications);
 		if (gen !== generation) return;
 
 		novuLogger.info(
@@ -257,6 +258,18 @@ async function fetchAndSyncNotifications(
 	}
 }
 
+function rehydrateNotifications(): void {
+	// Clear & Sync creates an empty replacement: restore history and badges without a render.
+	novuLogger.info('Novu: Notifications collection replaced, re-hydrating');
+	void queueNotificationFetch(generation, 'initial');
+}
+
+function followNotificationReplacements(database: StoreLocalDatabase): void {
+	replacementSubscription?.unsubscribe();
+	replacementSubscription =
+		observeNotificationsReplaced(database).subscribe(rehydrateNotifications);
+}
+
 /**
  * Start (or adopt) the Novu session for a subscriber.
  *
@@ -269,15 +282,14 @@ async function fetchAndSyncNotifications(
 export function startNovuBootstrap({
 	subscriberId,
 	subscriberMetadata,
-	notificationsCollection,
+	database,
 }: StartNovuBootstrapParams): void {
 	if (activeSubscriberId === subscriberId) {
-		// Same session - adopt the latest metadata/collection without re-bootstrapping
-		const collectionReplaced =
-			activeCollection !== null && activeCollection !== notificationsCollection;
+		// Same session - adopt the latest metadata/database without re-bootstrapping
+		const databaseReplaced = activeDatabase !== database;
 
 		activeMetadata = subscriberMetadata;
-		activeCollection = notificationsCollection;
+		activeDatabase = database;
 
 		if (readinessSettled) {
 			void syncMetadataIfChanged(generation);
@@ -286,12 +298,9 @@ export function startNovuBootstrap({
 		// does, so syncing here would only claim the dedupe key early and send the subscriber
 		// write before the WebSocket is up, losing any welcome notification it triggers.
 
-		if (collectionReplaced) {
-			// The RxDB collection was reset and recreated (e.g. Clear & Sync). The replacement is
-			// empty, so re-hydrate it instead of leaving history and badge counts blank until the
-			// next WebSocket event or manual refresh.
-			novuLogger.info('Novu: Notifications collection replaced, re-hydrating');
-			void queueNotificationFetch(generation, 'initial');
+		if (databaseReplaced) {
+			followNotificationReplacements(database);
+			rehydrateNotifications();
 		}
 
 		return;
@@ -303,7 +312,8 @@ export function startNovuBootstrap({
 	const gen = (generation += 1);
 	activeSubscriberId = subscriberId;
 	activeMetadata = subscriberMetadata;
-	activeCollection = notificationsCollection;
+	activeDatabase = database;
+	followNotificationReplacements(database);
 	readinessSettled = false;
 
 	novuLogger.info('Novu: Setting up client and WebSocket listeners', {
@@ -327,12 +337,12 @@ export function startNovuBootstrap({
 				},
 			});
 
-			const collection = activeCollection;
+			const database = activeDatabase;
 			const activeId = activeSubscriberId;
-			if (!collection || !activeId) return;
+			if (!database || !activeId) return;
 
 			// Pass isNewNotification=true to trigger behavior (toast, etc.)
-			void syncNotificationToRxDB(collection, activeId, notification, true);
+			void syncNotificationToRxDB(database, activeId, notification, true);
 		},
 		onUnreadCountChanged: (count) => {
 			novuLogger.debug('Novu: Unread count updated via WebSocket', { context: { count } });
@@ -394,11 +404,13 @@ export function stopNovuBootstrap(): void {
 		activeUnsubscribe = null;
 	}
 
+	replacementSubscription?.unsubscribe();
+	replacementSubscription = null;
 	disconnectNovuClient();
 
 	activeSubscriberId = null;
 	activeMetadata = null;
-	activeCollection = null;
+	activeDatabase = null;
 	syncedMetadataKey = null;
 	readinessSettled = false;
 	pendingNotificationFetches = 0;
@@ -416,7 +428,7 @@ export function stopNovuBootstrap(): void {
  * Re-fetch notifications from Novu for the running session.
  */
 export async function refreshNovuNotifications(): Promise<void> {
-	if (!activeSubscriberId || !activeCollection) {
+	if (!activeSubscriberId || !activeDatabase) {
 		novuLogger.warn('Novu: Not configured, skipping refresh');
 		return;
 	}

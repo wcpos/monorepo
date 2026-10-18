@@ -104,6 +104,12 @@ jest.mock('@wcpos/components/hstack', () => {
 	return { HStack: View };
 });
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@wcpos/components/label', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Label: Text };
@@ -174,13 +180,11 @@ describe('PerformanceScreen · server over time', () => {
 
 	it('renders quiet-server defaults, layout and controls', () => {
 		const renderer = renderScreen([]);
-		expect(paceText(renderer)).toBe('✓ Normal pace');
+		expect(paceText(renderer)).toBe('Normal pace');
 
 		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
 
-		expect(screen.props.className).toBe(
-			'mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8'
-		);
+		expect(screen.findAll((node) => node.props.role === 'heading').length).toBeGreaterThan(0);
 
 		const card = renderer.root.findByProps({ testID: 'preset-eco' });
 		expect(card.props.onPress).toBeUndefined();
@@ -204,7 +208,7 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), reported: 'high' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'✓ Normal pace — your server reports high load; the till only slows down if its answers do'
+			'Normal pace — your server reports high load; the till only slows down if its answers do'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
 			'text-muted-foreground'
@@ -215,10 +219,10 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), multiplier: 4, signal: 'rate-limited' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'⚠ Easing off — checking 4× less often: your server asked the POS to slow down'
+			'Easing off — checking 4× less often: your server asked the POS to slow down'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
-			'text-warning'
+			'text-warn-text'
 		);
 	});
 

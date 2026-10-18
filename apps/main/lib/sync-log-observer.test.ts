@@ -52,6 +52,14 @@ describe('createSyncLogObserver', () => {
 		}
 	});
 
+	it('classifies a request deadline as unreachable rather than a crashed task', () => {
+		observer.observe(
+			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
+		);
+		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
+		expect(rows[0].message).toMatch(/deadline/i);
+	});
+
 	it('stamps mapped failure codes but not mapped info rows', () => {
 		observer.observe(
 			event({
@@ -85,6 +93,14 @@ describe('createSyncLogObserver', () => {
 		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
 
 		expect(rows[0].code).toBe(errorCode);
+	});
+
+	it('classifies engine request deadlines as unreachable, not crashed', () => {
+		observer.observe(
+			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
+		);
+		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
+		expect(rows[0].message).toMatch(/deadline.*60000/i);
 	});
 
 	it('classifies signal tick auth, rate-limit and local failures separately', () => {

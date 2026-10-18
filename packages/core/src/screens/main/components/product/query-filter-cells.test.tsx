@@ -14,12 +14,6 @@ import { StockStatus } from '../../products/cells/stock-status';
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
-		<button onClick={onPress}>{children}</button>
-	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

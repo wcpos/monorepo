@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { mintRemoteId, normalizeCheckpoint } from '@wcpos/sync-core';
+import { mintRemoteId, normalizeCheckpoint, withOrderColumns } from '@wcpos/sync-core';
 
 import { createEngineHarness } from '../testing';
 import { materializeLocalOnly, materializeRefund } from '../materialization/record-materialization';
@@ -11,6 +11,7 @@ import {
 	createOrdersSchedulerFetcher,
 } from '../scheduler/rx-scheduler-order-fetcher';
 import * as refundSeeder from '../scheduler/rx-refund-scheduler-task-seeder';
+import { queueFor } from './write-intents';
 import { EngineOrderRepository } from './engine-order-repository';
 
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -59,6 +60,127 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	it.each(['dirty', 'held'])(
+		'protects a skeleton winning the pull insert race: %s',
+		async (protection) => {
+			const h = await harness();
+			const incoming = parent(42, []);
+			const orders = h.collection<ReturnType<typeof parent>>('orders');
+			const local = {
+				...incoming.local,
+				dirty: protection === 'dirty',
+				pendingMutationIds: protection === 'dirty' ? ['create'] : [],
+			};
+			const insert = orders.bulkInsert.bind(orders);
+			vi.spyOn(orders, 'bulkInsert').mockImplementationOnce(async (documents) => {
+				await orders.insert(
+					withOrderColumns({
+						...incoming,
+						local,
+						payload: { ...incoming.payload, status: 'pos-open' },
+					})
+				);
+				if (protection === 'held')
+					await queueFor(h.scope.database as never).admitWriter(
+						'orders',
+						incoming.uuid,
+						'writer',
+						Date.now()
+					);
+				return insert(documents);
+			});
+			expect(await h.repo.upsertMany([incoming])).toEqual([]);
+			expect((await orders.findOne(incoming.uuid).exec())?.toJSON()).toMatchObject({
+				local,
+				payload: { status: 'pos-open' },
+			});
+		}
+	);
+
+	it.each(['local create', 'void', 'none'])('rechecks insert protection: %s', async (hold) => {
+		const h = await harness();
+		const incoming = parent(42, []);
+		const orders = h.collection<ReturnType<typeof parent>>('orders');
+		const queue = queueFor(h.scope.database as never);
+		const local = { ...incoming.local, dirty: true, pendingMutationIds: ['local-create'] };
+		const getLocal = orders.getLocal.bind(orders);
+		vi.spyOn(orders, 'getLocal').mockImplementationOnce(async (id) => {
+			if (hold === 'local create') {
+				await orders.insert(
+					withOrderColumns({
+						...incoming,
+						local,
+						payload: { ...incoming.payload, status: 'pos-open' },
+					})
+				);
+			} else if (hold === 'void') {
+				await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			}
+			return getLocal(id);
+		});
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(hold === 'none' ? 1 : 0);
+		const stored = await orders.findOne(incoming.uuid).exec();
+		if (hold === 'local create') {
+			expect(stored?.toJSON()).toMatchObject({ local, payload: { status: 'pos-open' } });
+			await stored!.incrementalPatch({ local: { ...local, dirty: false, pendingMutationIds: [] } });
+		} else if (hold === 'void') {
+			expect(stored).toBeNull();
+			await queue.releaseVoidFence('orders', incoming.uuid, 'hold');
+		}
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(1);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe('completed');
+	});
+
+	it.each(['none', 'writer', 'void'])(
+		'ack recovery exempts only its mutation: %s',
+		async (hold) => {
+			const h = await harness();
+			const incoming = parent(42, []);
+			const orders = h.collection<ReturnType<typeof parent>>('orders');
+			const queue = queueFor(h.scope.database as never);
+			await orders.insert(
+				withOrderColumns({
+					...incoming,
+					local: { ...incoming.local, dirty: true, pendingMutationIds: ['ack'] },
+				})
+			);
+			if (hold === 'writer') await queue.admitWriter('orders', incoming.uuid, 'hold', Date.now());
+			if (hold === 'void') await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			const applied = await h.repo.upsertMany([incoming], {
+				source: 'ack',
+				mutationId: 'ack',
+				recordId: incoming.uuid,
+			});
+			expect(applied.map((doc) => doc.uuid)).toEqual(hold === 'none' ? [incoming.uuid] : []);
+			expect((await orders.findOne(incoming.uuid).exec())?.toJSON().local.dirty).toBe(
+				hold !== 'none'
+			);
+		}
+	);
+
+	it.each(['writer', 'void'])('rechecks a late %s hold', async (hold) => {
+		const h = await harness();
+		await h.repo.upsertMany([parent(42, [])]);
+		const queue = queueFor(h.scope.database as never);
+		const incoming = parent(42, []);
+		incoming.payload.status = 'processing';
+		const orders = h.collection<ReturnType<typeof parent>>('orders');
+		const getLocal = orders.getLocal.bind(orders);
+		vi.spyOn(orders, 'getLocal').mockImplementationOnce(async (id) => {
+			if (hold === 'writer') await queue.admitWriter('orders', incoming.uuid, 'hold', Date.now());
+			else await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			return getLocal(id);
+		});
+		expect(await h.repo.upsertMany([incoming])).toEqual([]);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe('completed');
+		if (hold === 'writer') await queue.releaseWriter('orders', incoming.uuid, 'hold');
+		else await queue.releaseVoidFence('orders', incoming.uuid, 'hold');
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(1);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe(
+			'processing'
+		);
+	});
+
 	// Remove the per-parent catch: one failed scheduler write rejects already-applied orders and skips 44.
 	it('continues seeding later parents after one seed rejects without rejecting applied writes', async () => {
 		const h = await harness();

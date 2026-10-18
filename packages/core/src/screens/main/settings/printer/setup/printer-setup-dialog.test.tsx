@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { persistPrinterProfile } from '../persist-printer-profile';
+import { savePrinterProfile } from '@wcpos/query';
+
 import { PrinterSetupDialog } from './printer-setup-dialog';
 import { createTestT } from '../../../../../../jest/translate';
 
@@ -16,6 +17,7 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));
+jest.mock('@wcpos/components/badge', () => ({ Badge: 'Badge' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
@@ -38,7 +40,9 @@ jest.mock('../dialog/connection/web-vendor-segmented', () => ({ WebVendorSegment
 jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
 jest.mock('../dialog/printer-toggle-group', () => ({ PrinterToggleGroup: () => null }));
 jest.mock('../dialog/test-print-error', () => ({ TestPrintError: () => null }));
-jest.mock('../persist-printer-profile', () => ({ persistPrinterProfile: jest.fn() }));
+jest.mock('@wcpos/query', () => ({
+	savePrinterProfile: jest.fn().mockResolvedValue({ id: 'saved', created: true }),
+}));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: {} }),
 }));
@@ -149,7 +153,8 @@ it('shows source labels on result cards', async () => {
 		['usb:1:2:3:4', 'USB'],
 	]) {
 		const card = renderer.root.findByProps({ testID: `printer-setup-result-${address}` });
-		expect(card.findAllByType('Text' as React.ElementType).map((n) => n.props.children)).toContain(
+		// The source tag is a muted Badge beside the address line.
+		expect(card.findAllByType('Badge' as React.ElementType).map((n) => n.props.children)).toContain(
 			label
 		);
 	}
@@ -320,7 +325,7 @@ it('offers the receipt language under More options for ESC/POS and hides it for 
 
 it('saves a generic native BLE printer after the cashier confirms the test page', async () => {
 	mockHideNetwork = true;
-	jest.mocked(persistPrinterProfile).mockClear();
+	jest.mocked(savePrinterProfile).mockClear();
 	mockExtraPrinters.push({
 		id: 'ble-1',
 		name: 'BLE printer',
@@ -340,12 +345,13 @@ it('saves a generic native BLE printer after the cashier confirms the test page'
 				renderer.root.findByProps({ testID: `printer-setup-${action}` }).props.onPress();
 			});
 		}
-		expect(persistPrinterProfile).toHaveBeenCalledWith(
+		expect(savePrinterProfile).toHaveBeenCalledWith(
 			{},
 			expect.objectContaining({
 				vendor: 'generic',
 				address: 'ble:ABC',
-			})
+			}),
+			{ reuseByAddress: true }
 		);
 	} finally {
 		act(() => renderer.unmount());

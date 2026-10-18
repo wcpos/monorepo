@@ -7,11 +7,8 @@ import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { RegisterSessionRequiredError, requireOpenSession } from '@wcpos/query/register-session';
 
-import {
-	RegisterSessionRequiredError,
-	requireOpenSession,
-} from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { commitGatewaySale } from '../commit-gateway-sale';
@@ -278,7 +275,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			if (signal.aborted) return;
 
 			// Recheck after bootstrap without a second journal write (the commit made the first).
-			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
+			if ((await requireOpenSession(ctx.storeDB, registerId, ctx.sessionsOn)) !== sessionId)
 				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
@@ -408,6 +405,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		error,
 		gateway,
 		gatewayResolved,
+		gatewayError,
+		refetch,
 		gatewayId,
 		settledOrderStatuses,
 		mode,

@@ -105,9 +105,7 @@ describe('badge colour contract', () => {
 
 	it.each([
 		['ghost', 'ghost'],
-		['ghost-quiet', 'ghost-quiet'],
 		['outline', 'outline'],
-		['secondary', 'secondary'],
 	] as const)('inherits no stateful text colour from the %s variant', (_label, variant) => {
 		render(
 			<Button variant={variant} testID="host">
@@ -138,6 +136,49 @@ describe('badge colour contract', () => {
 		);
 
 		expect(textClassOf('host')).toContain('text-destructive-foreground');
+	});
+});
+
+describe('badge label', () => {
+	it('keeps a long label on one line', () => {
+		render(
+			<div data-testid="host">
+				<Badge variant="muted">A very long customer name that would otherwise wrap</Badge>
+			</div>
+		);
+		const label = screen.getByText('A very long customer name that would otherwise wrap');
+		expect(label.getAttribute('numberOfLines')).toBe('1');
+	});
+});
+
+describe('badge tinted', () => {
+	it.each([
+		['success', 'bg-success/15'],
+		['warning', 'bg-warning/15'],
+		['destructive', 'bg-destructive/15'],
+		['default', 'bg-primary/15'],
+	] as const)(
+		'%s: a wash of the tone, the words in the foreground, the solid height',
+		(tone, bg) => {
+			const { container } = render(
+				<Badge variant={tone} tinted>
+					Ready
+				</Badge>
+			);
+			const root = container.firstChild as HTMLElement;
+			expect(root).toHaveClass(bg, 'h-5', 'rounded-full');
+			expect(root.className).not.toMatch(new RegExp(`(^| )${bg.split('/')[0]}( |$)`));
+			// The words keep the 4.5:1 floor on every wash: amber on amber/15 is 2.7:1 in light.
+			const label = screen.getByText('Ready');
+			expect(label).toHaveClass('text-foreground');
+			expect(label.className).not.toMatch(/text-(success|warning|destructive|primary)\b/);
+		}
+	);
+
+	it('leaves the solid badge as it was', () => {
+		const { container } = render(<Badge variant="success">Ready</Badge>);
+		expect(container.firstChild).toHaveClass('bg-success');
+		expect(screen.getByText('Ready')).toHaveClass('text-success-foreground');
 	});
 });
 

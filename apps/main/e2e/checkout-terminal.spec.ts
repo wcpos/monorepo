@@ -115,8 +115,10 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeVisible();
-			// Reader selection is rendered by Button's default (primary) variant, not aria-selected.
-			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(/\bbg-primary\b/);
+			// A reader is a Chip; the selected one draws its border in primary (no aria-selected).
+			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(
+				/\bborder-primary\b/
+			);
 			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
@@ -186,7 +188,9 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
 			await showReaderChips(page);
-			await expect(page.getByTestId('checkout-reader-sim-decline')).toHaveClass(/\bbg-primary\b/);
+			await expect(page.getByTestId('checkout-reader-sim-decline')).toHaveClass(
+				/\bborder-primary\b/
+			);
 			await page.getByTestId('checkout-reader-sim-approve').click();
 			await takeTerminal(page, orderId, 'sim-approve');
 			await expectReceipt(page);

@@ -80,7 +80,7 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 				style={StyleSheet.absoluteFill}
 			/>
 			<View style={styles.ctaContainer} pointerEvents="box-none">
-				<Card className="max-w-sm shadow-lg">
+				<Card className="max-w-sm">
 					<CardContent className="p-6">
 						<VStack className="items-center gap-4">
 							<Text testID="upgrade-title" className="text-xl font-bold">
@@ -90,7 +90,7 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 							<HStack className="gap-2">
 								<Button
 									testID="view-demo-button"
-									variant="secondary"
+									variant="outline"
 									onPress={() => openExternalURL(demoURL)}
 								>
 									{t('upgrade.view_demo')}

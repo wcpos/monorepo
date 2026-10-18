@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
 
+import { useCartTableReadOnly } from './cells/read-only';
 import { CartTable } from './table';
 
 const mockPulseAdd = jest.fn();
@@ -20,6 +21,7 @@ const mockCartLines = {
 	shipping_lines: [] as TestLine[],
 };
 let mockSortLines = 'newest_bottom';
+let mockGetRowId: ((line: unknown) => string) | undefined;
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -33,10 +35,13 @@ jest.mock('@tanstack/react-table', () => ({
 	useTable: ({
 		data,
 		columns,
+		getRowId,
 	}: {
 		data: { uuid: string }[];
 		columns: { id: string; header: () => React.ReactNode }[];
+		getRowId: (line: unknown) => string;
 	}) => ({
+		_getRowId: (mockGetRowId = getRowId),
 		getHeaderGroups: () => [
 			{
 				id: 'headers',
@@ -260,4 +265,52 @@ it('pulses once for an added line and does not pulse again on an unchanged reren
 	rerender(<CartTable />);
 	rerender(<CartTable />);
 	expect(mockPulseAdd.mock.calls).toEqual([['added']]);
+});
+
+describe('read-only (checkout and receipt)', () => {
+	function Probe() {
+		const readOnly = useCartTableReadOnly();
+		return <div data-testid="probe">{JSON.stringify(readOnly)}</div>;
+	}
+	beforeEach(() => {
+		mockPulseAdd.mockClear();
+		mockCartLines.line_items = [line('line-a')];
+		mockCartLines.fee_lines = [];
+		mockCartLines.shipping_lines = [];
+	});
+
+	it('renders the same rows stilled: no pulse rows, the footer inside, cells told read-only', () => {
+		render(<CartTable readOnly paidBy={{ 'line-a': ['Cash'] }} footer={<Probe />} />);
+		expect(screen.queryAllByTestId('cart-row')).toHaveLength(0);
+		expect(screen.getByTestId('probe').textContent).toBe('{"paidBy":{"line-a":["Cash"]}}');
+		for (const label of ['Qty', 'Item', 'Price', 'Total'])
+			expect(screen.getByText(label)).toBeTruthy();
+	});
+
+	it('never pulses and never shows the empty-cart state', () => {
+		mockCartLines.line_items = [];
+		const { rerender } = render(<CartTable readOnly />);
+		expect(screen.queryByTestId('cart-empty')).toBeNull();
+		mockCartLines.line_items = [line('added')];
+		rerender(<CartTable readOnly />);
+		expect(mockPulseAdd).not.toHaveBeenCalled();
+	});
+
+	it('has no footer and no read-only context in the editable cart', () => {
+		render(<CartTable footer={<Probe />} />);
+		expect(screen.queryByTestId('probe')).toBeNull();
+	});
+});
+
+it('gives lines without POS uuid meta distinct row identities (a receipt of a server-made order)', () => {
+	render(<CartTable readOnly />);
+	const id = (type: string, itemId: number | undefined, position: number) =>
+		mockGetRowId!({ uuid: '', type, item: { id: itemId }, position });
+	expect(id('line_items', 11, 0)).toBe('line_items-11');
+	expect(id('line_items', 12, 1)).toBe('line_items-12');
+	expect(id('fee_lines', 11, 0)).toBe('fee_lines-11');
+	expect(id('line_items', undefined, 3)).toBe('line_items-3');
+	expect(mockGetRowId!({ uuid: 'pos-uuid', type: 'line_items', item: { id: 11 } })).toBe(
+		'pos-uuid'
+	);
 });

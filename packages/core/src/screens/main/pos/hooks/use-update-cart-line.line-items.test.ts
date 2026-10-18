@@ -139,6 +139,9 @@ jest.mock('../contexts/current-order', () => ({
 					},
 				];
 				return {
+					getLatest() {
+						return this;
+					},
 					uuid: 'order-uuid',
 					payload: { id: 17, line_items: lineItems },
 					toMutableJSON: () => ({ payload: { line_items: lineItems } }),
@@ -152,7 +155,9 @@ jest.mock('../contexts/current-order', () => ({
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	documentRecordId: () => 'order-uuid',
 	useLocalMutation: () => ({
-		localPatch: mockLocalPatch,
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
 	}),
 }));
 
@@ -172,7 +177,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 // Mock useLineItemData

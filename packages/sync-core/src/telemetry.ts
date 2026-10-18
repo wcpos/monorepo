@@ -39,6 +39,9 @@ export type SyncEventLevel = 'debug' | 'info' | 'warn' | 'error';
  * labelled.
  */
 export type SyncEventType =
+	| 'void.recovery.identity-appeared'
+	| 'void.cleanup-failed'
+	| 'write.admission-release-failed'
 	// apply
 	| 'apply.barcode-rederive'
 	| 'apply.delete'
@@ -85,6 +88,7 @@ export type SyncEventType =
 	| 'engine.disposed'
 	| 'engine.guard'
 	| 'engine.lane.tick'
+	| 'engine.request.deadline'
 	| 'engine.listener-error'
 	| 'engine.pos-bootstrap-error'
 	| 'engine.ready'
@@ -159,6 +163,14 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
  * other side too.
  */
 export type SyncEventFieldsByType = {
+	'maintenance.lane.error': {
+		readonly lane: string;
+		readonly status?: number;
+	};
+	'engine.request.deadline': {
+		readonly lane: string;
+		readonly elapsedMs: number;
+	};
 	'signal.cycle': {
 		readonly collectionsChecked?: readonly string[];
 		readonly pulls: number;

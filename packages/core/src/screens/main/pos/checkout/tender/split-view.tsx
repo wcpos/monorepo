@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import Svg, { Circle } from 'react-native-svg';
 import { useCSSVariable } from 'uniwind';
@@ -7,7 +7,9 @@ import { useCSSVariable } from 'uniwind';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
+import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 
 import { evenSplitShareMinor } from './tender-state';
 import { useT } from '../../../../../contexts/translations';
@@ -82,7 +84,7 @@ export function SplitView({
 				);
 	return (
 		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
 				{t(flow.paidMinor > 0 ? 'pos_checkout.split_the_remaining' : 'pos_checkout.split')}
 			</Text>
 			<View className="size-48 items-center justify-center">
@@ -145,42 +147,46 @@ export function SplitView({
 								const paid = flow.linesPaidBy[line.id];
 								const checked = pickedLineIds.includes(line.id) || Boolean(paid);
 								return (
-									<Pressable
+									<ListItem
 										key={line.id}
 										testID={`checkout-split-item-${line.id}`}
-										accessibilityRole="checkbox"
-										accessibilityState={{ checked, disabled: Boolean(paid) || flow.busy }}
+										// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
+										role="checkbox"
+										aria-checked={checked}
+										aria-disabled={Boolean(paid) || flow.busy}
 										disabled={Boolean(paid) || flow.busy}
+										selected={pickedLineIds.includes(line.id)}
 										onPress={() => flow.dispatch({ type: 'toggle-split-line', lineId: line.id })}
-										className={`bg-muted min-h-14 flex-row items-center gap-3 rounded-xl p-3 ${paid ? 'opacity-40' : ''}`}
-									>
-										<View
-											className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-border'}`}
-										>
-											{checked ? (
-												<Icon name="check" size="xs" className="text-success-foreground" />
-											) : null}
-										</View>
-										<View className="flex-1">
-											<Text className="text-foreground font-semibold" decodeHtml>
-												{line.name}
+										className="min-h-14"
+										leading={
+											<View
+												className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-border'}`}
+											>
+												{checked ? (
+													<Icon name="check" size="xs" className="text-success-foreground" />
+												) : null}
+											</View>
+										}
+										trailing={
+											<Text className="text-foreground font-semibold tabular-nums">
+												{format(line.totalMinor)}
 											</Text>
-											{paid ? (
-												<Text className="text-muted-foreground text-xs" decodeHtml>
-													{t('pos_checkout.line_paid_by', { methods: paid.join(' + ') })}
-												</Text>
-											) : null}
-										</View>
-										<Text className="text-foreground font-semibold tabular-nums">
-											{format(line.totalMinor)}
+										}
+									>
+										<Text className="text-foreground font-semibold" decodeHtml>
+											{line.name}
 										</Text>
-									</Pressable>
+										{paid ? (
+											<Text className="text-muted-foreground text-xs" decodeHtml>
+												{t('pos_checkout.line_paid_by', { methods: paid.join(' + ') })}
+											</Text>
+										) : null}
+									</ListItem>
 								);
 							})}
 						</View>
 						<Button
-							variant="default"
-							className="h-14"
+							size="lg"
 							testID="checkout-split-items-go"
 							disabled={sum <= 0 || flow.busy}
 							onPress={() => items(1)}
@@ -200,7 +206,6 @@ export function SplitView({
 									<Button
 										key={ways}
 										variant="outline"
-										className="rounded-full"
 										size="sm"
 										testID={`checkout-split-share-${ways}`}
 										disabled={flow.busy}
@@ -237,10 +242,10 @@ export function SplitView({
 										flow.plan.firstMinor === minor &&
 										flow.plan.title === title;
 							return (
-								<Button
+								<Tile
 									key={value}
-									variant={selected ? 'outline-primary' : 'outline'}
-									className={`h-tile flex-col gap-1 rounded-lg ${tab === 'even' && !compact ? 'min-w-20 flex-1' : 'grow basis-1/3'}`}
+									selected={selected}
+									className={tab === 'even' && !compact ? 'min-w-20 flex-1' : 'grow basis-1/3'}
 									testID={`checkout-split-option-${value}`}
 									disabled={flow.busy || minor <= 0}
 									onPress={() =>
@@ -249,45 +254,47 @@ export function SplitView({
 											: fixed(minor, title)
 									}
 								>
-									<ButtonText>
+									<Text numberOfLines={1} className="font-medium">
 										{tab === 'even'
 											? t('pos_checkout.n_ways', { ways: value })
 											: (title ?? format(minor))}
-									</ButtonText>
-									<ButtonText className="opacity-70">
+									</Text>
+									<Text numberOfLines={1} className="font-medium opacity-70">
 										{tab === 'even'
 											? t('pos_checkout.each_amount', { amount: format(minor) })
 											: tab === 'amount'
 												? t('pos_checkout.then_amount', { amount: format(balance - minor) })
 												: format(minor)}
-									</ButtonText>
-								</Button>
+									</Text>
+								</Tile>
 							);
 						})}
 						{tab === 'amount' ? (
 							<>
-								<Button
-									variant="outline"
-									className="h-tile grow basis-1/3 flex-col gap-1 rounded-lg"
+								<Tile
+									className="grow basis-1/3"
 									testID="checkout-split-option-half"
 									onPress={() => fixed(evenSplitShareMinor(balance, 2))}
 								>
-									<ButtonText>{t('pos_checkout.half')}</ButtonText>
-									<ButtonText className="opacity-70">
+									<Text numberOfLines={1} className="font-medium">
+										{t('pos_checkout.half')}
+									</Text>
+									<Text numberOfLines={1} className="font-medium opacity-70">
 										{format(evenSplitShareMinor(balance, 2))}
-									</ButtonText>
-								</Button>
-								<Button
-									variant="outline"
-									className="h-tile w-full flex-col gap-1 rounded-lg"
+									</Text>
+								</Tile>
+								<Tile
+									className="w-full"
 									testID="checkout-split-option-custom"
 									onPress={() => flow.dispatch({ type: 'arm-custom' })}
 								>
-									<ButtonText>{t('pos_checkout.type_first_payment')}</ButtonText>
-									<ButtonText className="opacity-70">
+									<Text numberOfLines={1} className="font-medium">
+										{t('pos_checkout.type_first_payment')}
+									</Text>
+									<Text numberOfLines={1} className="font-medium opacity-70">
 										{t('pos_checkout.type_first_hint')}
-									</ButtonText>
-								</Button>
+									</Text>
+								</Tile>
 							</>
 						) : null}
 					</View>

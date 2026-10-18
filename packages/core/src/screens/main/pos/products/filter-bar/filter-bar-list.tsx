@@ -43,7 +43,11 @@ export function FilterBarList({
 	const save = (filterBar: FilterBarItem[]) => void patchUI({ filterBar } as never);
 
 	const renderItem = (item: FilterBarItem) => (
-		<HStack key={item.id} className="web:hover:shadow-md items-center rounded p-2">
+		<HStack
+			key={item.id}
+			// At least a row tall on native: the toggle's 44 pt square stays inside its own row.
+			className="web:hover:shadow-md native:min-h-row items-center rounded p-2"
+		>
 			<DragHandle className="mr-2">
 				<View testID={`filter-bar-drag-${item.id}`}>
 					<Icon name="gripLinesVertical" size="xs" className="cursor-grab" />
@@ -70,12 +74,14 @@ export function FilterBarList({
 					</VStack>
 					<IconButton
 						name="penToSquare"
+						accessibilityLabel={t('common.edit')}
 						testID={`filter-bar-edit-${item.id}`}
 						onPress={() => onEdit(item)}
 					/>
 					<IconButton
 						name="trash"
 						variant="destructive"
+						accessibilityLabel={t('common.delete')}
 						testID={`filter-bar-delete-${item.id}`}
 						onPress={() => setDeleting(item)}
 					/>

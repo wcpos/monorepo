@@ -104,6 +104,11 @@ HTTP/2: Node `https` (axios's adapter) is HTTP/1.1-only [doc]; every other lane 
 
 **Recommendation:** a default timeout at the `use-http-client` seam (per-request overridable), not per-call sprinkling.
 
+**Corrections (2026-10-17, from two review findings on #1417 that were never answered):**
+
+- *The engine lane is not "bounded differently": a hung engine request wedges its lane.* `automatic-tick-gate.ts` keeps a lane's unresolved run promise and returns it to every later `runLane` until it settles, and the engine transport had no general deadline (only hydration 5 s, one change-signal probe 5 s, the write drain 30 s). A black-holed pull therefore stopped that lane until a scope abort or a restart, silently. The recommendation above was incomplete: the engine transport needs its own request deadline, which lands as one constant at the single request door in wcpos/monorepo#2631 (`next`) and its port to `main`.
+- *The token-refresh mini-lane is no longer unbounded.* `refresh-http-client.ts` aborts the raw `fetch` after `REFRESH_TIMEOUT_MS` (`refresh-timeout.ts`), so a black-holed refresh releases the paused queue; the "no timeout" claim in §5 for that path is stale.
+
 ## 6. Body & streaming handling (audit Q6)
 
 - `toResponse()` lossiness (`engine-platform-fetch.electron.ts:10-22, 26-28`): JSON re-stringification (axios `responseType:'text'` keeps bodies as text, so normally verbatim), headers rebuilt from a plain object (multi-value headers collapse), **non-string request bodies throw**. Today the engine only sends JSON strings, so this is a latent trap, not a live bug — but it hard-blocks any future binary sync payload on Electron only.

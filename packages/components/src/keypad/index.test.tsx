@@ -39,7 +39,7 @@ const rows: readonly (readonly KeypadKeyDescriptor[])[] = [
 	],
 	[
 		{ value: '0', label: '0', span: 2 },
-		{ value: 'backspace', icon: 'deleteLeft' },
+		{ value: 'backspace', icon: 'deleteLeft', accessibilityLabel: 'Borrar dígito' },
 	],
 ];
 it('renders in reading order and every key emits only its descriptor value', () => {
@@ -64,8 +64,13 @@ it('gives an icon-only key a stable ID without a root ID and honors explicit IDs
 		<Keypad
 			rows={[
 				[
-					{ value: 'clear', icon: 'xmark' },
-					{ value: 'back', icon: 'deleteLeft', testID: 'custom-back' },
+					{ value: 'clear', icon: 'xmark', accessibilityLabel: 'Borrar' },
+					{
+						value: 'back',
+						icon: 'deleteLeft',
+						accessibilityLabel: 'Borrar dígito',
+						testID: 'custom-back',
+					},
 				],
 			]}
 			onPress={jest.fn()}
@@ -98,4 +103,12 @@ it('disabled keys do not emit', () => {
 it('lets the digit carry the key', () => {
 	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
 	expect(screen.getByText('1').dataset.classes).toContain('text-2xl');
+});
+
+it('uses the provided accessible name for icon-only keys', () => {
+	// @ts-expect-error Icon-only keys must supply a translated accessible name.
+	const unnamed: KeypadKeyDescriptor = { value: 'backspace', icon: 'deleteLeft' };
+	void unnamed;
+	render(<Keypad rows={rows} onPress={jest.fn()} />);
+	expect(screen.getByRole('button', { name: 'Borrar dígito' })).toBeInTheDocument();
 });

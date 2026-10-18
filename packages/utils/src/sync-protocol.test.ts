@@ -1,19 +1,21 @@
 import {
 	formatClientSignal,
+	instanceHeaderSupported,
 	parseUpdateRequiredBody,
 	protocolHeadersSupported,
+	sendsInstanceHeader,
 	sendsProtocolHeaders,
 	sendsProtocolQueryTwins,
 } from './sync-protocol';
 
 describe('sync protocol client signal', () => {
 	it('formats the platform and version', () => {
-		expect(formatClientSignal('electron', '2.0.0')).toBe('electron/2.0.0');
-		expect(formatClientSignal('electron', ' 2.0.0 ')).toBe('electron/2.0.0');
+		expect(formatClientSignal('electron', '2.0.0')).toBe('electron/2.0.0 payments=1.3');
+		expect(formatClientSignal('electron', ' 2.0.0 ')).toBe('electron/2.0.0 payments=1.3');
 	});
 
 	it.each(['', '   ', '\t'])('substitutes unknown for a blank version %p', (version) => {
-		expect(formatClientSignal('web', version)).toBe('web/unknown');
+		expect(formatClientSignal('web', version)).toBe('web/unknown payments=1.3');
 	});
 });
 
@@ -96,3 +98,17 @@ describe('protocol transport send rule', () => {
 		}
 	});
 });
+
+it.each([true, false, undefined])(
+	'requires reflection AND a successful instance probe: %s',
+	(flag) => {
+		for (const probe of [true, false, undefined]) {
+			expect(instanceHeaderSupported({ cors: { reflects_request_headers: flag } }, probe)).toBe(
+				flag === true && probe === true
+			);
+		}
+		for (const platform of ['web', 'ios', 'android', 'electron']) {
+			expect(sendsInstanceHeader(platform, flag)).toBe(platform !== 'web' || flag === true);
+		}
+	}
+);

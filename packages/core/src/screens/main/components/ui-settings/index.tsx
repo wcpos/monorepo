@@ -81,14 +81,32 @@ interface Props {
 	title: string;
 	children: React.ReactNode;
 	triggerTestID?: string;
+	/** The trigger's accessible name; the title when absent. */
+	triggerLabel?: string;
+	contentTestID?: string;
+	/** Footer ids, per page where more than one panel can exist; the generic ids otherwise. */
+	closeTestID?: string;
+	restoreTestID?: string;
 	portalHost?: string;
 	side?: 'left' | 'right';
 }
 
 /**
- *
+ * The one chrome for display settings: a side panel with the form in a scrolling body and
+ * Close + Restore defaults in its footer. The POS forms and the pages' columns-only form both
+ * open here.
  */
-function UISettingsDialog({ title, children, triggerTestID, portalHost, side = 'right' }: Props) {
+function UISettingsDialog({
+	title,
+	children,
+	triggerTestID,
+	triggerLabel,
+	contentTestID,
+	closeTestID = 'ui-settings-close',
+	restoreTestID = 'ui-settings-restore-defaults',
+	portalHost,
+	side = 'right',
+}: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -110,13 +128,17 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side = '
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" testID={triggerTestID} />
+						<IconButton
+							name="sliders"
+							testID={triggerTestID}
+							accessibilityLabel={triggerLabel ?? title}
+						/>
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side} size="lg" portalHost={portalHost}>
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID={contentTestID}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>
@@ -124,10 +146,10 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side = '
 						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
 					<DialogFooter>
-						<DialogClose testID="ui-settings-close">{t('common.close')}</DialogClose>
+						<DialogClose testID={closeTestID}>{t('common.close')}</DialogClose>
 						<Button
-							testID="ui-settings-restore-defaults"
-							variant="outline-error"
+							testID={restoreTestID}
+							variant="outline-destructive"
 							onPress={handleButtonPress}
 						>
 							{t('common.restore_default_settings')}

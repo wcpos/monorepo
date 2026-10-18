@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
 import {
@@ -12,17 +12,21 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
+import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -38,6 +42,7 @@ import { useCollectionCheck, useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useUnresolvedConflictKeys } from './use-unresolved-conflicts';
 import { useT } from '../../../contexts/translations';
+import { AreaPage } from '../components/navigation-area/area-page';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
 import { useCensusTotals } from '../hooks/use-census-totals';
@@ -46,15 +51,7 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import {
-	Callout,
-	CoverageBar,
-	HairlineHeaderCell,
-	HairlineHeaderRow,
-	Pill,
-	Stat,
-	StatHeader,
-} from './components';
+import { Callout, CoverageBar, Stat, StatHeader } from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,
@@ -234,9 +231,12 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
  * Below this width the collection column wrapped one character per line (portrait iPad
  * with the drawer rail open). The choice used to be the `md:` window breakpoint, but the
  * width that matters is the table's own: a tablet rail or an open drawer narrows the
- * content column without changing the window.
+ * content column without changing the window. 600 (the collection column keeps 120): inside
+ * the page card (2026-10-18) the table measures about 638 in a 1024 window (rail 56, area
+ * rail 224, page and card padding 106), which must keep the table, with room for a web
+ * scrollbar; a 768 window measures about 382 and takes the compact rows, as it did before.
  */
-const TABLE_LAYOUT_MIN_WIDTH = 640;
+const TABLE_LAYOUT_MIN_WIDTH = 600;
 
 /** Measured container width → whether the table layout fits; compact until measured. */
 function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent) => void } {
@@ -247,6 +247,22 @@ function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent)
 	}, []);
 	return { wide, onLayout };
 }
+
+/**
+ * The wide layout's columns, shared by the heads, the collection rows and the storage
+ * lines so they line up. The shared table's cells, flush (`px-0`): the row's `gap-3` is
+ * the gutter, as the hairline layout had it, and the actions column is the menu button's
+ * own width (`w-ctl`), so the heads no longer sit 8 px right of the numbers under them.
+ */
+const DB_ROW = 'items-center gap-3 py-2';
+const DB_COLUMN = {
+	name: 'min-w-0 px-0 py-0',
+	local: 'w-20 flex-none items-end px-0 py-0',
+	server: 'w-24 flex-none items-end px-0 py-0',
+	coverage: 'w-32 flex-none items-end px-0 py-0',
+	size: 'w-20 flex-none items-end px-0 py-0',
+	actions: 'w-ctl flex-none px-0 py-0',
+} as const;
 
 function CollectionRowView({
 	row,
@@ -329,22 +345,27 @@ function CollectionRowView({
 	const menu = (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
+				<IconButton
+					name="ellipsisVertical"
+					accessibilityLabel={t('common.more_actions')}
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
 					loading={syncing || checking === row.key}
-				>
-					<Icon name="ellipsisVertical" className="text-muted-foreground" />
-				</Button>
+				/>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent align="end">
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
+					<Icon name="arrowRotateRight" />
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem testID={`db-row-clear-${row.key}`} onPress={() => setConfirming(true)}>
-					<Text className="text-destructive">{t('health.database.clear_redownload')}</Text>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					testID={`db-row-clear-${row.key}`}
+					variant="destructive"
+					onPress={() => setConfirming(true)}
+				>
+					<Icon name="trash" className="text-destructive" />
+					<Text>{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -362,19 +383,16 @@ function CollectionRowView({
 	return (
 		<>
 			{/* wide — table row */}
-			<HStack
-				testID={`db-row-${row.key}`}
-				className={cn('border-border items-center gap-3 border-b py-2', wide ? 'flex' : 'hidden')}
-			>
-				<View className={isVariations ? 'min-w-0 flex-1 pl-4' : 'min-w-0 flex-1'}>
+			<TableRow testID={`db-row-${row.key}`} className={cn(DB_ROW, wide ? 'flex' : 'hidden')}>
+				<TableCell className={cn(DB_COLUMN.name, isVariations && 'pl-4')}>
 					<HStack className="items-center gap-2">
 						<Text className={isVariations ? undefined : 'font-medium'}>
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					{isVariations ? (
@@ -390,19 +408,25 @@ function CollectionRowView({
 						</Text>
 					) : null}
 					{clearingSub}
-				</View>
-				<Text className="w-20 text-right tabular-nums">{row.local.toLocaleString()}</Text>
-				<Text className="text-muted-foreground w-24 text-right text-sm tabular-nums">
-					{story.serverText}
-				</Text>
-				<View className="w-32 items-end">
+				</TableCell>
+				<TableCell className={DB_COLUMN.local}>
+					<Text className="text-right tabular-nums">{row.local.toLocaleString()}</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.server}>
+					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+						{story.serverText}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.coverage}>
 					<CoverageCell coverage={story.coverage} />
-				</View>
-				<Text className="text-muted-foreground w-20 text-right text-sm tabular-nums">
-					{sizeText ? `≈ ${sizeText}` : '—'}
-				</Text>
-				{menu}
-			</HStack>
+				</TableCell>
+				<TableCell className={DB_COLUMN.size}>
+					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+						{sizeText ? `≈ ${sizeText}` : '—'}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.actions}>{menu}</TableCell>
+			</TableRow>
 
 			{/* compact — two-line list row */}
 			<HStack
@@ -415,9 +439,9 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-sm-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-sm-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					<Text
@@ -518,14 +542,16 @@ function FootprintRow({
 	const text = formatBytes(bytes);
 	if (bytes <= 0 || !text) return null;
 	return (
-		<HStack testID={testID} className="border-border items-center gap-3 border-b py-2">
-			<View className="min-w-0 flex-1">
+		<TableRow testID={testID} className={DB_ROW}>
+			<TableCell className={DB_COLUMN.name}>
 				<Text className="text-muted-foreground">{label}</Text>
 				{sub ? <Text className="text-muted-foreground/80 text-xs">{sub}</Text> : null}
-			</View>
-			<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
-			<View className="w-9" />
-		</HStack>
+			</TableCell>
+			<TableCell className="flex-none items-end px-0 py-0">
+				<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
+			</TableCell>
+			<TableCell className={DB_COLUMN.actions} />
+		</TableRow>
 	);
 }
 
@@ -607,13 +633,12 @@ export function DatabaseScreen() {
 	const censusProgress = censusWindowProgress(censusWindow, nowMs);
 
 	return (
-		<ScrollView className="flex-1">
-			<VStack
-				testID="screen-health-database"
-				className="mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8"
-			>
-				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
-
+		<AreaPage
+			title={t('common.database')}
+			description={t('health.database.subtitle')}
+			testID="screen-health-database"
+		>
+			<VStack className="gap-4">
 				{/* Summary strip — shared Store health stat header */}
 				<StatHeader testID="db-stats">
 					<Stat
@@ -667,7 +692,7 @@ export function DatabaseScreen() {
 
 				{stats.clockSkew ? (
 					<Callout tone="warning" testID="db-clock-skew">
-						<Text className="text-warning text-sm">
+						<Text className="text-warn-text text-sm">
 							{`${
 								stats.clockSkew.skewSeconds > 0
 									? t('health.database.clock_skew_ahead', {
@@ -683,7 +708,7 @@ export function DatabaseScreen() {
 
 				{status.connectivity === 'offline' ? (
 					<Callout tone="warning">
-						<Text className="text-warning text-sm">
+						<Text className="text-warn-text text-sm">
 							{readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')}
 						</Text>
 					</Callout>
@@ -691,25 +716,27 @@ export function DatabaseScreen() {
 
 				{/* Per-collection rows (table header in the wide layout only; rows render both
 				    layouts and show one, chosen by the measured table width) */}
-				<VStack testID="db-table" className="gap-0" onLayout={tableLayout.onLayout}>
-					<HairlineHeaderRow className={tableLayout.wide ? 'flex' : 'hidden'}>
-						<HairlineHeaderCell className="flex-1">
-							{t('health.database.col_collection')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_on_device')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-24 text-right">
-							{t('health.database.col_on_server')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-32 text-right">
-							{t('health.database.col_coverage')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_size')}
-						</HairlineHeaderCell>
-						<View className="w-9" />
-					</HairlineHeaderRow>
+				<Table testID="db-table" onLayout={tableLayout.onLayout}>
+					<TableHeader className={tableLayout.wide ? 'flex' : 'hidden'}>
+						<TableRow className="items-center gap-3">
+							<TableHead className={DB_COLUMN.name}>
+								<Text>{t('health.database.col_collection')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.local}>
+								<Text>{t('health.database.col_on_device')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.server}>
+								<Text>{t('health.database.col_on_server')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.coverage}>
+								<Text>{t('health.database.col_coverage')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.size}>
+								<Text>{t('health.database.col_size')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.actions} />
+						</TableRow>
+					</TableHeader>
 					{rows.map((row) => (
 						<CollectionRowView
 							key={row.key}
@@ -773,7 +800,7 @@ export function DatabaseScreen() {
 							) : null}
 						</>
 					) : null}
-				</VStack>
+				</Table>
 
 				{/* Receipt emails that have not gone out yet (#165). Unlike the dead
 				    letters above there is no cheap precomputed count to gate on, so the
@@ -847,8 +874,7 @@ export function DatabaseScreen() {
 				</HStack>
 
 				<RegistersPanel />
-				<View className="h-4" />
 			</VStack>
-		</ScrollView>
+		</AreaPage>
 	);
 }

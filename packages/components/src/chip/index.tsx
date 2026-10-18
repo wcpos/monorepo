@@ -1,12 +1,16 @@
-import { Pressable, type PressableProps, View } from 'react-native';
+import * as React from 'react';
+import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
+import { useMinTargetSlop } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
 type ChipProps = Omit<PressableProps, 'children'> & {
 	label: string;
 	icon?: IconName;
+	/** A node in the icon's place, e.g. the cart customer's Avatar; wins over `icon`. */
+	leading?: React.ReactNode;
 	count?: number;
 	on?: boolean;
 	dimmed?: boolean;
@@ -14,13 +18,31 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	onClear?: () => void;
 	clearLabel?: string;
 	clearTestID?: string;
+	/**
+	 * `sm` (32) is for a dense table cell or a row's filter strip, the smallest a tap target
+	 * may be there; `default` (44, the control token) everywhere else. Same radius, border and
+	 * on-state at both sizes (ruled 2026-10-16, decision 10).
+	 */
+	size?: 'default' | 'sm';
 };
+
+/**
+ * The selected state is announced, not only drawn: `on` is a choice, so assistive tech hears
+ * which preset is picked (the health chip this replaced carried it). A chip is a button, and
+ * on the web a button's toggle state is `aria-pressed` (`aria-selected` is not allowed on the
+ * button role); native platforms announce it as `selected`.
+ */
+function selectedState(on: boolean | undefined) {
+	if (on === undefined) return {};
+	return Platform.OS === 'web' ? { 'aria-pressed': on } : { 'aria-selected': on };
+}
 
 // Every variant carries the same root classes; a cell that renders full-width is a stale
 // baseline, not a prop-dependent layout (measured on wcpos/monorepo#2189).
 export function Chip({
 	label,
 	icon,
+	leading,
 	count,
 	on,
 	dimmed,
@@ -28,6 +50,7 @@ export function Chip({
 	onClear,
 	clearLabel,
 	clearTestID,
+	size = 'default',
 	disabled,
 	testID,
 	className,
@@ -38,16 +61,37 @@ export function Chip({
 	// state key is absent, which is what `button` ledger line 1 records.
 	const inactive = !!(disabled || dimmed);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
+	const sm = size === 'sm';
+	// `sm` is drawn under 44 for a dense cell; the press target still gets 44 (§ Design 2). The
+	// slop sits on the root, because `hitSlop` never reaches past a parent's bounds.
+	const target = useMinTargetSlop(sm, props.onLayout);
+	// A clearable chip's root takes no press (the label half does), except on native when it
+	// carries the grown target: the band above and below is the root's, so the root routes a
+	// press there by where it landed, inside the clear half's measured span clearing and the
+	// rest pressing as the label (span, not side: a right-to-left layout puts it first). Native gives a touch to the deepest responder, so inside the chip the label
+	// and the clear halves still win and nothing fires twice; the web never measures.
+	const clearSpan = React.useRef({ start: 0, end: 0 });
+	const rootPress: PressableProps['onPress'] =
+		!onClear || !target.hitSlop
+			? onClear
+				? undefined
+				: onPress
+			: (event) => {
+					const x = event.nativeEvent.locationX;
+					if (x >= clearSpan.current.start && x < clearSpan.current.end) onClear();
+					else onPress?.(event);
+				};
 	const content = (
 		<>
-			{icon && <Icon name={icon} className="text-foreground" />}
+			{leading ?? (icon && <Icon name={icon} className="text-foreground" />)}
 			<Text
 				testID={onClear ? undefined : id('label')}
 				// One line: a long label (a customer's full name) truncates inside the pill
 				// instead of pushing the pill over the controls beside it.
 				numberOfLines={1}
 				className={cn(
-					'shrink text-base font-medium',
+					'shrink font-medium',
+					sm ? 'text-sm' : 'text-base',
 					add ? 'text-muted-foreground' : 'text-foreground',
 					on && 'text-primary font-semibold'
 				)}
@@ -65,20 +109,24 @@ export function Chip({
 	);
 	return (
 		<Pressable
+			hitSlop={target.hitSlop}
 			{...props}
+			onLayout={target.onLayout}
 			testID={testID}
 			disabled={inactive}
 			// With a clear control the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
-			onPress={onClear ? undefined : onPress}
+			onPress={rootPress}
 			role={onClear ? undefined : 'button'}
+			{...(onClear ? {} : selectedState(on))}
 			tabIndex={onClear ? -1 : 0}
 			accessible={onClear ? false : undefined}
 			className={cn(
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
 				// drawn chip is inline-flex.
-				'h-ctl bg-card active:bg-muted web:hover:bg-muted max-w-full flex-row items-center gap-1.5 self-start rounded-full border px-3',
+				'bg-card active:bg-muted web:hover:bg-muted max-w-full flex-row items-center gap-1.5 self-start rounded-full border',
+				sm ? 'h-8 px-2.5' : 'h-ctl px-3',
 				on ? 'border-primary' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',
@@ -90,6 +138,7 @@ export function Chip({
 					<Pressable
 						testID={id('label')}
 						role="button"
+						{...selectedState(on)}
 						disabled={inactive}
 						className="flex-1 flex-row items-center gap-1.5 self-stretch active:opacity-70"
 						// The label's press bubbles: with a clear control the root has no handler, so
@@ -108,7 +157,17 @@ export function Chip({
 						testID={clearTestID ?? id('clear')}
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
-						className="min-w-ctl -mr-3 items-center justify-center self-stretch active:opacity-70"
+						onLayout={(event) => {
+							const { x, width } = event.nativeEvent.layout;
+							clearSpan.current = { start: x, end: x + width };
+						}}
+						className={cn(
+							'items-center justify-center self-stretch active:opacity-70',
+							// The clear control spans the chip's height and as much width, so it is never
+							// smaller than the chip's own target (line 8); the negative margin cancels the
+							// chip's end padding.
+							sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3'
+						)}
 						onPress={(event) => {
 							event?.stopPropagation?.();
 							onClear();

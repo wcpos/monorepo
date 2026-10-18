@@ -1,15 +1,16 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { type Pressable, View } from 'react-native';
 
-import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+import { CustomerAvatar, GuestAvatar } from '../../components/user-avatar/customer-avatar';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
@@ -138,57 +139,65 @@ function OrderRow({
 		: undefined;
 	const stale = openedMs !== undefined && nowMs - openedMs >= STALE_AFTER_MS;
 	return (
-		<Pressable
+		<ListRow
 			testID={`open-orders-row-${order.uuid}`}
-			role="button"
-			aria-selected={selected}
+			size="sm"
+			selected={selected}
 			ref={focusCurrent}
 			onPress={onPress}
-			className={`border-border web:hover:bg-muted active:bg-muted min-h-row flex-row items-center gap-3 border-b border-l-2 py-2 pr-3 pl-2 ${selected ? 'bg-muted border-l-primary' : 'border-l-transparent'}`}
+			leading={
+				// The avatar follows the row's title, which reads the billing name only: a row titled
+				// "Guest" (a guest, or a registered customer whose order carries no name) gets the
+				// Guest glyph, never another person's picture or initials beside that word.
+				name ? (
+					<CustomerAvatar
+						customer={{
+							billing: { first_name: billing?.first_name, last_name: billing?.last_name },
+							id: payload.customer_id,
+						}}
+						size="md"
+					/>
+				) : (
+					<GuestAvatar size="md" />
+				)
+			}
+			trailing={
+				<View className="items-end gap-0.5">
+					<View className="tabular-nums">
+						<CartTabTitle order={order} amountOnly active />
+					</View>
+					<HStack space="sm">
+						{/* A cart that will restart with its next line has no age to show (#2183). */}
+						{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
+							<HStack space="xs">
+								<Icon
+									name="clock"
+									size="xs"
+									className={stale ? 'text-warn-text' : 'text-muted-foreground'}
+								/>
+								<Text
+									testID={`open-orders-row-${order.uuid}-age`}
+									className={`text-xs ${stale ? 'text-warn-text font-semibold' : 'text-muted-foreground'}`}
+								>
+									{relative(openedMs, nowMs)}
+								</Text>
+							</HStack>
+						)}
+						<TabChip order={order} fallbackLabel={getLabel(payload.status)} fallbackIsStatus />
+					</HStack>
+				</View>
+			}
 		>
-			{name ? (
-				<Avatar fallback={getInitials(name)} size="md" />
-			) : (
-				<View className="bg-muted size-9 items-center justify-center rounded-full">
-					<Icon name="user" size="sm" className="text-muted-foreground" />
-				</View>
-			)}
-			<View className="min-w-0 flex-1">
-				<Text className="font-semibold" numberOfLines={1}>
-					{name || t('pos_cart.guest')}
-				</Text>
-				<Text
-					testID={`open-orders-row-${order.uuid}-items`}
-					className="text-muted-foreground text-xs"
-					numberOfLines={1}
-				>
-					{items || t('pos_cart.cart_empty')}
-				</Text>
-			</View>
-			<View className="items-end gap-0.5">
-				<View className="tabular-nums">
-					<CartTabTitle order={order} amountOnly active />
-				</View>
-				<HStack space="sm">
-					{/* A cart that will restart with its next line has no age to show (#2183). */}
-					{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
-						<HStack space="xs">
-							<Icon
-								name="clock"
-								size="xs"
-								className={stale ? 'text-warning' : 'text-muted-foreground'}
-							/>
-							<Text
-								testID={`open-orders-row-${order.uuid}-age`}
-								className={`text-xs ${stale ? 'text-warning font-semibold' : 'text-muted-foreground'}`}
-							>
-								{relative(openedMs, nowMs)}
-							</Text>
-						</HStack>
-					)}
-					<TabChip order={order} fallbackLabel={getLabel(payload.status)} fallbackIsStatus />
-				</HStack>
-			</View>
-		</Pressable>
+			<Text className="font-semibold" numberOfLines={1}>
+				{name || t('pos_cart.guest')}
+			</Text>
+			<Text
+				testID={`open-orders-row-${order.uuid}-items`}
+				className="text-muted-foreground text-xs"
+				numberOfLines={1}
+			>
+				{items || t('pos_cart.cart_empty')}
+			</Text>
+		</ListRow>
 	);
 }

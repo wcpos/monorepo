@@ -13,8 +13,15 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -63,9 +70,26 @@ function DisplayRow({
 						? t('settings.customer_display.connected')
 						: t('settings.customer_display.disconnected')}
 				</Text>
-				<Button variant="ghost-quiet" size="sm" onPress={() => onForget(display)}>
-					<ButtonText>{t('settings.customer_display.forget')}</ButtonText>
-				</Button>
+				{/* Forgetting unpairs the display: the last, red row of the row's ⋮ menu. */}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton
+							name="ellipsisVertical"
+							testID={`customer-display-menu-${display.id}`}
+							accessibilityLabel={t('common.actions')}
+						/>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							variant="destructive"
+							testID={`customer-display-forget-${display.id}`}
+							onPress={() => onForget(display)}
+						>
+							<Icon name="trash" className="fill-destructive" />
+							<Text>{t('settings.customer_display.forget')}</Text>
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</HStack>
 		</SettingsRow>
 	);

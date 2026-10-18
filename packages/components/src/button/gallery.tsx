@@ -2,20 +2,34 @@ import type * as React from 'react';
 
 import { Button } from './index';
 
-const examples: ({ id: string } & React.ComponentProps<typeof Button>)[] = [
-	{ id: 'solid', children: 'Add product' },
-	{ id: 'outline', variant: 'outline', children: 'Add product' },
-	{ id: 'ghost', variant: 'ghost', children: 'Add product' },
-	{ id: 'ghost-quiet', variant: 'ghost-quiet', children: 'Add product' },
-	{ id: 'destructive', variant: 'destructive', children: 'Add product' },
-	{ id: 'outline-destructive', variant: 'outline-destructive', children: 'Add product' },
-	{ id: 'link', variant: 'link', children: 'Add product' },
+type Props = React.ComponentProps<typeof Button>;
+
+// The seven kept variants and three sizes (CODING_STANDARDS § Design, Buttons; ruled
+// 2026-10-16): one story per variant × size, so a change to any cell of the table shows.
+const VARIANTS = [
+	'default',
+	'outline',
+	'ghost',
+	'link',
+	'outline-destructive',
+	'ghost-destructive',
+	'destructive',
+] as const satisfies readonly NonNullable<Props['variant']>[];
+const SIZES = ['sm', 'default', 'lg'] as const satisfies readonly NonNullable<Props['size']>[];
+
+const examples: ({ id: string } & Props)[] = [
+	...VARIANTS.flatMap((variant) =>
+		SIZES.map((size) => ({
+			id: `${variant}-${size}`,
+			variant,
+			size,
+			children: size === 'lg' ? 'Checkout £12.40' : 'Add product',
+		}))
+	),
 	{ id: 'icon', leftIcon: 'plus', children: 'Add product' },
 	{ id: 'loading', loading: true, children: 'Add product' },
 	{ id: 'disabled', disabled: true, children: 'Add product' },
-	{ id: 'sm', size: 'sm', children: 'Add product' },
-	{ id: 'lg', size: 'lg', children: 'Add product' },
-	{ id: 'xl', size: 'xl', children: 'Checkout £12.40' },
+	{ id: 'outline-disabled', variant: 'outline', disabled: true, children: 'Add product' },
 ];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,

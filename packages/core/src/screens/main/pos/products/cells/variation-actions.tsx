@@ -6,6 +6,7 @@ import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useAddVariation } from '../../hooks/use-add-variation';
+import { useT } from '../../../../../contexts/translations';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
@@ -15,6 +16,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 export function ProductVariationActions({
 	row,
 }: CellContext<{ record: EngineRecord<'variations'> }, 'actions'>) {
+	const t = useT();
 	const variation = row.original.record;
 	const attributes = useRecordField(variation, (record) => record.payload.attributes);
 	const parentRow = row.getParentRow();
@@ -45,6 +47,7 @@ export function ProductVariationActions({
 			testID="add-variation-to-cart-button"
 			name="circlePlus"
 			size="4xl"
+			accessibilityLabel={t('common.add_to_cart')}
 			onPress={() => parent && addVariation(variation, parent, metaData)}
 			variant="success"
 		/>

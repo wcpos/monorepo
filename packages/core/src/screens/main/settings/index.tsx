@@ -1,11 +1,4 @@
-import * as React from 'react';
-import { ScrollView, View } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
+import { AreaPage } from '../components/navigation-area/area-page';
 
 export { BarcodeScanning } from './barcode-scanning';
 export { CardReadersSettings } from './card-readers';
@@ -18,36 +11,8 @@ export { SettingsSection } from './components/settings-section';
 export { SettingsRow } from './components/settings-row';
 export { SettingsDangerZone } from './components/settings-danger-zone';
 
-export function SettingsPage({
-	title,
-	description,
-	testID,
-	children,
-}: {
-	title: string;
-	description?: string;
-	testID: string;
-	children: React.ReactNode;
-}) {
-	const insets = useSafeAreaInsets();
-	return (
-		<ScrollView
-			testID={testID}
-			className="bg-background flex-1"
-			// The last control on a page sits above the home indicator, never on it.
-			contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-		>
-			<View className="mx-auto w-full max-w-3xl gap-6 px-4 py-5 md:px-8 md:py-6">
-				<View className="gap-1">
-					<Text role="heading" aria-level={1} className="text-xl font-semibold">
-						{title}
-					</Text>
-					{!!description && <Text className="text-muted-foreground text-sm">{description}</Text>}
-				</View>
-				<ErrorBoundary>
-					<Suspense>{children}</Suspense>
-				</ErrorBoundary>
-			</View>
-		</ScrollView>
-	);
-}
+/**
+ * A settings page is an area page (`AreaPage`): one card on the page ground, heading inside.
+ * Kept as a name so the settings routes read as settings.
+ */
+export const SettingsPage = AreaPage;

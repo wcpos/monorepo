@@ -6,6 +6,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
@@ -126,7 +127,11 @@ export function PrinterRow({
 				{showMenu && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
+							<IconButton
+								name="ellipsisVertical"
+								accessibilityLabel={t('common.more_actions')}
+								testID={`printer-row-${profile.id}-menu`}
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem
@@ -157,6 +162,10 @@ export function PrinterRow({
 									<Icon name="star" />
 									<Text>{t('settings.set_default')}</Text>
 								</DropdownMenuItem>
+							)}
+							{canDelete && (
+								// The red row is last and set apart from the actions above it.
+								<DropdownMenuSeparator />
 							)}
 							{canDelete && (
 								<DropdownMenuItem

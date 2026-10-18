@@ -27,6 +27,7 @@ export type WriteReceipt = {
 	mutationId: string;
 	recordId: string;
 	annihilated?: boolean;
+	annihilatedMutationIds?: string[];
 	supersededMutationId?: string;
 };
 export type WriteOptions = {
@@ -40,6 +41,7 @@ export type WriteOptions = {
 	payloadFromResident?: boolean;
 };
 export type WritePlane = {
+	sessionRestored(): void;
 	write(intent: WriteIntent, options?: WriteOptions): Promise<WriteReceipt>;
 	conflicts(): Promise<QueuedMutation[]>;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
@@ -49,6 +51,7 @@ export type WritePlane = {
 	sessionHeld(): boolean;
 };
 type WritePlaneDeps = {
+	paymentsContract?: () => string | null;
 	assertUsable: () => void;
 	settled: (kind: 'read' | 'write') => Promise<void>;
 	manager: StoreScopeManager;
@@ -107,6 +110,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		deps.onStatusChanged();
 	};
 	const drainLane = createWriteDrainLane({
+		paymentsContract: deps.paymentsContract,
 		manager: deps.manager,
 		databaseFor: deps.databaseFor,
 		fetcher: deps.fetcher,
@@ -188,14 +192,17 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 				if (receipt.annihilated) {
 					// The honest terminal contract (gate2 #516 item 3): the delete was
 					// satisfied locally (chain cancelled, resident row removed) — ONE
-					// terminal event for the receipt mutationId, and no 'enqueued'
+					// terminal event per chain id, then the receipt id, and no 'enqueued'
 					// diagnostics (nothing was enqueued).
-					deps.emitWriteEvent({
+					const event = {
 						type: 'write-annihilated',
 						collection: intent.collection,
 						recordId: receipt.recordId,
 						mutationId: receipt.mutationId,
-					});
+					} as const;
+					for (const mutationId of receipt.annihilatedMutationIds ?? [])
+						deps.emitWriteEvent({ ...event, mutationId });
+					deps.emitWriteEvent(event);
 					return receipt;
 				}
 				deps.diagnostics({
@@ -235,6 +242,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		},
 		lastError: () => lastError,
 		queueDepth: () => queueDepth,
+		sessionRestored: drainLane.sessionRestored,
 		sessionHeld: () => sessionHeldScope !== null && sessionHeldScope === deps.manager.activeScope,
 	};
 }

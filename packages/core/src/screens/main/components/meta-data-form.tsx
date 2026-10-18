@@ -19,15 +19,20 @@ export { metaDataSchema } from './meta-data-schema';
 
 interface MetaDataFormProps {
 	name?: string;
+	hiddenKeys?: readonly string[];
 	withDisplayValues?: boolean;
 }
 
 /**
  *
  */
-export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaDataFormProps) {
+export function MetaDataForm({
+	name = 'meta_data',
+	withDisplayValues,
+	hiddenKeys,
+}: MetaDataFormProps) {
 	const t = useT();
-	const { control, setValue, getValues } = useFormContext();
+	const { control, setValue, getValues, setError, clearErrors } = useFormContext();
 	const { fields, append, remove } = useFieldArray({
 		control,
 		name,
@@ -45,8 +50,8 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 				<VStack>
 					{fields.map((field, index) => {
 						const value = watchedFields[index]?.value;
-						// Hide items with value = null
-						if (value === null) {
+						// Hide tombstones and caller-protected metadata.
+						if (value === null || hiddenKeys?.includes(watchedFields[index]?.key)) {
 							return null;
 						}
 						return (
@@ -62,7 +67,23 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 									<FormField
 										control={control}
 										name={`${name}.${index}.key`}
-										render={({ field }) => <FormInput label={t('common.key')} {...field} />}
+										render={({ field }) => (
+											<FormInput
+												label={t('common.key')}
+												{...field}
+												onChange={(key) => {
+													if (hiddenKeys?.includes(String(key))) {
+														setError(field.name, {
+															type: 'validate',
+															message: t('common.meta_key_protected'),
+														});
+														return;
+													}
+													clearErrors(field.name);
+													field.onChange(key);
+												}}
+											/>
+										)}
 									/>
 									{withDisplayValues && (
 										<FormField
@@ -103,6 +124,7 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 											<IconButton
 												variant="destructive"
 												name="circleMinus"
+												accessibilityLabel={t('common.remove_item')}
 												onPress={() => {
 													const metaData = getValues(name);
 													const item = metaData[index];

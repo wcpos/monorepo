@@ -85,16 +85,16 @@ function RefundCard({
 			{lineItems.length ? (
 				<View className="px-3 py-2">
 					<View className="border-border/40 flex-row items-baseline gap-2 border-b pb-1">
-						<Text className="text-muted-foreground flex-1 text-[10px] font-semibold tracking-wide uppercase">
+						<Text className="text-muted-foreground flex-1 text-xs font-medium tracking-wide uppercase">
 							{t('common.product')}
 						</Text>
-						<Text className="text-muted-foreground w-8 text-right text-[10px] font-semibold tracking-wide uppercase">
-							{t('common.quantity')}
+						<Text className="text-muted-foreground w-8 text-right text-xs font-medium tracking-wide uppercase">
+							{t('pos_cart.qty_abbrev')}
 						</Text>
-						<Text className="text-muted-foreground w-14 text-right text-[10px] font-semibold tracking-wide uppercase">
+						<Text className="text-muted-foreground w-14 text-right text-xs font-medium tracking-wide uppercase">
 							{t('common.tax')}
 						</Text>
-						<Text className="text-muted-foreground w-16 text-right text-[10px] font-semibold tracking-wide uppercase">
+						<Text className="text-muted-foreground w-16 text-right text-xs font-medium tracking-wide uppercase">
 							{t('common.total')}
 						</Text>
 					</View>
@@ -109,7 +109,7 @@ function RefundCard({
 								</Text>
 								{item.sku ? (
 									<View className="bg-primary/10 rounded px-1 py-0.5">
-										<Text className="text-primary text-[10px] font-medium tabular-nums">
+										<Text className="text-primary text-xs font-medium tabular-nums">
 											{item.sku}
 										</Text>
 									</View>
@@ -173,7 +173,7 @@ export function RefundsFallback({
 									{refund.reason || t('orders.no_reason_provided')}
 								</Text>
 								<Text className="text-destructive text-sm font-semibold tabular-nums">
-									{format(-Math.abs(toNumber(refund.total)))}
+									{format(-refundValue(refund))}
 								</Text>
 							</View>
 						))}

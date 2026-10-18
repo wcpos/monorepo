@@ -3,6 +3,11 @@
  */
 
 import {
+	hasLiveSettlementLeg,
+	isFailedPaymentStatus,
+	isFinalPaymentStatus,
+	isLivePaymentStatus,
+	isSettledPaymentRow,
 	mintDevicePayment,
 	mintManualPayment,
 	mintServerPayment,
@@ -319,4 +324,35 @@ it.each(['manual', 'server', 'device'] as const)('mints %s provenance fields', (
 	expect(mint({ ...input, registerId: null, sessionId: undefined })).toMatchObject({
 		row: { register_id: null, session_id: null },
 	});
+});
+
+it('recognizes only pending, authorized, and captured as live payment statuses', () => {
+	expect(
+		['pending', 'authorized', 'captured', 'voided', 'failed', 'refunded', ''].map(
+			isLivePaymentStatus
+		)
+	).toEqual([true, true, true, false, false, false, false]);
+});
+
+it.each(['pending', 'authorized', 'captured', 'failed', 'voided'] as const)(
+	'settlement live leg is exactly pending or authorized: %s',
+	(status) => {
+		expect(hasLiveSettlementLeg(withLedger([], [row({ status })]))).toBe(
+			['pending', 'authorized'].includes(status)
+		);
+	}
+);
+
+// Settled money includes offline authorizations; terminal finality does not.
+it.each([
+	['captured', false, true, true, false],
+	['authorized', true, true, false, false],
+	['authorized', false, false, false, false],
+	['pending', false, false, false, false],
+	['failed', false, false, true, true],
+	['voided', false, false, true, true],
+] as const)('classifies %s (offline %s)', (status, offline, settled, final, failed) => {
+	expect(isSettledPaymentRow(row({ status, recorded_offline: offline }))).toBe(settled);
+	expect(isFinalPaymentStatus(status)).toBe(final);
+	expect(isFailedPaymentStatus(status)).toBe(failed);
 });

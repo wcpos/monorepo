@@ -101,3 +101,10 @@ describe('temporary-order repository (engine-shaped template, ADR 0028 stage I)'
 		expect(await getTemporaryOrder('tmp-2')).toBeNull();
 	});
 });
+
+it('temporary order meta patches retain protected entries from the current payload', async () => {
+	const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+	stored.push({ uuid: 'protected-temp', payload: { meta_data: [hint] } });
+	await patchTemporaryOrderPayload('protected-temp', () => ({ meta_data: [] }));
+	expect((await getTemporaryOrder('protected-temp'))?.payload.meta_data).toEqual([hint]);
+});

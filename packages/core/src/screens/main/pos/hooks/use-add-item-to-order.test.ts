@@ -5,9 +5,17 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
+
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
+
+jest.mock('@wcpos/sync-engine', () => ({
+	...jest.requireActual('@wcpos/sync-engine'),
+	hasPendingLocalWork: jest.fn(jest.requireActual('@wcpos/sync-engine').hasPendingLocalWork),
+}));
 
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -88,7 +96,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 const order: Record<string, unknown> & {
@@ -128,7 +136,11 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 		completeEngineRecord(await mockInsertEngineResident(...args)),
 	patchEngineResident: async (...args: unknown[]) =>
 		completeEngineRecord(await mockPatchEngineResident(...args)),
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({
@@ -157,12 +169,59 @@ describe('useAddItemToOrder', () => {
 			name: '',
 		});
 		order.payload.line_items = [];
+		delete (order.payload as { meta_data?: unknown }).meta_data;
 		delete (order.payload as { status?: string }).status;
 		delete (order.payload as { date_created_gmt?: string }).date_created_gmt;
 		order.isNew = false;
 		order.toJSON = () => ({ payload: { ...order.payload } });
 		order.toMutableJSON = () => ({ payload: { ...order.payload } });
 	});
+
+	it.each([false, true])(
+		'settles resident and create money before birth (orphan: %s)',
+		async (orphan) => {
+			order.isNew = true;
+			const payload = { uuid: 'order-uuid', line_items: [] };
+			if (orphan)
+				mockFindEngineResident.mockResolvedValue({
+					payload,
+					toMutableJSON: () => ({ payload }),
+				});
+			mockInsertEngineResident.mockImplementation(async ({ payload }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			}));
+			mockPatchEngineResident.mockImplementation(async ({ changes }) => ({
+				payload: changes,
+				toMutableJSON: () => ({ payload: changes }),
+			}));
+			mockWrite.mockResolvedValue({ mutationId: 'birth' });
+			const { result } = renderHook(() => useAddItemToOrder());
+			await act(async () => {
+				await result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					subtotal_tax: '2',
+					total_tax: '2',
+					taxes: [{ id: 1, total: '2', subtotal: '2' }],
+				});
+			});
+			const money = {
+				total: '12',
+				total_tax: '2',
+				tax_lines: [expect.objectContaining({ rate_id: 1, tax_total: '2' })],
+			};
+			expect(
+				orphan
+					? mockPatchEngineResident.mock.calls[0][0].changes
+					: mockInsertEngineResident.mock.calls[0][0].payload
+			).toMatchObject(money);
+			expect(mockWrite).toHaveBeenCalledTimes(1);
+			expect(mockWrite.mock.calls[0][0]).toMatchObject({ operation: 'create', payload: money });
+		}
+	);
 
 	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
 		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
@@ -198,8 +257,14 @@ describe('useAddItemToOrder', () => {
 		expect(mockReadCatalog).not.toHaveBeenCalled();
 	});
 
-	it('stamps missing POS identity meta before inserting a new engine order', async () => {
+	it('stamps the bound register over a stale template register', async () => {
 		order.isNew = true;
+		order.toMutableJSON = () => ({
+			payload: {
+				...order.payload,
+				meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
+			},
+		});
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				toMutableJSON: () => ({ payload }),
@@ -341,7 +406,9 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: resident,
-			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
+			data: expect.objectContaining({
+				line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })],
+			}),
 		});
 		// Stock is read on both adds; the guard sees the recovered resident's line because the
 		// lookup runs before the dispatch, and the second patch above carries both lines.
@@ -374,6 +441,7 @@ describe('useAddItemToOrder', () => {
 			} as never);
 		});
 
+		expect(hasPendingLocalWork).toHaveBeenCalledWith(resident);
 		expect(mockInsertEngineResident).not.toHaveBeenCalled();
 		expect(mockPatchEngineResident).not.toHaveBeenCalled();
 		expect(mockWrite).not.toHaveBeenCalled();
@@ -669,13 +737,13 @@ describe('useAddItemToOrder', () => {
 			expect.objectContaining({
 				collection: 'orders',
 				recordId: 'order-uuid',
-				changes: {
+				changes: expect.objectContaining({
 					line_items: [{ product_id: 1, quantity: 1 }, expect.objectContaining({ product_id: 2 })],
 					meta_data: expect.arrayContaining([
 						{ key: '_pos_user', value: '7' },
 						{ key: '_pos_store', value: '11' },
 					]),
-				},
+				}),
 			})
 		);
 		expect(mockWrite).toHaveBeenCalledTimes(1);
@@ -683,6 +751,41 @@ describe('useAddItemToOrder', () => {
 			expect.objectContaining({ operation: 'create', recordId: 'order-uuid' })
 		);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
+	});
+
+	it('rebinds an orphaned skeleton to the current register before creating the order', async () => {
+		order.isNew = true;
+		const skeletonPayload = {
+			uuid: 'order-uuid',
+			line_items: [],
+			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
+		};
+		mockFindEngineResident.mockResolvedValue({
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: '', source: 'skeleton' },
+			payload: skeletonPayload,
+			toMutableJSON: () => ({ payload: skeletonPayload }),
+		});
+		mockPatchEngineResident.mockImplementation(
+			async ({ changes }: { changes: Record<string, unknown> }) => {
+				const payload = { ...skeletonPayload, ...changes };
+				return { payload, toMutableJSON: () => ({ payload }) };
+			}
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', { product_id: 2, quantity: 1 });
+		});
+
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operation: 'create',
+				payload: expect.objectContaining({
+					meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
+				}),
+			})
+		);
 	});
 
 	it('keeps the orphaned skeleton and its lines when the retried create fails again', async () => {
@@ -951,6 +1054,7 @@ describe('useAddItemToOrder', () => {
 			status: 'pos-open',
 			date_created_gmt: '2026-07-01T00:00:00',
 			line_items: [{ id: 7, product_id: null, quantity: 1 }],
+			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
 		});
 		mockLocalPatch.mockResolvedValue({ document: order });
 
@@ -966,6 +1070,7 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch.mock.calls[0][0].data).toMatchObject({
 			date_created_gmt: expect.stringMatching(wcDate),
 			date_created: expect.stringMatching(wcDate),
+			meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
 		});
 		expect(mockLocalPatch.mock.calls[0][0].data.date_created_gmt).not.toBe('2026-07-01T00:00:00');
 		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toHaveLength(2);
@@ -995,3 +1100,5 @@ describe('useAddItemToOrder', () => {
 jest.mock('../../../../services/register/use-register', () => ({
 	useRegister: () => ({ id: 'till', sites: { site: { register_id: 'register' } } }),
 }));
+
+afterEach(() => expectSettledWrites(mockLocalPatch));

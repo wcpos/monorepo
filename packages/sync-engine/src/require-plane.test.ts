@@ -5,7 +5,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createEngineHarness, remoteId, type SchedulerTaskStateDocument } from './testing';
 import { RxSchedulerTaskStateRepository } from './scheduler/rx-scheduler-task-state-repository';
 
-describe('resident order refresh outcomes', () => {
+describe.each([false, true])('resident order refresh outcomes (dirty=%s)', (dirty) => {
 	it.each([
 		{
 			name: 'rejects ready when a forced refresh of a resident order has an owned failed task',
@@ -19,6 +19,7 @@ describe('resident order refresh outcomes', () => {
 			pullFails: false,
 			action: 'fetched',
 		},
+
 		{
 			name: 'serves a resident order locally without a pull when refresh is not forced',
 			forceRefresh: false,
@@ -63,6 +64,13 @@ describe('resident order refresh outcomes', () => {
 			await harness.engine.require(requirement).ready;
 			expect(await harness.collection('orders').count().exec()).toBe(1);
 			const pullsBefore = pulls;
+			if (dirty) {
+				const resident = await harness
+					.collection('orders')
+					.findOne('77777777-7777-4777-8777-777777777777')
+					.exec();
+				await resident!.incrementalPatch({ local: { ...resident!.get('local'), dirty: true } });
+			}
 			failPull = pullFails;
 			const handle = harness.engine.require({ ...requirement, forceRefresh });
 			try {
@@ -71,7 +79,10 @@ describe('resident order refresh outcomes', () => {
 						'require: forced refresh failed 1 task(s) for 1 resident order(s)'
 					);
 				} else {
-					await expect(handle.ready).resolves.toMatchObject({ action });
+					await expect(handle.ready).resolves.toMatchObject({
+						action,
+						...(forceRefresh ? { appliedRecordIds: dirty ? [] : ['7'], prunedRecordIds: [] } : {}),
+					});
 				}
 				expect(pulls - pullsBefore).toBe(forceRefresh ? 1 : 0);
 				expect(await harness.collection('orders').count().exec()).toBe(1);

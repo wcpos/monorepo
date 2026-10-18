@@ -61,6 +61,7 @@ export function CreatedVia({
 				<IconButton
 					name={iconName as import('@wcpos/components/icon').IconName}
 					variant={iconType as 'muted'}
+					accessibilityLabel={label}
 				/>
 			</TooltipTrigger>
 			<TooltipContent>

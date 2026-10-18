@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 7,
+	version: 8,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -93,6 +93,9 @@ export const sitesLiteral = {
 			type: 'boolean',
 		},
 		use_protocol_headers: {
+			type: 'boolean',
+		},
+		use_instance_header: {
 			type: 'boolean',
 		},
 		/**

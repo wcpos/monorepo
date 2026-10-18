@@ -350,10 +350,10 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&store_id=store-1&_wcpos_envelope=1'
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
 		);
 		expect(fetch.mock.calls[1]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&store_id=store-1'
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1'
 		);
 		fetch.mockRestore();
 	});
@@ -1588,7 +1588,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&store_id=store-1&_wcpos_envelope=1',
+			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1',
 			expect.objectContaining({ headers: expect.objectContaining({}) })
 		);
 		const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
@@ -1610,7 +1610,7 @@ describe('createAppSyncEngine scope cache', () => {
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&store_id=store-1&_wcpos_envelope=1'
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
 		);
 		fetch.mockRestore();
 	});
@@ -2684,13 +2684,17 @@ describe('previous-generation database drain', () => {
 		}
 	});
 
-	it('with the REAL drain: the host ports send a closed v5 sale once through its pinned transport, then remove pos_v5', async () => {
+	const assertRealDrain = async (
+		platform: 'ios' | 'web',
+		useInstanceHeader: boolean | undefined,
+		expectedHeader: string | null
+	) => {
 		const { getRxStorageMemory } = jest.requireActual<typeof import('rxdb/plugins/storage-memory')>(
 			'rxdb/plugins/storage-memory'
 		);
 		const { createRxDatabase } = jest.requireActual<typeof import('rxdb')>('rxdb');
 		const actual = jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
-		const { engineCollectionCreators } = jest.requireActual<
+		const { drainableGenerationCollectionCreators } = jest.requireActual<
 			typeof import('@wcpos/sync-engine/testing')
 		>('@wcpos/sync-engine/testing');
 		const { createFakeWriteServer } = jest.requireActual<typeof import('@wcpos/sync-core/testing')>(
@@ -2710,7 +2714,7 @@ describe('previous-generation database drain', () => {
 		};
 		// A till that closed a sale under v5 and upgraded before it was sent.
 		const legacy = await createRxDatabase({ name: LEGACY, storage, multiInstance: false });
-		const creators = engineCollectionCreators();
+		const creators = drainableGenerationCollectionCreators();
 		await legacy.addCollections({
 			orders: creators.orders as never,
 			recordMutations: creators.recordMutations as never,
@@ -2760,12 +2764,22 @@ describe('previous-generation database drain', () => {
 				return Response.json(await answer.json(), { status: answer.status });
 			});
 		const loaded = loadCreateAppEngine();
+		const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+		const appPlatform = jest.replaceProperty(AppInfo, 'platform', platform);
+		const instanceId = jest
+			.spyOn(
+				jest.requireActual<typeof import('@wcpos/utils/get-instance-id')>(
+					'@wcpos/utils/get-instance-id'
+				),
+				'getInstanceId'
+			)
+			.mockResolvedValue('host-instance');
 		jest.requireMock<{ defaultConfig: { storage: unknown } }>(
 			'@wcpos/database/adapters/default'
 		).defaultConfig.storage = storage;
 		loaded.drainLegacyScopeDatabase.mockImplementation(actual.drainLegacyScopeDatabase as never);
 		try {
-			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await loaded.createAppSyncEngine({ ...BASE_OPTIONS, useInstanceHeader }).ready;
 			for (
 				let turn = 0;
 				turn < 200 &&
@@ -2787,12 +2801,24 @@ describe('previous-generation database drain', () => {
 			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
 			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
 			expect(wire).toContain('store-1');
+			expect(new Headers(pushInit?.headers).get('X-WCPOS-Instance')).toBe(expectedHeader);
 			await discoveryFindsNothingElse(loaded);
 			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 		} finally {
 			fetch.mockRestore();
+			appPlatform.restore();
+			instanceId.mockRestore();
 		}
-	}, 30_000);
+	};
+	it.each([
+		['ios', undefined, 'host-instance'],
+		['web', true, 'host-instance'],
+		['web', undefined, null],
+	] as const)(
+		'with the REAL drain: %s verdict %s sends a closed v5 sale with instance header %s',
+		assertRealDrain,
+		30_000
+	);
 
 	it("logs a push the store refused during the drain with the store's reason and message", async () => {
 		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn } = loadCreateAppEngine();
@@ -2821,4 +2847,26 @@ describe('previous-generation database drain', () => {
 			})
 		);
 	});
+});
+
+it('reads the current store contract through the host port, including an awaited scope switch', async () => {
+	const { createAppSyncEngine, createRxdbSyncEngine, switchAppEngineScope } = loadCreateAppEngine();
+	let contract = '1.2';
+	const options = { ...BASE_OPTIONS, paymentsContract: () => contract };
+	createAppSyncEngine(options);
+	const ports = createRxdbSyncEngine.mock.calls[0]![0] as {
+		paymentsContract?: () => string | null;
+	};
+	expect(ports.paymentsContract?.()).toBe('1.2');
+	contract = '1.3';
+	expect(ports.paymentsContract?.()).toBe('1.3');
+	await switchAppEngineScope(
+		{
+			site: { wp_api_url: BASE_OPTIONS.scope.site },
+			store: { id: 'store-2' },
+			wpCredentials: { id: 'cashier-1' },
+		},
+		{ ...options, paymentsContract: () => null }
+	);
+	expect(ports.paymentsContract?.()).toBeNull();
 });

@@ -7,6 +7,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 import { useAddProduct } from '../../hooks/use-add-product';
 import { DataTableRow } from '../../../components/data-table/rows';
 import { InCartCount } from './in-cart-count';
+import { useT } from '../../../../../contexts/translations';
 
 export { InCartCount };
 
@@ -41,6 +42,7 @@ export function useVariationCount(record: EngineRecord<'variations'>) {
 export function ProductRow({
 	item,
 }: Pick<React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'products'> }>>, 'item'>) {
+	const t = useT();
 	const record = item.original.record;
 	const { addProduct } = useAddProduct();
 	const count = useProductCount(record);
@@ -59,6 +61,7 @@ export function ProductRow({
 					empty={
 						<IconButton
 							name="circlePlus"
+							accessibilityLabel={t('common.add_to_cart')}
 							testID="add-to-cart-button"
 							onPress={(event) => {
 								event.stopPropagation();

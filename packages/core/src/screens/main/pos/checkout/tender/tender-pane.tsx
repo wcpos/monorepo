@@ -12,6 +12,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
@@ -142,14 +143,19 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	);
 }
 
-const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
+const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDescriptor[])[] => [
 	...['123', '456', '789'].map((row) =>
 		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
 	),
 	[
 		{ value: 'clear', label: 'C', testID: 'checkout-key-clear' },
 		{ value: '0', label: '0', testID: 'checkout-key-0' },
-		{ value: 'backspace', icon: 'deleteLeft', testID: 'checkout-key-backspace' },
+		{
+			value: 'backspace',
+			icon: 'deleteLeft',
+			accessibilityLabel,
+			testID: 'checkout-key-backspace',
+		},
 	],
 ];
 
@@ -160,6 +166,7 @@ const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
  */
 function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const t = useT();
+	const KEYPAD_ROWS = keypadRows(t('common.backspace'));
 	const busy = flow.busy || saving;
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
@@ -224,10 +231,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const pills = flow.tiles.filter(canChoose).map((tile) => {
 		const selected = flow.state.methodId === tile.method.id;
 		return (
-			<Button
+			<Tile
 				key={tile.method.id}
-				variant="outline"
-				className={`min-h-tile border-border bg-background h-auto min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 py-2 ${selected ? 'border-primary bg-muted' : ''} ${busy ? 'opacity-45' : ''}`}
+				selected={selected}
+				className="min-w-0 flex-1"
 				testID={`checkout-method-${tile.method.id}`}
 				disabled={busy}
 				onPress={() => {
@@ -236,11 +243,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				}}
 			>
 				<Icon name={methodIcon(tile.method)} />
-				<ButtonText decodeHtml numberOfLines={2} className="text-center">
+				<Text decodeHtml numberOfLines={2} className="text-center font-medium">
 					{tile.method.title}
-				</ButtonText>
+				</Text>
 				<MethodStatus tile={tile} selected={selected} />
-			</Button>
+			</Tile>
 		);
 	});
 	// One rule: the picked card-reader tile settles later (the payment takes the offline path and
@@ -298,7 +305,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				<Text
 					testID="checkout-label"
 					decodeHtml
-					className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+					className="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
 				>
 					{plan
 						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
@@ -328,7 +335,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					/>
 				) : null}
 				{!flow.online ? (
-					<Text testID="checkout-offline" className="text-warning text-xs">
+					<Text testID="checkout-offline" className="text-warn-text text-xs">
 						{t('pos_checkout.offline')}
 					</Text>
 				) : null}
@@ -341,7 +348,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
-				className={`min-h-6 text-sm ${noChange ? 'text-warning' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
+				className={`min-h-6 text-sm ${noChange ? 'text-warn-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
 				decodeHtml
 			>
 				{hint}
@@ -366,12 +373,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							{leg.state === 'done' ? (
 								<Icon name="check" size="xs" className="text-success" />
 							) : null}
-							<Text
-								className={
-									leg.state === 'done' ? 'text-success text-xs' : 'text-foreground text-xs'
-								}
-								decodeHtml
-							>
+							{/* Words stay in the foreground on every leg: green text on the done leg's
+							    green wash reads under 4.5:1; the wash and the check carry the state. */}
+							<Text className="text-foreground text-xs" decodeHtml>
 								{leg.state === 'rest'
 									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
 									: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
@@ -416,7 +420,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						))}
 			</MethodRows>
 			{slow ? (
-				<Text testID="checkout-save-slow" className="text-warning text-sm">
+				<Text testID="checkout-save-slow" className="text-warn-text text-sm">
 					{t('pos_checkout.store_not_answering')}
 				</Text>
 			) : null}
@@ -424,7 +428,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				<VStack space="xs" className="w-full max-w-md">
 					{/* Styled as the quiet folded line it is: centred muted words, a chevron, no chrome. */}
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						className="flex-row gap-1 self-center"
 						testID="checkout-unavailable-toggle"
 						disabled={busy}
@@ -497,7 +501,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							</Text>
 							{!locked && flow.readers.length > 1 ? (
 								<Button
-									variant="secondary"
+									variant="outline"
 									size="sm"
 									testID="checkout-reader-change"
 									disabled={busy}
@@ -511,15 +515,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						<View className="flex-row flex-wrap gap-2">
 							{flow.readers.map((reader) => (
 								<VStack key={reader.id} space="xs">
-									<Button
-										size="sm"
-										variant={flow.state.readerId === reader.id ? 'default' : 'secondary'}
+									{/* A selected choice is a Chip; a Button is never a toggle. */}
+									<Chip
+										label={reader.label}
+										on={flow.state.readerId === reader.id}
 										testID={`checkout-reader-${reader.id}`}
 										disabled={busy || reader.inUseBy !== null}
 										onPress={() => flow.pickReader(reader.id)}
-									>
-										<ButtonText>{reader.label}</ButtonText>
-									</Button>
+									/>
 									{reader.inUseBy !== null ? (
 										<Text
 											className="text-muted-foreground text-xs"
@@ -644,13 +647,13 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 					: t('pos_checkout.invoice_sent_on', { date: sentOn ?? '' })}
 			</Text>
 			<Button
-				variant="ghost-destructive"
+				variant="outline-destructive"
 				size="sm"
 				testID="checkout-cancel-invoice"
 				disabled={busy || !flow.online}
 				onPress={() => void flow.cancelInvoice()}
 			>
-				<ButtonText className="underline">{t('pos_checkout.cancel_invoice')}</ButtonText>
+				<ButtonText>{t('pos_checkout.cancel_invoice')}</ButtonText>
 			</Button>
 		</View>
 	);

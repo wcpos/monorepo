@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -142,14 +143,13 @@ export function ScannerDeviceChooser() {
 				</VStack>
 			) : (
 				candidates.map((device) => (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`scanner-device-${device.id}`}
 						onPress={() => reply(device.id)}
-						className="border-border flex-row items-center gap-2 rounded-md border p-2"
 					>
 						<Text className="text-sm">{device.name}</Text>
-					</Pressable>
+					</ListItem>
 				))
 			)}
 			<Button

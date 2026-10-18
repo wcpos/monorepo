@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
-import { Text } from '@wcpos/components/text';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
 
@@ -39,30 +38,34 @@ export function ConnectionTypeSegmented({
 		{ value: 'bluetooth', label: t('settings.connection_bluetooth') },
 		{ value: 'usb', label: t('settings.connection_usb') },
 	];
-	const options = allOptions.filter((option) => enabledTypes.includes(option.value));
+	const current = value === 'system' ? 'usb' : value;
+	// A saved type this platform cannot use (a USB printer opened in a browser without WebUSB)
+	// stays on show, disabled, so the cashier sees it and can move the profile to a supported one.
+	const shown = allOptions.filter(
+		(option) => enabledTypes.includes(option.value) || option.value === current
+	);
+	// One way is no choice: when the only type is the one already set, nothing is drawn.
+	if (shown.length < 2) return null;
+	const segments = shown.map((option): Segment => ({
+		value: option.value,
+		label: option.label,
+		disabled: !enabledTypes.includes(option.value),
+		testID: `add-printer-connection-type-${option.value}`,
+	})) as unknown as React.ComponentProps<typeof SegmentedControl>['segments']; // 2 or 3, checked above
 
+	// A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10).
 	return (
-		<Tabs
-			value={value === 'system' ? 'usb' : value}
+		<SegmentedControl
+			testID="add-printer-connection-type-segmented"
+			className="w-full"
+			segments={segments}
+			value={current}
 			onValueChange={(next) => {
 				if (isConnectionType(next)) {
 					onChange(next);
 					form.clearErrors('address');
 				}
 			}}
-		>
-			<TabsList testID="add-printer-connection-type-segmented" className="w-full flex-row">
-				{options.map((option) => (
-					<TabsTrigger
-						key={option.value}
-						value={option.value}
-						testID={`add-printer-connection-type-${option.value}`}
-						className="flex-1"
-					>
-						<Text>{option.label}</Text>
-					</TabsTrigger>
-				))}
-			</TabsList>
-		</Tabs>
+		/>
 	);
 }

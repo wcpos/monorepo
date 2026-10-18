@@ -40,7 +40,7 @@ export const SENTRY_DSN =
 
 type SentryEventLike = {
 	message?: string;
-	exception?: { values?: { value?: string }[] };
+	exception?: { values?: { type?: string; value?: string }[] };
 	request?: { url?: string };
 	breadcrumbs?: { data?: Record<string, unknown> }[];
 	extra?: Record<string, unknown>;
@@ -135,6 +135,11 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 		event.message = redactSensitiveText(event.message);
 	}
 	for (const exception of event.exception?.values ?? []) {
+		// Sentry copies Error.name into `type`, so a credential smuggled through a custom
+		// error name needs the same scrub as the message.
+		if (typeof exception.type === 'string') {
+			exception.type = redactSensitiveText(exception.type);
+		}
 		if (typeof exception.value === 'string') {
 			exception.value = redactSensitiveText(exception.value);
 		}

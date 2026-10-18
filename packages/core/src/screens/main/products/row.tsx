@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
@@ -8,6 +8,7 @@ import { map, type Observable } from 'rxjs';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Image } from '@wcpos/components/image';
 import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, type QueryHandle, useRecordField } from '@wcpos/query';
@@ -80,63 +81,68 @@ export function ProductRow({
 		/>
 	);
 	return (
-		<Pressable
+		<ListRow
 			testID={`products-row-${record.uuid}`}
-			accessibilityRole="button"
-			accessibilityState={{
-				disabled: !variable && !editable,
-				...(variable ? { expanded: !!expanded } : {}),
-			}}
-			onPress={() => {
-				if (variable) onToggle?.();
-				else if (editable)
-					router.push(
-						variation
-							? {
-									pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-									params: { variationId: record.uuid },
-								}
-							: {
-									pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-									params: { productId: record.uuid },
-								}
-					);
-			}}
-			className="border-border active:bg-muted min-h-14 flex-row items-center gap-3 border-b px-3"
-		>
-			<Image
-				source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
-				recyclingKey={record.uuid}
-				className="size-10 rounded"
-			/>
-			<View className="min-w-0 flex-1">
-				<Text decodeHtml numberOfLines={1}>
-					{variation ? resolveVariationName(product) : product.name}
-				</Text>
-				<Text className="text-muted-foreground text-sm" numberOfLines={1}>
-					{product.sku}
-				</Text>
-			</View>
-			<View className="items-end gap-1 tabular-nums">
-				<View className="flex-row items-center gap-1">
-					{price(range?.min ?? product.price ?? '')}
-					{range && range.min !== range.max && (
-						<>
-							<Text>–</Text>
-							{price(range.max)}
-						</>
-					)}
-				</View>
-				<ProductStockBadge
-					status={displayStockStatus(product)}
-					quantity={product.manage_stock === true ? product.stock_quantity : undefined}
+			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
+			// lost the expanded state of a variable product.
+			aria-expanded={variable ? !!expanded : undefined}
+			// A row the cashier cannot open is inert, as the customers and coupons rows are.
+			onPress={
+				variable
+					? onToggle
+					: editable
+						? () =>
+								router.push(
+									variation
+										? {
+												pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+												params: { variationId: record.uuid },
+											}
+										: {
+												pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+												params: { productId: record.uuid },
+											}
+								)
+						: undefined
+			}
+			leading={
+				<Image
+					source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
+					recyclingKey={record.uuid}
+					className="size-10 rounded"
 				/>
-			</View>
-			<Icon
-				name={variable ? (expanded ? 'chevronUp' : 'chevronDown') : 'chevronRight'}
-				className="text-muted-foreground"
-			/>
-		</Pressable>
+			}
+			trailing={
+				<>
+					<View className="items-end gap-1 tabular-nums">
+						<View className="flex-row items-center gap-1">
+							{price(range?.min ?? product.price ?? '')}
+							{range && range.min !== range.max && (
+								<>
+									<Text>–</Text>
+									{price(range.max)}
+								</>
+							)}
+						</View>
+						<ProductStockBadge
+							status={displayStockStatus(product)}
+							quantity={product.manage_stock === true ? product.stock_quantity : undefined}
+						/>
+					</View>
+					<Icon
+						name={variable ? (expanded ? 'chevronUp' : 'chevronDown') : 'chevronRight'}
+						className="text-muted-foreground"
+					/>
+				</>
+			}
+		>
+			<Text decodeHtml numberOfLines={1}>
+				{variation ? resolveVariationName(product) : product.name}
+			</Text>
+			<Text className="text-muted-foreground text-sm" numberOfLines={1}>
+				{product.sku}
+			</Text>
+		</ListRow>
 	);
 }
 

@@ -16,10 +16,9 @@ import { useRegisterSurface } from '../../../../extensions/commands/use-register
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useEngineRecord } from '../../hooks/use-engine-document';
-import { CheckoutLedger } from './checkout-ledger';
+import { StilledCart } from './stilled-cart';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';
-import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { useVoidOrder } from '../hooks/use-void-order';
 import { CartTable } from './table';
 import { EmptyCart } from './empty-cart';
@@ -33,6 +32,7 @@ import { RegisterCount } from './register-count';
 import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
+import { SessionHoldBanner } from '../../components/session-hold-banner';
 import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
 import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';
@@ -70,11 +70,6 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
-	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
-	// useOrderTotals below all mount useCartLines — and settlement state must not be
-	// duplicated across them. Keep it mounted in checkout too: swapping the cart
-	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
-	useCartSettlement();
 	const { status: bindingStatus } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
@@ -172,6 +167,7 @@ function CartColumn({
 	return (
 		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
+			<SessionHoldBanner />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
@@ -206,7 +202,7 @@ function CartColumn({
 							<ReceiptLedger uuid={receiptOrderUuid} />
 						</React.Suspense>
 					) : isColumn && !isNewOrder && stage === 'checkout' ? (
-						<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
+						<StilledCart order={currentOrderRecord as EngineRecord<'orders'>} />
 					) : isNewOrder ? (
 						<View className="flex-1">
 							<ErrorBoundary>
@@ -216,7 +212,7 @@ function CartColumn({
 							{overdue && (
 								<Button
 									testID="checkout-close-register"
-									className="min-h-14"
+									size="lg"
 									onPress={() => setPanelOpen(true)}
 								>
 									{t('register.close_register')}
@@ -271,5 +267,5 @@ function ReceiptLedger({ uuid }: { uuid: string }) {
 	const order = useObservableSuspense(resource);
 	// The receipt stage in the other column drops the stale selection; render nothing meanwhile.
 	if (!order) return null;
-	return <CheckoutLedger order={order} />;
+	return <StilledCart order={order} />;
 }

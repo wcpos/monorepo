@@ -1,9 +1,11 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
+import { decode } from 'html-entities';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Input } from '@wcpos/components/input';
@@ -161,22 +163,23 @@ function TermChips<C extends 'tags' | 'brands'>({
 	ids: number[];
 	onRemove: (id: number) => void;
 }) {
+	const t = useT();
 	const records = useObservableSuspense(resource);
 	return (
 		<HStack className="flex-wrap">
 			{ids.map((id) => {
 				const record = records.find((entry) => entry.payload.id === id);
 				return (
-					<Button
+					<Chip
 						key={id}
-						variant="muted"
-						size="xs"
-						rightIcon="xmark"
-						testID={`quick-filter-term-remove-${id}`}
+						label={decode(record?.payload.name ?? String(id))}
+						// The whole chip removes the term, as the button it replaced did; the label
+						// half is never a focusable button that does nothing.
 						onPress={() => onRemove(id)}
-					>
-						<ButtonText decodeHtml>{record?.payload.name ?? String(id)}</ButtonText>
-					</Button>
+						onClear={() => onRemove(id)}
+						clearLabel={t('common.remove')}
+						clearTestID={`quick-filter-term-remove-${id}`}
+					/>
 				);
 			})}
 		</HStack>
@@ -422,6 +425,7 @@ export function QuickFilterEditor({
 							/>
 							<IconButton
 								name="xmark"
+								accessibilityLabel={t('common.remove')}
 								testID={`quick-filter-condition-remove-${index}`}
 								onPress={() =>
 									setDraft((value) => ({

@@ -5,7 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { toMinor } from '@wcpos/order-math';
+import { isFailedPaymentStatus, isSettledPaymentRow, toMinor } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { statusLabelKey, statusVariant } from './labels';
@@ -103,7 +103,7 @@ export function BalanceHeadline({
 
 	return (
 		<VStack space="xs">
-			<Text className="text-muted-foreground text-xs tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs tracking-wide uppercase">
 				{partPaid ? t('pos_checkout.remaining') : t('common.total')}
 			</Text>
 			<Text
@@ -128,9 +128,7 @@ export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const firstPending = view.rows.find((row) => row.status === 'pending');
-	const settled = view.rows.filter(
-		(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-	);
+	const settled = view.rows.filter(isSettledPaymentRow);
 	const lastTime = settled.at(-1)?.events?.[0]?.t;
 
 	if (view.rows.length === 0) {
@@ -162,7 +160,7 @@ export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['
 					<View className="items-center gap-1 pt-3">
 						<View
 							testID={`checkout-leg-dot-${row.id}`}
-							className={`size-2 rounded-full ${row.status === 'captured' ? 'bg-success' : row.status === 'failed' || row.status === 'voided' ? 'bg-destructive' : 'bg-warning'}`}
+							className={`size-2 rounded-full ${row.status === 'captured' ? 'bg-success' : isFailedPaymentStatus(row.status) ? 'bg-destructive' : 'bg-warning'}`}
 						/>
 						<View className="bg-border w-px flex-1" />
 					</View>

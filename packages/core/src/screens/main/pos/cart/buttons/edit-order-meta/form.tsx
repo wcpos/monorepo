@@ -42,8 +42,8 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { useDocField } from '@wcpos/query';
-import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
+import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
+import { NO_STORE, PROTECTED_ORDER_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -60,6 +60,7 @@ import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
+import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
@@ -132,7 +133,12 @@ export function EditOrderMetaForm({
 			return false;
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
-		const written = !!(await localPatch({ document: order, data: patch }));
+		const written = !!(await enqueueOrderMutation(order.uuid, () =>
+			localPatch({
+				document: order,
+				changes: () => patch,
+			})
+		));
 		if (written && close) closeDialog();
 		return written;
 	}
@@ -146,7 +152,7 @@ export function EditOrderMetaForm({
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, ...fields } = pending;
-		const patch = {
+		const patch = () => ({
 			...fields,
 			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
 				userId: cashier_id,
@@ -154,27 +160,37 @@ export function EditOrderMetaForm({
 				registerId: identity.registerId,
 				tillId: identity.tillId,
 			}),
-		};
+		});
 		setLoading(true);
 		let patched = false;
 		try {
-			if (!(await localPatch({ document: order, data: patch }))) return;
+			if (
+				!(await enqueueOrderMutation(order.uuid, () =>
+					localPatch({ document: order, changes: patch })
+				))
+			)
+				return;
 			patched = true;
 			await pushDocument(order);
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
 			if (
-				!['pos-open', 'pos-partial', 'pending'].includes(patch.status) ||
+				!(OPEN_ORDER_STATUSES as readonly string[]).includes(fields.status) ||
 				cashier_id !== String(cashierID)
 			) {
 				setCurrentOrderID('');
 			}
 		} catch (error) {
 			if (patched) {
-				const reverted = await localPatch({
-					document: order,
-					data: { status: previous.status, meta_data: previous.meta_data },
-				});
+				const reverted = await enqueueOrderMutation(order.uuid, () =>
+					localPatch({
+						document: order,
+						changes: () => ({
+							status: previous.status,
+							meta_data: previous.meta_data ?? [],
+						}),
+					})
+				);
 				// The failed send may still land: a timed-out outcome is unknown and a queued
 				// mutation is retried. Open orders only reach the server on an explicit push,
 				// so the revert is pushed too — the last write wins and the server ends up
@@ -326,7 +342,7 @@ export function EditOrderMetaForm({
 						)}
 					/>
 				</HStack>
-				<MetaDataForm />
+				<MetaDataForm hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.cancel')}</DialogClose>

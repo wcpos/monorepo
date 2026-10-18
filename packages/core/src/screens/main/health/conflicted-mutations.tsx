@@ -13,8 +13,17 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -24,7 +33,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../contexts/translations';
 import { FIX_ROUTES } from './attention-panel';
-import { Callout, Pill } from './components';
+import { Callout } from './components';
 import { useManualSync } from './use-manual-sync';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type UnresolvedConflict, useUnresolvedConflicts } from './use-unresolved-conflicts';
@@ -168,6 +177,11 @@ export function ConflictedMutationsPanel() {
 			<VStack className="gap-0">
 				{rows.map((row) => {
 					const fixRoute = FIX_ROUTES[row.collectionName]?.(row.recordId);
+					// Discarding the local change loses it (or the record): that one goes in the row's ⋮
+					// menu. Taking the server's version is a second constructive choice beside Resend, so
+					// both are outline and the row has no primary.
+					const discards =
+						row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision';
 					return (
 						<HStack
 							key={row.mutationId}
@@ -180,9 +194,9 @@ export function ConflictedMutationsPanel() {
 									{/* A held DELETE must never look like a held edit: resending it
 									    destroys the record on the server (#1093 audit, Q2). */}
 									{row.operation === 'delete' ? (
-										<Pill tone="destructive" testID={`db-conflicted-delete-${row.mutationId}`}>
+										<Badge variant="destructive" testID={`db-conflicted-delete-${row.mutationId}`}>
 											{t('health.database.conflicted.delete_pill')}
-										</Pill>
+										</Badge>
 									) : null}
 								</HStack>
 								<Text className="text-muted-foreground text-xs">
@@ -207,7 +221,7 @@ export function ConflictedMutationsPanel() {
 							</View>
 							<HStack className="items-center gap-2">
 								<Button
-									variant="outline"
+									variant={discards ? 'default' : 'outline'}
 									size="sm"
 									testID={`db-conflicted-resend-${row.mutationId}`}
 									disabled={busyId !== null || syncing}
@@ -219,28 +233,48 @@ export function ConflictedMutationsPanel() {
 								>
 									<ButtonText>{t('health.database.conflicted.resend')}</ButtonText>
 								</Button>
-								<Button
-									variant="ghost-destructive"
-									size="sm"
-									testID={`db-conflicted-discard-${row.mutationId}`}
-									disabled={busyId !== null || row.residentUnknown}
-									onPress={() => setDiscarding(row)}
-								>
-									<ButtonText>
-										{row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision'
-											? t('health.database.conflicted.discard_change')
-											: t('health.database.conflicted.use_server')}
-									</ButtonText>
-								</Button>
+								{discards ? null : (
+									<Button
+										variant="outline"
+										size="sm"
+										testID={`db-conflicted-discard-${row.mutationId}`}
+										disabled={busyId !== null || row.residentUnknown}
+										onPress={() => setDiscarding(row)}
+									>
+										<ButtonText>{t('health.database.conflicted.use_server')}</ButtonText>
+									</Button>
+								)}
 								{fixRoute ? (
 									<Button
-										variant="ghost-quiet"
+										variant="ghost"
 										size="sm"
 										testID={`db-conflicted-open-${row.mutationId}`}
 										onPress={() => router.push(fixRoute)}
 									>
 										<ButtonText>{t('health.database.conflicted.open')}</ButtonText>
 									</Button>
+								) : null}
+								{discards ? (
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<IconButton
+												name="ellipsisVertical"
+												testID={`db-conflicted-menu-${row.mutationId}`}
+												accessibilityLabel={t('common.actions')}
+											/>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem
+												variant="destructive"
+												testID={`db-conflicted-discard-${row.mutationId}`}
+												disabled={busyId !== null || row.residentUnknown}
+												onPress={() => setDiscarding(row)}
+											>
+												<Icon name="trash" className="fill-destructive" />
+												<Text>{t('health.database.conflicted.discard_change')}</Text>
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
 								) : null}
 							</HStack>
 						</HStack>

@@ -4,13 +4,13 @@ import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
 import { subDays } from 'date-fns/subDays';
 import { useObservableState } from 'observable-hooks';
-import { map, of } from 'rxjs';
+import { map } from 'rxjs';
 import get from 'lodash/get';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 import { log } from '@wcpos/utils/logger';
-import type { ClosureRow } from '@wcpos/database';
+import { type ClosureRow, observeClosures, refreshClosureRow } from '@wcpos/query/register-session';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -18,7 +18,6 @@ import { useAppInfo } from '../../../../hooks/use-app-info';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
 
 export type ClosureScope = {
 	from: string;
@@ -87,12 +86,11 @@ export function normalizeClosureRow(
 // Match the REST list default; a full final page costs one extra read, not a totals query.
 const PAGE_SIZE = 50;
 export function useClosureRows(requested: ClosureScope) {
-	const { store } = useStoreSession();
+	const { store, storeDB } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const collection = useClosureCollection();
 	const { timezone, presets } = useStoreDay(license?.isPro ? requested.storeId : store.id);
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
 	const scope = license?.isPro
@@ -118,14 +116,12 @@ export function useClosureRows(requested: ClosureScope) {
 	if (page.key !== key || (online && !wasOnline))
 		setPage({ key, rows: [], next: 1, target: 0, more: true, status: 'idle' });
 	const source = React.useMemo(
-		() => (collection ? collection.find().$.pipe(map((rows) => ({ collection, rows }))) : of(null)),
-		[collection]
+		() => observeClosures(storeDB).pipe(map((rows) => (rows === null ? null : { storeDB, rows }))),
+		[storeDB]
 	);
 	const observed = useObservableState(source, null);
 	const local = selectClosureRows(
-		observed?.collection === collection
-			? (observed?.rows.map((row) => row.toMutableJSON()) ?? [])
-			: [],
+		observed?.storeDB === storeDB ? (observed?.rows ?? []) : [],
 		scope,
 		timezone
 	);
@@ -228,12 +224,7 @@ export function useClosureRows(requested: ClosureScope) {
 			);
 			// A failed local patch must not stop the authoritative detail read that follows.
 			try {
-				const local = await collection
-					?.findOne({
-						selector: { $or: [{ id: identity(row) }, { server_closure_id: identity(row) }] },
-					})
-					.exec();
-				await local?.incrementalPatch({ corrections_count: updated.corrections_count });
+				await refreshClosureRow(storeDB, identity(row), updated.corrections_count);
 			} catch (error) {
 				log.warn('Closure row could not be patched locally', { context: { error: String(error) } });
 			}

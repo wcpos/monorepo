@@ -45,6 +45,7 @@ const engine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	readResidentMoneyEpoch: () => 0,
 	useQueryRuntime: () => ({ engine }),
 }));
 
@@ -371,7 +372,7 @@ describe('lifecycle', () => {
 
 	/**
 	 * This inverts the pre-ADR-0032 rule, which retired the alert on a later clean
-	 * ack. Under ADR 0032 a held divergence also tells `useCartSettlement` that
+	 * ack. Under ADR 0032 a held divergence also tells the settlement coordinator that
 	 * this order's money belongs to the server, so the POS stops asserting its
 	 * own — which makes every subsequent ack clean BY CONSTRUCTION. Retiring on
 	 * one would hand the money straight back to the POS, it would re-assert, the

@@ -1,10 +1,14 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
+import { decode } from 'html-entities';
+
 import * as Alert from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import {
 	Dialog,
@@ -162,7 +166,6 @@ export function CardReadersSettings() {
 					<VStack className="gap-1">
 						<Button
 							variant={readerHeld ? 'outline' : 'default'}
-							className="h-14"
 							leftIcon="plus"
 							disabled={actions.working !== null}
 							onPress={() =>
@@ -189,26 +192,26 @@ export function CardReadersSettings() {
 								<DialogTitle>{t('settings.card_readers.connect_with')}</DialogTitle>
 							</DialogHeader>
 							<VStack className="gap-1 px-4">
-								{devices.map((method) => (
-									<Button
-										key={method.id}
-										variant="ghost"
-										className="h-14 flex-row justify-start gap-3 px-1"
-										onPress={() => {
-											setPicking(false);
-											void actions.start(method);
-										}}
-										testID={`card-readers-connect-${method.id}`}
-									>
-										<View className="bg-muted size-10 items-center justify-center rounded-lg">
-											<Icon name="creditCard" variant="muted" size="lg" />
-										</View>
-										<Text className="flex-1 text-lg font-semibold" numberOfLines={1} decodeHtml>
-											{method.title}
-										</Text>
-										<Icon name="chevronRight" variant="muted" />
-									</Button>
-								))}
+								<MenuRowGroup
+									accessibilityLabel={t('settings.card_readers.connect_with')}
+									className="gap-1"
+								>
+									{devices.map((method) => (
+										<MenuRow
+											key={method.id}
+											choice
+											selected={false}
+											onPress={() => {
+												setPicking(false);
+												void actions.start(method);
+											}}
+											testID={`card-readers-connect-${method.id}`}
+											leading={<Icon name="creditCard" variant="muted" size="lg" />}
+											label={<MenuRow.Label decodeHtml>{method.title}</MenuRow.Label>}
+											trailing={<Icon name="chevronRight" variant="muted" />}
+										/>
+									))}
+								</MenuRowGroup>
 								<DialogClose className="mt-2 h-14" testID="card-readers-provider-cancel">
 									<ButtonText>{t('common.cancel')}</ButtonText>
 								</DialogClose>
@@ -279,13 +282,9 @@ function TapToPayRow({
 								? t('settings.card_readers.tap_to_pay_android')
 								: t('settings.card_readers.tap_to_pay')}
 						</Text>
-						<Text
-							className="text-muted-foreground bg-muted max-w-32 overflow-hidden rounded-full px-2 py-0.5 text-xs"
-							numberOfLines={1}
-							decodeHtml
-						>
-							{method.title}
-						</Text>
+						<Badge variant="muted" className="max-w-32">
+							{decode(method.title)}
+						</Badge>
 					</HStack>
 					{/* One line: not set up, and who can set it up when this user cannot. */}
 					<Text

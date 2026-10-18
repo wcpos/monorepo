@@ -1,13 +1,36 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { Sites } from './sites';
 import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 
 let mockSites: unknown[] = [];
 let mockCompatible = true;
+const mockAccordion: { onValueChange?: (value?: string) => void } = {};
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/query/user-db', () => ({ removeSite: jest.fn() }));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: () => mockSites }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
@@ -15,8 +38,8 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => mockCreateTestT(),
 }));
-jest.mock('../../../hooks/use-version-check', () => ({
-	useVersionCheck: () => ({ wcposVersionPass: mockCompatible }),
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ compatibility: { wcposVersionPass: mockCompatible } }),
 }));
 jest.mock('../../../hooks/use-site-info', () => ({ useSiteInfo: () => {} }));
 jest.mock('../../../hooks/use-wcpos-auth/redirect-result', () => ({
@@ -32,9 +55,18 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/accordion', () => ({
-	Accordion: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	Accordion: ({
+		children,
+		value,
+		onValueChange,
+	}: React.PropsWithChildren<{ value?: string; onValueChange?: (value?: string) => void }>) => {
+		mockAccordion.onValueChange = onValueChange;
+		return <div data-value={value}>{children}</div>;
+	},
 	AccordionItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AccordionTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AccordionTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
 	AccordionContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/card', () => ({
@@ -103,3 +135,19 @@ it.each([[a], [a, b]])(
 		);
 	}
 );
+it.each([[a], [a, b]])('folds every site to its header while collapsed: %j', (...sites) => {
+	mockCompatible = true;
+	mockSites = sites;
+	const onExpand = jest.fn();
+	const { container } = render(<Sites user={user} collapsed onExpand={onExpand} />);
+	expect(container.querySelector('[data-value]')?.getAttribute('data-value')).toBe('');
+	expect(screen.queryByText('Your sites') === null).toBe(sites.length === 1);
+	// Each folded header is the stable way back in for an automated flow.
+	sites.forEach((site) =>
+		expect(screen.getByTestId(`auth-site-trigger-${site.uuid}`)).toBeTruthy()
+	);
+	act(() => mockAccordion.onValueChange?.(''));
+	expect(onExpand).not.toHaveBeenCalled();
+	act(() => mockAccordion.onValueChange?.('a'));
+	expect(onExpand).toHaveBeenCalledTimes(1);
+});

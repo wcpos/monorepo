@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { useQueryRuntime } from './provider';
 
 import type { Observable } from 'rxjs';
-import type { RxCollection, RxDatabase } from 'rxdb';
+import type { RxCollection } from 'rxdb';
 
 /**
  * A reset announcement. The plugin emits the replacement `RxCollection` itself,
@@ -16,7 +16,7 @@ import type { RxCollection, RxDatabase } from 'rxdb';
 export type LocalCollectionReset = { name: string; database?: unknown };
 
 /** `reset$` is contributed by the reset-collection plugin; absent on plain databases. */
-export type LocalDatabaseWithReset = RxDatabase & {
+export type LocalDatabaseWithReset = {
 	collections: Record<string, unknown>;
 	reset$?: Observable<LocalCollectionReset | undefined>;
 };
@@ -60,21 +60,33 @@ function ownReplacement(
  * move B's mounted reader onto A's collection.
  */
 export function useFollowedCollection$<T = Record<string, unknown>>(
-	database: LocalDatabaseWithReset,
+	database: LocalDatabaseWithReset | null | undefined,
 	collectionName: string
 ): Observable<RxCollection<T> | undefined> {
 	const localDB = database;
-	const current = localDB.collections[collectionName] as RxCollection<T> | undefined;
+	const current = localDB?.collections[collectionName] as RxCollection<T> | undefined;
 
-	return React.useMemo(() => {
-		// `defer` re-reads `collections[name]` at SUBSCRIBE time rather than
-		// closing over the render-time snapshot: a subscriber that arrives after
-		// an already-delivered reset (`reset$` is a plain Subject and does not
-		// replay) would otherwise be handed the collection that reset removed.
-		const currentAtSubscribe$ = defer(() =>
-			of(localDB.collections[collectionName] as RxCollection<T> | undefined)
-		);
-		return localDB.reset$
+	// Re-rendered replacements must also invalidate downstream shared streams.
+	return React.useMemo(
+		() => observeFollowedCollection<T>(database, collectionName),
+		[database, collectionName, current]
+	);
+}
+
+/** Internal observable acquisition shared by named store-local reads and the React adapter. */
+export function observeFollowedCollection<T>(
+	localDB: LocalDatabaseWithReset | null | undefined,
+	collectionName: string
+): Observable<RxCollection<T> | undefined> {
+	// `defer` re-reads `collections[name]` at SUBSCRIBE time rather than
+	// closing over the render-time snapshot: a subscriber that arrives after
+	// an already-delivered reset (`reset$` is a plain Subject and does not
+	// replay) would otherwise be handed the collection that reset removed.
+	const currentAtSubscribe$ = defer(() =>
+		of(localDB?.collections[collectionName] as RxCollection<T> | undefined)
+	);
+	return (
+		localDB?.reset$
 			? // `merge`, not `concat`: both are subscribed immediately, so a reset
 				// landing in the gap between the initial emission and the live
 				// subscription cannot be dropped.
@@ -84,11 +96,8 @@ export function useFollowedCollection$<T = Record<string, unknown>>(
 						filter((replacement) => ownReplacement(replacement, collectionName, localDB))
 					)
 				)
-			: currentAtSubscribe$;
-		// `current` is a dependency on purpose: a replacement swapped into
-		// `collections` alongside a re-render must produce a NEW observable so
-		// downstream `shareReplay` consumers re-subscribe and re-read.
-	}, [localDB, collectionName, current]) as Observable<RxCollection<T> | undefined>;
+			: currentAtSubscribe$
+	) as Observable<RxCollection<T> | undefined>;
 }
 
 /**
@@ -106,12 +115,10 @@ export function useFollowedCollection$<T = Record<string, unknown>>(
  *
  * So the base is read during render and a reset only OVERRIDES it, with the
  * override discarded during render once it no longer belongs to the database on
- * screen. This is the shape `useReceiptEmailQueueCollection` arrived at for the
- * same reason; the owner check is shared with the observable form rather than
- * restated.
+ * screen. The owner check is shared with the observable form rather than restated.
  */
 export function useFollowedCollection<T = Record<string, unknown>>(
-	database: LocalDatabaseWithReset,
+	database: LocalDatabaseWithReset | null | undefined,
 	collectionName: string
 ): RxCollection<T> | undefined {
 	const [swap, setSwap] = React.useState<{
@@ -122,7 +129,7 @@ export function useFollowedCollection<T = Record<string, unknown>>(
 	React.useEffect(() => {
 		// Effect as last resort: `reset$` is an imperative RxDB notification with
 		// no render-derivable value.
-		const subscription = database.reset$?.subscribe((replacement) => {
+		const subscription = database?.reset$?.subscribe((replacement) => {
 			if (!ownReplacement(replacement, collectionName, database)) return;
 			setSwap({ database, collection: replacement as unknown as RxCollection<T> });
 		});
@@ -130,7 +137,7 @@ export function useFollowedCollection<T = Record<string, unknown>>(
 	}, [database, collectionName]);
 
 	if (swap && swap.database === database) return swap.collection;
-	return database.collections[collectionName] as RxCollection<T> | undefined;
+	return database?.collections[collectionName] as RxCollection<T> | undefined;
 }
 
 /**

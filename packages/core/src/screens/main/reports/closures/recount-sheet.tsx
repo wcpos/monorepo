@@ -9,12 +9,12 @@ import type { ClosureRow } from '@wcpos/database';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
+import { mintUuid } from '@wcpos/query/register-session';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
-import { mintUuid } from '../../../../services/register/register-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { ApprovalFields } from '../../pos/cart/approve-sheet';
 import { RegisterAmount } from '../../pos/cart/movement-sheet';
@@ -143,7 +143,6 @@ export function RecountSheet({
 					<Button
 						testID="recount-denominations"
 						variant="ghost"
-						className="min-h-12"
 						onPress={() => setNotesOpen(!notesOpen)}
 					>
 						{t('register.count_by_denominations')}
@@ -193,13 +192,7 @@ export function RecountSheet({
 						{t('reports.recount_reason_too_long', { limit: RECOUNT_REASON_LIMIT })}
 					</Text>
 				)}
-				<Button
-					testID="recount-save"
-					className="min-h-14"
-					loading={busy}
-					disabled={invalid}
-					onPress={save}
-				>
+				<Button testID="recount-save" loading={busy} disabled={invalid} onPress={save}>
 					{t('reports.recount_save')}
 				</Button>
 			</DialogContent>

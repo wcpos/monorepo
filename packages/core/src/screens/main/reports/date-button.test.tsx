@@ -31,7 +31,16 @@ jest.mock('./hero', () => ({
 		<div data-testid="reports-hero-loading">{title}</div>
 	),
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
+	Text: require('react-native').Text,
+}));
+// The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
 	Button: ({
@@ -172,8 +181,29 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
-jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
-jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
+jest.mock('../components/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+// The page bar has its own suites; here it only seats the scope and the phone crumb.
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({
+		testID,
+		titleSlot,
+		back,
+	}: {
+		testID: string;
+		titleSlot?: React.ReactNode;
+		back?: { label: string; onPress: () => void; testID?: string };
+	}) => (
+		<div data-testid={testID}>
+			{back && (
+				<button data-testid={back.testID} data-crumb="phone" onClick={back.onPress}>
+					{back.label}
+				</button>
+			)}
+			<div data-testid={`${testID}-title-slot`}>{titleSlot}</div>
+		</div>
+	),
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
@@ -228,6 +258,7 @@ const change = jest.fn();
 const room = jest.fn();
 const scope: ClosureScope = { from: '2026-09-16', to: '2026-09-16', storeId: 1, registerId: 'r' };
 beforeEach(() => {
+	mockScreenSize = 'sm';
 	jest.clearAllMocks();
 	isPro = false;
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
@@ -354,8 +385,10 @@ it.each([
 // Revert: omit minDate/maxDate on the custom calendar, or ignore the closer selection.
 it('caps custom history and applies the cashier filter', () => {
 	isPro = true;
+	mockScreenSize = 'md';
 	draw();
 	fireEvent.click(screen.getByTestId('reports-period'));
+	expect(screen.getByTestId('reports-period-today').closest('[role="radiogroup"]')).not.toBeNull();
 	const props = calendar.mock.calls.at(-1)?.[0];
 	expect(props.maxDate).toBe('2026-09-16');
 	expect(props.minDate).toBe('2026-06-16');

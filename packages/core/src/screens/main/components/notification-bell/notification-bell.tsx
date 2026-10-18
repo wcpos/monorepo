@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Badge } from '@wcpos/components/badge';
-import { Text } from '@wcpos/components/text';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { NavItem } from '@wcpos/components/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
 import { useNovuNotificationsSummary } from '../../../../contexts/novu';
@@ -40,23 +40,22 @@ export function NotificationBell({
 		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			{showLabel ? (
 				<PopoverTrigger asChild>
-					<Pressable
+					<NavItem
+						size="drawer"
+						className="mx-2"
 						testID={testID}
-						className={`web:hover:bg-white/10 h-12 flex-row items-center gap-3 border-x-4 border-transparent px-3 active:bg-white/10 ${showLabel ? '' : 'justify-center'}`}
-						accessibilityRole="button"
 						accessibilityLabel={t('common.notifications')}
-					>
-						<View>
-							<Icon name="bell" size="xl" className="text-sidebar-foreground" />
-							{/* Always mounted: the badge has to be there to show the first one arrive. */}
-							<View className="absolute -top-1 -right-0.5">
-								<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+						label={t('common.notifications')}
+						icon={
+							<View>
+								<Icon name="bell" size="xl" className="text-sidebar-foreground" />
+								{/* Always mounted: the badge has to be there to show the first one arrive. */}
+								<View className="absolute -top-1 -right-0.5">
+									<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+								</View>
 							</View>
-						</View>
-						{showLabel && (
-							<Text className="text-sidebar-foreground pr-2">{t('common.notifications')}</Text>
-						)}
-					</Pressable>
+						}
+					/>
 				</PopoverTrigger>
 			) : (
 				<View>

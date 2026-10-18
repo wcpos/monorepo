@@ -10,6 +10,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import {
 	createActionContext,
@@ -35,7 +36,6 @@ import {
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 import { rememberedReaders } from './remembered-readers';
@@ -47,8 +47,8 @@ import type {
 
 // The writer re-runs `requireOpenSession` (the pre-action write) after the gate's read; the
 // fixtures carry no session collection; both reads share the happy-path session id.
-jest.mock('../../../../../services/register-session/session-store', () => ({
-	...jest.requireActual('../../../../../services/register-session/session-store'),
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
 	requireOpenSession: jest.fn(async (_sessions: unknown, _registerId: unknown, enabled: boolean) =>
 		enabled ? mockSessionId : null
 	),
@@ -334,6 +334,8 @@ jest.mock('@wcpos/utils/logger', () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
 		warn: (...args: unknown[]) => mockWarn(...args),
 		error: (...args: unknown[]) => mockError(...args),
+		// Recovered arcs (a refresh that timed out or failed) log at debug; the hook must not crash on them.
+		debug: () => undefined,
 	}),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
@@ -2350,14 +2352,6 @@ it('resets a failed manual tender without logging a second error or toast', asyn
 
 let mockSessionsOn = false;
 let mockSessionId: string | null = 'session';
-jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => ({
-		findOne: () => ({
-			exec: async () =>
-				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
-		}),
-	}),
-}));
 beforeEach(() => {
 	mockSessionsOn = false;
 	mockSessionId = 'session';
@@ -2652,6 +2646,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				source: 'gateway',
 				actor: { id: '7', name: 'Pat' },
 				settledOrderStatus: 'pending',
+				settledOrderGateway: 'wcpos_email_invoice',
 			});
 			// The stale stamp goes with the mirror; no row is minted.
 			expect(mockManualMirror).toHaveBeenCalledWith(
@@ -3530,9 +3525,9 @@ it("writes the session's pre-action reset in the handler, after the gate's read 
 	mockMethods = [cash];
 	mockPayload = { id: 42, total: '92.95', meta_data: [] };
 	mockBlockIfDegraded.mockReturnValue(false);
-	const { requireOpenSession } = jest.requireMock(
-		'../../../../../services/register-session/session-store'
-	) as { requireOpenSession: jest.Mock };
+	const { requireOpenSession } = jest.requireMock('@wcpos/query/register-session') as {
+		requireOpenSession: jest.Mock;
+	};
 	requireOpenSession.mockClear();
 	const { result } = renderHook(() => useTenderFlow(order));
 	act(() => result.current.pickMethod('pos_cash'));
@@ -3566,9 +3561,9 @@ it('a session closed between the gate and the write refuses with the open-regist
 	mockMethods = [cash];
 	mockPayload = { id: 42, total: '92.95', meta_data: [] };
 	mockBlockIfDegraded.mockReturnValue(false);
-	const { requireOpenSession } = jest.requireMock(
-		'../../../../../services/register-session/session-store'
-	) as { requireOpenSession: jest.Mock };
+	const { requireOpenSession } = jest.requireMock('@wcpos/query/register-session') as {
+		requireOpenSession: jest.Mock;
+	};
 	requireOpenSession.mockImplementationOnce(async () => {
 		throw new RegisterSessionRequiredError();
 	});
@@ -3597,9 +3592,9 @@ it('a session replaced between the gate and the write refuses with the open-regi
 	mockMethods = [cash];
 	mockPayload = { id: 42, total: '92.95', meta_data: [] };
 	mockBlockIfDegraded.mockReturnValue(false);
-	const { requireOpenSession } = jest.requireMock(
-		'../../../../../services/register-session/session-store'
-	) as { requireOpenSession: jest.Mock };
+	const { requireOpenSession } = jest.requireMock('@wcpos/query/register-session') as {
+		requireOpenSession: jest.Mock;
+	};
 	requireOpenSession.mockResolvedValueOnce('replacement-session');
 	const { result } = renderHook(() => useTenderFlow(order));
 	act(() => result.current.pickMethod('pos_cash'));

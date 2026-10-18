@@ -1,19 +1,17 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Redirect, usePathname, useRouter } from 'expo-router';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon, type IconName } from '@wcpos/components/icon';
-import { usePointer } from '@wcpos/components/lib/device';
-import { cn } from '@wcpos/components/lib/utils';
-import { Text } from '@wcpos/components/text';
+import { type IconName } from '@wcpos/components/icon';
+import { NavItem } from '@wcpos/components/nav-item';
 
 import { useTheme } from '../../../../contexts/theme';
 import { ManagementBar } from '../management-bar';
 
 import type { Href } from 'expo-router';
+
+export { AreaPage, type AreaPageMode } from './area-page';
 
 export type NavigationAreaItem = {
 	href: Extract<Href, string>;
@@ -22,14 +20,6 @@ export type NavigationAreaItem = {
 	icon?: IconName;
 	badge?: React.ReactNode;
 };
-
-/**
- * The surface the area sits on. An area that opted into the page bar (`barTestID`) is on
- * `bg-background`, so a selected row lifts onto `bg-card`; an area that did not (Health, until
- * its own switch) is still on `bg-card`, where that lift is invisible, so it keeps the tinted
- * row it had. The index route reads it too, so both surfaces stay consistent per area.
- */
-const NavigationSurfaceContext = React.createContext<'background' | 'card'>('card');
 
 function NavigationItems({
 	items,
@@ -40,59 +30,19 @@ function NavigationItems({
 }) {
 	const pathname = usePathname();
 	const router = useRouter();
-	const pointer = usePointer();
-	const surface = React.useContext(NavigationSurfaceContext);
-	const lifted = surface === 'background';
 
-	return items.map((item) => {
-		const selected = pathname === item.href;
-
-		return (
-			<Pressable
-				key={item.href}
-				accessibilityRole="button"
-				testID={item.testID}
-				onPress={() => router.push(item.href)}
-				accessibilityState={{ selected }}
-				aria-selected={selected}
-				// `data-surface` on web: Uniwind compiles the classes away, so tests read the surface here.
-				{...({ dataSet: { surface } } as object)}
-				className={cn(
-					'h-10 w-full flex-row items-center gap-3 rounded-md px-3',
-					// The card surface keeps the ghost button's exact treatment it had before.
-					lifted ? 'active:bg-card' : 'active:bg-muted web:hover:bg-muted',
-					lifted && pointer === 'fine' && 'web:hover:bg-card',
-					selected && (lifted ? 'bg-card' : 'bg-primary/10 web:hover:bg-primary/10')
-				)}
-			>
-				{item.icon ? (
-					<Icon
-						name={item.icon}
-						size="sm"
-						className={
-							selected ? (lifted ? 'text-foreground' : 'text-primary') : 'text-muted-foreground'
-						}
-					/>
-				) : null}
-				<Text
-					className={cn(
-						'flex-1 text-sm',
-						selected
-							? lifted
-								? 'text-foreground'
-								: 'text-primary font-semibold'
-							: lifted
-								? 'text-muted-foreground'
-								: 'text-foreground'
-					)}
-				>
-					{item.label}
-				</Text>
-				{item.badge ? <View className="relative h-5 w-5">{item.badge}</View> : null}
-				{showChevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
-			</Pressable>
-		);
-	});
+	return items.map((item) => (
+		<NavItem
+			key={item.href}
+			testID={item.testID}
+			selected={pathname === item.href}
+			icon={item.icon}
+			label={item.label}
+			badge={item.badge}
+			chevron={showChevron}
+			onPress={() => router.push(item.href)}
+		/>
+	));
 }
 
 export function NavigationAreaLayout({
@@ -111,12 +61,13 @@ export function NavigationAreaLayout({
 	areaLabel: string;
 	testID: string;
 	screenTestID?: string;
-	barTestID?: string;
+	/** Every area is on the page bar, so its rail, list and page column sit on `bg-background`. */
+	barTestID: string;
 	barNotice?: React.ReactNode;
 	/**
-	 * The area's leaf pages render their own large heading (`SettingsPage`), so on a phone the
+	 * The area's leaf pages render their own large heading (`AreaPage`), so on a phone the
 	 * bar shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
-	 * An area whose pages carry no heading yet (Health) keeps the bar title until they do.
+	 * An area whose pages carry no heading keeps the bar title.
 	 */
 	leafPagesCarryTitle?: boolean;
 	children: React.ReactNode;
@@ -126,7 +77,7 @@ export function NavigationAreaLayout({
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
 	const phoneLeaf = screenSize === 'sm' && current;
-	const bar = barTestID ? (
+	const bar = (
 		<>
 			<ManagementBar
 				testID={barTestID}
@@ -143,37 +94,16 @@ export function NavigationAreaLayout({
 			/>
 			{barNotice}
 		</>
-	) : null;
-
-	const surface = barTestID ? 'background' : 'card';
+	);
 
 	if (screenSize === 'sm') {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
 		return (
-			<NavigationSurfaceContext.Provider value={surface}>
-				<View
-					testID={screenTestID}
-					className={cn('flex-1', barTestID ? 'bg-background' : 'bg-card')}
-				>
-					{bar}
-					{current && !barTestID ? (
-						<HStack
-							testID={`${testID}-back`}
-							className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
-						>
-							<Button variant="link" onPress={() => router.navigate(indexHref)}>
-								<HStack className="items-center gap-1">
-									<Icon name="chevronLeft" className="text-primary" />
-									<ButtonText>{areaLabel}</ButtonText>
-								</HStack>
-							</Button>
-							<ButtonText className="font-semibold">{current.label}</ButtonText>
-						</HStack>
-					) : null}
-					{children}
-				</View>
-			</NavigationSurfaceContext.Provider>
+			<View testID={screenTestID} className="bg-background flex-1">
+				{bar}
+				{children}
+			</View>
 		);
 	}
 
@@ -181,29 +111,22 @@ export function NavigationAreaLayout({
 		<View testID={testID} className="flex-1 flex-row">
 			<View
 				testID={`${testID}-rail`}
-				className={cn(
-					'border-border/50 w-56 shrink-0 gap-0.5 border-r p-3',
-					barTestID ? 'bg-background' : 'bg-card'
-				)}
+				className="border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r p-3"
 			>
 				<NavigationItems items={items} showChevron={false} />
 			</View>
-			<View testID={screenTestID} className="bg-card min-w-0 flex-1">
+			{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
+			    rail's selected row (`bg-card`) and the page card read as the same surface. */}
+			<View testID={screenTestID} className="bg-background min-w-0 flex-1">
 				{children}
 			</View>
 		</View>
 	);
 	return (
-		<NavigationSurfaceContext.Provider value={surface}>
-			{barTestID ? (
-				<View className="flex-1">
-					{bar}
-					{content}
-				</View>
-			) : (
-				content
-			)}
-		</NavigationSurfaceContext.Provider>
+		<View className="flex-1">
+			{bar}
+			{content}
+		</View>
 	);
 }
 
@@ -217,17 +140,13 @@ export function NavigationAreaIndex({
 	testID: string;
 }) {
 	const { screenSize } = useTheme();
-	const surface = React.useContext(NavigationSurfaceContext);
 
 	if (screenSize !== 'sm') {
 		return <Redirect href={defaultHref} />;
 	}
 
 	return (
-		<ScrollView
-			testID={testID}
-			className={cn('flex-1', surface === 'background' ? 'bg-background' : 'bg-card')}
-		>
+		<ScrollView testID={testID} className="bg-background flex-1">
 			<View className="gap-1 p-4">
 				<NavigationItems items={items} showChevron />
 			</View>

@@ -47,7 +47,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('../../hooks/use-guest-customer', () => ({
@@ -194,3 +196,5 @@ describe('useAddCustomer', () => {
 		expect(getLogger([]).success).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

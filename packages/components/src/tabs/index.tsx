@@ -120,7 +120,16 @@ function MeasuredTab({
 	} as any);
 }
 
-function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
+/**
+ * The overflow arrows are icon-only, so they carry names; the caller translates them.
+ */
+function ScrollableTabsList({
+	className,
+	children,
+	previousLabel,
+	nextLabel,
+	...props
+}: TabsPrimitive.ListProps & { previousLabel: string; nextLabel: string }) {
 	const scrollRef = React.useRef<ScrollViewInstance>(null);
 	const totalWidthRef = React.useRef(0);
 	const containerWidthRef = React.useRef(0);
@@ -239,6 +248,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton
 					name="chevronLeft"
+					accessibilityLabel={previousLabel}
 					testID="scrollable-tabs-prev"
 					onPress={onPressLeft}
 					disabled={currentIndex === 0}
@@ -275,6 +285,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton
 					name="chevronRight"
+					accessibilityLabel={nextLabel}
 					testID="scrollable-tabs-next"
 					onPress={onPressRight}
 					disabled={currentIndex === childrenArray.length - 1}

@@ -1,5 +1,6 @@
 import {
 	type QueuedMutation,
+	readMoneyEpoch,
 	type RecordMutationQueue,
 	type RemoteId,
 	remoteIdOrNull,
@@ -59,8 +60,31 @@ export function rejectionSuggestsServerRecord(reason: string | null | undefined)
 	return typeof reason === 'string' && SERVER_MAY_HOLD_RECORD_REASONS.has(reason);
 }
 
-function serverMayHoldRecord(entry: { rejectedReason?: string }): boolean {
-	return rejectionSuggestsServerRecord(entry.rejectedReason);
+/** The confirmation verdict and the engine's born-local decision share one identity rule. */
+export function discardConsequence({
+	row,
+	resident,
+	remoteIdField,
+}: {
+	row: Pick<
+		QueuedMutation,
+		'collectionName' | 'operation' | 'payload' | 'conflictDocument' | 'rejectedReason'
+	>;
+	resident: Record<string, unknown> | null | 'read-failed';
+	remoteIdField?: string;
+}): 'destroys-record' | 'may-destroy-record' | 'keeps-record' | 'unknown' {
+	if (resident === 'read-failed') return 'unknown';
+	if (!resident) return 'keeps-record';
+	const remoteId =
+		remoteIdOrNull(remoteIdField ? resident[remoteIdField] : undefined) ??
+		(row.collectionName === 'orders'
+			? null
+			: (remoteIdOrNull(row.payload.id) ?? remoteIdOrNull(row.conflictDocument?.id)));
+	if (remoteId !== null)
+		return row.collectionName === 'orders' ? 'keeps-record' : 'may-destroy-record';
+	return row.operation === 'create' && !rejectionSuggestsServerRecord(row.rejectedReason)
+		? 'destroys-record'
+		: 'keeps-record';
 }
 
 export type ConflictResolutionDeps = {
@@ -277,11 +301,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							const row = (
 								await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
 							)?.toJSON() as Record<string, unknown> | undefined;
-							const remoteId = remoteIdOrNull(
-								row?.[facet.remoteIdField] ??
-									(entry.payload as Record<string, unknown>).id ??
-									(entry.conflictDocument as Record<string, unknown> | undefined)?.id
-							);
+							const remoteId =
+								remoteIdOrNull(row?.[facet.remoteIdField]) ??
+								remoteIdOrNull(entry.payload.id) ??
+								remoteIdOrNull(entry.conflictDocument?.id);
 							if (remoteId !== null) {
 								// Discard WRITES this document back as server truth — without the
 								// scope's carriers the restored row would lose its barcode.
@@ -338,6 +361,9 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								await queue.replace({
 									...intact,
 									payload: reconcile(entry.payload),
+									...(entry.collectionName === 'orders' && entry.operation === 'update'
+										? { expectedEpoch: readMoneyEpoch(entry.conflictDocument?.meta_data) }
+										: {}),
 									baseRevision: serverBase ?? entry.baseRevision,
 									status: 'pending',
 								});
@@ -403,17 +429,12 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// truth, and discard means "accept it".
 								const remoteId = facet ? row?.[facet.remoteIdField] : undefined;
 								const bornLocalCreate =
-									entry.operation === 'create' &&
-									doc !== null &&
-									remoteIdOrNull(remoteId) === null &&
-									// The pre-flight above resolves a remote id from the queued payload
-									// too, and a server document coming back proves the record exists
-									// there whatever the resident's column says. Never destroy that.
-									// (Orders skip the pre-flight fetch entirely, so this is always
-									// null for them and the resident's column decides alone — which is
-									// exactly why `serverMayHoldRecord` below has to carry the weight.)
 									discardServerDocument === null &&
-									!serverMayHoldRecord(entry);
+									discardConsequence({
+										row: entry,
+										resident: row ?? null,
+										remoteIdField: facet?.remoteIdField,
+									}) === 'destroys-record';
 								const removesResident = discardRemovesResident || bornLocalCreate;
 								// Destroying is only safe when NOTHING is queued to send for this
 								// record. A live row means a push is pending or in flight, and for a

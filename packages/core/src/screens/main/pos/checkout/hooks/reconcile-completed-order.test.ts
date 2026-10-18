@@ -25,7 +25,10 @@ function setup(id: number | null = 42) {
 	const requireRefresh = jest
 		.fn()
 		.mockReturnValue({ ready: Promise.resolve(), release: stockRelease });
-	const orderHandle = { ready: Promise.resolve(), release };
+	const orderHandle = {
+		ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+		release,
+	};
 	requireRefresh.mockReturnValueOnce(orderHandle);
 	const runtime = { engine: { require: requireRefresh } } as unknown as QueryRuntime;
 	const order = {
@@ -60,8 +63,8 @@ afterEach(() => {
 it('force-refreshes and releases the order before refreshing only reduced products and variations', async () => {
 	const c = setup();
 	let ready!: () => void;
-	c.orderHandle.ready = new Promise<void>((resolve) => {
-		ready = resolve;
+	c.orderHandle.ready = new Promise((resolve) => {
+		ready = () => resolve({ action: 'fetched', appliedRecordIds: ['42'] });
 	});
 	const completion = reconcileCompletedOrder(c.runtime, c.order);
 	expect(c.requireRefresh.mock.calls).toEqual([
@@ -77,7 +80,7 @@ it('force-refreshes and releases the order before refreshing only reduced produc
 	]);
 	expect(c.order.getLatest).toHaveBeenCalledTimes(1);
 	ready();
-	await completion;
+	await expect(completion).resolves.toBe('refreshed');
 	expect(c.order.getLatest).toHaveBeenCalledTimes(2);
 	expect(c.release).toHaveBeenCalledTimes(1);
 	expect(c.release.mock.invocationCallOrder[0]).toBeLessThan(
@@ -109,12 +112,12 @@ it('force-refreshes and releases the order before refreshing only reduced produc
 
 it('degrades after ten seconds and still refreshes reduced stock from the local record', async () => {
 	const c = setup();
-	c.orderHandle.ready = new Promise<void>(() => undefined);
+	c.orderHandle.ready = new Promise(() => undefined);
 	const completion = reconcileCompletedOrder(c.runtime, c.order);
 	await jest.advanceTimersByTimeAsync(9_999);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(1);
 	await jest.advanceTimersByTimeAsync(1);
-	await completion;
+	await expect(completion).resolves.toBe('timed-out');
 	expect(c.release).toHaveBeenCalledTimes(1);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(3);
 	expect(c.stockRelease).toHaveBeenCalledTimes(2);
@@ -142,7 +145,7 @@ it('records a recovered arc when the refresh never answers within its bound', as
 it('records a recovered arc on rejected readiness and still refreshes reduced stock', async () => {
 	const c = setup();
 	c.orderHandle.ready = Promise.reject(new Error('network unavailable'));
-	await reconcileCompletedOrder(c.runtime, c.order);
+	await expect(reconcileCompletedOrder(c.runtime, c.order)).resolves.toBe('failed');
 	// The sale completed from the local record, so per LEVELS.md this arc recovered —
 	// warning here told the merchant something was broken when nothing was.
 	expect(getLogger(['wcpos', 'pos', 'checkout']).warn).not.toHaveBeenCalled();
@@ -183,7 +186,7 @@ it('propagates synchronous refresh admission failure without adjusting stock', a
 
 it('skips the order refresh but still adjusts local stock when refresh is false', async () => {
 	const c = setup(null);
-	await reconcileCompletedOrder(c.runtime, c.order, false);
+	await expect(reconcileCompletedOrder(c.runtime, c.order, false)).resolves.toBe('skipped');
 	expect(c.requireRefresh.mock.calls.map(([requirement]) => requirement.collection)).toEqual([
 		'products',
 		'variations',

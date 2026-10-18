@@ -27,8 +27,8 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: Props) => <span data-testid={testID}>{children}</span>,
 }));
-jest.mock('./components/pill', () => ({
-	Pill: ({ children }: Props) => <span>{children}</span>,
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: Props) => <span>{children}</span>,
 }));
 jest.mock('./components/section', () => ({
 	Section: ({ children, testID, title }: Props & { title: string }) => (
@@ -94,6 +94,39 @@ it('renders each finding using counters, order numbers, and the shared skew magn
 	expect(screen.getByTestId('health-registers').textContent).toContain(
 		'usually an offline sale synced later'
 	);
+});
+
+it('keys findings two tills of one register report alike without a duplicate-key warning', () => {
+	// The server summarises each till on its own and flattens: a register shared by two
+	// tills reports counter 1 twice and the same gap twice (web, 2026-10-18).
+	state.data = {
+		...state.data!,
+		registers: [
+			{
+				...register,
+				gaps: [
+					{ after: 1, before: 3, missing: 1 },
+					{ after: 1, before: 3, missing: 1 },
+				],
+				duplicates: [
+					{ counter: 1, order_ids: [11, 12], order_numbers: ['1011', '1012'] },
+					{ counter: 1, order_ids: [21, 22], order_numbers: ['1021', '1022'] },
+				],
+			},
+		],
+	};
+	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		render(<RegistersPanel />);
+		expect(screen.getAllByTestId('health-register-gap')).toHaveLength(2);
+		expect(screen.getAllByTestId('health-register-duplicate')).toHaveLength(2);
+		const keyWarnings = consoleError.mock.calls.filter((call) =>
+			String(call[0]).includes('same key')
+		);
+		expect(keyWarnings).toHaveLength(0);
+	} finally {
+		consoleError.mockRestore();
+	}
 });
 
 it('shows No findings for a clean register without finding headings', () => {

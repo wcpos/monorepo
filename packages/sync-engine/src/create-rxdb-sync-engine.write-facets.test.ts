@@ -4,6 +4,8 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
+import { discardConsequence } from './write-path/conflict-resolution';
+import { queueFor } from './write-path/write-intents';
 import { buildReplicationHandlers } from './change-signal/change-signal-handlers';
 import { type RxdbSyncEngine } from './create-rxdb-sync-engine';
 import { createEngineHarness, type EngineHarnessOptions, remoteId } from './testing';
@@ -634,6 +636,13 @@ describe('write facets beyond orders', () => {
 				payload: payload(spec, UUID_A, 'discard-me', spec.remoteId),
 			});
 			await subject.sync('write-drain');
+			expect(
+				discardConsequence({
+					row: (await subject.conflicts())[0],
+					resident: await record(subject, spec, UUID_A),
+					remoteIdField: spec.remoteIdField,
+				})
+			).toBe('may-destroy-record');
 			await subject.resolveConflict(receipt.mutationId, 'discard');
 
 			expect(route.pulls).toEqual([[spec.remoteId]]);
@@ -1123,6 +1132,57 @@ describe('write facets beyond orders', () => {
 		await subject.dispose();
 	});
 
+	it.each([false, true])(
+		'discard follows a queued server id past a zero resident id (missing=%s)',
+		async (missing) => {
+			const spec = { ...FACETS[2], remoteId: 123 };
+			const truth = {
+				...payload(spec, UUID_A, 'server-truth', 123),
+				_rxdb_revision: 'sha256:server',
+			};
+			const route = routedServer(spec, () => (missing ? null : truth));
+			route.server.script(() => ({
+				kind: 'invalid_param',
+				code: 'rest_invalid_param',
+				message: 'refused',
+			}));
+			const subject = engine(route.fetch);
+			try {
+				await subject.ready;
+				await insert(subject, spec, {
+					...storedDocument({ spec, id: UUID_A, label: 'local' }),
+					remoteId: '0',
+				});
+				const queue = queueFor(subject.active()!.database);
+				const receipt = await queue.enqueue({
+					mutationId: 'zero-id',
+					origin: 'existing',
+					baseRevision: null,
+					collectionName: spec.collection,
+					operation: 'create',
+					recordId: UUID_A,
+					payload: payload(spec, UUID_A, 'local', 123),
+					queuedAt: new Date().toISOString(),
+				});
+				await queue.replace({ ...receipt, status: 'rejected' });
+				expect(
+					discardConsequence({
+						row: receipt,
+						resident: await record(subject, spec, UUID_A),
+						remoteIdField: spec.remoteIdField,
+					})
+				).toBe('may-destroy-record');
+				await subject.resolveConflict(receipt.mutationId, 'discard');
+				expect(route.pulls).toEqual([[123]]);
+				const resident = await record(subject, spec, UUID_A);
+				if (missing) expect(resident).toBeNull();
+				else expect(resident?.payload).toMatchObject({ first_name: 'server-truth', id: 123 });
+			} finally {
+				await subject.dispose();
+			}
+		}
+	);
+
 	it('manual discard removes a rejected born-local create that never existed remotely', async () => {
 		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
 		const route = routedServer(spec, () => null);
@@ -1150,6 +1210,13 @@ describe('write facets beyond orders', () => {
 		// The auto path dead-letters (see the test above); destroying a born-local
 		// record stays behind the cashier-confirmed Store health discard, which
 		// warns outright that it DELETES the record (#832 R7b).
+		expect(
+			discardConsequence({
+				row: (await subject.conflicts())[0],
+				resident: await record(subject, spec, UUID_A),
+				remoteIdField: spec.remoteIdField,
+			})
+		).toBe('destroys-record');
 		await subject.resolveConflict(receipt.mutationId, 'discard');
 
 		await vi.waitFor(async () => {

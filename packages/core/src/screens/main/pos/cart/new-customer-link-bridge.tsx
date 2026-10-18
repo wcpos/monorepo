@@ -3,9 +3,9 @@ import * as React from 'react';
 import { BehaviorSubject, combineLatest, EMPTY, Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
-import { engineCollection, useQueryRuntime } from '@wcpos/query';
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
+import { engineCollection, hasQueuedDelete, useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -86,7 +86,7 @@ export function NewCustomerLinkBridge(): null {
 					payload?: Record<string, unknown>;
 					local?: { dirty?: boolean };
 				};
-				return { document, payload: payload ?? {}, dirty: local?.dirty === true };
+				return { document, payload: payload ?? {}, dirty: hasPendingLocalWork({ local }) };
 			},
 			// The acknowledged Woo id reaches the order through the same event as any customer
 			// set, as a system action: a hook on `cart.customer.set` sees the real id arrive.
@@ -121,19 +121,7 @@ export function NewCustomerLinkBridge(): null {
 				const database = runtime.engine.active()?.database;
 				// Thrown, not guessed: the pass keeps the link and the next pass retries.
 				if (!database) throw new Error('No active scope to read the write queue from');
-				const queue = database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as {
-					findOne(query: { selector: Record<string, unknown> }): { exec(): Promise<unknown> };
-				};
-				const row = await queue
-					.findOne({
-						selector: {
-							collectionName: { $eq: 'orders' },
-							recordId: { $eq: uuid },
-							operation: { $eq: 'delete' },
-						},
-					})
-					.exec();
-				return row !== null;
+				return hasQueuedDelete(database, 'orders', uuid);
 			},
 			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, (slot) => run(slot)),
 			drop: (uuid, at) => dropCustomerLink(storeDB, uuid, at),
@@ -199,7 +187,7 @@ export function NewCustomerLinkBridge(): null {
 							documents
 								.map((document) => {
 									const { uuid, payload, local } = document.toJSON();
-									return `${uuid}:${payload.status}:${payload.customer_id}:${local?.dirty}`;
+									return `${uuid}:${payload.status}:${payload.customer_id}:${hasPendingLocalWork({ local })}`;
 								})
 								.join('|')
 						),

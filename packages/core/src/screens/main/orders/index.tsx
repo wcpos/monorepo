@@ -18,8 +18,8 @@ import type { QueryHandle } from '@wcpos/query';
 
 import { ManagementBar } from '../components/management-bar';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UpgradeNotice } from '../components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
+import { UpgradeNotice } from '../components/upgrade-notice';
+import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useTheme } from '../../../contexts/theme';
 import { DisplayOptions } from './display-options';

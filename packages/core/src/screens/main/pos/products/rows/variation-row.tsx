@@ -8,6 +8,7 @@ import { DataTableRow } from '../../../components/data-table/rows';
 import { resolveVariationName } from '../../../components/product/resolve-variation-name';
 import { InCartCount, useVariationCount } from './product-row';
 import { useAddVariation } from '../../hooks/use-add-variation';
+import { useT } from '../../../../../contexts/translations';
 
 export { ProductVariationName as VariationName } from '../cells/variation-name';
 export { StockQuantity as VariationStock } from '../cells/stock-quantity';
@@ -19,6 +20,7 @@ type Props = {
 	parent: EngineRecord<'products'>;
 };
 export function VariationRow({ item, parent }: Props) {
+	const t = useT();
 	const variation = item.original.record;
 	const attributes = useDocField(variation, (value) => value.payload.attributes);
 	const name = useDocField(variation, (value) => resolveVariationName(value.payload));
@@ -49,6 +51,7 @@ export function VariationRow({ item, parent }: Props) {
 					empty={
 						<IconButton
 							name="circlePlus"
+							accessibilityLabel={t('common.add_to_cart')}
 							testID="add-variation-to-cart-button"
 							onPress={(e) => {
 								e.stopPropagation();

@@ -23,8 +23,11 @@ const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 17 },
 	getLatest: () => ({
+		getLatest() {
+			return this;
+		},
 		uuid: 'order-uuid',
-		payload: { id: 17 },
+		payload: { id: 17, fee_lines: mockFeeLines, line_items: mockLineItems },
 		toMutableJSON: () => ({
 			payload: { fee_lines: mockFeeLines, line_items: mockLineItems },
 		}),
@@ -65,7 +68,11 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({
@@ -104,7 +111,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 describe('useUpdateCartLine — fee_lines', () => {
@@ -151,7 +158,7 @@ describe('useUpdateCartLine — fee_lines', () => {
 		]);
 		expect(mockLocalPatch).toHaveBeenCalledWith(
 			expect.objectContaining({
-				data: { fee_lines: [expect.objectContaining({ total: '5' })] },
+				data: expect.objectContaining({ fee_lines: [expect.objectContaining({ total: '5' })] }),
 			})
 		);
 	});
@@ -220,7 +227,9 @@ describe('useUpdateCartLine — fee_lines', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
-			data: { fee_lines: [expect.objectContaining({ total: '3', total_tax: '0' })] },
+			data: expect.objectContaining({
+				fee_lines: [expect.objectContaining({ total: '3', total_tax: '0' })],
+			}),
 		});
 		// The changes-merge is the engine's now: `amount` has to land in pos_data, not
 		// top-level, or the next recalculation reads the pre-edit amount back.

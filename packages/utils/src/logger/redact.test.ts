@@ -1,6 +1,34 @@
-import { redactSensitiveFields } from './redact';
+import { redactSensitiveFields, redactSensitiveText } from './redact';
 
 describe('redactSensitiveFields', () => {
+	it.each([
+		['Authorization: Basic YWRtaW46c2VjcmV0', 'Authorization: Basic [REDACTED]'],
+		['Retry with Basic YWRtaW46c2VjcmV0 now', 'Retry with Basic [REDACTED] now'],
+		['Retry with bAsIc YWRtaW46c2VjcmV0 now', 'Retry with Basic [REDACTED] now'],
+		['Basic YWJjZDplZg==, Basic YTpi', 'Basic [REDACTED], Basic [REDACTED]'],
+		['Authorization: Basic YTpi', 'Authorization: Basic [REDACTED]'],
+		['token=YWRtaW46c2VjcmV0 Basic YWRtaW46c2VjcmV0', 'token=[REDACTED] Basic [REDACTED]'],
+		// test:€ — a UTF-8 password (RFC 7617) must still be recognised.
+		['Authorization: Basic dGVzdDrigqw=', 'Authorization: Basic [REDACTED]'],
+		// Firstname Lastname:secret — a space-separated user id (RFC 7613 §3.1).
+		[
+			'Authorization: Basic Rmlyc3RuYW1lIExhc3RuYW1lOnNlY3JldA==',
+			'Authorization: Basic [REDACTED]',
+		],
+	])('redacts Basic credentials in %s while preserving the scheme', (input, expected) => {
+		expect(redactSensitiveFields(input)).toBe(expected);
+	});
+
+	it.each([
+		'Basic authentication failed',
+		'Basic realm="WordPress"',
+		'Basic abcd+/_-',
+		'Basic Only mode',
+		'Basic Auth required',
+	])('leaves prose after Basic alone when it is not a user:password encoding: %s', (input) => {
+		expect(redactSensitiveText(input)).toBe(input);
+	});
+
 	it('should redact access_token at top level', () => {
 		const input = { access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef' };
 		const result = redactSensitiveFields(input);

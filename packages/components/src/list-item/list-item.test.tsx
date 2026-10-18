@@ -19,6 +19,8 @@ jest.mock('react-native', () => ({
 		disabled?: boolean;
 	}) => <div {...props} data-testid={testID} onClick={disabled ? undefined : onPress} />,
 }));
+let mockPointer: 'fine' | 'coarse' = 'coarse';
+jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('../icon-button', () => ({
 	IconButton: ({
 		onPress,
@@ -38,7 +40,7 @@ jest.mock('../text', () => ({
 
 it('uses the card surface, row height and muted press with disabled opacity', () => {
 	const { getByTestId } = render(<ListItem testID="row" title="Paul" disabled />);
-	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted', 'opacity-45');
+	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted', 'opacity-50');
 });
 
 it('preserves explicit variant priority over selected', () => {
@@ -52,7 +54,9 @@ it('preserves explicit variant priority over selected', () => {
 it('removes without activating the row', () => {
 	const onPress = jest.fn();
 	const onRemove = jest.fn();
-	const { getByRole } = render(<ListItem removable onPress={onPress} onRemove={onRemove} />);
+	const { getByRole } = render(
+		<ListItem removable removeLabel="Remove" onPress={onPress} onRemove={onRemove} />
+	);
 	fireEvent.click(getByRole('button'));
 	expect(onRemove).toHaveBeenCalledTimes(1);
 	expect(onPress).not.toHaveBeenCalled();
@@ -64,8 +68,34 @@ it('retires the background surface and tiny subtitle', () => {
 
 it('cannot remove a disabled row', () => {
 	const onRemove = jest.fn();
-	const { getByRole } = render(<ListItem removable disabled onRemove={onRemove} />);
+	const { getByRole } = render(
+		<ListItem removable removeLabel="Remove" disabled onRemove={onRemove} />
+	);
 	expect(getByRole('button')).toBeDisabled();
 	fireEvent.click(getByRole('button'));
 	expect(onRemove).not.toHaveBeenCalled();
+});
+
+it('is a button when it acts, keeps a caller role, and is no tab stop when it does not', () => {
+	const { getByTestId } = render(
+		<>
+			<ListItem testID="action" title="Store" onPress={() => {}} />
+			<ListItem testID="checkbox" title="Coffee" role="checkbox" onPress={() => {}} />
+			<ListItem testID="inert" title="Paul" />
+		</>
+	);
+	expect(getByTestId('action')).toHaveAttribute('accessibilityRole', 'button');
+	expect(getByTestId('checkbox')).not.toHaveAttribute('accessibilityRole');
+	expect(getByTestId('checkbox')).toHaveAttribute('role', 'checkbox');
+	expect(getByTestId('inert')).not.toHaveAttribute('accessibilityRole');
+	expect(getByTestId('inert')).toHaveAttribute('tabIndex', '-1');
+});
+
+it('shows the hover lift on a fine pointer only', () => {
+	mockPointer = 'fine';
+	const { getByTestId, rerender } = render(<ListItem testID="row" onPress={() => {}} />);
+	expect(getByTestId('row')).toHaveClass('web:hover:bg-muted');
+	mockPointer = 'coarse';
+	rerender(<ListItem testID="row" onPress={() => {}} />);
+	expect(getByTestId('row')).not.toHaveClass('web:hover:bg-muted');
 });

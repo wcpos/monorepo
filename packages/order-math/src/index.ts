@@ -1,6 +1,8 @@
 // ===== @wcpos/order-math public surface =====
 // The settle surface is per SPEC §3; the payments section is Payments Contract v1.
 
+export { readMoneyEpoch, serverOwnsMoney } from './payments/money-owner';
+
 export { createCartConfig } from './config';
 export type { CartConfig, CartConfigInput } from './config';
 
@@ -13,7 +15,7 @@ export {
 } from './snapshot';
 export type { CartSnapshot } from './snapshot';
 
-export { settleCart, settleAggregate } from './settle';
+export { settleCart, settleAggregate, settlementPatch } from './settle';
 export type {
 	SettleOptions,
 	SettlePatch,
@@ -81,6 +83,11 @@ export {
 	LEDGER_SCHEMA,
 	PAYMENT_METHOD_INDEX_META_KEY,
 	LIVE_PAYMENT_STATUSES,
+	isLivePaymentStatus,
+	isSettledPaymentRow,
+	isFinalPaymentStatus,
+	isFailedPaymentStatus,
+	hasLiveSettlementLeg,
 	KNOWN_CAPTURE_MODES,
 	KNOWN_KINDS,
 	KNOWN_PREFILLS,
@@ -127,3 +134,9 @@ export type {
 	FieldsVerbKind,
 	GatewaySubmitResponse,
 } from './payments';
+
+export {
+	APP_PAYMENTS_CONTRACT,
+	parsePaymentsContract,
+	paymentsContractAtLeast,
+} from './payments/contract';

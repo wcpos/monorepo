@@ -45,11 +45,33 @@ export const POS_META_KEYS = {
 	user: '_pos_user',
 	store: '_pos_store',
 	register: '_wcpos_register',
+	session: '_wcpos_session',
+	reducedStock: '_reduced_stock',
 	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
 	lineUuid: RECORD_UUID_META_KEY,
 	posData: '_woocommerce_pos_data',
 } as const;
+
+/** Server adoption replaces these; till mutations retain the resident value. */
+export const SERVER_ORDER_MONEY_META_KEYS: readonly string[] = [
+	'_wcpos_money_epoch',
+	'_wcpos_completed_at',
+	'_wcpos_completed_epoch',
+	'_wcpos_completed_session',
+	'_wcpos_reopened_at',
+];
+
+export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
+	...SERVER_ORDER_MONEY_META_KEYS,
+	POS_META_KEYS.user,
+	POS_META_KEYS.store,
+	POS_META_KEYS.register,
+	POS_META_KEYS.till,
+	RECORD_UUID_META_KEY,
+	'_wcpos_money_owner',
+	'_wcpos_money_owner_hint',
+];
 
 function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string | null {
 	if (!Array.isArray(meta)) return null;

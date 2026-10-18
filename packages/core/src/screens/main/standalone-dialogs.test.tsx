@@ -113,11 +113,11 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({
 		onPress,
 		testID,
-		'aria-label': label,
+		accessibilityLabel: label,
 	}: {
 		onPress?: () => void;
 		testID?: string;
-		'aria-label'?: string;
+		accessibilityLabel?: string;
 	}) => <button aria-label={label} data-testid={testID} onClick={onPress} />,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockView }));
@@ -173,9 +173,6 @@ jest.mock('../../services/register-session/settled-figures', () => ({
 }));
 jest.mock('../../services/register-session/use-closure-document-context', () => ({
 	useClosureDocumentContext: () => ({}),
-}));
-jest.mock('../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => null,
 }));
 jest.mock('./hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
 jest.mock('./receipt/use-receipt-document', () => ({

@@ -3,6 +3,7 @@ import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-n
 
 import { useObservableState } from 'observable-hooks';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -200,38 +201,35 @@ function Verdict({
 
 	let headline: string;
 	let boxClass: string;
-	let textClass: string;
 	if (analysis.detectedAsScan) {
 		headline = t('settings.barcode_test_detected_scan', {
 			code: analysis.code,
 		});
 		boxClass = 'border-success/40 bg-success/10';
-		textClass = 'text-success';
 	} else if (analysis.nearMiss) {
 		headline = t('settings.barcode_test_near_miss', {
 			avg,
 			threshold: settings.threshold,
 		});
 		boxClass = 'border-warning/40 bg-warning/10';
-		textClass = 'text-warning';
 	} else if (!Number.isFinite(analysis.avgGapMs)) {
 		// A single (or modifier-only) keypress has no gaps — "Infinityms" is not
 		// a number a cashier should ever read.
 		headline = t('settings.barcode_test_single_key');
 		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,
 		});
 		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	}
 
 	return (
 		<VStack space="sm" testID="barcode-test-verdict">
 			<View className={`rounded-md border p-2 ${boxClass}`}>
-				<Text className={`text-sm font-medium ${textClass}`}>{headline}</Text>
+				{/* The tone is the box; its words stay in the foreground, as a tinted Badge's do:
+				    green or amber text on its own wash reads under the 4.5:1 text floor. */}
+				<Text className="text-foreground text-sm font-medium">{headline}</Text>
 				{analysis.detectedAsScan ? (
 					<Text className="text-muted-foreground text-xs">
 						{t('settings.barcode_test_scan_detail', {
@@ -301,19 +299,15 @@ function History({ history }: { history: TraceAnalysis[] }) {
 						? t('settings.barcode_test_result_too_short')
 						: t('settings.barcode_test_result_scan')
 					: t('settings.barcode_test_result_typing');
-				const chipClass = entry.detectedAsScan
-					? entry.tooShort
-						? 'bg-warning/10 text-warning'
-						: 'bg-success/10 text-success'
-					: 'bg-muted text-muted-foreground';
+				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'success') : 'muted';
 				return (
 					<HStack key={index} className="border-border rounded-md border p-2">
 						<Text className="flex-1 font-mono text-sm" numberOfLines={1}>
 							{entry.code || entry.raw || '—'}
 						</Text>
-						<Text className={`rounded-full px-2 py-0.5 text-xs font-medium ${chipClass}`}>
+						<Badge variant={tone} tinted>
 							{result}
-						</Text>
+						</Badge>
 						<Text className="text-muted-foreground w-16 text-right text-xs">
 							{Number.isFinite(entry.avgGapMs) ? `${Math.round(entry.avgGapMs)}ms` : '—'}
 						</Text>

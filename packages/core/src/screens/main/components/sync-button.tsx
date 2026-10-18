@@ -36,6 +36,9 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 						name="arrowRotateRight"
 						size="sm"
 						loading={active}
+						accessibilityLabel={
+							clearAndSync ? t('common.press_to_sync_long_press_for') : t('common.sync')
+						}
 						onLongPress={clearAndSync ? () => triggerRef.current?.open?.() : undefined}
 						onPress={() => {
 							void sync();

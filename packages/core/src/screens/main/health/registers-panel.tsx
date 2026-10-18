@@ -1,12 +1,12 @@
 import * as React from 'react';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
-import { Pill } from './components/pill';
 import { Section } from './components/section';
 import { useRegisterHealth } from './use-register-health';
 
@@ -57,8 +57,14 @@ export function RegistersPanel() {
 					{register.gaps.length > 0 ? (
 						<VStack className="gap-1">
 							<Text className="text-sm font-semibold">{t('health.registers.gaps')}</Text>
-							{register.gaps.map((gap) => (
-								<Text key={gap.after} testID="health-register-gap" className="text-sm">
+							{/* The server summarises each till of a register on its own and flattens the
+							    findings, so two tills can report the same gap or the same counter. */}
+							{register.gaps.map((gap, index) => (
+								<Text
+									key={`${gap.after}-${gap.before}-${index}`}
+									testID="health-register-gap"
+									className="text-sm"
+								>
 									{t('health.registers.gap', gap)}
 								</Text>
 							))}
@@ -69,7 +75,7 @@ export function RegistersPanel() {
 							<Text className="text-sm font-semibold">{t('health.registers.duplicates')}</Text>
 							{register.duplicates.map((duplicate) => (
 								<Text
-									key={duplicate.counter}
+									key={`${duplicate.counter}:${duplicate.order_ids.join('-')}`}
 									testID="health-register-duplicate"
 									className="text-sm"
 								>
@@ -104,9 +110,9 @@ export function RegistersPanel() {
 						</VStack>
 					) : null}
 					{register.gaps.length + register.duplicates.length + register.skew.length === 0 ? (
-						<Pill tone="success" className="self-start">
+						<Badge variant="success" className="self-start">
 							{t('health.registers.clean')}
-						</Pill>
+						</Badge>
 					) : null}
 				</VStack>
 			))}

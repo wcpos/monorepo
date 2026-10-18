@@ -7,7 +7,6 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
@@ -83,27 +82,25 @@ function RegisterBarContent({
 				className={strip ? 'flex-1 gap-2 px-2' : 'border-border h-12 gap-2 border-b px-2'}
 			>
 				{screenSize !== 'lg' && (
-					<Button
-						variant="ghost"
-						className="h-11 w-11 p-0"
+					<IconButton
+						name="bars"
 						testID="pos-drawer-open-button"
-						aria-label={t('common.menu')}
+						accessibilityLabel={t('common.menu')}
 						onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
-					>
-						<Icon name="bars" />
-					</Button>
+					/>
 				)}
 				<View className="min-w-0 shrink">
 					{stores?.length > 1 ? (
 						<Button
 							testID="register-bar-store"
 							variant="ghost"
-							className="h-11 min-w-11 shrink items-start px-0"
+							className="min-w-11 shrink items-start px-0"
 							onPress={() => setStoreOpen(true)}
 						>
+							{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label. */}
 							<Text
 								testID="register-bar-place"
-								className="text-base font-semibold"
+								className="text-foreground text-base font-semibold"
 								numberOfLines={1}
 							>
 								{place}
@@ -120,6 +117,7 @@ function RegisterBarContent({
 				{(session || lastClosure) && (
 					<IconButton
 						name="cashRegister"
+						accessibilityLabel={t('common.register')}
 						testID="register-bar-drawer"
 						iconClassName={overdue ? 'text-warning' : 'text-foreground'}
 						onPress={() => onPanelOpenChange(true)}
@@ -131,7 +129,7 @@ function RegisterBarContent({
 				{screenSize !== 'lg' && (
 					<Button
 						variant="ghost"
-						className="h-11 w-11 p-0"
+						className="aspect-square px-0"
 						testID="register-bar-avatar"
 						onPress={() => setUserOpen(true)}
 					>

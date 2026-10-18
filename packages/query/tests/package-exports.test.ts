@@ -78,6 +78,44 @@ describe('package exports', () => {
 		});
 	});
 
+	it('resolves the register-session subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/register-session');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'register-session'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the receipt-email-queue subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/receipt-email-queue');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'receipt-email-queue'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the user-db subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/user-db');
+		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'user-db'), 'ios');
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
 	it('rejects the removed query subpaths', () => {
 		for (const specifier of ['@wcpos/query/engine-compat', '@wcpos/query/requirements']) {
 			const resolution = spawnSync(

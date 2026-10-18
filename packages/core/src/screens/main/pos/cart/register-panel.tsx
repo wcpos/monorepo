@@ -8,6 +8,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
@@ -122,8 +123,6 @@ export function RegisterPanel({
 						</Text>
 						<Button
 							testID="register-panel-retry-refused"
-							variant="outline"
-							className="min-h-row"
 							onPress={() =>
 								attempt(() => Promise.all(refused.map((row) => actions.retryMovement(row.id))))
 							}
@@ -134,11 +133,10 @@ export function RegisterPanel({
 				)}
 				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
-						<Button
+						<Tile
 							key={type}
 							testID={`register-panel-${type.replace('_', '-')}`}
-							className="h-tile flex-1 gap-1"
-							variant="outline"
+							className="flex-1"
 							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
 						>
@@ -151,8 +149,10 @@ export function RegisterPanel({
 											: 'cashRegister'
 								}
 							/>
-							<Text numberOfLines={1}>{t(`register.${type}`)}</Text>
-						</Button>
+							<Text numberOfLines={1} className="font-medium">
+								{t(`register.${type}`)}
+							</Text>
+						</Tile>
 					))}
 				</View>
 				<ScrollView contentContainerClassName="bg-card px-4 py-2">
@@ -174,7 +174,7 @@ export function RegisterPanel({
 					<Button
 						testID="register-panel-movements"
 						variant="ghost"
-						className={`min-h-row border-border rounded-none border-b ${highlight ? 'bg-success/10' : ''}`}
+						className={`border-border rounded-none border-b ${highlight ? 'bg-success/10' : ''}`}
 						onPress={() => setExpanded(!expanded)}
 					>
 						{t('register.paid_in_out')}
@@ -195,7 +195,6 @@ export function RegisterPanel({
 								</Text>
 								<Button
 									variant="ghost"
-									className="min-h-row"
 									testID={`movement-void-${row.id}`}
 									disabled={session?.status !== 'open'}
 									onPress={() => attempt(() => actions.voidMovement(row.id))}
@@ -206,12 +205,7 @@ export function RegisterPanel({
 						))}
 					{!blind && !!session && (
 						<View className="border-border border-b">
-							<Button
-								testID="register-panel-print"
-								className="min-h-row"
-								variant="ghost"
-								onPress={() => attempt(print)}
-							>
+							<Button testID="register-panel-print" variant="ghost" onPress={() => attempt(print)}>
 								{t('register.print_x_report')}
 							</Button>
 						</View>
@@ -224,7 +218,6 @@ export function RegisterPanel({
 							<Button
 								testID="register-panel-open-closure"
 								variant="ghost"
-								className="min-h-row"
 								disabled={reportsDenied}
 								onPress={() => {
 									router.push({
@@ -254,12 +247,7 @@ export function RegisterPanel({
 									{t('register.unsynced')}
 								</Text>
 							) : !blind ? (
-								<Button
-									testID="closure-reprint"
-									variant="ghost"
-									className="min-h-row"
-									onPress={() => attempt(reprint)}
-								>
+								<Button testID="closure-reprint" variant="ghost" onPress={() => attempt(reprint)}>
 									{t('register.reprint_copy')}
 								</Button>
 							) : null}
@@ -279,7 +267,6 @@ export function RegisterPanel({
 				<Button
 					testID="register-panel-close-register"
 					disabled={!session}
-					variant="outline"
 					size="lg"
 					onPress={() =>
 						attempt(async () => {
@@ -305,7 +292,6 @@ export function RegisterPanel({
 									<Button
 										testID="toast-undo"
 										variant="ghost"
-										className="min-h-row"
 										onPress={() => attempt(() => actions.voidMovement(id))}
 									>
 										{t('register.undo')}

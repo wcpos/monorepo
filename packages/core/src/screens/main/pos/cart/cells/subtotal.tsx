@@ -6,7 +6,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -20,7 +20,8 @@ interface Props {
  */
 export function Subtotal({ row, column }: CellContext<Props, 'subtotal'>) {
 	const item = row.original.item;
-	const { format } = useCurrencyFormat();
+	// The order's currency, as the Total column next to it (and a receipt for another order) reads.
+	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 

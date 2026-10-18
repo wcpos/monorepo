@@ -16,38 +16,26 @@ jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 }));
 
-jest.mock('@wcpos/components/tabs', () => {
-	const React = require('react');
-	const TabsContext = React.createContext({
-		value: '',
-		onValueChange: (_value: string) => undefined,
-	});
-	return {
-		Tabs: ({ children, value, onValueChange }: any) => (
-			<TabsContext.Provider value={{ value, onValueChange }}>{children}</TabsContext.Provider>
-		),
-		TabsList: ({ children, testID }: any) => (
-			<div data-testid={testID} role="tablist">
-				{children}
-			</div>
-		),
-		TabsTrigger: ({ children, value, testID }: any) => {
-			const context = React.useContext(TabsContext);
-			const selected = context.value === value;
-			return (
+jest.mock('@wcpos/components/segmented-control', () => ({
+	SegmentedControl: ({ segments, value, onValueChange, testID }: any) => (
+		<div data-testid={testID} role="radiogroup">
+			{segments.map((segment: any) => (
 				<button
+					key={segment.value}
 					type="button"
-					data-testid={testID}
-					role="tab"
-					aria-selected={selected ? 'true' : 'false'}
-					onClick={() => context.onValueChange(value)}
+					data-testid={segment.testID}
+					role="radio"
+					aria-checked={segment.value === value ? 'true' : 'false'}
+					disabled={segment.disabled}
+					// As the real control: choosing the selected segment again is a no-op.
+					onClick={() => segment.value !== value && onValueChange(segment.value)}
 				>
-					{children}
+					{segment.label}
 				</button>
-			);
-		},
-	};
-});
+			))}
+		</div>
+	),
+}));
 
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
@@ -69,14 +57,43 @@ describe('ConnectionTypeSegmented', () => {
 				form={{ clearErrors: jest.fn() }}
 				value="network"
 				onChange={jest.fn()}
-				availableTypes={['network']}
+				availableTypes={['network', 'usb']}
 			/>
 		);
 
 		expect(screen.getByTestId('add-printer-connection-type-network')).toBeInTheDocument();
-		expect(screen.queryByTestId('add-printer-connection-type-usb')).toBeNull();
+		expect(screen.getByTestId('add-printer-connection-type-usb')).toBeInTheDocument();
 		expect(screen.queryByTestId('add-printer-connection-type-bluetooth')).toBeNull();
 		expect(screen.queryByTestId('add-printer-connection-type-cloud')).toBeNull();
+	});
+
+	it('keeps a saved type this platform cannot use on show, disabled, beside the supported one', () => {
+		const onChange = jest.fn();
+		render(
+			<ConnectionTypeSegmented
+				form={{ clearErrors: jest.fn() }}
+				value="usb"
+				onChange={onChange}
+				availableTypes={['network']}
+			/>
+		);
+
+		expect(screen.getByTestId('add-printer-connection-type-usb')).toBeDisabled();
+		fireEvent.click(screen.getByTestId('add-printer-connection-type-network'));
+		expect(onChange).toHaveBeenCalledWith('network');
+	});
+
+	it('draws no switch when only one connection type is supported', () => {
+		render(
+			<ConnectionTypeSegmented
+				form={{ clearErrors: jest.fn() }}
+				value="network"
+				onChange={jest.fn()}
+				availableTypes={['network']}
+			/>
+		);
+
+		expect(screen.queryByTestId('add-printer-connection-type-segmented')).toBeNull();
 	});
 
 	it('emits stable connection-type values when selected', () => {
@@ -122,7 +139,8 @@ it.each(['bluetooth', 'usb'])(
 		await waitFor(() => expect(screen.getByTestId('address-error')).toBeEmptyDOMElement());
 		fireEvent.click(screen.getByText('Invalidate'));
 		expect(screen.getByTestId('address-error')).toHaveTextContent('required');
-		fireEvent.click(screen.getByTestId(`add-printer-connection-type-${type}`));
+		// A real transition back: choosing the selected segment again changes nothing.
+		fireEvent.click(screen.getByTestId('add-printer-connection-type-network'));
 		await waitFor(() => expect(screen.getByTestId('address-error')).toBeEmptyDOMElement());
 	}
 );

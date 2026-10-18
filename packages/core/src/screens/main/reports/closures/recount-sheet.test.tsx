@@ -10,6 +10,8 @@ import { RecountSheet } from './recount-sheet';
 
 import type { Correction } from '../../../../services/register-session/settled-figures';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
+// The approve sheet (rendered by the recount sheet) toasts on failure; the toast module is ESM-only.
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 const viewedStores = of([
 	{
 		id: 0,
@@ -143,7 +145,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
 }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
-jest.mock('../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	mintUuid: () => mockMint(),
 }));
 jest.mock('../../../../services/register-session/use-session-report', () => ({

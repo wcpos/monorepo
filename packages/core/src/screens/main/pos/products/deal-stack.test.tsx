@@ -210,9 +210,12 @@ function Cards() {
 	});
 	return null;
 }
-// What the grid's scroller and the frame around it are given.
+// What the grid's scroller and the frame around it are given. The scroller's node, on the web.
+const airScroller: { current: unknown } = { current: null };
 function Air({ scroll }: { scroll: { value: number } }) {
-	return <output data-testid="air">{JSON.stringify(useAirspace(scroll as never))}</output>;
+	return (
+		<output data-testid="air">{JSON.stringify(useAirspace(scroll as never, airScroller))}</output>
+	);
 }
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
@@ -1056,7 +1059,7 @@ it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt 
 
 // The scroller clipped the copy of a tile from the products' first row where it overlapped the
 // level's crumb row: its name was cut away for the whole walk (Pixel, 2026-10-06, 1c/1d).
-it('lets the tiles in the air out over the crumb, native only, while the grid is at its top', () => {
+it('lets the tiles in the air out over the crumb while the grid is at its top', () => {
 	mockOS = 'android';
 	const scroll = { value: 0 };
 	const air = () => JSON.parse(screen.getByTestId('air').textContent!);
@@ -1091,12 +1094,25 @@ it('lets the tiles in the air out over the crumb, native only, while the grid is
 	expect(air().scroller).toEqual({ overflow: 'visible' });
 });
 
-it('the web keeps its scroller: overflow visible would end the scrolling', () => {
+// The web's scroller clipped a first-row tile walking home: a crumb-high band off the top of its
+// card for the gather's last frames, the root's tile stepped aside under it (web, 2026-10-18). Let
+// out, it dropped its classic scrollbar and every row widened by the bar under the tiles in flight.
+it('the web lets a gather out at its top, keeping the scrollbar’s width, and not a deal out', () => {
 	const scroll = { value: 0 };
+	const air = () => JSON.parse(screen.getByTestId('air').textContent!);
+	// An 8 px classic bar, as the app's own scrollbar style draws it where bars take width.
+	airScroller.current = { getScrollableNode: () => ({ offsetWidth: 300, clientWidth: 292 }) };
 	const { rerender } = render(<Stage detail={null} scroll={scroll} />);
 	rerender(<Stage detail="Hoodie" scroll={scroll} />);
 	layOut();
-	expect(JSON.parse(screen.getByTestId('air').textContent!)).toEqual({});
+	// Out: the level mounted in the air, with no bar yet to measure; it keeps its edge.
+	expect(air()).toEqual({});
+	act(() => jest.advanceTimersByTime(1000));
+	expect(air()).toEqual({});
+	// Home from the top: measured before it lets go, the bar's width stays as padding.
+	rerender(<Stage detail={null} scroll={scroll} />);
+	expect(air().scroller).toEqual({ overflow: 'visible', paddingEnd: 8 });
+	airScroller.current = null;
 });
 
 // A clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { readResidentMoneyEpoch, useQueryRuntime } from '@wcpos/query';
 
 /**
  * The save-time money mirror, held for the cashier (R1, ADR 0032).
@@ -27,7 +27,7 @@ import { useQueryRuntime } from '@wcpos/query';
  * ── Why entries are STICKY (ADR 0032, replacing the retire-on-clean-ack rule) ─
  *
  * A held divergence does two jobs. It shows the cashier a notice, and it tells
- * `useCartSettlement` that this order's money now belongs to the server — so
+ * the settlement coordinator that this order's money now belongs to the server — so
  * the POS stops re-deriving that aggregate (`serverOwnsMoney` below).
  *
  * That second job is what makes retirement wrong. Once the POS has stopped
@@ -38,7 +38,7 @@ import { useQueryRuntime } from '@wcpos/query';
  * order would oscillate: the divergence loop the old re-push guard existed to
  * defend against, arriving through the eviction path instead.
  *
- * So a diverged order stays diverged for as long as it is in the till. It is
+ * A diverged order stays owned for its money epoch; a server reopen advances it. It is
  * not dismissible either: this is a broken product invariant, not a notice the
  * cashier may wave away. It clears on a store switch, or when the order leaves.
  *
@@ -99,6 +99,16 @@ type DivergenceStore = {
 };
 
 const OrderMoneyDivergenceContext = React.createContext<DivergenceStore | undefined>(undefined);
+
+const readUnknownContract = () => null;
+const ServerMoneyReaderContext = React.createContext<{
+	serverOwnsMoney: (uuid: string) => boolean;
+	storeContract: () => string | null;
+}>({ serverOwnsMoney: () => false, storeContract: readUnknownContract });
+export const useServerOwnsMoneyReader = () =>
+	React.useContext(ServerMoneyReaderContext).serverOwnsMoney;
+export const useStoreContractReader = () =>
+	React.useContext(ServerMoneyReaderContext).storeContract;
 
 type DivergenceEvent = {
 	type: string;
@@ -171,8 +181,22 @@ function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
 	return kept;
 }
 
-export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
+export function OrderMoneyDivergenceProvider({
+	children,
+	storeContract = readUnknownContract,
+}: {
+	children: React.ReactNode;
+	/** Supplied by the session-owning layout; cart readers need no app-state provider. */
+	storeContract?: () => string | null;
+}) {
 	const { engine } = useQueryRuntime();
+	const ownership = React.useRef({ engine, epochs: new Map<string, number>() });
+	const serverOwnsMoney = React.useCallback(
+		(uuid: string) =>
+			ownership.current.engine === engine &&
+			ownership.current.epochs.get(uuid) === readResidentMoneyEpoch(engine, uuid),
+		[engine]
+	);
 	// State carries the engine it was observed on. Engines are constructed per
 	// site and never reused after disposal, so this identity check can only ever
 	// hide entries — it can never let a stale one back in, which a scope-id check
@@ -199,6 +223,7 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// is a claim about ONE store, and carrying a count across a switch would
 			// escalate the next till for the previous one's misconfiguration.
 			if (message.type === 'scope-switched') {
+				ownership.current = { engine, epochs: new Map() };
 				setState((current) =>
 					Object.keys(current.byOrderId).length === 0 &&
 					current.serverOwnedOrderIds.size === 0 &&
@@ -219,6 +244,9 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 
 			const orderId = message.recordId;
 			if (typeof orderId !== 'string' || orderId === '') return;
+			// Commands must see the event immediately, without waiting for React to render.
+			if (ownership.current.engine !== engine) ownership.current = { engine, epochs: new Map() };
+			ownership.current.epochs.set(orderId, readResidentMoneyEpoch(engine, orderId));
 
 			const held: OrderMoneyDivergence = {
 				orderId,
@@ -259,10 +287,17 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 		[byOrderId, serverOwnedOrderIds, divergedOrderCount]
 	);
 
+	const readers = React.useMemo(
+		() => ({ serverOwnsMoney, storeContract }),
+		[serverOwnsMoney, storeContract]
+	);
+
 	return (
-		<OrderMoneyDivergenceContext.Provider value={value}>
-			{children}
-		</OrderMoneyDivergenceContext.Provider>
+		<ServerMoneyReaderContext.Provider value={readers}>
+			<OrderMoneyDivergenceContext.Provider value={value}>
+				{children}
+			</OrderMoneyDivergenceContext.Provider>
+		</ServerMoneyReaderContext.Provider>
 	);
 }
 
@@ -292,10 +327,11 @@ export function useOrderMoneyDivergence(orderId: string | undefined): {
 	divergedOrderCount: number;
 } {
 	const store = React.useContext(OrderMoneyDivergenceContext);
+	const readOwnership = useServerOwnsMoneyReader();
 	const divergence = orderId && store ? (store.byOrderId[orderId] ?? null) : null;
 	return {
 		divergence,
-		serverOwnsMoney: Boolean(orderId && store?.serverOwnedOrderIds.has(orderId)),
+		serverOwnsMoney: Boolean(orderId && readOwnership(orderId)),
 		divergedOrderCount: store?.divergedOrderCount ?? 0,
 	};
 }

@@ -24,7 +24,7 @@ export {
 export { buildCreateMutation, buildDeleteMutation, buildUpdateMutation } from './recordMutation';
 // prettier-ignore
 export {
-	pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
+	NON_INTERNAL_MUTATION_STATUSES, isInternalRow, pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
 	RecordMutationQueue, RxRecordMutationStorage, type QueuedMutation,
 	type RxRecordMutationCollection,
 } from './recordMutationQueue';
@@ -87,6 +87,8 @@ export {
 	identityColumns,
 	identityColumnFilter,
 	POS_META_KEYS,
+	PROTECTED_ORDER_META_KEYS,
+	SERVER_ORDER_MONEY_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';
 export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';
@@ -116,3 +118,9 @@ export { reconcileRefundIds } from './refund-reconciliation';
 export { hasPosRefundStamp } from './refund-provenance';
 
 export { readServerSentence, readWpFatalDetail, SERVER_SENTENCE_MAX_CHARS } from './serverSentence';
+
+export {
+	parsePaymentsContract,
+	paymentsContractAtLeast,
+	readMoneyEpoch,
+} from './payments-contract';

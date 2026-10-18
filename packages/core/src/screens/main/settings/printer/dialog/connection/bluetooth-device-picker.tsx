@@ -1,16 +1,17 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { ListItem } from '@wcpos/components/list-item';
 import { resolveNativePrinterColumns, usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
 import { isBluetoothPickerPrinter } from './discovered-printer-filters';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../../schema';
+import { RadioDot } from '../../components/radio-dot';
 
 export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
@@ -27,7 +28,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
 				return (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`add-printer-bt-device-${device.id}`}
 						onPress={async () => {
@@ -55,20 +56,14 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 								}
 							}
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
-							selected ? 'border-primary bg-primary/5' : 'border-border'
-						}`}
+						selected={selected}
+						leading={<RadioDot selected={selected} />}
 					>
-						<View
-							className={`h-4 w-4 rounded-full border-2 ${
-								selected ? 'border-primary bg-primary' : 'border-border'
-							}`}
-						/>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
 							<Text className="text-muted-foreground text-xs">{device.address}</Text>
 						</VStack>
-					</Pressable>
+					</ListItem>
 				);
 			})}
 			<Button

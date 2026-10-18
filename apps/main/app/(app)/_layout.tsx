@@ -15,6 +15,7 @@ import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
 import { SearchMetaKeysBridge } from '@wcpos/core/screens/main/components/search-meta-keys-bridge';
 import { SearchWarmupBridge } from '@wcpos/core/screens/main/components/search-warmup-bridge';
+import { MoneyOwnerHintBridge } from '@wcpos/core/screens/main/components/money-owner-hint-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
 import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bridge';
@@ -31,7 +32,7 @@ import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
-import { QueryProvider, useDocField } from '@wcpos/query';
+import { QueryProvider, readStorePaymentsContract, useDocField } from '@wcpos/query';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
@@ -78,7 +79,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB, extraData } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
@@ -126,6 +127,7 @@ function AppStack() {
 	) as boolean;
 	const useCacheBuster = useDocField(site, (value) => value.use_cache_buster) as boolean;
 	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
+	const useInstanceHeader = useDocField(site, (value) => value.use_instance_header) as boolean;
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
@@ -140,14 +142,14 @@ function AppStack() {
 	React.useEffect(() => {
 		registerEngineScopeSwitcher(async (session) => {
 			if (!session.site || !session.wpCredentials) return;
-			await switchAppEngineScope(
-				session,
-				createSessionFetcherOptions(
+			await switchAppEngineScope(session, {
+				paymentsContract: () => readStorePaymentsContract(session.extraData),
+				...createSessionFetcherOptions(
 					session.site.getLatest(),
 					session.wpCredentials,
 					t('auth.session_renewed_automatically')
-				)
-			);
+				),
+			});
 		});
 		return () => registerEngineScopeSwitcher(null);
 	}, [t]);
@@ -157,6 +159,7 @@ function AppStack() {
 			createAppSyncEngine({
 				wpApiUrl,
 				siteDocument: site,
+				paymentsContract: () => readStorePaymentsContract(extraData),
 				...createSessionFetcherOptions(
 					{
 						wcpos_api_url: wcposApiUrl,
@@ -166,6 +169,7 @@ function AppStack() {
 						use_rest_route_param: useRestRouteParamField,
 						use_cache_buster: useCacheBuster,
 						use_protocol_headers: useProtocolHeaders,
+						use_instance_header: useInstanceHeader,
 					},
 					wpCredentials,
 					t('auth.session_renewed_automatically')
@@ -174,6 +178,7 @@ function AppStack() {
 			}),
 		[
 			site,
+			extraData,
 			wpApiUrl,
 			wcposApiUrl,
 			storeID,
@@ -183,6 +188,7 @@ function AppStack() {
 			useCacheBuster,
 			wcposVersion,
 			useProtocolHeaders,
+			useInstanceHeader,
 			wpCredentials,
 			t,
 		]
@@ -206,10 +212,19 @@ function AppStack() {
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
 			<ExtraDataProvider>
 				<SyncConfigBridge />
+				{/* Under BOTH providers on purpose. The online-status provider: a REST client
+				    rendered above it reads the context default ("offline") and sets the
+				    app-wide request block — every request then fails "No internet connection"
+				    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). The
+				    query provider: the client's re-login path reads the query runtime
+				    (useSessionLoginFlow, #2629), and above the provider that throws at render
+				    on every fresh load (dev-next, 2026-10-17). */}
+				<CustomerDisplayServiceController />
 				{/* Keeps the "changes that never reached your server" count current for
 				    the root error boundary, which renders above every provider and so
 				    cannot ask the engine itself (#1098). */}
 				<UnsentChangesBridge />
+				<MoneyOwnerHintBridge />
 				{/* Receipt emails queued while offline drain from here (#165) — above the
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
@@ -432,11 +447,6 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<OnlineStatusLogger />
-			{/* Lives under the online-status provider on purpose: it uses the REST client, and a
-			    client rendered above the provider reads the context default ("offline") and sets
-			    the app-wide request block — every request then fails "No internet connection"
-			    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). */}
-			<CustomerDisplayServiceController />
 			<EngineConnectivityBridge />
 			<MetricsPersistenceBridge />
 			<SyncStatusPersistenceBridge />

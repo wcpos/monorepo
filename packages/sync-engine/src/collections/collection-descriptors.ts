@@ -40,12 +40,14 @@ import {
 	type RemoteId,
 	remoteIdOrNull,
 	remoteKeyFor,
+	SERVER_ORDER_MONEY_META_KEYS,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
+import { mergeProtectedOrderMeta } from '../write-path/merge-protected-order-meta';
 import {
 	type BarcodeSelectors,
 	barcodeSelectorsFor,
@@ -61,6 +63,7 @@ import {
 import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 import {
 	EngineOrderRepository,
+	type OrderIngestionContext,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
@@ -250,7 +253,11 @@ export type CollectionWriteFacet = {
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
 	/** Missing-row ack/discard write-back through the collection's repository seam. */
-	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
+	upsertServerDocument: (
+		db: RxDatabase,
+		document: Record<string, unknown>,
+		context?: OrderIngestionContext
+	) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
@@ -266,7 +273,9 @@ export type CollectionWriteFacet = {
 	onDeleteAck: (
 		db: RxDatabase,
 		mutation: { mutationId: string; recordId: string },
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		/** Annihilation reports cleanup without rejecting committed removal; must not throw. */
+		onCleanupError?: (error: unknown) => void
 	) => Promise<void>;
 };
 
@@ -345,14 +354,11 @@ function ackBookkeeping(options: {
 						const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
 							? [...adoptedPayload.meta_data]
 							: [];
-						for (const key of preserveMetaKeys) {
-							const localEntry = localMeta.find((entry) => entry?.key === key);
-							if (!localEntry) continue;
-							const index = adoptedMeta.findIndex((entry) => entry?.key === key);
-							if (index === -1) adoptedMeta.push(localEntry);
-							else adoptedMeta[index] = localEntry;
-						}
-						adoptedPayload = { ...adoptedPayload, meta_data: adoptedMeta };
+
+						adoptedPayload = {
+							...adoptedPayload,
+							meta_data: mergeProtectedOrderMeta(localMeta, adoptedMeta),
+						};
 					}
 					adoptionPatch = withOrderColumns({ ...adoptionPatch, payload: adoptedPayload });
 				}
@@ -395,12 +401,12 @@ function ackBookkeeping(options: {
 				};
 			});
 		},
-		onDeleteAck: async (db, mutation, signal) => {
-			if (signal?.aborted) return;
+		onDeleteAck: async (db, mutation, signal, onCleanupError) => {
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
 			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
 			const data =
@@ -413,10 +419,15 @@ function ackBookkeeping(options: {
 							)
 						)[0]
 					: undefined);
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
 			if (doc) await doc.remove();
-			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			try {
+				if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			} catch (error) {
+				if (!onCleanupError) throw error; // Ordinary delete acks retry the cascade.
+				onCleanupError(error); // Removal committed: annihilation must not restore the chain.
+			}
 		},
 	};
 }
@@ -653,12 +664,26 @@ const ordersWriteFacet = createWriteFacet({
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
-	// cart. Identity only, never a value. The display-field strip re-applies
-	// because a payload may predate it (#885/#890) and this rewrites line arrays.
+	// cart. Editable values stay local; server-owned money facts replace local meta.
+	// The display-field strip re-applies for payloads predating it (#885/#890).
 	graftAckIdentity: (payload, source, options) =>
-		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
-	upsert: async (db, document) => {
-		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
+		stripNonStringMetaDisplayFields({
+			...graftServerLineIdentity(payload, source, options),
+			// Even with a successor, the server owns these facts; editable intent stays local.
+			meta_data: [
+				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
+					(entry) => !['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+				),
+				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+					['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+				),
+			],
+		}),
+	upsert: async (db, document, context) => {
+		await new EngineOrderRepository(db.collections as never).upsertMany(
+			[document as never],
+			context
+		);
 	},
 });
 

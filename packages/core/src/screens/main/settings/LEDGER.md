@@ -4,7 +4,7 @@ Seeded 2026-09-18 from the screen inventory `docs/prototypes/2026-09-12-language
 
 **Job:** Compose the general, tax and appearance settings pages with immediate persistence.
 
-**Composes:** `SettingsPage`, `SettingsSection`, `SettingsRow`, `SettingsDangerZone`, form controls, customer selection, theme tiles, Suspense and ErrorBoundary.
+**Composes:** `SettingsPage` (the shared `AreaPage`: one card on the page ground, heading inside), `SettingsSection`, `SettingsRow`, `SettingsDangerZone`, form controls, customer selection, theme tiles, Suspense and ErrorBoundary.
 
 ## Lines
 

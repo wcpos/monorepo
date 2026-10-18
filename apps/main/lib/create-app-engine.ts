@@ -20,6 +20,7 @@ import {
 	refreshAccessToken,
 	type RefreshAccessTokenConfig,
 } from '@wcpos/hooks/use-http-client/refresh-access-token';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
@@ -94,6 +95,7 @@ const isWeb = Platform.isWeb;
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
 
 export interface CreateAppSyncEngineOptions {
+	paymentsContract?: () => string | null;
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
 	/**
@@ -115,6 +117,7 @@ export interface CreateAppSyncEngineOptions {
 	useCacheBuster?: boolean;
 	bareAuthParam?: boolean;
 	useProtocolHeaders?: boolean;
+	useInstanceHeader?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
 	 * request's arc id is passed so the refresh layer's "Session renewed
@@ -139,6 +142,7 @@ export interface CreateAppSyncEngineOptions {
 // scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
+	| 'paymentsContract'
 	| 'credentials'
 	| 'refreshAuth'
 	| 'useJwtAsParam'
@@ -146,6 +150,7 @@ type MutableFetcherOptions = Pick<
 	| 'useRestRouteParam'
 	| 'useCacheBuster'
 	| 'useProtocolHeaders'
+	| 'useInstanceHeader'
 >;
 type CachedEngine = {
 	renderKey: string | null;
@@ -407,7 +412,7 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 
 /** Shared by render and awaited session commits, including the incoming cashier's refresh. */
 export function createSessionFetcherOptions(
-	site: RefreshAccessTokenConfig['site'],
+	site: RefreshAccessTokenConfig['site'] & { use_instance_header?: boolean },
 	wpCredentials: RefreshAccessTokenConfig['wpUser'] & CreateAppSyncEngineOptions['credentials'],
 	sessionRenewedMessage: string
 ): MutableFetcherOptions {
@@ -418,6 +423,7 @@ export function createSessionFetcherOptions(
 		useCacheBuster: site.use_cache_buster,
 		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
 		useProtocolHeaders: site.use_protocol_headers,
+		useInstanceHeader: site.use_instance_header,
 		refreshAuth: (context) =>
 			refreshAccessToken({
 				site: {
@@ -438,12 +444,14 @@ export function createSessionFetcherOptions(
 function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOptions {
 	return {
 		credentials: options.credentials,
+		paymentsContract: options.paymentsContract,
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
 		useRestRouteParam: options.useRestRouteParam,
 		useCacheBuster: options.useCacheBuster,
 		useProtocolHeaders: options.useProtocolHeaders,
+		useInstanceHeader: options.useInstanceHeader,
 	};
 }
 
@@ -947,11 +955,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	}
 	const engine = createRxdbSyncEngine(
 		{
+			paymentsContract: () => fetcherOptions.paymentsContract?.() ?? null,
 			site: {
 				...site,
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
 			},
 			storage: defaultConfig.storage,
+			getInstanceId,
 			fetcher,
 			onUpdateRequired: (details) => {
 				reportUpdateRequired(options.scope.site, details);
@@ -963,7 +973,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			},
 			queryTotal: {
-				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
+				fetchWooQueryTotal: (input) =>
+					fetchWooQueryTotal(input, engine.hostTransport().fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
 			holdAutomaticTicks: () =>
@@ -1000,6 +1011,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return {
 			site,
 			storage: defaultConfig.storage,
+			getInstanceId,
 			fetcher: createEngineFetcher({
 				auth: { ...fetcherOptions },
 				clockSkew: { generation: 0, evaluated: false },

@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { BluetoothCandidate } from '@wcpos/printer';
@@ -35,22 +36,25 @@ export function ElectronBtPicker({
 	if (candidates.length === 0) return null;
 	const { likely, named, unnamed } = rankBluetoothCandidates(candidates);
 	const item = (d: BluetoothCandidate, isLikely: boolean) => (
-		<Pressable
+		<ListItem
 			key={d.id}
 			testID={`electron-bt-device-${d.id}`}
 			onPress={() => onSelect(d.id)}
-			className={`flex-row items-center gap-2 rounded-md border p-2 ${
-				isLikely ? 'border-primary bg-primary/5' : 'border-border'
-			}`}
+			leading={
+				<View
+					className={`size-2 rounded-full ${isLikely ? 'bg-primary' : 'bg-muted-foreground'}`}
+				/>
+			}
+			trailing={
+				isLikely ? (
+					<Text className="text-primary text-xs font-semibold">
+						{t('settings.bt_likely_printer')}
+					</Text>
+				) : null
+			}
 		>
-			<View className={`h-2 w-2 rounded-full ${isLikely ? 'bg-primary' : 'bg-muted-foreground'}`} />
-			<Text className="flex-1 text-sm">{d.name || d.id}</Text>
-			{isLikely && (
-				<Text className="text-primary text-xs font-semibold">
-					{t('settings.bt_likely_printer')}
-				</Text>
-			)}
-		</Pressable>
+			<Text className="text-sm">{d.name || d.id}</Text>
+		</ListItem>
 	);
 	return (
 		<VStack className="gap-2">

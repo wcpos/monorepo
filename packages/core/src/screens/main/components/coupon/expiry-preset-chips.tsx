@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 
 import { DatePickerInput } from './date-picker-input';
@@ -28,24 +28,21 @@ export function ExpiryPresetChips({ value, onChange }: ExpiryPresetChipsProps) {
 
 	return (
 		<HStack className="flex-wrap gap-2">
-			<ButtonPill
-				size="sm"
-				variant={hasDate ? 'muted' : 'default'}
+			<Chip
+				label={t('coupons.never_expires')}
+				on={!hasDate}
 				onPress={() => onChange(null)}
 				testID="coupon-expiry-never"
-			>
-				<ButtonText>{t('coupons.never_expires')}</ButtonText>
-			</ButtonPill>
+			/>
 			{presets.map((preset) => (
-				<ButtonPill
+				<Chip
 					key={preset.key}
-					size="sm"
-					variant="muted"
+					label={preset.label}
+					// A preset reads as picked while the field holds the date it sets today.
+					on={value === expiryPresetToDate(preset.key, timezone)}
 					onPress={() => onChange(expiryPresetToDate(preset.key, timezone))}
 					testID={`coupon-expiry-${preset.key}`}
-				>
-					<ButtonText>{preset.label}</ButtonText>
-				</ButtonPill>
+				/>
 			))}
 			<DatePickerInput value={value ?? null} onChange={onChange} label={t('coupons.pick_a_date')} />
 		</HStack>

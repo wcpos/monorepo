@@ -1,7 +1,7 @@
 import { withLedger } from '@wcpos/order-math';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import { createActionContext, resetActionHookStrikes } from '../../../../extensions/actions';
-import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 import { commitGatewaySale } from './commit-gateway-sale';
 import { row } from './payments/device/fixtures.test-utils';
 import { persistSaleProvenance, recordSaleAttempt } from './sale-completion';
@@ -9,8 +9,8 @@ import { persistSaleProvenance, recordSaleAttempt } from './sale-completion';
 import type { SaleContext } from './sale-completion';
 
 const mockRequireOpenSession = jest.fn();
-jest.mock('../../../../services/register-session/session-store', () => ({
-	...jest.requireActual('../../../../services/register-session/session-store'),
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
 	requireOpenSession: (...args: unknown[]) => mockRequireOpenSession(...args),
 }));
 jest.mock('./sale-completion', () => ({
@@ -38,7 +38,7 @@ const ctx = {
 		resolveSession,
 	}),
 	actionActor: { userId: 7, registerId: 'register', sessionId: null },
-	sessions: {},
+	storeDB: {},
 	sessionsOn: true,
 	dp: 2,
 } as unknown as SaleContext;
@@ -46,6 +46,7 @@ const input = {
 	order,
 	source: 'gateway-contract' as const,
 	methodId: 'stripe',
+	settledOrderStatus: 'pending',
 	bindingStatus: 'bound' as const,
 	online: true,
 };
@@ -67,6 +68,8 @@ it('journals and stamps the provenance on the gate-approved session, then return
 		order,
 		completing: true,
 		source: 'gateway-contract',
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'stripe',
 	});
 	expect(persistSaleProvenance).toHaveBeenCalledWith(ctx, {
 		order,

@@ -1,7 +1,9 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import { Button } from '@wcpos/components/button';
 import type { InputProps } from '@wcpos/components/input';
+import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
 import { Textarea } from '@wcpos/components/textarea';
 
 /**
@@ -103,13 +105,15 @@ export function EditableField({
 			onPress={() => setEditing(true)}
 			disabled={!editable}
 		>
-			<ButtonText
-				className={bold ? 'font-bold' : variant === 'ghost' ? 'font-normal' : undefined}
+			{/* The field's value is data, not a quiet action: on a ghost it keeps the foreground
+			    over the variant's muted label (a cart line's name must not read as disabled). */}
+			<Text
+				className={cn(variant === 'ghost' && 'text-foreground font-normal', bold && 'font-bold')}
 				numberOfLines={numberOfLines}
 				decodeHtml
 			>
 				{editValue}
-			</ButtonText>
+			</Text>
 		</Button>
 	);
 }

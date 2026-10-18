@@ -1,5 +1,6 @@
 import { withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import {
 	createActionContext,
@@ -7,7 +8,6 @@ import {
 	TENDER_COMMIT_EVENT,
 	TENDER_GUARD_IDS,
 } from '../../../../extensions/actions';
-import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 import {
 	enqueueOrderMutation,
 	type OrderMutationContext,
@@ -38,9 +38,9 @@ const ctx: SaleCommitContext = {
 		resolveSession,
 	}),
 	actionActor: { userId: 7, registerId: 'register', sessionId: null },
-	sessions: {
-		findOne: () => ({ exec: async () => openSession }),
-	} as unknown as SaleCommitContext['sessions'],
+	storeDB: {
+		collections: { register_sessions: { findOne: () => ({ exec: async () => openSession }) } },
+	} as unknown as SaleCommitContext['storeDB'],
 	sessionsOn: true,
 	dp: 2,
 };
@@ -226,9 +226,9 @@ it('a guard refusal is returned and the write never runs', async () => {
 	expect(patchSession).not.toHaveBeenCalled();
 });
 
-it('the write receives the gate-stamped ids after the pre-action session write', async () => {
+it('the write receives the gate-stamped ids without patching the session', async () => {
 	const written = await commitSale(ctx, request, async (sale) => {
-		expect(patchSession).toHaveBeenCalledWith({ server_expected: null, server_sales_count: null });
+		expect(patchSession).not.toHaveBeenCalled();
 		return { registerId: sale.registerId, sessionId: sale.sessionId };
 	});
 	expect(written).toEqual({ registerId: 'register', sessionId: 'session' });

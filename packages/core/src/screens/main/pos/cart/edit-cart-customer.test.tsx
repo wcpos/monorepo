@@ -64,6 +64,7 @@ jest.mock('react-hook-form', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	useQueryRuntime: () => manager,
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
@@ -124,7 +125,9 @@ jest.mock('../../components/shipping-address-form', () => {
 	};
 });
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('../../hooks/mutations/use-mutation', () => ({
 	useMutation: (props: unknown) => {
@@ -216,3 +219,7 @@ describe('EditCartCustomerForm', () => {
 		expect(screen.queryByTestId('pos_cart.save_to_order_customer')).toBeNull();
 	});
 });
+
+jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({}) }));

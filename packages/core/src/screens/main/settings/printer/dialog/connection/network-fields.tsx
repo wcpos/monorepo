@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
@@ -197,11 +198,9 @@ export function NetworkFields({
 						const endpoint = resultEndpoint?.(printer);
 						const discoveredAt = `${printer.address}${printer.port ? `:${printer.port}` : ''}`;
 						return (
-							<Button
+							<ListItem
 								key={printer.id}
 								testID={`add-printer-network-result-${printer.id}`}
-								variant="outline"
-								className="h-auto items-start justify-start py-2"
 								onPress={() => {
 									form.setValue('connectionType', 'network');
 									form.setValue('address', printer.address, { shouldValidate: true });
@@ -224,35 +223,33 @@ export function NetworkFields({
 									}
 								}}
 							>
-								<VStack className="flex-1 items-start gap-0.5">
-									<Text className="text-sm font-medium">{printer.name}</Text>
-									<Text className="text-muted-foreground text-xs">
-										{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
+								<Text className="text-sm font-medium">{printer.name}</Text>
+								<Text className="text-muted-foreground text-xs">
+									{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
+								</Text>
+								{endpoint && (
+									<Text
+										testID={`add-printer-network-result-endpoint-${printer.id}`}
+										className="text-muted-foreground text-xs"
+									>
+										{t('settings.web_print_will_use').replace('%s', endpoint)}
 									</Text>
-									{endpoint && (
-										<Text
-											testID={`add-printer-network-result-endpoint-${printer.id}`}
-											className="text-muted-foreground text-xs"
-										>
-											{t('settings.web_print_will_use').replace('%s', endpoint)}
-										</Text>
-									)}
-									{resultEndpoint && printer.port === 9100 && (
-										<Text
-											testID={`add-printer-network-result-raw-tcp-${printer.id}`}
-											className="text-muted-foreground text-xs"
-										>
-											{t('settings.raw_tcp_not_supported_on_web')}
-										</Text>
-									)}
-									<HStack className="items-center gap-1 pt-1">
-										<Icon name="circlePlus" size="sm" className="text-primary" />
-										<Text className="text-primary text-xs font-semibold">
-											{t('settings.use_this_printer')}
-										</Text>
-									</HStack>
-								</VStack>
-							</Button>
+								)}
+								{resultEndpoint && printer.port === 9100 && (
+									<Text
+										testID={`add-printer-network-result-raw-tcp-${printer.id}`}
+										className="text-muted-foreground text-xs"
+									>
+										{t('settings.raw_tcp_not_supported_on_web')}
+									</Text>
+								)}
+								<HStack className="items-center gap-1 pt-1">
+									<Icon name="circlePlus" size="sm" className="text-primary" />
+									<Text className="text-primary text-xs font-semibold">
+										{t('settings.use_this_printer')}
+									</Text>
+								</HStack>
+							</ListItem>
 						);
 					})}
 				</VStack>

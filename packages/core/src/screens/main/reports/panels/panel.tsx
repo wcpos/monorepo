@@ -306,7 +306,6 @@ export function DetailPanel() {
 						<Button
 							testID="detail-panel-export"
 							variant="outline"
-							className="min-h-12"
 							loading={busy}
 							onPress={async () => {
 								if (busy) return;
@@ -337,7 +336,6 @@ export function DetailPanel() {
 					)}
 					<Button
 						testID="detail-panel-print"
-						className="min-h-12"
 						disabled={!!waiting}
 						loading={doc.isPrinting}
 						onPress={async () => {

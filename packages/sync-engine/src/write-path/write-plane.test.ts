@@ -130,7 +130,7 @@ describe('write-plane status notifications', () => {
 			collections: { orders: { findOne: () => ({ exec: async () => resident }) } },
 			listCollections: () => [],
 			resetCollection: async () => undefined,
-			pendingMutationCount: async () => 0,
+			pendingMutationIds: async () => [],
 			close: async () => undefined,
 		} as unknown as RxDatabase & ScopeDatabase;
 		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());

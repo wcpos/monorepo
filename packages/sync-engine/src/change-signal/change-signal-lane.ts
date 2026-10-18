@@ -47,6 +47,7 @@ import {
 } from './change-signal-source';
 import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
+import { RequestTimeoutError } from '../write-path/request-timeout';
 
 import type { RxDatabase } from 'rxdb';
 import type {
@@ -537,7 +538,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				lastError = null;
 				return { lane: 'change-signal', status: 'skipped', reason: 'aborted' };
 			}
-			const status = error instanceof ChangeSignalPoisonError ? error.status : undefined;
+			// A request deadline is a transport failure with no response: status 0, so the
+			// observer files it as unreachable beside the engine.request.deadline row rather
+			// than as a crashed task.
+			const status =
+				error instanceof ChangeSignalPoisonError
+					? error.status
+					: error instanceof RequestTimeoutError
+						? 0
+						: undefined;
 			deps.diagnostics({
 				type: 'signal.tick.error',
 				level: 'error',

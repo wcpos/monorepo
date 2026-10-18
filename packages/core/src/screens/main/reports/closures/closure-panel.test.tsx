@@ -76,11 +76,27 @@ jest.mock('../../hooks/use-currency-format', () => ({
 			}).format(n),
 	}),
 }));
-jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => mockCollection,
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readClosure: async (_db: unknown, identity: { id?: string; serverClosureId?: string }) =>
+		mockCollection
+			.findOne({
+				selector: {
+					$or: [
+						{ id: identity.id ?? identity.serverClosureId },
+						{ server_closure_id: identity.serverClosureId ?? identity.id },
+					],
+				},
+			})
+			.exec(),
+	setClosureReceiptSnapshot: async (_db: unknown, _id: string, snapshot: string) =>
+		mockPatch({ receipt_snapshot: snapshot }),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
+	// The resolved-printer hook reads the overrides through this named read; the test's
+	// override rows (`mockOverrides`) drive the Thermal route exactly as the collection did.
+	observeTemplatePrinterOverrides: () => mockOverrides,
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({

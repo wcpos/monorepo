@@ -5,6 +5,7 @@ import {
 	__resetRedirectResultForTesting,
 	captureRedirectResult,
 	claimRedirectResult,
+	peekRedirectClaim,
 	peekRedirectLoginUrl,
 	saveRedirectState,
 } from './redirect-result';
@@ -174,6 +175,15 @@ describe('redirect-result', () => {
 		expect(peekRedirectLoginUrl()).toBe(LOGIN_URL);
 		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
 		expect(peekRedirectLoginUrl()).toBeNull();
+	});
+
+	it('peekRedirectClaim reveals the initiating site and claimKey without consuming', () => {
+		simulateRedirectReturn({ claimKey: 'add-user' });
+
+		expect(peekRedirectClaim()).toEqual({ loginUrl: LOGIN_URL, claimKey: 'add-user' });
+		expect(peekRedirectClaim()).toEqual({ loginUrl: LOGIN_URL, claimKey: 'add-user' });
+		expect(claimRedirectResult(LOGIN_URL, 'add-user')?.type).toBe('success');
+		expect(peekRedirectClaim()).toBeNull();
 	});
 
 	it('delivers a server error response to the initiating site', () => {

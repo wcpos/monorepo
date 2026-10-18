@@ -32,7 +32,10 @@ export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
 } from './transport/response-envelope';
-export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
+export {
+	discardConsequence,
+	rejectionSuggestsServerRecord,
+} from './write-path/conflict-resolution';
 /** A scope generation bump strands the previous generation's unsent sales in its old
  * database: the host drains it through this before anything removes it. */
 export {
@@ -72,3 +75,17 @@ export type { QueryTotalWooRequest } from './scheduler';
 export type { CouponReferenceOrderby, TermReferenceOrderby } from './scheduler';
 
 export type { WooRefundPayload, LocalRefundDocument } from './collections/refund-schema';
+
+export { hasPendingLocalWork } from './write-path/local-work-guard';
+
+export { mergeProtectedOrderMeta } from './write-path/merge-protected-order-meta';
+
+export {
+	type QueueRow,
+	type QueueRowStatus,
+	QUEUE_ROW_STATUSES,
+	TERMINAL_QUEUE_STATUSES,
+	PARKED_QUEUE_STATUSES,
+	BACKLOG_QUEUE_STATUSES,
+	REJECTED_QUEUE_STATUSES,
+} from './queue-rows';

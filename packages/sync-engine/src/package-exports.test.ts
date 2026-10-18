@@ -12,6 +12,22 @@ describe('package exports', () => {
 		expect(Object.keys(production).sort()).toEqual(
 			[
 				'createRxdbSyncEngine',
+				// Typed queue consumers share the engine's complete status vocabulary.
+				'QUEUE_ROW_STATUSES',
+				// Human decisions partition backlog from terminal work.
+				'TERMINAL_QUEUE_STATUSES',
+				// The unresolved panel selects parked work without re-spelling statuses.
+				'PARKED_QUEUE_STATUSES',
+				// Health counters select network-waiting work.
+				'BACKLOG_QUEUE_STATUSES',
+				// The dead-letter panel selects permanent refusals.
+				'REJECTED_QUEUE_STATUSES',
+				// Register accounting shares the engine's definition of pending local work.
+				'hasPendingLocalWork',
+				// The one protected-order-meta rule (identity re-stamps, the one-way money-owner
+				// hint, Woo ids kept): pull adoption, acknowledgement adoption and core's
+				// mutation boundary must agree, so core imports the engine's merge (#2688).
+				'mergeProtectedOrderMeta',
 				'normalizeVariationAttributes',
 				// The variation projector, exported so @wcpos/query's parity test can pin
 				// the map face against it — the drift tripwire #1308 gave products/orders.
@@ -21,6 +37,8 @@ describe('package exports', () => {
 				// The Store health panel must decide "does discard delete this record?"
 				// from the SAME rule the engine enforces (#832 follow-up, R7b).
 				'rejectionSuggestsServerRecord',
+				// Query descriptions and actual discard share the same consequence rule.
+				'discardConsequence',
 				// A scope generation bump opens a fresh database; the host drains the previous
 				// generation's unsent sales through the engine's own write path before that
 				// database is removed (SCOPE_DATABASE_GENERATION 5 -> 6).
@@ -55,6 +73,7 @@ describe('package exports', () => {
 		expect(Object.keys(testing).sort()).toEqual([
 			'createEngineHarness',
 			'customerBrowseWindowQueryKeyFromDimensions',
+			'drainableGenerationCollectionCreators',
 			'engineCollectionCreators',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',

@@ -1,10 +1,7 @@
+export type { ReadonlyEngineRecord } from './records/readonly-engine-record';
 export { QueryProvider, useQueryRuntime } from './provider';
 export type { EngineRecord, EngineRecordCollectionName } from './records/engine-record';
-export {
-	engineCollection,
-	observeEngineCollection,
-	type EngineCollection,
-} from './records/engine-collection';
+export { engineCollection, type EngineCollection } from './records/engine-collection';
 export { useDocField, useRecordField } from './records/use-record-field';
 export {
 	useFollowedCollection,
@@ -47,6 +44,7 @@ export type {
 export { variationAllMatch, variationAttributesMatch } from './engine-adapter/translate-selector';
 export {
 	observeCoverage,
+	readCoverageGeneration,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,
@@ -104,3 +102,64 @@ export type {
 	QueryLaneProgress,
 	QuerySnapshot,
 } from './query-handle';
+
+export {
+	observePaymentMethodHistory,
+	type ObservedPaymentMethod,
+} from './reads/payment-method-history';
+export { observeProductMetaKeys } from './reads/product-meta-keys';
+export { observeUnsentWorkCount } from './reads/unsent-work-count';
+export { hasQueuedDelete } from './reads/queued-delete';
+
+export {
+	observeQueueRows,
+	observeQueueCounts,
+	type EngineMutationCounts,
+	type QueueSelection,
+	BACKLOG_QUEUE_STATUSES,
+	PARKED_QUEUE_STATUSES,
+	REJECTED_QUEUE_STATUSES,
+	TERMINAL_QUEUE_STATUSES,
+} from './reads/queue-rows';
+
+export { observeDescribedQueueRows, type DescribedQueueRow } from './reads/described-queue-rows';
+
+export {
+	observeCollectionCounts,
+	emptyCollectionCounts,
+	type EngineCollectionCounts,
+} from './reads/collection-counts';
+
+export {
+	observeTemplatePrinterOverrides,
+	observePrinterProfiles,
+	observeActiveTemplates,
+	type StoreLocalDatabase,
+	type NotificationRow,
+	type ActiveTemplate,
+	type LocalPrinterProfile,
+} from './reads/store-local';
+
+export { readStorePaymentsContract, useStorePaymentsContract } from './store-payments-contract';
+
+export { readResidentMoneyEpoch } from './reads/order-money-epoch';
+export {
+	savePrinterProfile,
+	ensureSystemPrinterProfile,
+	setDefaultPrinterProfile,
+	deletePrinterProfile,
+	PrinterProfileNotFoundError,
+	StoreDatabaseUnavailableError,
+	SYSTEM_PRINTER_ID,
+	type PrinterStoreDatabase,
+	type PrinterProfileFields,
+} from './commands/printer-profiles';
+export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
+
+export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';
+export {
+	markNotificationRead,
+	markAllNotificationsRead,
+	markAllNotificationsSeen,
+	upsertNotification,
+} from './commands/notifications';

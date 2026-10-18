@@ -1,4 +1,4 @@
-import { wooMetaCarrier } from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { backordersAllowed } from '../../components/product/resolve-stock';
 
@@ -51,7 +51,7 @@ type StockLine = Pick<CartLineStockIdentity, 'quantity' | 'meta_data'>;
  * unreadable or negative. Its product's stock_quantity is already lowered by them.
  */
 export function reducedStockQuantity(line: StockLine): number {
-	const value = line.meta_data?.find((meta) => meta.key === '_reduced_stock')?.value;
+	const value = line.meta_data?.find((meta) => meta.key === POS_META_KEYS.reducedStock)?.value;
 	return Math.max(0, Number(value) || 0);
 }
 

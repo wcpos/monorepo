@@ -58,13 +58,14 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
+import { MUTATION_QUEUE_RXDB_COLLECTION } from './collections/engine-collections';
+import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
-	MUTATION_QUEUE_RXDB_COLLECTION,
 	resetEngineCollection,
 	type ResettableCollectionName,
 	SYNC_COLLECTION_NAMES,
@@ -108,6 +109,7 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_LEASE_FOR_MS,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -134,6 +136,7 @@ import {
 	createWritePlane,
 	type WriteIntent,
 } from './write-path/write-plane';
+import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
@@ -156,6 +159,7 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
+import type { QueueRow } from './queue-rows';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -254,6 +258,9 @@ export type EngineStringStore = {
 };
 
 export type RxdbSyncEnginePorts = {
+	/** The active store payments contract; unknown stores retain the legacy envelope. */
+	paymentsContract?: () => string | null;
+	getInstanceId?: () => string | undefined | Promise<string | undefined>;
 	site: { syncBaseUrl: string; wpJsonRoot: string; wcposVersion?: () => string | undefined };
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
@@ -346,6 +353,10 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+// Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
+const ENGINE_REQUEST_DEADLINE_MS = 60_000;
+// Leave five seconds to settle the probe before its claim can be taken over.
+const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -606,6 +617,11 @@ export type RxdbSyncEngine = {
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
 	db$(cb: (db: RxDatabase | null) => void): Unsubscribe;
+	/** Live non-internal queue; null means no active scope. Errors remain distinguishable from empty. */
+	queueRows$(
+		listener: (rows: readonly QueueRow[] | null) => void,
+		onError?: (error: unknown) => void
+	): Unsubscribe;
 	scope: {
 		/** Pause/resume; serialized; works offline. Same-site only. */
 		switch(identity: StoreScopeIdentity): Promise<ActiveScope>;
@@ -719,6 +735,8 @@ export type RxdbSyncEngine = {
 	 * Throws for an unknown/non-terminal mutationId, for 'retry-with-server-base'
 	 * on a rejected row, or for 'requeue-rebuilt' on anything but a rejected row.
 	 */
+	/** Credentials were saved: release the session hold and kick the write drain. */
+	sessionRestored(): void;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
 	/** Component-declared data requirement (CONTEXT.md): coverage-aware ready
 	 * (serve-local without a fetch when every record is resident), priority
@@ -874,20 +892,28 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const fetcher: EngineFetcher = async (url, init) => {
-		if (updateRequiredRefusal !== null) {
-			return new Response(updateRequiredRefusal.body, {
-				status: updateRequiredRefusal.status,
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
+	const createRequestObservation = (callerSignal?: AbortSignal | null) => {
 		const startedAtMs = nowMs();
+		let observed = false;
+		// The age that decides whether an abort was a timeout is measured at the ABORT, not at
+		// the moment a transport that ignored the signal finally rejects (which can be at the
+		// deadline, long after a young cancellation).
+		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
+		const onAbort = () => {
+			abortedAtMs ??= nowMs();
+		};
+		callerSignal?.addEventListener('abort', onAbort, { once: true });
+		// A lane signal is reused across many requests; drop the listener when this one ends.
+		const release = () => callerSignal?.removeEventListener('abort', onAbort);
+		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
 		const observe = (
 			status: number,
 			retryAfter?: string | null,
 			pressure?: ServerPressure,
 			serverLoad1m?: number
 		): void => {
+			if (observed) return;
+			observed = true;
 			const atMs = nowMs();
 			const reportedBefore = serverPressure.reported();
 			const signalBefore = serverPressure.signal();
@@ -912,6 +938,26 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
+		return { observe, abortAgeMs, release };
+	};
+	const transportFetcher = async (
+		url: string,
+		init: RequestInit | undefined,
+		{ observe, abortAgeMs }: ReturnType<typeof createRequestObservation>
+	) => {
+		if (updateRequiredRefusal !== null) {
+			return new Response(updateRequiredRefusal.body, {
+				status: updateRequiredRefusal.status,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
+		const headers = new Headers(init?.headers);
+		const installId = await ports.getInstanceId?.();
+		if (installId !== undefined || headers.has('X-WCPOS-Instance')) {
+			headers.delete('X-WCPOS-Instance');
+			if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
+			init = { ...init, headers };
+		}
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -938,7 +984,7 @@ export function createRxdbSyncEngine(
 			const aborted =
 				(error as { name?: unknown } | null)?.name === 'AbortError' ||
 				init?.signal?.aborted === true;
-			const abortedYoung = aborted && nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
@@ -1019,6 +1065,40 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
+	const observeDeadline = async <T>(
+		request: (observation: ReturnType<typeof createRequestObservation>) => Promise<T>,
+		lane: string,
+		callerSignal?: AbortSignal | null
+	) => {
+		const observation = createRequestObservation(callerSignal);
+		const startedAtMs = nowMs();
+		try {
+			return await request(observation);
+		} catch (error) {
+			if (error instanceof RequestTimeoutError) {
+				observation.observe(0);
+				diagnostics({
+					type: 'engine.request.deadline',
+					level: 'warn',
+					fields: { lane, elapsedMs: nowMs() - startedAtMs },
+				});
+			}
+			throw error;
+		} finally {
+			observation.release();
+		}
+	};
+	const fetcher = (url: string, init?: RequestInit, lane = 'host-transport') =>
+		observeDeadline(
+			(observation) =>
+				withRequestTimeout(
+					(url, init) => transportFetcher(url, init, observation),
+					ENGINE_REQUEST_DEADLINE_MS,
+					timers
+				)(url, { ...init, signal: init?.signal ?? undefined }),
+			lane,
+			init?.signal
+		);
 	const rawQueryTotal = ports.queryTotal;
 	const queryTotal =
 		rawQueryTotal === undefined
@@ -1027,7 +1107,19 @@ export function createRxdbSyncEngine(
 					fetchWooQueryTotal: async (
 						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
 					): Promise<number | null> =>
-						updateRequiredRefusal === null ? rawQueryTotal.fetchWooQueryTotal(input) : null,
+						updateRequiredRefusal === null
+							? observeDeadline(
+									() =>
+										withRequestTimeout(
+											(_url, init) =>
+												rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
+											QUERY_TOTAL_REQUEST_DEADLINE_MS,
+											timers
+										)(input.request.endpoint, { signal: input.signal }),
+									'query-total-retry',
+									input.signal
+								)
+							: null,
 				};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
@@ -1189,6 +1281,19 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(collectionCreators() as never);
+			if (scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION) {
+				try {
+					await queueFor(db, { now: nowMs, observe: diagnostics }).clearExpiredAnnihilation(
+						nowMs()
+					);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.guard',
+						level: 'warn',
+						message: `Expired void cleanup failed: ${String(error)}`,
+					});
+				}
+			}
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
@@ -1263,7 +1368,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: () => db.collections[MUTATION_QUEUE_RXDB_COLLECTION].count().exec(),
+				pendingMutationIds: async () => queueFor(db).pendingResetIds(nowMs()),
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);
@@ -1754,7 +1859,7 @@ export function createRxdbSyncEngine(
 		needsPrime: (scopeId) => !bootstrappedScopes.has(scopeId),
 		timers,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'change-signal'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
 		writeBlob,
@@ -1780,7 +1885,7 @@ export function createRxdbSyncEngine(
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'require'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
@@ -1807,6 +1912,7 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writePlane = createWritePlane({
+		paymentsContract: ports.paymentsContract,
 		// A drainable-generation engine acknowledges through projections that fit its schemas.
 		...(scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
 			? {}
@@ -1823,7 +1929,7 @@ export function createRxdbSyncEngine(
 		},
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'write-drain'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		mintUuid: uuid,
 		now: nowMs,
@@ -2334,6 +2440,36 @@ export function createRxdbSyncEngine(
 				dbSubscribers.delete(cb);
 			};
 		},
+		queueRows$: (listener, onError) => {
+			let subscription: { unsubscribe(): void } | undefined;
+			const stop = engine.db$((database) => {
+				subscription?.unsubscribe();
+				if (!database) {
+					listener(null);
+					return;
+				}
+				try {
+					subscription = database.collections[MUTATION_QUEUE_RXDB_COLLECTION].find().$.subscribe({
+						next: (documents) =>
+							listener(
+								documents.flatMap((document) => {
+									const row = document.toJSON() as QueuedMutation;
+									return row.status === 'internal'
+										? []
+										: [{ ...row, status: row.status ?? 'pending' }];
+								})
+							),
+						error: onError,
+					});
+				} catch (error) {
+					onError?.(error);
+				}
+			});
+			return () => {
+				stop();
+				subscription?.unsubscribe();
+			};
+		},
 		scope: {
 			switch: async (identity) => switchScope(identity),
 			resetCollection: async (name, opts) => {
@@ -2404,6 +2540,11 @@ export function createRxdbSyncEngine(
 				writeDrainNudge.nudge();
 			}
 			return receipt;
+		},
+		sessionRestored: () => {
+			assertNotDisposed();
+			writePlane.sessionRestored();
+			writeDrainNudge.nudge();
 		},
 		conflicts: () => writePlane.conflicts(),
 		resolveConflict: (mutationId, resolution) => writePlane.resolveConflict(mutationId, resolution),

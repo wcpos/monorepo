@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
@@ -40,20 +41,16 @@ function ThemeOptionButton({
 }) {
 	const isActive = activeTheme === option.name;
 	return (
-		<Pressable
+		<Tile
 			testID={`theme-option-${option.name}`}
 			onPress={() => {
 				void onPress(option.name);
 			}}
-			accessibilityRole="button"
-			accessibilityState={{ selected: isActive }}
-			aria-selected={isActive}
+			selected={isActive}
 			// min-h-40 clears the tallest possible card — icon + 2-line label cap
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
-			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border p-3 ${
-				isActive ? 'border-primary' : 'border-border web:hover:border-primary/40'
-			}`}
+			className="min-h-40 flex-1 gap-2 p-3"
 		>
 			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
 			<Icon
@@ -70,7 +67,7 @@ function ThemeOptionButton({
 			<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
 				{t(option.descriptionKey)}
 			</Text>
-		</Pressable>
+		</Tile>
 	);
 }
 

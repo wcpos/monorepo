@@ -16,6 +16,31 @@ let rows: RejectedMutation[] = [];
 type Kids = { children?: React.ReactNode };
 type PressProps = Kids & { testID?: string; disabled?: boolean; onPress?: () => void };
 
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ testID }: { testID?: string }) => <button data-testid={testID} />,
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/alert-dialog', () => {
 	function Passthrough({ children }: Kids) {
 		return <>{children}</>;
@@ -56,6 +81,12 @@ jest.mock('@wcpos/components/vstack', () => ({
 // Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
 // panel that forgets the prop renders the raw entity here exactly as it would on
 // a till. A mock that swallowed the prop would make the entity test unfailable.
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => {
 	const { decode } = jest.requireActual('html-entities');
 	return {

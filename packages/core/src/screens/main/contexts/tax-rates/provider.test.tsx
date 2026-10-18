@@ -9,6 +9,9 @@ import { BehaviorSubject, map } from 'rxjs';
 import type { EngineRecord } from '@wcpos/query';
 
 import { TaxRatesProvider, useTaxLocation, useTaxSettings } from './provider';
+import { CartConfigProvider, useCartConfig } from '../../pos/hooks/use-cart-config';
+import { useCartWrite } from '../../pos/commands/use-cart-write';
+import { enqueueOrderMutation } from '../../pos/hooks/order-mutation-queue';
 import { useTaxRates } from './use-tax-rates';
 import {
 	CurrentOrderContext,
@@ -16,6 +19,7 @@ import {
 } from '../../pos/contexts/current-order/context';
 
 import type { QueryStateOf } from '../../../../query';
+import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 
 type TestOrderRecord = EngineRecord<'orders'> & {
 	patchPayload: (patch: Record<string, unknown>) => void;
@@ -596,4 +600,78 @@ describe('current-order subscription', () => {
 
 		expect(screen.getByTestId('based-on').textContent).toBe('billing');
 	});
+});
+
+// The config reader used by product tiles must not subscribe to cart writes.
+jest.mock('../extra-data/use-extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
+it('keeps cart-config consumers idle for line writes but updates for billing changes', () => {
+	storeSubjects.tax_based_on$.next('billing');
+	const order = makeOrder();
+	const configs: ReturnType<typeof useCartConfig>[] = [];
+	const Probe = React.memo(function Probe() {
+		configs.push(useCartConfig());
+		return null;
+	});
+	const tree = () => (
+		<CurrentOrderContext.Provider
+			value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
+		>
+			<TaxRatesProvider>
+				<Probe />
+			</TaxRatesProvider>
+		</CurrentOrderContext.Provider>
+	);
+	const { rerender } = render(tree());
+	const first = configs.at(-1);
+	const count = configs.length;
+	act(() => order.patchPayload({ line_items: [{ total: '10' }] }));
+	rerender(tree());
+	expect(configs).toHaveLength(count);
+	expect(configs.at(-1)).toBe(first);
+	act(() => order.patchPayload({ billing: { country: 'GB' } }));
+	expect(configs.at(-1)).not.toBe(first);
+});
+
+// Keep settlement real; only the resident-write boundary is replaced.
+jest.mock('../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({
+		localPatch: ({ document, changes }: { document: TestOrderRecord; changes: PayloadChanges }) =>
+			document.patchPayload(changes(document.payload)),
+	}),
+}));
+it('settles a queued command with new rates after its caller unmounts', async () => {
+	const order = makeOrder();
+	const rate = { ...allRates[0], rate: '10', shipping: true };
+	activeResult = { hits: [{ record: { payload: rate } }] };
+	let write!: ReturnType<typeof useCartWrite>['localPatch'];
+	function Tile() {
+		const { localPatch } = useCartWrite();
+		React.useLayoutEffect(() => {
+			write = localPatch;
+		}, [localPatch]);
+		return null;
+	}
+	const tree = (mounted: boolean) => (
+		<TaxRatesProvider>
+			<CartConfigProvider>{mounted && <Tile />}</CartConfigProvider>
+		</TaxRatesProvider>
+	);
+	const { rerender } = render(tree(true));
+	let release!: () => void;
+	const blocker = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	void enqueueOrderMutation(order.uuid, () => blocker);
+	const queued = enqueueOrderMutation(order.uuid, async () =>
+		write({ document: order, data: { shipping_lines: [{ total: '10', method_id: 'flat_rate' }] } })
+	);
+	rerender(tree(false));
+	act(() =>
+		mockHandle!.set({ result: { hits: [{ record: { payload: { ...rate, rate: '20' } } }] } })
+	);
+	await act(async () => {
+		release();
+		await queued;
+	});
+	expect(order.payload).toMatchObject({ total: '12', total_tax: '2', shipping_tax: '2' });
 });

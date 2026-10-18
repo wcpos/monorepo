@@ -21,6 +21,10 @@
   --spacing-tile: 64px;
   --radius: 8px;
   --text-amt: 40px;
+  /* The small end is explicit per step, never a ratio of base: 12 px is the floor
+     for text a cashier reads (scale.ts SCALE_STEPS has the sources). */
+  --text-xs: 12px;
+  --text-2xs: 11px;
 
   /* Container widths preserve their 14px-root web sizes. */
   --width-128: 448px;
@@ -73,6 +77,7 @@
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
   --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
   --color-warn-bg: var(--warn-bg);
   --color-bad: var(--bad);
   --color-bad-bg: var(--bad-bg);
@@ -109,6 +114,7 @@
   --duration-count-fade: 170ms;
   --duration-overlay-fade: 150ms;
   --duration-crossfade: 200ms;
+  --duration-image-fade: 250ms;
   --duration-popover-fade: 200ms;
   --duration-sheet-rise: 200ms;
   --duration-beat: 220ms;
@@ -140,13 +146,9 @@
 
 /* Resolve derived values where utilities are used, including inside a scale scope. */
 @theme inline {
-  /* Type ramp from base, with a shared 1.35 line height. */
-  --text-3xs: calc(var(--text-base) * 0.714);
-  --text-3xs--line-height: calc(var(--text-base) * 0.714 * 1.35);
-  --text-2xs: calc(var(--text-base) * 0.786);
-  --text-2xs--line-height: calc(var(--text-base) * 0.786 * 1.35);
-  --text-xs: calc(var(--text-base) * 0.857);
-  --text-xs--line-height: calc(var(--text-base) * 0.857 * 1.35);
+  /* Type ramp from base (xs and 2xs are their own tokens), with a shared 1.35 line height. */
+  --text-2xs--line-height: calc(var(--text-2xs) * 1.35);
+  --text-xs--line-height: calc(var(--text-xs) * 1.35);
   --text-sm: calc(var(--text-base) * 0.929);
   --text-sm--line-height: calc(var(--text-base) * 0.929 * 1.35);
   --text-base--line-height: calc(var(--text-base) * 1.35);
@@ -290,18 +292,20 @@
       --accent-foreground: var(--foreground);
       
       /* Semantic colors */
-      --destructive: oklch(0.55 0.22 25);
+      --destructive: oklch(0.53 0.22 25);
       --destructive-foreground: oklch(0.99 0.01 25);
       --success: var(--ok);
       --success-foreground: oklch(0.98 0.01 160);
-      --info: oklch(0.58 0.14 240);
+      --info: oklch(0.50 0.14 240);
       --info-foreground: oklch(0.98 0.01 240);
       --action: oklch(0.55 0.18 295);
       --action-foreground: oklch(0.98 0.01 295);
       --attention: var(--warn);
       --attention-foreground: oklch(0.25 0.03 90);
       --warning: var(--warn);
-      --warning-foreground: oklch(0.98 0.01 45);
+      /* Dark ink, as attention and the other four themes use: near-white on the light amber
+         read 2.8:1, under the 4.5:1 text floor (CODING_STANDARDS § Design 7). */
+      --warning-foreground: oklch(0.25 0.03 90);
       
       /* Borders and inputs */
       --border: oklch(0.90 0.008 250);
@@ -335,9 +339,10 @@
       --rail: oklch(0.955 0.014 250);
       --rail-foreground: oklch(0.40 0.03 250);
       --rail-border: oklch(0.90 0.012 250);
-      --ok: oklch(0.55 0.16 155);
+      --ok: oklch(0.52 0.16 155);
       --ok-bg: oklch(0.96 0.03 155);
       --warn: oklch(0.68 0.16 70);
+      --warn-text: oklch(0.50 0.13 70);
       --warn-bg: oklch(0.97 0.04 85);
       --bad: oklch(0.58 0.2 25);
       --bad-bg: oklch(0.97 0.02 25);
@@ -398,8 +403,8 @@
       --accent-foreground: var(--foreground);
       
       /* Semantic colors */
-      --destructive: oklch(0.62 0.2 25);
-      --destructive-foreground: oklch(0.99 0.01 25);
+      --destructive: oklch(0.67 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
       --success: var(--ok);
       --success-foreground: oklch(0.15 0.02 160);
       --info: oklch(0.70 0.13 240);
@@ -446,6 +451,7 @@
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
       --warn: oklch(0.78 0.15 75);
+      --warn-text: var(--warn);
       --warn-bg: oklch(0.30 0.05 80);
       --bad: oklch(0.68 0.18 25);
       --bad-bg: oklch(0.30 0.05 25);
@@ -504,8 +510,8 @@
       --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
-      --destructive: oklch(0.62 0.2 25);
-      --destructive-foreground: oklch(0.99 0.01 25);
+      --destructive: oklch(0.67 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
       --success: var(--ok);
       --success-foreground: oklch(0.15 0.04 165);
       --info: oklch(0.70 0.13 240);
@@ -552,6 +558,7 @@
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
       --warn: oklch(0.78 0.15 75);
+      --warn-text: var(--warn);
       --warn-bg: oklch(0.30 0.05 80);
       --bad: oklch(0.68 0.18 25);
       --bad-bg: oklch(0.30 0.05 25);
@@ -610,8 +617,8 @@
       --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
-      --destructive: oklch(0.62 0.2 20);
-      --destructive-foreground: oklch(0.99 0.01 25);
+      --destructive: oklch(0.68 0.2 20);
+      --destructive-foreground: oklch(0.15 0.02 25);
       --success: var(--ok);
       --success-foreground: oklch(0.18 0.05 155);
       --info: oklch(0.70 0.13 240);
@@ -658,6 +665,7 @@
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
       --warn: oklch(0.78 0.15 75);
+      --warn-text: var(--warn);
       --warn-bg: oklch(0.30 0.05 80);
       --bad: oklch(0.68 0.18 25);
       --bad-bg: oklch(0.30 0.05 25);
@@ -714,14 +722,14 @@
       --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
-      --destructive: oklch(0.62 0.2 25);
-      --destructive-foreground: oklch(0.99 0.01 25);
+      --destructive: oklch(0.66 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
       --success: var(--ok);
       --success-foreground: oklch(0.12 0 0);
       --info: oklch(0.70 0.13 240);
       --info-foreground: oklch(0.12 0 0);
       --action: oklch(0.66 0 0);
-      --action-foreground: oklch(0.98 0 0);
+      --action-foreground: oklch(0.12 0 0);
       --attention: var(--warn);
       --attention-foreground: oklch(0.12 0 0);
       --warning: var(--warn);
@@ -762,6 +770,7 @@
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
       --warn: oklch(0.78 0.15 75);
+      --warn-text: var(--warn);
       --warn-bg: oklch(0.30 0.05 80);
       --bad: oklch(0.68 0.18 25);
       --bad-bg: oklch(0.30 0.05 25);

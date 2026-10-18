@@ -4,7 +4,9 @@ import { ActivityIndicator, Linking, Platform, View } from 'react-native';
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Badge, type BadgeProps } from '@wcpos/components/badge';
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Dialog,
@@ -24,6 +26,7 @@ import {
 	PrinterService,
 	usePrinterDiscovery,
 } from '@wcpos/printer';
+import { savePrinterProfile } from '@wcpos/query';
 
 import { CodePageSelect } from '../components/code-page-select';
 import { VendorSelect } from '../components/vendor-select';
@@ -33,7 +36,6 @@ import { WebVendorSegmented } from '../dialog/connection/web-vendor-segmented';
 import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
 import { TestPrintError } from '../dialog/test-print-error';
-import { persistPrinterProfile } from '../persist-printer-profile';
 import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 import {
@@ -53,8 +55,8 @@ import {
 } from './use-printer-setup-flow';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 
-import type { PrinterDialogPrefill } from '../profile-config';
 import type * as z from 'zod';
 
 /**
@@ -124,7 +126,10 @@ export function PrinterSetupDialog({
 		{
 			discovery,
 			printerService,
-			persist: (data) => persistPrinterProfile(storeDB, data),
+			persist: (data) =>
+				savePrinterProfile(storeDB, buildPrinterProfileFields(data), { reuseByAddress: true }).then(
+					({ id }) => id
+				),
 			t,
 			printerCount,
 			prefill: prefillDraft(prefill),
@@ -208,7 +213,7 @@ export function PrinterSetupDialog({
 			variant={variant}
 			size={full ? 'default' : 'sm'}
 			leftIcon={icon}
-			className={full ? 'h-auto w-full justify-start rounded-xl px-4 py-3' : 'rounded-lg'}
+			className={full ? 'h-auto w-full justify-start px-4 py-3' : undefined}
 			disabled={disabled}
 			onPress={onPress}
 		>
@@ -300,49 +305,45 @@ export function PrinterSetupDialog({
 	const scanning = busy && !bleScanning;
 	const scanScreen = phase === 'scanning' || phase === 'checking' || phase === 'results';
 	const vendorLabel = (vendor?: string) => vendors.find((v) => v.value === vendor)?.label ?? '';
-	const pill: Record<string, string> = {
-		ready: 'bg-success/15 text-success',
-		unsure: 'bg-warning/10 text-warning',
-		notprinter: 'bg-destructive/10 text-destructive',
-		unknown: 'bg-muted text-muted-foreground',
+	const tone: Record<string, BadgeProps['variant']> = {
+		ready: 'success',
+		unsure: 'warning',
+		notprinter: 'destructive',
+		unknown: 'muted',
 	};
 	const cards = found.map((p) => {
 		const status = classifyPrinter(p, platform);
 		return (
-			<Button
+			<ListItem
 				key={p.address}
 				testID={`printer-setup-result-${p.address}`}
-				variant="outline"
-				className={`h-auto w-full justify-between rounded-xl px-4 py-3 ${
-					selected?.address === p.address ? 'border-primary bg-primary/5' : ''
-				}`}
+				className="w-full px-4 py-3"
+				selected={selected?.address === p.address}
 				disabled={!['ready', 'unsure'].includes(status)}
 				onPress={() => flow.select(p)}
-			>
-				<View className="w-full flex-row items-center justify-between gap-3">
-					<View className="shrink gap-0.5">
-						<Text className="text-base font-semibold">{p.name}</Text>
-						<View className="flex-row items-center gap-2">
-							<Text className="text-muted-foreground text-sm">
-								{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
-								{p.identity?.model
-									? ` · ${p.identity.model}`
-									: p.identity?.vendor
-										? ` · ${vendorLabel(p.identity.vendor)}`
-										: ''}
-							</Text>
-							<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
-								{native && secureTargetFor(p)
-									? t('settings.setup_source_network_secure')
-									: t(`settings.setup_source_${p.source}`)}
-							</Text>
-						</View>
-					</View>
-					<Text className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pill[status]}`}>
+				trailing={
+					<Badge variant={tone[status]} tinted>
 						{t(`settings.setup_${status}`)}
+					</Badge>
+				}
+			>
+				<Text className="text-base font-semibold">{p.name}</Text>
+				<View className="flex-row items-center gap-2">
+					<Text className="text-muted-foreground text-sm">
+						{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
+						{p.identity?.model
+							? ` · ${p.identity.model}`
+							: p.identity?.vendor
+								? ` · ${vendorLabel(p.identity.vendor)}`
+								: ''}
 					</Text>
+					<Badge variant="muted">
+						{native && secureTargetFor(p)
+							? t('settings.setup_source_network_secure')
+							: t(`settings.setup_source_${p.source}`)}
+					</Badge>
 				</View>
-			</Button>
+			</ListItem>
 		);
 	});
 	const headline = (
@@ -412,7 +413,7 @@ export function PrinterSetupDialog({
 			{heading('address_heading')}
 			<View
 				testID="printer-setup-address-form"
-				className="border-border gap-3 rounded-xl border p-3"
+				className="border-border gap-3 rounded-lg border p-3"
 			>
 				<View className="flex-row gap-3">
 					<View className="flex-1">
@@ -490,7 +491,7 @@ export function PrinterSetupDialog({
 		</>
 	);
 	const moreOptions = optionsOpen && (
-		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-xl border p-3">
+		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-lg border p-3">
 			<FormField
 				control={form.control}
 				name="name"

@@ -103,7 +103,7 @@ describe('useHttpClient network audit logs', () => {
 
 			const config = (http.request as jest.Mock).mock.calls[0][0];
 			expect(config.headers['x-wcpos-protocol']).toBe('2');
-			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version}`);
+			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version} payments=1.3`);
 		} finally {
 			AppInfo.platform = webPlatform;
 		}
@@ -121,7 +121,7 @@ describe('useHttpClient network audit logs', () => {
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
 		expect(config.headers['x-wcpos-protocol']).toBe('2');
-		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
+		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version} payments=1.3`);
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
@@ -551,7 +551,7 @@ describe('request preamble dispatch seam', () => {
 		expect(sent.url).toBe(
 			'https://shop.test/blog/?rest_route=%2Fwcpos%2Fv2%2Forders%2F42' +
 				'&include%5B%5D=1&include%5B%5D=2&status=wc-completed&after=2026-01-01T00%3A00%3A00&_fields=id%2Cstatus' +
-				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}&store_id=7`
+				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}+payments%3D1.3&store_id=7`
 		);
 	});
 	it.each(['test', 'development'])(

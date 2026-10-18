@@ -791,8 +791,20 @@ const VISIBLE: ViewStyle = { overflow: 'visible' };
  * around it (`frame`, reaching up to the stage's top) clips them at its bottom instead, so no row
  * below shows over the footer. A grid scrolled away from its top keeps its own edge: rows above
  * it would show over the crumb. Both styles are empty at rest.
+ *
+ * The web, on the gather home: left clipped, a first-row tile walking home lost a crumb-high
+ * band off its top for the last frames, the root's tile stepped aside under it (web film,
+ * 2026-10-18: Clothing, rec1 f010). A web scroller made `overflow: visible` stops scrolling (at
+ * its top that loses nothing) and drops its scrollbar, which on a classic-scrollbar desktop gave
+ * every row the bar's width back and moved every slot under the tiles in flight. So the bar's
+ * width is measured on the live scroller before it lets go, and kept as padding on its end. Only
+ * a gather has a scroller to measure: a level dealt out mounts in the air, its bar still to
+ * come, so on the web the deal out keeps its edge (drill-in.tsx).
  */
-export function useAirspace(scroll: SharedValue<number>): {
+export function useAirspace(
+	scroll: SharedValue<number>,
+	scroller?: { current: unknown }
+): {
 	frame?: ViewStyle;
 	scroller?: ViewStyle;
 } {
@@ -804,8 +816,21 @@ export function useAirspace(scroll: SharedValue<number>): {
 			if (top !== was) scheduleOnRN(setAtTop, top);
 		}
 	);
-	// Native only: a web scroller made `overflow: visible` stops being one and loses its offset.
-	if (Platform.OS === 'web' || landed || !atTop || !grid) return NO_AIR;
+	const web = Platform.OS === 'web';
+	// The web's scrollbar width for this gather: `null` at rest, on a deal out, or unmeasured.
+	// Measured in the render that hears the tiles turn for home, before that render commits: the
+	// scroller on the page is still the one at rest, with its bar. A level mounted in the air (a
+	// deal out) starts with `null`.
+	const [flight, setFlight] = React.useState<{ landed: boolean; gutter: number | null }>({
+		landed,
+		gutter: null,
+	});
+	if (flight.landed !== landed) {
+		setFlight({ landed, gutter: web && !landed ? scrollbarWidth(scroller) : null });
+	}
+	const gutter = flight.landed === landed ? flight.gutter : null;
+	if (landed || !atTop || !grid) return NO_AIR;
+	if (web && gutter === null) return NO_AIR;
 	return {
 		// `box-none`: the frame reaches over the crumb row, whose presses must still land on it.
 		frame: {
@@ -814,8 +839,17 @@ export function useAirspace(scroll: SharedValue<number>): {
 			overflow: 'hidden',
 			pointerEvents: 'box-none',
 		},
-		scroller: VISIBLE,
+		scroller: web ? { overflow: 'visible', paddingEnd: gutter ?? 0 } : VISIBLE,
 	};
+}
+
+/** A web scroller's own scrollbar width (0 for an overlay bar); `null` if there is no node. */
+function scrollbarWidth(scroller?: { current: unknown }): number | null {
+	const component = scroller?.current as { getScrollableNode?: () => unknown } | null | undefined;
+	const node = (component?.getScrollableNode?.() ?? component) as
+		{ offsetWidth?: unknown; clientWidth?: unknown } | null | undefined;
+	if (typeof node?.offsetWidth !== 'number' || typeof node.clientWidth !== 'number') return null;
+	return Math.max(0, node.offsetWidth - node.clientWidth);
 }
 
 /** The pane's furniture (breadcrumb, footer): it fades in as the products fade out. */

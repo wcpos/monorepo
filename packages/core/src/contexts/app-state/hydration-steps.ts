@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
+import { createStoreDB, createUserDB } from '@wcpos/database';
 import { platformFetch } from '@wcpos/hooks/platform-fetch';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
@@ -12,7 +12,11 @@ import {
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
-import { protocolHeadersSupported } from '@wcpos/utils/sync-protocol';
+import {
+	INSTANCE_HEADER,
+	instanceHeaderSupported,
+	protocolHeadersSupported,
+} from '@wcpos/utils/sync-protocol';
 import {
 	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
@@ -27,14 +31,14 @@ import type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
-
+import { ensureRegister } from '@wcpos/query/register-session';
 import {
 	mergeServerOwnedStoreFields,
 	normalizeStorePayload,
 	type ServerStorePayload,
-} from '../../utils/merge-stores';
-import { ensureRegister } from '../../services/register/register-document';
-import { upsertSiteData } from '../../utils/site-writes';
+} from '@wcpos/query/user-db';
+import { upsertEmbeddedCredentials, upsertSiteData } from '@wcpos/query/user-db';
+
 import { initialProps } from './initial-props';
 import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
 
@@ -249,6 +253,7 @@ export type AuthTransportResolution =
 			useJwtAsParam: boolean;
 			useRestRouteParam: boolean;
 			useProtocolHeaders: boolean;
+			useInstanceHeader: boolean;
 	  }
 	| { ok: false; code: ErrorCode | null; timedOut?: true };
 
@@ -647,6 +652,32 @@ export async function testAuthorizationMethod(
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
 			const useProtocolHeaders = protocolHeadersSupported(echo);
+			// One harmless request per site negotiation proves this header's actual CORS path.
+			let instanceProbe: HeaderEchoResult | null = null;
+			if (Platform.isWeb && echo.cors?.reflects_request_headers === true) {
+				const prepared = buildRequestPreamble(
+					{
+						purpose: 'probe-echo',
+						client: AppInfo,
+						accessToken,
+						site: { wcpos_version: wcposVersion },
+					},
+					{
+						url: useRestRouteParam ? queryEchoUrl : pathEchoUrl,
+						headers: { [INSTANCE_HEADER]: 'wcpos-instance-probe' },
+					}
+				);
+				const result = await fetchJsonWithTimeout(
+					prepared.url,
+					{ cache: 'no-store', headers: Object.fromEntries(prepared.headers) },
+					AUTH_PROBE_TIMEOUT_MS
+				);
+				instanceProbe = result?.response.ok ? parseHeaderEcho(result.data) : null;
+			}
+			const useInstanceHeader = instanceHeaderSupported(
+				echo,
+				instanceProbe?.headers[INSTANCE_HEADER.toLowerCase()]?.received === true
+			);
 			// Only names the probe actually sent can be dead — the map also
 			// carries the rest of the server's floor, which arrives
 			// `received: false` on every healthy store.
@@ -666,10 +697,22 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { ok: true, useJwtAsParam: false, useRestRouteParam, useProtocolHeaders };
+				return {
+					ok: true,
+					useJwtAsParam: false,
+					useRestRouteParam,
+					useProtocolHeaders,
+					useInstanceHeader,
+				};
 			}
 			if (paramAuthArrives) {
-				return { ok: true, useJwtAsParam: true, useRestRouteParam, useProtocolHeaders };
+				return {
+					ok: true,
+					useJwtAsParam: true,
+					useRestRouteParam,
+					useProtocolHeaders,
+					useInstanceHeader,
+				};
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
@@ -728,6 +771,7 @@ export async function testAuthorizationMethod(
 				useJwtAsParam: false,
 				useRestRouteParam,
 				useProtocolHeaders: false,
+				useInstanceHeader: false,
 			};
 		}
 
@@ -749,6 +793,7 @@ export async function testAuthorizationMethod(
 				useJwtAsParam: true,
 				useRestRouteParam,
 				useProtocolHeaders: false,
+				useInstanceHeader: false,
 			};
 		}
 		if (legacy.statuses?.[0] === 400 && legacy.statuses[1] === 414) {
@@ -963,10 +1008,9 @@ const processInitialPropsStep: HydrationStep = {
 		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
 		// full-document write and would drop the locally-owned `wp_credentials`
 		// link array, which the embedded payload never carries (#902).
-		const siteDoc = await upsertSiteData(userDB.sites, initialSite);
-		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
-			sanitizeWPCredentialsData(initialProps.wp_credentials)
-		);
+		const siteDoc = await upsertSiteData(userDB, initialSite);
+		// The credential merges for the same reason: its `stores` links reset to `[]` otherwise.
+		const wpCredentialsDoc = await upsertEmbeddedCredentials(userDB, initialProps.wp_credentials);
 
 		// Handle URL store parameter
 		let urlStoreID: number | null = null;
@@ -1154,6 +1198,7 @@ const testAuthorizationStep: HydrationStep = {
 					use_jwt_as_param: !!result.useJwtAsParam,
 					use_rest_route_param: !!result.useRestRouteParam,
 					use_protocol_headers: !!result.useProtocolHeaders,
+					use_instance_header: !!result.useInstanceHeader,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {

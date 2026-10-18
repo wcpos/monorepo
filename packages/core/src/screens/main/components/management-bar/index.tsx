@@ -14,12 +14,16 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { CashierSheetProvider, useCashierSheet } from '../../pos/cart/cashier-sheet-state';
+import { SessionHoldBanner } from '../session-hold-banner';
+import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
 
 type Props = React.PropsWithChildren<{
 	title?: string;
+	/** A scoped room's scope control in the title's place (Reports). */
+	titleSlot?: React.ReactNode;
 	testID: string;
 	search?: React.ReactNode;
 	back?: React.ComponentProps<typeof PageBar>['back'];
@@ -34,7 +38,7 @@ export function ManagementBar(props: Props) {
 	);
 }
 
-function ManagementBarContent({ title, testID, search, back, children }: Props) {
+function ManagementBarContent({ title, titleSlot, testID, search, back, children }: Props) {
 	const { screenSize } = useTheme();
 	const phone = useIsPhone();
 	const navigation = useNavigation();
@@ -53,6 +57,7 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 		<>
 			<PageBar
 				title={title}
+				titleSlot={titleSlot}
 				testID={testID}
 				back={back}
 				status={badge}
@@ -71,7 +76,7 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 				{screenSize !== 'lg' && (
 					<Button
 						variant="ghost"
-						className="h-11 w-11 p-0"
+						className="aspect-square px-0"
 						testID={`${testID}-avatar`}
 						onPress={() => setUserOpen(true)}
 					>
@@ -82,7 +87,18 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 			{phone && search != null && (
 				<View className="h-ctl border-border justify-center border-b px-2">{search}</View>
 			)}
-			<UserSheet open={userOpen} onOpenChange={setUserOpen} />
+			{/* Under the bar, where the drawer header showed it: a held session is a state. */}
+			<SessionHoldBanner />
+			{/* The root host, as the rail's: the POS host sits inside the POS screen, which is
+			    hidden (web) or detached (native) while a management page is on screen. */}
+			{/* The one cashier surface carries the same rows on every screen (ruling 2026-10-16,
+			    decision 6): Switch register raises the same request the rail's sheet does. */}
+			<UserSheet
+				open={userOpen}
+				onOpenChange={setUserOpen}
+				portalHost={null}
+				onSwitchRegister={requestRegisterPicker}
+			/>
 		</>
 	);
 }

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
@@ -7,6 +6,7 @@ import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { ListItem } from '@wcpos/components/list-item';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
 
 import { PrinterSetupDialog } from './setup/printer-setup-dialog';
@@ -34,6 +34,7 @@ import {
 	type VendorOption,
 } from './schema';
 import { useT } from '../../../../contexts/translations';
+import { RadioDot } from './components/radio-dot';
 
 import type { PrinterDialogPrefill } from './profile-config';
 import type { UseFormReturn } from 'react-hook-form';
@@ -66,7 +67,7 @@ function DeviceList({
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
 				return (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`add-printer-electron-${type}-device-${device.id}`}
 						onPress={() => {
@@ -77,20 +78,14 @@ function DeviceList({
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);
 							}
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
-							selected ? 'border-primary bg-primary/5' : 'border-border'
-						}`}
+						selected={selected}
+						leading={<RadioDot selected={selected} />}
 					>
-						<View
-							className={`h-4 w-4 rounded-full border-2 ${
-								selected ? 'border-primary bg-primary' : 'border-border'
-							}`}
-						/>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
 							<Text className="text-muted-foreground text-xs">{device.address}</Text>
 						</VStack>
-					</Pressable>
+					</ListItem>
 				);
 			})}
 		</VStack>

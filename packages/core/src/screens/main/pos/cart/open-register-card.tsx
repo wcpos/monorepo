@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Pressable, ScrollView, type TextInputInstance, View } from 'react-native';
+import { ScrollView, type TextInputInstance, View } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 
@@ -86,7 +87,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			)}
 			<Button
 				testID="open-register-button"
-				size="xl"
+				size="lg"
 				className="w-full"
 				loading={busy}
 				disabled={!amount || !Number.isFinite(Number(amount)) || Number(amount) < 0}
@@ -103,13 +104,15 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			)}
 			{!!error && <Text className="text-destructive">{error}</Text>}
 			{lastClosure && (
-				<Pressable
+				<ListRow
 					testID="open-register-last-closure"
-					accessibilityRole="button"
+					size="sm"
 					onPress={onLastClosure}
-					className="border-border min-h-ctl active:bg-muted web:hover:bg-muted flex-row items-center gap-2 border-t"
+					// The card's closing line, ruled off above, in the card's own padding.
+					className="gap-2 border-t border-b-0 px-0"
+					bodyClassName="flex-row items-center gap-2"
+					leading={<Icon name="chevronRight" className="text-muted-foreground" />}
 				>
-					<Icon name="chevronRight" className="text-muted-foreground" />
 					<Text className="text-muted-foreground">{t('register.last_closure')}</Text>
 					<Text className="text-muted-foreground shrink">
 						{t('reports.closure_n', { n: lastClosure.server_number ?? lastClosure.number })}
@@ -118,7 +121,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 							? ` · ${format(Number(lastClosure.counted.cash))}`
 							: ''}
 					</Text>
-				</Pressable>
+				</ListRow>
 			)}
 		</ScrollView>
 	);

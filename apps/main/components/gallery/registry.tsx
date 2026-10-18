@@ -34,6 +34,7 @@ import { stories as notice } from '@wcpos/components/notice/gallery';
 import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
+import { stories as navItem } from '@wcpos/components/nav-item/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
 import { PortalHost } from '@wcpos/components/portal';
@@ -56,6 +57,11 @@ import { stories as tabs } from '@wcpos/components/tabs/gallery';
 import { stories as panels } from '@wcpos/components/panels/gallery';
 import { stories as table } from '@wcpos/components/table/gallery';
 import { stories as listItem } from '@wcpos/components/list-item/gallery';
+import { stories as menuRow } from '@wcpos/components/menu-row/gallery';
+import { stories as listRow } from '@wcpos/components/list-row/gallery';
+import { stories as tile } from '@wcpos/components/tile/gallery';
+import { stories as tooltip } from '@wcpos/components/tooltip/gallery';
+import { stories as posterTile } from '@wcpos/components/poster-tile/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
@@ -70,6 +76,11 @@ const registry: Record<string, Story[]> = {
 	panels,
 	table,
 	'list-item': listItem,
+	'list-row': listRow,
+	'menu-row': menuRow,
+	tile,
+	tooltip,
+	'poster-tile': posterTile,
 	badge,
 	avatar,
 	loader,
@@ -105,17 +116,24 @@ const registry: Record<string, Story[]> = {
 	notice,
 	breadcrumb,
 	'browse-tiles': browseTiles,
+	'nav-item': navItem,
 	'page-bar': pageBar,
 	'pane-stack': paneStack,
 	'slide-over': slideOver,
 	'v2-dialog': dialogV2,
 };
 
+/** Every theme the app ships (`metro.config.js` `extraThemes` plus light and dark); the shoot covers all five. */
+const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome'] as const;
+type Theme = (typeof THEMES)[number];
+const isTheme = (theme: string | undefined): theme is Theme =>
+	(THEMES as readonly string[]).includes(theme ?? '');
+
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
 	// Sync the URL's external theme selection before painting the cells.
 	React.useLayoutEffect(() => {
-		Uniwind.setTheme(theme === 'dark' ? 'dark' : 'light');
+		Uniwind.setTheme(isTheme(theme) ? theme : 'light');
 	}, [theme]);
 	return (
 		<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">

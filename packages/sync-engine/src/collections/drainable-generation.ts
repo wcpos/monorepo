@@ -17,6 +17,11 @@
  */
 
 import {
+	recordMutationQueueMigrationStrategies,
+	recordMutationQueueSchema,
+} from '@wcpos/sync-core';
+
+import {
 	type CollectionWriteFacet,
 	productDocument,
 	productsWriteFacetProjectedBy,
@@ -39,6 +44,27 @@ import { productSchema } from './product-schema';
  */
 export const DRAINABLE_SCHEMAS_GENERATION = 5;
 
+// Keep the shipped v5 queue: its pre-upgrade rows have no expectedEpoch.
+// The drain opens it as-is; adding the field would force a legacy database migration.
+const {
+	expectedEpoch: _moneyEpoch,
+	supersededBy: _voidMark,
+	markedAt: _markedAt,
+	expiresAt: _expiresAt,
+	admittedBy: _admittedBy,
+	admittedAt: _admittedAt,
+	admissionReleased: _admissionReleased,
+	mutationId: _mutationId,
+	...drainableQueueProperties
+} = recordMutationQueueSchema.properties;
+
+const {
+	6: _voidMarkMigration,
+	7: _voidFenceMigration,
+	8: _moneyEpochMigration,
+	...drainableQueueMigrations
+} = recordMutationQueueMigrationStrategies;
+
 const { tagIds: _promotedAtV6, ...drainableProductProperties } = productSchema.properties;
 
 /** The product schema v5 shipped: today's minus the `tagIds` column v6 promoted. */
@@ -60,6 +86,19 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 		[MUTATION_QUEUE_RXDB_COLLECTION]: {
 			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
 			localDocuments: true,
+			schema: {
+				...recordMutationQueueSchema,
+				version: 5,
+				properties: {
+					...drainableQueueProperties,
+					mutationId: { type: 'string', maxLength: 64 },
+					status: {
+						type: 'string',
+						enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
+					},
+				},
+			},
+			migrationStrategies: drainableQueueMigrations,
 		},
 	};
 }

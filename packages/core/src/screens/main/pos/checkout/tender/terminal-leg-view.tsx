@@ -200,7 +200,7 @@ export function TerminalLegView({
 				</Text>
 			</HStack>
 			<View className="min-h-4 flex-1" />
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
 				{t('pos_checkout.on_the_terminal')}
 			</Text>
 			<Text className={`text-foreground font-bold tabular-nums ${phone ? 'text-5xl' : 'text-7xl'}`}>
@@ -295,8 +295,7 @@ export function TerminalLegView({
 					(row.capture_mode !== 'device' ||
 						('resumed' in leg && leg.resumed && row.status === 'authorized'))) ? (
 					<Button
-						variant="outline"
-						size="lg"
+						variant="outline-destructive"
 						testID="checkout-terminal-cancel"
 						disabled={action === 'cancelling'}
 						loading={action === 'cancelling'}
@@ -308,7 +307,6 @@ export function TerminalLegView({
 				{action === 'release' ? (
 					<Button
 						variant="outline"
-						size="lg"
 						testID="checkout-terminal-release"
 						onPress={flow.releaseTerminalLeg}
 					>
@@ -327,7 +325,6 @@ export function TerminalLegView({
 						</Button>
 						<Button
 							variant="outline"
-							size="lg"
 							testID="checkout-terminal-another"
 							onPress={flow.dismissTerminalLeg}
 						>

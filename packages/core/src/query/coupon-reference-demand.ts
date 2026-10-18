@@ -23,6 +23,7 @@ import {
 	type QueryHandle,
 	useQueryRuntime,
 } from '@wcpos/query';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
 	acquireDemandQueryHandle,
@@ -129,6 +130,18 @@ function compileReference(collection: ReferenceCollection, id: string) {
 			);
 }
 
+export function acquireReferenceDemandHandle(
+	engine: RxdbSyncEngine,
+	collection: ReferenceCollection,
+	generation: number,
+	enabled = true
+): QueryHandle {
+	const key = canonicalQueryKey(['coupon-replay', collection, generation, enabled]);
+	return enabled
+		? acquireDemandQueryHandle(engine, key, (id) => compileReference(collection, id))
+		: acquireEmptyQueryHandle(engine, key);
+}
+
 /**
  * One reference collection's demand as a handle, owned while the caller is mounted: a demand
  * handle while `enabled` (the declaration, its readiness and re-arm, the pull activity), the empty
@@ -141,13 +154,9 @@ function useReferenceDemandHandle(
 ): { handle: QueryHandle; generation: number } {
 	const { engine } = useQueryRuntime();
 	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
-	const key = canonicalQueryKey(['coupon-replay', collection, generation, enabled]);
 	const handle = React.useMemo(
-		() =>
-			enabled
-				? acquireDemandQueryHandle(engine, key, (id) => compileReference(collection, id))
-				: acquireEmptyQueryHandle(engine, key),
-		[collection, enabled, engine, key]
+		() => acquireReferenceDemandHandle(engine, collection, generation, enabled),
+		[collection, enabled, engine, generation]
 	);
 	React.useEffect(() => handle.retain(), [handle]);
 	return { handle, generation };
@@ -159,6 +168,65 @@ function activeOf(handle: QueryHandle): Observable<boolean> {
 		map((snapshot) => snapshot.active),
 		distinctUntilChanged()
 	);
+}
+
+export function referenceQuiet(coupons: QueryHandle, categories: QueryHandle) {
+	return combineLatest([activeOf(coupons), activeOf(categories)]).pipe(
+		map(([couponsActive, categoriesActive]) => !couponsActive && !categoriesActive),
+		filter(Boolean)
+	);
+}
+export async function whenReferencesSettled(
+	coupons: QueryHandle,
+	categories: QueryHandle,
+	signal: AbortSignal
+): Promise<boolean> {
+	const quiet$ = referenceQuiet(coupons, categories);
+	const deadline = Date.now() + COUPON_REFERENCE_BACKGROUND_TIMEOUT_MS;
+	// First pass rides the STANDING declaration — the very pull the foreground gave
+	// up on. `whenReady()` reads the demand's current declaration, so its retry is picked up too.
+	// Bounded, because that promise answers to neither this abort nor this cap.
+	let readiness = await withDeadline(
+		Promise.all([coupons.whenReady(), categories.whenReady()]),
+		signal,
+		deadline,
+		[NOT_ATTEMPTED, NOT_ATTEMPTED]
+	);
+	for (let attempt = 0; !signal.aborted && Date.now() < deadline; attempt += 1) {
+		if (readiness.every(({ attempted }) => attempted)) {
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) break;
+			// Ready-then-quiet, same ordering as the foreground barrier: readiness is
+			// proven for this tab, quietness rules out a sibling declaration still writing.
+			return await firstValueFrom(
+				race(
+					quiet$.pipe(map(() => true)),
+					timer(remaining).pipe(map(() => false)),
+					whenAborted$(signal)
+				)
+			);
+		}
+		// `released` (or an abandoned declaration) proves nothing: another owner holds
+		// the scheduler row and its pull is invisible here. Ask again after a backoff
+		// rather than reading the release as a settle.
+		await sleep(
+			Math.min(COUPON_REFERENCE_REARM_BASE_MS * 2 ** attempt, COUPON_REFERENCE_REARM_MAX_MS),
+			signal
+		);
+		if (signal.aborted || Date.now() >= deadline) break;
+		const rearm = new AbortController();
+		try {
+			readiness = await withDeadline(
+				Promise.all([coupons.declareOnce(rearm.signal), categories.declareOnce(rearm.signal)]),
+				signal,
+				deadline,
+				[NOT_ATTEMPTED, NOT_ATTEMPTED]
+			);
+		} finally {
+			rearm.abort();
+		}
+	}
+	return false;
 }
 
 /**
@@ -219,14 +287,7 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	);
 	// The re-arm identity the settlement keys its continuation on: a reset of either collection.
 	const generation = couponsGeneration + categoriesGeneration;
-	const quiet$ = React.useMemo(
-		() =>
-			combineLatest([activeOf(coupons), activeOf(categories)]).pipe(
-				map(([couponsActive, categoriesActive]) => !couponsActive && !categoriesActive),
-				filter(Boolean)
-			),
-		[categories, coupons]
-	);
+	const quiet$ = React.useMemo(() => referenceQuiet(coupons, categories), [categories, coupons]);
 	return React.useMemo(
 		() => ({
 			// Bounded: cart math must never hang on sync, so the wait cannot be open-ended. The
@@ -243,56 +304,8 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
 					)
 				),
-			whenSettledInBackground: async (signal: AbortSignal): Promise<boolean> => {
-				const deadline = Date.now() + COUPON_REFERENCE_BACKGROUND_TIMEOUT_MS;
-				// First pass rides the STANDING declaration — the very pull the foreground gave
-				// up on. `whenReady()` reads the demand's current declaration, so its retry is picked up too.
-				// Bounded, because that promise answers to neither this abort nor this cap.
-				let readiness = await withDeadline(
-					Promise.all([coupons.whenReady(), categories.whenReady()]),
-					signal,
-					deadline,
-					[NOT_ATTEMPTED, NOT_ATTEMPTED]
-				);
-				for (let attempt = 0; !signal.aborted && Date.now() < deadline; attempt += 1) {
-					if (readiness.every(({ attempted }) => attempted)) {
-						const remaining = deadline - Date.now();
-						if (remaining <= 0) break;
-						// Ready-then-quiet, same ordering as the foreground barrier: readiness is
-						// proven for this tab, quietness rules out a sibling declaration still writing.
-						return await firstValueFrom(
-							race(
-								quiet$.pipe(map(() => true)),
-								timer(remaining).pipe(map(() => false)),
-								whenAborted$(signal)
-							)
-						);
-					}
-					// `released` (or an abandoned declaration) proves nothing: another owner holds
-					// the scheduler row and its pull is invisible here. Ask again after a backoff
-					// rather than reading the release as a settle.
-					await sleep(
-						Math.min(COUPON_REFERENCE_REARM_BASE_MS * 2 ** attempt, COUPON_REFERENCE_REARM_MAX_MS),
-						signal
-					);
-					if (signal.aborted || Date.now() >= deadline) break;
-					const rearm = new AbortController();
-					try {
-						readiness = await withDeadline(
-							Promise.all([
-								coupons.declareOnce(rearm.signal),
-								categories.declareOnce(rearm.signal),
-							]),
-							signal,
-							deadline,
-							[NOT_ATTEMPTED, NOT_ATTEMPTED]
-						);
-					} finally {
-						rearm.abort();
-					}
-				}
-				return false;
-			},
+			whenSettledInBackground: (signal: AbortSignal) =>
+				whenReferencesSettled(coupons, categories, signal),
 			generation,
 		}),
 		[categories, coupons, generation, quiet$]

@@ -50,7 +50,6 @@ export function ParkedTab({
 			/>
 			<Button
 				testID={lost ? 'parked-tab-reload' : 'parked-tab-take-over'}
-				className="min-h-12"
 				disabled={waiting}
 				onPress={lost ? reloadApp : takeOver}
 			>

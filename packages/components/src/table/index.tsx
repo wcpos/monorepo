@@ -79,9 +79,17 @@ function TableRow({
 	);
 }
 
+/**
+ * The one table-header text recipe (decision 9, 2026-10-16). Every column heading in the app
+ * reads this, through `TableHead`'s text context; a caller never restyles its header text.
+ * Exported for the few headings that sit outside a `TableHead` (a payments label under the
+ * cart table) so they cannot drift from it.
+ */
+const TABLE_HEAD_TEXT = 'text-muted-foreground text-xs font-medium tracking-wide uppercase';
+
 function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 	return (
-		<TextClassContext.Provider value="text-muted-foreground text-xs font-semibold tracking-wide uppercase text-left">
+		<TextClassContext.Provider value={cn(TABLE_HEAD_TEXT, 'text-left')}>
 			<TablePrimitive.Head
 				className={cn(
 					'h-9 flex-1 flex-col justify-center px-3 [&:has([role=checkbox])]:pr-0',
@@ -112,6 +120,7 @@ function TableCell({ className, children, ...props }: TablePrimitive.CellProps) 
 }
 
 export {
+	TABLE_HEAD_TEXT,
 	PressableTableRow,
 	PulseTableRow,
 	Table,

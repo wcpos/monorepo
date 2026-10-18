@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -21,7 +22,14 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Notice } from '@wcpos/components/notice';
 import { VStack } from '@wcpos/components/vstack';
@@ -33,18 +41,38 @@ import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
 import { Site, SiteHeader } from './site';
+import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useVersionCheck } from '../../../hooks/use-version-check';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
 	user: UserDocument;
+	/**
+	 * Fold every site to its header row (the page's connect form is open).
+	 * Display-only: the remembered expansion is kept and returns when this clears.
+	 */
+	collapsed?: boolean;
+	/** A site was expanded by the user — the page closes its connect form. */
+	onExpand?: () => void;
 }
 
-export function Sites({ user }: SitesProps) {
+/**
+ * The selection provider sits at one fixed position above both layouts, so a
+ * fold (which unmounts WPUsers, and swaps a lone site's layout) keeps the picks.
+ */
+export function Sites(props: SitesProps) {
+	return (
+		<SiteSelectionProvider>
+			<SitesContent {...props} />
+		</SiteSelectionProvider>
+	);
+}
+
+function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
 	const t = useT();
 	const sites = useObservableSuspense(
 		(
@@ -78,8 +106,11 @@ export function Sites({ user }: SitesProps) {
 		return null;
 	}
 
-	// Single site: render directly without accordion
-	if (sites.length === 1) {
+	const expandedSiteUuid = collapsed ? '' : nextAccordionState.expandedSiteUuid;
+
+	// Single site: render directly without accordion. Folded, it takes the
+	// accordion row below so its header (with chevron) is the way back in.
+	if (sites.length === 1 && !collapsed) {
 		return (
 			<Card className="w-full p-3" testID="logged-in-users-label">
 				<ErrorBoundary>
@@ -89,20 +120,23 @@ export function Sites({ user }: SitesProps) {
 		);
 	}
 
-	// Multiple sites: use accordion
+	// Multiple sites (or a folded single site): use accordion
 	return (
 		<VStack className="w-full gap-2" testID="logged-in-users-label">
-			<Text className="text-sm font-semibold">
-				{t('auth.your_sites_heading', { _tags: 'core' })}
-			</Text>
+			{sites.length > 1 && (
+				<Text className="text-sm font-semibold">
+					{t('auth.your_sites_heading', { _tags: 'core' })}
+				</Text>
+			)}
 			<Accordion
 				className="gap-2"
 				type="single"
 				collapsible
-				value={nextAccordionState.expandedSiteUuid}
-				onValueChange={(value) =>
-					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
-				}
+				value={expandedSiteUuid}
+				onValueChange={(value) => {
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }));
+					if (value) onExpand?.();
+				}}
 			>
 				{sites.map((site) => (
 					<ErrorBoundary key={site.uuid}>
@@ -127,13 +161,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}
@@ -148,6 +176,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 				<AccordionItem value={site.uuid ?? ''} className="border-b-0">
 					<HStack className="items-center gap-2">
 						<AccordionTrigger
+							testID={`auth-site-trigger-${site.uuid}`}
 							headerClassName="flex-1"
 							className="min-h-row gap-3 py-2"
 							chevronPosition="left"
@@ -162,12 +191,26 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 								)}
 							</View>
 						</AccordionTrigger>
-						<IconButton
-							name="xmark"
-							size="lg"
-							variant="destructive"
-							onPress={() => setDeleteDialogOpened(true)}
-						/>
+						{/* Removing a site loses its users on this device: the last, red row of a ⋮ menu. */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<IconButton
+									name="ellipsisVertical"
+									testID={`auth-site-menu-${site.uuid}`}
+									accessibilityLabel={t('common.actions')}
+								/>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem
+									variant="destructive"
+									testID={`auth-site-remove-${site.uuid}`}
+									onPress={() => setDeleteDialogOpened(true)}
+								>
+									<Icon name="trash" className="fill-destructive" />
+									<Text>{t('auth.remove_site')}</Text>
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</HStack>
 					<AccordionContent>
 						<ErrorBoundary>
@@ -203,7 +246,8 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
  * Content inside an accordion item — needs Suspense boundary above it
  */
 function AccordionSiteContent({ site }: { site: SiteDocument }) {
-	const { wcposVersionPass } = useVersionCheck({ site });
+	const { compatibility } = useAppInfo({ site });
+	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 	const t = useT();
 
 	useSiteInfo({ site });

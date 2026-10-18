@@ -12,9 +12,9 @@ import {
 	FormItem,
 	FormLabel,
 	FormMessage,
+	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
-	FormToggleGroup,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
@@ -104,10 +104,10 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 					control={form.control}
 					name="discount_type"
 					render={({ field }) => (
-						<FormToggleGroup
+						<FormSegmentedControl
 							testID="coupon-discount-type"
 							label={t('coupons.discount')}
-							options={[
+							segments={[
 								{ value: 'percent', label: t('coupons.percent_short') },
 								{ value: 'fixed_cart', label: t('coupons.amount_off_order') },
 								{ value: 'fixed_product', label: t('coupons.amount_off_products') },

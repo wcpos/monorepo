@@ -31,8 +31,15 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: Er
 let subscribeCount = 0;
 let collection: unknown;
 
-jest.mock('../receipt/email-queue/use-receipt-email-queue-collection', () => ({
-	useReceiptEmailQueueCollection: () => collection,
+const databases = new WeakMap<object, object>();
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => {
+		if (!collection) return { storeDB: undefined };
+		const key = collection as object;
+		if (!databases.has(key))
+			databases.set(key, { collections: { receipt_email_queue: collection } });
+		return { storeDB: databases.get(key) };
+	},
 }));
 
 /** One row, one microtask after each subscribe — the shape of a live RxDB `find().$`. */

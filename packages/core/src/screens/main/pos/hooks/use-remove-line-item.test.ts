@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
@@ -22,11 +23,10 @@ const mockOrderLists: Partial<Record<'fee_lines' | 'shipping_lines' | 'coupon_li
 	{};
 const mockOrder = {
 	uuid: 'order-uuid',
-	payload: { id: 17 },
-	getLatest: () => ({
-		uuid: 'order-uuid',
-		payload: { id: 17, line_items: mockLines, ...mockOrderLists },
-	}),
+	get payload() {
+		return { id: 17, line_items: mockLines, ...mockOrderLists };
+	},
+	getLatest: () => mockOrder,
 };
 
 jest.mock('@wcpos/utils/logger', () => {
@@ -63,7 +63,11 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({
@@ -265,9 +269,9 @@ describe('useRemoveLineItem', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
-			data: {
+			data: expect.objectContaining({
 				line_items: [expect.objectContaining({ id: 11, product_id: null })],
-			},
+			}),
 		});
 		expect(mockLoggerSuccess).toHaveBeenCalledWith(
 			'pos.removed_from_cart',
@@ -319,3 +323,7 @@ describe('useRemoveLineItem', () => {
 		);
 	});
 });
+
+afterEach(() => expectSettledWrites(mockLocalPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

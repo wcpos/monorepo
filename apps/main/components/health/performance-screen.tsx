@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -13,6 +13,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
+import { AreaPage } from '@wcpos/core/screens/main/components/navigation-area/area-page';
 import { Section } from '@wcpos/core/screens/main/health/components';
 import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
 import { useLocalMutation } from '@wcpos/core/screens/main/hooks/mutations/use-local-mutation';
@@ -46,8 +47,8 @@ const formatCount = (value: number) => value.toLocaleString();
 
 /**
  * Store health · Performance — what the POS asks of the server and the #559
- * tuning controls. Layout follows the settings pages: centered max-w column
- * with generous padding. Lives in apps/main because the measured actuals
+ * tuning controls. An area page like Settings (`AreaPage`: one card, heading
+ * inside). Lives in apps/main because the measured actuals
  * (hourly metrics buckets) are host-level state.
  */
 export function PerformanceScreen() {
@@ -177,14 +178,11 @@ export function PerformanceScreen() {
 	};
 
 	return (
-		<ScrollView className="flex-1">
-			<VStack
-				testID="screen-health-performance"
-				className="mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8"
-			>
+		<AreaPage title={t('common.performance')} testID="screen-health-performance">
+			<VStack className="gap-6">
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
-					<Text className={healthy ? 'text-success font-semibold' : 'text-warning font-semibold'}>
+					<Text className={healthy ? 'text-success font-semibold' : 'text-warn-text font-semibold'}>
 						{healthy
 							? t('health.performance.status_normal')
 							: t('health.performance.status_attention')}
@@ -357,7 +355,7 @@ export function PerformanceScreen() {
 						    may still be inside its ten-sample slow window. */}
 						<Text
 							className={
-								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warning text-sm'
+								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warn-text text-sm'
 							}
 							testID="server-pace"
 						>
@@ -412,8 +410,7 @@ export function PerformanceScreen() {
 				<DocsLink testID="performance-docs-link" href={DOCS_URL}>
 					{t('health.performance.learn_more_in_docs')}
 				</DocsLink>
-				<View className="h-4" />
 			</VStack>
-		</ScrollView>
+		</AreaPage>
 	);
 }

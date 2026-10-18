@@ -126,6 +126,8 @@ export function NumberInput({
 			<PopoverContent side={placement as 'top' | 'bottom'} className="w-auto p-2">
 				<VStack className="gap-1">
 					<Numpad
+						changeSignLabel={t('common.change_sign')}
+						backspaceLabel={t('common.backspace')}
 						ref={numpadRef}
 						initialValue={toNumber(value)}
 						onChangeText={handleChange}

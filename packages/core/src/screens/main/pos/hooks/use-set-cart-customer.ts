@@ -5,7 +5,7 @@ import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 import { enqueueCartAction } from './enqueue-cart-action';
 import { useActionContext } from './use-action-context';
 import { dispatchAction } from '../../../../extensions/actions';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 
 import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -33,7 +33,7 @@ export interface CartCustomerFields {
  * `cart.customer.set` hooks have seen, rewritten or refused them.
  */
 export const useSetCartCustomer = () => {
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const { ctx, actor } = useActionContext();
 
 	return React.useCallback(

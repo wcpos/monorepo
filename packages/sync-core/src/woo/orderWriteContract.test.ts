@@ -86,3 +86,11 @@ describe('whether an order change set asserts anything', () => {
 		expect(orderChangesAssertIntent({ line_items: [] })).toBe(true);
 	});
 });
+
+it('keeps the durable money-owner hint as outbound intent', () => {
+	const meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
+	expect(orderChangesAssertIntent({ meta_data })).toBe(true);
+	expect(stripServerAuthoredOrderMoney({ meta_data, total: '99', total_tax: '9' })).toEqual({
+		meta_data,
+	});
+});

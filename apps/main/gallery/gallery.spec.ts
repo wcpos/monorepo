@@ -7,6 +7,14 @@ import { expect, test } from '@playwright/test';
 // after it; two seconds leaves every entrance well finished without stalling a page.
 const SETTLE_BOUND_MS = 2_000;
 
+// Light and dark are shot at every scale step and pointer. A theme swaps colour tokens and a
+// step swaps size variables, and the two are independent, so the three extra themes are shot at
+// one step: every story in all five themes (decision 12, 2026-10-16) without shooting the
+// same geometry three more times. Keep in step with `THEMES` in components/gallery/registry.tsx.
+const FULL_THEMES = ['light', 'dark'] as const;
+const COLOUR_THEMES = ['ocean', 'sunset', 'monochrome'] as const;
+const COLOUR_THEME_CELL = '--regular-coarse';
+
 test('gallery cells', async ({ page }, testInfo) => {
 	const smoke = testInfo.project.ignoreSnapshots && !process.env.CI;
 	if (!smoke && process.platform !== 'linux') {
@@ -28,7 +36,7 @@ test('gallery cells', async ({ page }, testInfo) => {
 	// One test shoots every page: the budget grows with the inventory, a minute a
 	// page and theme (its isolated cells included), so a new component never trips
 	// a fixed clock.
-	test.setTimeout(components.length * 2 * 60_000);
+	test.setTimeout(components.length * (FULL_THEMES.length + COLOUR_THEMES.length) * 60_000);
 	let count = 0;
 	const shot = new Set<string>();
 	const shoot = async (id: string, theme: string, isolated = false) => {
@@ -79,16 +87,19 @@ test('gallery cells', async ({ page }, testInfo) => {
 		count++;
 	};
 	for (const component of components) {
-		for (const theme of ['light', 'dark']) {
+		for (const theme of [...FULL_THEMES, ...COLOUR_THEMES]) {
+			const colourOnly = (COLOUR_THEMES as readonly string[]).includes(theme);
 			await page.goto(`/gallery/${component}?theme=${theme}`);
 			const cells = page.locator('[data-cell-id]');
 			await expect(cells.first()).toBeVisible();
-			const ids = await cells.evaluateAll((nodes) =>
-				nodes.map((node) => ({
-					id: node.getAttribute('data-cell-id')!,
-					isolated: node.getAttribute('data-isolated') === 'true',
-				}))
-			);
+			const ids = (
+				await cells.evaluateAll((nodes) =>
+					nodes.map((node) => ({
+						id: node.getAttribute('data-cell-id')!,
+						isolated: node.getAttribute('data-isolated') === 'true',
+					}))
+				)
+			).filter(({ id }) => !colourOnly || id.endsWith(COLOUR_THEME_CELL));
 			for (const { id, isolated } of ids) if (!isolated) await shoot(id, theme);
 			// An isolated story (an open popover, select or dialog: it owns the document's
 			// focus) is shot one cell per page, so its siblings cannot close or cover it.

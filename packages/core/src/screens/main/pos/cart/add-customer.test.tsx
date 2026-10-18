@@ -69,6 +69,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));
 
@@ -86,7 +87,11 @@ jest.mock('../../components/customer/customer-form', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../../hooks/mutations/use-mutation', () => ({
@@ -163,14 +168,16 @@ describe.each([
 		});
 
 		// The cart's own "{name} saved" is the one toast (the hook is built with showSuccessToast: false).
-		expect(mockCreate).toHaveBeenCalledWith({ data: { first_name: 'Ada' } });
+		expect(mockCreate).toHaveBeenCalledWith({
+			data: expect.objectContaining({ first_name: 'Ada' }),
+		});
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: currentOrderRecord,
-			data: {
+			data: expect.objectContaining({
 				customer_id: 0,
 				billing: payload.billing,
 				shipping: payload.shipping,
-			},
+			}),
 		});
 		expect(mockRecordCustomerLink).toHaveBeenCalledWith(mockStoreDB, 'order-1', {
 			customerUuid: 'customer-1',
@@ -221,7 +228,7 @@ describe.each([
 			await mockSubmitCustomer?.({ first_name: 'Ada' });
 		});
 		const { data } = mockLocalPatch.mock.calls[0][0];
-		expect(data).toEqual({ customer_id: 0, billing: payload.billing, shipping: undefined });
+		expect(data).toMatchObject({ customer_id: 0, billing: payload.billing, shipping: undefined });
 	});
 
 	it('keeps the form open and records no link when the create could not be queued', async () => {
@@ -289,3 +296,5 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</div>
 	),
 }));
+
+jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

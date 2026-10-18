@@ -1,3 +1,5 @@
+import { APP_PAYMENTS_CONTRACT } from './payments-contract';
+
 /**
  * Sending this value is the client's claim that it tolerates the 2.0.0 boundary
  * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
@@ -6,6 +8,7 @@ export const SYNC_PROTOCOL_VERSION = 2;
 
 export const PROTOCOL_HEADER = 'X-WCPOS-Protocol';
 export const CLIENT_HEADER = 'X-WCPOS-Client';
+export const INSTANCE_HEADER = 'X-WCPOS-Instance';
 export const PROTOCOL_QUERY_PARAM = 'wcpos_protocol';
 export const CLIENT_QUERY_PARAM = 'wcpos_client';
 
@@ -54,6 +57,21 @@ export function protocolHeadersSupported(echo: EchoCorsCapability | null | undef
 	);
 }
 
+/** INSTANCE_HEADER is outside the frozen floor: reflection needs a successful path probe. */
+export function instanceHeaderSupported(
+	echo: EchoCorsCapability | null | undefined,
+	probeSucceeded: boolean | undefined
+): boolean {
+	return echo?.cors?.reflects_request_headers === true && probeSucceeded === true;
+}
+
+export function sendsInstanceHeader(
+	platform: string,
+	useInstanceHeader: boolean | undefined
+): boolean {
+	return platform !== 'web' || useInstanceHeader === true;
+}
+
 /** Native always sends the signal headers (no CORS preflight exists there);
  * web sends them only with a proven per-site verdict. */
 export function sendsProtocolHeaders(
@@ -76,8 +94,9 @@ export function sendsProtocolQueryTwins(
 	return platform !== 'web' || useProtocolHeaders !== true;
 }
 
+/** Platform/app version and the independent payments=<major.minor> contract token. */
 export function formatClientSignal(platform: string, version: string): string {
-	return `${platform}/${version.trim() || 'unknown'}`;
+	return `${platform}/${version.trim() || 'unknown'} payments=${APP_PAYMENTS_CONTRACT}`;
 }
 
 /**

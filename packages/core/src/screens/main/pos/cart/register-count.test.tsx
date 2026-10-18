@@ -3,12 +3,19 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/register-session';
+
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
+}));
+jest.mock('../../../../services/register-session/audit', () => ({
+	__esModule: true,
+	...jest.requireActual('../../../../services/register-session/audit'),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
@@ -68,6 +75,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
+let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let blind = false,
 	approval_required = false,
@@ -79,7 +87,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		varianceThreshold,
-		session: { id: 's', register_id: 'r', approval_required },
+		session: { id: 's', register_id: 'r', approval_required, approved_counted },
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
@@ -110,6 +118,7 @@ jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="appr
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
+	approved_counted = null;
 	unsyncedCount = 3;
 	blind = false;
 	approval_required = false;
@@ -229,4 +238,58 @@ it.each([
 	unsyncedCount = count;
 	render(<RegisterCount onClosed={jest.fn()} />);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
+});
+
+it('retries a failed close without a second approval for the same count', async () => {
+	// A failed close or a restart keeps the approval; the same over-threshold count is not
+	// re-approved (expected cash is 480.80, so 463.30 is a 17.50 short against a 5 threshold).
+	varianceThreshold = '5';
+	approved_counted = { cash: '463.30' };
+	closeSession.mockRejectedValueOnce(new Error('offline'));
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('463.30');
+	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+	expect(screen.queryByTestId('approve-sheet')).toBeNull();
+	expect(closeSession).toHaveBeenCalledTimes(2);
+});
+
+it('requires approval for the same count after returning to selling and counting again', async () => {
+	varianceThreshold = '5';
+	approved_counted = { cash: '463.30' };
+	approval_required = true;
+	const sessions = {
+		findOne: () => ({
+			exec: async () => ({
+				incrementalPatch: async (patch: Record<string, unknown>) => {
+					if ('approved_counted' in patch)
+						approved_counted = patch.approved_counted as typeof approved_counted;
+					if ('approval_required' in patch) approval_required = patch.approval_required as boolean;
+				},
+			}),
+		}),
+	};
+	const storeDB = { collections: { register_sessions: sessions } };
+	backToSelling.mockImplementationOnce(async () => {
+		await resumeSelling(storeDB, 's');
+	});
+	const view = render(<RegisterCount onClosed={jest.fn()} />);
+	await act(async () => fireEvent.click(screen.getByTestId('count-back')));
+	await startCounting(storeDB, 's');
+	view.unmount();
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('463.30');
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(closeSession).not.toHaveBeenCalled();
+	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+	expect(approval_required).toBe(true);
+});
+
+it('requests approval again when the count changes after approval', () => {
+	approved_counted = { cash: '463.30' };
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('480.80');
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(closeSession).not.toHaveBeenCalled();
+	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
 });

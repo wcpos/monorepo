@@ -248,6 +248,7 @@ function CouponsScreenContent() {
 						<IconButton
 							testID="coupons-add-button"
 							name="plus"
+							accessibilityLabel={t('coupons.add_coupon')}
 							onPress={() => router.push({ pathname: '/coupons/add' })}
 							disabled={readOnly || !caps.canCreateCoupons}
 						/>

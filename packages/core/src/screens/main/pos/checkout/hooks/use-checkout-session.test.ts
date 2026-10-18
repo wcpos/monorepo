@@ -200,6 +200,7 @@ describe('useCheckoutSession', () => {
 		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
 		expect(result.current.mode).toBe('webview');
 		expect(result.current.error).toBe('payment_gateways_fetch_failed');
+		expect(result.current).toMatchObject({ gatewayError: 'boom', refetch: expect.any(Function) });
 	});
 
 	it('maps every catalog entry to its stored settled status, keyed by gateway id', async () => {
@@ -770,19 +771,24 @@ jest.mock('../hooks/use-sale-context', () => ({
 			// The session gate reads through the same store the handler then writes to.
 			resolveSession: async () => {
 				const { readBoundRegister } = jest.requireActual<
-					typeof import('../../../../../services/register/register-document')
-				>('../../../../../services/register/register-document');
+					typeof import('@wcpos/query/register-session')
+				>('@wcpos/query/register-session');
 				const { findOpenSession } = jest.requireActual<
-					typeof import('../../../../../services/register-session/session-store')
-				>('../../../../../services/register-session/session-store');
+					typeof import('@wcpos/query/register-session')
+				>('@wcpos/query/register-session');
 				const registerId = (await readBoundRegister(mockUserDB as never, 'site', 1))?.id ?? null;
-				const session = await findOpenSession(mockSessions as never, registerId, mockSessionsOn);
+				const session = await findOpenSession(
+					{ collections: { register_sessions: mockSessions } },
+					registerId,
+					mockSessionsOn
+				);
 				return { registerId, sessionId: session?.id ?? null };
 			},
 		}),
 		userDB: mockUserDB,
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,
+		storeDB: { collections: { register_sessions: mockSessions } },
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },

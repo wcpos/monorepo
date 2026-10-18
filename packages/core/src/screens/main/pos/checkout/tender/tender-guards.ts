@@ -1,10 +1,11 @@
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
+
 import {
 	type ActionHook,
 	registerActionHook,
 	TENDER_COMMIT_EVENT,
 	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 
 /** The reasons the two gates refuse with; callers present them as the cashier's next step. */
 export const CHOOSE_REGISTER_REASON = 'pos_checkout.choose_register_first';

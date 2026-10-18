@@ -8,5 +8,6 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 
 ## Lines
 
-1. Uses an untinted medium shadow after the native shadow adjustment — evidence: `05ad25913b 2025-11-04 update shadows and rounding for native`, code: `"className={cn('border-border bg-card rounded-lg border shadow-md', className)}"` in `packages/components/src/card/index.tsx:10`.
+~~1. Uses an untinted medium shadow after the native shadow adjustment — evidence: `05ad25913b 2025-11-04 update shadows and rounding for native`, code: `"className={cn('border-border bg-card rounded-lg border shadow-md', className)}"` in `packages/components/src/card/index.tsx:10`.~~ _(struck 2026-10-17 by line 3: CODING_STANDARDS § Design 7, flat surfaces with hairline borders and no drop shadow.)_
 2. Rounds the header’s top corners to match the card after the native rounding adjustment — evidence: `05ad25913b 2025-11-04 update shadows and rounding for native`, code: `"return <View className={cn('flex flex-col rounded-t-lg p-6', className)} {...props} />;"` in `packages/components/src/card/index.tsx:17`.
+3. Flat: a hairline border on `bg-card` and no shadow, so a card reads as white on grey, the same way an anchored panel does — evidence: decision 11 of the 2026-10-16 component-consistency board ("No shadow on the anchored popover and menu, per §7") and CODING_STANDARDS § Design 7 ("No gradients, glass or drop shadows to make a card look 'premium'"); test "is flat with a rounded header while quieting the title and insets" in `card.test.tsx`.

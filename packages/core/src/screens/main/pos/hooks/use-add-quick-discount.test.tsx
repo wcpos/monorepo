@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useAddQuickDiscount } from './use-add-quick-discount';
 
@@ -27,7 +28,9 @@ jest.mock('./cart-failure', () => ({
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('./use-recalculate-coupons', () => ({ useRecalculateCoupons: () => ({ recalculate }) }));
 const mockActionLog = jest.fn();
@@ -101,10 +104,10 @@ it.each(['percent', 'fixed_cart'] as const)(
 		expect(recalculate).toHaveBeenCalledWith(lineItems, [line]);
 		expect(localPatch).toHaveBeenCalledWith({
 			document: expect.anything(),
-			data: {
+			data: expect.objectContaining({
 				coupon_lines: [line],
 				line_items: [{ ...lineItems[0], total: '90' }],
-			},
+			}),
 		});
 		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), {
 			context: {
@@ -258,3 +261,7 @@ it('a refusal the hook already presented is not echoed into the field', async ()
 	).resolves.toEqual({ success: false, error: undefined });
 	expect(localPatch).not.toHaveBeenCalled();
 });
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

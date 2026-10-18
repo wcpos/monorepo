@@ -116,7 +116,7 @@ export function ClosureSheet({
 						<Button
 							testID="closure-preview-fold"
 							variant="ghost"
-							className="min-h-ctl flex-row justify-start gap-2 px-0"
+							className="flex-row justify-start gap-2 px-0"
 							onPress={() => setPreview(!preview)}
 						>
 							<Icon
@@ -145,7 +145,6 @@ export function ClosureSheet({
 				<DialogFooter className="flex-row items-center gap-2">
 					<Button
 						testID="closure-done"
-						variant={blind || printedAt ? 'default' : 'ghost'}
 						className={blind || printedAt ? 'w-full' : undefined}
 						size="lg"
 						onPress={onDone}
@@ -156,6 +155,8 @@ export function ClosureSheet({
 					{!blind && !printedAt && (
 						<Button
 							testID="closure-print"
+							// Done is the sheet's one primary; printing the Z report is the alternative beside it.
+							variant="outline"
 							leftIcon="printer"
 							size="lg"
 							loading={busy}

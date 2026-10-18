@@ -41,6 +41,12 @@ const buttonVariants = cva('items-center justify-center rounded-lg', {
 type ButtonProps = PressableProps &
 	VariantProps<typeof buttonVariants> & {
 		name: IconName;
+		/**
+		 * The control's accessible name. An icon-only button has no text for a screen reader to
+		 * announce, so the caller names what it does (translated) and TypeScript refuses an
+		 * unnamed one.
+		 */
+		accessibilityLabel: string;
 		loading?: boolean;
 		on?: boolean;
 		iconClassName?: string;

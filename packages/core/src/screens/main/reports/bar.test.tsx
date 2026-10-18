@@ -6,6 +6,7 @@ import { TZDate } from '@date-fns/tz';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { Bar, CashierButton } from './bar';
@@ -24,7 +25,16 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
+	Text: require('react-native').Text,
+}));
+// The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
 	Button: ({
@@ -165,8 +175,28 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
-jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
-jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
+jest.mock('../components/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+// The page bar has its own suites; here it only seats the scope and the phone crumb.
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({
+		testID,
+		titleSlot,
+		back,
+	}: {
+		testID: string;
+		titleSlot?: React.ReactNode;
+		back?: { label: string; onPress: () => void; testID?: string };
+	}) => (
+		<div data-testid={testID}>
+			{back && (
+				<button data-testid={back.testID} data-crumb="phone" onClick={back.onPress}>
+					{back.label}
+				</button>
+			)}
+			<div data-testid={`${testID}-title-slot`}>{titleSlot}</div>
+		</div>
+	),
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
@@ -338,26 +368,38 @@ it.each([
 	isPro = true;
 	draw();
 	fireEvent.click(screen.getByTestId(trigger));
+	expect(screen.getByTestId(option).getAttribute('role')).toBe('radio');
+	expect(screen.getByTestId(option).closest('[role="radiogroup"]')).not.toBeNull();
 	fireEvent.click(screen.getByTestId(option));
 	expect(change).toHaveBeenCalled();
 	expect(screen.queryByTestId(option)).toBeNull();
 });
-// Revert: leave HeaderLeft at the default 40pt height or let its container shrink.
-it.each(['sm', 'md'])(
-	'keeps the %s page-bar drawer target at least 48pt and non-shrinking',
-	(size) => {
-		mockScreenSize = size;
-		try {
-			render(<Controls room="sales" onRoomChange={room} scope={scope} onScopeChange={change} />);
-			const button = screen.getByTestId('drawer-open-button');
-			expect(button.className).toContain('h-12');
-			expect(button.className).toContain('min-w-12');
-			expect(button.className).toContain('shrink-0');
-		} finally {
-			mockScreenSize = 'sm';
-		}
-	}
-);
+// Revert: keep the scope beside a private bar instead of in the page bar's title place.
+it('seats the scope in the page bar title place and returns to Sales from an arrow on wide widths', () => {
+	render(
+		<DeviceScope phone={false}>
+			<Controls room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
+		</DeviceScope>
+	);
+	const slot = screen.getByTestId('reports-bar-title-slot');
+	expect(slot.contains(screen.getByTestId('reports-scope'))).toBe(true);
+	// Wide: no phone crumb (the page bar shows back on a phone only), an arrow before the scope.
+	const back = screen.getByTestId('reports-back-sales');
+	expect(back.getAttribute('data-crumb')).toBeNull();
+	expect(slot.contains(back)).toBe(true);
+	fireEvent.click(back);
+	expect(room).toHaveBeenCalledWith('sales');
+});
+
+it('gives the phone the page bar crumb back to Sales instead of an arrow', () => {
+	render(
+		<DeviceScope phone>
+			<Controls room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
+		</DeviceScope>
+	);
+	expect(screen.getAllByTestId('reports-back-sales')).toHaveLength(1);
+	expect(screen.getByTestId('reports-back-sales').getAttribute('data-crumb')).toBe('phone');
+});
 
 // Revert: restore the old room segments.
 it.each(['sm', 'md', 'lg'])('renders no tabs row on any width (%s)', (size) => {

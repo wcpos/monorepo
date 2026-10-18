@@ -12,6 +12,8 @@ import {
 	type DeclaredValues,
 	derive,
 	fromMinor,
+	isLivePaymentStatus,
+	isSettledPaymentRow,
 	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
@@ -25,6 +27,7 @@ import {
 	toMinor,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -33,7 +36,6 @@ import { isActionRefusal } from '../../../../../extensions/actions';
 import '../cash-rounding-hook';
 import { useActionContext } from '../../hooks/use-action-context';
 import { useCartConfig } from '../../hooks/use-cart-config';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { commitSale, type StampedSale } from '../commit-sale';
 import {
 	getTerminalPaymentsService,
@@ -270,7 +272,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			online: online && !queuedOffline,
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
-			hasLiveLeg: rows.some(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
+			hasLiveLeg: rows.some(({ status }) => isLivePaymentStatus(status)),
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
@@ -279,9 +281,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
 		const planRows = rows
 			.slice(storedPlan?.from ?? rows.length)
-			.filter(
-				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-			)
+			.filter(isSettledPaymentRow)
 			.map((row) => ({
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -310,7 +310,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(
-		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
+		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
@@ -422,9 +422,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
 	const rowsSinceFrom = rows
 		.slice(state.plan?.from ?? rows.length)
-		.filter(
-			(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-		)
+		.filter(isSettledPaymentRow)
 		.map((row) => ({
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -630,20 +628,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
 			else latest[index] = row;
-			const counts = (candidate: PaymentRow) =>
-				candidate.status === 'captured' ||
-				(candidate.status === 'authorized' && candidate.recorded_offline);
-			const paidAfter = latest.filter(counts).reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			const paidAfter = latest
+				.filter(isSettledPaymentRow)
+				.reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
 			const action: TenderAction = {
 				type: 'tender-recorded',
 				balanceMinor: Math.max(0, toMinor(order.getLatest().payload.total, dp) - paidAfter),
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
-					.filter(
-						(candidate) =>
-							candidate.status === 'captured' ||
-							(candidate.status === 'authorized' && candidate.recorded_offline)
-					)
+					.filter(isSettledPaymentRow)
 					.map((candidate) => ({
 						amountMinor: toMinor(candidate.amount, dp),
 						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
@@ -768,6 +761,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								: 'terminal',
 				completing: amountMinor === balanceMinor,
 				settledOrderStatus,
+				settledOrderGateway: method?.id,
 			});
 			const saveProvenance = async () => {
 				if (amountMinor !== balanceMinor) return;
@@ -953,7 +947,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// gateway runs the whole order and cannot become one leg beside money already held.
 				if (
 					readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
-						['pending', 'authorized', 'captured'].includes(status)
+						isLivePaymentStatus(status)
 					)
 				) {
 					logger.info(t(disabledReasonKey('not_with_split'), { title: method.title }), {
@@ -1464,7 +1458,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					(row) =>
 						row.capture_mode === 'device' &&
 						((row.recorded_offline && row.status === 'authorized') ||
-							(!online && ['pending', 'authorized', 'captured'].includes(row.status)))
+							(!online && isLivePaymentStatus(row.status)))
 				)
 			) {
 				logger.info(t('pos_checkout.device_void_needs_settlement'), {

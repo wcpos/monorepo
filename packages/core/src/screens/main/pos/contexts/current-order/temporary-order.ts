@@ -6,6 +6,8 @@ import { createTemporaryDB, type TemporaryOrderDocument } from '@wcpos/database'
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { protectOrderMeta } from '../../../hooks/mutations/protected-order-meta';
+
 const temporaryOrderLogger = getLogger(['wcpos', 'pos', 'temporary-order']);
 
 /**
@@ -80,13 +82,19 @@ export async function getTemporaryOrder(uuid: string): Promise<TemporaryOrderDoc
  */
 export async function patchTemporaryOrderPayload(
 	uuid: string,
-	changes: Record<string, unknown>
+	changes: Record<string, unknown> | ((payload: Record<string, unknown>) => Record<string, unknown>)
 ): Promise<TemporaryOrderDocument | null> {
 	const document = await getTemporaryOrder(uuid);
 	if (!document) return null;
 	return (await document.incrementalModify((data) => ({
 		...data,
-		payload: { ...(data.payload as Record<string, unknown>), ...changes },
+		payload: {
+			...(data.payload as Record<string, unknown>),
+			...protectOrderMeta(
+				data.payload as Record<string, unknown>,
+				typeof changes === 'function' ? changes(data.payload as Record<string, unknown>) : changes
+			),
+		},
 	}))) as TemporaryOrderDocument;
 }
 

@@ -9,6 +9,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { EditableField } from '../../../components/editable-field';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
+import { useCartTableReadOnly } from './read-only';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
 export function FeeName({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
+	const readOnly = useCartTableReadOnly();
 
 	/**
 	 * filter out the private meta data
@@ -43,13 +45,19 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 		<VStack className="w-full">
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			<View className="w-full">
-				<EditableField
-					variant="ghost"
-					bold={false}
-					numberOfLines={2}
-					value={item.name ?? undefined}
-					onChangeText={(name) => updateCartLine('fee_lines', uuid, { name })}
-				/>
+				{readOnly ? (
+					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{item.name ?? ''}
+					</Text>
+				) : (
+					<EditableField
+						variant="ghost"
+						bold={false}
+						numberOfLines={2}
+						value={item.name ?? undefined}
+						onChangeText={(name) => updateCartLine('fee_lines', uuid, { name })}
+					/>
+				)}
 			</View>
 
 			{metaData.length > 0 && (

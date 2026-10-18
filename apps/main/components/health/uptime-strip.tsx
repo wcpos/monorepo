@@ -11,26 +11,20 @@ import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
 import type { UptimeCell } from './performance-logic';
 
 /**
- * CVD-validated palette, locked on #843 — exact hexes, deliberately NOT theme
- * tokens, with glyphs as the secondary encoding so color never stands alone.
- * Red (#dc2626, ✕ stalled-while-open) is reserved until the hourly heartbeat
- * rollups exist to prove "open but not running".
+ * The theme's `ok` / `warn` tokens (CODING_STANDARDS § Design 7: never a hex in a
+ * component), with glyphs as the secondary encoding so colour never stands alone.
+ * The #843 palette was exact hexes; the tokens follow light, dark and every theme.
+ * A red "stalled while open" state is reserved until the hourly heartbeat rollups
+ * exist to prove "open but not running".
  */
-const UPTIME_GREEN = '#15803d';
-const UPTIME_AMBER = '#ca8a04';
 
 function CellView({ cell, tooltip }: { cell: UptimeCell; tooltip: string }) {
 	const body =
 		cell.state === 'running' ? (
-			<View className="h-6 rounded" style={{ backgroundColor: UPTIME_GREEN, opacity: 0.75 }} />
+			<View className="bg-ok h-6 rounded opacity-75" />
 		) : cell.state === 'errors' ? (
-			<View
-				className="h-6 items-center justify-center rounded border"
-				style={{ borderColor: UPTIME_AMBER }}
-			>
-				<Text className="text-[11px]" style={{ color: UPTIME_AMBER }}>
-					⚠
-				</Text>
+			<View className="border-warn h-6 items-center justify-center rounded border">
+				<Text className="text-warn text-xs">⚠</Text>
 			</View>
 		) : (
 			<View className="border-border h-6 rounded border" />
@@ -94,28 +88,25 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 				))}
 			</HStack>
 			<HStack className="justify-between">
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{first ? hourLabel(first.hourStartMs) : ''}
 				</Text>
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{middle ? hourLabel(middle.hourStartMs) : ''}
 				</Text>
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{t('health.performance.uptime_now')}
 				</Text>
 			</HStack>
 			<HStack className="flex-wrap gap-x-4 gap-y-1">
 				<HStack className="items-center gap-1.5">
-					<View
-						className="h-3 w-3 rounded-sm"
-						style={{ backgroundColor: UPTIME_GREEN, opacity: 0.75 }}
-					/>
+					<View className="bg-ok h-3 w-3 rounded-sm opacity-75" />
 					<Text className="text-muted-foreground text-xs">
 						{t('health.performance.uptime_running')}
 					</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
-					<View className="h-3 w-3 rounded-sm border" style={{ borderColor: UPTIME_AMBER }} />
+					<View className="border-warn h-3 w-3 rounded-sm border" />
 					<Text className="text-muted-foreground text-xs">
 						{t('health.performance.uptime_errors')}
 					</Text>

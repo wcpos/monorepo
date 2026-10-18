@@ -60,6 +60,10 @@ const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
 });
 
+// The embedded boot merges its payload into an existing credential document.
+const mergeable = <T extends object>(doc: T) =>
+	Object.assign(doc, { getLatest: () => doc, incrementalModify: jest.fn(async () => undefined) });
+
 describe('hydrateUserSession', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -297,10 +301,10 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		existingStore.getLatest = jest.fn(() => existingStore);
 
 		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = {
+		const wpCredentialsDoc = mergeable({
 			uuid: 'credentials-1',
 			patch: jest.fn(async () => undefined),
-		};
+		});
 		const bulkInsert = jest.fn(async () => undefined);
 		const userDB = {
 			sites: {
@@ -311,10 +315,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
-			wp_credentials: {
-				upsert: jest.fn(async () => wpCredentialsDoc),
-				...documentLookup(wpCredentialsDoc),
-			},
+			wp_credentials: documentLookup(wpCredentialsDoc),
 			stores: {
 				findOne: jest
 					.fn()
@@ -361,7 +362,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
 		const previous = { siteID: 'old-site', storeID: 'old-store' };
 		const site = { uuid: 'new-site' };
-		const credentials = { uuid: 'new-credentials', patch: jest.fn() };
+		const credentials = mergeable({ uuid: 'new-credentials', patch: jest.fn() });
 		const appState = { get: jest.fn(() => previous), set: jest.fn() };
 		const context = {
 			appState,
@@ -372,10 +373,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 					incrementalUpsert: jest.fn(async () => site),
 				},
-				wp_credentials: {
-					...documentLookup(credentials),
-					upsert: jest.fn(async () => credentials),
-				},
+				wp_credentials: documentLookup(credentials),
 				stores: { ...documentLookup(null), bulkInsert: jest.fn() },
 			},
 			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
@@ -396,6 +394,74 @@ describe('PROCESS_INITIAL_PROPS', () => {
 			}
 		);
 		expect(appState.set).not.toHaveBeenCalled();
+	});
+
+	it('merges the embedded credential, so a failure before the stores patch keeps its links', async () => {
+		// The payload carries no `stores`, `last_access` or `date_*`. A full-document
+		// upsert reset them until the step's final patch, so a throw in between (the
+		// step fails soft) persisted `stores: []` and the app showed no stores.
+		const original = {
+			uuid: 'credentials-1',
+			display_name: 'Old Name',
+			stores: ['store-a'],
+			last_access: '2026-10-01T00:00:00.000Z',
+			date_created_gmt: '2026-01-01T00:00:00',
+			date_modified_gmt: '2026-09-01T00:00:00',
+		};
+		let stored: Record<string, unknown> = { ...original };
+		type Modifier = (current: Record<string, unknown>) => Record<string, unknown>;
+		const credentialDoc = {
+			uuid: original.uuid,
+			getLatest: () => credentialDoc,
+			incrementalModify: jest.fn(async (modify: Modifier) => {
+				stored = modify({ ...stored });
+			}),
+			patch: jest.fn(async (patch: Record<string, unknown>) => {
+				stored = { ...stored, ...patch };
+			}),
+		};
+		// RxDB's `upsert` replaces the document: omitted properties take their defaults.
+		const upsert = jest.fn(async (json: Record<string, unknown>) => {
+			stored = {
+				stores: [],
+				last_access: '',
+				date_created_gmt: '',
+				date_modified_gmt: '',
+				...json,
+			};
+			return credentialDoc;
+		});
+		const credentialLookup = documentLookup(credentialDoc);
+		const site = { uuid: 'site-1' };
+		const context = {
+			appState: { get: jest.fn(async () => null), set: jest.fn() },
+			user: { uuid: 'user-1' },
+			userDB: {
+				sites: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					incrementalUpsert: jest.fn(async () => site),
+				},
+				wp_credentials: { ...credentialLookup, upsert, incrementalUpsert: upsert },
+				stores: {
+					...documentLookup(null),
+					bulkInsert: jest.fn(async () => {
+						throw new Error('store insert failed');
+					}),
+				},
+			},
+			initialProps: {
+				site,
+				wp_credentials: { uuid: original.uuid, display_name: 'New Name' },
+				stores: [{ id: 1 }],
+			},
+		} as unknown as HydrationContext;
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
+
+		await expect(step.execute(context)).rejects.toThrow('store insert failed');
+		expect(credentialLookup.findOne).toHaveBeenCalledWith('credentials-1');
+		expect(upsert).not.toHaveBeenCalled();
+		expect(stored).toEqual({ ...original, display_name: 'New Name' });
 	});
 });
 
@@ -419,7 +485,11 @@ describe('HYDRATE_USER_SESSION', () => {
 				},
 			};
 			let latestSite = site;
-			const credentials = { uuid: 'credentials-1', access_token: 'token', patch: jest.fn() };
+			const credentials = mergeable({
+				uuid: 'credentials-1',
+				access_token: 'token',
+				patch: jest.fn(),
+			});
 			const store = { localID: '0123456789' };
 			let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
 			const context = {
@@ -439,7 +509,7 @@ describe('HYDRATE_USER_SESSION', () => {
 						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 						incrementalUpsert: async () => site,
 					},
-					wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
+					wp_credentials: documentLookup(credentials),
 					stores: {
 						findOne: jest
 							.fn()
@@ -555,7 +625,10 @@ describe('PROCESS_INITIAL_PROPS display advertisement', () => {
 			getLatest: () => existingStore,
 		};
 		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = { uuid: 'credentials-1', patch: jest.fn(async () => undefined) };
+		const wpCredentialsDoc = mergeable({
+			uuid: 'credentials-1',
+			patch: jest.fn(async () => undefined),
+		});
 		// The changed pointer is hydrated before it is committed (main #2127): the
 		// existence check sees no site yet, the hydration afterwards finds the upserted
 		// one, the credentials and the store, and opens the store database.
@@ -569,10 +642,7 @@ describe('PROCESS_INITIAL_PROPS display advertisement', () => {
 					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
-			wp_credentials: {
-				...documentLookup(wpCredentialsDoc),
-				upsert: jest.fn(async () => wpCredentialsDoc),
-			},
+			wp_credentials: documentLookup(wpCredentialsDoc),
 			stores: {
 				findOne: jest.fn(() => ({ exec: jest.fn(async () => existingStore) })),
 				bulkInsert: jest.fn(async () => undefined),
@@ -716,6 +786,7 @@ describe('TEST_AUTHORIZATION', () => {
 			use_jwt_as_param: false,
 			use_rest_route_param: false,
 			use_protocol_headers: false,
+			use_instance_header: false,
 		});
 		expect(siteDoc.use_jwt_as_param).toBe(false);
 		expect(siteDoc.use_rest_route_param).toBe(false);
@@ -808,6 +879,7 @@ describe('TEST_AUTHORIZATION', () => {
 			use_jwt_as_param: false,
 			use_rest_route_param: false,
 			use_protocol_headers: true,
+			use_instance_header: false,
 		});
 		expect(siteDoc.use_protocol_headers).toBe(true);
 		// Unsent floor names are unknown, not dead: no false alarm on a healthy store.
@@ -1029,6 +1101,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -1057,6 +1130,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1169,6 +1243,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1208,24 +1283,51 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: true,
+			useInstanceHeader: false,
 		});
 	});
 
-	it('enables protocol headers when the echo proves reflected CORS names are authorized', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
-		});
+	it.each([
+		['received', true, true],
+		['stripped', false, false],
+		['missing', undefined, false],
+		['HTML challenge', 'html', false],
+		['failed preflight', null, false],
+	] as const)(
+		'probes the instance header before trusting reflection: %s',
+		async (_scenario, received, allowed) => {
+			fetchMock.mockResolvedValueOnce({
+				ok: true,
+				json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
+			});
+			fetchMock.mockImplementationOnce(async (url, init) => {
+				expect(new URL(url).searchParams.get('wcpos')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS-Instance')).toBe('wcpos-instance-probe');
+				if (received === null) throw new TypeError('Failed preflight');
+				const body = echoBody({ cors: { reflects_request_headers: true } });
+				if (typeof received === 'boolean') {
+					Object.assign(body.headers, {
+						'x-wcpos-instance': { received, length: received ? 20 : 0 },
+					});
+				}
+				return new Response(
+					received === 'html' ? '<html>Checking your browser</html>' : JSON.stringify(body),
+					{ status: 200 }
+				);
+			});
 
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: true,
-		});
-	});
+			await expect(
+				testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+			).resolves.toEqual({
+				ok: true,
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: true,
+				useInstanceHeader: allowed,
+			});
+		}
+	);
 
 	it('classifies a challenge page returned by the path echo', async () => {
 		fetchMock
@@ -1437,6 +1539,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
@@ -1455,6 +1558,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 	});
 
@@ -1472,6 +1576,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1557,6 +1662,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -1581,6 +1687,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
@@ -1602,6 +1709,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1647,6 +1755,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1670,6 +1779,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -1695,6 +1805,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1716,6 +1827,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);

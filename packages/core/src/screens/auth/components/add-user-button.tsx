@@ -1,7 +1,9 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
 
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
+import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -13,7 +15,7 @@ import { useLoginHandler } from '../hooks/use-login-handler';
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: Pick<ReadonlySiteRecord, 'uuid' | 'name' | 'wcpos_login_url'>;
 	hasExistingUsers: boolean;
 	compact?: boolean;
 }
@@ -76,29 +78,32 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 		void promptAsync();
 	}, [promptAsync]);
 
-	return (
-		<Pressable
-			testID={compact ? 'user-sheet-another-account' : 'add-user-button'}
+	const label = isProcessing
+		? t('common.loading')
+		: compact
+			? t('register.another_account')
+			: hasExistingUsers
+				? t('auth.add_another_user', { _tags: 'core' })
+				: t('auth.sign_in_with_wordpress', { _tags: 'core' });
+	// In the user sheet it is one of the sheet's quiet rows; on the connect screen, the
+	// dashed add-another row under the users.
+	return compact ? (
+		<MenuRow
+			testID="user-sheet-another-account"
 			disabled={disabled}
 			onPress={handlePress}
-			className={
-				compact
-					? 'active:bg-muted h-11 justify-center px-4'
-					: disabled
-						? 'border-border min-h-row w-full flex-row items-center gap-3 rounded-lg border border-dashed px-3 py-2 opacity-60'
-						: 'border-border active:bg-muted min-h-row w-full flex-row items-center gap-3 rounded-lg border border-dashed px-3 py-2'
-			}
+			label={label}
+		/>
+	) : (
+		<ListItem
+			testID="add-user-button"
+			variant="dashed"
+			className="w-full"
+			disabled={disabled}
+			onPress={handlePress}
+			leading={<Icon name="plus" size="sm" />}
 		>
-			{!compact && <Icon name="plus" size="sm" />}
-			<Text className="text-muted-foreground text-sm font-medium">
-				{isProcessing
-					? t('common.loading')
-					: compact
-						? t('register.another_account')
-						: hasExistingUsers
-							? t('auth.add_another_user', { _tags: 'core' })
-							: t('auth.sign_in_with_wordpress', { _tags: 'core' })}
-			</Text>
-		</Pressable>
+			<Text className="text-muted-foreground text-sm font-medium">{label}</Text>
+		</ListItem>
 	);
 }

@@ -6,6 +6,8 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { usePointer } from '../lib/device';
+import { TILE_SURFACE } from '../lib/tile-surface';
 
 /**
  * ListItem — a selectable row with leading content, title, and trailing content.
@@ -22,6 +24,7 @@ import { Text } from '../text';
  *   trailing={<StatusBadge label="Valid" variant="success" />}
  *   selected
  *   removable
+ *   removeLabel="Remove Paul Kilmurray"
  *   onRemove={() => {}}
  * />
  *
@@ -30,15 +33,16 @@ import { Text } from '../text';
  *   <Text>Custom content here</Text>
  * </ListItem>
  */
+// A tile laid out as a row: the tile's surface and its picked state (`lib/tile-surface.ts`).
 const listItemVariants = cva(
-	'min-h-row active:bg-muted flex-row items-center gap-3 rounded-lg border px-3 py-2',
+	`min-h-row flex-row items-center gap-3 px-3 py-2 ${TILE_SURFACE.base}`,
 	{
 		variants: {
 			variant: {
-				default: 'border-border bg-card',
-				selected: 'border-primary bg-primary/10',
+				default: TILE_SURFACE.rest,
+				selected: TILE_SURFACE.selected,
 				warning: 'border-warning/40 bg-warning/10',
-				dashed: 'border-border border-dashed',
+				dashed: TILE_SURFACE.dashed,
 			},
 		},
 		defaultVariants: {
@@ -47,7 +51,7 @@ const listItemVariants = cva(
 	}
 );
 
-export interface ListItemProps
+interface ListItemBaseProps
 	extends Omit<PressableProps, 'children'>, VariantProps<typeof listItemVariants> {
 	/** Content rendered on the left (avatar, icon, etc.) */
 	leading?: React.ReactNode;
@@ -59,13 +63,24 @@ export interface ListItemProps
 	trailing?: React.ReactNode;
 	/** Whether this item is in a selected state */
 	selected?: boolean;
-	/** Whether to show a remove (X) button */
-	removable?: boolean;
 	/** Called when the remove button is pressed */
 	onRemove?: () => void;
 	/** Custom children — if provided, replaces title/subtitle */
 	children?: React.ReactNode;
 }
+
+// The remove (X) is icon-only, so a removable row must say what removing it does: the caller
+// passes the translated name, and TypeScript refuses a removable row without one.
+type ListItemRemoveProps =
+	| { removable?: false; removeLabel?: undefined }
+	| {
+			/** Whether to show a remove (X) button */
+			removable: true;
+			/** The remove button's accessible name, translated by the caller. */
+			removeLabel: string;
+	  };
+
+export type ListItemProps = ListItemBaseProps & ListItemRemoveProps;
 
 export function ListItem({
 	leading,
@@ -74,6 +89,7 @@ export function ListItem({
 	trailing,
 	selected,
 	removable,
+	removeLabel,
 	onRemove,
 	variant,
 	className,
@@ -83,12 +99,20 @@ export function ListItem({
 	// Explicit non-default variant (e.g. "warning") wins over selected.
 	const resolvedVariant =
 		variant && variant !== 'default' ? variant : selected ? 'selected' : 'default';
+	const pointer = usePointer();
+	const { onPress, role, accessibilityRole } = pressableProps;
 
 	return (
 		<Pressable
+			// An actionable row is a button unless the caller names it otherwise (a checkbox, a
+			// radio); react-native-web also needs the role for Space to press it. A row without an
+			// action is no tab stop.
+			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
+			tabIndex={onPress ? undefined : -1}
 			className={cn(
 				listItemVariants({ variant: resolvedVariant }),
-				pressableProps.disabled && 'opacity-45',
+				pointer === 'fine' && 'web:hover:bg-muted',
+				pressableProps.disabled && TILE_SURFACE.disabled,
 				className
 			)}
 			{...pressableProps}
@@ -113,6 +137,7 @@ export function ListItem({
 					name="xmark"
 					size="xs"
 					variant="destructive"
+					accessibilityLabel={removeLabel}
 					// A disabled row cannot be removed either (CodeRabbit on #2213).
 					disabled={pressableProps.disabled ?? undefined}
 					onPress={(e) => {

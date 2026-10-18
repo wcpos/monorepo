@@ -7,9 +7,8 @@ import { useCurrentOrder } from '../contexts/current-order';
 /**
  * The cart's line selector. PURE — it reads, it does not write.
  *
- * The settlement that used to live here moved to useCartSettlement for #1472, where a
- * single mount owns the single-flight guard and the re-push latch — three copies of
- * those meant three concurrent writes per cart edit.
+ * Settlement belongs to cart commands and the session-owned coordinator (#1472),
+ * never to a selector mounted by multiple cart components.
  *
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
  */

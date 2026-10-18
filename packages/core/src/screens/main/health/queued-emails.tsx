@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -8,19 +9,18 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-
-import { useT } from '../../../contexts/translations';
-import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import {
 	drainReceiptEmailQueue,
 	receiptEmailPostRequest,
-	type ReceiptEmailQueuePort,
 	type ReceiptEmailRow,
 	removeReceiptEmail,
 	retryReceiptEmail,
-} from '../receipt/email-queue/queue';
-import { useReceiptEmailQueueCollection } from '../receipt/email-queue/use-receipt-email-queue-collection';
-import { Callout, Pill } from './components';
+} from '@wcpos/query/receipt-email-queue';
+
+import { useT } from '../../../contexts/translations';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { useAppState } from '../../../contexts/app-state';
+import { Callout } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type QueuedEmail, useQueuedEmails } from './use-queued-emails';
 
@@ -42,7 +42,7 @@ const logger = getLogger(['wcpos', 'receipt', 'emailQueue']);
 export function QueuedEmailsPanel() {
 	const t = useT();
 	const rows = useQueuedEmails();
-	const collection = useReceiptEmailQueueCollection();
+	const { storeDB } = useAppState();
 	const http = useRestHttpClient();
 	const nowMs = useNowMs(30_000);
 	const relative = useRelativeTime();
@@ -62,12 +62,12 @@ export function QueuedEmailsPanel() {
 		try {
 			// Refuses a row that is no longer failed, so a stale click cannot pull a
 			// just-delivered row back into the pending lane and send it twice.
-			const requeued = await retryReceiptEmail(row.doc, logger);
+			const requeued = await retryReceiptEmail(storeDB, row.localID, logger);
 			// Joins the running drain rather than starting a second one, so a retry
 			// pressed while the connectivity drain is mid-post cannot double-send.
-			if (requeued && collection) {
+			if (requeued && storeDB) {
 				await drainReceiptEmailQueue({
-					collection: collection as unknown as ReceiptEmailQueuePort,
+					storeDB,
 					post,
 					logger,
 				});
@@ -91,12 +91,8 @@ export function QueuedEmailsPanel() {
 	const discard = async (row: QueuedEmail) => {
 		setBusyId(row.localID);
 		try {
-			if (!collection) return;
-			const removed = await removeReceiptEmail(
-				collection as unknown as ReceiptEmailQueuePort,
-				row.doc,
-				logger
-			);
+			if (!storeDB) return;
+			const removed = await removeReceiptEmail(storeDB, row.localID, logger);
 			Toast.show({
 				type: removed ? 'success' : 'warning',
 				text1: t(
@@ -145,13 +141,13 @@ export function QueuedEmailsPanel() {
 							<HStack className="items-center gap-2">
 								<Text className="font-medium">{describeRow(row, t)}</Text>
 								{row.status === 'failed' ? (
-									<Pill tone="destructive" testID={`db-queued-email-failed-${row.localID}`}>
+									<Badge variant="destructive" testID={`db-queued-email-failed-${row.localID}`}>
 										{t('health.database.emails.failed')}
-									</Pill>
+									</Badge>
 								) : (
-									<Pill tone="warning" testID={`db-queued-email-pending-${row.localID}`}>
+									<Badge variant="warning" testID={`db-queued-email-pending-${row.localID}`}>
 										{t('health.database.emails.pending')}
-									</Pill>
+									</Badge>
 								)}
 							</HStack>
 							<Text className="text-muted-foreground text-xs">

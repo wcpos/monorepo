@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { observeTemplatePrinterOverrides } from '@wcpos/query';
 import type { PrinterProfile, TemplateInfo } from '@wcpos/printer';
 import { detectMismatch, resolvePrinter } from '@wcpos/printer';
-import type { TemplatePrinterOverrideDocument } from '@wcpos/database';
 
 import { useAvailablePrinterProfiles } from '../../settings/printer/use-available-printer-profiles';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -55,10 +55,10 @@ export function useResolvedPrinter({
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
 		() =>
-			storeDB.collections.template_printer_overrides.find().$.pipe(
+			observeTemplatePrinterOverrides(storeDB).pipe(
 				map((docs) => {
 					const m = new Map<string, string>();
-					for (const doc of docs as TemplatePrinterOverrideDocument[]) {
+					for (const doc of docs) {
 						m.set(doc.template_id, doc.printer_profile_id);
 					}
 					return m;

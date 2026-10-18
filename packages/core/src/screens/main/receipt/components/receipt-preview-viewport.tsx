@@ -84,7 +84,7 @@ export function ReceiptPreviewViewport({
 		>
 			<View
 				testID={testID ? `${testID}-zoom-controls` : undefined}
-				className="bg-background/95 absolute top-2 right-2 z-10 flex-row items-stretch overflow-hidden rounded-md border shadow-sm"
+				className="bg-background/95 absolute top-2 right-2 z-10 flex-row items-stretch overflow-hidden rounded-lg border"
 			>
 				<Pressable
 					accessibilityRole="button"

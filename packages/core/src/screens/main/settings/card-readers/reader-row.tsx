@@ -1,12 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { decode } from 'html-entities';
+
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
@@ -109,7 +114,7 @@ export function ReaderRow({
 					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
-		lineClass = 'text-warning text-sm';
+		lineClass = 'text-warn-text text-sm';
 	} else if (updating) {
 		line = t('settings.card_readers.installing');
 		below = (
@@ -171,7 +176,7 @@ export function ReaderRow({
 						{t('settings.card_readers.cant_see')}
 					</DocsLink>
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						onPress={actions.cancelScan}
 						testID={`reader-row-${method.id}-cancel-scan`}
 					>
@@ -213,14 +218,9 @@ export function ReaderRow({
 						<Text className="flex-1 text-lg font-semibold" numberOfLines={1}>
 							{name || method.title}
 						</Text>
-						<Text
-							testID={`reader-row-${method.id}-provider`}
-							className="text-muted-foreground bg-muted max-w-32 overflow-hidden rounded-full px-2 py-0.5 text-xs"
-							numberOfLines={1}
-							decodeHtml
-						>
-							{method.title}
-						</Text>
+						<Badge testID={`reader-row-${method.id}-provider`} variant="muted" className="max-w-32">
+							{decode(method.title)}
+						</Badge>
 					</HStack>
 					{serial || locationName ? (
 						<HStack className="items-center gap-1.5">
@@ -373,6 +373,7 @@ export function ReaderRow({
 							<IconButton
 								name="ellipsisVertical"
 								variant="outline"
+								accessibilityLabel={t('common.more_actions')}
 								// The menu stays in place; with nothing to release or forget it is disabled.
 								disabled={!connected && !status.reader && !remembered}
 								testID={`reader-row-${method.id}-menu`}
@@ -391,6 +392,10 @@ export function ReaderRow({
 									<Text>{t('settings.card_readers.release_reader')}</Text>
 								</DropdownMenuItem>
 							) : null}
+							{remembered && !connected && !sdkUi && status.reader ? (
+								// The red row is last and set apart when another action sits above it.
+								<DropdownMenuSeparator />
+							) : null}
 							{remembered || connected ? (
 								<DropdownMenuItem
 									variant="destructive"
@@ -408,11 +413,12 @@ export function ReaderRow({
 			{__DEV__ && devControls.length > 0 && connected ? (
 				<HStack className="flex-wrap gap-2">
 					{devControls.map((control) => (
-						<Button
+						// An on/off dev control is a choice: a Chip, never a toggled Button.
+						<Chip
 							key={control.id}
+							label={control.label}
+							on={control.active}
 							testID={`reader-row-${method.id}-dev-control-${control.id}`}
-							size="sm"
-							variant={control.active ? 'default' : 'secondary'}
 							disabled={working}
 							onPress={() =>
 								void actions.runDev(method, async () => {
@@ -423,9 +429,7 @@ export function ReaderRow({
 									}
 								})
 							}
-						>
-							<ButtonText>{control.label}</ButtonText>
-						</Button>
+						/>
 					))}
 				</HStack>
 			) : null}

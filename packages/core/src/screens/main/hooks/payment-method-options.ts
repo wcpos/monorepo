@@ -1,11 +1,7 @@
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import type { ObservedPaymentMethod } from '@wcpos/query';
 
 export type PaymentMethodOption = { value: string; label: string; kind: string };
-export type ObservedPaymentMethod = {
-	payment_method?: string;
-	payment_method_title?: string;
-	indexMethods: string[];
-};
 type InventoryMethod = Pick<PaymentMethodDescriptor, 'id' | 'title' | 'kind' | 'order'> & {
 	pos_enabled?: boolean;
 };

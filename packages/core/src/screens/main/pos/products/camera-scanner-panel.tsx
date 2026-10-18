@@ -205,6 +205,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 					<IconButton
 						name="xmark"
 						size="sm"
+						accessibilityLabel={t('pos_products.camera_scan_close')}
 						onPress={onClose}
 						iconClassName="text-white"
 						testID="camera-scanner-close"

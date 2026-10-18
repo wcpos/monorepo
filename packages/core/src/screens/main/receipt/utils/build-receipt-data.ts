@@ -11,14 +11,13 @@ import { getI18n } from 'react-i18next';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type { TaxId } from '@wcpos/database';
+import type { RegisterDocument } from '@wcpos/query/register-session';
 
 import {
 	decimalSeparatorFormatter,
 	quickDiscountLabel,
 	readQuickDiscountIntent,
 } from '../../pos/hooks/quick-discount';
-
-import type { RegisterDocument } from '../../../../services/register/register-document';
 
 interface ReceiptOrder {
 	id: number;

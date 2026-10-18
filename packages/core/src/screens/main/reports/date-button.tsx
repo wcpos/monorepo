@@ -8,6 +8,7 @@ import { subDays } from 'date-fns/subDays';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';
+import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
@@ -111,6 +112,7 @@ export function DateButton({
 	const insets = useSafeAreaInsets();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
+	const PeriodGroup = phone ? View : MenuRowGroup;
 	const { license } = useAppInfo();
 	const { presets, timezone } = useStoreDay(storeId);
 	const [locked, setLocked] = React.useState(initialLockedPeriod ? lockedScopeName : '');
@@ -184,10 +186,13 @@ export function DateButton({
 				<Button
 					testID="reports-period"
 					variant="ghost"
-					className="min-h-12 min-w-0 shrink flex-row items-center gap-1 px-1"
+					className="min-w-0 shrink flex-row items-center gap-1 px-1"
 				>
 					<ButtonText numberOfLines={1} className="min-w-0 shrink">
-						{selected && <Text className="font-semibold">{labels[selected]} · </Text>}
+						{/* The period is the bar's title: foreground over the ghost's muted label; the dates stay muted. */}
+						{selected && (
+							<Text className="text-foreground font-semibold">{labels[selected]} · </Text>
+						)}
 						<Text className="text-muted-foreground font-normal">{dates}</Text>
 					</ButtonText>
 					{!license?.isPro && <Icon name="lock" className="text-muted-foreground" />}
@@ -202,27 +207,51 @@ export function DateButton({
 			>
 				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
 				<PickerBody phone={phone} maxHeight={bodyMaxHeight}>
-					<View className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}>
-						{Object.entries(ranges).map(([key, range]) => (
-							<Button
-								key={key}
-								testID={`reports-period-${key}`}
-								variant="ghost"
-								className={`min-h-12 flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
-								onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
-							>
-								<View className="w-5 items-center">
-									{selected === key && <Icon name="check" size="sm" />}
+					<PeriodGroup
+						accessibilityLabel={t('common.date_range')}
+						className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}
+					>
+						{Object.entries(ranges).map(([key, range]) =>
+							phone ? (
+								<Button
+									key={key}
+									testID={`reports-period-${key}`}
+									variant="ghost"
+									className={`flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
+									onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+								>
+									<View className="w-5 items-center">
+										{selected === key && <Icon name="check" size="sm" />}
+									</View>
+									<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
+										{labels[key as keyof typeof labels]}
+									</ButtonText>
+									{!license?.isPro && key !== 'today' && (
+										<Icon name="lock" size="sm" className="text-muted-foreground" />
+									)}
+								</Button>
+							) : (
+								<View
+									key={key}
+									className={!license?.isPro && key !== 'today' ? 'opacity-50' : undefined}
+								>
+									<MenuRow
+										testID={`reports-period-${key}`}
+										choice
+										selected={selected === key}
+										label={labels[key as keyof typeof labels]}
+										onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+										trailing={
+											!license?.isPro &&
+											key !== 'today' && (
+												<Icon name="lock" size="sm" className="text-muted-foreground" />
+											)
+										}
+									/>
 								</View>
-								<ButtonText numberOfLines={1} className="min-w-0 flex-1 text-left">
-									{labels[key as keyof typeof labels]}
-								</ButtonText>
-								{!license?.isPro && key !== 'today' && (
-									<Icon name="lock" size="sm" className="text-muted-foreground" />
-								)}
-							</Button>
-						))}
-					</View>
+							)
+						)}
+					</PeriodGroup>
 					<View
 						className={phone ? '-mx-2 self-center' : 'self-center'}
 						style={{ width: calendarWidth }}
@@ -282,7 +311,6 @@ export function DateButton({
 					<Text className="text-muted-foreground flex-1">{t('reports.tap_a_day')}</Text>
 					<Button
 						testID="reports-period-apply"
-						className="min-h-12"
 						onPress={() => {
 							if (
 								period(

@@ -410,6 +410,9 @@ jobs:
         timeout-minutes: 250
         env:
           GH_TOKEN: ${{ github.token }}
+          # A refused build skips the queue inside the script (not in the `if`: the
+          # test jobs' refuse step mirrors this condition and cannot see steps.refuse).
+          REFUSED: ${{ steps.refuse.outputs.refused }}
         run: node scripts/wait-devnext-free.mjs
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one

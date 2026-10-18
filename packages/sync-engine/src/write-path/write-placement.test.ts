@@ -36,6 +36,20 @@ describe('decideWritePlacement', () => {
 		});
 	});
 
+	it.each([false, true])('a live delete is terminal (recovery=%s)', (isRecovery) => {
+		for (const status of [undefined, 'pending', 'claimed'] as const) {
+			expect(decide([row({ operation: 'delete', status })], { isRecovery }).kind).toBe(
+				'refuse-recovery-superseded-by-delete'
+			);
+		}
+		const deleted = row({ operation: 'delete' });
+		expect(decide([deleted], { isRecovery, operation: 'delete' }).kind).toBe('coalesce');
+		for (const inactive of [{ status: 'rejected' }, { supersededBy: 'coalesce:new' }] as const)
+			expect(decide([row({ ...deleted, ...inactive })], { isRecovery }).kind).not.toBe(
+				'refuse-recovery-superseded-by-delete'
+			);
+	});
+
 	it.each([
 		[
 			'coalescing disabled',

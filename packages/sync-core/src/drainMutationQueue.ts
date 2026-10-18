@@ -154,7 +154,10 @@ export function isNeverPushedChain(rows: readonly QueuedMutation[]): boolean {
 		rows.length > 0 &&
 		rows[0]?.operation === 'create' &&
 		rows.every(
-			(row) => (row.status === undefined || row.status === 'pending') && (row.attempts ?? 0) === 0
+			(row) =>
+				row.supersededBy === undefined &&
+				(row.status === undefined || row.status === 'pending') &&
+				(row.attempts ?? 0) === 0
 		)
 	);
 }
@@ -186,23 +189,24 @@ export function isNeverPushedChain(rows: readonly QueuedMutation[]): boolean {
  *    pending carries attempts > 0 — its delete is a REAL void of a REAL order and
  *    must push).
  *
- * Removals are CONDITIONAL and run successors-first, the create LAST, mirroring
- * the enqueue-time ordering: a refused CAS (the row moved under us) restores the
- * rows already removed and leaves the record to the normal drain, so a partial
- * annihilation can never strand an orphaned delete or — worse — a create with no
- * delete behind it. The resident is removed only after the whole chain is gone;
- * if that removal throws, the chain is restored and the record is left to drain
- * (net-neutral phantom, the pre-fix behaviour — never data loss).
+ * Successors are durably marked, never removed before resident deletion commits.
+ * Refusal unmarks them; a crashed pre-commit fence expires back to the full chain.
+ * After resident removal, marked rows are cleanup-only: recovery finishes the void.
  */
 async function annihilateNeverPushedChains(input: {
 	queue: RecordMutationQueue;
+	now: () => number;
+	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
+	hasServerIdentity?: (mutation: RecordMutation) => Promise<boolean>;
 	removeResident?: (mutation: QueuedMutation, signal?: AbortSignal) => Promise<void>;
 	signal?: AbortSignal;
 	emit: (event: SyncEvent) => void;
 }): Promise<{ chains: number; mutations: QueuedMutation[] }> {
+	const legacyQueue = !input.queue.supportsVoidFences;
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
+		if ((await input.queue.admissionState(row, input.now())) !== 'released') continue;
 		const key = recordKey(row);
 		const bucket = byRecord.get(key);
 		if (bucket) bucket.push(row);
@@ -218,49 +222,135 @@ async function annihilateNeverPushedChains(input: {
 		const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
 		if (
 			!isNeverPushedChain(rows) ||
+			rows.some((row) => row.requeuedFrom) ||
 			pendingRows.length < 2 ||
 			pendingRows[pendingRows.length - 1]?.operation !== 'delete' ||
 			pendingRows.length !== rows.length
 		) {
 			continue;
 		}
-		const removed: QueuedMutation[] = [];
-		let refused = false;
-		for (const row of [...pendingRows].reverse()) {
-			if (await input.queue.removePending(row.mutationId)) removed.push(row);
-			else {
-				refused = true;
-				break;
-			}
-		}
-		// `removed` is delete-first … create-last; the restore wants seq order.
-		const orderedRemoved = [...removed].reverse();
-		if (refused) {
-			if (orderedRemoved.length > 0)
-				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
-			continue;
-		}
 		const head = pendingRows[0];
-		if (input.removeResident) {
-			try {
-				await input.removeResident(head, input.signal);
-			} catch {
-				// Could not remove the resident — put the chain back and let the normal
-				// drain handle it (a net-neutral phantom, the pre-#1059 behaviour). Never
-				// leave the record with removed queue rows AND a resident: that is the
-				// lost sale this whole write path is built to prevent.
-				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
+		const token = `drain-void:${input.now()}:${Math.random()}`;
+		if (
+			!legacyQueue &&
+			!(await input.queue.fenceForVoid(head.collectionName, head.recordId, token, input.now()))
+		)
+			continue;
+		const marked: QueuedMutation[] = [];
+		let residentRemoved = false;
+		try {
+			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
 				continue;
+			const fresh: QueuedMutation[] = [];
+			let settlementRefused = false;
+			for (const row of (await input.queue.all()).filter(
+				(row) => recordKey(row) === recordKey(head)
+			)) {
+				if (
+					row.status !== 'rejected' &&
+					(await input.queue.admissionState(row, input.now())) === 'lost'
+				) {
+					if (
+						!(await input.queue.markForAnnihilation(row.mutationId, token, input.now(), 'lost'))
+					) {
+						settlementRefused = true;
+						break;
+					}
+					marked.push(row);
+				} else fresh.push(row);
 			}
+			if (settlementRefused) continue;
+			if (
+				fresh.some(
+					(row) =>
+						row.status !== 'rejected' && !rows.some((own) => own.mutationId === row.mutationId)
+				)
+			)
+				continue;
+			for (const row of fresh.filter((row) => row.status === 'rejected')) {
+				if (
+					!(await (legacyQueue
+						? input.queue.removeIfStatus(row.mutationId, 'rejected', input.now())
+						: input.queue.markForAnnihilation(row.mutationId, token, input.now(), 'rejected')))
+				) {
+					settlementRefused = true;
+					break;
+				}
+				marked.push(row);
+			}
+			if (settlementRefused) continue;
+			let refused = false;
+			for (const row of [...pendingRows].reverse()) {
+				if (
+					await (legacyQueue
+						? input.queue.removePending(row.mutationId, { requireNeverPushed: true })
+						: input.queue.markForAnnihilation(row.mutationId, token, input.now()))
+				)
+					marked.push(row);
+				else {
+					refused = true;
+					break;
+				}
+			}
+			if (refused) continue;
+			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
+				continue;
+			if (
+				!legacyQueue &&
+				!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed'))
+			)
+				continue;
+			if (input.removeResident) {
+				try {
+					await input.removeResident(head, input.signal);
+				} catch {
+					continue;
+				}
+			}
+			residentRemoved = true;
+			try {
+				if (!legacyQueue) {
+					for (const row of marked) await input.queue.removeMarked(row.mutationId, token, true);
+					await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
+				}
+			} catch (error) {
+				// The void committed; retain its fence for expiry recovery and report success.
+				input.emit({
+					type: 'void.cleanup-failed',
+					level: 'warn',
+					collection: head.collectionName,
+					fields: { token, error: String(error) },
+				});
+			}
+			annihilated += 1;
+			// Failed cleanup is still durable in the committed fence; the lane acks after emitting.
+			annihilatedMutations.push(
+				...(legacyQueue
+					? pendingRows
+					: marked
+							.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+							.map((row): QueuedMutation => ({ ...row, status: 'internal' })))
+			);
+			input.emit({
+				type: 'queue.write.annihilate',
+				level: 'info',
+				collection: head.collectionName,
+				fields: { recordId: head.recordId, removed: pendingRows.length, drain: true },
+			});
+		} finally {
+			if (
+				!residentRemoved &&
+				(legacyQueue ||
+					(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'preparing')))
+			) {
+				for (const row of marked) {
+					if (legacyQueue) await input.queue.replace(row);
+					else await input.queue.unmarkForAnnihilation(row.mutationId, token);
+				}
+			}
+			if (!residentRemoved && !legacyQueue)
+				await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
 		}
-		annihilated += 1;
-		annihilatedMutations.push(...orderedRemoved);
-		input.emit({
-			type: 'queue.write.annihilate',
-			level: 'info',
-			collection: head.collectionName,
-			fields: { recordId: head.recordId, removed: removed.length, drain: true },
-		});
 	}
 	return { chains: annihilated, mutations: annihilatedMutations };
 }
@@ -285,10 +375,12 @@ export async function drainMutationQueue(input: {
 	backoff?: RetryBackoffPolicy;
 	/** Reads the resident record's latest server revision immediately before push. */
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
+	/** Canonical server identity, including bare acknowledgements without a revision. */
+	hasServerIdentity?: (mutation: RecordMutation) => Promise<boolean>;
 	/**
 	 * Removes the local resident record when a never-pushed create→delete chain is
 	 * annihilated at drain (#1059). Called with the chain's create head after its
-	 * queue rows are gone, so the resident vanishes exactly as it would have under
+	 * queue rows are marked, so the resident vanishes exactly as it would have under
 	 * enqueue-time annihilation (the caller asked for deletion). Absent ⇒ queue-only
 	 * annihilation (the model tests): the pushes are still cancelled, the resident is
 	 * left to the host. Wired by the write-drain lane, which only ticks on the leader,
@@ -303,6 +395,8 @@ export async function drainMutationQueue(input: {
 	 * gets its attempt, so a cashier's new action probes the session.
 	 */
 	sessionExpired?: boolean;
+	/** A restored session gets one immediate attempt through existing retry delays. */
+	retryImmediately?: boolean;
 	/**
 	 * Called the moment a push fails retryably — before the drain moves on to the
 	 * next row — and again for every later row of the same record this drain then
@@ -370,6 +464,10 @@ export async function drainMutationQueue(input: {
 	const backoff = input.backoff ?? DEFAULT_RETRY_BACKOFF;
 	const limit = input.limit ?? Number.POSITIVE_INFINITY;
 
+	const recovered = input.signal?.aborted
+		? []
+		: await input.queue.recoverAnnihilatedMutations(now());
+
 	// LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel never-pushed create→delete
 	// chains BEFORE the scan, so an annihilated create is never claimed or pushed
 	// (no phantom server order from a follower create+void). A no-op on
@@ -378,11 +476,16 @@ export async function drainMutationQueue(input: {
 		? { chains: 0, mutations: [] as QueuedMutation[] }
 		: await annihilateNeverPushedChains({
 				queue: input.queue,
+				now,
+				currentRevision: input.currentRevision,
+				hasServerIdentity: input.hasServerIdentity,
 				...(input.removeResident ? { removeResident: input.removeResident } : {}),
 				...(input.signal ? { signal: input.signal } : {}),
 				emit,
 			});
-	const annihilated = annihilation.chains;
+	const annihilated =
+		annihilation.chains +
+		new Set(recovered.map((row) => `${row.collectionName}/${row.recordId}`)).size;
 	// Scan the WHOLE pending set, not a pre-sliced page: `limit` bounds the number of push ATTEMPTS
 	// (the network ops), not the scan — otherwise a deferred row at the head would consume a slot and
 	// starve a ready row behind it. 'claimed' rows are INCLUDED: a claim outlives a tick when a crash
@@ -407,7 +510,10 @@ export async function drainMutationQueue(input: {
 	const blockedRecords = new Set<string>(
 		scanned
 			.filter(
-				(mutation) => mutation.status === 'conflicted' || mutation.status === 'needs-revision'
+				(mutation) =>
+					mutation.supersededBy !== undefined ||
+					mutation.status === 'conflicted' ||
+					mutation.status === 'needs-revision'
 			)
 			.map(recordKey)
 	);
@@ -492,7 +598,7 @@ export async function drainMutationQueue(input: {
 		blockedRecords.add(recordKey(mutation));
 	};
 
-	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
+	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void | false> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const { status, reason, serverMessage } = error as {
 			status?: number;
@@ -506,14 +612,17 @@ export async function drainMutationQueue(input: {
 			// `requeuedFrom` / `requeueCount` ride along untouched (the spread), so a
 			// row that dead-letters AGAIN after a recovery still reports how many
 			// recoveries it has already survived.
-			await input.queue.replace({
+			const rejectedRow: QueuedMutation = {
 				...mutation,
 				status: 'rejected',
 				...(status !== undefined ? { rejectedStatus: status } : {}),
 				...(reason !== undefined ? { rejectedReason: reason } : {}),
 				...(serverMessage !== undefined ? { rejectedMessage: serverMessage } : {}),
 				rejectedAt: new Date(now()).toISOString(),
-			});
+			};
+			if (reason === 'admission-lost') {
+				if (!(await input.queue.claim(rejectedRow, now()))) return false;
+			} else await input.queue.replace(rejectedRow);
 			// Counted ONLY once the verdict is durable. A dead letter that exists
 			// solely in this drain's return value is not a dead letter: `rejected`
 			// feeds the drain log AND the Store health gate that mounts the recovery
@@ -628,6 +737,7 @@ export async function drainMutationQueue(input: {
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
 		// its window elapses. Skip it AND hold later edits to the same record (FIFO ordering).
 		if (
+			!input.retryImmediately &&
 			mutation.nextAttemptAt &&
 			Date.parse(mutation.nextAttemptAt) > now() &&
 			!(lastAttemptAt(mutation) <= (freshExplicitQueuedAt.get(recordKey(mutation)) ?? -Infinity))
@@ -641,6 +751,13 @@ export async function drainMutationQueue(input: {
 			break;
 		}
 
+		// Wait for the owner's durable release, so a lease expiring between this
+		// read and claim can never authorize a stale append after a void.
+		const admission = await input.queue.admissionState(mutation, now());
+		if (admission === 'live') {
+			blockedRecords.add(recordKey(mutation));
+			continue;
+		}
 		// Re-stamp the optimistic-concurrency base AT DRAIN TIME from the record's
 		// current sync.revision (fallback: the enqueue-time base) — an update queued
 		// while an earlier ack was in flight must push against the revision that ack
@@ -664,6 +781,9 @@ export async function drainMutationQueue(input: {
 				: {};
 		const draining = {
 			...bare,
+			...(admission === 'released' && mutation.admittedBy
+				? { admissionReleased: mutation.admittedBy }
+				: {}),
 			baseRevision: freshRevision || mutation.baseRevision,
 			status: 'claimed' as const,
 			...lease,
@@ -684,15 +804,29 @@ export async function drainMutationQueue(input: {
 				(item) => item.mutationId === mutation.mutationId
 			);
 			if (
-				current?.status === 'claimed' &&
-				current.claimedBy !== undefined &&
-				current.claimedBy !== input.drainInstanceId &&
-				(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now()
+				current?.admissionReleased !== mutation.admissionReleased ||
+				current?.supersededBy !== undefined ||
+				(current?.status === 'claimed' &&
+					current.claimedBy !== undefined &&
+					current.claimedBy !== input.drainInstanceId &&
+					(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now())
 			) {
 				blockedRecords.add(recordKey(mutation));
 			}
 			continue;
 		}
+		if (
+			admission === 'lost' &&
+			(await input.queue.admissionState(draining, now())) !== 'released'
+		) {
+			if (
+				(await deadLetter(draining, { reason: 'admission-lost' })) !== false ||
+				(await input.queue.admissionState(draining, now())) !== 'released' ||
+				!(await stillOwnLease(draining.mutationId))
+			)
+				continue;
+		}
+		if (admission === 'lost') draining.admissionReleased = draining.admittedBy;
 		attemptStartedAt = now();
 		attempted += 1;
 		let result: PushResult;
@@ -972,7 +1106,8 @@ export async function drainMutationQueue(input: {
 			}
 			await input.queue.acknowledge([mutation.mutationId]);
 			pushed += 1;
-		} catch {
+		} catch (error) {
+			if (input.signal?.aborted || (error as { name?: string })?.name === 'AbortError') break;
 			// The push landed but the ack/remove failed — leave it queued (the re-push dedupes), block
 			// later links, and back it off so we don't hammer. An abort here is a scope switch, not a
 			// failure, so skip the backoff.
@@ -1004,7 +1139,7 @@ export async function drainMutationQueue(input: {
 	return {
 		pushed,
 		annihilated,
-		annihilatedMutations: annihilation.mutations,
+		annihilatedMutations: [...recovered, ...annihilation.mutations],
 		held,
 		conflicts,
 		failed,

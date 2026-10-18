@@ -8,6 +8,8 @@ import {
 } from './carrier';
 
 it('freezes POS metadata wire keys', () => {
+	expect(POS_META_KEYS.session).toBe('_wcpos_session');
+	expect(POS_META_KEYS.reducedStock).toBe('_reduced_stock');
 	expect(POS_META_KEYS.posData).toBe('_woocommerce_pos_data');
 	expect(POS_META_KEYS.lineUuid).toBe('_woocommerce_pos_uuid');
 });

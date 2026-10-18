@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import {
 	Combobox,
 	ComboboxContent,
@@ -38,6 +38,8 @@ interface Props {
 export function VariationSelect({ attribute, selected = '', onSelect, onRemove }: Props) {
 	const t = useT();
 	const isActive = !!selected;
+	// The chip's label is plain text, so decode the catalogue's entities here.
+	const label = decode(isActive ? `${attribute.name}: ${selected}` : (attribute.name ?? ''));
 	const options = attribute?.options || [];
 	const data = React.useMemo(
 		() => options.map((option: string) => ({ value: option, label: option })),
@@ -61,17 +63,14 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 				}
 			>
 				<SelectPrimitiveTrigger asChild>
-					<ButtonPill
-						size="xs"
-						leftIcon="check"
-						variant={isActive ? undefined : 'muted'}
-						removable={isActive}
-						onRemove={onRemove}
-					>
-						<ButtonText decodeHtml>
-							{isActive ? `${attribute.name}: ${selected}` : attribute.name}
-						</ButtonText>
-					</ButtonPill>
+					<Chip
+						size="sm"
+						icon="check"
+						label={label}
+						on={isActive}
+						onClear={isActive ? onRemove : undefined}
+						clearLabel={t('common.remove')}
+					/>
 				</SelectPrimitiveTrigger>
 				<SelectContent>
 					{/* Decode the LABEL only — `value` is the identity sent back to
@@ -100,17 +99,14 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 			}
 		>
 			<ComboboxTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="check"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={onRemove}
-				>
-					<ButtonText decodeHtml>
-						{isActive ? `${attribute.name}: ${selected}` : attribute.name}
-					</ButtonText>
-				</ButtonPill>
+				<Chip
+					size="sm"
+					icon="check"
+					label={label}
+					on={isActive}
+					onClear={isActive ? onRemove : undefined}
+					clearLabel={t('common.remove')}
+				/>
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<ComboboxInput placeholder={t('common.search_variations')} />

@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { BehaviorSubject, map, merge, of, Subject } from 'rxjs';
+import { BehaviorSubject, map, merge, of, startWith, Subject } from 'rxjs';
 import { Query } from 'mingo';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
@@ -13,16 +13,47 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
+import { ensureRegister } from '@wcpos/query/register-session';
+import * as actions from '@wcpos/query/register-session';
 
-import { ensureRegister } from '../register/register-document';
-import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument } from './closure-document';
 
 Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
 
-jest.mock('./session-store');
+const mockRequestRefresh = jest.fn();
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	observeRegisterSessions: () => {
+		const generation = mockGeneration;
+		return mockHasSessions
+			? merge(of(null), mockSessionChanges).pipe(
+					map(() => ({
+						active,
+						closed,
+						isCurrent: () => mockHasSessions && generation === mockGeneration,
+					})),
+					startWith(null)
+				)
+			: of(null);
+	},
+	observeCashMovements: () => of(entries),
+	observeRegisterClosures: () => of(closureRows),
+	observeSessionAccounting: jest.fn((...args) =>
+		jest.requireActual('@wcpos/query/register-session').observeSessionAccounting(...args)
+	),
+	openSession: jest.fn(),
+	startCounting: jest.fn(),
+	backToSelling: jest.fn(),
+	closeSession: jest.fn(),
+	recordMovement: jest.fn(),
+	voidMovement: jest.fn(),
+	retryMovement: jest.fn(),
+	requireOpenSession: jest.fn(),
+	writeClosure: jest.fn(),
+	sessionRefreshRequests: { next: (...args: unknown[]) => mockRequestRefresh(...args) },
+}));
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 
 type Row = Record<string, unknown>;
@@ -32,7 +63,14 @@ let closed: Row[] = [];
 let entries: Row[] = [];
 let closureRows: Row[] = [];
 const mockSessionChanges = new Subject<void>();
-type Hit = { record: { uuid: string; local: { dirty: boolean }; payload: Row } };
+type Hit = {
+	record: {
+		remoteId?: number | null;
+		uuid: string;
+		local: { dirty: boolean; pendingMutationIds?: string[] };
+		payload: Row;
+	};
+};
 let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
 let mockParentOrders: BehaviorSubject<Hit[]> | undefined;
@@ -60,18 +98,8 @@ function mockObserve(_engine: unknown, query: { collection: string; selector: Ro
 	);
 }
 
-// The hook only trusts an emission whose collections are identical to the ones it holds now,
-// so these have to be stable across renders. Both session queries are register-scoped, so
-// whatever they return IS this register's set of sessions.
-const mockSessions = {
-	find: (query?: { selector?: { status?: unknown } }) => ({
-		$: merge(of(null), mockSessionChanges).pipe(
-			map(() => (query?.selector?.status === 'closed' ? closed : active))
-		),
-	}),
-};
-const mockMovements = { find: () => ({ $: of(entries) }) };
-const mockClosures = { find: () => ({ $: of(closureRows) }) };
+let mockHasSessions = true;
+let mockGeneration = {};
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockReleaseParents = jest.fn();
 const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [
@@ -83,6 +111,7 @@ const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	userDB: {},
+	storeDB: {},
 	site: {
 		uuid: 'site',
 		populate: async () => [
@@ -92,11 +121,6 @@ const mockStoreSession = {
 	},
 };
 
-jest.mock('./use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => mockSessions,
-	useCashMovementCollection: () => mockMovements,
-	useClosureCollection: () => mockClosures,
-}));
 jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => mockBinding,
 }));
@@ -104,9 +128,13 @@ jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => mockStoreSession,
 	useAppState: () => ({ ...mockStoreSession, store: { timezone: 'America/Los_Angeles' } }),
 }));
-jest.mock('@wcpos/query', () => ({
-	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
+jest.mock('../../../../query/src/engine-query', () => ({
 	observeEngineQuery: (...args: Parameters<typeof mockObserve>) => mockObserve(...args),
+}));
+jest.mock('../../../../query/src/requirement-bridge', () => ({
+	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
+}));
+jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	useDocField: (_doc: unknown, select: (value: Record<string, unknown>) => unknown) =>
 		select({
@@ -127,6 +155,8 @@ const session = {
 	// The server's figure cannot include a movement it never accepted.
 	server_expected: { cash: '100' },
 	server_sales_count: 0,
+	server_expected_at: '2026-09-15T09:00:00.000Z',
+	server_movement_ids: [],
 };
 const movement = {
 	id: 'movement',
@@ -143,6 +173,7 @@ async function settled() {
 }
 
 beforeEach(() => {
+	mockHasSessions = true;
 	jest.clearAllMocks();
 	active = [
 		{
@@ -200,12 +231,16 @@ it('counts a refused movement as outstanding and keeps it in the list for retry'
 	expect(typeof result.current.actions.retryMovement).toBe('function');
 });
 
-it('trusts the server total once every local row is delivered', async () => {
-	entries = [{ ...movement, sync_status: 'synced' }];
-	const result = await settled();
-	expect(result.current.expected.cash).toBe('100');
-	expect(result.current.unsyncedCount).toBe(0);
-});
+it.each(['synced', 'pending'])(
+	'trusts snapshot movement membership while locally %s',
+	async (sync_status) => {
+		active = [{ ...active[0], server_movement_ids: [movement.id] }];
+		entries = [{ ...movement, sync_status }];
+		const result = await settled();
+		expect(result.current.expected.cash).toBe('100');
+		expect(result.current.unsyncedCount).toBe(sync_status === 'pending' ? 1 : 0);
+	}
+);
 
 describe('refusedMovements', () => {
 	const refused = { ...movement, sync_status: 'failed', sync_error: 'rest_invalid_param' };
@@ -316,7 +351,7 @@ it('logs a manual retry with the current cashier and the movement session', asyn
 	await expect(result.current.actions.retryMovement('movement')).resolves.toMatchObject({
 		id: 'movement',
 	});
-	expect(actions.retryMovement).toHaveBeenCalledWith(mockMovements, 'movement');
+	expect(actions.retryMovement).toHaveBeenCalledWith(mockStoreSession.storeDB, 'movement');
 	expect(logger.info).toHaveBeenCalledWith(
 		'Register cash movement retry requested',
 		expect.objectContaining({
@@ -459,7 +494,7 @@ function refundHit(amount = '20', stamp = 'session'): Hit {
 	return {
 		record: {
 			uuid: 'refund:20',
-			local: { dirty: false },
+			local: { dirty: true },
 			payload: {
 				id: 20,
 				parent_id: 1,
@@ -470,7 +505,12 @@ function refundHit(amount = '20', stamp = 'session'): Hit {
 		},
 	};
 }
-function parentHit(saleSession = 'old-session', allocated = true, modified = '2026-09-01'): Hit {
+function parentHit(
+	saleSession = 'old-session',
+	allocated = true,
+	modified = '2026-09-01',
+	payment = {}
+): Hit {
 	return {
 		record: {
 			uuid: 'parent',
@@ -478,6 +518,7 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 			payload: {
 				id: 1,
 				date_modified_gmt: modified,
+				date_created_gmt: modified,
 				meta_data: [
 					{
 						key: '_wcpos_payments',
@@ -486,6 +527,8 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 							payments: [
 								{
 									id: 'card',
+									created_at_gmt: modified,
+									updated_at_gmt: modified,
 									session_id: saleSession,
 									kind: 'card',
 									method_id: 'stripe',
@@ -493,6 +536,7 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 									amount: '100',
 									refunded_amount: allocated ? '20' : '0',
 									refunds: allocated ? [{ id: 20, amount: '20', status: 'succeeded' }] : [],
+									...payment,
 								},
 							],
 						},
@@ -503,7 +547,7 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 	};
 }
 
-// Remove the refund subscription or snapshot nulling: live edits stay hidden behind server_expected.
+// Remove the refund subscription or pending delta: live edits stay hidden behind server_expected.
 it('keeps the initial empty snapshot, then recomputes inserts, updates and deletion and permits server re-anchoring', async () => {
 	entries = [];
 	const result = await settled();
@@ -512,7 +556,7 @@ it('keeps the initial empty snapshot, then recomputes inserts, updates and delet
 		mockRefunds.next([refundHit()]);
 	});
 	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80.0000' }));
-	expect(active[0].server_expected).toBeNull();
+	expect(active[0].server_expected).toEqual({ cash: '100' });
 	await act(async () => {
 		mockRefunds.next([refundHit('30')]);
 	});
@@ -520,7 +564,7 @@ it('keeps the initial empty snapshot, then recomputes inserts, updates and delet
 	await act(async () => {
 		mockRefunds.next([]);
 	});
-	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100.0000' }));
+	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100' }));
 	await act(async () => {
 		active = [{ ...active[0], server_expected: { cash: '99' } }];
 		mockSessionChanges.next();
@@ -535,16 +579,9 @@ it('observes old held parents and later allocations without importing their sale
 	const result = await settled();
 	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80.0000' }));
 	await act(async () => {
-		active = [{ ...active[0], server_expected: { cash: '80' } }];
-		mockSessionChanges.next();
-	});
-	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80' }));
-	await act(async () => {
 		mockOrders.next([parentHit()]);
 	});
-	await waitFor(() =>
-		expect(result.current.expected).toEqual({ cash: '100.0000', stripe: '-20.0000' })
-	);
+	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100', stripe: '-20.0000' }));
 	expect(result.current.salesCount).toBe(0);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest
@@ -576,7 +613,7 @@ it('loads another session stamp referenced by this session payment allocations',
 // Drop uuid deduplication: a parent returned by both reads doubles the captured sale and allocation.
 it('deduplicates parents also returned by the recent sales query', async () => {
 	entries = [];
-	active = [{ ...active[0], server_sales_count: null }];
+	active = [{ ...active[0], server_expected: null, server_sales_count: null }];
 	mockOrders.next([parentHit('session', true, '2026-09-15')]);
 	mockRefunds.next([refundHit()]);
 	const result = await settled();
@@ -603,7 +640,7 @@ it('requests missing stamped refund parents, releases on arrival, and keeps resi
 	);
 	await act(async () => mockOrders.next([parentHit()]));
 	await waitFor(() =>
-		expect(view.result.current.expected).toEqual({ cash: '100.0000', stripe: '-20.0000' })
+		expect(view.result.current.expected).toEqual({ cash: '100', stripe: '-20.0000' })
 	);
 	expect(mockReleaseParents).toHaveBeenCalledTimes(1);
 	mockDeclareRequirements.mockClear();
@@ -681,12 +718,10 @@ it.each([false, true])(
 				await pending;
 				return { ...session, status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' } as never;
 			});
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			const result = await settled();
 			let closing!: ReturnType<typeof result.current.actions.closeSession>;
 			await act(async () => {
@@ -723,9 +758,9 @@ it.each([false, true])(
 	}
 );
 
-// Revert the refund-record or pending-invalidation guard: close freezes the stale server anchor.
+// The closure must use baseline plus pending deltas, without waiting for an anchor write.
 it.each([false, true])(
-	'derives the closure before anchor clearing settles, allocation-only %s',
+	'derives the closure with the retained baseline, allocation-only %s',
 	async (allocationOnly) => {
 		addRxPlugin(RxDBLocalDocumentsPlugin);
 		const db: StoreDatabase = await createRxDatabase({
@@ -764,12 +799,10 @@ it.each([false, true])(
 				status: 'closed',
 				closed_at_gmt: '2026-09-15T11:00:00',
 			} as never);
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			const result = await settled();
 			expect(result.current.expected).toEqual({ cash: '100' });
 			let closing!: ReturnType<typeof result.current.actions.closeSession>;
@@ -777,7 +810,11 @@ it.each([false, true])(
 				if (allocationOnly) {
 					// The close already wrote the session, but its closure still needs recovery.
 					Object.assign(active[0], { status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' });
-					mockOrders.next([parentHit('session', true, '2026-09-15')]);
+					const pending = parentHit('session', true, '2026-09-15', {
+						updated_at_gmt: '2026-09-15T10:00:00',
+					});
+					pending.record.local.dirty = true;
+					mockOrders.next([pending]);
 				} else {
 					mockRefunds.next([refundHit()]);
 				}
@@ -787,7 +824,7 @@ it.each([false, true])(
 			expect(active[0].server_expected).toEqual({ cash: '100' });
 			expect((await closing).toJSON()).toMatchObject({
 				period_refunds_total: '20.0000',
-				till_expected: { cash: '100.0000', stripe: allocationOnly ? '80.0000' : '-20.0000' },
+				till_expected: { cash: '100', stripe: '-20.0000' },
 				breakdowns: {
 					refund_count: 1,
 					payment_methods: {
@@ -806,44 +843,55 @@ it.each([false, true])(
 );
 
 // Remove the parent wait or use the pre-wait accounting: the closure records cash instead of card.
-it('waits for missing refund parents before computing the closure tender', async () => {
-	entries = [];
-	mockRefunds.next([refundHit()]);
-	let resolve!: () => void;
-	const ready = new Promise<void>((done) => {
-		resolve = done;
-	});
-	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
-	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
-	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
-		const { readLedger } =
-			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
-		const attributed = attributeRefunds(
-			input.session.id,
-			input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
-			input.refundRecords ?? []
-		);
-		return {
-			id: 'closure',
-			counted: {},
-			variance: {},
-			breakdowns: { payment_methods: attributed.byMethod },
-		} as never;
-	});
-	const result = await settled();
-	let closing!: ReturnType<typeof result.current.actions.closeSession>;
-	await act(async () => {
-		closing = result.current.actions.closeSession({ counted: { cash: '100' } });
-	});
-	expect(actions.writeClosure).not.toHaveBeenCalled();
-	await act(async () => {
-		mockOrders.next([parentHit()]);
-		resolve();
-		await closing;
-	});
-	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
-});
+it.each(['unchanged', 'locale', 'engine'] as const)(
+	'waits for missing refund parents before computing the closure tender (%s)',
+	async (change) => {
+		entries = [];
+		mockRefunds.next([refundHit()]);
+		let resolve!: () => void;
+		const ready = new Promise<void>((done) => {
+			resolve = done;
+		});
+		mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+			const { attributeRefunds } = jest.requireActual<
+				typeof import('@wcpos/query/register-session')
+			>('@wcpos/query/register-session');
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			const attributed = attributeRefunds(
+				input.session.id,
+				input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+				input.refundRecords ?? []
+			);
+			return {
+				id: 'closure',
+				counted: {},
+				variance: {},
+				breakdowns: { payment_methods: attributed.byMethod },
+			} as never;
+		});
+		const { result, rerender } = renderHook(() => useRegisterSession());
+		await waitFor(() => expect(result.current.session).not.toBeNull());
+		let closing!: ReturnType<typeof result.current.actions.closeSession>;
+		await act(async () => {
+			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		const previousRuntime = { ...mockRuntime };
+		if (change === 'locale') mockRuntime.locale = 'es';
+		if (change === 'engine') mockRuntime.engine = {};
+		rerender();
+		await act(async () => {
+			mockOrders.next([parentHit()]);
+			resolve();
+			await closing;
+		});
+		expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
+		Object.assign(mockRuntime, previousRuntime);
+	}
+);
 
 // Revert to resolving on any accounting emission: an unchanged missing set closes with cash.
 it('ignores an unrelated resident parent emission while awaiting the missing parent tender', async () => {
@@ -864,7 +912,9 @@ it('ignores an unrelated resident parent emission while awaiting the missing par
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
+			'@wcpos/query/register-session'
+		);
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(
@@ -909,7 +959,9 @@ it.each([false, true])(
 		mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-			const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+			const { attributeRefunds } = jest.requireActual<
+				typeof import('@wcpos/query/register-session')
+			>('@wcpos/query/register-session');
 			const { readLedger } =
 				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 			const attributed = attributeRefunds(
@@ -971,7 +1023,9 @@ it('follows replacement refund parent handles before computing the closure tende
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
+			'@wcpos/query/register-session'
+		);
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(
@@ -1039,18 +1093,19 @@ it('shares one close deadline across replacement refund parent handles', async (
 	}
 });
 
-// Revert catch to finally: a failed patch ends accounting and close reuses the stale anchor.
-it('keeps processing after anchor patch failures and derives the closure', async () => {
+// Refund observation must not write or discard the shared server baseline.
+it('keeps the baseline without attempting anchor patches', async () => {
 	entries = [];
 	const patch = jest.fn().mockRejectedValue(new Error('anchor patch failed'));
-	active = [{ ...active[0], incrementalPatch: patch }];
+	active = [
+		{ ...active[0], incrementalPatch: patch, server_expected_at: '2026-09-17T00:00:00.000Z' },
+	];
 	mockOrders.next([parentHit('session', false, '2026-09-15')]);
 	const result = await settled();
 	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-15')]));
-	expect(patch).toHaveBeenCalledTimes(1);
-	expect(logger.warn).toHaveBeenCalled();
+	expect(patch).not.toHaveBeenCalled();
 	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-16')]));
-	expect(patch).toHaveBeenCalledTimes(2);
+	expect(patch).not.toHaveBeenCalled();
 	jest
 		.mocked(actions.closeSession)
 		.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
@@ -1060,7 +1115,7 @@ it('keeps processing after anchor patch failures and derives the closure', async
 	});
 	expect(actions.writeClosure).toHaveBeenLastCalledWith(
 		expect.objectContaining({
-			tillExpected: undefined,
+			tillExpected: { cash: '100', stripe: '-20.0000' },
 			orders: [parentHit('session', true, '2026-09-16').record],
 			refundRecords: [],
 		})
@@ -1131,12 +1186,10 @@ it.each([
 					status: 'closed',
 					closed_at_gmt: '2026-09-17T12:00:00Z',
 				} as never);
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			mockOrders.next(
 				[7, 8, 99].map((id) => ({
 					record: {
@@ -1317,3 +1370,399 @@ describe('overdue', () => {
 		expect(counter.renders).toBe(settledRenders + 1);
 	});
 });
+
+it.each([true, false])('adds only pending sales with server baseline %s', async (baseline) => {
+	entries = [];
+	active = [
+		{
+			...active[0],
+			counted_float: '0',
+			server_expected: baseline ? { cash: '100' } : null,
+			server_sales_count: baseline ? 5 : null,
+		},
+	];
+	mockOrders.next(
+		[
+			['local', '10', true],
+			['synced', '50', false],
+		].map(([id, amount, pending]) => {
+			const hit = parentHit('session', false, pending ? '2026-09-15T10:00:00' : '2026-09-15', {
+				id,
+				amount,
+				kind: 'cash',
+				method_id: 'cash',
+			});
+			hit.record.uuid = String(id);
+			hit.record.local.pendingMutationIds = pending ? ['write'] : [];
+			return hit;
+		})
+	);
+	const result = await settled();
+	expect(result.current.expected.cash).toBe(baseline ? '110.0000' : '60.0000');
+	expect(result.current.salesCount).toBe(baseline ? 6 : 2);
+});
+
+it('keeps acknowledged sales, refunds and movements until baseline refresh', async () => {
+	active = [{ ...active[0], server_expected_at: '2026-09-15T10:00:00.000Z' }];
+	mockOrders.next([parentHit('session', false, '2026-09-15T10:00:01')]);
+	const refund = refundHit();
+	refund.record.local.dirty = false;
+	refund.record.payload.date_created_gmt = '2026-09-15T10:00:01';
+	mockRefunds.next([refund]);
+	entries = [
+		{
+			...movement,
+			amount: '30',
+			sync_status: 'synced',
+		},
+	];
+	const result = await settled();
+	const expected = { cash: '110.0000', stripe: '100.0000' };
+	expect(result.current.expected).toEqual(expected);
+	expect(result.current.salesCount).toBe(1);
+	await act(async () => {
+		Object.assign(active[0], {
+			server_expected: expected,
+			server_sales_count: 1,
+			server_expected_at: '2026-09-15T10:00:02.000Z',
+			server_movement_ids: [movement.id],
+		});
+		mockSessionChanges.next();
+	});
+	expect(result.current.expected).toEqual(expected);
+	expect(result.current.salesCount).toBe(1);
+});
+
+it('derives locally when figures have no snapshot boundary', async () => {
+	active = [
+		{
+			...active[0],
+			server_expected: { cash: '999' },
+			server_sales_count: 99,
+			server_expected_at: null,
+		},
+	];
+	const result = await settled();
+	expect(result.current.expected.cash).toBe('120.0000');
+	expect(result.current.salesCount).toBe(0);
+});
+
+it.each([
+	['captured', false],
+	['voided', false],
+	['captured', true],
+	['voided', true],
+])('preserves baseline ledger rows on a dirty order (%s, ids %s)', async (status, withIds) => {
+	if (withIds) active = [{ ...active[0], server_ledger_row_ids: ['card'] }];
+	entries = [];
+	const hit = parentHit('session', false, '2026-09-15T10:00:00', {
+		kind: 'cash',
+		method_id: 'cash',
+		amount: '60',
+		status,
+		created_at_gmt: '2026-09-15T08:00:00',
+		updated_at_gmt: '2026-09-15T10:00:00',
+	});
+	hit.record.local.dirty = true;
+	hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+	const meta = hit.record.payload.meta_data as { value: { payments: Row[] } }[];
+	meta[0].value.payments.push({
+		...meta[0].value.payments[0],
+		id: 'new',
+		amount: '10',
+		status: 'captured',
+		created_at_gmt: '2026-09-15T10:00:00',
+	});
+	mockOrders.next([hit]);
+	const result = await settled();
+	expect(mockRequestRefresh).toHaveBeenCalledWith({
+		storeDB: mockStoreSession.storeDB,
+		registerId: 'register',
+	});
+	expect(result.current.expected.cash).toBe('110.0000');
+	expect(result.current.salesCount).toBe(0);
+	await act(async () => {
+		Object.assign(active[0], {
+			server_expected: { cash: '70' },
+			server_expected_at: '2026-09-15T11:00:00.000Z',
+			server_ledger_row_ids: withIds ? ['card', 'new'] : null,
+		});
+		mockSessionChanges.next();
+	});
+	expect(result.current.expected.cash).toBe('70');
+	expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+});
+
+it.each([null, 1])(
+	'counts only orders absent from the snapshot (remoteId %s)',
+	async (remoteId) => {
+		const hit = parentHit('session', false, '2026-09-15T10:00:00');
+		hit.record.remoteId = remoteId;
+		hit.record.local.dirty = true;
+		hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.salesCount).toBe(remoteId === null ? 1 : 0);
+	}
+);
+
+it.each([
+	[[1], '2026-09-15T10:00:00', 5],
+	[[], '2026-09-15T09:00:00', 6],
+	[[], '2026-09-15T08:00:00', 6],
+	[undefined, '2026-09-15T10:00:00', 6],
+	[null, '2026-09-15T08:00:00', 5],
+] as const)(
+	'counts sales by snapshot order ids %j at %s',
+	async (ids, createdAt, expectedCount) => {
+		entries = [];
+		active = [{ ...active[0], server_order_ids: ids, server_sales_count: 5 }];
+		const hit = parentHit('session', false, createdAt);
+		hit.record.remoteId = 1;
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.salesCount).toBe(expectedCount);
+	}
+);
+
+it.each([
+	[['card'], '2026-09-15T10:00:00', '100'],
+	[[], '2026-09-15T09:00:00', '110.0000'],
+	[[], '2026-09-15T08:00:00', '110.0000'],
+	[undefined, '2026-09-15T10:00:00', '110.0000'],
+	[null, '2026-09-15T08:00:00', '100'],
+] as const)(
+	'uses snapshot ledger ids %j at %s for display and closure',
+	async (ids, createdAt, cash) => {
+		entries = [];
+		active = [{ ...active[0], server_ledger_row_ids: ids }];
+		mockOrders.next([
+			parentHit('session', false, createdAt, {
+				kind: 'cash',
+				method_id: 'cash',
+				amount: '10',
+			}),
+		]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe(cash);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tillExpected: { cash },
+			})
+		);
+	}
+);
+
+it.each([
+	[[], '2026-09-15T09:00:00', '80.0000'],
+	[[20], '2026-09-15T10:00:00', '100'],
+	[null, '2026-09-15T10:00:00', '80.0000'],
+	[null, '2026-09-15T08:00:00', '100'],
+] as const)(
+	'uses snapshot refund ids %j at %s for display and closure',
+	async (ids, createdAt, cash) => {
+		entries = [];
+		active = [{ ...active[0], server_refund_ids: ids }];
+		const refund = refundHit();
+		refund.record.payload.date_created_gmt = createdAt;
+		mockOrders.next([parentHit('old-session', false)]);
+		mockRefunds.next([refund]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe(cash);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({ tillExpected: { cash } })
+		);
+	}
+);
+
+it.each([
+	[[], undefined, '-20.0000'],
+	[[20], undefined, undefined],
+	[null, undefined, '-20.0000'],
+	[null, '2026-09-15T10:00:00', '-20.0000'],
+	[null, '2026-09-15T08:00:00', undefined],
+] as const)('accounts for allocation-only refund ids %j at %s', async (ids, at, stripe) => {
+	entries = [];
+	active = [{ ...active[0], server_refund_ids: ids, server_ledger_row_ids: ['card'] }];
+	mockOrders.next([
+		parentHit('session', true, '2026-09-15', {
+			refunds: [{ id: 20, amount: '20', status: 'succeeded', created_at_gmt: at }],
+		}),
+	]);
+	const result = await settled();
+	expect(result.current.expected.stripe).toBe(stripe);
+});
+
+it.each([
+	['ledger', '2026-09-15T08:00:01', 1],
+	['refund', '2026-09-15T08:00:01', 1],
+	['ledger', '2026-09-15T10:00:00', 0],
+	['refund', '2026-09-15T10:00:00', 0],
+] as const)(
+	'refreshes edited %s version %s, not snapshot time',
+	async (kind, updated, requests) => {
+		entries = [];
+		const version = requests ? '2026-09-15T08:00:00' : updated;
+		active = [
+			{
+				...active[0],
+				server_ledger_row_ids: ['card'],
+				server_refund_ids: [20],
+				server_ledger_rows: [{ id: 'card', updated_at_gmt: version, status: 'captured' }],
+				server_refunds: [{ id: 20, updated_at_gmt: version }],
+			},
+		];
+		mockOrders.next([parentHit('session', false, kind === 'ledger' ? updated : version)]);
+		const refund = refundHit('30');
+		refund.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+		refund.record.payload.date_modified_gmt = kind === 'refund' ? updated : version;
+		mockRefunds.next([refund]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe('100');
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(requests);
+	}
+);
+
+it.each([
+	['before-tip', 1],
+	['after-tip', 0],
+	[undefined, 0],
+] as const)(
+	'compares opaque ledger version %s at the same timestamp',
+	async (version, requests) => {
+		entries = [];
+		const updated = '2026-09-15T08:00:00';
+		active = [
+			{
+				...active[0],
+				server_ledger_row_ids: ['card'],
+				server_ledger_rows: [{ id: 'card', status: 'captured', updated_at_gmt: updated, version }],
+			},
+		];
+		mockOrders.next([
+			parentHit('session', false, updated, { amount: '110', version: 'after-tip' }),
+		]);
+		const result = await settled();
+		expect(result.current.expected).toEqual({ cash: '100' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(requests);
+	}
+);
+
+it.each([
+	['cash', 'captured', 'voided'],
+	['cash', 'authorized', 'failed'],
+	['cheque', 'authorized', 'voided'],
+	['cheque', 'captured', 'failed'],
+])(
+	'debits a snapshotted %s %s leg changed offline to %s exactly once',
+	async (method, before, status) => {
+		entries = [];
+		const snapshot = { id: 'card', updated_at_gmt: '2026-09-15T08:00:00', status: before };
+		active = [
+			{
+				...active[0],
+				server_expected: { [method]: '100' },
+				server_ledger_row_ids: ['card'],
+				server_ledger_rows: [snapshot],
+			},
+		];
+		const hit = parentHit('session', false, '2026-09-15T10:00:00', {
+			kind: method === 'cash' ? 'cash' : 'manual',
+			method_id: method,
+			amount: '50',
+			status,
+			created_at_gmt: snapshot.updated_at_gmt,
+		});
+		hit.record.local.dirty = true;
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.expected).toEqual({ [method]: '50.0000' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { [method]: '50' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({ tillExpected: { [method]: '50.0000' } })
+		);
+		await act(async () => {
+			Object.assign(active[0], {
+				server_expected: { [method]: '50' },
+				server_expected_at: '2026-09-15T11:00:00',
+				server_ledger_rows: [{ ...snapshot, status, updated_at_gmt: '2026-09-15T10:00:00' }],
+			});
+			mockSessionChanges.next();
+		});
+		expect(result.current.expected).toEqual({ [method]: '50' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+	}
+);
+
+it.each(['startCounting', 'backToSelling', 'closeSession'] as const)(
+	'%s rejects with the domain error when the session is missing',
+	async (action) => {
+		active = [{ ...session, sync_status: 'failed' }];
+		const { result } = renderHook(() => useRegisterSession());
+		await act(async () => {});
+		await expect(
+			result.current.actions[action]({ counted: { cash: '100' } })
+		).rejects.toBeInstanceOf(actions.RegisterSessionRequiredError);
+		mockHasSessions = false;
+		const missing = renderHook(() => useRegisterSession());
+		await expect(
+			missing.result.current.actions[action]({ counted: { cash: '100' } })
+		).rejects.toBeInstanceOf(actions.RegisterSessionRequiredError);
+		expect(actions.startCounting).not.toHaveBeenCalled();
+		expect(actions.backToSelling).not.toHaveBeenCalled();
+		expect(actions.closeSession).not.toHaveBeenCalled();
+	}
+);
+
+// Removing any one of the three guard keys exposes the outgoing drawer during this render.
+it.each(['store', 'register', 'generation'] as const)(
+	'hides stale session data during a %s switch',
+	async (scope) => {
+		const previousStore = mockStoreSession.storeDB;
+		const previousRegister = mockBinding.registerId;
+		const renders: ReturnType<typeof useRegisterSession>[] = [];
+		const view = renderHook(() => {
+			const value = useRegisterSession();
+			renders.push(value);
+			return value;
+		});
+		await waitFor(() => expect(view.result.current.session?.id).toBe('session'));
+		renders.length = 0;
+		try {
+			if (scope === 'store') mockStoreSession.storeDB = {};
+			if (scope === 'register') mockBinding.registerId = 'other';
+			if (scope === 'generation') mockGeneration = {};
+			view.rerender();
+			expect(renders[0].session).toBeNull();
+			expect(renders[0].loaded).toBe(false);
+			await expect(renders[0].actions.startCounting()).rejects.toBeInstanceOf(
+				actions.RegisterSessionRequiredError
+			);
+		} finally {
+			view.unmount();
+			mockStoreSession.storeDB = previousStore;
+			mockBinding.registerId = previousRegister;
+		}
+	}
+);

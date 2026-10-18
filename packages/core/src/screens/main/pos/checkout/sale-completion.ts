@@ -1,8 +1,10 @@
-import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
+import { POS_META_KEYS } from '@wcpos/sync-core';
+import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	isCompletingStatus,
+	isSettledPaymentRow,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
@@ -45,7 +47,6 @@ export interface SaleContext {
 	storeDB: StoreDatabase;
 	siteUuid: string;
 	storeId?: number;
-	sessions: RegisterSessionCollection | undefined;
 	sessionsOn: boolean;
 	runtime: ReturnType<typeof useQueryRuntime>;
 	dp: number;
@@ -63,6 +64,7 @@ export async function recordSaleAttempt(
 		source: SaleOutcome['source'];
 		/** A gateway sale's stored POS Order Status (see isSettledOrderStatus), for its replay. */
 		settledOrderStatus?: string | null;
+		settledOrderGateway?: string;
 		/** Every gateway's stored status, keyed by id, for a pay-page sale's replay. */
 		settledOrderStatuses?: Record<string, string | null>;
 	}
@@ -73,6 +75,9 @@ export async function recordSaleAttempt(
 			source: input.source,
 			...(ctx.actor ? { actor: ctx.actor } : {}),
 			...(input.settledOrderStatus != null ? { settledOrderStatus: input.settledOrderStatus } : {}),
+			...(input.settledOrderStatus != null && input.settledOrderGateway != null
+				? { settledOrderGateway: input.settledOrderGateway }
+				: {}),
 			...(input.settledOrderStatuses ? { settledOrderStatuses: input.settledOrderStatuses } : {}),
 		});
 }
@@ -101,7 +106,7 @@ export async function persistSaleProvenance(
 		input = {
 			...input,
 			extraMeta: withMetaReplaced(input.extraMeta, [
-				{ key: '_wcpos_session', value: input.sessionId },
+				{ key: POS_META_KEYS.session, value: input.sessionId },
 			]),
 		};
 	}
@@ -175,6 +180,7 @@ export type SaleOutcome =
 	| {
 			source: 'replay';
 			refreshed?: boolean;
+			settledOrderGateway?: string;
 			/** The status journaled with a gateway attempt (recordSaleAttempt); see isSettledOrderStatus. */
 			settledOrderStatus?: string | null;
 			/**
@@ -239,7 +245,11 @@ function replayStoredStatus(
 	outcome: Extract<SaleOutcome, { source: 'replay' }>,
 	payload: OrderPayload
 ): string | null | undefined {
-	if (!outcome.settledOrderStatuses) return outcome.settledOrderStatus;
+	if (!outcome.settledOrderStatuses)
+		return outcome.settledOrderGateway === undefined ||
+			outcome.settledOrderGateway === payload.payment_method
+			? outcome.settledOrderStatus
+			: null;
 	const method = payload.payment_method;
 	return typeof method === 'string' ? (outcome.settledOrderStatuses[method] ?? null) : null;
 }
@@ -354,16 +364,9 @@ async function finishSale(
 			summary: null,
 		};
 	}
-	// Enter BEFORE refresh: the paid order has left pos-open and otherwise the cashier sees an empty cart.
-	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
-	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
 	const payload = () =>
 		outcome.source === 'gateway-snapshot' ? outcome.snapshot : order.getLatest().payload;
 	let latest = payload();
-	await reportProvenanceGap({
-		...ctx,
-		order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },
-	});
 	const refresh =
 		outcome.source === 'manual'
 			? outcome.via === 'online'
@@ -372,15 +375,36 @@ async function finishSale(
 				: outcome.source === 'replay'
 					? !!latest.id && !outcome.refreshed
 					: outcome.source === 'gateway-contract' || outcome.source === 'gateway-settled';
+	if (outcome.source === 'replay' && refresh) {
+		// The cached status is suspect on replay; re-judge the store's copy before any receipt.
+		const refreshed = await reconcileCompletedOrder(
+			ctx.runtime,
+			order,
+			refresh,
+			ctx.stockAdjustment
+		);
+		if (refreshed !== 'refreshed') return { outcome: 'not-completed', summary: null };
+		latest = payload();
+		if (latest.status === 'cancelled' || !isSaleComplete(outcome, ctx.dp, latest))
+			return { outcome: 'not-completed', summary: null };
+	}
+	// Enter BEFORE refresh: the paid order has left pos-open and otherwise the cashier sees an empty cart.
+	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
+	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
+	await reportProvenanceGap({
+		...ctx,
+		order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },
+	});
 	if (outcome.source === 'gateway-snapshot') {
 		const reduced = (latest.line_items ?? []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(
-				(meta) => meta.key === '_reduced_stock'
+				(meta) => meta.key === POS_META_KEYS.reducedStock
 			)
 		);
 		if (ctx.stockAdjustment) ctx.stockAdjustment(reduced);
 		else stockAdjustment(ctx.runtime, reduced);
-	} else await reconcileCompletedOrder(ctx.runtime, order, refresh, ctx.stockAdjustment);
+	} else if (outcome.source !== 'replay' || !refresh)
+		await reconcileCompletedOrder(ctx.runtime, order, refresh, ctx.stockAdjustment);
 	latest = payload();
 	return {
 		outcome: 'completed',
@@ -389,9 +413,7 @@ async function finishSale(
 			orderUUID: order.uuid,
 			orderNumber: latest.number ?? null,
 			total: latest.total ?? null,
-			paymentLegs: readLedger(latest.meta_data).filter(
-				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-			).length,
+			paymentLegs: readLedger(latest.meta_data).filter(isSettledPaymentRow).length,
 		},
 	};
 }
@@ -444,7 +466,8 @@ export async function completeSale(
 		if (isActionRefusal(result))
 			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
-		await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+		if (outcome.source !== 'replay' || result.outcome === 'completed')
+			await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return result.outcome;
 	} catch (error) {
 		try {
