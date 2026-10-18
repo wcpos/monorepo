@@ -16,8 +16,9 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => mockCreateTestT() }));
 jest.mock('../../../contexts/app-state', () => ({ useAppState: () => ({ login: jest.fn() }) }));
-jest.mock('../../../hooks/use-version-check', () => ({
-	useVersionCheck: () => ({ wcposVersionPass: true }),
+jest.mock('@wcpos/query/user-db', () => ({ removeSite: jest.fn() }));
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ compatibility: { wcposVersionPass: true } }),
 }));
 jest.mock('../../../hooks/use-site-info', () => ({ useSiteInfo: () => {} }));
 jest.mock('../../../hooks/use-wcpos-auth/redirect-result', () => ({
