@@ -270,7 +270,7 @@ function RegisterBlock({ register, days }: { register: RegisterReport; days: num
 				<Text className="text-muted-foreground text-xs">
 					{register.orders === 0
 						? t('health.registers.no_sales', { days })
-						: t('health.registers.summary', {
+						: t('health.registers.sales_counters', {
 								count: register.orders,
 								first: first ?? '—',
 								last: last ?? '—',
@@ -334,7 +334,7 @@ export function RegistersPanel() {
 			))}
 			{data && data.unregistered.length > 0 ? (
 				<VStack testID="health-unregistered" className="gap-1">
-					<Text className="font-medium">{t('health.registers.unregistered')}</Text>
+					<Text className="font-medium">{t('health.registers.unregistered_title')}</Text>
 					<Text className="text-muted-foreground text-xs">
 						{t('health.registers.unregistered_sub')}
 					</Text>
