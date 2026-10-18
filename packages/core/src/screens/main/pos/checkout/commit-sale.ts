@@ -26,6 +26,7 @@ export type SaleCommitContext = Pick<
 >;
 export type SaleAmounts =
 	| { kind: 'whole-balance' }
+	| { kind: 'retained-captures' }
 	| {
 			kind: 'entry';
 			expectedBalanceMinor: number;
@@ -51,14 +52,18 @@ export type StampedSale = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'
 export function commitSale<R>(
 	ctx: SaleCommitContext,
 	{ order, methodId, bindingStatus, amounts }: SaleCommitRequest,
-	write: (sale: StampedSale, queue: OrderMutationContext) => Promise<R>
+	write: (sale: StampedSale, queue: OrderMutationContext) => Promise<R>,
+	options?: { queue?: OrderMutationContext }
 ): Promise<ActionRefusal | R> {
-	return enqueueOrderMutation(order.uuid, async (queue) => {
+	const run = async (queue: OrderMutationContext): Promise<ActionRefusal | R> => {
 		const latest = order.getLatest().payload;
-		const balanceMinor = toMinor(
-			derive(latest.total, readLedger(latest.meta_data), [], { dp: ctx.dp }).balance,
-			ctx.dp
-		);
+		const retained = amounts.kind === 'retained-captures';
+		const balanceMinor = retained
+			? 0
+			: toMinor(
+					derive(latest.total, readLedger(latest.meta_data), [], { dp: ctx.dp }).balance,
+					ctx.dp
+				);
 		// The keypad's facts were read at render, before any cart edit queued ahead.
 		if (amounts.kind === 'entry' && amounts.expectedBalanceMinor !== balanceMinor)
 			return {
@@ -71,7 +76,7 @@ export function commitSale<R>(
 				},
 			};
 		const whole = amounts.kind === 'whole-balance';
-		const amountMinor = whole ? balanceMinor : amounts.amountMinor;
+		const amountMinor = amounts.kind === 'entry' ? amounts.amountMinor : balanceMinor;
 		const unmet = await countConditionsInSlot(
 			queue.order ?? order,
 			ctx.actionCtx,
@@ -89,9 +94,13 @@ export function commitSale<R>(
 				source: 'user',
 				payload: {
 					methodId,
-					mode: whole ? 'gateway' : balanceMinor === 0 ? 'zero-balance' : amounts.captureMode,
+					mode: whole
+						? 'gateway'
+						: amounts.kind === 'entry' && balanceMinor !== 0
+							? amounts.captureMode
+							: 'zero-balance',
 					amountMinor,
-					tenderedMinor: whole ? balanceMinor : amounts.tenderedMinor,
+					tenderedMinor: amounts.kind === 'entry' ? amounts.tenderedMinor : balanceMinor,
 					balanceMinor,
 					roundingMinor: 0,
 					completing: amountMinor === balanceMinor,
@@ -112,5 +121,6 @@ export function commitSale<R>(
 				return write(payload, queue);
 			},
 		}) as Promise<ActionRefusal | R>;
-	});
+	};
+	return options?.queue ? run(options.queue) : enqueueOrderMutation(order.uuid, run);
 }

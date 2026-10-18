@@ -15,9 +15,15 @@ export const config = createCartConfig({
 });
 export const useCartConfigReader = jest.fn(() => () => config);
 
-/** Every existing command case also pins its merged write contract. */
+/** Coupon commands leave the aggregate to continuation; other commands merge it. */
 export function expectSettledWrites(patch: jest.Mock) {
 	for (const [input] of patch.mock.calls) {
+		const coupons = input.data.coupon_lines ?? input.document.payload.coupon_lines;
+		if (coupons?.some((line: { code?: string }) => line.code != null)) {
+			for (const key of ['total', 'total_tax', 'tax_lines', 'discount_total', 'discount_tax'])
+				expect(input.data).not.toHaveProperty(key);
+			continue;
+		}
 		expect(input.data).toEqual(
 			expect.objectContaining({
 				total: expect.any(String),
@@ -32,5 +38,7 @@ export function expectSettledWrites(patch: jest.Mock) {
 
 export const resolveCartWrite =
 	(mock: jest.Mock): Parameters<typeof settleCartWrite>[1]['localPatch'] =>
-	({ document, changes }) =>
-		mock({ document, data: changes(document.payload) });
+	({ document, changes }) => {
+		const data = changes({ status: 'pos-open', ...document.payload });
+		return Object.keys(data).length ? mock({ document, data }) : Promise.resolve(document);
+	};

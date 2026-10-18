@@ -19,14 +19,20 @@ export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
 	receiptHost: 'stage' | 'modal' = 'stage'
 ): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<void> {
+	const complete = useCompleteOrderFlowForOrder(receiptHost);
+	return React.useCallback((outcome, queue) => complete(order, outcome, queue), [complete, order]);
+}
+
+/** Cart commands finish their captured order, even if the cashier has switched tabs. */
+export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 'stage') {
 	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
-	const { setCurrentOrderID } = useCurrentOrderActions();
+	const { setCurrentOrderID, getCurrentOrderRecord } = useCurrentOrderActions();
 
 	return React.useCallback(
-		async (outcome: SaleOutcome, queue?: OrderMutationContext) => {
+		async (order: EngineRecord<'orders'>, outcome: SaleOutcome, queue?: OrderMutationContext) => {
 			const result = await completeSale(
 				ctx,
 				order,
@@ -40,6 +46,10 @@ export function useCompleteOrderFlow(
 			if (result !== 'completed' && result !== 'sent') return;
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
+			if (getCurrentOrderRecord().uuid !== order.uuid) {
+				leaveCheckout(order.uuid);
+				return;
+			}
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
@@ -61,6 +71,14 @@ export function useCompleteOrderFlow(
 				if (screenSize === 'sm') returnToTill(router, true, 'products');
 			}
 		},
-		[ctx, receiptHost, order, router, screenSize, setCurrentOrderID, uiSettings.autoShowReceipt]
+		[
+			ctx,
+			receiptHost,
+			router,
+			screenSize,
+			setCurrentOrderID,
+			getCurrentOrderRecord,
+			uiSettings.autoShowReceipt,
+		]
 	);
 }

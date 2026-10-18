@@ -305,6 +305,7 @@ export const useAddItemToOrder = () => {
 									}
 								: {};
 							result = await localPatch({
+								queue: context,
 								document: latest,
 								data: {
 									...restart,

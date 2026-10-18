@@ -44,7 +44,7 @@ import {
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { returnToTill } from '../till-route';
-import { completionMetaFor, persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
+import { persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -112,6 +112,7 @@ import {
 	selectableReaders,
 	type TenderTile,
 } from './tiles';
+import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
@@ -778,17 +779,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-				const latest = order.getLatest().payload;
-				const result = await localPatch({
-					document: order,
-					data: {
-						...(roundingMinor !== 0 ? roundingFee(latest, null) : {}),
-						status: 'completed',
-						meta_data: await completionMetaFor(ctx, latest.meta_data, { sessionId }),
-					},
+				await writeZeroBalanceCompletion(ctx, {
+					order,
+					sessionId,
+					queue,
+					write: (changes) => localPatch({ document: order, changes }),
+					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
+					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
 				});
-				if (!result) throw new Error('zero_balance_completion_failed');
-				await completeOrderFlow({ source: 'zero-balance' }, queue);
 				return;
 			}
 			if (!method) return;

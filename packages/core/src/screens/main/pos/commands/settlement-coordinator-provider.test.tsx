@@ -10,6 +10,7 @@ import { createCartConfig } from '@wcpos/order-math';
 
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { settleCartWrite } from './settle-cart-write';
+import { commitAtBoundary } from './boundary-commit';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
@@ -38,6 +39,17 @@ const engine = {
 };
 const manager = { engine };
 const writes: Record<string, unknown>[] = [];
+const sessionChanges = new Subject();
+let sessionOpen = true;
+const saleContext = { sessions: { $: sessionChanges } };
+jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => saleContext }));
+jest.mock('./boundary-commit', () => ({
+	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
+		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };
+		const patch = { ...orderMath.settlementPatch(result), status: 'completed' };
+		await write(() => patch);
+	}),
+}));
 const report = jest.fn();
 let currentConfig = config;
 const readConfig = () => currentConfig;
@@ -62,7 +74,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 } }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registerId: 'register' }),
+	useRegisterBinding: () => ({ registerId: 'register', status: 'bound' }),
 }));
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: (...args: unknown[]) => {
@@ -110,6 +122,7 @@ const flush = async () => {
 };
 beforeEach(() => {
 	currentConfig = config;
+	sessionOpen = true;
 	ownsMoney.mockReset().mockReturnValue(false);
 	beforeResolve.mockReset().mockResolvedValue(undefined);
 	writes.length = 0;
@@ -151,29 +164,23 @@ it('binds, rebinds on scope/reset, waits for rates, reports once and tears down'
 	expect(orders.observed).toBe(false);
 });
 
-it.each(['0.30', '0.40'])(
-	'defers a partial order crossing net paid %s, without writing money',
-	async (amount) => {
-		// prettier-ignore
-		const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [
+it.each(['0.30', '0.40'])('commits a partial order crossing net paid %s', async (amount) => {
+	// prettier-ignore
+	const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [
 			{ id: 'leg', status: 'captured', amount, refunded_amount: '0.10' },
 		] } }];
-		orders.next({
-			ready: true,
-			hits: [
-				{ record: record({ status: 'pos-partial', meta_data, line_items: [{ total: '0.20' }] }) },
-			],
-		});
-		const view = render(<SettlementCoordinatorProvider />);
-		await flush();
-		expect(writes).toEqual([]);
-		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
-			'settlement.boundary-deferred',
-			expect.anything()
-		);
-		view.unmount();
-	}
-);
+	orders.next({
+		ready: true,
+		hits: [
+			{ record: record({ status: 'pos-partial', meta_data, line_items: [{ total: '0.20' }] }) },
+		],
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toEqual([expect.objectContaining({ status: 'completed', total: '0.2' })]);
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	view.unmount();
+});
 
 const references = new BehaviorSubject({ ready: false, generation: '0:0' });
 const context = {
@@ -208,14 +215,10 @@ it.each(['valid', 'missing', 'boundary'])(
 		expect(writes).toHaveLength(0);
 		act(() => references.next({ ready: true, generation: '0:0' }));
 		await flush();
-		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
+		expect(writes).toHaveLength(kind !== 'missing' ? 1 : 0);
 		if (kind === 'valid')
 			expect(writes[0]).toEqual(expect.objectContaining({ total: '9', discount_total: '1' }));
-		if (kind === 'boundary')
-			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
-				'settlement.boundary-deferred',
-				expect.anything()
-			);
+		if (kind === 'boundary') expect(commitAtBoundary).toHaveBeenCalledTimes(1);
 		if (kind === 'missing')
 			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 				'Cart settlement failed',
@@ -228,8 +231,8 @@ it.each(['valid', 'missing', 'boundary'])(
 		expect(report).toHaveBeenCalledTimes(1);
 		act(() => orders.next({ ready: true, hits: [{ record: a }] }));
 		await flush();
-		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
-		expect(getLogger(['test']).warn).toHaveBeenCalledTimes(kind === 'valid' ? 0 : 1);
+		expect(writes).toHaveLength(kind !== 'missing' ? 1 : 0);
+		expect(getLogger(['test']).warn).toHaveBeenCalledTimes(kind === 'missing' ? 1 : 0);
 		view.unmount();
 		expect(references.observed).toBe(false);
 	}
@@ -488,3 +491,96 @@ it.each(['divergence', 'command', 'replay-owner', 'replay-edit'] as const)(
 		view.unmount();
 	}
 );
+
+it('retries a deferred boundary when a session opens, then excludes the completed order', async () => {
+	sessionOpen = false;
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: {
+					schema: 1,
+					payments: [{ id: 'leg', status: 'captured', amount: '4', refunded_amount: '0' }],
+				},
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	expect(writes).toEqual([]);
+	act(() => {
+		sessionOpen = true;
+		sessionChanges.next({});
+	});
+	await flush();
+	expect(a.payload.status).toBe('completed');
+	expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+	act(() => {
+		sessionChanges.next({});
+		orders.next({ ready: true, hits: [{ record: a }] });
+	});
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+	view.unmount();
+	expect(sessionChanges.observed).toBe(false);
+});
+
+it('leaves a coupon edit to the continuation and completes once at the redistributed $5', async () => {
+	context.coupons = new Map([
+		['summer', { code: 'summer', discount_type: 'fixed_cart', amount: '5' }],
+	]);
+	references.next({ ready: true, generation: '0:0' });
+	const a = record({
+		status: 'pos-partial',
+		total: '15',
+		line_items: [1, 2].map((product_id) => ({
+			product_id,
+			quantity: 1,
+			subtotal: '10',
+			total: '7.5',
+		})),
+		coupon_lines: [{ code: 'summer' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: {
+					schema: 1,
+					payments: [{ id: 'leg', status: 'captured', amount: '8', refunded_amount: '0' }],
+				},
+			},
+		],
+	});
+	const intent = { line_items: a.payload.line_items!.slice(0, 1) };
+	const commandCommit = jest.fn();
+	await enqueueOrderMutation(a.uuid, (queue) =>
+		settleCartWrite(
+			{ document: a as CurrentOrderRecord, data: intent, queue },
+			{
+				configForOrder: readConfig,
+				serverOwnsMoney: () => false,
+				commitAtBoundary: commandCommit,
+				localPatch: async ({ changes }) => {
+					const patch = changes(a.payload);
+					expect(patch).toEqual(intent);
+					Object.assign(a.payload, patch);
+					return a;
+				},
+			}
+		)
+	);
+	expect(commandCommit).not.toHaveBeenCalled();
+	expect(a.payload.total).toBe('15');
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(a.payload).toMatchObject({ status: 'completed', total: '5' });
+	act(() => orders.next({ ready: true, hits: [{ record: a }] }));
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	expect(writes).toHaveLength(1);
+	view.unmount();
+});

@@ -67,7 +67,10 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 jest.mock('../../contexts/current-order/context', () => ({
-	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+	useCurrentOrderActions: () => ({
+		setCurrentOrderID: mockSetCurrentOrderID,
+		getCurrentOrderRecord: () => order,
+	}),
 }));
 jest.mock('../../hooks/read-stock-document', () => ({
 	resolveStockOwnerId: (_runtime: unknown, productId: number, variationId: number) =>

@@ -29,6 +29,7 @@ jest.mock('@wcpos/utils/logger', () => {
 });
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useDocField: (_store: unknown, selector: (value: { store_country: string }) => unknown) =>
 		selector({ store_country: 'ES' }),
 }));
@@ -198,3 +199,7 @@ describe('useAddCustomer', () => {
 });
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

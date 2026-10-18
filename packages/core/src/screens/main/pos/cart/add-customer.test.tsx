@@ -69,6 +69,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));
 
@@ -297,3 +298,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 
 jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

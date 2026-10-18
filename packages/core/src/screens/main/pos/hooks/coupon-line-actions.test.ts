@@ -73,6 +73,7 @@ it('apply: dispatches the entering line with the cart, then recalculates and pat
 	expect(recalculate).toHaveBeenCalledWith(lineItems, [{ code: 'existing' }, saved]);
 	expect(localPatch).toHaveBeenCalledWith({
 		document: order,
+		queue: expect.objectContaining({ dispatchToken: expect.any(Object) }),
 		data: {
 			coupon_lines: [{ code: 'existing' }, saved],
 			line_items: [{ product_id: 1, quantity: 1, total: '90' }],

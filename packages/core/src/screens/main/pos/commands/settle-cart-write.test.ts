@@ -12,7 +12,7 @@ const line = {
 	subtotal: '10',
 	total: '8',
 };
-const payload = { line_items: [line], billing: { country: 'AU' }, total: '99' };
+const payload = { status: 'pos-open', line_items: [line], billing: { country: 'AU' }, total: '99' };
 const record = (value = payload) =>
 	({
 		uuid: 'target',
@@ -118,4 +118,63 @@ it('writes only intent when persisted money already matches', async () => {
 	expect(configForOrder).toHaveBeenCalledWith(
 		expect.objectContaining({ billing: payload.billing })
 	);
+});
+
+it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', async (operation) => {
+	const order = record();
+	order.payload.line_items = [
+		{ ...line, total: '3' },
+		{ ...line, total: '9', quantity: 3 },
+	];
+	order.payload.status = 'pos-partial';
+	order.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [{ id: 'leg', status: 'captured', amount: '4', refunded_amount: '0' }],
+			},
+		},
+	];
+	const queue = {
+		dispatchToken: {},
+	} as import('../hooks/order-mutation-queue').OrderMutationContext;
+	const data = {
+		line_items:
+			operation === 'remove'
+				? order.payload.line_items.slice(0, 1)
+				: [
+						{ ...line, total: '3' },
+						{ ...line, quantity: 1, total: '3' },
+					],
+	};
+	const localPatch = jest.fn(async ({ data: changes }) => {
+		Object.assign(order.payload, changes);
+		return order;
+	});
+	const commitAtBoundary = jest.fn(async () => {
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(order.payload.line_items).toEqual(data.line_items);
+		expect(order.payload.total).toBe('99');
+	});
+	await settleCartWrite(
+		{ document: order, data, queue },
+		{
+			localPatch: resolveCartWrite(localPatch),
+			configForOrder: () => config,
+			serverOwnsMoney: () => false,
+			commitAtBoundary,
+		}
+	);
+	if (operation === 'remove') {
+		expect(localPatch).toHaveBeenCalledWith({ document: order, data });
+		expect(commitAtBoundary).toHaveBeenCalledWith(
+			order,
+			expect.objectContaining({ changed: true }),
+			queue
+		);
+	} else {
+		expect(order.payload.total).toBe('6');
+		expect(commitAtBoundary).not.toHaveBeenCalled();
+	}
 });

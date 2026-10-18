@@ -43,6 +43,7 @@ const posPrice = (price: number) => ({
 
 function completeEngineRecord(record: Record<string, any> | null) {
 	if (!record) return null;
+	if (record.payload) record.payload.status ??= 'pos-open';
 	if (!record.getLatest) record.getLatest = () => record;
 	return record;
 }
@@ -112,6 +113,7 @@ const order: Record<string, unknown> & {
 };
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({ engine: { write: mockWrite } }),
 }));
@@ -170,7 +172,7 @@ describe('useAddItemToOrder', () => {
 		});
 		order.payload.line_items = [];
 		delete (order.payload as { meta_data?: unknown }).meta_data;
-		delete (order.payload as { status?: string }).status;
+		Object.assign(order.payload, { status: 'pos-open' });
 		delete (order.payload as { date_created_gmt?: string }).date_created_gmt;
 		order.isNew = false;
 		order.toJSON = () => ({ payload: { ...order.payload } });
@@ -1102,3 +1104,7 @@ jest.mock('../../../../services/register/use-register', () => ({
 }));
 
 afterEach(() => expectSettledWrites(mockLocalPatch));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

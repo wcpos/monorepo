@@ -62,6 +62,7 @@ export const useSetCartCustomer = () => {
 					},
 					bottom: (e) =>
 						localPatch({
+							queue,
 							document: target,
 							data: {
 								...(setsCustomer ? { customer_id: e.payload.customerId } : {}),

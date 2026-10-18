@@ -467,3 +467,7 @@ describe('useSplitLineItem', () => {
 });
 
 afterEach(() => expectSettledWrites(mockLocalPatch));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

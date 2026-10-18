@@ -156,7 +156,10 @@ jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: mockAutoShowReceipt } }),
 }));
 jest.mock('../../contexts/current-order/context', () => ({
-	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+	useCurrentOrderActions: () => ({
+		setCurrentOrderID: mockSetCurrentOrderID,
+		getCurrentOrderRecord: () => order,
+	}),
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	stockAdjustment: (...args: unknown[]) => mockAdjustStock(...args),
@@ -647,10 +650,11 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
-			data: {
-				status: 'completed',
-				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
-			},
+			changes: expect.any(Function),
+		});
+		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
+			status: 'completed',
+			meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
 		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },
@@ -1854,7 +1858,11 @@ it('zero balance writes completion and provenance together exactly once', async 
 	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: order,
-		data: { status: 'completed', meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+		changes: expect.any(Function),
+	});
+	expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
+		status: 'completed',
+		meta_data: [{ key: '_wcpos_sale_counter', value: '1' }],
 	});
 });
 
@@ -3625,6 +3633,7 @@ describe('cash rounding (#66, #84)', () => {
 		defaults: { ...cash.defaults, rounding: { increment: '0.05', mode: 'nearest' as const } },
 	};
 	type Patch = { data: Record<string, unknown> };
+	let appliedPatches: Record<string, unknown>[];
 	// One product line. The stored total may differ from it: the store can own the order's money
 	// (ADR 0032), and a fee edit must move the stored total, not recompute it from the lines.
 	const sale = (total: string, linesTotal = total) => ({
@@ -3633,7 +3642,7 @@ describe('cash rounding (#66, #84)', () => {
 		meta_data: [],
 		line_items: [{ name: 'Item', quantity: 1, total: linesTotal, total_tax: '0.00' }],
 	});
-	const patches = () => mockLocalPatch.mock.calls.map(([call]) => (call as Patch).data);
+	const patches = () => appliedPatches;
 	beforeEach(() => {
 		jest.clearAllMocks();
 		resetCheckoutMode();
@@ -3648,10 +3657,20 @@ describe('cash rounding (#66, #84)', () => {
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockPushDocument.mockResolvedValue(order);
 		// The resident record takes each patch, so the writer reads what the handler wrote.
-		mockLocalPatch.mockImplementation(async ({ data }: Patch) => {
-			mockPayload = { ...mockPayload, ...data };
-			return order;
-		});
+		appliedPatches = [];
+		mockLocalPatch.mockImplementation(
+			async ({
+				data,
+				changes,
+			}: Partial<Patch> & {
+				changes?: (current: Record<string, unknown>) => Record<string, unknown>;
+			}) => {
+				const patch = changes ? changes(mockPayload) : data!;
+				appliedPatches.push(patch);
+				mockPayload = { ...mockPayload, ...patch };
+				return order;
+			}
+		);
 	});
 	afterEach(() => {
 		mockUseRealManual = false;
@@ -3807,6 +3826,7 @@ describe('cash rounding (#66, #84)', () => {
 		mockPayload = sale('10.03');
 		// The provenance push came back with the fee's server id.
 		mockLocalPatch.mockImplementation(async ({ data }: Patch) => {
+			appliedPatches.push(data);
 			const fees = data.fee_lines as { id?: number }[] | undefined;
 			mockPayload = {
 				...mockPayload,

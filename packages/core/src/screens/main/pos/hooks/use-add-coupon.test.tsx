@@ -464,3 +464,7 @@ describe('useAddCoupon per-user usage limits', () => {
 afterEach(() => expectSettledWrites(localPatch));
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

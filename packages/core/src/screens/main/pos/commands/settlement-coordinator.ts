@@ -11,7 +11,7 @@ import {
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
 import { type CouponReferences, replayContentKey } from './coupon-continuation';
-import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import { readQuickDiscountIntent } from '../hooks/quick-discount';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -21,6 +21,7 @@ export type RatesReady = { ready: boolean; generation: number };
 export type SettlementDiagnostic = { type: string; uuid: string; at: number; error?: unknown };
 interface Deps {
 	inputs$: Observable<CartConfigInputs>;
+	completionChanges$?: Observable<unknown>;
 	// null is a rebind: discard old records AND queued work before accepting the new scope.
 	openOrders$: Observable<CurrentOrderRecord[] | null>;
 	ratesReady$: Observable<RatesReady>;
@@ -33,7 +34,8 @@ interface Deps {
 		uuid: string,
 		record: CurrentOrderRecord,
 		allowed: (payload: OrderPayload) => boolean,
-		coupons?: CouponContext
+		coupons: CouponContext | undefined,
+		queue: OrderMutationContext
 	) => Promise<unknown>;
 	now: () => number;
 	observe: (event: SettlementDiagnostic) => void;
@@ -68,6 +70,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let inputs: CartConfigInputs;
 	let rates: RatesReady = { ready: false, generation: 0 };
 	let epoch = 0;
+	let completionGeneration = 0;
 	let stopped = false;
 	let running = false;
 	let dirty = false;
@@ -98,6 +101,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			closed(p, record, deps, inputs.settings.priceNumDecimals),
 			inputs,
 			rates.generation,
+			completionGeneration,
 		]);
 	};
 	async function replay(record: CurrentOrderRecord, key: string, pass: number) {
@@ -122,7 +126,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					fingerprint(fresh) === key &&
 					replayContentKey({ uuid, payload }) === content &&
 					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
-				if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, coupons);
+				if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, coupons, slot);
 			});
 		} catch (error) {
 			if (flights.get(uuid) === flight) seen.delete(uuid);
@@ -163,7 +167,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 								current() &&
 								!hasCoupons({ payload }) &&
 								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
-							if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed);
+							if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, undefined, slot);
 						});
 					} catch (error) {
 						seen.delete(uuid);
@@ -210,6 +214,13 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			dirty = true;
 			void drain();
 		}
+	);
+	subscription.add(
+		deps.completionChanges$?.subscribe(() => {
+			completionGeneration++;
+			dirty = true;
+			void drain();
+		})
 	);
 	return {
 		stop() {

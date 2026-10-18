@@ -332,7 +332,13 @@ it('#952 settles a quick-discount-only cart on bind without declaring reference 
 	await flush();
 	expect(h.references$.observed).toBe(false);
 	expect(h.readCoupons).toHaveBeenCalledWith(a.payload);
-	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+	expect(h.settle).toHaveBeenCalledWith(
+		'a',
+		a,
+		expect.any(Function),
+		emptyContext,
+		expect.objectContaining({ dispatchToken: expect.any(Object) })
+	);
 });
 
 it.each([undefined, [], [{ code: null }]])(
@@ -452,7 +458,13 @@ it('#952 a quick discount mixed with a catalog coupon still waits for reference 
 	expect(h.references$.observed).toBe(true);
 	expect(h.settle).not.toHaveBeenCalled();
 	await emit(h.references$, { ready: true, generation: '0:0' });
-	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+	expect(h.settle).toHaveBeenCalledWith(
+		'a',
+		a,
+		expect.any(Function),
+		emptyContext,
+		expect.objectContaining({ dispatchToken: expect.any(Object) })
+	);
 });
 
 it('#952/#963 server ownership stops coupon reads and subsequent settlement passes', async () => {

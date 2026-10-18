@@ -48,6 +48,10 @@ const mockDismissTo = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
+let mockSelectedOrder = 'uuid-42';
+beforeEach(() => {
+	mockSelectedOrder = 'uuid-42';
+});
 let mockAutoShowReceipt = false;
 let mockScreenSize = 'lg';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -71,7 +75,10 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 jest.mock('../../contexts/current-order/context', () => ({
-	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+	useCurrentOrderActions: () => ({
+		setCurrentOrderID: mockSetCurrentOrderID,
+		getCurrentOrderRecord: () => ({ uuid: mockSelectedOrder }),
+	}),
 }));
 
 function makeOrder(id: number | null = 42) {
@@ -308,3 +315,29 @@ it('completes inside the caller queue without waiting on itself', async () => {
 		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
 	);
 });
+
+it.each(['stage', 'modal'] as const)(
+	'keeps B selected when A completes in the %s host',
+	async (host) => {
+		jest.clearAllMocks();
+		mockAutoShowReceipt = false;
+		mockScreenSize = 'sm';
+		let release!: () => void;
+		mockRequire.mockReturnValue({
+			ready: new Promise<void>((resolve) => {
+				release = resolve;
+			}),
+			release: jest.fn(),
+		});
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record, host));
+		await act(async () => {
+			const finishing = result.current({ source: 'gateway-contract', status: 'completed' });
+			mockSelectedOrder = 'B';
+			release();
+			await finishing;
+		});
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+	}
+);
