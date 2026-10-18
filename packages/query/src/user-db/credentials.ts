@@ -1,4 +1,4 @@
-import type { SiteDocument, UserDatabase } from '@wcpos/database';
+import type { SiteDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { sanitizeWPCredentialsData } from '@wcpos/database/collections/wp-credentials';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
@@ -72,6 +72,27 @@ export async function saveLoginCredentials(
 		linked,
 		credentials: credentials as unknown as ReadonlyWpCredentialsRecord,
 	};
+}
+
+/**
+ * Merge the embedded boot's credential payload over the stored credential.
+ * The payload never carries the locally-owned `stores` links, `last_access` or
+ * `date_*` fields, and `collection.upsert()` is a full-document write that would
+ * reset them to defaults (the #902 class, as `upsertSiteData`).
+ */
+export async function upsertEmbeddedCredentials(
+	userDB: UserDatabase | null | undefined,
+	data: unknown
+): Promise<WPCredentialsDocument> {
+	if (!userDB) throw new UserDatabaseUnavailableError();
+	const patch = sanitizeWPCredentialsData(data);
+	if (!patch.uuid) throw new Error('Cannot save credentials without a uuid');
+	const existing = await userDB.wp_credentials.findOne(patch.uuid).exec();
+	if (existing) {
+		await existing.getLatest().incrementalModify((current) => ({ ...current, ...patch }));
+		return existing.getLatest();
+	}
+	return userDB.wp_credentials.incrementalUpsert(patch as never);
 }
 
 export async function removeCredentials(

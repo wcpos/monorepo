@@ -1203,7 +1203,9 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/auth/hooks/use-login-handler.ts :: storage import :: useLoginHandler :: from '@wcpos/database' :: 1",
 	'screens/auth/hooks/use-site-connect.ts :: record mutator :: useSiteConnect :: user.getLatest().incrementalUpdate :: 1',
 	"screens/auth/hooks/use-site-connect.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// The embedded boot's credential write is a merge command in @wcpos/query/user-db.
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.wp_credentials.upsert :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 286;
+export const SEAM_RETIRED_FLOOR = 287;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'8389f4b1b13adeaf48b91ffbd39acadb1f7796ab7520bf86d1df2a7889dd4197';
+	'b1912710495fed88c23b7bce526b293c1e5ab9481d9568ccea6c2a646cd04fd2';
