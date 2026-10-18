@@ -4,19 +4,24 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { upsertSiteData } from '@wcpos/query/user-db';
+import {
+	connectionAddressOf,
+	normalizeSiteAddress,
+	saveConnectedSite,
+	SiteIdentityClashError,
+} from '@wcpos/query/user-db';
 
 import { createTestT } from '../../../../jest/translate';
 import { URL_IMPLEMENTATIONS, withGlobalUrl } from '../../../../jest/url-implementations';
-import { connectionAddressOf, normalizeSiteAddress, useSiteConnect } from './use-site-connect';
+import { useSiteConnect } from './use-site-connect';
 
 const mockT = createTestT();
-const mockFindOneFix = jest.fn();
 const mockTestAuthorizationMethod = jest.fn();
 const mockRunConnectCompatibilityProbes = jest.fn();
 const mockSavedSite = { name: 'Test Store', getLatest: jest.fn() };
 mockSavedSite.getLatest.mockReturnValue(mockSavedSite);
-const mockUserLatest = { sites: [] as string[], incrementalUpdate: jest.fn() };
+const mockUser = {};
+const mockUserDB = {};
 const mockDiscoverWpApiUrl = jest.fn(async () => 'https://example.com/wp-json/');
 const mockDiscoverApiEndpoints = jest.fn(async () => ({
 	endpoints: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' },
@@ -25,15 +30,8 @@ const mockDiscoverApiEndpoints = jest.fn(async () => ({
 
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		user: {
-			getLatest: () => mockUserLatest,
-		},
-		userDB: {
-			sites: {
-				parseRestResponse: (data: unknown) => data,
-				findOneFix: (uuid: string) => ({ exec: () => mockFindOneFix(uuid) }),
-			},
-		},
+		user: mockUser,
+		userDB: mockUserDB,
 	}),
 }));
 jest.mock('../../../contexts/app-state/hydration-steps', () => ({
@@ -49,8 +47,10 @@ jest.mock('./use-api-discovery', () => ({
 jest.mock('./use-url-discovery', () => ({
 	useUrlDiscovery: () => ({ discoverWpApiUrl: mockDiscoverWpApiUrl }),
 }));
+jest.mock('expo-crypto', () => ({}));
 jest.mock('@wcpos/query/user-db', () => ({
-	upsertSiteData: jest.fn(async () => mockSavedSite),
+	...jest.requireActual('@wcpos/query/user-db'),
+	saveConnectedSite: jest.fn(async () => mockSavedSite),
 }));
 
 describe('normalizeSiteAddress', () => {
@@ -93,7 +93,7 @@ describe('connectionAddressOf', () => {
 describe('useSiteConnect', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockFindOneFix.mockResolvedValue(null);
+		jest.mocked(saveConnectedSite).mockResolvedValue(mockSavedSite as never);
 		mockRunConnectCompatibilityProbes.mockResolvedValue({
 			blocking: null,
 			warnings: [],
@@ -161,7 +161,7 @@ describe('useSiteConnect', () => {
 	});
 
 	it('refuses a saved identity at another address without writing site data', async () => {
-		mockFindOneFix.mockResolvedValue({ url: 'https://live.example.com', name: 'Live' });
+		jest.mocked(saveConnectedSite).mockRejectedValueOnce(new SiteIdentityClashError('Live'));
 		mockDiscoverApiEndpoints.mockResolvedValueOnce({
 			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
 			siteData: { uuid: 'site-uuid', url: 'https://staging.example.com', wcpos_version: '2.0.0' },
@@ -173,22 +173,21 @@ describe('useSiteConnect', () => {
 			expect(await result.current.onConnect('https://staging.example.com')).toBeNull();
 		});
 
-		expect(mockFindOneFix).toHaveBeenCalledWith('site-uuid');
+		expect(saveConnectedSite).toHaveBeenCalledWith(
+			mockUserDB,
+			mockUser,
+			expect.objectContaining({ uuid: 'site-uuid' }),
+			'https://staging.example.com/wp-json/wcpos/v2/'
+		);
 		expect(result.current.errorCode).toBe('AUTH341');
 		expect(result.current.error).toContain('Live');
 		expect(result.current.status).toBe('error');
-		expect(upsertSiteData).not.toHaveBeenCalled();
-		expect(mockUserLatest.incrementalUpdate).not.toHaveBeenCalled();
 	});
 
 	it('refuses a raw copy that still reports the saved store as its home but was reached at another address', async () => {
 		// A database copy without a search-replace: the REST index reports the
 		// live store's url and uuid, only the address the connect reached differs.
-		mockFindOneFix.mockResolvedValue({
-			url: 'https://example.com',
-			wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
-			name: 'Live',
-		});
+		jest.mocked(saveConnectedSite).mockRejectedValueOnce(new SiteIdentityClashError('Live'));
 		mockDiscoverApiEndpoints.mockResolvedValueOnce({
 			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
 			siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '2.0.0' },
@@ -201,15 +200,9 @@ describe('useSiteConnect', () => {
 		});
 
 		expect(result.current.errorCode).toBe('AUTH341');
-		expect(upsertSiteData).not.toHaveBeenCalled();
 	});
 
 	it('keeps merging a saved identity at the same address despite scheme, host case and permalink style', async () => {
-		mockFindOneFix.mockResolvedValue({
-			url: 'http://Example.com/',
-			wcpos_api_url: 'http://Example.com/?rest_route=/wcpos/v2/',
-			name: 'Live',
-		});
 		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
 		const { result } = renderHook(() => useSiteConnect());
 
@@ -217,9 +210,11 @@ describe('useSiteConnect', () => {
 			expect(await result.current.onConnect('https://example.com')).toBe(mockSavedSite);
 		});
 
-		expect(upsertSiteData).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({ uuid: 'site-uuid', url: 'https://example.com' })
+		expect(saveConnectedSite).toHaveBeenCalledWith(
+			mockUserDB,
+			mockUser,
+			expect.objectContaining({ uuid: 'site-uuid', url: 'https://example.com' }),
+			'https://example.com/wp-json/wcpos/v2/'
 		);
 		expect(result.current.error).toBeNull();
 		expect(result.current.errorCode).toBeNull();
@@ -252,9 +247,11 @@ describe('useSiteConnect', () => {
 			});
 			expect(result.current.error).toBeNull();
 			expect(result.current.status).toBe('success');
-			expect(upsertSiteData).toHaveBeenCalledWith(
-				expect.anything(),
-				expect.objectContaining({ use_cache_buster: useCacheBuster })
+			expect(saveConnectedSite).toHaveBeenCalledWith(
+				mockUserDB,
+				mockUser,
+				expect.objectContaining({ use_cache_buster: useCacheBuster }),
+				'https://example.com/wp-json/wcpos/v2/'
 			);
 			expect(result.current.errorCode).toBeNull();
 		}

@@ -1,6 +1,10 @@
-import type { SiteCollection, SiteDocument, UserDatabase } from '@wcpos/database';
+import type { SiteCollection, SiteDocument, UserDatabase, UserDocument } from '@wcpos/database';
+import { asciiHost } from '@wcpos/utils/ascii-host';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
+
+import type { ReadonlySiteRecord, ReadonlyUserRecord } from './records';
 
 /**
  * Fields on the site document that are owned by the local app, never by the server.
@@ -157,4 +161,84 @@ export async function linkCredentialsToSite(
 	});
 
 	return appended;
+}
+
+/**
+ * The address as an identity: scheme dropped, host lower-cased, trailing
+ * slash dropped, port and path kept, so `example.com/staging` is another
+ * site and `https://Example.com/` is `example.com`. A missing address
+ * compares as empty rather than throwing inside the save.
+ * A non-ASCII host compares in its punycode form, so `münchen-laden.de`
+ * and `xn--mnchen-laden-dlb.de` are the same site.
+ */
+export function normalizeSiteAddress(url: string | undefined): string {
+	return (url ?? '')
+		.replace(/^https?:\/\//i, '')
+		.replace(/^[^/]+/, (segment) =>
+			segment.replace(/^[^?#\\]+/, (host) => asciiHost(host)).toLowerCase()
+		)
+		.replace(/\/$/, '');
+}
+
+/**
+ * The address a connect actually reached, from its discovered API URL: the
+ * normalised site address with the REST suffix (`/wp-json/...` or
+ * `?rest_route=...`) cut off, so a permalink-style change is not a move but
+ * a different host or site path is.
+ */
+export function connectionAddressOf(apiUrl: string | undefined): string {
+	return normalizeSiteAddress((apiUrl ?? '').replace(/(\/wp-json\b.*|\/?\?rest_route=.*)$/i, ''));
+}
+
+export class SiteIdentityClashError extends Error {
+	constructor(public readonly existingName: string | undefined) {
+		super('Site identity already belongs to another address');
+		this.name = 'SiteIdentityClashError';
+	}
+}
+
+export async function saveConnectedSite(
+	userDB: UserDatabase | null | undefined,
+	user: ReadonlyUserRecord | UserDocument,
+	siteData: { uuid: string; url: string; name?: string },
+	connectionAddress: string | undefined
+): Promise<ReadonlySiteRecord> {
+	if (!userDB) throw new UserDatabaseUnavailableError();
+	if (!siteData.uuid) throw new Error('Cannot save site data without a uuid');
+	const parsedData = userDB.sites.parseRestResponse(siteData);
+	const existingSite: SiteDocument | null = await userDB.sites.findOneFix(siteData.uuid).exec();
+	if (
+		existingSite &&
+		(normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url) ||
+			connectionAddressOf(existingSite.wcpos_api_url) !== connectionAddressOf(connectionAddress))
+	)
+		throw new SiteIdentityClashError(existingSite.name);
+	const siteDoc = await upsertSiteData(userDB, parsedData);
+	// Read-only records are the original RxDB instances; mutation is confined to commands.
+	const mutableUser = user as UserDocument;
+	const currentSites: string[] = mutableUser.getLatest().sites ?? [];
+	const siteLogger = getLogger(['wcpos', 'auth', 'site']);
+	if (!currentSites.includes(siteData.uuid)) {
+		await mutableUser.getLatest().incrementalUpdate({ $push: { sites: siteData.uuid } });
+		siteLogger.debug(
+			existingSite ? `Re-added site to user: ${siteData.name}` : `Added new site: ${siteData.name}`
+		);
+	}
+	if (existingSite) siteLogger.debug(`Updated site: ${siteData.name}`);
+	// Preserve the RxDB instance; typed populateResource makes the two faces invariant.
+	return siteDoc.getLatest() as unknown as ReadonlySiteRecord;
+}
+
+export async function removeSite(
+	user: ReadonlyUserRecord | UserDocument,
+	siteUuid: string | undefined
+): Promise<void> {
+	if (!siteUuid) throw new Error('Cannot remove site without a uuid');
+	// Read-only records retain their RxDB identity; only this command opens the write door.
+	const mutableUser = user as UserDocument;
+	const site = await mutableUser.collection.database.sites.findOne(siteUuid).exec();
+	if (!site) throw new Error('Cannot remove missing site');
+	const latest = site.getLatest();
+	await latest.remove();
+	await mutableUser.incrementalUpdate({ $pullAll: { sites: [latest.uuid] } });
 }

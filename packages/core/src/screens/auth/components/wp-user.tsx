@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { removeCredentials } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -126,12 +127,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 	}, [response, handleLoginSuccess, site.name, wpUser.id, t]);
 
 	const handleRemoveWpUser = React.useCallback(async () => {
-		await wpUser.incrementalRemove();
-		await site.getLatest().incrementalUpdate({
-			$pullAll: {
-				wp_credentials: [wpUser.uuid],
-			},
-		});
+		await removeCredentials(site, wpUser.uuid);
 	}, [wpUser, site]);
 
 	const trailing = showReauth ? (

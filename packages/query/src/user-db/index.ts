@@ -1,3 +1,4 @@
+export * from './credentials';
 export * from './sites';
 export * from './stores';
 export {

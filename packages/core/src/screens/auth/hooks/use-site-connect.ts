@@ -3,7 +3,11 @@ import * as React from 'react';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
-import { upsertSiteData } from '@wcpos/query/user-db';
+import {
+	type ReadonlySiteRecord,
+	saveConnectedSite,
+	SiteIdentityClashError,
+} from '@wcpos/query/user-db';
 
 import { useAppState } from '../../../contexts/app-state';
 import {
@@ -11,40 +15,10 @@ import {
 	testAuthorizationMethod,
 } from '../../../contexts/app-state/hydration-steps';
 import { useT } from '../../../contexts/translations';
-import { asciiHost } from '../../../lib/url';
 import { useApiDiscovery } from './use-api-discovery';
 import { useUrlDiscovery } from './use-url-discovery';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
-
-/**
- * The address as an identity: scheme dropped, host lower-cased, trailing
- * slash dropped, port and path kept, so `example.com/staging` is another
- * site and `https://Example.com/` is `example.com`. A missing address
- * compares as empty rather than throwing inside the save.
- * A non-ASCII host compares in its punycode form, so `münchen-laden.de`
- * and `xn--mnchen-laden-dlb.de` are the same site.
- */
-export function normalizeSiteAddress(url: string | undefined): string {
-	return (url ?? '')
-		.replace(/^https?:\/\//i, '')
-		.replace(/^[^/]+/, (segment) =>
-			segment.replace(/^[^?#\\]+/, (host) => asciiHost(host)).toLowerCase()
-		)
-		.replace(/\/$/, '');
-}
-
-/**
- * The address a connect actually reached, from its discovered API URL: the
- * normalised site address with the REST suffix (`/wp-json/...` or
- * `?rest_route=...`) cut off, so a permalink-style change is not a move but
- * a different host or site path is.
- */
-export function connectionAddressOf(apiUrl: string | undefined): string {
-	return normalizeSiteAddress((apiUrl ?? '').replace(/(\/wp-json\b.*|\/?\?rest_route=.*)$/i, ''));
-}
-
-type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
 	uuid: string;
@@ -109,7 +83,7 @@ interface UseSiteConnectReturn {
 	error: string | null;
 	errorCode: ErrorCode | null;
 	loading: boolean;
-	onConnect: (url: string) => Promise<SiteDocument | null>;
+	onConnect: (url: string) => Promise<ReadonlySiteRecord | null>;
 	reset: () => void;
 }
 
@@ -161,7 +135,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 			endpoints: any,
 			authResult: any,
 			useCacheBuster: boolean
-		): Promise<SiteDocument | null> => {
+		): Promise<ReadonlySiteRecord | null> => {
 			try {
 				// Combine all the data into the extended site data format
 				const extendedSiteData: ExtendedSiteData = {
@@ -174,61 +148,15 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					use_instance_header: authResult.useInstanceHeader,
 				};
 
-				// Parse and validate the data using the database schema
-				const parsedData = (userDB.sites as any).parseRestResponse(extendedSiteData);
-
-				// Check if site already exists
-				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
-				// Two addresses are compared: the one the store reports as its home
-				// (a clone whose URLs were search-replaced reports its own) and the
-				// one this connect actually reached (a raw database copy still
-				// reports the live store's home, and only the address differs).
-				if (
-					existingSite &&
-					(normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url) ||
-						connectionAddressOf(existingSite.wcpos_api_url) !==
-							connectionAddressOf(endpoints.wcpos_api_url))
-				) {
+				return await saveConnectedSite(userDB, user, extendedSiteData, endpoints.wcpos_api_url);
+			} catch (err: unknown) {
+				if (err instanceof SiteIdentityClashError) {
 					throw Object.assign(
-						new Error(t('auth.site_identity_clash', { name: existingSite.name })),
+						new Error(t('auth.site_identity_clash', { name: err.existingName })),
 						{
 							errorCode: ERROR_CODES.SITE_IDENTITY_CLASH,
 						}
 					);
-				}
-
-				/**
-				 * Merge the discovered details into the site document.
-				 *
-				 * This must not be a full-document write: `parsedData` carries the schema
-				 * default for every property the REST index does not return, including the
-				 * locally-owned `wp_credentials` link array. Writing that back erased any
-				 * credential linked while discovery was still in flight (#902).
-				 */
-				const siteDoc = await upsertSiteData(userDB, parsedData);
-
-				// Ensure site is in user's sites array (may be missing if new or previously removed)
-				const currentSites: string[] = user.getLatest().sites ?? [];
-				if (!currentSites.includes(siteData.uuid)) {
-					await user.getLatest().incrementalUpdate({ $push: { sites: siteData.uuid } });
-					siteLogger.debug(
-						existingSite
-							? `Re-added site to user: ${siteData.name}`
-							: `Added new site: ${siteData.name}`
-					);
-				}
-
-				if (existingSite) {
-					siteLogger.debug(`Updated site: ${siteData.name}`);
-				}
-
-				return siteDoc.getLatest();
-			} catch (err: unknown) {
-				if (
-					err instanceof Error &&
-					(err as Error & { errorCode?: ErrorCode }).errorCode === ERROR_CODES.SITE_IDENTITY_CLASH
-				) {
-					throw err;
 				}
 				// Determine error type and code
 				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
@@ -271,7 +199,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 	 * Main connection function
 	 */
 	const onConnect = React.useCallback(
-		async (url: string): Promise<SiteDocument | null> => {
+		async (url: string): Promise<ReadonlySiteRecord | null> => {
 			setErrorCode(null);
 			if (!url || url.trim() === '') {
 				const errorMsg = t('auth.url_is_required');

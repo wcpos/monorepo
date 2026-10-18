@@ -20,6 +20,13 @@ import {
 	stripLocalOnlySiteFields,
 	upsertSiteData,
 } from '../../src/user-db/sites';
+import {
+	removeCredentials,
+	removeSite,
+	saveConnectedSite,
+	saveLoginCredentials,
+	SiteIdentityClashError,
+} from '../../src/user-db';
 
 jest.mock('uuid', () => ({
 	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,
@@ -376,4 +383,103 @@ it('rejects an absent user database', async () => {
 	await expect(upsertSiteData(undefined, restResponse())).rejects.toMatchObject({
 		name: 'UserDatabaseUnavailableError',
 	});
+});
+
+describe('auth write commands', () => {
+	const params = {
+		uuid: 'cred-auth',
+		id: '7',
+		display_name: 'Cashier',
+		access_token: 'token',
+		refresh_token: 'refresh',
+		expires_at: 123,
+		token_type: 'Bearer',
+	};
+	const createUser = () => db.users.insert({ uuid: 'global-user', sites: [] });
+
+	it('creates sanitized credentials and links once; re-auth patches tokens without losing stores', async () => {
+		const site = await upsertSiteData(db, restResponse());
+		const created = await saveLoginCredentials(db, SITE_UUID, params);
+		expect(created).toMatchObject({ created: true, linked: true });
+		expect(created.credentials.toJSON()).not.toHaveProperty('token_type');
+		await db.wp_credentials
+			.findOne(params.uuid)
+			.exec()
+			.then((doc) => doc!.incrementalPatch({ stores: ['saved-store'] }));
+		const patched = await saveLoginCredentials(db, SITE_UUID, {
+			...params,
+			access_token: 'new-token',
+		});
+		expect(patched).toMatchObject({ created: false, linked: false });
+		expect(patched.credentials.access_token).toBe('new-token');
+		expect(patched.credentials.stores).toEqual(['saved-store']);
+		expect(site.getLatest().wp_credentials).toEqual(['cred-auth']);
+	});
+
+	it('connects and merges the same identity without erasing credential links or duplicating the user link', async () => {
+		const user = await createUser();
+		const site = await saveConnectedSite(
+			db,
+			user,
+			restResponse(),
+			'https://example.test/wp-json/wcpos/v2/'
+		);
+		await linkCredentialsToSite((await sites().findOne(SITE_UUID).exec())!, 'cred-auth');
+		await saveConnectedSite(
+			db,
+			user,
+			restResponse({ name: 'Renamed', url: 'http://Example.test/' }),
+			'http://Example.test/?rest_route=/wcpos/v2/'
+		);
+		expect(site.getLatest().name).toBe('Renamed');
+		expect(site.getLatest().wp_credentials).toEqual(['cred-auth']);
+		expect(user.getLatest().sites).toEqual([SITE_UUID]);
+	});
+
+	it.each(['home', 'reached'])(
+		'refuses a cloned %s address before writing or linking',
+		async (address) => {
+			await upsertSiteData(db, restResponse());
+			const user = await createUser();
+			const data = restResponse(address === 'home' ? { url: 'https://clone.test' } : {});
+			const reached = address === 'reached' ? 'https://clone.test/wp-json/' : data.wcpos_api_url;
+			const saving = saveConnectedSite(db, user, data, reached);
+			await expect(saving).rejects.toBeInstanceOf(SiteIdentityClashError);
+			await expect(saving).rejects.toMatchObject({ existingName: 'Pro WCPOS' });
+			expect((await sites().findOne(SITE_UUID).exec())!.url).toBe('https://example.test');
+			expect(user.getLatest().sites).toEqual([]);
+		}
+	);
+
+	it('removes a site then unlinks it from the user', async () => {
+		const user = await createUser();
+		await saveConnectedSite(db, user, restResponse(), restResponse().wcpos_api_url);
+		await removeSite(user, SITE_UUID);
+		expect(await sites().findOne(SITE_UUID).exec()).toBeNull();
+		expect(user.getLatest().sites).toEqual([]);
+	});
+
+	it('removes credentials then unlinks them from the latest site', async () => {
+		const site = await upsertSiteData(db, restResponse());
+		await saveLoginCredentials(db, SITE_UUID, params);
+		await removeCredentials(site, params.uuid);
+		expect(await db.wp_credentials.findOne(params.uuid).exec()).toBeNull();
+		expect(site.getLatest().wp_credentials).toEqual([]);
+	});
+
+	it.each(['', undefined])(
+		'rejects empty/missing ids without changing existing auth records (%s)',
+		async (id) => {
+			const user = await createUser();
+			const site = await upsertSiteData(db, restResponse());
+			await saveLoginCredentials(db, SITE_UUID, params);
+			await expect(saveLoginCredentials(db, id!, params)).rejects.toThrow();
+			await expect(saveLoginCredentials(db, SITE_UUID, { ...params, uuid: id! })).rejects.toThrow();
+			await expect(saveConnectedSite(db, user, restResponse({ uuid: id }), '')).rejects.toThrow();
+			await expect(removeSite(user, id!)).rejects.toThrow();
+			await expect(removeCredentials(site, id!)).rejects.toThrow();
+			expect(site.getLatest().deleted).toBe(false);
+			expect((await db.wp_credentials.findOne(params.uuid).exec())!.deleted).toBe(false);
+		}
+	);
 });
