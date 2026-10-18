@@ -14,7 +14,14 @@ import { Hero } from './hero';
 import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
 
-export function Reports({ title }: { title: React.ReactNode }) {
+export function Reports({
+	title,
+	header,
+}: {
+	title: React.ReactNode;
+	/** The till strip: the page's first row, scrolling with it (owner, 2026-10-18). */
+	header?: React.ReactNode;
+}) {
 	const { bottom } = useSafeAreaInsets();
 	const { detail } = useReportsScope(),
 		{ screenSize } = useTheme();
@@ -42,7 +49,9 @@ export function Reports({ title }: { title: React.ReactNode }) {
 					{phonePanel ? (
 						<DetailPanel key={detail} />
 					) : (
-						<ScrollView className="flex-1" contentContainerClassName="gap-3 px-2">
+						// The page gutter (16) around and between the strip, the hero and the cards.
+						<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+							{header}
 							<Hero title={title} />
 							<PeriodSection />
 						</ScrollView>

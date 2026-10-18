@@ -190,10 +190,12 @@ jest.mock('./context', () => ({
 	},
 }));
 jest.mock('./reports', () => ({
-	Reports: ({ title }: { title: React.ReactNode }) => {
+	// `header` is the till strip, the page's first row since 2026-10-18.
+	Reports: ({ title, header }: { title: React.ReactNode; header?: React.ReactNode }) => {
 		const actions = jest.requireActual('../../../query').useQueryStateActions();
 		return (
 			<>
+				{header}
 				{title}
 				<button
 					data-testid="legacy-register"
