@@ -10,8 +10,8 @@
  * it. Disarming only after the re-mint means a failed re-mint is retried on the next
  * load instead of leaving the clone armed with nothing.
  *
- * Web only, like the clear-local-data flag: native installs cannot be cloned this way
- * and have no localStorage, so the read is a no-op there.
+ * Read wherever `localStorage` exists (web, Electron's renderer); native has none and
+ * cannot be cloned this way, so the read is a no-op there. Nothing in the app arms it.
  */
 export const NEW_TILL_ON_NEXT_LOAD_KEY = 'wcpos.newTillOnNextLoad';
 

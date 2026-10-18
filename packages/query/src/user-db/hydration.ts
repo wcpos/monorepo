@@ -38,7 +38,8 @@ export async function openUserDatabase(): Promise<{
 
 	await ensureRegister(userDB);
 	// A restored copy of another installation's database is a cloned till; the copy
-	// becomes its own till before anything sells (see new-till-flag.ts).
+	// becomes its own till before anything sells (see new-till-flag.ts). One page per
+	// context boots armed; two tabs booting armed at once would each re-mint.
 	if (newTillOnNextLoadArmed()) {
 		await remintRegister(userDB);
 		disarmNewTillOnNextLoad();

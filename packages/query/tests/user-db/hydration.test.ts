@@ -383,6 +383,72 @@ describe('openUserDatabase', () => {
 		jest.mocked(createUserDB).mockResolvedValueOnce(undefined);
 		await expect(openUserDatabase()).rejects.toThrow('Failed to create user database');
 	});
+
+	// The re-mint is the one hydration step a real merchant must never hit: it runs
+	// only behind the new-till flag, and the flag is disarmed after it succeeds.
+	describe('the new-till flag', () => {
+		const NEW_TILL_ON_NEXT_LOAD_KEY = 'wcpos.newTillOnNextLoad';
+		const openWithRegister = async () => {
+			const data = {
+				id: 'register-1',
+				name: 'Register 0001',
+				sites: { site: { sale_counter: 3 } },
+			};
+			const doc = {
+				toJSON: () => ({ data }),
+				incrementalModify: jest.fn(async (modify: (current: typeof data) => typeof data) => ({
+					toJSON: () => ({ data: modify(data) }),
+				})),
+			};
+			const userDB = {
+				addState: jest.fn(async () => ({ get: jest.fn() })),
+				users: { findOne: () => ({ exec: async () => ({ uuid: 'global-user' }) }) },
+				getLocal: async () => doc,
+			};
+			jest.mocked(createUserDB).mockResolvedValueOnce(userDB as never);
+			await openUserDatabase();
+			return doc;
+		};
+		afterEach(() => {
+			localStorage.removeItem(NEW_TILL_ON_NEXT_LOAD_KEY);
+		});
+
+		it('leaves the register document alone when it is not armed', async () => {
+			const doc = await openWithRegister();
+			expect(doc.incrementalModify).not.toHaveBeenCalled();
+		});
+
+		it('re-mints the till once when armed, then disarms', async () => {
+			localStorage.setItem(NEW_TILL_ON_NEXT_LOAD_KEY, '1');
+			const doc = await openWithRegister();
+			expect(doc.incrementalModify).toHaveBeenCalledTimes(1);
+			const reminted = doc.incrementalModify.mock.calls[0][0]({
+				id: 'register-1',
+				name: 'Register 0001',
+				sites: { site: { sale_counter: 3 } },
+			});
+			expect(reminted.id).not.toBe('register-1');
+			expect(reminted.sites.site.sale_counter).toBe(0);
+			expect(localStorage.getItem(NEW_TILL_ON_NEXT_LOAD_KEY)).toBeNull();
+		});
+
+		it('stays armed when the re-mint fails, so the next load retries', async () => {
+			localStorage.setItem(NEW_TILL_ON_NEXT_LOAD_KEY, '1');
+			const userDB = {
+				addState: jest.fn(async () => ({ get: jest.fn() })),
+				users: { findOne: () => ({ exec: async () => ({ uuid: 'global-user' }) }) },
+				getLocal: async () => ({
+					toJSON: () => ({ data: { id: 'register-1', sites: {} } }),
+					incrementalModify: async () => {
+						throw new Error('storage closed');
+					},
+				}),
+			};
+			jest.mocked(createUserDB).mockResolvedValueOnce(userDB as never);
+			await expect(openUserDatabase()).rejects.toThrow('storage closed');
+			expect(localStorage.getItem(NEW_TILL_ON_NEXT_LOAD_KEY)).toBe('1');
+		});
+	});
 });
 
 describe('site transport storage', () => {
