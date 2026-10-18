@@ -2,14 +2,17 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { ErrorBoundary } from 'react-error-boundary';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 
 import { StoreSelect } from './store-select';
 import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 
-let mockStores = new BehaviorSubject<unknown[] | typeof PENDING_USER_DB_READ>([]);
+let mockStores: Subject<unknown[] | typeof PENDING_USER_DB_READ> = new BehaviorSubject<
+	unknown[] | typeof PENDING_USER_DB_READ
+>([]);
 jest.mock('@wcpos/query/user-db', () => ({
 	PENDING_USER_DB_READ: Symbol('pending'),
 	observeCredentialStores: () => mockStores,
@@ -154,4 +157,83 @@ it('suspends on mount and a credentials switch until each store read answers', a
 	expect(screen.getByRole('radiogroup').textContent).toContain('Store 2');
 	expect(screen.queryByText('Store 1')).toBeNull();
 	expect(screen.queryByText('Loading stores')).toBeNull();
+});
+
+it('never commits the previous cashier stores or enabled Open POS after switching', async () => {
+	mockStores.next([a]);
+	const commits: { rows: string[]; disabled: boolean | undefined }[] = [];
+	const picker = (user: typeof wpUser) => (
+		<React.Profiler
+			id="picker"
+			onRender={() => {
+				commits.push({
+					rows: screen.queryAllByTestId(/^store-option-/).map((row) => row.textContent ?? ''),
+					disabled: screen.queryByTestId<HTMLButtonElement>('open-pos-button')?.disabled,
+				});
+			}}
+		>
+			<React.Suspense fallback="Loading stores">
+				<StoreSelect
+					site={site}
+					wpUser={user}
+					selectedStoreId={null}
+					onStoreSelect={jest.fn()}
+					onLogin={onLogin}
+				/>
+			</React.Suspense>
+		</React.Profiler>
+	);
+	const view = render(picker(wpUser));
+	expect(screen.getByTestId<HTMLButtonElement>('open-pos-button').disabled).toBe(false);
+	mockStores = new Subject();
+	view.rerender(picker({ ...wpUser, uuid: 'next-cashier' }));
+	expect(screen.getByText('Loading stores')).toBeTruthy();
+	commits.length = 0;
+	await act(async () => {
+		mockStores.next([b, { id: 3, localID: 'c', name: 'Store 3' }]);
+	});
+	// Profiler runs at commit, before the hook's passive subscription can repair stale state.
+	expect(commits.length).toBeGreaterThan(0);
+	for (const commit of commits) {
+		expect(commit.rows).toEqual(['Store 2', 'Store 3']);
+		expect(commit.disabled).toBe(true);
+	}
+	expect(screen.getByRole('radiogroup').getAttribute('data-value')).toBe('');
+});
+
+it('rebuilds an errored resource when the picker error boundary is reset', async () => {
+	mockStores = new Subject();
+	render(
+		<ErrorBoundary
+			fallbackRender={({ resetErrorBoundary }) => (
+				<button onClick={resetErrorBoundary}>Dismiss error</button>
+			)}
+		>
+			<React.Suspense fallback="Loading stores">
+				<StoreSelect
+					site={site}
+					wpUser={wpUser}
+					selectedStoreId={null}
+					onStoreSelect={jest.fn()}
+					onLogin={onLogin}
+				/>
+			</React.Suspense>
+		</ErrorBoundary>,
+		{ onCaughtError: () => {} }
+	);
+	await act(async () => {
+		mockStores.error(new Error('transient storage failure'));
+	});
+	expect(screen.getByText('Dismiss error')).toBeTruthy();
+	mockStores = new Subject();
+	fireEvent.click(screen.getByText('Dismiss error'));
+	expect(screen.getByText('Loading stores')).toBeTruthy();
+	await act(async () => {
+		mockStores.next([b]);
+	});
+	expect(screen.queryByText('Dismiss error')).toBeNull();
+	expect(screen.getByTestId('store-option-2').textContent).toBe('Store 2');
+	expect(screen.getByTestId<HTMLButtonElement>('open-pos-button').disabled).toBe(false);
+	fireEvent.click(screen.getByTestId('open-pos-button'));
+	expect(onLogin).toHaveBeenLastCalledWith('b');
 });
