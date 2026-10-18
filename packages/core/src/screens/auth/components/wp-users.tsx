@@ -56,21 +56,30 @@ export function WPUsers({ site }: WpUsersProps) {
 				</Text>
 
 				<VStack space="sm">
-					{wpCreds.map((wpCred) => (
-						<ErrorBoundary key={wpCred.uuid}>
-							<Suspense>
-								<WpUser
-									wpUser={wpCred}
-									site={site}
-									isSelected={selectedUserUuid === wpCred.uuid}
-									onSelect={() => {
-										setSelectedUserUuid(wpCred.uuid ?? null);
-										setSelectedStoreId(null);
-									}}
-								/>
-							</Suspense>
-						</ErrorBoundary>
-					))}
+					{/* The rows are radios; the group holds only them, so Add user stays outside it. */}
+					{wpCreds.length > 0 && (
+						<VStack
+							space="sm"
+							role="radiogroup"
+							aria-label={t('auth.wordpress_users_heading', { _tags: 'core' })}
+						>
+							{wpCreds.map((wpCred) => (
+								<ErrorBoundary key={wpCred.uuid}>
+									<Suspense>
+										<WpUser
+											wpUser={wpCred}
+											site={site}
+											isSelected={selectedUserUuid === wpCred.uuid}
+											onSelect={() => {
+												setSelectedUserUuid(wpCred.uuid ?? null);
+												setSelectedStoreId(null);
+											}}
+										/>
+									</Suspense>
+								</ErrorBoundary>
+							))}
+						</VStack>
+					)}
 					<AddUserButton site={site} hasExistingUsers={wpCreds.length > 0} />
 				</VStack>
 			</VStack>

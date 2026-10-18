@@ -139,11 +139,14 @@ export function Avatar({
 	shape,
 	variant,
 	className,
+	onLoad,
+	onError,
 	...imageProps
 }: AvatarProps) {
 	const resolvedSource = resolveSource(source);
 	const [errored, setErrored] = React.useState(false);
-	// Reset error state if the source changes (e.g. site URL edited) by adjusting
+	const [loaded, setLoaded] = React.useState(false);
+	// Reset error and load state if the source changes (e.g. site URL edited) by adjusting
 	// state during render instead of in an effect — React's recommended pattern for
 	// resetting state when a prop changes (https://react.dev/learn/you-might-not-need-an-effect).
 	const sourceKey = getSourceKey(resolvedSource);
@@ -151,6 +154,7 @@ export function Avatar({
 	if (sourceKey !== prevSourceKey) {
 		setPrevSourceKey(sourceKey);
 		setErrored(false);
+		setLoaded(false);
 	}
 
 	const hasSource = Boolean(resolvedSource);
@@ -163,44 +167,49 @@ export function Avatar({
 		className
 	);
 
-	if (showImage) {
-		return (
-			<View className={containerClass}>
-				<Image
-					source={resolvedSource}
-					onError={() => setErrored(true)}
-					contentFit="cover"
-					className={cn(
-						'h-full w-full',
-						(shape ?? 'circle') === 'circle' ? 'rounded-full' : 'rounded-lg'
-					)}
-					{...imageProps}
-				/>
-			</View>
-		);
-	}
-
 	const initials = (fallback ?? '').slice(0, 2).toUpperCase();
+	const fallbackContent = icon ? (
+		<Icon
+			name={icon}
+			size={iconSizeVariants[resolvedSize]}
+			className={fallbackTextVariants[resolvedVariant]}
+		/>
+	) : initials ? (
+		<Text
+			className={cn(
+				'font-semibold',
+				fallbackTextSizeVariants[resolvedSize],
+				fallbackTextVariants[resolvedVariant]
+			)}
+		>
+			{initials}
+		</Text>
+	) : null;
 
 	return (
 		<View className={containerClass}>
-			{icon ? (
-				<Icon
-					name={icon}
-					size={iconSizeVariants[resolvedSize]}
-					className={fallbackTextVariants[resolvedVariant]}
-				/>
-			) : initials ? (
-				<Text
+			{/* The initials stand until the picture has loaded: a person with no Gravatar waits for
+			    its 404, and an empty accent disc in the meantime reads as broken. */}
+			{!(showImage && loaded) && fallbackContent}
+			{showImage && (
+				<Image
+					{...imageProps}
+					source={resolvedSource}
+					onLoad={(event) => {
+						setLoaded(true);
+						onLoad?.(event);
+					}}
+					onError={(event) => {
+						setErrored(true);
+						onError?.(event);
+					}}
+					contentFit="cover"
 					className={cn(
-						'font-semibold',
-						fallbackTextSizeVariants[resolvedSize],
-						fallbackTextVariants[resolvedVariant]
+						'absolute inset-0 h-full w-full',
+						(shape ?? 'circle') === 'circle' ? 'rounded-full' : 'rounded-lg'
 					)}
-				>
-					{initials}
-				</Text>
-			) : null}
+				/>
+			)}
 		</View>
 	);
 }

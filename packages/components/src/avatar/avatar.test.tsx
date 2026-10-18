@@ -17,8 +17,21 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 jest.mock('../image', () => ({
-	Image: ({ onError, source }: { onError: () => void; source?: { uri?: string } | string }) => (
-		<img alt="Avatar" src={typeof source === 'string' ? source : source?.uri} onError={onError} />
+	Image: ({
+		onError,
+		onLoad,
+		source,
+	}: {
+		onError: () => void;
+		onLoad: () => void;
+		source?: { uri?: string } | string;
+	}) => (
+		<img
+			alt="Avatar"
+			src={typeof source === 'string' ? source : source?.uri}
+			onError={onError}
+			onLoad={onLoad}
+		/>
 	),
 }));
 jest.mock('../icon', () => ({
@@ -93,4 +106,14 @@ it('contains no arbitrary text sizes or palette greys', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	expect(source).not.toContain('text-[');
 	expect(source).not.toContain('gray');
+});
+
+it('keeps the initials under the picture until it has loaded', () => {
+	const { container } = render(
+		<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="AL" />
+	);
+	expect(container.querySelector('img')).not.toBeNull();
+	expect(container.textContent).toBe('AL');
+	fireEvent.load(container.querySelector('img')!);
+	expect(container.textContent).toBe('');
 });

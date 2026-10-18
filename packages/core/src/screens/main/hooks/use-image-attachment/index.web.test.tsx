@@ -231,6 +231,25 @@ describe('useImageAttachment (web)', () => {
 		jest.useRealTimers();
 	});
 
+	it('keeps a Gravatar 404 as a final "no picture", past the retry delay', async () => {
+		jest.useFakeTimers();
+		const url = 'https://secure.gravatar.com/avatar/no-picture?d=404';
+		mockGet.mockResolvedValue({ status: 404, statusText: 'Not Found', headers: {}, data: null });
+
+		const first = render(probeTree(makeDocument(), url));
+		expect(await screen.findByText('blank')).toBeTruthy();
+		first.unmount();
+
+		await act(async () => {
+			jest.advanceTimersByTime(ERROR_RETRY_DELAY_MS);
+		});
+		render(probeTree(makeDocument(), url));
+		expect(await screen.findByText('blank')).toBeTruthy();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet.mock.calls[0][1].validateStatus(404)).toBe(true);
+		jest.useRealTimers();
+	});
+
 	it('fetches when the Cache API is unavailable', async () => {
 		Object.defineProperty(globalThis, 'caches', { configurable: true, value: undefined });
 		mockGet.mockResolvedValue(makeImageResponse('uncached'));

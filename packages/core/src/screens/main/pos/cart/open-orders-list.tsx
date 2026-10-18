@@ -10,7 +10,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
-import { CustomerAvatar } from '../../components/user-avatar/customer-avatar';
+import { CustomerAvatar, GuestAvatar } from '../../components/user-avatar/customer-avatar';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
@@ -146,14 +146,20 @@ function OrderRow({
 			ref={focusCurrent}
 			onPress={onPress}
 			leading={
-				// The billing name only, as the row's title reads it: a nameless guest is "Guest".
-				<CustomerAvatar
-					customer={{
-						billing: { first_name: billing?.first_name, last_name: billing?.last_name },
-						id: payload.customer_id,
-					}}
-					size="md"
-				/>
+				// The avatar follows the row's title, which reads the billing name only: a row titled
+				// "Guest" (a guest, or a registered customer whose order carries no name) gets the
+				// Guest glyph, never another person's picture or initials beside that word.
+				name ? (
+					<CustomerAvatar
+						customer={{
+							billing: { first_name: billing?.first_name, last_name: billing?.last_name },
+							id: payload.customer_id,
+						}}
+						size="md"
+					/>
+				) : (
+					<GuestAvatar size="md" />
+				)
 			}
 			trailing={
 				<View className="items-end gap-0.5">

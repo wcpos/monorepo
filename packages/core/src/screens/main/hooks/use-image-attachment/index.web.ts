@@ -32,11 +32,15 @@ const emptyResource: ImageResource = new ObservableResource(of(EMPTY_STATE));
 
 export const ERROR_RETRY_DELAY_MS = 30_000;
 
+/**
+ * Resolves to the image, or to `null` for a Gravatar URL's 404: asked for `d=404`, Gravatar's
+ * 404 is the final answer "this person has no picture", not a failure to retry.
+ */
 async function fetchImageBlob(
 	_source: ImageAttachmentSource,
 	imageUrl: string,
 	get: HttpGet
-): Promise<Blob> {
+): Promise<Blob | null> {
 	let cache: Cache | undefined;
 	if (typeof caches !== 'undefined') {
 		try {
@@ -57,8 +61,8 @@ async function fetchImageBlob(
 	// status table has no meaning for it — a missing upload would otherwise be
 	// logged as AUTH311 "store route unavailable". The registered meaning of a
 	// failure here is PRODUCT201: the image is unavailable, the product still sells.
-	// A Gravatar URL asks for `d=404` (`withoutDefaultGravatar`), so its 404 is the answer "this
-	// person has no picture", not a failure: it resolves, and throws below without a log row.
+	// A Gravatar URL asks for `d=404` (`withoutDefaultGravatar`), so its 404 resolves (no
+	// failure log row) and is returned as "no picture" below.
 	const response = await get(imageUrl, {
 		responseType: 'arraybuffer',
 		wcposHeaders: false,
@@ -68,6 +72,10 @@ async function fetchImageBlob(
 			validateStatus: (status: number) => (status >= 200 && status < 300) || status === 404,
 		}),
 	});
+
+	if (response?.status === 404 && isGravatarUrl(imageUrl)) {
+		return null;
+	}
 
 	if (!response || response.status !== 200) {
 		throw new Error(`Failed to fetch image: ${response?.status} ${response?.statusText}`);
@@ -102,7 +110,10 @@ function getImageResource(
 	let resource = imageResourceCache.get(imageUrl);
 	if (!resource) {
 		const state$ = defer(() => fetchImageBlob(source, imageUrl, get)).pipe(
-			map((blob): ImageAttachmentState => ({ uri: URL.createObjectURL(blob), error: null })),
+			// "No picture" is kept like a success, for the session: never evicted, never refetched.
+			map((blob): ImageAttachmentState =>
+				blob ? { uri: URL.createObjectURL(blob), error: null } : EMPTY_STATE
+			),
 			catchError((err) => {
 				// Keep the errored resource cached: a Suspense retry re-renders with
 				// an uncommitted useMemo, so immediate eviction would refetch in a
