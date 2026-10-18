@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { scannerDeviceKey } from '@wcpos/scanner';
@@ -145,12 +145,19 @@ const keyboardProfile = {
 
 let mockProfiles: Record<string, unknown>[] = [keyboardProfile];
 const collection = {
-	find: () => ({ $: of(mockProfiles) }),
+	find: () => ({ $: of(mockProfiles.map((row) => ({ toJSON: () => row }))) }),
+	findOne: (deviceKey: string) => ({
+		exec: async () => {
+			const row = mockProfiles.find((profile) => profile.deviceKey === deviceKey);
+			return row ? { remove: mockRemove } : null;
+		},
+	}),
 	upsert: (...args: unknown[]) => mockUpsert(...args),
 };
 
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => ({ collection }),
+const mockStoreDB = { collections: { scanner_profiles: collection } };
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ storeDB: mockStoreDB }),
 }));
 const CANDIDATE = { deviceName: 'ACME Scanner', vendorId: 1234, productId: 5678 };
 // The capture flow deliberately replaces the list while it is running, so most
@@ -163,7 +170,7 @@ let mockRegistration: {
 jest.mock('../../hooks/barcodes/use-scanner-registration', () => ({
 	useScannerRegistration: () => ({
 		...mockRegistration,
-		save: mockSave,
+		register: mockSave,
 		stop: jest.fn(),
 		start: jest.fn(),
 		discard: jest.fn(),
@@ -418,7 +425,9 @@ describe('InputSources manual Bluetooth service UUID', () => {
 		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
 			target: { value: ' 49535343-FE7D-4AE5-8FA9-9FAFD205E455 ' },
 		});
-		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		});
 
 		await waitFor(() =>
 			expect(mockUpsert).toHaveBeenCalledWith({

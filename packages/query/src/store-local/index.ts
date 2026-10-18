@@ -28,3 +28,11 @@ export {
 	observeClockCheckRows,
 	readRecentErrorLogs,
 } from './logs';
+export {
+	observeScannerProfiles,
+	readScannerProfiles,
+	saveScannerProfile,
+	removeScannerProfile,
+	type ScannerProfile,
+	type ScannerConnectionType,
+} from './scanner-profiles';

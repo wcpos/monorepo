@@ -19,18 +19,23 @@ import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import type { ScannerProfileDocument } from '@wcpos/database';
+import {
+	observeScannerProfiles,
+	removeScannerProfile,
+	saveScannerProfile,
+	type ScannerProfile,
+} from '@wcpos/query/store-local';
 import { isCanonicalUuid, normalizeUuid, scannerDeviceKey } from '@wcpos/scanner';
 import { getErrorMessage } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/scan-hub-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
-import { useCollection } from '../../hooks/use-collection';
+import { useAppState } from '../../../../contexts/app-state';
 import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
-const NO_PROFILES: ScannerProfileDocument[] = [];
+const NO_PROFILES: ScannerProfile[] = [];
 const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 
 /**
@@ -49,7 +54,7 @@ type ScannerStatus =
 	'connected' | 'registered' | 'not_in_range' | 'not_plugged_in' | 'disconnected';
 
 export function scannerStatus(
-	connectionType: ScannerProfileDocument['connectionType'],
+	connectionType: ScannerProfile['connectionType'],
 	live: boolean
 ): ScannerStatus {
 	if (connectionType === 'keyboard') {
@@ -76,15 +81,15 @@ function ScannerProfileRow({
 	live,
 	onRemove,
 }: {
-	profile: ScannerProfileDocument;
+	profile: ScannerProfile;
 	live: boolean;
-	onRemove: (profile: ScannerProfileDocument) => void;
+	onRemove: (profile: ScannerProfile) => void;
 }) {
 	const t = useT();
 	const status = scannerStatus(profile.connectionType, live);
 
 	// Literal keys so the translations pipeline can find them.
-	const typeLabel: Record<ScannerProfileDocument['connectionType'], string> = {
+	const typeLabel: Record<ScannerProfile['connectionType'], string> = {
 		keyboard: t('settings.scanner_type_keyboard'),
 		'usb-serial': t('settings.scanner_type_usb_serial'),
 		'bluetooth-spp': t('settings.scanner_type_bluetooth_spp'),
@@ -163,11 +168,11 @@ function ScannerProfileRow({
  */
 export function InputSources() {
 	const t = useT();
-	const { collection } = useCollection('scanner_profiles');
+	const { storeDB } = useAppState();
 	const profiles = useObservableState(
-		React.useMemo(() => collection.find().$, [collection]),
+		React.useMemo(() => observeScannerProfiles(storeDB), [storeDB]),
 		NO_PROFILES
-	) as ScannerProfileDocument[];
+	);
 	const registration = useScannerRegistration();
 	const { serial, hid, ble } = useDeviceScanControls();
 	const [name, setName] = React.useState('');
@@ -197,7 +202,7 @@ export function InputSources() {
 
 	const handleSave = async () => {
 		try {
-			await registration.save(name);
+			await registration.register(name);
 			setName('');
 			Toast.show({ type: 'success', title: t('settings.scanner_registered'), duration: 2500 });
 		} catch (error) {
@@ -209,9 +214,9 @@ export function InputSources() {
 		}
 	};
 
-	const handleRemove = async (profile: ScannerProfileDocument) => {
+	const handleRemove = async (profile: ScannerProfile) => {
 		try {
-			await profile.getLatest().remove();
+			await removeScannerProfile(storeDB, profile.deviceKey);
 		} catch (error) {
 			Toast.show({
 				type: 'error',
@@ -244,7 +249,7 @@ export function InputSources() {
 			// Upsert on the canonical key: a second Add press while the first is in
 			// flight is now idempotent rather than a duplicate row, so this needs no
 			// in-flight guard.
-			await collection.upsert({
+			await saveScannerProfile(storeDB, {
 				deviceKey,
 				name: '',
 				connectionType: 'bluetooth-spp',

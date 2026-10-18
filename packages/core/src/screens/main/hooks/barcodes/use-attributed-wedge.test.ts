@@ -79,16 +79,15 @@ let mockProfiles: Record<string, unknown>[] = [profile];
 const mockCollection = {
 	find: (query?: { selector?: { connectionType?: string } }) => ({
 		$: of(
-			query?.selector?.connectionType
+			(query?.selector?.connectionType
 				? mockProfiles.filter((row) => row.connectionType === query.selector?.connectionType)
 				: mockProfiles
+			).map((row) => ({ toJSON: () => row }))
 		),
 	}),
 };
 
-jest.mock('../use-collection', () => ({
-	useCollection: () => ({ collection: mockCollection }),
-}));
+const mockStoreDB = { collections: { scanner_profiles: mockCollection } };
 
 const prefix$ = new BehaviorSubject('');
 const suffix$ = new BehaviorSubject('');
@@ -96,6 +95,7 @@ const minChars$ = new BehaviorSubject(8);
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
+		storeDB: mockStoreDB,
 		store: {
 			barcode_scanning_prefix$: prefix$,
 			barcode_scanning_suffix$: suffix$,

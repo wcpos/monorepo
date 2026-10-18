@@ -1475,10 +1475,23 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.count :: 1',
 	'screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.count :: 2',
 	"screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.find({ selector: { category: { $gte: domain, $lt: `${domain}/` }, operationType: { $eq: 'sync.record' }, }, sort: [{ timestamp: 'desc' }], limit: STUCK_OUTCOME_LIMIT, }) :: 1",
+	// ADR 0033 per-screen (g2): the barcode-scanning settings read scanner profiles through named reads and write them through commands.
+	"screens/main/hooks/barcodes/use-attributed-wedge.ts :: raw query construction :: useAttributedWedge :: collection.find({ selector: { connectionType: 'keyboard' } }) :: 1",
+	'screens/main/hooks/barcodes/use-attributed-wedge.ts :: record collection back-reference :: useAttributedWedge :: collection :: 1',
+	"screens/main/hooks/barcodes/use-attributed-wedge.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/hooks/barcodes/use-scanner-registration.ts :: record collection back-reference :: useScannerRegistration :: collection :: 1',
+	'screens/main/hooks/barcodes/use-scanner-registration.ts :: record mutator :: useScannerRegistration :: collection.upsert :: 1',
+	'screens/main/settings/barcode-scanning/input-sources.tsx :: raw query construction :: InputSources :: collection.find() :: 1',
+	'screens/main/settings/barcode-scanning/input-sources.tsx :: record collection back-reference :: InputSources :: collection :: 1',
+	'screens/main/settings/barcode-scanning/input-sources.tsx :: record mutator :: InputSources>handleAddServiceUuid :: collection.upsert :: 1',
+	'screens/main/settings/barcode-scanning/input-sources.tsx :: record mutator :: InputSources>handleRemove :: profile.getLatest().remove :: 1',
+	'screens/main/settings/barcode-scanning/input-sources.tsx :: record mutator :: InputSources>handleSave :: registration.save :: 1',
+	"screens/main/settings/barcode-scanning/input-sources.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/barcode-scanning/test-panel.tsx :: record mutator :: TestPanel :: suggestion.patch :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 539;
+export const SEAM_RETIRED_FLOOR = 551;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b3c4cbed33ffda95cad9c577a793414cca3aac78e23c88fea533dafc6f89cfc7';
+	'6b0a2d197ff070315e6171abf9dd86398c981e0979d499ca3b4d1ca8202ffcdf';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

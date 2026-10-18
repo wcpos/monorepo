@@ -20,6 +20,8 @@ const ALLOWED: Record<string, string> = {
 		'full document: both of the schema\u2019s two properties set',
 	'store-local/templates-sync.ts :: syncTemplates :: collection.bulkUpsert':
 		'full documents: each row is the server\u2019s complete template (parsed per row through parseRestResponse); templates have no local-only fields, and the closure prune removes rows the server no longer serves',
+	'store-local/scanner-profiles.ts :: saveScannerProfile :: scannerProfiles(storeDB).upsert':
+		'full document: the registering lane composes the whole profile (deviceKey, connectionType, identity, service uuids) and a re-registration replaces it on purpose',
 };
 
 function sourceFiles(directory: string): string[] {

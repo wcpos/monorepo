@@ -130,7 +130,7 @@ export function TestPanel() {
 
 	const applySuggestion = React.useCallback(
 		async (suggestion: TraceSuggestion) => {
-			await patchStoreSettings(store, suggestion.patch, t);
+			await patchStoreSettings(store, suggestion.settings, t);
 		},
 		[t, store]
 	);
