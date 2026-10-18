@@ -26,6 +26,11 @@ const Tabs = TabsPrimitive.Root;
 
 type TabsListProps = TabsPrimitive.ListProps & {
 	asSelect?: boolean;
+	/**
+	 * With `asSelect`, the phone Select's trigger testID (each option takes
+	 * `${testID}-option-${value}`); otherwise the list's.
+	 */
+	testID?: string;
 };
 
 type TabsTriggerProps = TabsPrimitive.TriggerProps & {
@@ -51,7 +56,12 @@ function getTabsSelectOptions(children: React.ReactNode) {
  * layout boundary (`useIsPhone`), not a CSS breakpoint, so a screen that also folds there never
  * gets its phone body under a desktop strip, and only one of the two is rendered.
  */
-function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListProps) {
+function TabsListAsSelect({
+	className,
+	children,
+	testID,
+	...props
+}: Omit<TabsListProps, 'asSelect'>) {
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
 	const options = React.useMemo(() => getTabsSelectOptions(children), [children]);
 	const isPhone = useIsPhone();
@@ -69,6 +79,7 @@ function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListP
 					}}
 					placeholder={options[0]?.label ?? ''}
 					triggerClassName="w-full"
+					triggerTestID={testID}
 					matchWidth
 				/>
 			</StyledView>
@@ -78,6 +89,7 @@ function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListP
 	return (
 		<TabsPrimitive.List
 			className={cn('border-border flex-row items-end gap-1 border-b', className)}
+			testID={testID}
 			{...props}
 		>
 			{children}

@@ -65,10 +65,10 @@ jest.mock('../text', () => ({
 }));
 
 jest.mock('../select', () => ({
-	OptionSelect: ({ onChange, options, placeholder, value }: any) => {
+	OptionSelect: ({ onChange, options, placeholder, value, triggerTestID }: any) => {
 		const selected = options.find((option: any) => option.value === value);
 		return (
-			<div data-testid="tabs-select">
+			<div data-testid="tabs-select" data-trigger-testid={triggerTestID}>
 				<button data-testid="tabs-select-trigger">{selected?.label ?? placeholder}</button>
 				{options.map((option: any) => (
 					<button
@@ -113,6 +113,24 @@ describe('TabsList', () => {
 
 		screen.getByTestId('tabs-select-clear').click();
 		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
+	it("hands the phone Select's trigger the list's testID", () => {
+		render(
+			<DeviceScope phone>
+				<Tabs value="general" onValueChange={jest.fn()}>
+					<TabsList asSelect testID="class-select">
+						<TabsTrigger value="general" label="General">
+							General
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
+			</DeviceScope>
+		);
+		expect(screen.getByTestId('tabs-select')).toHaveAttribute(
+			'data-trigger-testid',
+			'class-select'
+		);
 	});
 
 	it('renders only the plain list off a phone, with no breakpoint classes', () => {

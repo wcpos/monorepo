@@ -131,7 +131,9 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						{isPhone ? (
 							// A phone folds the strip into a Select; `label` is what its options read.
 							<View className="mx-4">
-								<TabsList asSelect>{triggers}</TabsList>
+								<TabsList asSelect testID="tax-rates-class-select">
+									{triggers}
+								</TabsList>
 							</View>
 						) : (
 							// Scroll arrows for a store with more classes than the panel is wide.
@@ -153,7 +155,7 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 					</Tabs>
 				</View>
 				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
-				<DialogFooter className="sm:items-center sm:justify-between">
+				<DialogFooter className="justify-between">
 					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 					<DialogClose>{t('common.close')}</DialogClose>
 				</DialogFooter>
