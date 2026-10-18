@@ -17,6 +17,14 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../contexts/translations', () => ({ useT: () => mockCreateTestT() }));
 jest.mock('../../../contexts/app-state', () => ({ useAppState: () => ({ login: jest.fn() }) }));
 jest.mock('@wcpos/query/user-db', () => ({ removeSite: jest.fn() }));
+// The lists read named reads through Suspense resources since ADR 0033 (e4); this test's fixtures
+// still describe each record's rows through `populateResource`, so the resources are mapped onto them.
+jest.mock('../../../hooks/user-db-list-resources', () => ({
+	siteListResource: (user: { populateResource: (key: string) => unknown }) =>
+		user.populateResource('sites'),
+	credentialsListResource: (site: { populateResource: (key: string) => unknown }) =>
+		site.populateResource('wp_credentials'),
+}));
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ compatibility: { wcposVersionPass: true } }),
 }));

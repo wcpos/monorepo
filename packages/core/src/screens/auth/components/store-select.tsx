@@ -30,7 +30,7 @@ type StoreResource = ObservableResource<
 	ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ,
 	ReadonlyStoreRecord[]
 >;
-const resourcesByCredentials = new WeakMap<WPCredentialsDocument, StoreResource>();
+const resourcesByCredentials = new WeakMap<ReadonlyWpCredentialsRecord, StoreResource>();
 
 /** `numeric` so "Store 2" precedes "Store 10"; `base` so case never decides order. */
 const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });

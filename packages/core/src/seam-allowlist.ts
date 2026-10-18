@@ -1237,3 +1237,6 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/hooks/use-store-label.ts :: storage import ::  :: from '@wcpos/database' :: 2",
 	"screens/main/pos/cart/register-panel.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
+export const SEAM_RETIRED_FLOOR = 316;
+export const SEAM_RETIRED_PREFIX_DIGEST =
+	'1960931220d8255101664ba147a0f00a93acab80154a455fbd9fea40890cd3d1';
