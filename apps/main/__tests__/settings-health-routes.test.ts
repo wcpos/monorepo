@@ -60,7 +60,13 @@ describe('settings and Store health route structure', () => {
 	});
 
 	it('renders the existing logs screen at the nested health route', () => {
-		expect(source(`${routeRoot}/health/logs.tsx`)).toContain('@wcpos/core/screens/main/logs');
+		// The route takes the screen from the lazy rest chunk, which re-exports the logs screen.
+		const route = source(`${routeRoot}/health/logs.tsx`);
+		expect(route).toContain("from '@wcpos/core/screens/main/rest/lazy'");
+		expect(route).toContain('m.LogsScreen');
+		expect(source('../../packages/core/src/screens/main/rest/index.tsx')).toContain(
+			"export { LogsScreen } from '../logs';"
+		);
 	});
 
 	it('gives every drawer route a stable navigation selector', () => {
