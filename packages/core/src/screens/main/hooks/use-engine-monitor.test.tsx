@@ -17,7 +17,7 @@ const mockCounts = new BehaviorSubject<EngineMutationCounts>({
 });
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockEngine }),
-	EMPTY_COLLECTION_COUNTS: { orders: 0 },
+	emptyCollectionCounts: () => ({ orders: 0 }),
 	observeCollectionCounts: () => mockCollections.asObservable(),
 	observeQueueCounts: () => mockCounts.asObservable(),
 }));

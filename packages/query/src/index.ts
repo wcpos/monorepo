@@ -126,6 +126,6 @@ export { observeDescribedQueueRows, type DescribedQueueRow } from './reads/descr
 
 export {
 	observeCollectionCounts,
-	EMPTY_COLLECTION_COUNTS,
+	emptyCollectionCounts,
 	type EngineCollectionCounts,
 } from './reads/collection-counts';

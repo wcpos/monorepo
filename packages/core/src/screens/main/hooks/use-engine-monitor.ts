@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import {
-	EMPTY_COLLECTION_COUNTS,
+	emptyCollectionCounts,
 	type EngineCollectionCounts,
 	type EngineMutationCounts,
 	observeCollectionCounts,
@@ -25,7 +25,7 @@ export function useEngineStatus(): EngineStatus {
 
 export function useCollectionCounts(): EngineCollectionCounts {
 	const { engine } = useQueryRuntime();
-	const [counts, setCounts] = React.useState<EngineCollectionCounts>(EMPTY_COLLECTION_COUNTS);
+	const [counts, setCounts] = React.useState<EngineCollectionCounts>(emptyCollectionCounts);
 
 	React.useEffect(() => {
 		// RxDB count streams are external subscriptions and must follow the active engine lifecycle.

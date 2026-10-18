@@ -9,9 +9,16 @@ import {
 export type EngineCollectionCounts = Record<string, number>;
 type CountCollection = { count(): { $: Observable<number> } };
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
-export const EMPTY_COLLECTION_COUNTS = Object.fromEntries(
-	SYNC_COLLECTION_NAMES.map((name) => [name, 0])
-) as EngineCollectionCounts;
+/**
+ * Every sync collection at zero. Computed on first use, not at module load: hosts that
+ * partially mock `@wcpos/sync-engine` (apps/main `create-app-engine.test.ts`) import this
+ * package without `SYNC_COLLECTION_NAMES`, and an eager read would throw on import.
+ */
+let emptyCounts: EngineCollectionCounts | undefined;
+export function emptyCollectionCounts(): EngineCollectionCounts {
+	emptyCounts ??= Object.fromEntries(SYNC_COLLECTION_NAMES.map((name) => [name, 0]));
+	return emptyCounts;
+}
 
 export function observeCollectionCounts(
 	engine: RxdbSyncEngine
@@ -20,7 +27,7 @@ export function observeCollectionCounts(
 		engine.db$((database) => subscriber.next(database))
 	).pipe(
 		switchMap((database) => {
-			if (!database) return of(EMPTY_COLLECTION_COUNTS);
+			if (!database) return of(emptyCollectionCounts());
 			const collections = database.collections as unknown as Record<
 				SyncCollectionName,
 				CountCollection
