@@ -1488,10 +1488,25 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/settings/barcode-scanning/input-sources.tsx :: record mutator :: InputSources>handleSave :: registration.save :: 1',
 	"screens/main/settings/barcode-scanning/input-sources.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/settings/barcode-scanning/test-panel.tsx :: record mutator :: TestPanel :: suggestion.patch :: 1',
+	// ADR 0033 per-screen (g3): the BLE, HID and serial scanner lanes read and save scanner profiles through @wcpos/query/store-local.
+	"screens/main/pos/products/use-ble-scan.ios.ts :: raw query construction :: useBleScan :: collection.find({ selector: { connectionType: 'bluetooth-le' } }) :: 1",
+	"screens/main/pos/products/use-ble-scan.ios.ts :: raw query construction :: useBleScan :: collection.find({ selector: { connectionType: 'bluetooth-le' } }) :: 2",
+	'screens/main/pos/products/use-ble-scan.ios.ts :: record collection back-reference :: useBleScan :: collection :: 1',
+	'screens/main/pos/products/use-ble-scan.ios.ts :: record mutator :: useBleScan :: collection.upsert :: 1',
+	"screens/main/pos/products/use-ble-scan.ios.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/use-hid-scan.web.ts :: raw query construction :: useHidScan :: collection.find({ selector: { connectionType: 'hid-pos' } }) :: 1",
+	'screens/main/pos/products/use-hid-scan.web.ts :: record collection back-reference :: useHidScan :: collection :: 1',
+	'screens/main/pos/products/use-hid-scan.web.ts :: record mutator :: useHidScan :: collection.upsert :: 1',
+	"screens/main/pos/products/use-hid-scan.web.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/use-serial-scan.web.ts :: raw query construction :: useSerialScan :: collection .find({ selector: { connectionType: 'bluetooth-spp' } }) :: 1",
+	"screens/main/pos/products/use-serial-scan.web.ts :: raw query construction :: useSerialScan :: collection .find({ selector: { connectionType: { $in: ['usb-serial', 'bluetooth-spp'] } } }) :: 1",
+	'screens/main/pos/products/use-serial-scan.web.ts :: record collection back-reference :: useSerialScan :: collection :: 1',
+	'screens/main/pos/products/use-serial-scan.web.ts :: record mutator :: useSerialScan :: collection.upsert :: 1',
+	"screens/main/pos/products/use-serial-scan.web.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 551;
+export const SEAM_RETIRED_FLOOR = 565;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'6b0a2d197ff070315e6171abf9dd86398c981e0979d499ca3b4d1ca8202ffcdf';
+	'b618a7b58c49a46454832e6ccfe9d0a61c501ad9131a97b47b1269517e42b91f';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
