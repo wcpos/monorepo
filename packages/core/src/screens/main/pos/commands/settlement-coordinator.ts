@@ -6,6 +6,7 @@ import {
 	derive,
 	hasLiveSettlementLeg,
 	readLedger,
+	serverOwnsMoney,
 } from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
@@ -51,7 +52,7 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 		) ||
 		deps.inCheckout(record.uuid) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		payload.meta_data?.some(({ key, value }) => key === '_wcpos_money_owner' && value === 'server')
+		serverOwnsMoney(payload.meta_data)
 	);
 }
 
@@ -89,7 +90,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			p.billing,
 			p.shipping,
 			p.meta_data?.filter(
-				({ key }) => key === '_woocommerce_pos_tax_based_on' || key === '_wcpos_money_owner'
+				({ key }) =>
+					key === '_woocommerce_pos_tax_based_on' ||
+					key === '_wcpos_money_owner' ||
+					key === '_wcpos_money_owner_hint'
 			),
 			closed(p, record, deps, inputs.settings.priceNumDecimals),
 			inputs,

@@ -28,7 +28,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
-import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
+import { GUEST_CUSTOMER_ID, isGuestCustomer, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -417,7 +417,7 @@ export function EditOrderForm({ order }: Props) {
 						/>
 					</HStack>
 					<TaxIdsForm name="tax_ids" />
-					<MetaDataForm name="meta_data" />
+					<MetaDataForm name="meta_data" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 				</VStack>
 			</DialogBody>
 			<DialogFooter>

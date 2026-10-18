@@ -87,6 +87,7 @@ export {
 	identityColumns,
 	identityColumnFilter,
 	POS_META_KEYS,
+	PROTECTED_ORDER_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';
 export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';

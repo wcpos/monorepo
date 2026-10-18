@@ -14,6 +14,10 @@ describe('package exports', () => {
 				'createRxdbSyncEngine',
 				// Register accounting shares the engine's definition of pending local work.
 				'hasPendingLocalWork',
+				// The one protected-order-meta rule (identity re-stamps, the one-way money-owner
+				// hint, Woo ids kept): pull adoption, acknowledgement adoption and core's
+				// mutation boundary must agree, so core imports the engine's merge (#2688).
+				'mergeProtectedOrderMeta',
 				'normalizeVariationAttributes',
 				// The variation projector, exported so @wcpos/query's parity test can pin
 				// the map face against it — the drift tripwire #1308 gave products/orders.

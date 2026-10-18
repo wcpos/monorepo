@@ -7,7 +7,10 @@ import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { EditOrderMetaForm } from './form';
+import { protectOrderMeta } from '../../../../hooks/mutations/protected-order-meta';
+import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
+const mockBeforePatch = jest.fn();
 const mockPatch = jest.fn(),
 	mockPush = jest.fn(),
 	mockMove = jest.fn(),
@@ -74,7 +77,18 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxInput: mockInput,
 	ComboboxTrigger: mockWrap,
 }));
-jest.mock('@wcpos/components/button', () => ({ Button: mockButton }));
+jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
+jest.mock('@wcpos/components/collapsible', () => ({
+	Collapsible: mockWrap,
+	CollapsibleContent: mockWrap,
+	CollapsibleTrigger: mockWrap,
+}));
+jest.mock('@wcpos/components/tooltip', () => ({
+	Tooltip: mockWrap,
+	TooltipContent: mockWrap,
+	TooltipTrigger: mockWrap,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: mockButton }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: mockWrap }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('@wcpos/components/text', () => ({ Text: mockWrap }));
@@ -119,7 +133,7 @@ jest.mock('../../../../components/order/order-status-select', () => ({
 }));
 jest.mock('../../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../components/meta-data-form', () => ({
-	MetaDataForm: () => null,
+	MetaDataForm: jest.requireActual('../../../../components/meta-data-form').MetaDataForm,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),
 }));
 jest.mock('../../../../hooks/use-cashier-label', () => ({
@@ -159,7 +173,16 @@ async function confirm() {
 }
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockPatch.mockResolvedValue({ document: order });
+	order.payload = payload;
+	mockPatch.mockImplementation((input) => {
+		mockBeforePatch();
+		const resident = input.document.getLatest();
+		const changes = input.changes?.(resident.payload) ?? input.data;
+		input.data = protectOrderMeta(resident.payload, changes);
+		delete input.changes;
+		resident.payload = { ...resident.payload, ...input.data };
+		return Promise.resolve({ document: resident });
+	});
 	mockPush.mockResolvedValue(order);
 	mockGuard.mockReturnValue(false);
 });
@@ -244,4 +267,103 @@ it('does not write or push when storage is degraded', async () => {
 	expect(mockGuard).toHaveBeenCalledWith('save-order', { orderId: 'order-1' });
 	expect(mockPatch).not.toHaveBeenCalled();
 	expect(mockPush).not.toHaveBeenCalled();
+});
+it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
+	const protectedMeta = [
+		...meta,
+		{ id: 42, key: '_wcpos_money_owner_hint', value: 'server' },
+		{ id: 43, key: '_wcpos_money_owner', value: 'server' },
+	];
+	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
+	resident.getLatest = () => resident;
+	const custom = { key: 'custom', value: 'edited' };
+	const formData = { ...payload, status, cashier_id: '7', meta_data: [...protectedMeta, custom] };
+	const view = render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	expect(screen.queryAllByDisplayValue('server')).toHaveLength(0);
+	expect(screen.getByDisplayValue('custom')).toBeTruthy();
+	const edited = { ...formData, meta_data: [{ ...protectedMeta[4], value: null }, custom] };
+	view.rerender(<EditOrderMetaForm order={resident as never} formData={edited} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	if (status === 'completed') await confirm();
+	expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...protectedMeta]));
+	expect(resident.payload.meta_data).toHaveLength(protectedMeta.length + 1);
+});
+
+it.each(['pos-open', 'completed'])(
+	'keeps a hint arriving at the %s write boundary',
+	async (status) => {
+		const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+		const custom = { key: 'custom', value: 'edited' };
+		const resident = { ...order, payload: { ...payload } };
+		resident.getLatest = () => resident;
+		mockBeforePatch.mockImplementationOnce(() => {
+			resident.payload = { ...payload, meta_data: [...meta, hint] };
+		});
+		const formData = { ...payload, status, cashier_id: '7', meta_data: [...meta, custom] };
+		render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+		if (status === 'completed') await confirm();
+		expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...meta, hint]));
+		expect(resident.payload.meta_data).toHaveLength(meta.length + 2);
+	}
+);
+
+it('keeps a hint queued during a failed send when rolling back', async () => {
+	const sentCashiers: unknown[] = [];
+	const hint = { id: 42, key: '_wcpos_money_owner_hint', value: 'server' };
+	const resident = { ...order, payload: { ...payload } };
+	resident.getLatest = () => resident;
+	mockPush.mockImplementationOnce(() => {
+		sentCashiers.push(resident.payload.meta_data.find((entry) => entry.key === '_pos_user')?.value);
+		void enqueueOrderMutation(resident.uuid, async () => {
+			await Promise.resolve();
+			resident.payload = { ...resident.payload, meta_data: [...resident.payload.meta_data, hint] };
+		});
+		return Promise.reject(new Error('offline'));
+	});
+	const formData = { ...payload, status: 'completed', cashier_id: '9' };
+	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(sentCashiers).toEqual(['9']);
+	expect(resident.payload).toEqual({
+		...payload,
+		status: 'pos-open',
+		meta_data: [...meta, hint],
+	});
+});
+
+it('rolls back the cashier after a failed hand-off without losing concurrent ownership', async () => {
+	const sentCashiers: unknown[] = [];
+	const hint = { id: 42, key: '_wcpos_money_owner_hint', value: 'server' };
+	const resident = { ...order, payload: { ...payload } };
+	resident.getLatest = () => resident;
+	mockPush.mockImplementationOnce(() => {
+		sentCashiers.push(resident.payload.meta_data.find((entry) => entry.key === '_pos_user')?.value);
+		resident.payload = { ...resident.payload, meta_data: [...resident.payload.meta_data, hint] };
+		return Promise.reject(new Error('offline'));
+	});
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(sentCashiers).toEqual(['9']);
+	expect(resident.payload.meta_data).toEqual([...meta, hint]);
+});
+
+it('rejects renaming an ordinary row to a protected key', async () => {
+	render(
+		<EditOrderMetaForm
+			order={order as never}
+			formData={{
+				...payload,
+				cashier_id: '7',
+				meta_data: [...meta, { key: 'ordinary', value: 'keep' }],
+			}}
+		/>
+	);
+	const input = screen.getByDisplayValue('ordinary');
+	fireEvent.change(input, { target: { value: '_pos_user' } });
+	expect(screen.queryByDisplayValue('_pos_user')).toBeNull();
+	expect(screen.getByDisplayValue('ordinary')).toBe(input);
 });

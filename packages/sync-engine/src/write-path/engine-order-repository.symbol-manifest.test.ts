@@ -229,3 +229,100 @@ it('restores resync print counts in a new repository and consumes the stash', as
 		await harness.dispose();
 	}
 });
+
+it.each([undefined, 'server', null])(
+	'retains the resident money hint over pull value %s',
+	async (value) => {
+		const { db, orderUpserts } = orderDatabase();
+		const { storedDocument } = materializedOrder();
+		const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+		const resident = structuredClone(storedDocument);
+		resident.payload.meta_data = [...meta, hint];
+		db.orders.findByIds = () => ({
+			exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+		});
+		storedDocument.payload.meta_data = [
+			...meta,
+			...(value === undefined ? [] : [{ ...hint, value }]),
+		];
+		await new EngineOrderRepository(db).upsertMany([storedDocument]);
+		expect(orderUpserts[0][0]).toMatchObject({ payload: { meta_data: [...meta, hint] } });
+	}
+);
+
+it('lets an incoming server hint replace a local tombstone (Codex on #2688)', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+	const resident = structuredClone(storedDocument);
+	// This till tombstoned the hint in an older meta edit; the diverging till wrote `server`.
+	resident.payload.meta_data = [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: null }];
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	storedDocument.payload.meta_data = [
+		...meta,
+		{ id: 8, key: '_wcpos_money_owner_hint', value: 'server' },
+	];
+	await new EngineOrderRepository(db).upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { meta_data: [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: 'server' }] },
+	});
+});
+
+it('keeps the server-assigned id when the resident protected entry has none (Codex on #2688)', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+	const resident = structuredClone(storedDocument);
+	// The till's first hint write is id-less; the acknowledgement comes back with Woo's id.
+	resident.payload.meta_data = [...meta, { key: '_wcpos_money_owner_hint', value: 'server' }];
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	storedDocument.payload.meta_data = [
+		...meta,
+		{ id: 8, key: '_wcpos_money_owner_hint', value: 'server' },
+	];
+	await new EngineOrderRepository(db).upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { meta_data: [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: 'server' }] },
+	});
+});
+
+it.each(['resident', 'insert conflict'])(
+	'keeps a money hint arriving after the pull snapshot through the %s modifier',
+	async (route) => {
+		const { db, orderUpserts } = orderDatabase();
+		const { storedDocument } = materializedOrder();
+		const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+		let residentExists = route === 'resident';
+		const resident = {
+			toJSON: () => storedDocument,
+			incrementalModify: async (modify: (current: Record<string, unknown>) => unknown) => {
+				// The hint write has drained since the snapshot; only the modifier sees it.
+				const current = {
+					...storedDocument,
+					payload: { ...storedDocument.payload, meta_data: [...meta, hint] },
+				};
+				await db.orders.bulkUpsert([await modify(current)]);
+			},
+		};
+		db.orders.findByIds = () => ({
+			exec: async () => new Map(residentExists ? [[storedDocument.uuid, resident]] : []),
+		});
+		db.orders.bulkInsert = async () => {
+			residentExists = true;
+			return { error: [{ status: 409, documentId: storedDocument.uuid }] };
+		};
+		await new EngineOrderRepository(db).upsertMany([
+			{ ...storedDocument, payload: { ...storedDocument.payload, status: 'completed' } },
+		]);
+		expect(orderUpserts).toHaveLength(1);
+		expect(orderUpserts[0][0]).toMatchObject({
+			payload: { status: 'completed', meta_data: [...meta, hint] },
+		});
+	}
+);

@@ -6,7 +6,6 @@ import {
 	hasPosRefundStamp,
 	normalizeCheckpoint,
 	type OrderDocument,
-	POS_META_KEYS,
 	reconcileRefundIds,
 	type RemoteId,
 	type SyncCheckpoint,
@@ -22,6 +21,7 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
+import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
@@ -32,6 +32,7 @@ import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seed
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';
+export { POS_ORDER_IDENTITY_META_KEYS } from './merge-protected-order-meta';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 /**
@@ -41,13 +42,6 @@ const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
  * stashes the counts its database held for orders the current one does not hold yet.
  */
 export const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
-
-/** POS identity metadata whose resident values must survive server adoption. */
-export const POS_ORDER_IDENTITY_META_KEYS = [
-	POS_META_KEYS.user,
-	POS_META_KEYS.store,
-	POS_META_KEYS.taxBasedOn,
-] as const;
 
 type StoredOrderDoc = {
 	toJSON(): unknown;
@@ -322,16 +316,13 @@ export class EngineOrderRepository {
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
-			const serverMeta = Array.isArray(entry.storedDocument.payload.meta_data)
-				? [...entry.storedDocument.payload.meta_data]
-				: [];
-			for (const key of POS_ORDER_IDENTITY_META_KEYS) {
-				const localEntry = localMeta.find((meta) => meta?.key === key);
-				if (!localEntry) continue;
-				const index = serverMeta.findIndex((meta) => meta?.key === key);
-				if (index === -1) serverMeta.push(localEntry);
-				else serverMeta[index] = localEntry;
-			}
+			const serverMeta = mergeProtectedOrderMeta(
+				localMeta,
+				Array.isArray(entry.storedDocument.payload.meta_data)
+					? entry.storedDocument.payload.meta_data
+					: []
+			);
+
 			if (serverMeta.length > 0) {
 				entry.storedDocument = {
 					...entry.storedDocument,
@@ -403,7 +394,18 @@ export class EngineOrderRepository {
 						return current;
 					}
 					skipped.delete(document.uuid);
-					return withPreservedPrintCount(current, document as unknown as Record<string, unknown>);
+					// A hint may have landed and drained since the early residency snapshot.
+					const localMeta = (current.payload as Record<string, unknown> | undefined)?.meta_data;
+					return withPreservedPrintCount(current, {
+						...document,
+						payload: {
+							...document.payload,
+							meta_data: mergeProtectedOrderMeta(
+								Array.isArray(localMeta) ? localMeta : [],
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+							),
+						},
+					});
 				});
 			} else {
 				assertBulkSuccess(

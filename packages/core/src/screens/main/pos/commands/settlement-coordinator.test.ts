@@ -94,6 +94,7 @@ const payloadCases: [string, OrderPayload, boolean][] = [
 	['authorized leg', { meta_data: ledger('authorized') }, true],
 	['completed ledger', { total: '0.004', meta_data: ledger('captured', '0.004') }, true],
 	['awaiting customer', { meta_data: [{ key: '_wcpos_awaiting_customer', value: { method_id: 'invoice', attempt_id: 'one' } }] }, true],
+	['server hint', { meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }, true],
 	['server meta', { meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] }, true],
 	['partial capture', { meta_data: ledger('captured') }, false],
 	['provenance alone', { meta_data: [{ key: '_wcpos_sale_time', value: 'before-failed-leg' }] }, false],
@@ -264,6 +265,7 @@ it.each(['content', 'stop', 'rebind', 'generation'])(
 	'invalidates an in-flight coupon context on %s',
 	async (change) => {
 		const a = couponOrder();
+		a.payload.meta_data = [];
 		const h = start([a]);
 		const pending = new Subject<CouponContext>();
 		h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
@@ -371,15 +373,28 @@ it.each(['memory', 'payload'] as const)(
 	}
 );
 
-it.each(['owner', 'memory', 'status', 'id', 'line_items', 'fee_lines', 'shipping_lines'] as const)(
+it.each([
+	'hint',
+	'owner',
+	'memory',
+	'status',
+	'id',
+	'line_items',
+	'fee_lines',
+	'shipping_lines',
+] as const)(
 	'#963 rejects stale coupon work when %s changes during the context read',
 	async (change) => {
 		const a = couponOrder();
+		a.payload.meta_data = [];
 		const h = start([a]);
 		const pending = new Subject<CouponContext>();
 		h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
 		await emit(h.references$, { ready: true, generation: '0:0' });
-		if (change === 'owner') a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+		if (change === 'hint')
+			a.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
+		else if (change === 'owner')
+			a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
 		else if (change === 'memory') h.serverOwnsMoney.mockReturnValue(true);
 		else if (change === 'status') a.payload.status = 'completed';
 		else if (change === 'id') a.payload.id = 4711;

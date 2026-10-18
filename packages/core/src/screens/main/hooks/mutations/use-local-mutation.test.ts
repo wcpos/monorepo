@@ -8,12 +8,15 @@ import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { log } from '@wcpos/utils/logger';
+
 import { useLocalMutation } from './use-local-mutation';
 import { useCartWrite } from '../../pos/commands/use-cart-write';
 import { config } from '../../../../../jest/cart-write';
 
 let cartConfig = config;
 let moneyOwned = false;
+let divergenceListener: (event: { type: string; recordId?: string }) => void;
 jest.mock('../../pos/hooks/use-cart-config', () => ({
 	useCartConfigReader: () => () => cartConfig,
 }));
@@ -91,6 +94,10 @@ jest.mock('@wcpos/query', () => ({
 		database?.collections?.[name] ?? null,
 	useQueryRuntime: () => ({
 		engine: {
+			events: (callback: typeof divergenceListener) => {
+				divergenceListener = callback;
+				return () => {};
+			},
 			active: readActive,
 			ready: Promise.resolve(),
 			/**
@@ -1044,10 +1051,11 @@ it('register attribution starts with resident metadata and retains a simultaneou
 	expect(mockWrite).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			payload: {
-				// A caller-supplied array is taken as-is (never merged with resident
-				// entries, which could collapse repeated keys); only the register is appended.
+				// Protected resident entries survive replacement; the caller's ledger edit
+				// still lands, while unprotected resident entries are not carried through.
 				meta_data: [
 					{ key: '_wcpos_payments', value: 'new' },
+					{ key: '_pos_user', value: 'original' },
 					{ key: '_wcpos_register', value: 'register' },
 					{ key: '_wcpos_till', value: 'installation' },
 				],
@@ -1162,10 +1170,10 @@ it.each([undefined, 17])(
 			registerId: 'different',
 			changes: { meta_data: [{ key: 'caller', value: 'keep' }] },
 		});
-		expect(stored.payload.meta_data).toEqual([{ key: 'caller', value: 'keep' }, register]);
+		expect(stored.payload.meta_data).toEqual([register, { key: 'caller', value: 'keep' }]);
 		expect(mockWrite).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				payload: { meta_data: [{ key: 'caller', value: 'keep' }, register] },
+				payload: { meta_data: [register, { key: 'caller', value: 'keep' }] },
 			})
 		);
 	}
@@ -1252,4 +1260,145 @@ describe('cart changes at the resident modifier', () => {
 			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'money-only' ? 0 : 1);
 		}
 	);
+});
+
+// Exercise the app-session bridge (no POS provider) through the real plainPatch and outbound write contract.
+describe('durable divergence ownership', () => {
+	const { MoneyOwnerHintBridge } = jest.requireActual<
+		typeof import('../../components/money-owner-hint-bridge')
+	>('../../components/money-owner-hint-bridge');
+	const query = jest.requireMock('@wcpos/query');
+	const originalRuntime = query.useQueryRuntime;
+	beforeEach(() => {
+		activeScopeId = 'scope-1';
+		mockStatus.mockReturnValue({ activeScopeId });
+		const manager = originalRuntime();
+		query.useQueryRuntime = () => manager;
+	});
+	afterEach(() => {
+		query.useQueryRuntime = originalRuntime;
+	});
+	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+	const other = { id: 7, key: 'unrelated', value: 'keep' };
+	it.each([null, 'foreign'])('replaces a non-server hint (%s) in place', async (value) => {
+		mockWrite.mockClear().mockResolvedValue({});
+		const stored = {
+			uuid: 'hint-order',
+			payload: { meta_data: [{ id: 8, ...hint, value }, other], total: '99' },
+		};
+		const resident = {
+			...stored,
+			getLatest: () => resident,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+			incrementalModify: async (modify: (old: typeof stored) => typeof stored) => {
+				Object.assign(stored, modify(stored));
+				return resident;
+			},
+		};
+		mockFindOneExec.mockResolvedValue(resident);
+		renderHook(() => MoneyOwnerHintBridge());
+		await act(async () => {
+			divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(stored.payload.meta_data).toEqual([{ id: 8, ...hint }, other]);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: {
+					meta_data: [{ id: 8, ...hint }, other],
+					date_modified_gmt: '2026-03-02T00:00:00',
+				},
+			})
+		);
+	});
+	it.each(['new', 'existing', 'missing', 'failure', 'switched'])(
+		'enqueues a money-free hint once: %s resident',
+		async (scenario) => {
+			jest.mocked(log.warn).mockClear();
+			mockWrite.mockClear();
+			mockWrite.mockResolvedValue({});
+			if (scenario === 'failure')
+				mockWrite.mockRejectedValueOnce(new Error('offline write failed'));
+			const stored = {
+				uuid: 'hint-order',
+				payload: { total: '99', meta_data: scenario === 'existing' ? [other, hint] : [other] },
+			};
+			const resident = {
+				...stored,
+				getLatest: () => resident,
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) => {
+					Object.assign(stored, modify(stored));
+					return resident;
+				},
+			};
+			mockFindOneExec.mockResolvedValue(scenario === 'missing' ? null : resident);
+			renderHook(() => MoneyOwnerHintBridge());
+			await act(async () => {
+				divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+				if (scenario !== 'failure')
+					divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+				if (scenario === 'switched') divergenceListener({ type: 'scope-switched' });
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+			expect(log.warn).toHaveBeenCalledTimes(scenario === 'failure' ? 1 : 0);
+			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'new' || scenario === 'failure' ? 1 : 0);
+			if (scenario === 'new' || scenario === 'failure') {
+				expect(mockWrite).toHaveBeenLastCalledWith({
+					collection: 'orders',
+					operation: 'update',
+					recordId: 'hint-order',
+					payload: { meta_data: [other, hint], date_modified_gmt: '2026-03-02T00:00:00' },
+				});
+				expect(stored.payload.total).toBe('99');
+			}
+		}
+	);
+});
+
+describe('protected order meta at the mutation boundary', () => {
+	it.each([{ meta_data: [] }, { meta_data: [{ key: '_wcpos_money_owner_hint', value: null }] }])(
+		'localPatch restores omitted or tombstoned protected meta: %j',
+		async ({ meta_data }) => {
+			activeScopeId = 'scope-1';
+			mockStatus.mockReturnValue({ activeScopeId });
+			mockWrite.mockResolvedValue({});
+			const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+			const stored = { payload: { meta_data: [hint] } };
+			const resident = {
+				toJSON: () => stored,
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+					Object.assign(stored, modify(stored)),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const { result } = renderHook(() => useLocalMutation());
+			await result.current.localPatch({
+				document: { uuid: 'order', collection: { name: 'orders' } } as never,
+				data: { meta_data },
+			});
+			expect(stored.payload.meta_data).toEqual([hint]);
+			expect(mockWrite).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					payload: expect.objectContaining({ meta_data: [hint] }),
+				})
+			);
+		}
+	);
+});
+
+it('keeps the provider latch immediate without invoking the mutation path', async () => {
+	const { OrderMoneyDivergenceProvider, useServerOwnsMoneyReader } = jest.requireActual<
+		typeof import('../../pos/contexts/order-money-divergence')
+	>('../../pos/contexts/order-money-divergence');
+	mockFindOneExec.mockClear();
+	const { result } = renderHook(() => useServerOwnsMoneyReader(), {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	await act(async () => {
+		divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+		expect(result.current('hint-order')).toBe(true);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockFindOneExec).not.toHaveBeenCalled();
 });

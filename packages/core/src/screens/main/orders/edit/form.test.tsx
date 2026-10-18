@@ -411,3 +411,48 @@ describe('EditOrderForm save', () => {
 		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 });
+
+it('management save preserves a tombstoned money-owner hint at the mutation boundary', async () => {
+	jest.clearAllMocks();
+	const { patchAndEnqueueEngineResident } = jest.requireActual(
+		'../../hooks/mutations/use-local-mutation'
+	);
+	const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+	const stored = { payload: { meta_data: [hint] } };
+	const resident = {
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	};
+	mockLocalPatch.mockImplementation(async ({ data }) => ({
+		document: await patchAndEnqueueEngineResident({
+			manager: { engine: { write: async () => ({}), status: () => ({ activeScopeId: 'scope' }) } },
+			collection: 'orders',
+			recordId: order.uuid,
+			changes: data,
+			initial: { resident, scope: { scopeId: 'scope' } },
+		}),
+	}));
+	form.handleSubmit.mockImplementation(
+		(callback: unknown) => () =>
+			(callback as (data: unknown) => unknown)({
+				meta_data: [
+					{ ...hint, value: null },
+					{ key: 'custom', value: 'edited' },
+				],
+			})
+	);
+	mockPushDocument.mockResolvedValue(order);
+	render(<EditOrderForm order={order} />);
+	await act(async () => {
+		await modalActions.get('order-edit-save-button')!.onPress!();
+	});
+	expect(testLogger.error).not.toHaveBeenCalled();
+	expect(stored.payload.meta_data).toEqual([hint, { key: 'custom', value: 'edited' }]);
+});
+
+jest.mock('../../pos/contexts/current-order/temporary-order', () => ({}));
+
+jest.mock('../../../../hooks/use-local-date', () => ({
+	convertLocalDateToUTCString: () => '2026-10-18',
+}));
