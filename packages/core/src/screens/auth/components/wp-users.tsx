@@ -11,6 +11,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { AddUserButton } from './add-user-button';
+import { useSiteSelection } from './site-selection';
 import { StoreSelect } from './store-select';
 import { WpUser } from './wp-user';
 import { useAppState } from '../../../contexts/app-state';
@@ -34,10 +35,12 @@ export function WPUsers({ site }: WpUsersProps) {
 	);
 	const t = useT();
 	const { login } = useAppState();
-	// Explicit user choice (null until the user picks one). The effective
-	// selection is derived during render so we never need an effect to sync it.
-	const [pickedUserUuid, setPickedUserUuid] = React.useState<string | null>(null);
-	const [selectedStoreId, setSelectedStoreId] = React.useState<string | null>(null);
+	// Explicit user/store choice (null until picked), held above the accordion so
+	// it survives a fold. The effective selection is derived during render so we
+	// never need an effect to sync it.
+	const [{ pickedUserUuid, selectedStoreId }, updateSelection] = useSiteSelection(
+		site.uuid ?? ''
+	);
 
 	// Derive the selected user: the explicit pick if it still exists, otherwise
 	// fall back to the first available credential.
@@ -45,7 +48,6 @@ export function WPUsers({ site }: WpUsersProps) {
 		(pickedUserUuid ? wpCreds.find((c) => c.uuid === pickedUserUuid) : undefined) ?? wpCreds[0];
 	const selectedUserUuid = selectedUser?.uuid ?? null;
 
-	const setSelectedUserUuid = setPickedUserUuid;
 
 	return (
 		<VStack space="md">
@@ -71,8 +73,11 @@ export function WPUsers({ site }: WpUsersProps) {
 											site={site}
 											isSelected={selectedUserUuid === wpCred.uuid}
 											onSelect={() => {
-												setSelectedUserUuid(wpCred.uuid ?? null);
-												setSelectedStoreId(null);
+												// Changing user resets the store choice.
+												updateSelection(() => ({
+													pickedUserUuid: wpCred.uuid ?? null,
+													selectedStoreId: null,
+												}));
 											}}
 										/>
 									</Suspense>
@@ -92,7 +97,9 @@ export function WPUsers({ site }: WpUsersProps) {
 							site={site}
 							wpUser={selectedUser}
 							selectedStoreId={selectedStoreId}
-							onStoreSelect={setSelectedStoreId}
+							onStoreSelect={(storeId) =>
+								updateSelection((current) => ({ ...current, selectedStoreId: storeId }))
+							}
 							onLogin={(storeID) => {
 								// uuid is the primary key on both documents — always set on a stored row.
 								login({

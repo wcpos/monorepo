@@ -99,11 +99,13 @@ export function Sites({ user, collapsed = false, onExpand }: SitesProps) {
 	// accordion row below so its header (with chevron) is the way back in.
 	if (sites.length === 1 && !collapsed) {
 		return (
-			<Card className="w-full p-3" testID="logged-in-users-label">
-				<ErrorBoundary>
-					<Site user={user} site={sites[0]} />
-				</ErrorBoundary>
-			</Card>
+			<SiteSelectionProvider value={selections}>
+				<Card className="w-full p-3" testID="logged-in-users-label">
+					<ErrorBoundary>
+						<Site user={user} site={sites[0]} />
+					</ErrorBoundary>
+				</Card>
+			</SiteSelectionProvider>
 		);
 	}
 

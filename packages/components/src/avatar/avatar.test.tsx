@@ -64,6 +64,15 @@ it('asks Gravatar for a 404 instead of the default silhouette', () => {
 	);
 });
 
+it('drops the force-default flag, which would hide a real Gravatar', () => {
+	expect(withoutDefaultGravatar('https://www.gravatar.com/avatar/abc?s=48&d=mm&f=y')).toBe(
+		'https://www.gravatar.com/avatar/abc?s=48&d=404'
+	);
+	expect(withoutDefaultGravatar('https://www.gravatar.com/avatar/abc?forcedefault=1&amp;f=y')).toBe(
+		'https://www.gravatar.com/avatar/abc?d=404'
+	);
+});
+
 it('leaves a non-Gravatar picture untouched', () => {
 	const upload = 'https://shop.example/wp-content/uploads/me.jpg?d=mm';
 	expect(isGravatarUrl(upload)).toBe(false);

@@ -5,6 +5,13 @@
  */
 const GRAVATAR_AVATAR_URL = /^(?:https?:)?\/\/(?:[a-z0-9-]+\.)*gravatar\.com\/avatar\//i;
 
+/**
+ * Dropped before `d=404` is appended: the default (`d`/`default`), and the force-default flag
+ * (`f`/`forcedefault`, any value), which serves the default for EVERY hash and would reduce a
+ * person with a real Gravatar to initials.
+ */
+const DROPPED_PARAM = /^(?:amp;)?(?:d|default|f|forcedefault)(?:=|$)/i;
+
 /** True when `url` is a Gravatar avatar URL. */
 export function isGravatarUrl(url: string | null | undefined): boolean {
 	return typeof url === 'string' && GRAVATAR_AVATAR_URL.test(url);
@@ -27,9 +34,7 @@ export function withoutDefaultGravatar(url: string | null | undefined): string |
 	const queryAt = withoutFragment.indexOf('?');
 	const base = queryAt === -1 ? withoutFragment : withoutFragment.slice(0, queryAt);
 	const query = queryAt === -1 ? '' : withoutFragment.slice(queryAt + 1);
-	const params = query
-		.split('&')
-		.filter((param) => param !== '' && !/^(?:amp;)?(?:d|default)=/i.test(param));
+	const params = query.split('&').filter((param) => param !== '' && !DROPPED_PARAM.test(param));
 	params.push('d=404');
 	return `${base}?${params.join('&')}${fragment}`;
 }
