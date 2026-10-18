@@ -17,7 +17,10 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 const mockComboboxItem = jest.fn();
 let mockListProps: Record<string, unknown> = {};
 
-jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null }));
+jest.mock('@wcpos/components/avatar', () => ({
+	Avatar: () => null,
+	getInitials: (name: string) => name.slice(0, 2),
+}));
 jest.mock('@wcpos/components/combobox', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
 	return {

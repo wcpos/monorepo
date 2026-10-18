@@ -68,7 +68,10 @@ jest.mock('@wcpos/hooks/use-http-client', () => ({
 jest.mock('../contexts/app-state', () => ({
 	useAppState: () => ({ userDB: {}, user: { uuid: 'user-1' } }),
 }));
-jest.mock('@wcpos/query/user-db', () => ({ mergeStoresWithResponse: jest.fn() }));
+jest.mock('../../../query/src/user-db/stores', () => ({ mergeStoresWithResponse: jest.fn() }));
+jest.mock('@wcpos/query/user-db', () =>
+	jest.requireActual('../../../query/src/user-db/credentials')
+);
 
 describe('useUserValidation capabilities', () => {
 	const site = {

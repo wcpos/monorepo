@@ -2,11 +2,12 @@ import { isRxDocument } from 'rxdb';
 import { defer, firstValueFrom, type Observable } from 'rxjs';
 import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/operators';
 
-import { createTemporaryDB, type TemporaryOrderDocument } from '@wcpos/database';
+import type { TemporaryOrderDocument } from '@wcpos/database';
+import { createTemporaryDB } from '@wcpos/database/create-db';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { protectOrderMeta } from '../../../hooks/mutations/protected-order-meta';
+import { protectOrderMeta } from '../mutations/protected-order-meta';
 
 const temporaryOrderLogger = getLogger(['wcpos', 'pos', 'temporary-order']);
 

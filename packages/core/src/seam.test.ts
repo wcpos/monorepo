@@ -19,9 +19,13 @@ import { join, posix, relative, sep } from 'node:path';
 import * as ts from 'typescript';
 
 import {
+	SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18,
 	SEAM_FROZEN_VIOLATIONS_2026_10_16,
 	SEAM_RETIRED_FINGERPRINTS,
 	SEAM_RETIRED_FLOOR,
+	SEAM_RETIRED_GENERIC_RESIDENT_DOOR,
+	SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR,
+	SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST,
 	SEAM_RETIRED_PREFIX_DIGEST,
 } from './seam-allowlist';
 
@@ -129,6 +133,11 @@ const residentHelperNames = new Set([
 	'insertEngineResident',
 	'useLocalMutation',
 	'useMutation',
+]);
+const genericResidentDoorNames = new Set([
+	'applyLocalPatch',
+	'createEngineResident',
+	'findEngineResident',
 ]);
 const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
 
@@ -352,6 +361,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			if (!allowsResidentHelpers) {
 				if (node.importClause?.name && residentHelperNames.has(node.importClause.name.text))
 					report('resident helper write', node.importClause.name);
+				if (node.importClause?.name && genericResidentDoorNames.has(node.importClause.name.text))
+					report('generic resident door', node.importClause.name);
 				if (bindings && ts.isNamedImports(bindings)) {
 					for (const binding of bindings.elements) {
 						if (
@@ -359,6 +370,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 							residentHelperNames.has(binding.name.text)
 						)
 							report('resident helper write', binding);
+						if (
+							genericResidentDoorNames.has((binding.propertyName ?? binding.name).text) ||
+							genericResidentDoorNames.has(binding.name.text)
+						)
+							report('generic resident door', binding);
 					}
 				}
 			}
@@ -378,6 +394,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 							residentHelperNames.has(binding.name.text)
 						)
 							report('resident helper write', binding);
+						if (
+							genericResidentDoorNames.has((binding.propertyName ?? binding.name).text) ||
+							genericResidentDoorNames.has(binding.name.text)
+						)
+							report('generic resident door', binding);
 					}
 				} else if (ts.isStringLiteralLike(node.moduleSpecifier)) {
 					const target = posix.join(posix.dirname(filePath), node.moduleSpecifier.text);
@@ -413,6 +434,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					: staticName(callee);
 			if (!allowsResidentHelpers && name && residentHelperNames.has(name))
 				report('resident helper write', callee);
+			if (!allowsResidentHelpers && name && genericResidentDoorNames.has(name))
+				report('generic resident door', callee);
 			const findReceiver = memberReceiver(callee, 'find');
 			const argument = unwrap(node.arguments[0]);
 			if (
@@ -506,16 +529,25 @@ function fingerprints(file: string, matches: ReturnType<typeof violations>): str
 	});
 }
 
-const current = violationsByFile.flatMap(({ file, matches }) => fingerprints(file, matches)).sort();
+const allCurrent = violationsByFile
+	.flatMap(({ file, matches }) => fingerprints(file, matches))
+	.sort();
+const genericCurrent = allCurrent.filter((fingerprint) =>
+	fingerprint.includes(' :: generic resident door :: ')
+);
+const current = allCurrent.filter((fingerprint) => !genericCurrent.includes(fingerprint));
 const frozen = new Set(SEAM_FROZEN_VIOLATIONS_2026_10_16);
 console.log(
 	`Seam progress: ${SEAM_RETIRED_FINGERPRINTS.length}/${frozen.size} frozen violations retired; ${current.length} remain`
+);
+console.log(
+	`Generic resident door: ${SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length}/${SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18.length} retired; ${genericCurrent.length} remain`
 );
 if (process.env.SEAM_PROGRESS === '1') console.log(current.join('\n'));
 
 // `SEAM_DUMP=<path>` writes sorted current fingerprints as JSON for an explicit re-freeze.
 if (process.env.SEAM_DUMP)
-	writeFileSync(process.env.SEAM_DUMP, JSON.stringify(current, null, '\t'));
+	writeFileSync(process.env.SEAM_DUMP, JSON.stringify(allCurrent, null, '\t'));
 
 function fingerprintIssues(
 	current: string[],
@@ -541,6 +573,9 @@ it('requires current violations to match the frozen set minus explicit retiremen
 
 it('keeps retirements within the frozen set and pins every append-only entry', () => {
 	expect(SEAM_RETIRED_FINGERPRINTS.filter((fingerprint) => !frozen.has(fingerprint))).toEqual([]);
+	// A fingerprint retired twice (a conflict resolution that appended what the other side had
+	// already appended) would over-report progress and hide a real retirement under its ordinal.
+	expect(new Set(SEAM_RETIRED_FINGERPRINTS).size).toBe(SEAM_RETIRED_FINGERPRINTS.length);
 	expect(SEAM_RETIRED_FINGERPRINTS.length).toBeGreaterThanOrEqual(SEAM_RETIRED_FLOOR);
 	expect(
 		createHash('sha256')
@@ -1443,3 +1478,52 @@ it.each(['order', 'record', 'this', 'manager.record', "manager['record']", 'mana
 			expect(violations(`${receiver}['${member}'];`)).toEqual([]);
 	}
 );
+
+it.each(['applyLocalPatch', 'createEngineResident', 'findEngineResident'])(
+	'fences the generic resident door %s independently of the module',
+	(name) => {
+		for (const source of [
+			`import { ${name} as alias } from '@wcpos/query/mutations';`,
+			`import { safe as ${name} } from './other';`,
+			`import ${name} from './other';`,
+			`${name}(manager, input);`,
+			`helpers['${name}'](manager, input);`,
+			`export { ${name} as alias } from './other';`,
+		]) {
+			expect(violations(source).map(({ rule }) => rule)).toEqual(['generic resident door']);
+			for (const path of [
+				'screens/main/hooks/mutations/use-local-mutation.ts',
+				'screens/main/hooks/mutations/use-mutation.ts',
+				'screens/main/pos/commands/write.ts',
+			])
+				expect(violations(source, path)).toEqual([]);
+		}
+	}
+);
+
+it('pins the independent generic resident door baseline and append-only retirements', () => {
+	const frozen = new Set(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18);
+	expect(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18).toHaveLength(20);
+	expect(
+		createHash('sha256')
+			.update(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18.join('\n'))
+			.digest('hex')
+	).toBe('113e2fb079e9353a130415b9251595f1dedfabc15dc012264634cbedbe09c97d');
+	expect(fingerprintIssues(genericCurrent, frozen, SEAM_RETIRED_GENERIC_RESIDENT_DOOR)).toEqual([]);
+	expect(
+		SEAM_RETIRED_GENERIC_RESIDENT_DOOR.filter((fingerprint) => !frozen.has(fingerprint))
+	).toEqual([]);
+	expect(SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length).toBeGreaterThanOrEqual(
+		SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR
+	);
+	expect(
+		createHash('sha256')
+			.update(
+				SEAM_RETIRED_GENERIC_RESIDENT_DOOR.slice(0, SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR).join(
+					'\n'
+				)
+			)
+			.digest('hex')
+	).toBe(SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST);
+	expect(SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR).toBe(SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length);
+});

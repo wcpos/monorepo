@@ -5,6 +5,10 @@ import { act, create } from 'react-test-renderer';
 
 import AppLayout from '../app/(app)/_layout';
 import { createSessionFetcherOptions } from '../lib/create-app-engine';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	credentialsTokenOwner: (credentials: unknown) => credentials,
+}));
 
 // Avoid jest-expo's winter runtime resolving lazy globals between tests.
 jest.resetModules();

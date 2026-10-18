@@ -1,15 +1,16 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
+import { filter } from 'rxjs';
 import { format } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
-import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -90,8 +91,11 @@ export function DetailPanel() {
 			t('common.unknown')
 		: t('reports.all_registers');
 	const { site } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const directory = useObservableState(source) as WPCredentialsDocument[] | undefined;
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const directory = useObservableState(source);
 	const ids = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);

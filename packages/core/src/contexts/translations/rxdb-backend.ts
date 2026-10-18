@@ -1,3 +1,5 @@
+import { cacheTranslations, type TranslationsState, type UserDatabase } from '@wcpos/query/user-db';
+
 // On next, this is wcpos/translations' moving jsDelivr branch ref, refreshed by the CDN within about 12 hours.
 // On main, the release workflow replaces it with a CalVer tag; resolve this one-line conflict in main's favour when merging next.
 export const TRANSLATION_VERSION = 'next';
@@ -14,7 +16,8 @@ export class RxDBBackend {
 	static type = 'backend' as const;
 	type = 'backend' as const;
 
-	private translationsState: any;
+	private translationsState?: TranslationsState;
+	private userDB?: UserDatabase;
 	private services: any;
 	// A rolling ref is fetched once per backend instance; every later read for the same key
 	// serves the cache, as a pinned version does.
@@ -22,6 +25,7 @@ export class RxDBBackend {
 
 	init(services: any, backendOptions: any) {
 		this.services = services;
+		this.userDB = backendOptions.userDB;
 		this.translationsState = backendOptions.translationsState;
 	}
 
@@ -48,23 +52,12 @@ export class RxDBBackend {
 		});
 	}
 
-	/**
-	 * Write the cache only when the fetched catalogue differs from what is stored. Every
-	 * rx-state write appends the whole catalogue and wakes the app state's subscribers, and
-	 * on a rolling ref an unconditional write on every read fed itself: the state grew by
-	 * tens of megabytes a second until the browser's storage quota was exhausted.
-	 */
-	private cache(cacheKey: string, cached: unknown, data: Record<string, string>) {
-		if (JSON.stringify(cached) === JSON.stringify(data)) return;
-		this.translationsState?.set(cacheKey, () => data);
-	}
-
 	read(language: string, namespace: string, callback: (err: any, data?: any) => void) {
 		const cacheKey = `${language}@${TRANSLATION_VERSION}`;
 
 		// A pinned version serves the cache without fetching; a rolling ref serves it once
 		// this instance has fetched the key.
-		const cached = this.translationsState?.[cacheKey];
+		const cached = this.translationsState?.get(cacheKey);
 		const rolling = TRANSLATION_VERSION === ROLLING_TRANSLATION_REF;
 		// The refreshed set is keyed by namespace too, so a second namespace would still be
 		// fetched; the stored key stays language-only, as before this change.
@@ -83,7 +76,7 @@ export class RxDBBackend {
 			.then((data) => {
 				if (data && Object.keys(data).length > 0) {
 					refreshed();
-					this.cache(cacheKey, cached, data);
+					if (this.userDB) void cacheTranslations(this.userDB, cacheKey, data, { cached });
 					callback(null, data);
 					return;
 				}
@@ -99,7 +92,8 @@ export class RxDBBackend {
 					if (fallbackData && Object.keys(fallbackData).length > 0) {
 						// Cache under the original language + version key.
 						refreshed();
-						this.cache(cacheKey, cached, fallbackData);
+						if (this.userDB)
+							void cacheTranslations(this.userDB, cacheKey, fallbackData, { cached });
 						callback(null, fallbackData);
 					} else {
 						callback(null, cached ?? {});

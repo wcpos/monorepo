@@ -18,8 +18,8 @@ const mockLocalPatch = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
-jest.mock('uuid', () => ({
-	v4: () => 'born-local-uuid',
+jest.mock('../../../../../../query/src/mint-uuid', () => ({
+	mintUuid: () => 'born-local-uuid',
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -35,6 +35,16 @@ jest.mock('./use-local-mutation', () => ({
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+}));
+
+jest.mock('../../../../../../query/src/mutations/resident', () => ({
+	...jest.requireActual('../../../../../../query/src/mutations/resident'),
+	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
+	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
+}));
+jest.mock('../../../../../../query/src/await-write-outcome', () => ({
+	...jest.requireActual('../../../../../../query/src/await-write-outcome'),
+	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({

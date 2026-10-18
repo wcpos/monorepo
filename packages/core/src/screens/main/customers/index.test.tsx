@@ -212,6 +212,8 @@ describe('CustomersScreen query-state wiring', () => {
 		expect(mockDataTableProps).toMatchObject({
 			handle: mockHandle,
 			sort: { field: 'last_name', direction: 'asc' },
+			// The page gutter (16), not the POS pane's dense 8.
+			gutter: 'page',
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');
 		expect(mockDataTableProps).not.toHaveProperty('resource');
@@ -337,7 +339,10 @@ jest.mock('./row', () => ({
 	),
 }));
 jest.mock('./cells/date', () => ({ DateCell: () => null }));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => mockPointer }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	usePointer: () => mockPointer,
+	useIsPhone: () => false,
+}));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: { children: React.ReactNode }) => children,
 }));

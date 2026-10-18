@@ -56,9 +56,15 @@ jest.mock('./components/demo-button', () => ({
 	DemoButton: () => <button data-testid="enter-demo-store-button" />,
 }));
 jest.mock('./components/sites', () => ({
-	Sites: () => {
+	Sites: ({ collapsed, onExpand }: { collapsed?: boolean; onExpand?: () => void }) => {
 		if (mockSuspend) throw mockPending;
-		return mockSites.value.length ? <div data-testid="logged-in-users-label" /> : null;
+		return mockSites.value.length ? (
+			<button
+				data-testid="logged-in-users-label"
+				data-collapsed={String(!!collapsed)}
+				onClick={onExpand}
+			/>
+		) : null;
 	},
 }));
 
@@ -104,4 +110,16 @@ it('renders a skeleton card while sites suspend', () => {
 	const { container } = render(<Connect />);
 	expect(container.querySelector('section [data-shape="line"]')).not.toBeNull();
 	expect(container.querySelectorAll('section [data-shape="row"]')).toHaveLength(2);
+});
+it('folds the sites while the address is open, and expanding a site closes the address', () => {
+	mockSites.next(['a']);
+	render(<Connect />);
+	const sites = screen.getByTestId('logged-in-users-label');
+	expect(sites.getAttribute('data-collapsed')).toBe('false');
+	fireEvent.click(screen.getByTestId('connect-another-store'));
+	expect(sites.getAttribute('data-collapsed')).toBe('true');
+	fireEvent.click(sites);
+	expect(sites.getAttribute('data-collapsed')).toBe('false');
+	expect(screen.queryByTestId('store-url-input')).toBeNull();
+	expect(screen.getByTestId('connect-another-store')).toBeTruthy();
 });

@@ -14,7 +14,14 @@ import { Hero } from './hero';
 import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
 
-export function Reports({ title }: { title: React.ReactNode }) {
+export function Reports({
+	title,
+	header,
+}: {
+	title: React.ReactNode;
+	/** The till strip: the page's first row, scrolling with it (owner, 2026-10-18). */
+	header?: React.ReactNode;
+}) {
 	const { bottom } = useSafeAreaInsets();
 	const { detail } = useReportsScope(),
 		{ screenSize } = useTheme();
@@ -38,17 +45,27 @@ export function Reports({ title }: { title: React.ReactNode }) {
 				</ErrorBoundary>
 			)}
 			<View className="min-h-0 flex-1 flex-row">
-				<ErrorBoundary>
-					{phonePanel ? (
+				{phonePanel ? (
+					<ErrorBoundary>
 						<DetailPanel key={detail} />
-					) : (
-						<ScrollView className="flex-1" contentContainerClassName="gap-3 px-2">
+					</ErrorBoundary>
+				) : (
+					// The page gutter (16) around and between the strip, the hero and the cards.
+					<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+						{/* The strip stays outside the report's boundary: it is the only way into
+						    Closures, so a failed hero or card must not take it down (Codex, #2720). */}
+						{header}
+						<ErrorBoundary>
 							<Hero title={title} />
 							<PeriodSection />
-						</ScrollView>
-					)}
-					{detail && !phonePanel && <DetailPanel key={detail} />}
-				</ErrorBoundary>
+						</ErrorBoundary>
+					</ScrollView>
+				)}
+				{detail && !phonePanel && (
+					<ErrorBoundary>
+						<DetailPanel key={detail} />
+					</ErrorBoundary>
+				)}
 			</View>
 			<PortalHost name="reports" />
 		</View>

@@ -11,8 +11,12 @@
 		"./testing": "./src/testing.ts",
 		"./collection-map": "./src/collection-map.ts",
 		"./register-session": "./src/register-session/index.ts",
+		"./register-session/new-till-flag": "./src/register-session/new-till-flag.ts",
+		"./temporary-order": "./src/temporary-order/index.ts",
+		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",
-		"./user-db": "./src/user-db/index.ts"
+		"./user-db": "./src/user-db/index.ts",
+		"./user-db/bootstrap": "./src/user-db/bootstrap.ts"
 	},
 	"type": "module",
 	"files": [
@@ -28,6 +32,7 @@
 	"dependencies": {
 		"@wcpos/order-math": "workspace:*",
 		"@date-fns/tz": "^1.5.0",
+		"@date-fns/utc": "^2.1.1",
 		"@wcpos/database": "workspace:*",
 		"@wcpos/hooks": "workspace:*",
 		"@wcpos/order-math": "workspace:*",

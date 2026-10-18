@@ -1,19 +1,24 @@
 import * as React from 'react';
 
 import type {
-	SiteDocument,
+	CurrentSessionIDs,
+	ExtraDataSlot,
+	ReadonlySiteRecord,
+	ReadonlyStoreRecord,
+	ReadonlyUserRecord,
+	ReadonlyWpCredentialsRecord,
+	SessionAppState,
 	StoreDatabase,
-	StoreDocument,
+	TranslationsState,
 	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
-} from '@wcpos/database';
-import { getErrorMessage, getLogger, setDatabase } from '@wcpos/utils/logger';
+} from '@wcpos/query/user-db';
+import { bindSurvivingStoreLogs, hydrateUserSession } from '@wcpos/query/user-db';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
+import { switchUserSessionStore, toHydrationContext } from './hydration-steps';
 import {
 	clearStoreSession as clearPersistedStoreSession,
 	commitStoreSession,
@@ -22,13 +27,7 @@ import {
 	SIGNED_OUT_SESSION,
 } from './store-session';
 
-import type {
-	CurrentSessionIDs,
-	ExtraDataState,
-	HydrationContext,
-	SessionAppState,
-	TranslationsState,
-} from './hydration-steps';
+import type { HydrationContext } from './hydration-steps';
 
 /** The context value: the hydrated session plus the session actions. */
 export interface AppState extends HydrationContext {
@@ -36,11 +35,11 @@ export interface AppState extends HydrationContext {
 	userDB: UserDatabase;
 	appState: SessionAppState;
 	translationsState: TranslationsState;
-	user: UserDocument;
+	user: ReadonlyUserRecord;
 	updateAppState: (updates: Partial<HydrationContext>) => void;
 	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
 	logout: () => Promise<void>;
-	switchStore: (store: StoreDocument) => Promise<void>;
+	switchStore: (store: ReadonlyStoreRecord) => Promise<void>;
 }
 
 /**
@@ -49,11 +48,11 @@ export interface AppState extends HydrationContext {
  * the `(app)` stack is mounted behind `Stack.Protected guard={hasStoreSession(state)}`.
  */
 export interface StoreSessionState extends AppState {
-	site: SiteDocument;
-	wpCredentials: WPCredentialsDocument;
-	store: StoreDocument;
+	site: ReadonlySiteRecord;
+	wpCredentials: ReadonlyWpCredentialsRecord;
+	store: ReadonlyStoreRecord;
 	storeDB: StoreDatabase;
-	extraData: ExtraDataState;
+	extraData: ExtraDataSlot;
 }
 
 export {
@@ -140,10 +139,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			});
 			try {
 				updateAppState(
-					await commitStoreSession(state.appState!, {
-						ids: { siteID, wpCredentialsID, storeID },
-						session: sessionData,
-					})
+					toHydrationContext(
+						await commitStoreSession(state.userDB!, {
+							ids: { siteID, wpCredentialsID, storeID },
+							session: sessionData,
+						})
+					)
 				);
 			} catch (error) {
 				if (error instanceof IncompleteStoreSessionError) {
@@ -153,7 +154,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				throw error;
 			}
 		},
-		[state.appState, state.userDB, updateAppState]
+		[state.userDB, updateAppState]
 	);
 
 	/**
@@ -162,8 +163,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * recovery below, so anything added to signing out reaches both.
 	 */
 	const clearStoreSession = React.useCallback(async () => {
-		updateAppState(await clearPersistedStoreSession(state.appState!));
-	}, [state.appState, updateAppState]);
+		updateAppState(toHydrationContext(await clearPersistedStoreSession(state.userDB!)));
+	}, [state.userDB, updateAppState]);
 
 	const logout = React.useCallback(async () => {
 		if (Platform.isWeb) {
@@ -182,7 +183,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	}, [clearStoreSession]);
 
 	const switchStore = React.useCallback(
-		async (store: StoreDocument): Promise<void> => {
+		async (store: ReadonlyStoreRecord): Promise<void> => {
 			const current = await state.appState!.get('current');
 			if (store.localID === current?.storeID) {
 				return;
@@ -206,7 +207,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				}
 				throw error;
 			}
-			updateAppState(sessionData);
+			updateAppState(toHydrationContext(sessionData));
 		},
 		[state.appState, state.userDB, updateAppState]
 	);
@@ -230,11 +231,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	// When the store database survived (a lost site or credential row), its logs
 	// collection keeps the evidence for the Logs screen and debug export; the
 	// next AppLayout mount rebinds to whichever store the cashier opens.
-	const survivingLogs = state.storeDB?.collections.logs;
 	// The pointer already recovered from: the effect re-runs when the sign-out
 	// it triggers lands, and must not report the same pointer twice.
 	const recoveredPointer = React.useRef<string | null>(null);
-	/* eslint-disable react-you-might-not-need-an-effect/no-event-handler -- the session arrives through render (Suspense hydration, or setState from login/switchStore); there is no handler to move this into, and the toast needs the mounted tree. */
+
 	React.useEffect(() => {
 		if (!missingSessionFields) return;
 		// RxState reads are synchronous (`set` is the async one).
@@ -249,7 +249,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		if (recoveredPointer.current === pointerKey) return;
 		recoveredPointer.current = pointerKey;
 		const missingFields = missingSessionFields.split(',');
-		if (survivingLogs) setDatabase(survivingLogs);
+		bindSurvivingStoreLogs(state.storeDB);
 		reportIncompleteSession(missingFields, current);
 		void clearStoreSession().catch((error: unknown) => {
 			// The same failing storage that lost the rows may refuse this write too;
@@ -257,10 +257,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			sessionLogger.warn('Could not clear the incomplete session pointer', {
 				context: { error: getErrorMessage(error) },
 			});
-			updateAppState(SIGNED_OUT_SESSION);
+			updateAppState(toHydrationContext(SIGNED_OUT_SESSION));
 		});
-	}, [missingSessionFields, survivingLogs, state.appState, clearStoreSession, updateAppState]);
-	/* eslint-enable react-you-might-not-need-an-effect/no-event-handler */
+	}, [missingSessionFields, state.storeDB, state.appState, clearStoreSession, updateAppState]);
 
 	const value = React.useMemo<AppState>(() => {
 		return {

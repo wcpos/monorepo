@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { removeSite } from '@wcpos/query/user-db';
+import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -37,10 +37,11 @@ import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { siteListResource } from '../../../hooks/user-db-list-resources';
 import { Site, SiteHeader } from './site';
+import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { WPUsers } from './wp-users';
@@ -49,20 +50,31 @@ import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
-	user: UserDocument;
+	user: ReadonlyUserRecord;
+	/**
+	 * Fold every site to its header row (the page's connect form is open).
+	 * Display-only: the remembered expansion is kept and returns when this clears.
+	 */
+	collapsed?: boolean;
+	/** A site was expanded by the user — the page closes its connect form. */
+	onExpand?: () => void;
 }
 
-export function Sites({ user }: SitesProps) {
-	const t = useT();
-	const sites = useObservableSuspense(
-		(
-			user as unknown as {
-				populateResource: (
-					key: string
-				) => import('observable-hooks').ObservableResource<SiteDocument[]>;
-			}
-		).populateResource('sites')
+/**
+ * The selection provider sits at one fixed position above both layouts, so a
+ * fold (which unmounts WPUsers, and swaps a lone site's layout) keeps the picks.
+ */
+export function Sites(props: SitesProps) {
+	return (
+		<SiteSelectionProvider>
+			<SitesContent {...props} />
+		</SiteSelectionProvider>
 	);
+}
+
+function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
+	const t = useT();
+	const sites = useObservableSuspense(siteListResource(user));
 
 	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
 	const [accordionState, setAccordionState] = React.useState(() => {
@@ -86,8 +98,11 @@ export function Sites({ user }: SitesProps) {
 		return null;
 	}
 
-	// Single site: render directly without accordion
-	if (sites.length === 1) {
+	const expandedSiteUuid = collapsed ? '' : nextAccordionState.expandedSiteUuid;
+
+	// Single site: render directly without accordion. Folded, it takes the
+	// accordion row below so its header (with chevron) is the way back in.
+	if (sites.length === 1 && !collapsed) {
 		return (
 			<Card className="w-full p-3" testID="logged-in-users-label">
 				<ErrorBoundary>
@@ -97,20 +112,23 @@ export function Sites({ user }: SitesProps) {
 		);
 	}
 
-	// Multiple sites: use accordion
+	// Multiple sites (or a folded single site): use accordion
 	return (
 		<VStack className="w-full gap-2" testID="logged-in-users-label">
-			<Text className="text-sm font-semibold">
-				{t('auth.your_sites_heading', { _tags: 'core' })}
-			</Text>
+			{sites.length > 1 && (
+				<Text className="text-sm font-semibold">
+					{t('auth.your_sites_heading', { _tags: 'core' })}
+				</Text>
+			)}
 			<Accordion
 				className="gap-2"
 				type="single"
 				collapsible
-				value={nextAccordionState.expandedSiteUuid}
-				onValueChange={(value) =>
-					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
-				}
+				value={expandedSiteUuid}
+				onValueChange={(value) => {
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }));
+					if (value) onExpand?.();
+				}}
 			>
 				{sites.map((site) => (
 					<ErrorBoundary key={site.uuid}>
@@ -129,7 +147,7 @@ export function Sites({ user }: SitesProps) {
  * - Remove button on the right
  * - Each item has its own card
  */
-function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument }) {
+function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: ReadonlySiteRecord }) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 
@@ -150,6 +168,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 				<AccordionItem value={site.uuid ?? ''} className="border-b-0">
 					<HStack className="items-center gap-2">
 						<AccordionTrigger
+							testID={`auth-site-trigger-${site.uuid}`}
 							headerClassName="flex-1"
 							className="min-h-row gap-3 py-2"
 							chevronPosition="left"
@@ -218,7 +237,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 /**
  * Content inside an accordion item — needs Suspense boundary above it
  */
-function AccordionSiteContent({ site }: { site: SiteDocument }) {
+function AccordionSiteContent({ site }: { site: ReadonlySiteRecord }) {
 	const { compatibility } = useAppInfo({ site });
 	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 	const t = useT();

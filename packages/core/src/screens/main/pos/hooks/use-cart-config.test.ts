@@ -61,7 +61,7 @@ jest.mock('../../contexts/tax-rates', () => {
 				location,
 				orderTaxLocation({ country: 'AU' }, mockTaxBasedOn, mockOrder?.payload).location
 			);
-			return { location };
+			return { location, hasOrder: Boolean(mockOrder) };
 		},
 		useTaxSettings: () => ({
 			allRates,

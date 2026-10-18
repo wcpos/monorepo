@@ -8,6 +8,7 @@ import { engineCollection, hasQueuedDelete, useQueryRuntime } from '@wcpos/query
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getTemporaryOrder } from '@wcpos/query/temporary-order';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -22,7 +23,6 @@ import {
 	isActionRefusal,
 	presentActionRefusal,
 } from '../../../../extensions/actions';
-import { getTemporaryOrder } from '../contexts/current-order/temporary-order';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import { useActionContext } from '../hooks/use-action-context';
 import {

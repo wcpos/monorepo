@@ -122,7 +122,7 @@ jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
 }));
 
-jest.mock('../contexts/current-order/temporary-order', () => ({
+jest.mock('@wcpos/query/temporary-order', () => ({
 	removeTemporaryOrder: (uuid: string) => mockRemoveTemporaryOrder(uuid),
 }));
 

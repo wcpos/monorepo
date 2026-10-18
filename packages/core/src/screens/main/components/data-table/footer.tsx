@@ -40,9 +40,9 @@ export function DataTableFooter({
 	const actions = useQueryStateActions();
 	const t = useT();
 	return (
-		// A caption row on the ground under the card: no rule of its own, text aligned with the
-		// card's cell padding (gutter 8 + cell 12).
-		<HStack testID="data-table-caption-row" className="min-h-ctl items-center px-5">
+		// A caption row on the ground under the card: no rule of its own. Its mount aligns the
+		// text with the card's cells (`CaptionRowInset`: the card's gutter + the cell's 12).
+		<HStack testID="data-table-caption-row" className="min-h-ctl items-center">
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">

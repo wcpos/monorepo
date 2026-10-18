@@ -215,7 +215,12 @@ it('the default footer is the caption row: the drawn total, the live spinner, th
 	Object.assign(live, { sync: liveSync });
 	rerender(tree(live));
 
-	expect(screen.getByTestId('data-table-caption-row')).toBeTruthy();
+	// The mount owns the caption row's inset (surface.tsx `CaptionRowInset`), not the footer.
+	expect(
+		screen
+			.getByTestId('data-table-caption-inset')
+			.contains(screen.getByTestId('data-table-caption-row'))
+	).toBe(true);
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
 	expect(screen.getByTestId('data-table-total-count').textContent).toBe('5');
 	expect(screen.getByTestId('sync-button').dataset.active).toBe('true');

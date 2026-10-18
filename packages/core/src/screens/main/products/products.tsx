@@ -291,6 +291,7 @@ function ProductsList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<ProductRow>
 					id="products"
+					gutter="page"
 					collectionName="products"
 					handle={handle}
 					sort={state.sort}
@@ -353,7 +354,7 @@ function ProductsBody() {
 			{/* A failed products read is thrown here; the fallback's reset asks the handle again,
 			    and a changed query (its handle is new) clears the fallback on its own. */}
 			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="products" />}>
+				<Suspense fallback={<DataTableSkeleton id="products" gutter="page" />}>
 					<ProductsList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
@@ -374,7 +375,7 @@ export function Products() {
 			style={{ paddingBottom: bottom || undefined }}
 		>
 			<ManagementBar
-				title={t('common.products')}
+				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
 				testID="products-bar"
 				search={
 					<QuerySearchInput

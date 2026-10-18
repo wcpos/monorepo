@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { FormatAddress } from '@wcpos/components/format';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
@@ -10,6 +9,7 @@ import { RailSection, Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
 import { TAX_ID_LABEL_KEYS, type TaxId, type TaxIdType } from '../../../../../lib/tax-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
+import { CustomerAvatar } from '../../../components/user-avatar/customer-avatar';
 
 type OrderPayload = EngineRecord<'orders'>['payload'];
 type Address = NonNullable<OrderPayload['billing']> | NonNullable<OrderPayload['shipping']>;
@@ -54,12 +54,14 @@ export function CustomerRail({ order, last }: { order: OrderPayload; last?: bool
 		shipping: order.shipping,
 		id: order.customer_id,
 	});
-	const initials = getInitials(name);
 
 	return (
 		<RailSection title={t('common.customer')} last={last}>
 			<View className="flex-row items-center gap-2">
-				<Avatar size="md" fallback={initials} variant="default" />
+				<CustomerAvatar
+					customer={{ billing: order.billing, shipping: order.shipping, id: order.customer_id }}
+					size="md"
+				/>
 				<View className="min-w-0 flex-1">
 					<Text className="text-foreground text-sm font-medium" numberOfLines={1}>
 						{name}

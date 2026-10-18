@@ -32,6 +32,7 @@ module.exports = {
 	// After the preset's own setup (which loads Expo's winter runtime): see the file's header.
 	setupFiles: [...expoPreset.setupFiles, '<rootDir>/jest/resolve-winter-globals.js'],
 	moduleNameMapper: {
+		'^@wcpos/database/create-db$': '<rootDir>/../../packages/query/tests/__mocks__/create-db.ts',
 		'^react-native/asset-registry$': path.join(reactNativeDir, 'src/asset-registry.js'),
 		'^@wcpos/order-math$': '<rootDir>/../../packages/order-math/src',
 	},

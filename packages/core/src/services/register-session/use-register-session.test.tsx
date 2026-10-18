@@ -114,10 +114,11 @@ const mockStoreSession = {
 	storeDB: {},
 	site: {
 		uuid: 'site',
-		populate: async () => [
-			{ id: 8, display_name: 'Alex' },
-			{ id: 9, display_name: 'Sam' },
-		],
+		populate$: () =>
+			of([
+				{ id: 8, display_name: 'Alex' },
+				{ id: 9, display_name: 'Sam' },
+			]),
 	},
 };
 

@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 
+import { credentialsTokenOwner, migrateSiteApiUrl } from '@wcpos/query/user-db';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -162,7 +163,7 @@ export const useRestHttpClient = (endpoint = '') => {
 		() =>
 			createTokenRefreshHandler({
 				site,
-				wpUser: wpCredentials,
+				wpUser: credentialsTokenOwner(wpCredentials),
 				getHttpClient,
 				sessionRenewedMessage: t('auth.session_renewed_automatically'),
 			}),
@@ -247,7 +248,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			// Migrate missing and persisted v1 service bases to v2.
 			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {
 				apiURL = wpApiURL + 'wcpos/v2';
-				await site.incrementalPatch({ wcpos_api_url: apiURL });
+				await migrateSiteApiUrl(site, apiURL);
 			}
 
 			// Discovery stores wcpos_api_url WITH a trailing slash; strip it before

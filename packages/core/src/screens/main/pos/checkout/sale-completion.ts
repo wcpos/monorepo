@@ -1,5 +1,5 @@
 import { POS_META_KEYS } from '@wcpos/sync-core';
-import type { StoreDatabase, UserDatabase } from '@wcpos/database';
+import type { StoreDatabase, UserDatabase } from '@wcpos/query/user-db';
 import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,

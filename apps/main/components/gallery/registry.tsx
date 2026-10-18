@@ -50,6 +50,7 @@ import { stories as progress } from '@wcpos/components/progress/gallery';
 import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
 import { stories as statusBadge } from '@wcpos/components/status-badge/gallery';
 import { stories as stepProgress } from '@wcpos/components/step-progress/gallery';
+import { stories as derivation } from '@wcpos/components/derivation/gallery';
 import { stories as logView } from '@wcpos/components/log-view/gallery';
 import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
 import { stories as card } from '@wcpos/components/card/gallery';
@@ -88,6 +89,7 @@ const registry: Record<string, Story[]> = {
 	'sort-icon': sortIcon,
 	'status-badge': statusBadge,
 	'step-progress': stepProgress,
+	derivation,
 	'log-view': logView,
 	'docs-link': docsLink,
 	card,

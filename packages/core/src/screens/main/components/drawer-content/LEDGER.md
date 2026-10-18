@@ -25,4 +25,6 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 13. System-bar icon style follows the rail's surface through the colour scheme, never a fixed style — a pale rail under light icons is illegible — evidence: this PR; #351 R5 — platform: iOS/Android.
 14. The front drawer's items are the shared `nav-item` at its drawer size (48, `rounded-lg`, `bg-card` when selected, `mx-2` from the panel edge); the 4 px left border, the `bg-white/10` hover and the `default` Button forced transparent were retired, and the unreachable label-less permanent variant went with them (the wide layout's rail is `rail/drawer-item.tsx`, which keeps line 1) — evidence: design-system decision 8 (2026-10-16); `packages/components/src/nav-item/LEDGER.md` lines 1–3 — platform: all.
 
+15. The permanent rail is 64 wide so its 48 items sit 8 px from each edge, the dense-strip gutter the front drawer already gives the same items (`mx-2`); at 56 the active square touched the rail. Spacing comes from the gutter table in `CODING_STANDARDS.md` § Design, never per surface — evidence: owner, 2026-10-18; `rail/index.tsx` — platform: all.
+
 Status (2026-10-16, C7 B3): `version.tsx` now composes `@wcpos/components/v2/dialog`; About retains its centred `sm` presentation.

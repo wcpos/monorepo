@@ -25,7 +25,7 @@ jest.mock('../components/area-navigation/health', () => ({ useHealthNavigationIt
 jest.mock('../components/unread-logs', () => ({ useUnreadLogsCount: () => 0 }));
 
 describe('Store health layout', () => {
-	it('renders the shared page bar, keeping the bar title (its pages carry no heading)', () => {
+	it("renders the shared page bar, leaving the title to the pages' own headings", () => {
 		let view: ReturnType<typeof create>;
 		act(() => {
 			view = create(<HealthLayout />);
@@ -34,7 +34,7 @@ describe('Store health layout', () => {
 		expect(props?.barTestID).toBe('health-bar');
 		expect(props?.screenTestID).toBe('health-screen');
 		expect(props?.areaLabel).toBe('common.store_health');
-		expect(props?.leafPagesCarryTitle).toBeUndefined();
+		expect(props?.leafPagesCarryTitle).toBe(true);
 		act(() => view.unmount());
 	});
 });

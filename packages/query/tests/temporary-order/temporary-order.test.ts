@@ -5,7 +5,7 @@ import {
 	patchTemporaryOrderPayload,
 	removeTemporaryOrder,
 	temporaryDB$,
-} from './temporary-order';
+} from '../../src/temporary-order';
 
 type StoredOrder = Record<string, unknown> & { uuid: string; payload: Record<string, unknown> };
 
@@ -37,7 +37,7 @@ function fakeDocument(data: StoredOrder) {
 	return document;
 }
 
-jest.mock('@wcpos/database', () => ({
+jest.mock('@wcpos/database/create-db', () => ({
 	createTemporaryDB: async () => ({
 		orders: {
 			findOne: (uuid?: string) => ({

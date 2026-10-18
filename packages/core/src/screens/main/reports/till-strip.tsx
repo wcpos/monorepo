@@ -1,15 +1,16 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { filter } from 'rxjs';
 import { format as formatDate, subDays } from 'date-fns';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableState } from 'observable-hooks';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import type { WPCredentialsDocument } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -83,8 +84,11 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		storeId: store.id,
 		autoPrintAllowed: false,
 	});
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const cashiers = useObservableState(source, []);
 	const settings = useDocField(useViewedStore(store.id), (value) => value);
 	const { format } = useCurrencyFormat({
 		currency: settings?.currency,
@@ -356,7 +360,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		</View>
 	);
 	return (
-		<View testID="reports-till" className="bg-card mx-4 gap-3 rounded-md border px-4 py-3">
+		<View testID="reports-till" className="bg-card gap-3 rounded-md border px-4 py-3">
 			{phone ? (
 				<>
 					{title}

@@ -131,7 +131,9 @@ jest.mock('../components/data-table', () => ({
 	defaultRenderItem: jest.fn(),
 }));
 jest.mock('../components/data-table/skeleton', () => ({
-	DataTableSkeleton: () => <div data-testid="skeleton-products" />,
+	DataTableSkeleton: ({ gutter }: { gutter?: string }) => (
+		<div data-testid="skeleton-products" data-gutter={gutter} />
+	),
 }));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
@@ -291,6 +293,9 @@ it('keeps the management bar outside the Pro body and never invents an add butto
 	const body = screen.getByTestId('products-body');
 	expect(body.contains(bar)).toBe(false);
 	expect(screen.queryByTestId('products-add-button')).toBeNull();
+	// No title: the search names the page (owner, 2026-10-18); the table takes the page gutter.
+	expect(bar.hasAttribute('data-title')).toBe(false);
+	expect(mockDataTableProps.gutter).toBe('page');
 });
 
 jest.mock('expo-haptics', () => ({}));
@@ -299,8 +304,9 @@ jest.mock('../components/management-bar', () => ({
 		children,
 		search,
 		testID,
-	}: React.PropsWithChildren<{ search: React.ReactNode; testID: string }>) => (
-		<div data-testid={testID}>
+		title,
+	}: React.PropsWithChildren<{ search: React.ReactNode; testID: string; title?: string }>) => (
+		<div data-testid={testID} data-title={title}>
 			{search}
 			{children}
 		</div>
@@ -351,7 +357,7 @@ it('renders the skeleton inside the guard while the handle is unanswered and the
 	mockHandle = fakeQueryHandle({ ready: false });
 	try {
 		render(<ProductsScreen />);
-		expect(screen.getByTestId('skeleton-products')).toBeTruthy();
+		expect(screen.getByTestId('skeleton-products').getAttribute('data-gutter')).toBe('page');
 		expect(screen.queryByTestId('products-table')).toBeNull();
 		expect(screen.getByTestId('products-bar')).toBeTruthy();
 		expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-body'))).toBe(true);

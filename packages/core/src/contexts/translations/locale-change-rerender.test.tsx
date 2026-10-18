@@ -30,10 +30,13 @@ jest.mock('expo-localization', () => ({
 
 let mockAppState: {
 	store?: { locale$: BehaviorSubject<string | null> };
-	translationsState: { set: jest.Mock };
+	translationsState: { get: jest.Mock; set: jest.Mock };
 };
 jest.mock('../app-state', () => ({
-	useAppState: () => mockAppState,
+	useAppState: () => ({
+		...mockAppState,
+		userDB: { states: { translations_v2: mockAppState.translationsState } },
+	}),
 	AppStateProvider: ({ children }: React.PropsWithChildren) => children,
 }));
 
@@ -87,7 +90,7 @@ function Label({ id }: { id: string }) {
 
 function setupLocale(initial: string) {
 	const locale$ = new BehaviorSubject<string | null>(initial);
-	mockAppState = { store: { locale$ }, translationsState: { set: jest.fn() } };
+	mockAppState = { store: { locale$ }, translationsState: { get: jest.fn(), set: jest.fn() } };
 	return locale$;
 }
 

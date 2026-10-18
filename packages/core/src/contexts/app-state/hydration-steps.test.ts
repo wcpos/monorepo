@@ -1,4 +1,10 @@
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+/** @jest-environment jsdom */
+
+const mockRegisterPlugins = jest.fn();
+jest.mock('@wcpos/query/user-db/bootstrap', () => {
+	mockRegisterPlugins();
+	return {};
+});
 
 jest.mock('expo-crypto', () => ({
 	CryptoDigestAlgorithm: { SHA256: 'SHA256' },
@@ -19,10 +25,17 @@ const platformFetchRef: { fn: (...args: unknown[]) => unknown } = {
 	fn: (...args: unknown[]) => (globalThis.fetch as (...a: unknown[]) => unknown)(...args),
 };
 
-jest.mock('@wcpos/database', () => ({
+jest.mock('@wcpos/database/create-db', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
 	createUserDB: jest.fn(),
-	sanitizeWPCredentialsData: (data: unknown) => data,
+}));
+
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	applyEmbeddedBootPayload: jest.fn(),
+	openUserDatabase: jest.fn(),
+	readSiteTransportInputs: jest.fn(),
+	recordSiteTransport: jest.fn(),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -42,44 +55,40 @@ jest.mock('@wcpos/hooks/platform-fetch', () => ({
 	platformFetch: (...args: unknown[]) => platformFetchRef.fn(...args),
 }));
 
-// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
+// eslint-disable-next-line import/first -- Jest mocks must be registered before loading query commands.
 import {
-	hydrateUserSession,
-	type HydrationContext,
-	hydrationSteps,
-	runConnectCompatibilityProbes,
-	switchUserSessionStore,
-	testAuthorizationMethod,
-} from './hydration-steps';
+	applyEmbeddedBootPayload,
+	openUserDatabase,
+	readSiteTransportInputs,
+	recordSiteTransport,
+} from '@wcpos/query/user-db';
+// eslint-disable-next-line import/first -- Keep imports after the logger mock initialization.
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
+import { type HydrationContext, hydrationSteps, switchUserSessionStore } from './hydration-steps';
 // eslint-disable-next-line import/first -- Register the real engine port for session commits.
 import { registerEngineScopeSwitcher } from './engine-scope-port';
 
+beforeEach(() => {
+	jest.mocked(applyEmbeddedBootPayload).mockReset();
+	jest.mocked(openUserDatabase).mockReset();
+	jest.mocked(readSiteTransportInputs).mockReset().mockResolvedValue({});
+	jest.mocked(recordSiteTransport).mockReset();
+});
 afterEach(() => registerEngineScopeSwitcher(null));
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
 });
 
-describe('hydrateUserSession', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({ id: 'state' })) });
-	});
+// The embedded boot merges its payload into an existing credential document.
+const mergeable = <T extends object>(doc: T) =>
+	Object.assign(doc, { getLatest: () => doc, incrementalModify: jest.fn(async () => undefined) });
 
-	it('throws when a selected store cannot create its store database', async () => {
-		createStoreDBMock.mockResolvedValue(undefined);
-
-		await expect(
-			hydrateUserSession(
-				{
-					sites: documentLookup({ uuid: 'site-1' }),
-					wp_credentials: documentLookup({ uuid: 'cred-1' }),
-					stores: documentLookup({ localID: 'store-1' }),
-				} as any,
-				{ siteID: 'site-1', wpCredentialsID: 'cred-1', storeID: 'store-1' }
-			)
-		).rejects.toThrow('Failed to create store database');
-	});
+const pluginRegistrationsAtModuleLoad = mockRegisterPlugins.mock.calls.length;
+it('loads the database plugins with the hydration module, before executing any step', () => {
+	expect(pluginRegistrationsAtModuleLoad).toBe(1);
 });
 
 describe('switchUserSessionStore', () => {
@@ -102,6 +111,7 @@ describe('switchUserSessionStore', () => {
 		await expect(
 			switchUserSessionStore(
 				{
+					states: { v2: appState },
 					sites: documentLookup({ uuid: 'site-1' }),
 					wp_credentials: documentLookup({ uuid: 'cred-1' }),
 					stores: documentLookup({ localID: 'store-2' }),
@@ -135,6 +145,7 @@ describe('switchUserSessionStore', () => {
 
 		const switching = switchUserSessionStore(
 			{
+				states: { v2: appState },
 				sites: documentLookup(site),
 				wp_credentials: documentLookup(wpCredentials),
 				stores: documentLookup(store),
@@ -180,6 +191,7 @@ describe('switchUserSessionStore', () => {
 			switchUserSessionStore(
 				{
 					// The site row is gone — the #2112 shape.
+					states: { v2: appState },
 					sites: documentLookup(null),
 					wp_credentials: documentLookup({ uuid: 'cred-1' }),
 					stores: documentLookup({ localID: 'store-2' }),
@@ -212,6 +224,7 @@ describe('switchUserSessionStore', () => {
 		await expect(
 			switchUserSessionStore(
 				{
+					states: { v2: appState },
 					sites: documentLookup({ uuid: 'site-1' }),
 					wp_credentials: documentLookup({ uuid: 'cred-1' }),
 					stores: documentLookup({ localID: 'store-2' }),
@@ -247,6 +260,7 @@ describe('switchUserSessionStore', () => {
 
 		await switchUserSessionStore(
 			{
+				states: { v2: appState },
 				sites: documentLookup({ uuid: 'site-1' }),
 				wp_credentials: documentLookup({ uuid: 'cred-1' }),
 				stores: documentLookup(store),
@@ -283,85 +297,80 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		jest.clearAllMocks();
 	});
 
-	it('merges server-owned fields into existing stores and inserts new stores', async () => {
+	it.each(['site', 'credentials', 'stores'])(
+		'preserves URL cleanup ordering when the %s write throws',
+		async (failureAt) => {
+			window.history.replaceState({}, '', '/pos?store=2&keep=1');
+			const failure = new Error('write failed');
+			const write = (stage: string, value: unknown) => async () => {
+				if (failureAt === stage) throw failure;
+				return value;
+			};
+			const site = { uuid: 'site-1' };
+			const userDB = {
+				sites: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					insert: write('site', site),
+				},
+				wp_credentials: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					insert: write('credentials', { uuid: 'cred-1' }),
+				},
+				stores: { ...documentLookup(null), bulkInsert: write('stores', undefined) },
+			};
+			jest
+				.mocked(applyEmbeddedBootPayload)
+				.mockImplementation(jest.requireActual('@wcpos/query/user-db').applyEmbeddedBootPayload);
+			try {
+				await expect(
+					hydrationSteps[1].execute({
+						userDB,
+						appState: { get: () => null },
+						user: { uuid: 'user-1' },
+						initialProps: { site, wp_credentials: { uuid: 'cred-1' }, stores: [{ id: 2 }] },
+					} as unknown as HydrationContext)
+				).rejects.toBe(failure);
+				expect(window.location.search).toBe(failureAt === 'stores' ? '?keep=1' : '?store=2&keep=1');
+			} finally {
+				window.history.replaceState({}, '', '/');
+			}
+		}
+	);
+
+	it('hydrates and commits the processed store selection', async () => {
+		const site = { uuid: 'site-1' };
+		const credentials = { uuid: 'credentials-1' };
+		const store = { localID: '0123456789' };
+		const appState = { get: jest.fn(() => ({ storeID: store.localID })), set: jest.fn() };
 		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
-		const existingStore: any = {
-			id: 1,
-			localID: '0123456789',
-			currency: 'USD',
-			theme: 'dark',
-			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
-				Object.assign(existingStore, patch);
-			}),
-		};
-		existingStore.getLatest = jest.fn(() => existingStore);
-
-		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = {
-			uuid: 'credentials-1',
-			patch: jest.fn(async () => undefined),
-		};
-		const bulkInsert = jest.fn(async () => undefined);
-		const userDB = {
-			sites: {
-				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
-				incrementalUpsert: jest.fn(async () => siteDoc),
-			},
-			wp_credentials: {
-				upsert: jest.fn(async () => wpCredentialsDoc),
-				...documentLookup(wpCredentialsDoc),
-			},
-			stores: {
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => existingStore) })
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => existingStore) }),
-				bulkInsert,
-			},
-		};
-		const appState = {
-			get: jest.fn(async () => ({ storeID: existingStore.localID })),
-			set: jest.fn(async () => undefined),
-		};
-		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
-
-		await step!.execute({
-			userDB: userDB as any,
-			appState: appState as any,
-			user: { uuid: 'user-1' } as any,
-			initialProps: {
-				site: siteDoc,
-				wp_credentials: wpCredentialsDoc,
-				stores: [
-					{ id: 1, currency: 'EUR', calc_taxes: 'yes', theme: 'light' },
-					{ id: 2, name: 'New Store' },
-				],
-			},
+		jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+			siteUuid: site.uuid,
+			wpCredentialsUuid: credentials.uuid,
+			stores: [{ id: 1, localID: store.localID }],
 		});
-
-		// calc_taxes is auto-synced; currency is app-editable and must NOT auto-sync
-		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({ calc_taxes: 'yes' });
-		expect(existingStore.theme).toBe('dark');
-		expect(createStoreDBMock).toHaveBeenCalledWith(existingStore.localID);
+		await hydrationSteps
+			.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!
+			.execute({
+				userDB: {
+					sites: documentLookup(site),
+					wp_credentials: documentLookup(credentials),
+					stores: documentLookup(store),
+					states: { v2: appState },
+				} as any,
+				appState: appState as any,
+				user: { uuid: 'user-1' } as any,
+				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+			});
+		expect(createStoreDBMock).toHaveBeenCalledWith(store.localID);
 		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
-		expect(bulkInsert).toHaveBeenCalledWith([
-			expect.objectContaining({
-				id: 2,
-				name: 'New Store',
-				prevent_overselling: false,
-			}),
-		]);
 	});
 
 	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
 		const previous = { siteID: 'old-site', storeID: 'old-store' };
 		const site = { uuid: 'new-site' };
-		const credentials = { uuid: 'new-credentials', patch: jest.fn() };
+		const credentials = mergeable({ uuid: 'new-credentials', patch: jest.fn() });
 		const appState = { get: jest.fn(() => previous), set: jest.fn() };
 		const context = {
 			appState,
@@ -370,16 +379,18 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				sites: {
 					...documentLookup(null),
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-					incrementalUpsert: jest.fn(async () => site),
+					insert: jest.fn(async () => site),
 				},
-				wp_credentials: {
-					...documentLookup(credentials),
-					upsert: jest.fn(async () => credentials),
-				},
+				wp_credentials: documentLookup(credentials),
 				stores: { ...documentLookup(null), bulkInsert: jest.fn() },
 			},
 			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
 		} as unknown as HydrationContext;
+		jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+			siteUuid: site.uuid,
+			wpCredentialsUuid: credentials.uuid,
+			stores: [{ id: 1, localID: '0123456789' }],
+		});
 		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
 		expect(step.failSoft).toBe(true);
 		await expect(step.execute(context)).resolves.not.toHaveProperty('session');
@@ -394,6 +405,34 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					storeID: '0123456789',
 				},
 			}
+		);
+		expect(appState.set).not.toHaveBeenCalled();
+	});
+
+	it('merges the embedded credential, so a failure before the stores patch keeps its links', async () => {
+		// Storage preservation is pinned in query's applyEmbeddedBootPayload suite.
+		// Core passes the narrow payload through and must not commit after a failure.
+		const failure = new Error('store insert failed');
+		jest.mocked(applyEmbeddedBootPayload).mockRejectedValueOnce(failure);
+		const userDB = {};
+		const user = { uuid: 'user-1' };
+		const initialProps = {
+			site: { uuid: 'site-1' },
+			wp_credentials: { uuid: 'credentials-1', display_name: 'New Name' },
+			stores: [{ id: 1 }],
+		};
+		const appState = { get: jest.fn(async () => null), set: jest.fn() };
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
+
+		expect(step.failSoft).toBe(true);
+		await expect(
+			step.execute({ userDB, user, initialProps, appState } as unknown as HydrationContext)
+		).rejects.toBe(failure);
+		expect(applyEmbeddedBootPayload).toHaveBeenCalledWith(
+			userDB,
+			initialProps,
+			user,
+			expect.any(Function)
 		);
 		expect(appState.set).not.toHaveBeenCalled();
 	});
@@ -419,7 +458,11 @@ describe('HYDRATE_USER_SESSION', () => {
 				},
 			};
 			let latestSite = site;
-			const credentials = { uuid: 'credentials-1', access_token: 'token', patch: jest.fn() };
+			const credentials = mergeable({
+				uuid: 'credentials-1',
+				access_token: 'token',
+				patch: jest.fn(),
+			});
 			const store = { localID: '0123456789' };
 			let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
 			const context = {
@@ -432,32 +475,38 @@ describe('HYDRATE_USER_SESSION', () => {
 				user: { uuid: 'user-1' },
 				userDB: {
 					sites: {
-						findOne: jest
-							.fn()
-							.mockReturnValueOnce({ exec: async () => null })
-							.mockReturnValue({ exec: async () => site }),
+						findOne: jest.fn().mockReturnValue({ exec: async () => site }),
 						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-						incrementalUpsert: async () => site,
+						insert: async () => site,
 					},
-					wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
+					wp_credentials: documentLookup(credentials),
 					stores: {
-						findOne: jest
-							.fn()
-							.mockReturnValueOnce({ exec: async () => null })
-							.mockReturnValue({ exec: async () => store }),
+						findOne: jest.fn().mockReturnValue({ exec: async () => store }),
 						bulkInsert: jest.fn(),
 					},
 				},
 				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
 			} as unknown as HydrationContext;
-			const database = Object.assign(context.userDB!, {
-				addState: async () => context.appState,
-				users: documentLookup(context.user),
-				// CREATE_USER_DB also ensures the register document on this lane; an existing
-				// one keeps ensureRegister from inserting.
-				getLocal: async () => ({ toJSON: () => ({ data: { id: 'register-1', sites: {} } }) }),
+			Object.assign(context.userDB!, { states: { v2: context.appState } });
+			jest.mocked(openUserDatabase).mockResolvedValue({
+				userDB: context.userDB!,
+				sessionPointer: context.appState!,
+				translationsCache: context.appState!,
+				user: context.user!,
 			});
-			jest.requireMock('@wcpos/database').createUserDB.mockResolvedValue(database);
+			jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+				siteUuid: site.uuid,
+				wpCredentialsUuid: credentials.uuid,
+				stores: [{ id: 1, localID: store.localID }],
+			});
+			jest.mocked(recordSiteTransport).mockImplementation(async (_db, _uuid, flags) => {
+				latestSite = {
+					...latestSite,
+					use_jwt_as_param: !!flags.useJwtAsParam,
+					use_rest_route_param: !!flags.useRestRouteParam,
+					use_protocol_headers: !!flags.useProtocolHeaders,
+				};
+			});
 			jest.requireMock('./initial-props').initialProps = context.initialProps;
 			const originalFetch = platformFetchRef.fn;
 			platformFetchRef.fn = jest.fn(async (url) => ({
@@ -529,137 +578,6 @@ describe('HYDRATE_USER_SESSION', () => {
 	});
 });
 
-describe('PROCESS_INITIAL_PROPS display advertisement', () => {
-	it('keeps a display advertisement the initial props do not carry', async () => {
-		// The free plugin builds inline initial props without Pro's store filters,
-		// so `display` is never present there; the cashier response is the only
-		// payload that may withdraw it.
-		type StoreData = Record<string, unknown> & { display?: unknown };
-		type StoreDouble = StoreData & {
-			incrementalPatch: jest.Mock<Promise<void>, [Record<string, unknown>]>;
-			incrementalModify: jest.Mock<Promise<void>, [(doc: StoreData) => StoreData]>;
-			getLatest: () => StoreDouble;
-		};
-		const existingStore: StoreDouble = {
-			id: 1,
-			localID: '0123456789',
-			display: { contract: 1, signaling: '/wcpos/v2/display' },
-			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
-				Object.assign(existingStore, patch);
-			}),
-			incrementalModify: jest.fn(async (modify: (doc: StoreData) => StoreData) => {
-				const next = modify({ ...existingStore });
-				delete existingStore.display;
-				Object.assign(existingStore, next);
-			}),
-			getLatest: () => existingStore,
-		};
-		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = { uuid: 'credentials-1', patch: jest.fn(async () => undefined) };
-		// The changed pointer is hydrated before it is committed (main #2127): the
-		// existence check sees no site yet, the hydration afterwards finds the upserted
-		// one, the credentials and the store, and opens the store database.
-		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({ id: 'state' })) });
-		const userDB = {
-			sites: {
-				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
-				incrementalUpsert: jest.fn(async () => siteDoc),
-			},
-			wp_credentials: {
-				...documentLookup(wpCredentialsDoc),
-				upsert: jest.fn(async () => wpCredentialsDoc),
-			},
-			stores: {
-				findOne: jest.fn(() => ({ exec: jest.fn(async () => existingStore) })),
-				bulkInsert: jest.fn(async () => undefined),
-			},
-		};
-		const appState = {
-			get: jest.fn(async () => ({ storeID: existingStore.localID })),
-			set: jest.fn(async () => undefined),
-		};
-		type StepContext = Parameters<NonNullable<(typeof hydrationSteps)[number]['execute']>>[0];
-		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
-		await step!.execute({
-			userDB: userDB as unknown as StepContext['userDB'],
-			appState: appState as unknown as StepContext['appState'],
-			user: { uuid: 'user-1' } as unknown as StepContext['user'],
-			initialProps: {
-				site: siteDoc,
-				wp_credentials: wpCredentialsDoc,
-				stores: [{ id: 1, calc_taxes: 'yes' }],
-			},
-		});
-		expect(existingStore.display).toEqual({ contract: 1, signaling: '/wcpos/v2/display' });
-		expect(existingStore.incrementalModify).not.toHaveBeenCalled();
-	});
-});
-
-describe('probe transport', () => {
-	/**
-	 * The 1.10.2 connect outage: these probes called the renderer's global fetch.
-	 * On Electron the renderer origin is the custom scheme `wcpos://-`, so every
-	 * store request is cross-origin, and a host that rewrites
-	 * Access-Control-Allow-Origin to echo the caller's Origin returns an EMPTY
-	 * value for a custom scheme. The probes threw, both echo spellings read as
-	 * dead, and the app told the merchant "The store's REST API did not answer at
-	 * any address" about a store that answered 200 over the IPC bridge.
-	 *
-	 * The existing tests here cannot catch a regression: they stub `global.fetch`,
-	 * and the web build of `platformFetch` calls exactly that, so raw fetch and
-	 * platformFetch are indistinguishable to them. This test separates the two —
-	 * the global is rigged to throw, so anything reaching it fails loudly.
-	 */
-	const platformFetchMock = jest.fn();
-	const forbiddenGlobalFetch = jest.fn(() => {
-		throw new Error('probe used the global fetch — it must go through platformFetch');
-	});
-
-	beforeEach(() => {
-		platformFetchMock.mockReset();
-		forbiddenGlobalFetch.mockClear();
-		mockPlatform.isWeb = true;
-		global.fetch = forbiddenGlobalFetch as unknown as typeof fetch;
-		// Point the mocked module at this block's spy; the default delegates to the
-		// global so every OTHER test in this file keeps its existing fetch stub.
-		platformFetchRef.fn = platformFetchMock;
-		platformFetchMock.mockResolvedValue({
-			ok: true,
-			status: 200,
-			headers: { get: () => 'application/json' },
-			clone: () => ({ text: async () => '' }),
-			text: async () => '',
-			json: async () => ({
-				v: 1,
-				headers: { authorization: { received: true, length: 12 } },
-				params: { authorization: true, wcpos: true, store_id: true },
-			}),
-		});
-	});
-
-	it('sends the authorization probes through platformFetch, never the global', async () => {
-		const result = await testAuthorizationMethod(
-			'https://example.com/wp-json/wcpos/v2/',
-			'mock.connect.test',
-			'1.10.0',
-			'https://example.com/wp-json/'
-		);
-
-		expect(platformFetchMock).toHaveBeenCalled();
-		expect(forbiddenGlobalFetch).not.toHaveBeenCalled();
-		expect(result.ok).toBe(true);
-	});
-
-	afterEach(() => {
-		platformFetchRef.fn = (...args: unknown[]) =>
-			(globalThis.fetch as (...a: unknown[]) => unknown)(...args);
-	});
-});
-
 describe('TEST_AUTHORIZATION', () => {
 	const fetchMock = jest.fn();
 
@@ -712,15 +630,16 @@ describe('TEST_AUTHORIZATION', () => {
 			},
 		});
 
-		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
-			use_jwt_as_param: false,
-			use_rest_route_param: false,
-			use_protocol_headers: false,
-			use_instance_header: false,
-		});
-		expect(siteDoc.use_jwt_as_param).toBe(false);
-		expect(siteDoc.use_rest_route_param).toBe(false);
-		expect(siteDoc.use_protocol_headers).toBe(false);
+		expect(recordSiteTransport).toHaveBeenCalledWith(
+			expect.anything(),
+			'site-1',
+			expect.objectContaining({
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: false,
+				useInstanceHeader: false,
+			})
+		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -754,7 +673,7 @@ describe('TEST_AUTHORIZATION', () => {
 			})
 		).resolves.toEqual({});
 
-		expect(siteDoc.incrementalPatch).not.toHaveBeenCalled();
+		expect(recordSiteTransport).not.toHaveBeenCalled();
 	});
 
 	it('standalone web resolves the current session site and persists the transport verdict', async () => {
@@ -794,6 +713,13 @@ describe('TEST_AUTHORIZATION', () => {
 		siteDoc.getLatest.mockReturnValue(siteDoc);
 		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
 
+		jest.mocked(readSiteTransportInputs).mockResolvedValue({
+			siteUuid: siteDoc.uuid,
+			wcposApiUrl: siteDoc.wcpos_api_url,
+			accessToken: 'token',
+			wpApiUrl: undefined,
+			wcposVersion: undefined,
+		});
 		await step!.execute({
 			userDB: {
 				sites: documentLookup(siteDoc),
@@ -805,13 +731,16 @@ describe('TEST_AUTHORIZATION', () => {
 			initialProps: null,
 		});
 
-		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
-			use_jwt_as_param: false,
-			use_rest_route_param: false,
-			use_protocol_headers: true,
-			use_instance_header: false,
-		});
-		expect(siteDoc.use_protocol_headers).toBe(true);
+		expect(recordSiteTransport).toHaveBeenCalledWith(
+			expect.anything(),
+			'site-1',
+			expect.objectContaining({
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: true,
+				useInstanceHeader: false,
+			})
+		);
 		// Unsent floor names are unknown, not dead: no false alarm on a healthy store.
 		expect(mockAppLogger.warn).not.toHaveBeenCalledWith(
 			'Some POS request headers do not reach this server',
@@ -831,1010 +760,5 @@ describe('TEST_AUTHORIZATION', () => {
 		).resolves.toEqual({});
 
 		expect(fetchMock).not.toHaveBeenCalled();
-	});
-});
-
-describe('runConnectCompatibilityProbes', () => {
-	const fetchMock = jest.fn();
-	const echoBody = (received: boolean, length: number) => ({
-		v: 1,
-		headers: { authorization: { received, length } },
-		params: { authorization: false, wcpos: true, store_id: true },
-	});
-	const response = (status: number, data: unknown = null) => ({
-		ok: status >= 200 && status < 300,
-		status,
-		json: jest.fn(async () => data),
-		text: jest.fn(async () => (data === null ? '' : JSON.stringify(data))),
-	});
-	const run = () =>
-		runConnectCompatibilityProbes({
-			pathBase: 'https://example.com/wp-json/wcpos/v2/',
-			pathRoot: 'https://example.com/wp-json/',
-			useRestRouteParam: false,
-		});
-
-	beforeEach(() => {
-		fetchMock.mockReset();
-		mockAppLogger.warn.mockClear();
-		mockAppLogger.error.mockClear();
-		global.fetch = fetchMock as unknown as typeof fetch;
-	});
-
-	it('warns only when the bare ping is readable and the nasty search is blocked', async () => {
-		fetchMock
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(403))
-			.mockResolvedValueOnce(response(500))
-			.mockResolvedValueOnce(response(500));
-
-		await expect(run()).resolves.toEqual({
-			blocking: null,
-			warnings: [ERROR_CODES.SEARCH_BLOCKED_BY_WAF],
-			useCacheBuster: false,
-		});
-		expect(String(fetchMock.mock.calls[1][0])).toContain('s=%C3%9Cnion+select+caf%C3%A9');
-		expect(mockAppLogger.warn).toHaveBeenCalledWith(
-			'Host security filter blocks ordinary search terms',
-			{
-				code: ERROR_CODES.SEARCH_BLOCKED_BY_WAF,
-				showToast: true,
-				context: { classification: 'SEARCH_BLOCKED_BY_WAF' },
-			}
-		);
-	});
-
-	it.each([
-		['both pings are forbidden', response(403), response(403)],
-		['the bare ping fails', new Error('offline'), response(403)],
-	])('does not infer search blocking when %s', async (_name, bare, nasty) => {
-		if (bare instanceof Error) fetchMock.mockRejectedValueOnce(bare);
-		else fetchMock.mockResolvedValueOnce(bare);
-		fetchMock
-			.mockResolvedValueOnce(nasty)
-			.mockResolvedValueOnce(response(500))
-			.mockResolvedValueOnce(response(500));
-
-		await expect(run()).resolves.toEqual({ blocking: null, warnings: [], useCacheBuster: false });
-		expect(fetchMock).toHaveBeenCalledTimes(4);
-		expect(mockAppLogger.warn).not.toHaveBeenCalled();
-	});
-
-	it('blocks when the second authenticated echo replays the first token length', async () => {
-		fetchMock
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)));
-
-		await expect(run()).resolves.toEqual({
-			blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
-			warnings: [],
-			useCacheBuster: false,
-		});
-		expect(fetchMock).toHaveBeenCalledTimes(6);
-		const keys = fetchMock.mock.calls
-			.slice(4)
-			.map(([url]) => new URL(url).searchParams.get('_wcpos_nocache'));
-		expect(keys[0]).toBeTruthy();
-		expect(keys[1]).toBeTruthy();
-		expect(keys[0]).not.toBe(keys[1]);
-		expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[3][0]);
-		expect(fetchMock.mock.calls[2][1].headers.authorization).toHaveLength(24);
-		expect(fetchMock.mock.calls[3][1].headers.authorization).toHaveLength(36);
-		expect(mockAppLogger.error).toHaveBeenCalledWith('Shared cache replay detected', {
-			code: ERROR_CODES.CACHE_SHARED_REPLAY,
-			showToast: true,
-		});
-	});
-
-	it.each([
-		['healthy echoes', echoBody(true, 24), echoBody(true, 36)],
-		['stripped Authorization headers', echoBody(false, 0), echoBody(false, 0)],
-		['a malformed second echo', echoBody(true, 24), { status: 'success' }],
-	])('does not infer cache replay from %s', async (_name, first, second) => {
-		fetchMock
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200, first))
-			.mockResolvedValueOnce(response(200, second));
-
-		await expect(run()).resolves.toEqual({ blocking: null, warnings: [], useCacheBuster: false });
-		expect(fetchMock).toHaveBeenCalledTimes(4);
-		expect(mockAppLogger.error).not.toHaveBeenCalled();
-	});
-
-	it('routes around replay when the busted pair is healthy without a toast', async () => {
-		fetchMock
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-			.mockResolvedValueOnce(response(200, echoBody(true, 36)));
-		await expect(run()).resolves.toEqual({
-			blocking: null,
-			warnings: [ERROR_CODES.CACHE_SHARED_REPLAY],
-			useCacheBuster: true,
-		});
-		expect(fetchMock).toHaveBeenCalledTimes(6);
-		expect(mockAppLogger.warn).toHaveBeenCalledWith(
-			'Shared cache replay detected; routing around it with a unique cache key on every request',
-			{
-				code: ERROR_CODES.CACHE_SHARED_REPLAY,
-				context: { classification: 'CACHE_SHARED_REPLAY', mitigated: true },
-			}
-		);
-		expect(mockAppLogger.error).not.toHaveBeenCalled();
-	});
-	it.each([{ status: 'success' }, null, echoBody(true, 36)])(
-		'blocks when the busted first echo does not prove arrival: %p',
-		async (first) => {
-			fetchMock
-				.mockResolvedValueOnce(response(200))
-				.mockResolvedValueOnce(response(200))
-				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-				.mockResolvedValueOnce(response(200, first))
-				.mockResolvedValueOnce(response(200, echoBody(true, 36)));
-			await expect(run()).resolves.toEqual({
-				blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
-				warnings: [],
-				useCacheBuster: false,
-			});
-			expect(fetchMock).toHaveBeenCalledTimes(6);
-			expect(mockAppLogger.warn).not.toHaveBeenCalled();
-		}
-	);
-	it.each([{ status: 'success' }, null, echoBody(false, 36)])(
-		'blocks when the busted second echo does not prove arrival: %p',
-		async (second) => {
-			fetchMock
-				.mockResolvedValueOnce(response(200))
-				.mockResolvedValueOnce(response(200))
-				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
-				.mockResolvedValueOnce(response(200, second));
-			await expect(run()).resolves.toEqual({
-				blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
-				warnings: [],
-				useCacheBuster: false,
-			});
-			expect(fetchMock).toHaveBeenCalledTimes(6);
-		}
-	);
-});
-
-describe('testAuthorizationMethod', () => {
-	const fetchMock = jest.fn();
-
-	beforeEach(() => {
-		fetchMock.mockReset();
-		mockAppLogger.warn.mockClear();
-		mockAppLogger.error.mockClear();
-		global.fetch = fetchMock as unknown as typeof fetch;
-	});
-
-	it('uses Authorization headers without testing query parameter auth when headers work', async () => {
-		fetchMock.mockResolvedValueOnce({ ok: false, json: jest.fn() }).mockResolvedValueOnce({
-			ok: true,
-			json: jest.fn(async () => ({ status: 'success' })),
-		});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
-		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
-		expect(fetchMock.mock.calls[1][1]).toMatchObject({
-			headers: {
-				authorization: 'Bearer token',
-			},
-		});
-	});
-
-	it('falls back to query parameter auth when headers fail', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({
-				ok: true,
-				json: jest.fn(async () => ({ status: 'success' })),
-			});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: true,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
-		expect(fetchMock.mock.calls[2][1]).toMatchObject({
-			headers: {
-				'x-wcpos': '1',
-			},
-		});
-	});
-
-	it('returns an uncoded failure when both legacy auth methods answer but reject credentials', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: null });
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(fetchMock.mock.calls[1][1]).toMatchObject({
-			headers: {
-				authorization: 'Bearer token',
-				'x-wcpos': '1',
-			},
-		});
-		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
-		expect(fetchMock.mock.calls[2][1]).toMatchObject({
-			headers: {
-				'x-wcpos': '1',
-			},
-		});
-		expect(mockAppLogger.error).not.toHaveBeenCalled();
-	});
-
-	it('passes abort signals to auth probes so requests can time out', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
-
-		await testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token');
-
-		expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
-		expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
-		expect(fetchMock.mock.calls[2][1].signal).toBeInstanceOf(AbortSignal);
-	});
-
-	it('keeps the shorter echo timeout active while reading the response body', async () => {
-		jest.useFakeTimers();
-		try {
-			let resolveBody!: (value: unknown) => void;
-			const body = new Promise<unknown>((resolve) => {
-				resolveBody = resolve;
-			});
-			fetchMock
-				.mockResolvedValueOnce({ ok: true, json: jest.fn(() => body) })
-				.mockResolvedValueOnce({ ok: false, json: jest.fn() })
-				.mockResolvedValueOnce({ ok: false, json: jest.fn() });
-
-			const authorization = testAuthorizationMethod(
-				'https://example.com/wp-json/wcpos/v2/',
-				'token'
-			);
-			await Promise.resolve();
-			const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
-
-			expect(signal.aborted).toBe(false);
-			jest.advanceTimersByTime(3000);
-			expect(signal.aborted).toBe(true);
-
-			resolveBody(null);
-			await expect(authorization).resolves.toEqual({
-				ok: false,
-				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
-			});
-		} finally {
-			jest.useRealTimers();
-		}
-	});
-
-	const echoBody = (overrides: Record<string, unknown> = {}) => ({
-		v: 1,
-		headers: {
-			authorization: { received: true, length: 12 },
-			'content-type': { received: true, length: 16 },
-			'x-wcpos': { received: true, length: 1 },
-			'x-wcpos-store': { received: true, length: 1 },
-			'idempotency-key': { received: true, length: 16 },
-			'if-match': { received: true, length: 18 },
-			'if-none-match': { received: true, length: 18 },
-			'x-wcpos-idempotency-key': { received: true, length: 16 },
-		},
-		params: { authorization: true, wcpos: true, store_id: true },
-		...overrides,
-	});
-
-	it('accepts an old-shape echo without cors and conservatively keeps protocol params', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: jest.fn(async () => echoBody()),
-		});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		const echoUrl = String(fetchMock.mock.calls[0][0]);
-		expect(echoUrl).toContain('/wp-json/wcpos/v2/echo');
-		// Both credential channels ride the single probe request — but the URL
-		// carries a MASKED token (same shape and length), never the secret.
-		expect(echoUrl).toContain('authorization=Bearer+xxxxx');
-		expect(echoUrl).not.toContain('token');
-		expect(echoUrl).toContain('wcpos=1');
-		expect(echoUrl).toContain('store_id=1');
-		expect(fetchMock.mock.calls[0][1]).toMatchObject({
-			headers: {
-				authorization: 'Bearer token',
-				'x-wcpos': '1',
-				'x-wcpos-store': '1',
-				'idempotency-key': 'wcpos-echo-probe',
-				'if-match': '"wcpos-echo-probe"',
-				'if-none-match': '"wcpos-echo-probe"',
-				'x-wcpos-idempotency-key': 'wcpos-echo-probe',
-			},
-		});
-	});
-
-	it('enables protocol headers when both signal names are in the echo header floor', async () => {
-		const body = echoBody();
-		Object.assign(body.headers, {
-			'x-wcpos-protocol': { received: false, length: 0 },
-			'x-wcpos-client': { received: false, length: 0 },
-		});
-		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: true,
-			useInstanceHeader: false,
-		});
-	});
-
-	it.each([
-		['received', true, true],
-		['stripped', false, false],
-		['missing', undefined, false],
-		['HTML challenge', 'html', false],
-		['failed preflight', null, false],
-	] as const)(
-		'probes the instance header before trusting reflection: %s',
-		async (_scenario, received, allowed) => {
-			fetchMock.mockResolvedValueOnce({
-				ok: true,
-				json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
-			});
-			fetchMock.mockImplementationOnce(async (url, init) => {
-				expect(new URL(url).searchParams.get('wcpos')).toBe('1');
-				expect(new Headers(init.headers).get('X-WCPOS')).toBe('1');
-				expect(new Headers(init.headers).get('X-WCPOS-Instance')).toBe('wcpos-instance-probe');
-				if (received === null) throw new TypeError('Failed preflight');
-				const body = echoBody({ cors: { reflects_request_headers: true } });
-				if (typeof received === 'boolean') {
-					Object.assign(body.headers, {
-						'x-wcpos-instance': { received, length: received ? 20 : 0 },
-					});
-				}
-				return new Response(
-					received === 'html' ? '<html>Checking your browser</html>' : JSON.stringify(body),
-					{ status: 200 }
-				);
-			});
-
-			await expect(
-				testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-			).resolves.toEqual({
-				ok: true,
-				useJwtAsParam: false,
-				useRestRouteParam: false,
-				useProtocolHeaders: true,
-				useInstanceHeader: allowed,
-			});
-		}
-	);
-
-	it('classifies a challenge page returned by the path echo', async () => {
-		fetchMock
-			.mockResolvedValueOnce({
-				ok: false,
-				status: 403,
-				headers: { get: jest.fn(() => 'text/html; charset=UTF-8') },
-				text: jest.fn(async () => '<html><script src="/cdn-cgi/challenge-platform/cf-chl.js">'),
-			})
-			.mockRejectedValueOnce(new Error('query echo blocked'))
-			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API });
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-	});
-
-	it('does not read a Cloudflare-branded plain error page as a bot challenge', async () => {
-		// A CF-branded 520/maintenance page carries the brand name but no
-		// challenge machinery — it must stay on the transport/outage diagnosis.
-		const cfErrorPage = {
-			ok: false,
-			status: 520,
-			headers: { get: jest.fn(() => 'text/html; charset=UTF-8') },
-			text: jest.fn(
-				async () => '<html><body>Web server is down — cloudflare performance & security</body>'
-			),
-		};
-		fetchMock
-			.mockResolvedValueOnce(cfErrorPage)
-			.mockResolvedValueOnce({ ...cfErrorPage, text: jest.fn(async () => '<html>down') })
-			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') });
-
-		const result = await testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token');
-		expect(result).toMatchObject({ ok: false });
-		expect((result as { code: unknown }).code).not.toBe(ERROR_CODES.BOT_CHALLENGE_BLOCKING_API);
-	});
-
-	it('treats a 503 pair with a 5xx ping as an outage, not a header limit', async () => {
-		// The header-limit diagnosis needs the MINIMAL-header lane healthy; a
-		// 503-answering ping is the same outage answering everywhere.
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: null });
-
-		expect(mockAppLogger.error).not.toHaveBeenCalled();
-	});
-
-	it('classifies legacy header 400 plus parameter 414 as an oversized token', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 401, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 400, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 414, text: jest.fn(async () => '') });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.AUTH_TOKEN_TOO_LARGE });
-	});
-
-	it('classifies two 503 echo spellings when the bare ping answers', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
-			.mockResolvedValueOnce({ status: 200 });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.RESPONSE_HEADERS_REJECTED });
-
-		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/ping?wcpos=1');
-	});
-
-	it('classifies web preflight blocking when an unheadered echo remains readable', async () => {
-		fetchMock
-			.mockRejectedValueOnce(new TypeError('path CORS failure'))
-			.mockRejectedValueOnce(new TypeError('query CORS failure'))
-			.mockResolvedValueOnce({ status: 200 })
-			.mockResolvedValueOnce({ ok: true, status: 200 });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.CORS_PREFLIGHT_BLOCKED });
-
-		expect(fetchMock).toHaveBeenCalledTimes(4);
-		expect(fetchMock.mock.calls[3][1]).toMatchObject({ cache: 'no-store' });
-		expect(fetchMock.mock.calls[3][1]).not.toHaveProperty('headers');
-	});
-
-	it('treats web echo probe timeouts as a slow store when the simple echo succeeds', async () => {
-		jest.useFakeTimers();
-		try {
-			const waitForAbort = (_input: unknown, init: RequestInit) =>
-				new Promise<Response>((_resolve, reject) => {
-					init.signal!.addEventListener('abort', () => {
-						reject(new DOMException('The operation was aborted', 'AbortError'));
-					});
-				});
-			fetchMock
-				.mockImplementationOnce(waitForAbort)
-				.mockImplementationOnce(waitForAbort)
-				.mockResolvedValueOnce({ ok: true, status: 200 })
-				.mockResolvedValueOnce({ ok: true, status: 200 });
-
-			const authorization = testAuthorizationMethod(
-				'https://example.com/wp-json/wcpos/v2/',
-				'token'
-			);
-			await jest.advanceTimersByTimeAsync(6000);
-
-			await expect(authorization).resolves.toEqual({ ok: false, code: null, timedOut: true });
-			expect(fetchMock).toHaveBeenCalledTimes(4);
-			expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
-			expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
-			expect(mockAppLogger.warn).toHaveBeenCalledTimes(1);
-			expect(mockAppLogger.warn).toHaveBeenCalledWith(
-				'Authorization probes timed out — store too slow to answer',
-				{ context: { wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/' } }
-			);
-			expect(mockAppLogger.error).not.toHaveBeenCalled();
-		} finally {
-			jest.useRealTimers();
-		}
-	});
-
-	it('classifies a path timeout with a fast query failure as preflight blocking', async () => {
-		jest.useFakeTimers();
-		try {
-			fetchMock
-				.mockImplementationOnce(
-					(_input: unknown, init: RequestInit) =>
-						new Promise<Response>((_resolve, reject) => {
-							init.signal!.addEventListener('abort', () => {
-								reject(new DOMException('The operation was aborted', 'AbortError'));
-							});
-						})
-				)
-				.mockRejectedValueOnce(new TypeError('query CORS failure'))
-				.mockResolvedValueOnce({ ok: true, status: 200 })
-				.mockResolvedValueOnce({ ok: true, status: 200 });
-
-			const authorization = testAuthorizationMethod(
-				'https://example.com/wp-json/wcpos/v2/',
-				'token'
-			);
-			await jest.advanceTimersByTimeAsync(3000);
-
-			await expect(authorization).resolves.toEqual({
-				ok: false,
-				code: ERROR_CODES.CORS_PREFLIGHT_BLOCKED,
-			});
-			expect(fetchMock).toHaveBeenCalledTimes(4);
-			expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
-			expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false);
-		} finally {
-			jest.useRealTimers();
-		}
-	});
-
-	it('does not classify a readable simple-echo error as preflight blocking', async () => {
-		fetchMock
-			.mockRejectedValueOnce(new Error('path CORS failure'))
-			.mockRejectedValueOnce(new Error('query CORS failure'))
-			.mockResolvedValueOnce({ status: 200 })
-			.mockResolvedValueOnce({ ok: false, status: 403 });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
-	});
-
-	it('classifies broken web CORS when only a no-cors ping resolves', async () => {
-		fetchMock
-			.mockRejectedValueOnce(new Error('path CORS failure'))
-			.mockRejectedValueOnce(new Error('query CORS failure'))
-			.mockRejectedValueOnce(new Error('cors ping failure'))
-			.mockRejectedValueOnce(new Error('simple echo failure'))
-			.mockResolvedValueOnce({ type: 'opaque', status: 0 });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.CORS_MISCONFIGURED });
-
-		expect(fetchMock).toHaveBeenCalledTimes(5);
-		expect(fetchMock.mock.calls[4][1]).toMatchObject({ cache: 'no-store', mode: 'no-cors' });
-	});
-
-	it('retries a 404 path echo in query form and derives auth from that response', async () => {
-		const body = echoBody();
-		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
-			received: false,
-			length: 0,
-		};
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => body) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: true,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
-		expect(String(fetchMock.mock.calls[1][0])).toContain('rest_route=%2Fwcpos%2Fv2%2Fecho');
-	});
-
-	it('retries a network-failed path echo in query form', async () => {
-		fetchMock
-			.mockRejectedValueOnce(new Error('blocked'))
-			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => echoBody()) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-	});
-
-	it('probes only query form when the stored base is already query form', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: jest.fn(async () => echoBody()),
-		});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/?rest_route=/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(String(fetchMock.mock.calls[0][0])).toContain('rest_route=%2Fwcpos%2Fv2%2Fecho');
-		expect(String(fetchMock.mock.calls[0][0])).not.toContain('/wp-json/');
-	});
-
-	it('treats native network-dead-with-dead-ping as offline, not hostile', async () => {
-		// Everything network-dead INCLUDING the ping discriminator is the
-		// store-offline shape (finding d9): no host-blocked code, no toast —
-		// the online-status UX owns outages.
-		mockPlatform.isWeb = false;
-		fetchMock
-			.mockRejectedValueOnce(new Error('path blocked'))
-			.mockRejectedValueOnce(new Error('query blocked'))
-			.mockRejectedValueOnce(new Error('ping dead'));
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: null });
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(String(fetchMock.mock.calls[2][0])).toContain('/wcpos/v2/ping');
-		expect(mockAppLogger.error).not.toHaveBeenCalled();
-	});
-
-	it('names the transport block on native when the ping proves the store alive', async () => {
-		mockPlatform.isWeb = false;
-		fetchMock
-			.mockRejectedValueOnce(new Error('path blocked'))
-			.mockRejectedValueOnce(new Error('query blocked'))
-			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn() });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
-			code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
-			showToast: true,
-			context: {
-				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				classification: 'REST_TRANSPORT_BLOCKED',
-			},
-		});
-	});
-
-	it('returns and logs the transport-blocked verdict when both legacy transports are blocked', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
-
-		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
-			code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
-			showToast: true,
-			context: {
-				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				classification: 'REST_TRANSPORT_BLOCKED',
-			},
-		});
-	});
-
-	it('treats a path echo 401 as an auth-level answer and skips query echo', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 401, json: jest.fn() })
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: jest.fn(async () => ({ status: 'success' })),
-			});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
-	});
-
-	it('retries the legacy auth test in query form after path transport 404s', async () => {
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: jest.fn(async () => ({ status: 'success' })),
-			});
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
-		expect(String(fetchMock.mock.calls[3][0])).toContain('rest_route=/wcpos/v2/auth/test');
-	});
-
-	it('flips to param mode when the echo shows the Authorization header stripped', async () => {
-		const body = echoBody();
-		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
-			received: false,
-			length: 0,
-		};
-		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: true,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-	});
-
-	it('returns and logs credential-channel blocking without the legacy fallback', async () => {
-		const body = echoBody({ params: { authorization: false, wcpos: true, store_id: true } });
-		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
-			received: false,
-			length: 0,
-		};
-		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, code: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST });
-
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
-			code: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
-			showToast: true,
-			context: {
-				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				classification: 'AUTH_TOKEN_BLOCKED_BY_HOST',
-			},
-		});
-	});
-
-	it('reaches the path legacy test when the query echo answers with a non-probe 200', async () => {
-		// Old server behind a sloppy cache: path echo 404 (route absent), query
-		// echo answers 200 with garbage. Neither is network-dead, so the ladder
-		// must fall through to auth/test — path first, since the path answered
-		// at route level — never to both-transports-blocked.
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => '<html>') })
-			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
-		expect(String(fetchMock.mock.calls[2][0])).not.toContain('rest_route');
-	});
-
-	it('retries the legacy test in query form when the path legacy transport is dead too', async () => {
-		// path echo 404 → query echo garbage 200 → path auth/test 404 → query
-		// auth/test succeeds: the query spelling carries the site.
-		fetchMock
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => '<html>') })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(4);
-		expect(String(fetchMock.mock.calls[3][0])).toContain('rest_route=/wcpos/v2/auth/test');
-	});
-
-	it('falls back to the legacy auth test when the echo body is incomplete', async () => {
-		// { v: 1, headers: {}, params: {} } must read as probe-UNAVAILABLE, not
-		// as "both channels blocked" — an empty map would otherwise skip the
-		// legacy fallback on a healthy server.
-		fetchMock
-			.mockResolvedValueOnce({
-				ok: true,
-				json: jest.fn(async () => ({ v: 1, headers: {}, params: {} })),
-			})
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
-	});
-
-	it('falls back to the legacy auth test when the echo body is not the probe shape', async () => {
-		// A hostile host can answer 200 with an interstitial page; the guard
-		// must treat that as echo-unavailable, not as an empty header map.
-		fetchMock
-			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) })
-			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
-			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
-
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-			useProtocolHeaders: false,
-			useInstanceHeader: false,
-		});
-
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
-	});
-});
-
-// Wire fixtures recorded through platformFetch against 7bd1b8abf0, before migration.
-// Only HTTP header names/order are normalized; URL bytes and header values are literal.
-describe('probe wire fixtures', () => {
-	it.each([false, true])('keeps all five experiments unchanged (query=%s)', async (query) => {
-		const previousFetch = platformFetchRef.fn;
-		const fetchMock = jest.fn(async () => ({
-			ok: false,
-			status: 401,
-			json: async () => ({}),
-		}));
-		platformFetchRef.fn = fetchMock;
-		const pathBase = 'https://example.test/blog/wp-json/wcpos/v2/';
-		const base = query ? 'https://example.test/blog/?rest_route=/wcpos/v2/' : pathBase;
-		const wire = () =>
-			fetchMock.mock.calls.map((call) => {
-				const [url, init] = call as unknown as [string, RequestInit];
-				return { url: String(url), headers: Object.fromEntries(new Headers(init.headers)) };
-			});
-		const echoHeaders = {
-			authorization: 'Bearer Ab9._-Cd7',
-			'content-type': 'application/json',
-			'x-wcpos': '1',
-			'x-wcpos-store': '1',
-			'idempotency-key': 'wcpos-echo-probe',
-			'if-match': '"wcpos-echo-probe"',
-			'if-none-match': '"wcpos-echo-probe"',
-			'x-wcpos-idempotency-key': 'wcpos-echo-probe',
-		};
-		try {
-			await testAuthorizationMethod(base, 'Ab9._-Cd7');
-			expect(wire()).toEqual([
-				{
-					url: query
-						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fecho&authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1'
-						: 'https://example.test/blog/wp-json/wcpos/v2/echo?authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1',
-					headers: echoHeaders,
-				},
-				{ url: `${base}auth/test`, headers: { 'x-wcpos': '1', authorization: 'Bearer Ab9._-Cd7' } },
-				{
-					url: query
-						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Ftest&authorization=Bearer+Ab9._-Cd7'
-						: 'https://example.test/blog/wp-json/wcpos/v2/auth/test?authorization=Bearer+Ab9._-Cd7',
-					headers: { 'x-wcpos': '1' },
-				},
-			]);
-			fetchMock.mockClear();
-			await runConnectCompatibilityProbes({
-				pathBase,
-				pathRoot: 'https://example.test/blog/wp-json/',
-				useRestRouteParam: query,
-			});
-			expect(wire()).toEqual([
-				{ url: `${base}ping${query ? '&' : '?'}wcpos=1`, headers: {} },
-				{
-					url: query
-						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fping&wcpos=1&s=%C3%9Cnion+select+caf%C3%A9'
-						: 'https://example.test/blog/wp-json/wcpos/v2/ping?wcpos=1&s=%C3%9Cnion+select+caf%C3%A9',
-					headers: {},
-				},
-				{
-					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
-					headers: { authorization: 'Bearer cache.probe.12345' },
-				},
-				{
-					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
-					headers: { authorization: 'Bearer cache.probe.second.token.1234' },
-				},
-			]);
-		} finally {
-			platformFetchRef.fn = previousFetch;
-		}
 	});
 });

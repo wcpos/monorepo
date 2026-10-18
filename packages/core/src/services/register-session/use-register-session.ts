@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged, map, of, timer } from 'rxjs';
+import { combineLatest, distinctUntilChanged, filter, firstValueFrom, map, of, timer } from 'rxjs';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { type ReadonlyEngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
@@ -235,7 +236,6 @@ export function useRegisterSession() {
 				refundRecords: data?.refundRecords,
 			}
 		: undefined;
-	const terms = drawerInput ? deriveDrawerTerms(drawerInput) : undefined;
 	const baselineHas = baselineContains(
 		accountingOrders.map(({ record }) => record),
 		data?.refundSources ?? [],
@@ -270,6 +270,8 @@ export function useRegisterSession() {
 			sessionRefreshRequests.next({ storeDB, registerId: binding.registerId });
 	}, [baselineStale, storeDB, binding.registerId]);
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
+	// The same anchor as `expected`, so the strip's terms add up to its total.
+	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -398,8 +400,9 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
-				const cashiers: { id?: number; display_name?: string }[] =
-					await site.populate('wp_credentials');
+				const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
+					observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+				);
 				const actorName = (id: number | null | undefined) =>
 					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
 						?.display_name ?? '';

@@ -27,6 +27,7 @@ import {
 	saveConnectedSite,
 	saveLoginCredentials,
 	SiteIdentityClashError,
+	upsertEmbeddedCredentials,
 } from '../../src/user-db';
 
 jest.mock('uuid', () => ({
@@ -483,6 +484,87 @@ describe('auth write commands', () => {
 			expect((await db.wp_credentials.findOne(params.uuid).exec())!.deleted).toBe(false);
 		}
 	);
+});
+
+describe('upsertEmbeddedCredentials', () => {
+	// The shape `Auth::get_user_data` embeds: no `stores`, `last_access` or `date_*`.
+	const embedded = (overrides: Record<string, unknown> = {}) => ({
+		uuid: 'cred-embedded',
+		id: 7,
+		username: 'cashier',
+		email: 'cashier@example.test',
+		first_name: 'Cash',
+		last_name: 'Ier',
+		nice_name: 'cashier',
+		display_name: 'Cashier',
+		roles: ['cashier'],
+		capabilities: ['y'],
+		avatar_url: 'https://example.test/avatar.png',
+		access_token: 'new',
+		refresh_token: 'refresh',
+		token_type: 'Bearer',
+		expires_at: 456,
+		...overrides,
+	});
+	const stored = {
+		uuid: 'cred-embedded',
+		id: 7,
+		display_name: 'Old Name',
+		access_token: 'old',
+		capabilities: ['x'],
+		stores: ['store-a'],
+		last_access: '2026-10-01T00:00:00.000Z',
+		date_created_gmt: '2026-01-01T00:00:00',
+		date_modified_gmt: '2026-09-01T00:00:00',
+	};
+
+	it('merges over the stored credential, keeping the fields the payload never carries', async () => {
+		await db.wp_credentials.insert(stored);
+
+		// A server that ever sends `stores` must not overwrite the local links.
+		const doc = await upsertEmbeddedCredentials(db, embedded({ stores: ['server-junk'] }));
+
+		expect(doc.toJSON()).toMatchObject({
+			access_token: 'new',
+			refresh_token: 'refresh',
+			display_name: 'Cashier',
+			first_name: 'Cash',
+			capabilities: ['y'],
+			roles: ['cashier'],
+			stores: ['store-a'],
+			last_access: stored.last_access,
+			date_created_gmt: stored.date_created_gmt,
+			date_modified_gmt: stored.date_modified_gmt,
+		});
+		expect(doc.toJSON()).not.toHaveProperty('token_type');
+		// The returned handle is the live document, not the pre-merge snapshot.
+		expect(doc.getLatest().access_token).toBe('new');
+		expect((await db.wp_credentials.findOne(stored.uuid).exec())!.access_token).toBe('new');
+	});
+
+	it('inserts and returns the credential when none is stored', async () => {
+		const doc = await upsertEmbeddedCredentials(db, embedded());
+
+		expect(doc.uuid).toBe('cred-embedded');
+		expect(doc.access_token).toBe('new');
+		expect((await db.wp_credentials.findOne('cred-embedded').exec())!.display_name).toBe('Cashier');
+	});
+
+	it('drops stored capabilities when the payload carries none (absent = unknown)', async () => {
+		await db.wp_credentials.insert(stored);
+		const { capabilities: _omitted, ...payload } = embedded();
+
+		const doc = await upsertEmbeddedCredentials(db, payload);
+
+		expect(doc.toJSON()).not.toHaveProperty('capabilities');
+		expect(doc.stores).toEqual(['store-a']);
+	});
+
+	it('rejects a payload without a uuid', async () => {
+		await expect(upsertEmbeddedCredentials(db, {})).rejects.toThrow(
+			'Cannot save credentials without a uuid'
+		);
+	});
 });
 
 // The REST suffix cut is a linear scan now (CodeQL, #2706); these pin the regex's semantics.

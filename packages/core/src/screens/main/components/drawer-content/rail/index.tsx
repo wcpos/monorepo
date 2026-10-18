@@ -76,7 +76,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
 			<DrawerContentScrollView
 				{...props}
-				className="bg-rail border-rail-border w-14 border-r"
+				// 64 wide: the 48 items sit 8 px from each edge, the same gutter the front drawer
+				// gives them (`mx-2`, decision 8 of 2026-10-16); at 56 the active square touched
+				// the rail's sides (owner, 2026-10-18).
+				className="bg-rail border-rail-border w-16 border-r"
 				testID={panelTestID}
 				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
 				accessibilityElementsHidden={hideFromAssistiveTech}
@@ -87,6 +90,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 					paddingRight: 0,
 					paddingStart: 0,
 					paddingEnd: 0,
+					alignItems: 'center',
 					justifyContent: 'flex-start',
 					// flexGrow (not height: '100%') so the bottom group's marginTop: 'auto'
 					// still anchors when content fits, while overflowing items stay scrollable

@@ -15,6 +15,11 @@ import type { QueryHandle, QueryStateOf } from '../../../query';
 
 type FakeHandle = QueryHandle & { set: (partial: object) => void; retry: () => void };
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
@@ -185,10 +190,12 @@ jest.mock('./context', () => ({
 	},
 }));
 jest.mock('./reports', () => ({
-	Reports: ({ title }: { title: React.ReactNode }) => {
+	// `header` is the till strip, the page's first row since 2026-10-18.
+	Reports: ({ title, header }: { title: React.ReactNode; header?: React.ReactNode }) => {
 		const actions = jest.requireActual('../../../query').useQueryStateActions();
 		return (
 			<>
+				{header}
 				{title}
 				<button
 					data-testid="legacy-register"

@@ -66,6 +66,8 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
+		'^@wcpos/database/create-db$': '<rootDir>/../query/tests/__mocks__/create-db.ts',
+		'^expo-crypto$': '<rootDir>/../query/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/core-test/mock-use-doc-field$': '<rootDir>/jest/mock-use-doc-field.js',
 		'^@wcpos/core-test/fake-query-handle$': '<rootDir>/jest/fake-query-handle.js',
 		// Mock logger modules (must come before generic @wcpos/utils matcher)

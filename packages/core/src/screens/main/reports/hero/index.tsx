@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { filter } from 'rxjs';
 import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -12,7 +14,6 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
-import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -104,10 +105,13 @@ function MenuChip({
 function CashierChip() {
 	const t = useT();
 	const { site } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
 	// Undefined until the directory emits: a chip built from an empty list would offer Everyone
 	// as the only choice while the credentials are still being read.
-	const cashiers = useObservableState(source) as WPCredentialsDocument[] | undefined;
+	const cashiers = useObservableState(source);
 	const value = useQueryState<'orders'>().filters.cashier;
 	const actions = useQueryStateActions<'orders'>();
 	if (!cashiers)
@@ -267,7 +271,7 @@ function Figures({
  * slow or stuck all-results request (it is the only way to a smaller range). */
 export function HeroShell({ title }: { title: React.ReactNode }) {
 	return (
-		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-5">
+		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-4">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 			</View>
@@ -433,7 +437,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	// would be wrong money.
 	if (!store) return <HeroShell title={title} />;
 	return (
-		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-5">
+		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-4">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 				<View className="flex-row items-center gap-2">

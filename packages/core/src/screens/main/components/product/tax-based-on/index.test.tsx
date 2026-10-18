@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { DeviceScope } from '@wcpos/components/lib/device';
 
@@ -43,25 +43,46 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
-jest.mock('@wcpos/components/table', () =>
-	Object.fromEntries(
-		'Table TableBody TableCell TableHead TableHeader TableRow'
-			.split(' ')
-			.map((name) => [name, ({ children }: React.PropsWithChildren) => children])
-	)
-);
+// The table's pulse row is native motion; the panel only reads the head recipe.
+jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'head' }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+const mockLocation = {
+	rates: [{ id: 1, name: 'VAT', rate: '20.0000', class: 'standard', country: 'GB' }],
+	taxBasedOn: 'base',
+	location: { country: 'GB', state: '', city: '', postcode: '' },
+	hasOrder: false,
+};
 jest.mock('../../../contexts/tax-rates', () => ({
-	useTaxLocation: () => ({
-		rates: [{ id: 1, name: 'VAT', rate: '20.0000', class: 'standard' }],
-		taxBasedOn: 'base',
-		location: { country: 'GB' },
-	}),
+	useTaxLocation: () => mockLocation,
+	useTaxSettings: () => ({ allRates: mockLocation.rates }),
+}));
+jest.mock('../../../pos/hooks/use-cart-config', () => ({
+	useCartConfig: () =>
+		jest.requireActual('@wcpos/order-math').createCartConfig({
+			rates: mockLocation.rates,
+			allRates: mockLocation.rates,
+			calcTaxes: true,
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+			dp: 2,
+			shippingTaxClass: 'standard',
+			taxClassSlugs: ['standard'],
+			calcDiscountsSequentially: false,
+		}),
+}));
+jest.mock('../../../contexts/extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: () => [{ slug: 'standard', name: 'Standard rate' }],
+}));
+jest.mock('../../../hooks/use-number-format', () => ({
+	useNumberFormat: () => ({ format: (value: number) => String(value) }),
 }));
 
 beforeEach(() => {
 	jest.useFakeTimers();
 	mockPush.mockClear();
+	mockLocation.hasOrder = false;
+	mockLocation.taxBasedOn = 'base';
 });
 afterEach(() => jest.useRealTimers());
 
@@ -89,9 +110,49 @@ describe.each([false, true])('phone: %s', (phone) => {
 		renderTaxBasedOn();
 		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
 		expect(screen.getByTestId('tax-based-on-content')).toBeTruthy();
-		fireEvent.click(screen.getByText('common.view_all_tax_rates'));
+		fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
 		act(() => jest.advanceTimersByTime(1000));
 		expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
 		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
+	});
+
+	it('the setting links to Settings › Tax, closing the panel first', () => {
+		renderTaxBasedOn();
+		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+		expect(screen.getByText('common.shop_address')).toBeTruthy();
+		expect(screen.getByText('United Kingdom (UK)')).toBeTruthy();
+		expect(screen.getByText('Standard rate')).toBeTruthy();
+		expect(screen.getAllByText('20%')).toHaveLength(2);
+		fireEvent.click(screen.getByTestId('tax-based-on-change-setting'));
+		act(() => jest.advanceTimersByTime(1000));
+		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
+		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
+	});
+
+	it('an order with no billing address breaks the chain at the address', () => {
+		mockLocation.hasOrder = true;
+		mockLocation.taxBasedOn = 'billing';
+		const { location, rates } = mockLocation;
+		mockLocation.location = { country: '', state: '', city: '', postcode: '' };
+		// Nothing matched: a worldwide rate on an empty address would not be a failure.
+		mockLocation.rates = [];
+		try {
+			renderTaxBasedOn();
+			fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+			expect(screen.getByText('common.order_has_no_billing_address')).toBeTruthy();
+			expect(screen.getByText('common.none')).toBeTruthy();
+		} finally {
+			mockLocation.location = location;
+			mockLocation.rates = rates;
+		}
+	});
+
+	it('on the Products screen (no order) the address is the shop base whatever the setting', () => {
+		mockLocation.taxBasedOn = 'billing';
+		renderTaxBasedOn();
+		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+		const panel = within(screen.getByTestId('tax-based-on-content'));
+		expect(panel.getByText('common.customer_billing_address')).toBeTruthy();
+		expect(panel.getByText('common.shop_address')).toBeTruthy();
 	});
 });

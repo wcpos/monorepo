@@ -12,10 +12,10 @@ const appLogger = getLogger(['wcpos', 'app', 'stores']);
 /**
  * Generate a unique localID for stores
  */
-async function generateHashId(dataObject: {
-	user: string;
-	siteID: string;
-	wpCredentialsID: string;
+export async function generateStoreLocalID(dataObject: {
+	user: string | undefined;
+	siteID: string | undefined;
+	wpCredentialsID: string | undefined;
 	storeID: number;
 }) {
 	// Convert the object to a JSON string
@@ -42,6 +42,8 @@ async function generateHashId(dataObject: {
  * becomes empty.
  */
 const VALID_TAX_BASED_ON_VALUES = new Set(['shipping', 'billing', 'base']);
+
+export type PreparedStorePayload = ServerStorePayload & { localID: string };
 
 export type ServerStorePayload = { id: number } & Record<string, unknown>;
 
@@ -230,7 +232,7 @@ export async function mergeStoresWithResponse({
 		const remoteStoresWithLocalID = await Promise.all(
 			remoteStores.map(async (store) => {
 				const normalized = normalizeStorePayload(store);
-				const localID = await generateHashId({
+				const localID = await generateStoreLocalID({
 					user: user.uuid,
 					siteID,
 					wpCredentialsID: wpUser.uuid ?? '',
@@ -282,93 +284,7 @@ export async function mergeStoresWithResponse({
 			}
 		}
 
-		// `failedDocIds` collects localIDs for non-conflict bulkInsert errors so we
-		// can exclude them from wpUser.stores — otherwise a 422/write failure would
-		// leave wpUser pointing at a missing store doc and StoreSelect would
-		// silently drop it.
-		const failedDocIds = new Set<string>();
-		if (newStores.length > 0) {
-			const bulkResult: any = await userDB.stores.bulkInsert(newStores);
-			if (bulkResult?.error?.length) {
-				// bulkInsert resolves successfully even when every doc failed — the caller
-				// has to inspect `error` or it looks like the merge worked.
-				// Partition errors: 409 (conflict) means the doc already exists, which is
-				// expected on re-sync — log at debug, don't toast. Everything else (422
-				// validation, write errors, etc.) gets surfaced to the user.
-				const conflicts: any[] = [];
-				const failures: any[] = [];
-				for (const err of bulkResult.error) {
-					if (err?.status === 409) {
-						conflicts.push(err);
-					} else {
-						failures.push(err);
-						// Errors usually carry `documentId`, but some failure modes (e.g.
-						// storage-level errors thrown before the doc id is attached) only
-						// expose the raw doc via `err.document.localID`. Fall back so we
-						// never leave wpUser.stores pointing at an unpersisted id.
-						const failedId: string | undefined =
-							err?.documentId ?? err?.document?.localID ?? err?.id;
-						if (failedId) {
-							failedDocIds.add(failedId);
-						}
-					}
-				}
-
-				if (conflicts.length > 0) {
-					appLogger.debug('[stores] bulkInsert conflicts (doc already exists)', {
-						context: {
-							conflictCount: conflicts.length,
-							conflictDocIds: conflicts.map((c) => c?.documentId),
-						},
-					});
-				}
-
-				if (failures.length > 0) {
-					const summaries = failures.map((err: any) => {
-						const validationErrors: { message?: string; path?: string }[] =
-							err?.parameters?.errors ??
-							err?.parameters?.validationErrors ??
-							err?.validationErrors ??
-							[];
-						const detail =
-							validationErrors
-								.map((v) => (v.path ? `${v.path}: ${v.message}` : v.message))
-								.filter(Boolean)
-								.join('; ') ||
-							err?.message ||
-							`status ${err?.status ?? 'unknown'}`;
-						return { documentId: err?.documentId, detail };
-					});
-					const toastMessage = `Failed to save ${summaries.length} store${summaries.length === 1 ? '' : 's'}: ${summaries
-						.map((s: { detail: string }) => s.detail)
-						.join(' | ')}`;
-					appLogger.error(toastMessage, {
-						showToast: true,
-						code: ERROR_CODES.AUTH_UNEXPECTED,
-						context: {
-							failures: summaries,
-							// Include the raw first error for deep debugging
-							rawFirstError: JSON.stringify(failures[0] ?? null, (_k, v) =>
-								v instanceof Error ? { name: v.name, message: v.message, stack: v.stack } : v
-							),
-						},
-					});
-				}
-			}
-			appLogger.debug('[stores] bulkInsert result', {
-				context: {
-					successCount: bulkResult?.success?.length ?? 0,
-					errorCount: bulkResult?.error?.length ?? 0,
-				},
-			});
-
-			appLogger.debug('Inserted new stores from response', {
-				context: {
-					storeIds: newStores.map((store) => store.id),
-					localIDs: newStores.map((store) => store.localID),
-				},
-			});
-		}
+		const failedDocIds = await insertStorePayloads(userDB, newStores);
 
 		// Update wpUser.stores with the new array of localIDs, excluding any docs
 		// that failed to persist above.
@@ -408,4 +324,98 @@ export async function mergeStoresWithResponse({
 		});
 		throw error;
 	}
+}
+
+/** Shared embedded/runtime insert outcome: conflicts exist; other failures must not be linked. */
+export async function insertStorePayloads(
+	userDB: UserDatabase,
+	newStores: PreparedStorePayload[]
+): Promise<Set<string>> {
+	// `failedDocIds` collects localIDs for non-conflict bulkInsert errors so we
+	// can exclude them from wpUser.stores — otherwise a 422/write failure would
+	// leave wpUser pointing at a missing store doc and StoreSelect would
+	// silently drop it.
+	const failedDocIds = new Set<string>();
+	if (newStores.length > 0) {
+		const bulkResult: any = await userDB.stores.bulkInsert(newStores);
+		if (bulkResult?.error?.length) {
+			// bulkInsert resolves successfully even when every doc failed — the caller
+			// has to inspect `error` or it looks like the merge worked.
+			// Partition errors: 409 (conflict) means the doc already exists, which is
+			// expected on re-sync — log at debug, don't toast. Everything else (422
+			// validation, write errors, etc.) gets surfaced to the user.
+			const conflicts: any[] = [];
+			const failures: any[] = [];
+			for (const err of bulkResult.error) {
+				if (err?.status === 409) {
+					conflicts.push(err);
+				} else {
+					failures.push(err);
+					// Errors usually carry `documentId`, but some failure modes (e.g.
+					// storage-level errors thrown before the doc id is attached) only
+					// expose the raw doc via `err.document.localID`. Fall back so we
+					// never leave wpUser.stores pointing at an unpersisted id.
+					const failedId: string | undefined = err?.documentId ?? err?.document?.localID ?? err?.id;
+					if (failedId) {
+						failedDocIds.add(failedId);
+					}
+				}
+			}
+
+			if (conflicts.length > 0) {
+				appLogger.debug('[stores] bulkInsert conflicts (doc already exists)', {
+					context: {
+						conflictCount: conflicts.length,
+						conflictDocIds: conflicts.map((c) => c?.documentId),
+					},
+				});
+			}
+
+			if (failures.length > 0) {
+				const summaries = failures.map((err: any) => {
+					const validationErrors: { message?: string; path?: string }[] =
+						err?.parameters?.errors ??
+						err?.parameters?.validationErrors ??
+						err?.validationErrors ??
+						[];
+					const detail =
+						validationErrors
+							.map((v) => (v.path ? `${v.path}: ${v.message}` : v.message))
+							.filter(Boolean)
+							.join('; ') ||
+						err?.message ||
+						`status ${err?.status ?? 'unknown'}`;
+					return { documentId: err?.documentId, detail };
+				});
+				const toastMessage = `Failed to save ${summaries.length} store${summaries.length === 1 ? '' : 's'}: ${summaries
+					.map((s: { detail: string }) => s.detail)
+					.join(' | ')}`;
+				appLogger.error(toastMessage, {
+					showToast: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					context: {
+						failures: summaries,
+						// Include the raw first error for deep debugging
+						rawFirstError: JSON.stringify(failures[0] ?? null, (_k, v) =>
+							v instanceof Error ? { name: v.name, message: v.message, stack: v.stack } : v
+						),
+					},
+				});
+			}
+		}
+		appLogger.debug('[stores] bulkInsert result', {
+			context: {
+				successCount: bulkResult?.success?.length ?? 0,
+				errorCount: bulkResult?.error?.length ?? 0,
+			},
+		});
+
+		appLogger.debug('Inserted new stores from response', {
+			context: {
+				storeIds: newStores.map((store) => store.id),
+				localIDs: newStores.map((store) => store.localID),
+			},
+		});
+	}
+	return failedDocIds;
 }

@@ -12,14 +12,14 @@ import {
 	SelectPrimitiveTrigger,
 	SelectSeparator,
 } from '@wcpos/components/select';
-import type { StoreDocument } from '@wcpos/database';
+import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
 
 import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 interface Props {
-	resource: ObservableResource<StoreDocument[]>;
+	resource: ObservableResource<ReadonlyStoreRecord[]>;
 }
 
 /**

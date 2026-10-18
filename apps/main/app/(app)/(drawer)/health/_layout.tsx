@@ -18,7 +18,8 @@ export default function HealthLayout() {
 	const { license } = useAppInfo();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 
-	// No `leafPagesCarryTitle`: Health pages carry no in-page heading, so the bar keeps the title.
+	// Health pages carry their own heading (`AreaPage`), as Settings does, so on a phone the bar
+	// shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
 	return (
 		<NavigationAreaLayout
 			items={items}
@@ -27,6 +28,7 @@ export default function HealthLayout() {
 			testID="health-navigation"
 			screenTestID="health-screen"
 			barTestID="health-bar"
+			leafPagesCarryTitle
 			barNotice={
 				showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />
 			}

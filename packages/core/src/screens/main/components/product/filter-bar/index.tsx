@@ -42,7 +42,8 @@ export function FilterBar() {
 	 *
 	 */
 	return (
-		<View className="p-2">
+		// The page gutter all round: the search above and the table card below share this 16 edge.
+		<View className="p-4">
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}

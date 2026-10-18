@@ -3,6 +3,7 @@ import * as React from 'react';
 import type { QueryHandle } from '@wcpos/query';
 
 import { useQueryHandleFields } from '../../../../query';
+import { CaptionRowInset } from '../../components/data-table/surface';
 import { ProductsFooter, type ProductsFooterProps } from './footer';
 
 import type { SnapshotFields } from '../../../../query';
@@ -30,15 +31,19 @@ export function HandleProductsFooter({
 	children?: React.ReactNode;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	// Mounted outside DataTable, under the POS pane's dense card: the inset DataTable's own
+	// footer mount gives it.
 	return (
-		<ProductsFooter
-			collectionName={collectionName}
-			active={active}
-			total={total}
-			sync={handle.sync}
-			count={count}
-		>
-			{children}
-		</ProductsFooter>
+		<CaptionRowInset>
+			<ProductsFooter
+				collectionName={collectionName}
+				active={active}
+				total={total}
+				sync={handle.sync}
+				count={count}
+			>
+				{children}
+			</ProductsFooter>
+		</CaptionRowInset>
 	);
 }

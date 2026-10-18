@@ -57,8 +57,14 @@ export function RegistersPanel() {
 					{register.gaps.length > 0 ? (
 						<VStack className="gap-1">
 							<Text className="text-sm font-semibold">{t('health.registers.gaps')}</Text>
-							{register.gaps.map((gap) => (
-								<Text key={gap.after} testID="health-register-gap" className="text-sm">
+							{/* The server summarises each till of a register on its own and flattens the
+							    findings, so two tills can report the same gap or the same counter. */}
+							{register.gaps.map((gap, index) => (
+								<Text
+									key={`${gap.after}-${gap.before}-${index}`}
+									testID="health-register-gap"
+									className="text-sm"
+								>
 									{t('health.registers.gap', gap)}
 								</Text>
 							))}
@@ -69,7 +75,7 @@ export function RegistersPanel() {
 							<Text className="text-sm font-semibold">{t('health.registers.duplicates')}</Text>
 							{register.duplicates.map((duplicate) => (
 								<Text
-									key={duplicate.counter}
+									key={`${duplicate.counter}:${duplicate.order_ids.join('-')}`}
 									testID="health-register-duplicate"
 									className="text-sm"
 								>

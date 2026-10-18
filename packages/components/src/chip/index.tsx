@@ -9,6 +9,8 @@ import { Text } from '../text';
 type ChipProps = Omit<PressableProps, 'children'> & {
 	label: string;
 	icon?: IconName;
+	/** A node in the icon's place, e.g. the cart customer's Avatar; wins over `icon`. */
+	leading?: React.ReactNode;
 	count?: number;
 	on?: boolean;
 	dimmed?: boolean;
@@ -40,6 +42,7 @@ function selectedState(on: boolean | undefined) {
 export function Chip({
 	label,
 	icon,
+	leading,
 	count,
 	on,
 	dimmed,
@@ -80,7 +83,7 @@ export function Chip({
 				};
 	const content = (
 		<>
-			{icon && <Icon name={icon} className="text-foreground" />}
+			{leading ?? (icon && <Icon name={icon} className="text-foreground" />)}
 			<Text
 				testID={onClear ? undefined : id('label')}
 				// One line: a long label (a customer's full name) truncates inside the pill

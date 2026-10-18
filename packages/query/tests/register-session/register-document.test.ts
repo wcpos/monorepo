@@ -275,3 +275,65 @@ it('readCounters refuses payloads that cannot serve as a floor', () => {
 		counters_started_at: null,
 	});
 });
+
+it('re-mints a cloned till: new id, counters back at zero, store bindings and floors kept', async () => {
+	const { remintRegister } = await import('../../src/register-session');
+	const cloned = await ensureRegister(db);
+	await bindRegister(db, 'site', { id: 'server-register', name: 'Front' }, 1);
+	await adoptCounters(db, 'site', 'server-register', {
+		last_closure_number: 4,
+		perpetual_sales_total: '10.00',
+		perpetual_refunds_total: '0.00',
+	});
+	for (const counter of [1, 2, 3]) expect(await nextSaleCounter(db, 'site')).toBe(counter);
+	expect(await nextSaleCounter(db, 'other')).toBe(1);
+	// A closure the source till has in flight is the source's, not the clone's.
+	const doc = await db.getLocal<{ sites: Record<string, { registers?: Record<string, unknown> }> }>(
+		'register'
+	);
+	await doc!.incrementalModify((data) => ({
+		...data,
+		sites: {
+			...data.sites,
+			site: {
+				...data.sites.site,
+				registers: {
+					'server-register': {
+						...data.sites.site.registers?.['server-register'],
+						closure_reservation: { row: { id: 'closure-1', number: 5 }, applied: false },
+					},
+				},
+			},
+		},
+	}));
+
+	// The suite pins uuid v4 to one value; the re-mint must draw a different one.
+	jest
+		.spyOn(globalThis.crypto, 'randomUUID')
+		.mockReturnValueOnce('FRESH000-1111-4222-8333-444444444444');
+	const fresh = await remintRegister(db);
+	expect(fresh.id).toBe('fresh000-1111-4222-8333-444444444444');
+	expect(fresh.id).not.toBe(cloned.id);
+	expect(fresh.name).toBe(`Register ${fresh.id.slice(-4).toUpperCase()}`);
+	expect(fresh.sites.site).toMatchObject({
+		sale_counter: 0,
+		register_id: 'server-register',
+		register_name: 'Front',
+		register_store_id: 1,
+		registers: { 'server-register': { last_closure_number: 4, perpetual_sales_total: '10.0000' } },
+	});
+	expect(fresh.sites.site.registers?.['server-register']).not.toHaveProperty('closure_reservation');
+	expect(fresh.sites.other.sale_counter).toBe(0);
+	// The next sale starts the new till's own run, and the cached identity moved with it.
+	expect(await nextSaleCounter(db, 'site')).toBe(1);
+	expect(getRegisterSnapshot()?.id).toBe(fresh.id);
+	expect(getBoundRegisterId('site', 1)).toBe('server-register');
+	expect((await readRegister(db))?.id).toBe(fresh.id);
+});
+
+it('re-minting without a document is a plain mint', async () => {
+	const { remintRegister } = await import('../../src/register-session');
+	const minted = await remintRegister(db);
+	expect(await readRegister(db)).toEqual(minted);
+	expect(minted.sites).toEqual({});
+});

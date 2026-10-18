@@ -13,7 +13,7 @@ import { useAppState } from '../../../contexts/app-state';
 import {
 	runConnectCompatibilityProbes,
 	testAuthorizationMethod,
-} from '../../../contexts/app-state/hydration-steps';
+} from '../../../contexts/app-state/connect-probes';
 import { useT } from '../../../contexts/translations';
 import { useApiDiscovery } from './use-api-discovery';
 import { useUrlDiscovery } from './use-url-discovery';

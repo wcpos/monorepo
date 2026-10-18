@@ -5,12 +5,11 @@ import type {
 	WPCredentialsDocument,
 } from '@wcpos/database';
 
-import type { ObservableResource } from 'observable-hooks';
 import type { Reactified } from 'rxdb';
 import type { Observable } from 'rxjs';
 
 /** RxDB instances retain their identity, with storage and write doors omitted. */
-type ReadonlyUserDbRecord<D, Links = Record<never, never>> = Omit<
+type ReadonlyUserDbRecord<D> = Omit<
 	D,
 	| 'patch'
 	| 'update'
@@ -36,23 +35,14 @@ type ReadonlyUserDbRecord<D, Links = Record<never, never>> = Omit<
 	| '$'
 	| '$$'
 > & {
-	getLatest(): ReadonlyUserDbRecord<D, Links>;
-	readonly $: Observable<ReadonlyUserDbRecord<D, Links>>;
-	readonly $$: Reactified<unknown, ReadonlyUserDbRecord<D, Links>>;
-	populate<K extends keyof Links>(key: K): Promise<Links[K][]>;
-	populate$<K extends keyof Links>(key: K): Observable<Links[K][]>;
-	populateResource<K extends keyof Links>(key: K): ObservableResource<Links[K][]>;
+	getLatest(): ReadonlyUserDbRecord<D>;
+	readonly $: Observable<ReadonlyUserDbRecord<D>>;
+	readonly $$: Reactified<unknown, ReadonlyUserDbRecord<D>>;
 };
 
-export type ReadonlySiteRecord = ReadonlyUserDbRecord<
-	SiteDocument,
-	{ wp_credentials: ReadonlyWpCredentialsRecord }
->;
+export type ReadonlySiteRecord = ReadonlyUserDbRecord<SiteDocument>;
 export type ReadonlyStoreRecord = ReadonlyUserDbRecord<StoreDocument>;
-export type ReadonlyUserRecord = ReadonlyUserDbRecord<UserDocument, { sites: ReadonlySiteRecord }>;
-export type ReadonlyWpCredentialsRecord = ReadonlyUserDbRecord<
-	WPCredentialsDocument,
-	{ stores: ReadonlyStoreRecord }
->;
+export type ReadonlyUserRecord = ReadonlyUserDbRecord<UserDocument>;
+export type ReadonlyWpCredentialsRecord = ReadonlyUserDbRecord<WPCredentialsDocument>;
 export type ReadonlyUserDatabaseRecord =
 	ReadonlySiteRecord | ReadonlyStoreRecord | ReadonlyUserRecord | ReadonlyWpCredentialsRecord;

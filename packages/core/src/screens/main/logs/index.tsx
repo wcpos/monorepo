@@ -22,6 +22,7 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
+import { AreaPage } from '../components/navigation-area/area-page';
 import { QuerySearchInput } from '../components/query-search-input';
 import { type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
@@ -351,11 +352,11 @@ function LogsScreenContent() {
 	]);
 
 	return (
-		<View className="flex-1">
-			<VStack
-				testID="screen-logs"
-				className="mx-auto min-h-0 w-full max-w-4xl flex-1 gap-3 p-4 md:p-6"
-			>
+		// `fill`: the card takes the column's height and its body is a flex column, so this
+		// stack keeps the scroll contract above — header block sized to content, the ledger
+		// owning the scroll, the footer and status line pinned under it, inside the card.
+		<AreaPage title={t('common.logs')} testID="screen-logs" mode="fill">
+			<VStack className="min-h-0 flex-1 gap-3">
 				{/* Compact-height escape hatch: the pinned controls yield to the
 				    ledger (which keeps a min-h floor) and scroll internally instead
 				    of squeezing the rows out of reach on short viewports. On normal
@@ -488,7 +489,7 @@ function LogsScreenContent() {
 				    loading or broken (Codex P2, PR #1421). */}
 				<LedgerFooter shown={renderedCount} total={total} accessory={<StatusLine />} />
 			</VStack>
-		</View>
+		</AreaPage>
 	);
 }
 

@@ -3,9 +3,9 @@ import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs';
+import { filter, firstValueFrom, map } from 'rxjs';
 
-import { Avatar, getInitials } from '@wcpos/components/avatar';
+import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
@@ -14,19 +14,21 @@ import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
 import { identityColumnFilter } from '@wcpos/sync-core';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { RecordAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
 import { ClearLocalData } from './clear-local-data';
 import { SwitchStoreSheet } from './switch-store-sheet';
@@ -83,12 +85,13 @@ function UserRows() {
 	const { site, store, wpCredentials, logout } = useStoreSession();
 	const { login } = useAppState();
 	const router = useRouter();
-	const credentials = useObservableSuspense(
-		site.populateResource('wp_credentials')
-	) as WPCredentialsDocument[];
-	const switchUser = async (credential: WPCredentialsDocument) => {
+	const credentials = useObservableSuspense(credentialsListResource(site));
+	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
 		try {
-			const stores = (await credential.populate('stores')) as StoreDocument[];
+			// Switching is a one-shot read of the first non-pending database answer.
+			const stores = await firstValueFrom(
+				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+			);
 			const next = stores.find((candidate) => candidate.id === store.id);
 			requestStateManager.clearRefreshedToken();
 			requestStateManager.setAuthFailed(false);
@@ -119,7 +122,14 @@ function UserRows() {
 						key={credential.uuid}
 						testID={`user-sheet-user-${credential.uuid}`}
 						onPress={() => void switchUser(credential)}
-						leading={<Avatar fallback={getInitials(credential.display_name)} size="md" />}
+						leading={
+							<RecordAvatar
+								record={credential}
+								avatarUrl={credential.avatar_url}
+								name={credential.display_name}
+								size="md"
+							/>
+						}
 						label={credential.display_name}
 					/>
 				))}
