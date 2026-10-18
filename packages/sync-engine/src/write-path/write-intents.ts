@@ -60,11 +60,11 @@
  * never both coalesce onto one row.
  */
 
-import { readMoneyEpoch } from '@wcpos/order-math';
 import {
 	buildCreateMutation,
 	buildDeleteMutation,
 	buildUpdateMutation,
+	readMoneyEpoch,
 	RecordMutationQueue,
 	remoteIdOrNull,
 	RxRecordMutationStorage,

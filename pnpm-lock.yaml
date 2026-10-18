@@ -1169,9 +1169,6 @@ importers:
 
   packages/sync-engine:
     dependencies:
-      '@wcpos/order-math':
-        specifier: workspace:*
-        version: link:../order-math
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core

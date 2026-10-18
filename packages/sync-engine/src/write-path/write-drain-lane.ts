@@ -26,9 +26,9 @@
  * unchanged).
  */
 
-import { paymentsContractAtLeast } from '@wcpos/order-math';
 import {
 	drainMutationQueue,
+	paymentsContractAtLeast,
 	pushEndpointResolver,
 	pushRecordMutation,
 	reconcileCreateAck,
