@@ -37,7 +37,7 @@ Prefer semantic classes over hardcoded colors to preserve theme compatibility.
 | `bg-card` | Card/elevated surfaces |
 | `bg-sidebar` | Navigation sidebar |
 | `bg-muted` | Muted elements/buttons |
-| `text-warn-text` | warning words; `warn` is the fill and the icon |
+| `text-warn-text` | warning words, and an icon inline with them (register-count lock, open-orders clock, upgrade-notice star); `warn` is the fill and the standalone icon (register-bar, StatusBadge, Icon `warning` variant) |
 | `bg-table-header` | Data table headers |
 
 ### Theme Switching and Native Issues

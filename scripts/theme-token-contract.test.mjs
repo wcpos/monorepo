@@ -209,7 +209,7 @@ test('controls share the web keyboard focus outline', () => {
 
 // WCAG 2 contrast of two `oklch(L C h)` tokens, through OKLab to sRGB (clamped to the gamut,
 // as a browser paints an out-of-gamut colour).
-function oklchLuminance(value) {
+function oklchLinearRgb(value) {
 	const [L, C, h] = value
 		.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/)
 		.slice(1)
@@ -219,16 +219,34 @@ function oklchLuminance(value) {
 	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
 	const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
 	const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-	const [r, g, bl] = [
+	return [
 		4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
 		-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
 		-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
 	].map((channel) => Math.min(1, Math.max(0, channel)));
+}
+function luminance([r, g, bl]) {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
 }
-function contrast(x, y) {
-	const [hi, lo] = [oklchLuminance(x), oklchLuminance(y)].sort((p, q) => q - p);
+function oklchLuminance(value) {
+	return luminance(oklchLinearRgb(value));
+}
+function luminanceContrast(x, y) {
+	const [hi, lo] = [x, y].sort((p, q) => q - p);
 	return (hi + 0.05) / (lo + 0.05);
+}
+function contrast(x, y) {
+	return luminanceContrast(oklchLuminance(x), oklchLuminance(y));
+}
+// Alpha compositing happens in gamma-encoded sRGB, not linear light. Return
+// the painted surface's luminance after decoding the blended channels.
+function blend(tint, alpha, surface) {
+	const encode = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+	const decode = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+	const background = oklchLinearRgb(surface).map(encode);
+	return luminance(
+		oklchLinearRgb(tint).map((c, i) => decode(alpha * encode(c) + (1 - alpha) * background[i]))
+	);
 }
 function themeToken(body, token) {
 	const value = body.match(new RegExp(`--${token}\\s*:\\s*([^;]+);`))?.[1].trim();
@@ -240,6 +258,29 @@ function themeToken(body, token) {
 // Text contrast 4.5:1 (CODING_STANDARDS § Design 7). The light theme's --ok read 4.16:1 under
 // its own success-foreground at L 0.55; every success green is drawn from it.
 const TEXT_CONTRAST = 4.5;
+// Warning washes appear in register-count, legacy-tab, Badge, ListItem, Avatar
+// and log-view; destructive/10 with destructive words appears in legacy-tab and log-view.
+for (const name of themeNames) {
+	for (const [text, tint, alpha] of [
+		['warn-text', 'warn', 0.1],
+		['warn-text', 'warn', 0.15],
+		['destructive', 'destructive', 0.1],
+	]) {
+		for (const surface of ['card', 'background']) {
+			const pair = `${text} on ${tint}/${alpha * 100} over ${surface}`;
+			test(`${name}: ${pair} reaches 4.5:1`, () => {
+				const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+				assert.ok(body, `Missing ${name} theme`);
+				const ratio = luminanceContrast(
+					oklchLuminance(themeToken(body, text)),
+					blend(themeToken(body, tint), alpha, themeToken(body, surface))
+				);
+				assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${pair} is ${ratio.toFixed(2)}:1`);
+			});
+		}
+	}
+}
+
 for (const name of themeNames) {
 	test(`${name}: success text and the words on a success fill reach 4.5:1`, () => {
 		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
