@@ -2,11 +2,11 @@ import * as React from 'react';
 
 import { useFocusEffect } from 'expo-router';
 
-import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
 
 import { useMarkLogsAsRead } from '../../../../components/unread-logs';
 
-const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.LogsScreen })));
+const Screen = lazyRest((m) => m.LogsScreen);
 
 /** Rendered inside the Suspense boundary, so it only marks the logs read once they are on screen. */
 function MarkLogsRead() {

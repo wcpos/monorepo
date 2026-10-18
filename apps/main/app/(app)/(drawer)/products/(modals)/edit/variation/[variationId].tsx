@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
 
-const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.EditVariationScreen })));
+const Screen = lazyRest((m) => m.EditVariationScreen);
 
 export default function EditVariationRoute() {
 	return (

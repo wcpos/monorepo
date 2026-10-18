@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
 
-const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.MiniAppHost })));
+const Screen = lazyRest((m) => m.MiniAppHost);
 
 export default function MiniAppRoute() {
 	const { id } = useLocalSearchParams<{ id: string }>();
