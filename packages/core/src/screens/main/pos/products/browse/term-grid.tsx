@@ -148,7 +148,7 @@ export function TermLevelGrid({
 	const { placeGrid } = useDeal();
 	const slotsNode = React.useRef<React.ComponentRef<typeof View>>(null);
 	// Tiles in flight may paint above the scroller, over the crumb row (see useAirspace).
-	const air = useAirspace(scroll);
+	const air = useAirspace(scroll, scroller);
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
