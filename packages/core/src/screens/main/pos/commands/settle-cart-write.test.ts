@@ -58,12 +58,17 @@ it('settles the latest post-intent payload in one write, without changing outbou
 	);
 });
 
-it.each(['meta', 'memory'])(
+it.each(['meta', 'hint', 'memory'])(
 	'keeps server money owned through %s while writing intent',
 	async (source) => {
 		const order = record();
-		if (source === 'meta')
-			order.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+		if (source !== 'memory')
+			order.payload.meta_data = [
+				{
+					key: source === 'hint' ? '_wcpos_money_owner_hint' : '_wcpos_money_owner',
+					value: 'server',
+				},
+			];
 		const localPatch = jest.fn();
 		const data = { line_items: [line] };
 		await settleCartWrite(
@@ -78,9 +83,10 @@ it.each(['meta', 'memory'])(
 	}
 );
 
-it('preserves current server ownership when intent carries stale full metadata', async () => {
+const ownerKeys = ['_wcpos_money_owner', '_wcpos_money_owner_hint'];
+it.each(ownerKeys)('preserves ownership against stale meta (%s)', async (key) => {
 	const order = record();
-	const owner = { id: 42, key: '_wcpos_money_owner', value: 'server' };
+	const owner = { id: 42, key, value: 'server' };
 	order.payload.meta_data = [owner];
 	const data = { line_items: [line], meta_data: [{ key: '_wcpos_cart', value: 'restarted' }] };
 	const localPatch = jest.fn();

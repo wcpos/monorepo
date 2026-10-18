@@ -36,6 +36,7 @@ test('public value surface is exactly the spec', () => {
 		'roundToIncrement',
 		'roundedDue',
 		'saleProvenanceMeta',
+		'serverOwnsMoney',
 		// Added 2026-08-23 (#1472): the cart's money write must not sit behind a
 		// coupon-reference fetch, and settleCart's missing-coupon gate makes it. The
 		// aggregate over the persisted lines needs no coupon data, so it gets its own

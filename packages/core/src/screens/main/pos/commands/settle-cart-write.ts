@@ -1,6 +1,11 @@
 import cloneDeep from 'lodash/cloneDeep';
 
-import { settleAggregate, settlementPatch, snapshotFromOrderJSON } from '@wcpos/order-math';
+import {
+	serverOwnsMoney,
+	settleAggregate,
+	settlementPatch,
+	snapshotFromOrderJSON,
+} from '@wcpos/order-math';
 import type { CartConfig } from '@wcpos/order-math';
 
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
@@ -25,19 +30,18 @@ export function settleCartWrite<T>(
 			const intent = Object.fromEntries(
 				Object.entries(input.data).filter(([, value]) => value !== undefined)
 			);
-			const owner = payload.meta_data?.find((entry) => entry.key === '_wcpos_money_owner');
-			if (
-				owner &&
-				Array.isArray(intent.meta_data) &&
-				!intent.meta_data.some((entry) => entry.key === '_wcpos_money_owner')
-			) {
-				intent.meta_data = [...intent.meta_data, owner];
+			for (const key of ['_wcpos_money_owner', '_wcpos_money_owner_hint']) {
+				const owner = payload.meta_data?.find((entry) => entry.key === key);
+				if (
+					owner &&
+					Array.isArray(intent.meta_data) &&
+					!intent.meta_data.some((entry) => entry.key === key)
+				) {
+					intent.meta_data = [...intent.meta_data, owner];
+				}
 			}
 			const after = { ...payload, ...intent };
-			const owned =
-				payload.meta_data?.some(
-					(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
-				) || deps.serverOwnsMoney(document.uuid);
+			const owned = serverOwnsMoney(payload.meta_data) || deps.serverOwnsMoney(document.uuid);
 			const result = owned
 				? undefined
 				: settleAggregate(snapshotFromOrderJSON(after), deps.configForOrder(after));

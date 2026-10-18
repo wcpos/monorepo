@@ -652,3 +652,7 @@ describe('the engine-warning half', () => {
 		expect(screen.getByTestId('order-totals-changed-banner-docs-link')).toBeTruthy();
 	});
 });
+
+jest.mock('../../hooks/mutations/use-local-mutation', () => ({
+	findEngineResident: async () => null,
+}));
