@@ -64,6 +64,7 @@ jest.mock('react-hook-form', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	useQueryRuntime: () => manager,
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
@@ -220,3 +221,5 @@ describe('EditCartCustomerForm', () => {
 });
 
 jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({}) }));

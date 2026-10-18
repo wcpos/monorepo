@@ -218,7 +218,7 @@ describe('createEngineFetcher', () => {
 		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=2&per_page=50');
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1',
 			expect.any(Object)
 		);
 	});
@@ -236,7 +236,7 @@ describe('createEngineFetcher', () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3',
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -275,7 +275,7 @@ describe('createEngineFetcher', () => {
 
 		expect(total).toBe(17);
 		expect(fetch).toHaveBeenCalledWith(
-			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1`,
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 		expect(recordTransport).toHaveBeenCalledTimes(1);

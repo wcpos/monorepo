@@ -53,7 +53,17 @@ export const POS_META_KEYS = {
 	posData: '_woocommerce_pos_data',
 } as const;
 
+/** Server adoption replaces these; till mutations retain the resident value. */
+export const SERVER_ORDER_MONEY_META_KEYS: readonly string[] = [
+	'_wcpos_money_epoch',
+	'_wcpos_completed_at',
+	'_wcpos_completed_epoch',
+	'_wcpos_completed_session',
+	'_wcpos_reopened_at',
+];
+
 export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
+	...SERVER_ORDER_MONEY_META_KEYS,
 	POS_META_KEYS.user,
 	POS_META_KEYS.store,
 	POS_META_KEYS.register,

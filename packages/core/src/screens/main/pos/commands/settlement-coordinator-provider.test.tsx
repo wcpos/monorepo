@@ -22,6 +22,8 @@ jest.mock('@wcpos/order-math', () => ({
 	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
 }));
 
+const paymentMethods = new BehaviorSubject<unknown>(null);
+const extraData = { get: () => paymentMethods.value, get$: () => paymentMethods };
 const events = new Subject<{ type: string; collection?: string }>();
 const coverage = new BehaviorSubject({ complete: true });
 const statuses = new BehaviorSubject({ collections: { taxRates: { coverageGeneration: 0 } } });
@@ -53,13 +55,14 @@ let mockInputs = {
 };
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 } }),
+	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 }, extraData }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register' }),
@@ -109,6 +112,7 @@ const flush = async () => {
 	});
 };
 beforeEach(() => {
+	paymentMethods.next(null);
 	currentConfig = config;
 	ownsMoney.mockReset().mockReturnValue(false);
 	beforeResolve.mockReset().mockResolvedValue(undefined);
@@ -488,3 +492,19 @@ it.each(['divergence', 'command', 'replay-owner', 'replay-edit'] as const)(
 		view.unmount();
 	}
 );
+
+it('wakes a hint-only open order when the store contract resolves to 1.3', async () => {
+	orders.next({
+		ready: true,
+		hits: [
+			{ record: record({ meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }) },
+		],
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toHaveLength(0);
+	act(() => paymentMethods.next({ schema: 1, methods: [], contract: '1.3' }));
+	await flush();
+	expect(writes).toHaveLength(1);
+	view.unmount();
+});

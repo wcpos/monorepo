@@ -926,6 +926,9 @@ importers:
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../utils
       lodash:
         specifier: ^4.18.1
         version: 4.18.1

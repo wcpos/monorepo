@@ -29,6 +29,8 @@ import {
 export type MutationOperation = 'create' | 'update' | 'delete';
 
 export type RecordMutation = {
+	/** The order money epoch observed at enqueue; absent for legacy queued work. */
+	expectedEpoch?: number;
 	/** Idempotency key — a fresh uuid per enqueue; the server dedupes retries on it. */
 	mutationId: string;
 	/** Collection key ('orders' | 'products' | …) — routes to the per-collection endpoint. */

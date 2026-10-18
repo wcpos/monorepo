@@ -26,10 +26,12 @@ it.each([
 	});
 	expect(new URL(result.url).searchParams.has('_wcpos_nocache')).toBe(false);
 	expect(result.headers.get('X-WCPOS-Protocol')).toBe(headers ? '2' : null);
-	expect(result.headers.get('X-WCPOS-Client')).toBe(headers ? `${platform}/test` : null);
+	expect(result.headers.get('X-WCPOS-Client')).toBe(
+		headers ? `${platform}/test payments=1.3` : null
+	);
 	expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe(params ? '2' : null);
 	expect(new URL(result.url).searchParams.get('wcpos_client')).toBe(
-		params ? `${platform}/test` : null
+		params ? `${platform}/test payments=1.3` : null
 	);
 });
 

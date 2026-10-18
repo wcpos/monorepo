@@ -44,8 +44,10 @@ import { productSchema } from './product-schema';
  */
 export const DRAINABLE_SCHEMAS_GENERATION = 5;
 
-// Queue schema v5 predates void marks; the drainable database keeps its shipped hash.
+// Keep the shipped v5 queue: its pre-upgrade rows have no expectedEpoch.
+// The drain opens it as-is; adding the field would force a legacy database migration.
 const {
+	expectedEpoch: _moneyEpoch,
 	supersededBy: _voidMark,
 	markedAt: _markedAt,
 	expiresAt: _expiresAt,
@@ -59,6 +61,7 @@ const {
 const {
 	6: _voidMarkMigration,
 	7: _voidFenceMigration,
+	8: _moneyEpochMigration,
 	...drainableQueueMigrations
 } = recordMutationQueueMigrationStrategies;
 

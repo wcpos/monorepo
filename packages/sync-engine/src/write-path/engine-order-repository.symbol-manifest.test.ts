@@ -231,14 +231,14 @@ it('restores resync print counts in a new repository and consumes the stash', as
 });
 
 it.each([undefined, 'server', null])(
-	'retains the resident money hint over pull value %s',
+	'clears an absent server stamp, retaining the resident hint over pull value %s',
 	async (value) => {
 		const { db, orderUpserts } = orderDatabase();
 		const { storedDocument } = materializedOrder();
 		const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
 		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
 		const resident = structuredClone(storedDocument);
-		resident.payload.meta_data = [...meta, hint];
+		resident.payload.meta_data = [...meta, hint, { key: '_wcpos_money_owner', value: 'server' }];
 		db.orders.findByIds = () => ({
 			exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
 		});
