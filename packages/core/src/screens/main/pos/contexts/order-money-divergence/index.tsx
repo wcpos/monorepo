@@ -100,8 +100,15 @@ type DivergenceStore = {
 
 const OrderMoneyDivergenceContext = React.createContext<DivergenceStore | undefined>(undefined);
 
-const ServerMoneyReaderContext = React.createContext<(uuid: string) => boolean>(() => false);
-export const useServerOwnsMoneyReader = () => React.useContext(ServerMoneyReaderContext);
+const readUnknownContract = () => null;
+const ServerMoneyReaderContext = React.createContext<{
+	serverOwnsMoney: (uuid: string) => boolean;
+	storeContract: () => string | null;
+}>({ serverOwnsMoney: () => false, storeContract: readUnknownContract });
+export const useServerOwnsMoneyReader = () =>
+	React.useContext(ServerMoneyReaderContext).serverOwnsMoney;
+export const useStoreContractReader = () =>
+	React.useContext(ServerMoneyReaderContext).storeContract;
 
 type DivergenceEvent = {
 	type: string;
@@ -174,7 +181,14 @@ function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
 	return kept;
 }
 
-export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
+export function OrderMoneyDivergenceProvider({
+	children,
+	storeContract = readUnknownContract,
+}: {
+	children: React.ReactNode;
+	/** Supplied by the session-owning layout; cart readers need no app-state provider. */
+	storeContract?: () => string | null;
+}) {
 	const { engine } = useQueryRuntime();
 	const ownership = React.useRef({ engine, epochs: new Map<string, number>() });
 	const serverOwnsMoney = React.useCallback(
@@ -273,8 +287,13 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 		[byOrderId, serverOwnedOrderIds, divergedOrderCount]
 	);
 
+	const readers = React.useMemo(
+		() => ({ serverOwnsMoney, storeContract }),
+		[serverOwnsMoney, storeContract]
+	);
+
 	return (
-		<ServerMoneyReaderContext.Provider value={serverOwnsMoney}>
+		<ServerMoneyReaderContext.Provider value={readers}>
 			<OrderMoneyDivergenceContext.Provider value={value}>
 				{children}
 			</OrderMoneyDivergenceContext.Provider>

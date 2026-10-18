@@ -1,18 +1,18 @@
 import * as React from 'react';
 
-import { readStorePaymentsContract } from '@wcpos/query';
-
-import { useStoreSession } from '../../../../contexts/app-state';
 import { settleCartWrite } from './settle-cart-write';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCartConfigReader } from '../hooks/use-cart-config';
-import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
+import {
+	useServerOwnsMoneyReader,
+	useStoreContractReader,
+} from '../contexts/order-money-divergence';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
 /** Same-slot write: callers already hold the per-order queue, including coupon writers. */
 export function useCartWrite() {
-	const { extraData } = useStoreSession();
+	const storeContract = useStoreContractReader();
 	const { localPatch } = useLocalMutation();
 	const configForOrder = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
@@ -22,9 +22,9 @@ export function useCartWrite() {
 				localPatch,
 				configForOrder,
 				serverOwnsMoney,
-				storeContract: () => readStorePaymentsContract(extraData),
+				storeContract,
 			}),
-		[localPatch, configForOrder, serverOwnsMoney, extraData]
+		[localPatch, configForOrder, serverOwnsMoney, storeContract]
 	);
 	// Birth writes use the same settlement/ownership guard before inserting their resident.
 	const settleIntent = React.useCallback(
@@ -36,10 +36,10 @@ export function useCartWrite() {
 					// The birth runs after its dispatch hooks settle: read the config current then.
 					configForOrder,
 					serverOwnsMoney,
-					storeContract: () => readStorePaymentsContract(extraData),
+					storeContract,
 				}
 			),
-		[configForOrder, serverOwnsMoney, extraData]
+		[configForOrder, serverOwnsMoney, storeContract]
 	);
 	return { localPatch: write, settleIntent };
 }

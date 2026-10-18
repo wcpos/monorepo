@@ -21,6 +21,7 @@ jest.mock('../../pos/hooks/use-cart-config', () => ({
 	useCartConfigReader: () => () => cartConfig,
 }));
 jest.mock('../../pos/contexts/order-money-divergence', () => ({
+	...jest.requireActual('../../pos/contexts/order-money-divergence'),
 	useServerOwnsMoneyReader: () => () => moneyOwned,
 }));
 

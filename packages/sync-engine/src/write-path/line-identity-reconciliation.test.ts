@@ -199,3 +199,62 @@ it.each([true, false])(
 		}
 	}
 );
+
+it.each(['1', undefined])(
+	'manual rebase replaces the queued epoch with server epoch %s',
+	async (epoch) => {
+		const current = {
+			...truth,
+			meta_data: [
+				...meta_data,
+				...(epoch === undefined ? [] : [{ key: '_wcpos_money_epoch', value: epoch }]),
+			],
+		};
+		const { engine } = await createEngineHarness({
+			mode: 'manual',
+			fetch: async () =>
+				new Response(
+					JSON.stringify({
+						code: 'woo_rxdb_sync_conflict',
+						currentRevision: 'server-base',
+						current,
+					}),
+					{ status: 409 }
+				),
+		});
+		try {
+			await engine.ready;
+			const db = engine.active()!.database;
+			const facet = writeFacetFor('orders')!;
+			await facet.upsertServerDocument(
+				db,
+				facet.documentFromServerPayload({
+					...truth,
+					meta_data: [
+						...meta_data,
+						{ key: '_wcpos_money_epoch', value: epoch === undefined ? '2' : '0' },
+					],
+				})
+			);
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID,
+				payload: { customer_note: 'keep my edit' },
+			});
+			await engine.sync('write-drain');
+			expect(await engine.conflicts()).toEqual([
+				expect.objectContaining({ mutationId: receipt.mutationId }),
+			]);
+			await engine.resolveConflict(receipt.mutationId, 'retry-with-server-base');
+			const row = await db.collections.recordMutations.findOne(receipt.mutationId).exec();
+			expect(row!.toJSON()).toMatchObject({
+				status: 'pending',
+				expectedEpoch: epoch === undefined ? 0 : 1,
+				payload: { customer_note: 'keep my edit' },
+			});
+		} finally {
+			await engine.dispose();
+		}
+	}
+);
