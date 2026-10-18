@@ -147,7 +147,27 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		<>
 			<ListItem
 				testID="wp-user-button"
+				// The row picks one user (a radio), and holds its own buttons (× and
+				// Re-authenticate). Left to ListItem's default `button` role, react-native-web
+				// renders it as a <button>, so those would be buttons inside a button: invalid
+				// HTML that React flags on /connect. A radio renders as a focusable <div>.
+				// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
+				role="radio"
+				aria-checked={isSelected}
 				onPress={onSelect}
+				// react-native-web presses on Space only for the button role (Enter works for any
+				// role), so the radio row takes Space here, without scrolling the page. Only the
+				// row's own key: a Space on its × or Re-authenticate button is theirs.
+				onKeyDown={(event) => {
+					if (
+						event.nativeEvent.key === ' ' &&
+						event.target === event.currentTarget &&
+						!event.defaultPrevented
+					) {
+						event.preventDefault();
+						onSelect();
+					}
+				}}
 				selected={isSelected}
 				// ListItem gives explicit `variant` priority over `selected` styling,
 				// so only apply the warning variant to unselected expired rows —

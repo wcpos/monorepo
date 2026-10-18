@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WpUser } from './wp-user';
 
@@ -37,8 +37,23 @@ jest.mock('react-native', () => ({
 		children,
 		className,
 		testID,
-	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
-		<div data-testid={testID} className={className}>
+		role,
+		'aria-checked': ariaChecked,
+		onKeyDown,
+	}: React.PropsWithChildren<{
+		className?: string;
+		testID?: string;
+		role?: string;
+		'aria-checked'?: boolean;
+		onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+	}>) => (
+		<div
+			data-testid={testID}
+			className={className}
+			role={role}
+			aria-checked={ariaChecked}
+			onKeyDown={onKeyDown}
+		>
 			{children}
 		</div>
 	),
@@ -131,6 +146,22 @@ describe('user row status', () => {
 			expect(screen.getByText(valid ? 'auth.signed_in' : 'auth.sign_in_again')).toBeTruthy()
 		);
 		if (!valid) expect(screen.getByRole('button').getAttribute('data-variant')).toBe('outline');
+	});
+	it('is a radio, not a button, so its × and Re-authenticate buttons are not nested in one', async () => {
+		mockValid = false;
+		render(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
+		const row = await screen.findByTestId('wp-user-button');
+		expect(row.getAttribute('role')).toBe('radio');
+		expect(row.getAttribute('aria-checked')).toBe('true');
+	});
+	it('selects the row on Space, as Enter does, without scrolling the page', async () => {
+		mockValid = true;
+		const onSelect = jest.fn();
+		render(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={onSelect} />);
+		const row = await screen.findByTestId('wp-user-button');
+		const notPrevented = fireEvent.keyDown(row, { key: ' ' });
+		expect(onSelect).toHaveBeenCalledTimes(1);
+		expect(notPrevented).toBe(false);
 	});
 	it('keeps border-primary on the selected invalid row', async () => {
 		mockValid = false;
