@@ -2,6 +2,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import type { useQueryRuntime } from '@wcpos/query';
 import { getCurrentBoundRegisterId } from '@wcpos/query/register-session';
+import { getTemporaryOrder, patchTemporaryOrderPayload } from '@wcpos/query/temporary-order';
 
 import {
 	documentRecordId,
@@ -11,10 +12,6 @@ import {
 	syncableChanges,
 	writeableCollection,
 } from '../../hooks/mutations/use-local-mutation';
-import {
-	getTemporaryOrder,
-	patchTemporaryOrderPayload,
-} from '../contexts/current-order/temporary-order';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 export { findEngineResident } from '../../hooks/mutations/use-local-mutation';

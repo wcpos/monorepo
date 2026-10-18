@@ -5,9 +5,9 @@ import useDeepCompareEffect from 'use-deep-compare-effect';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useDocField } from '@wcpos/query';
+import { newOrder$, patchTemporaryOrderPayload } from '@wcpos/query/temporary-order';
 
 import { useRegister } from '../../../../../services/register/use-register';
-import { newOrder$, patchTemporaryOrderPayload } from './temporary-order';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import { useDefaultCustomer } from '../../../hooks/use-default-customer';

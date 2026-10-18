@@ -133,7 +133,7 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => mockUseT(),
 }));
 
-jest.mock('../../pos/contexts/current-order/temporary-order', () => ({
+jest.mock('@wcpos/query/temporary-order', () => ({
 	getTemporaryOrder: (uuid: string) => mockGetTemporaryOrder(uuid),
 	patchTemporaryOrderPayload: (uuid: string, changes: Record<string, unknown>) =>
 		mockPatchTemporaryOrderPayload(uuid, changes),

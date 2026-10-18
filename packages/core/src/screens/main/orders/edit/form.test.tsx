@@ -451,7 +451,7 @@ it('management save preserves a tombstoned money-owner hint at the mutation boun
 	expect(stored.payload.meta_data).toEqual([hint, { key: 'custom', value: 'edited' }]);
 });
 
-jest.mock('../../pos/contexts/current-order/temporary-order', () => ({}));
+jest.mock('@wcpos/query/temporary-order', () => ({}));
 
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: () => '2026-10-18',
