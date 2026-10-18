@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { Icon } from '../icon';
-import { MenuRow } from './index';
+import { MenuRow, MenuRowGroup } from './index';
 
 let mockPointer: 'fine' | 'coarse' = 'fine';
 // Keep RNW press behaviour; Jest does not compile Uniwind classes.
@@ -37,9 +37,9 @@ beforeEach(() => {
 	mockPointer = 'fine';
 });
 
-it('renders a label and the menuitem role with the menu surface classes', () => {
+it('renders a label and the button role with the menu surface classes', () => {
 	render(<MenuRow testID="row" label="Settings" onPress={() => {}} />);
-	const row = screen.getByRole('menuitem', { name: 'Settings' });
+	const row = screen.getByRole('button', { name: 'Settings' });
 	expect(row).toHaveAttribute('data-testid', 'row');
 	for (const token of [
 		'w-full',
@@ -66,30 +66,30 @@ it('shows a check only for the selected choice and reserves its slot on the othe
 			<MenuRow selected label="Plain" />
 		</>
 	);
-	const selected = screen.getByRole('menuitemradio', { name: 'Today', checked: true });
-	const other = screen.getByRole('menuitemradio', { name: 'Yesterday', checked: false });
+	const selected = screen.getByRole('radio', { name: 'Today', checked: true });
+	const other = screen.getByRole('radio', { name: 'Yesterday', checked: false });
 	expect(selected.querySelector('[data-classes~="w-5"] svg')).not.toBeNull();
 	expect(other.querySelector('[data-classes~="w-5"]')).toBeEmptyDOMElement();
 	expect(
-		screen.getByRole('menuitem', { name: 'Plain' }).querySelector('[data-classes~="w-5"]')
+		screen.getByRole('button', { name: 'Plain' }).querySelector('[data-classes~="w-5"]')
 	).toBeNull();
 });
 
 it('presses when enabled and blocks a disabled press', () => {
 	const onPress = jest.fn();
 	const { rerender } = render(<MenuRow label="Switch" onPress={onPress} />);
-	fireEvent.click(screen.getByRole('menuitem'));
+	fireEvent.click(screen.getByRole('button'));
 	expect(onPress).toHaveBeenCalledTimes(1);
 	rerender(<MenuRow label="Switch" onPress={onPress} disabled />);
-	fireEvent.click(screen.getByRole('menuitem'));
+	fireEvent.click(screen.getByRole('button'));
 	expect(onPress).toHaveBeenCalledTimes(1);
-	expect(screen.getByRole('menuitem')).toHaveAttribute('aria-disabled', 'true');
-	expect(screen.getByRole('menuitem').dataset.classes).toContain('opacity-45');
+	expect(screen.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
+	expect(screen.getByRole('button').dataset.classes).toContain('opacity-45');
 });
 
 it('paints destructive words and icons red, with a destructive hover and press wash', () => {
 	render(<MenuRow label="Forget" variant="destructive" leading={<Icon name="trash" />} />);
-	const row = screen.getByRole('menuitem');
+	const row = screen.getByRole('button');
 	expect(within(row).getByText('Forget').dataset.classes).toContain('text-destructive');
 	expect(row.querySelector('svg')?.parentElement?.dataset.classes).toContain('text-destructive');
 	for (const state of ['web:hover', 'web:focus', 'active'])
@@ -99,7 +99,7 @@ it('paints destructive words and icons red, with a destructive hover and press w
 it('keeps hover off coarse pointers without removing press or keyboard focus feedback', () => {
 	mockPointer = 'coarse';
 	render(<MenuRow label="Settings" />);
-	const classes = screen.getByRole('menuitem').dataset.classes;
+	const classes = screen.getByRole('button').dataset.classes;
 	expect(classes).not.toContain('hover:');
 	expect(classes).toContain('active:bg-muted');
 	expect(classes).toContain('web:focus:bg-muted');
@@ -114,31 +114,60 @@ it('renders a node label, description and leading/trailing slots', () => {
 			trailing={<span>Shortcut</span>}
 		/>
 	);
-	const row = screen.getByRole('menuitem');
+	const row = screen.getByRole('button');
 	expect(row).toHaveTextContent('AvatarRegisterNot openedShortcut');
 	expect(screen.getByTestId('label').dataset.classes).toContain('min-w-0 flex-1');
 	expect(within(row).getByText('Not opened').dataset.classes).toContain('text-muted-foreground');
 });
 
-it.each([false, true])(
-	'activates choice=%s with Enter and Space, but not when disabled',
-	(choice) => {
-		const onPress = jest.fn();
-		const { rerender } = render(
-			<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} />
+it.each([
+	[false, 'Enter'],
+	[false, ' '],
+	[true, 'Enter'],
+	[true, ' '],
+])('activates choice=%s once with %j, but not when disabled', (choice, key) => {
+	const onPress = jest.fn();
+	const { rerender } = render(
+		<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} />
+	);
+	const row = screen.getByTestId('row');
+	fireEvent.keyDown(row, { key });
+	fireEvent.keyUp(row, { key });
+	// jsdom does not synthesize the browser's keyboard click on native buttons.
+	if (row.tagName === 'BUTTON') fireEvent.click(row, { detail: 0 });
+	expect(onPress).toHaveBeenCalledTimes(1);
+	rerender(<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} disabled />);
+	fireEvent.keyDown(row, { key });
+	fireEvent.keyUp(row, { key });
+	if (row.tagName === 'BUTTON') fireEvent.click(row, { detail: 0 });
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('forwards the caller onKeyDown for Escape', () => {
+	const onKeyDown = jest.fn();
+	render(<MenuRow testID="row" label="Settings" onKeyDown={onKeyDown} />);
+	fireEvent.keyDown(screen.getByTestId('row'), { key: 'Escape' });
+	expect(onKeyDown).toHaveBeenCalledTimes(1);
+	expect(onKeyDown.mock.calls[0][0].nativeEvent.key).toBe('Escape');
+});
+
+it('wraps a numeric description in muted Text', () => {
+	render(<MenuRow label="Count" description={3} />);
+	expect(screen.getByText('3').dataset.classes).toContain('text-muted-foreground');
+});
+
+it.each(['aria-label', 'accessibilityLabel'] as const)(
+	'labels the radio group with %s and preserves layout classes',
+	(labelProp) => {
+		render(
+			<MenuRowGroup {...{ [labelProp]: 'Period' }} className="gap-2">
+				<MenuRow choice selected label="Today" />
+				<MenuRow choice label="Yesterday" />
+			</MenuRowGroup>
 		);
-		const row = screen.getByTestId('row');
-		for (const key of ['Enter', ' ']) {
-			fireEvent.keyDown(row, { key });
-			fireEvent.keyUp(row, { key });
-		}
-		expect(onPress).toHaveBeenCalledTimes(2);
-		rerender(<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} disabled />);
-		for (const key of ['Enter', ' ']) {
-			fireEvent.keyDown(row, { key });
-			fireEvent.keyUp(row, { key });
-		}
-		expect(onPress).toHaveBeenCalledTimes(2);
+		const group = screen.getByRole('radiogroup', { name: 'Period' });
+		expect(group.dataset.classes).toBe('gap-2');
+		expect(within(group).getAllByRole('radio')).toHaveLength(2);
 	}
 );
 
@@ -146,10 +175,10 @@ it('keeps the native light haptic of the replaced Buttons, but not on disabled r
 	const platform = jest.replaceProperty(Platform, 'OS', 'ios');
 	try {
 		const { rerender } = render(<MenuRow label="Settings" />);
-		fireEvent.click(screen.getByRole('menuitem'));
+		fireEvent.click(screen.getByRole('button'));
 		expect(Haptics.impactAsync).toHaveBeenCalledWith('light');
 		rerender(<MenuRow label="Settings" disabled />);
-		fireEvent.click(screen.getByRole('menuitem'));
+		fireEvent.click(screen.getByRole('button'));
 		expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
 	} finally {
 		platform.restore();

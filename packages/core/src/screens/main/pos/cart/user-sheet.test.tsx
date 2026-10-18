@@ -178,7 +178,7 @@ it('keeps settings, support and external links reachable below sign out', () => 
 	const { openExternalURL } = jest.requireMock('@wcpos/utils/open-external-url');
 	render(<UserSheet open onOpenChange={jest.fn()} />);
 	const ids = Array.from(
-		document.querySelectorAll('button[data-testid], [role="menuitem"][data-testid]')
+		document.querySelectorAll('button[data-testid], [role="button"][data-testid]')
 	).map((node) => node.getAttribute('data-testid'));
 	expect(ids.slice(ids.indexOf('user-sheet-sign-out'))).toEqual([
 		'user-sheet-sign-out',

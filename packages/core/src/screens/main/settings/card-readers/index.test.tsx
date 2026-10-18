@@ -421,6 +421,7 @@ it('cancels provider selection without opening a reader connection', async () =>
 	render(<CardReadersSettings />);
 	await flush();
 	fireEvent.click(screen.getByTestId('card-readers-connect'));
+	expect(screen.getByRole('radiogroup', { name: 'Connect a reader with' })).toBeTruthy();
 	fireEvent.click(screen.getByTestId('card-readers-provider-cancel'));
 	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
 	expect(screen.getByTestId('card-readers-connect')).toBeTruthy();

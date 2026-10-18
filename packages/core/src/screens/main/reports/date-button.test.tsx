@@ -258,6 +258,7 @@ const change = jest.fn();
 const room = jest.fn();
 const scope: ClosureScope = { from: '2026-09-16', to: '2026-09-16', storeId: 1, registerId: 'r' };
 beforeEach(() => {
+	mockScreenSize = 'sm';
 	jest.clearAllMocks();
 	isPro = false;
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
@@ -384,8 +385,10 @@ it.each([
 // Revert: omit minDate/maxDate on the custom calendar, or ignore the closer selection.
 it('caps custom history and applies the cashier filter', () => {
 	isPro = true;
+	mockScreenSize = 'md';
 	draw();
 	fireEvent.click(screen.getByTestId('reports-period'));
+	expect(screen.getByTestId('reports-period-today').closest('[role="radiogroup"]')).not.toBeNull();
 	const props = calendar.mock.calls.at(-1)?.[0];
 	expect(props.maxDate).toBe('2026-09-16');
 	expect(props.minDate).toBe('2026-06-16');

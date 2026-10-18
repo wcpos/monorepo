@@ -1,9 +1,14 @@
 import * as React from 'react';
-import { Platform, Pressable, type PressableProps, View } from 'react-native';
+import {
+	type GestureResponderEvent,
+	Platform,
+	Pressable,
+	type PressableProps,
+	View,
+} from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 
-import { SHEET_ROW_ROLES } from '../dropdown-menu/sheet-context';
 import { Icon } from '../icon';
 import { usePointer } from '../lib/device';
 import { cn } from '../lib/utils';
@@ -43,32 +48,35 @@ export function MenuRow({
 }: MenuRowProps) {
 	const pointer = usePointer();
 	const destructive = variant === 'destructive';
+	const press = (event: GestureResponderEvent) => {
+		if (Platform.OS !== 'web' && !disabled) {
+			void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+		}
+		onPress?.(event);
+	};
 	return (
 		<TextClassContext.Provider
 			value={cn('text-base select-none', destructive ? 'text-destructive' : 'text-foreground')}
 		>
 			<Pressable
 				{...props}
-				onPress={(event) => {
-					if (Platform.OS !== 'web' && !disabled) {
-						void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-					}
-					onPress?.(event);
-				}}
-				// RNW only handles Space for button roles; menu rows need the same activation.
+				onPress={press}
+				// react-native-web activates on Space only for the button role; a radio
+				// row gets it here, after the caller's handler and only if that did not
+				// claim the key.
 				onKeyDown={
-					Platform.OS === 'web'
+					choice
 						? (event) => {
-								if (event.nativeEvent.key !== ' ') return;
-								event.preventDefault();
-								if (!disabled && !event.nativeEvent.repeat) {
-									(event.currentTarget as unknown as HTMLElement).click();
+								props.onKeyDown?.(event);
+								if (event.nativeEvent.key === ' ' && !event.defaultPrevented && !disabled) {
+									event.preventDefault();
+									press(event as unknown as GestureResponderEvent);
 								}
 							}
-						: undefined
+						: props.onKeyDown
 				}
-				accessibilityRole={choice ? 'radio' : 'menuitem'}
-				role={choice ? SHEET_ROW_ROLES.radio : 'menuitem'}
+				accessibilityRole={choice ? 'radio' : 'button'}
+				role={choice ? 'radio' : 'button'}
 				accessibilityState={{
 					...accessibilityState,
 					disabled: !!disabled,
@@ -101,7 +109,11 @@ export function MenuRow({
 					)}
 					{description != null && (
 						<TextClassContext.Provider value="text-muted-foreground text-sm">
-							{typeof description === 'string' ? <Text>{description}</Text> : description}
+							{typeof description === 'string' || typeof description === 'number' ? (
+								<Text>{description}</Text>
+							) : (
+								description
+							)}
 						</TextClassContext.Provider>
 					)}
 				</View>
@@ -112,6 +124,11 @@ export function MenuRow({
 }
 
 MenuRow.Label = MenuRowLabel;
+
+/** Semantics only: callers still own selection and layout. */
+export function MenuRowGroup(props: React.ComponentProps<typeof View>) {
+	return <View {...props} role="radiogroup" accessibilityRole="radiogroup" />;
+}
 
 /** A group break, not a divider after every row (DropdownMenuSeparator's sheet classes). */
 export function MenuRowSeparator() {

@@ -368,6 +368,8 @@ it.each([
 	isPro = true;
 	draw();
 	fireEvent.click(screen.getByTestId(trigger));
+	expect(screen.getByTestId(option).getAttribute('role')).toBe('radio');
+	expect(screen.getByTestId(option).closest('[role="radiogroup"]')).not.toBeNull();
 	fireEvent.click(screen.getByTestId(option));
 	expect(change).toHaveBeenCalled();
 	expect(screen.queryByTestId(option)).toBeNull();

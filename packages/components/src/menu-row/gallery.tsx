@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { Avatar } from '../avatar';
 import { Icon } from '../icon';
-import { MenuRow, MenuRowSeparator } from './index';
+import { MenuRow, MenuRowGroup, MenuRowSeparator } from './index';
 
 const onPress = () => {};
 export const stories = [
@@ -36,7 +36,7 @@ export const stories = [
 	{
 		id: 'choice',
 		render: () => (
-			<View className="bg-card w-80 gap-2 p-2">
+			<MenuRowGroup accessibilityLabel="Period" className="bg-card w-80 gap-2 p-2">
 				<MenuRow testID="menu-row-today" label="Today" choice selected onPress={onPress} />
 				<MenuRow
 					testID="menu-row-yesterday"
@@ -45,7 +45,7 @@ export const stories = [
 					selected={false}
 					onPress={onPress}
 				/>
-			</View>
+			</MenuRowGroup>
 		),
 	},
 	{

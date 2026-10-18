@@ -6,7 +6,7 @@ import { format, parseISO, subDays } from 'date-fns';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';
-import { MenuRow } from '@wcpos/components/menu-row';
+import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
@@ -110,6 +110,7 @@ export function DateButton({
 	const insets = useSafeAreaInsets();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
+	const PeriodGroup = phone ? View : MenuRowGroup;
 	const { license } = useAppInfo();
 	const { presets, timezone } = useStoreDay(storeId);
 	const [locked, setLocked] = React.useState(initialLockedPeriod ? lockedScopeName : '');
@@ -204,7 +205,10 @@ export function DateButton({
 			>
 				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
 				<PickerBody phone={phone} maxHeight={bodyMaxHeight}>
-					<View className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}>
+					<PeriodGroup
+						accessibilityLabel={t('common.date_range')}
+						className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}
+					>
 						{Object.entries(ranges).map(([key, range]) =>
 							phone ? (
 								<Button
@@ -245,7 +249,7 @@ export function DateButton({
 								</View>
 							)
 						)}
-					</View>
+					</PeriodGroup>
 					<View
 						className={phone ? '-mx-2 self-center' : 'self-center'}
 						style={{ width: calendarWidth }}
