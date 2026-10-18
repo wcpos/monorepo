@@ -4,15 +4,13 @@ import * as React from 'react';
 import { act, fireEvent, render } from '@testing-library/react';
 
 import { PrintingSettings } from './index';
-const mockRemove = jest.fn().mockResolvedValue(undefined);
+const mockDeletePrinterProfile = jest.fn().mockResolvedValue(true);
 const profile = { id: 'counter', name: 'Counter', isBuiltIn: false, connectionType: 'network' };
-const mockFindOne = jest.fn(() => ({ exec: async () => ({ ...profile, remove: mockRemove }) }));
-const storeDB = {
-	collections: {
-		printer_profiles: { findOne: mockFindOne },
-		template_printer_overrides: { find: () => ({ $: { pipe: () => new Map() } }) },
-	},
-};
+const storeDB = {};
+jest.mock('@wcpos/query', () => ({
+	deletePrinterProfile: (...args: unknown[]) => mockDeletePrinterProfile(...args),
+	observeTemplatePrinterOverrides: () => ({ pipe: () => new Map() }),
+}));
 jest.mock('observable-hooks', () => ({ useObservableState: (value: unknown) => value }));
 jest.mock('@wcpos/printer', () => ({
 	PrinterService: class {
@@ -89,17 +87,16 @@ it('asks with the printer name, and cancel removes nothing', async () => {
 	const { getByTestId, queryByRole } = render(<PrintingSettings />);
 	await act(async () => fireEvent.click(getByTestId('printer-row-counter-delete')));
 	expect(queryByRole('alertdialog')?.textContent).toContain('Delete Counter?');
-	expect(mockRemove).not.toHaveBeenCalled();
+	expect(mockDeletePrinterProfile).not.toHaveBeenCalled();
 	fireEvent.click(getByTestId('printer-row-counter-delete-cancel'));
 	expect(queryByRole('alertdialog')).toBeNull();
-	expect(mockFindOne).not.toHaveBeenCalled();
-	expect(mockRemove).not.toHaveBeenCalled();
+	expect(mockDeletePrinterProfile).not.toHaveBeenCalled();
 });
 it('removes only when confirmed and closes the confirmation', async () => {
 	const { getByTestId, queryByRole } = render(<PrintingSettings />);
 	fireEvent.click(getByTestId('printer-row-counter-delete'));
 	await act(async () => fireEvent.click(getByTestId('printer-row-counter-delete-confirm')));
-	expect(mockFindOne).toHaveBeenCalledWith('counter');
-	expect(mockRemove).toHaveBeenCalledTimes(1);
+	expect(mockDeletePrinterProfile).toHaveBeenCalledWith(storeDB, 'counter');
+	expect(mockDeletePrinterProfile).toHaveBeenCalledTimes(1);
 	expect(queryByRole('alertdialog')).toBeNull();
 });

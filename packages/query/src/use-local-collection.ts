@@ -115,9 +115,7 @@ export function observeFollowedCollection<T>(
  *
  * So the base is read during render and a reset only OVERRIDES it, with the
  * override discarded during render once it no longer belongs to the database on
- * screen. This is the shape `useReceiptEmailQueueCollection` arrived at for the
- * same reason; the owner check is shared with the observable form rather than
- * restated.
+ * screen. The owner check is shared with the observable form rather than restated.
  */
 export function useFollowedCollection<T = Record<string, unknown>>(
 	database: LocalDatabaseWithReset | null | undefined,

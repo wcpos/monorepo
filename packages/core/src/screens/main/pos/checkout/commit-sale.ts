@@ -1,5 +1,6 @@
 import { derive, readLedger, toMinor } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
+import { RegisterSessionRequiredError, requireOpenSession } from '@wcpos/query/register-session';
 
 import {
 	type ActionEventInput,
@@ -8,10 +9,6 @@ import {
 	TENDER_COMMIT_EVENT,
 	TENDER_GUARD_IDS,
 } from '../../../../extensions/actions';
-import {
-	RegisterSessionRequiredError,
-	requireOpenSession,
-} from '../../../../services/register-session/session-store';
 import { conditionRules } from '../conditions/evaluate';
 import { countConditionsInSlot } from '../conditions/snapshot';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
@@ -22,7 +19,7 @@ import type { SaleContext } from './sale-completion';
 
 export type SaleCommitContext = Pick<
 	SaleContext,
-	'actionCtx' | 'actionActor' | 'sessions' | 'sessionsOn' | 'dp'
+	'actionCtx' | 'actionActor' | 'storeDB' | 'sessionsOn' | 'dp'
 >;
 export type SaleAmounts =
 	| { kind: 'whole-balance' }
@@ -112,11 +109,7 @@ export function commitSale<R>(
 			},
 			bottom: async ({ payload }) => {
 				// This pre-action write precedes the attempt and money; a replacement session refuses.
-				const sessionId = await requireOpenSession(
-					ctx.sessions,
-					payload.registerId,
-					ctx.sessionsOn
-				);
+				const sessionId = await requireOpenSession(ctx.storeDB, payload.registerId, ctx.sessionsOn);
 				if (sessionId !== payload.sessionId) throw new RegisterSessionRequiredError();
 				return write(payload, queue);
 			},

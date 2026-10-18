@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { findOpenSession, readBoundRegister } from '@wcpos/query/register-session';
 
 import { readStockDocument } from './read-stock-document';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
@@ -13,9 +14,6 @@ import {
 	createActionContext,
 } from '../../../../extensions/actions';
 import { useRegister } from '../../../../services/register/use-register';
-import { readBoundRegister } from '../../../../services/register/register-document';
-import { findOpenSession } from '../../../../services/register-session/session-store';
-import { useRegisterSessionCollection } from '../../../../services/register-session/use-register-session-collections';
 
 const ACTIONS_CATEGORY = ['wcpos', 'pos', 'actions'];
 
@@ -29,8 +27,7 @@ export function useActionContext(): {
 } {
 	const runtime = useQueryRuntime();
 	const t = useT();
-	const { store, wpCredentials, userDB, site } = useStoreSession();
-	const sessions = useRegisterSessionCollection();
+	const { store, wpCredentials, userDB, storeDB, site } = useStoreSession();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const preventOverselling = useDocField(store, (value) => value.prevent_overselling) === true;
 	const priceDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
@@ -65,7 +62,7 @@ export function useActionContext(): {
 				// `requireOpenSession` makes stays with the writer (the tender's bottom handler).
 				resolveSession: async () => {
 					const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
-					const session = await findOpenSession(sessions, registerId, sessionsOn);
+					const session = await findOpenSession(storeDB, registerId, sessionsOn);
 					return { registerId, sessionId: session?.id ?? null };
 				},
 			}),
@@ -91,7 +88,7 @@ export function useActionContext(): {
 			userDB,
 			site.uuid,
 			store.id,
-			sessions,
+			storeDB,
 			sessionsOn,
 		]
 	);

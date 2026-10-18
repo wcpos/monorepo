@@ -179,8 +179,8 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			)}
 			{needsManager && (
 				<View className="bg-warning/10 min-h-ctl flex-row items-center gap-2 rounded-lg px-3">
-					<Icon name="lock" className="text-warning" />
-					<Text testID="count-manager-line" className="text-warning flex-1">
+					<Icon name="lock" className="text-warn-text" />
+					<Text testID="count-manager-line" className="text-warn-text flex-1">
 						{session?.approval_required
 							? t('register.approval_needed')
 							: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}

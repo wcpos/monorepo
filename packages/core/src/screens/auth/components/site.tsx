@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { type ReadonlySiteRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -30,7 +31,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useVersionCheck } from '../../../hooks/use-version-check';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface Props {
 	user: import('@wcpos/database').UserDocument;
@@ -44,7 +45,7 @@ function getUrlWithoutProtocol(url: string) {
 /**
  * Site header — avatar, name, URL
  */
-export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocument }) {
+export function SiteHeader({ site }: { site: Pick<ReadonlySiteRecord, 'name' | 'url'> }) {
 	return (
 		<HStack space="md" className="flex-1 items-center">
 			<Avatar
@@ -68,19 +69,14 @@ export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocum
 export function Site({ user, site }: Props) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const { wcposVersionPass } = useVersionCheck({ site });
+	const { compatibility } = useAppInfo({ site });
+	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 
 	useSiteInfo({ site });
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}

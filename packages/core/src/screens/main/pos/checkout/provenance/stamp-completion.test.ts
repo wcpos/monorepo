@@ -1,13 +1,13 @@
 import type { UserDatabase } from '@wcpos/database';
+import { readRegister } from '@wcpos/query/register-session';
 
-import { readRegister } from '../../../../../services/register/register-document';
 import { completionMeta } from './stamp-completion';
 
 const mockWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
 }));
-jest.mock('../../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	readRegister: jest.fn(async () => ({
 		sites: { site: { register_id: 'register', register_store_id: 1 } },
 	})),

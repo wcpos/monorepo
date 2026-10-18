@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { BehaviorSubject, map, merge, of, Subject } from 'rxjs';
+import { BehaviorSubject, map, merge, of, startWith, Subject } from 'rxjs';
 import { Query } from 'mingo';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
@@ -13,18 +13,45 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
+import { ensureRegister } from '@wcpos/query/register-session';
+import * as actions from '@wcpos/query/register-session';
 
-import { ensureRegister } from '../register/register-document';
-import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument } from './closure-document';
 
 Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
 
-jest.mock('./session-store');
 const mockRequestRefresh = jest.fn();
-jest.mock('./refresh', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	observeRegisterSessions: () => {
+		const generation = mockGeneration;
+		return mockHasSessions
+			? merge(of(null), mockSessionChanges).pipe(
+					map(() => ({
+						active,
+						closed,
+						isCurrent: () => mockHasSessions && generation === mockGeneration,
+					})),
+					startWith(null)
+				)
+			: of(null);
+	},
+	observeCashMovements: () => of(entries),
+	observeRegisterClosures: () => of(closureRows),
+	observeSessionAccounting: jest.fn((...args) =>
+		jest.requireActual('@wcpos/query/register-session').observeSessionAccounting(...args)
+	),
+	openSession: jest.fn(),
+	startCounting: jest.fn(),
+	backToSelling: jest.fn(),
+	closeSession: jest.fn(),
+	recordMovement: jest.fn(),
+	voidMovement: jest.fn(),
+	retryMovement: jest.fn(),
+	requireOpenSession: jest.fn(),
+	writeClosure: jest.fn(),
 	sessionRefreshRequests: { next: (...args: unknown[]) => mockRequestRefresh(...args) },
 }));
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
@@ -71,19 +98,8 @@ function mockObserve(_engine: unknown, query: { collection: string; selector: Ro
 	);
 }
 
-// The hook only trusts an emission whose collections are identical to the ones it holds now,
-// so these have to be stable across renders. Both session queries are register-scoped, so
-// whatever they return IS this register's set of sessions.
 let mockHasSessions = true;
-const mockSessions = {
-	find: (query?: { selector?: { status?: unknown } }) => ({
-		$: merge(of(null), mockSessionChanges).pipe(
-			map(() => (query?.selector?.status === 'closed' ? closed : active))
-		),
-	}),
-};
-const mockMovements = { find: () => ({ $: of(entries) }) };
-const mockClosures = { find: () => ({ $: of(closureRows) }) };
+let mockGeneration = {};
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockReleaseParents = jest.fn();
 const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [
@@ -95,6 +111,7 @@ const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	userDB: {},
+	storeDB: {},
 	site: {
 		uuid: 'site',
 		populate: async () => [
@@ -104,11 +121,6 @@ const mockStoreSession = {
 	},
 };
 
-jest.mock('./use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => (mockHasSessions ? mockSessions : undefined),
-	useCashMovementCollection: () => mockMovements,
-	useClosureCollection: () => mockClosures,
-}));
 jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => mockBinding,
 }));
@@ -116,9 +128,13 @@ jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => mockStoreSession,
 	useAppState: () => ({ ...mockStoreSession, store: { timezone: 'America/Los_Angeles' } }),
 }));
-jest.mock('@wcpos/query', () => ({
-	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
+jest.mock('../../../../query/src/engine-query', () => ({
 	observeEngineQuery: (...args: Parameters<typeof mockObserve>) => mockObserve(...args),
+}));
+jest.mock('../../../../query/src/requirement-bridge', () => ({
+	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
+}));
+jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	useDocField: (_doc: unknown, select: (value: Record<string, unknown>) => unknown) =>
 		select({
@@ -335,7 +351,7 @@ it('logs a manual retry with the current cashier and the movement session', asyn
 	await expect(result.current.actions.retryMovement('movement')).resolves.toMatchObject({
 		id: 'movement',
 	});
-	expect(actions.retryMovement).toHaveBeenCalledWith(mockMovements, 'movement');
+	expect(actions.retryMovement).toHaveBeenCalledWith(mockStoreSession.storeDB, 'movement');
 	expect(logger.info).toHaveBeenCalledWith(
 		'Register cash movement retry requested',
 		expect.objectContaining({
@@ -702,12 +718,10 @@ it.each([false, true])(
 				await pending;
 				return { ...session, status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' } as never;
 			});
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			const result = await settled();
 			let closing!: ReturnType<typeof result.current.actions.closeSession>;
 			await act(async () => {
@@ -785,12 +799,10 @@ it.each([false, true])(
 				status: 'closed',
 				closed_at_gmt: '2026-09-15T11:00:00',
 			} as never);
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			const result = await settled();
 			expect(result.current.expected).toEqual({ cash: '100' });
 			let closing!: ReturnType<typeof result.current.actions.closeSession>;
@@ -831,44 +843,55 @@ it.each([false, true])(
 );
 
 // Remove the parent wait or use the pre-wait accounting: the closure records cash instead of card.
-it('waits for missing refund parents before computing the closure tender', async () => {
-	entries = [];
-	mockRefunds.next([refundHit()]);
-	let resolve!: () => void;
-	const ready = new Promise<void>((done) => {
-		resolve = done;
-	});
-	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
-	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
-	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
-		const { readLedger } =
-			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
-		const attributed = attributeRefunds(
-			input.session.id,
-			input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
-			input.refundRecords ?? []
-		);
-		return {
-			id: 'closure',
-			counted: {},
-			variance: {},
-			breakdowns: { payment_methods: attributed.byMethod },
-		} as never;
-	});
-	const result = await settled();
-	let closing!: ReturnType<typeof result.current.actions.closeSession>;
-	await act(async () => {
-		closing = result.current.actions.closeSession({ counted: { cash: '100' } });
-	});
-	expect(actions.writeClosure).not.toHaveBeenCalled();
-	await act(async () => {
-		mockOrders.next([parentHit()]);
-		resolve();
-		await closing;
-	});
-	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
-});
+it.each(['unchanged', 'locale', 'engine'] as const)(
+	'waits for missing refund parents before computing the closure tender (%s)',
+	async (change) => {
+		entries = [];
+		mockRefunds.next([refundHit()]);
+		let resolve!: () => void;
+		const ready = new Promise<void>((done) => {
+			resolve = done;
+		});
+		mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+			const { attributeRefunds } = jest.requireActual<
+				typeof import('@wcpos/query/register-session')
+			>('@wcpos/query/register-session');
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			const attributed = attributeRefunds(
+				input.session.id,
+				input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+				input.refundRecords ?? []
+			);
+			return {
+				id: 'closure',
+				counted: {},
+				variance: {},
+				breakdowns: { payment_methods: attributed.byMethod },
+			} as never;
+		});
+		const { result, rerender } = renderHook(() => useRegisterSession());
+		await waitFor(() => expect(result.current.session).not.toBeNull());
+		let closing!: ReturnType<typeof result.current.actions.closeSession>;
+		await act(async () => {
+			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		const previousRuntime = { ...mockRuntime };
+		if (change === 'locale') mockRuntime.locale = 'es';
+		if (change === 'engine') mockRuntime.engine = {};
+		rerender();
+		await act(async () => {
+			mockOrders.next([parentHit()]);
+			resolve();
+			await closing;
+		});
+		expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
+		Object.assign(mockRuntime, previousRuntime);
+	}
+);
 
 // Revert to resolving on any accounting emission: an unchanged missing set closes with cash.
 it('ignores an unrelated resident parent emission while awaiting the missing parent tender', async () => {
@@ -889,7 +912,9 @@ it('ignores an unrelated resident parent emission while awaiting the missing par
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
+			'@wcpos/query/register-session'
+		);
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(
@@ -934,7 +959,9 @@ it.each([false, true])(
 		mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-			const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+			const { attributeRefunds } = jest.requireActual<
+				typeof import('@wcpos/query/register-session')
+			>('@wcpos/query/register-session');
 			const { readLedger } =
 				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 			const attributed = attributeRefunds(
@@ -996,7 +1023,9 @@ it('follows replacement refund parent handles before computing the closure tende
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
+			'@wcpos/query/register-session'
+		);
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(
@@ -1157,12 +1186,10 @@ it.each([
 					status: 'closed',
 					closed_at_gmt: '2026-09-17T12:00:00Z',
 				} as never);
-			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			const { writeClosure } = jest.requireActual<typeof actions>('@wcpos/query/register-session');
 			jest
 				.mocked(actions.writeClosure)
-				.mockImplementationOnce((input) =>
-					writeClosure({ ...input, closures: db.closures, userDB })
-				);
+				.mockImplementationOnce((input) => writeClosure({ ...input, storeDB: db, userDB }));
 			mockOrders.next(
 				[7, 8, 99].map((id) => ({
 					record: {
@@ -1449,7 +1476,7 @@ it.each([
 	mockOrders.next([hit]);
 	const result = await settled();
 	expect(mockRequestRefresh).toHaveBeenCalledWith({
-		sessions: mockSessions,
+		storeDB: mockStoreSession.storeDB,
 		registerId: 'register',
 	});
 	expect(result.current.expected.cash).toBe('110.0000');
@@ -1705,5 +1732,37 @@ it.each(['startCounting', 'backToSelling', 'closeSession'] as const)(
 		expect(actions.startCounting).not.toHaveBeenCalled();
 		expect(actions.backToSelling).not.toHaveBeenCalled();
 		expect(actions.closeSession).not.toHaveBeenCalled();
+	}
+);
+
+// Removing any one of the three guard keys exposes the outgoing drawer during this render.
+it.each(['store', 'register', 'generation'] as const)(
+	'hides stale session data during a %s switch',
+	async (scope) => {
+		const previousStore = mockStoreSession.storeDB;
+		const previousRegister = mockBinding.registerId;
+		const renders: ReturnType<typeof useRegisterSession>[] = [];
+		const view = renderHook(() => {
+			const value = useRegisterSession();
+			renders.push(value);
+			return value;
+		});
+		await waitFor(() => expect(view.result.current.session?.id).toBe('session'));
+		renders.length = 0;
+		try {
+			if (scope === 'store') mockStoreSession.storeDB = {};
+			if (scope === 'register') mockBinding.registerId = 'other';
+			if (scope === 'generation') mockGeneration = {};
+			view.rerender();
+			expect(renders[0].session).toBeNull();
+			expect(renders[0].loaded).toBe(false);
+			await expect(renders[0].actions.startCounting()).rejects.toBeInstanceOf(
+				actions.RegisterSessionRequiredError
+			);
+		} finally {
+			view.unmount();
+			mockStoreSession.storeDB = previousStore;
+			mockBinding.registerId = previousRegister;
+		}
 	}
 );

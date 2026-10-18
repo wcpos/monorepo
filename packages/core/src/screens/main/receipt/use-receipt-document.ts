@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { ClosureDocument } from '@wcpos/database';
+import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -34,7 +34,7 @@ export function useReceiptDocument({
 	storeId,
 	previewEnabled = true,
 }: {
-	getLocalClosure?: () => Promise<ClosureDocument | null>;
+	getLocalClosure?: () => Promise<ReadonlyClosureDocument | null>;
 	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
@@ -188,11 +188,7 @@ export function useReceiptDocument({
 					if (!closure) throw new Error('Local closure unavailable');
 					const count = closure.getLatest().print_count + 1;
 					commit = async () => {
-						await closure.incrementalModify((row) => ({
-							...row,
-							print_count: Math.max(row.print_count, count),
-							printed_at: row.printed_at ?? new Date().toISOString(),
-						}));
+						await recordClosurePrint(closure, count, () => new Date().toISOString());
 					};
 					return count;
 				}
@@ -226,13 +222,12 @@ export function useReceiptDocument({
 						const marker = await recordPrint();
 						const closure = marker && getLocalClosure ? await getLocalClosure() : null;
 						if (marker && closure) {
-							await closure.incrementalModify((row) => ({
-								...row,
-								print_count: Math.max(row.print_count + 1, marker.print_count),
-								printed_at:
-									row.printed_at ??
-									convertUTCStringToLocalDate(marker.last_printed_at_gmt).toISOString(),
-							}));
+							await recordClosurePrint(
+								closure,
+								marker.print_count,
+								() => convertUTCStringToLocalDate(marker.last_printed_at_gmt).toISOString(),
+								true
+							);
 						}
 					} catch (error) {
 						Toast.show({

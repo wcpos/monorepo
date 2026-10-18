@@ -134,6 +134,29 @@ export {
 	observeTemplatePrinterOverrides,
 	observePrinterProfiles,
 	observeActiveTemplates,
+	type StoreLocalDatabase,
+	type NotificationRow,
 	type ActiveTemplate,
 	type LocalPrinterProfile,
 } from './reads/store-local';
+
+export {
+	savePrinterProfile,
+	ensureSystemPrinterProfile,
+	setDefaultPrinterProfile,
+	deletePrinterProfile,
+	PrinterProfileNotFoundError,
+	StoreDatabaseUnavailableError,
+	SYSTEM_PRINTER_ID,
+	type PrinterStoreDatabase,
+	type PrinterProfileFields,
+} from './commands/printer-profiles';
+export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
+
+export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';
+export {
+	markNotificationRead,
+	markAllNotificationsRead,
+	markAllNotificationsSeen,
+	upsertNotification,
+} from './commands/notifications';

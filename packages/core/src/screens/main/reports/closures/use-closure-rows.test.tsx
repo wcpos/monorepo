@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map } from 'rxjs';
 import { Query } from 'mingo';
 
 import type { ClosureRow } from '@wcpos/database';
@@ -10,13 +10,15 @@ import { useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
 const collection = { find: () => ({ $: source }), findOne: jest.fn() };
+const storeDB = { collections: { closures: collection } };
 const get = jest.fn();
 const http = { get };
 let online = true;
 let isPro = true;
 const binding = { registerId: 'r', registerName: 'Front' };
-jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => collection,
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	observeClosures: () => source.pipe(map((rows) => rows.map((row) => row.toMutableJSON()))),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => http }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -27,7 +29,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 }));
 jest.mock('../../../../hooks/use-app-info', () => ({ useAppInfo: () => ({ license: { isPro } }) }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { id: 1 } }),
+	useStoreSession: () => ({ store: { id: 1 }, storeDB }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
 	useStoreDay: (storeId?: number) => ({

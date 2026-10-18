@@ -2,6 +2,7 @@ import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import type {
+	NotificationDocument,
 	PrinterProfileDocument,
 	TemplateDocument,
 	TemplatePrinterOverrideDocument,
@@ -9,13 +10,14 @@ import type {
 
 import { type LocalDatabaseWithReset, observeFollowedCollection } from '../use-local-collection';
 
-type StoreDatabase = LocalDatabaseWithReset | null | undefined;
+export type StoreLocalDatabase = LocalDatabaseWithReset | null | undefined;
+export type NotificationRow = ReturnType<NotificationDocument['toJSON']>;
 export type ActiveTemplate = ReturnType<TemplateDocument['toJSON']>;
 export type LocalPrinterProfile = ReturnType<PrinterProfileDocument['toJSON']>;
 type TemplatePrinterOverride = ReturnType<TemplatePrinterOverrideDocument['toJSON']>;
 
 /** All store-local routing overrides; absent database → []. */
-export function observeTemplatePrinterOverrides(database: StoreDatabase) {
+export function observeTemplatePrinterOverrides(database: StoreLocalDatabase) {
 	return observeFollowedCollection<TemplatePrinterOverride>(
 		database,
 		'template_printer_overrides'
@@ -27,7 +29,7 @@ export function observeTemplatePrinterOverrides(database: StoreDatabase) {
 }
 
 /** Persisted printer profiles (cloud profiles are merged by the caller); absent → []. */
-export function observePrinterProfiles(database: StoreDatabase) {
+export function observePrinterProfiles(database: StoreLocalDatabase) {
 	return observeFollowedCollection<LocalPrinterProfile>(database, 'printer_profiles').pipe(
 		switchMap((collection) =>
 			collection ? collection.find().$.pipe(map((docs) => docs.map((doc) => doc.toJSON()))) : of([])
@@ -37,7 +39,7 @@ export function observePrinterProfiles(database: StoreDatabase) {
 
 /** Published/virtual templates in menu order; closure templates belong to the viewed store. */
 export function observeActiveTemplates(
-	database: StoreDatabase,
+	database: StoreLocalDatabase,
 	{ type, storeId }: { type: 'receipt' | 'report' | 'closure'; storeId?: number }
 ) {
 	return observeFollowedCollection<ActiveTemplate>(database, 'templates').pipe(

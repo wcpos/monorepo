@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
-
 import { PrinterService, probeVendorEndpoint, usePrinterDiscovery } from '@wcpos/printer';
 import type { DiscoveryError, PrinterProfile } from '@wcpos/printer';
 import { Platform } from '@wcpos/utils/platform';
+import { PrinterProfileNotFoundError, savePrinterProfile } from '@wcpos/query';
 
 import { BridgeError, type BridgeHandlers } from '../bridge/types';
 import { buildPrinterProfileFields } from '../../settings/printer/profile-config';
@@ -156,7 +155,6 @@ export function usePrinterCapabilities(): BridgeHandlers {
 					throw new BridgeError('bad_request', 'Printer profile required');
 				}
 				const profileData = profile as Record<string, unknown>;
-				const id = typeof profileData.id === 'string' ? profileData.id : uuidv4();
 				const schema = Platform.isElectron
 					? electronPrinterSchema
 					: Platform.isWeb
@@ -171,24 +169,24 @@ export function usePrinterCapabilities(): BridgeHandlers {
 						issues: result.error.issues,
 					});
 				}
-				const collection = storeDB.collections.printer_profiles;
-				const existing = profileData.id ? await collection.findOne(id).exec() : null;
-				if (profileData.id && !existing) {
+				// A truthy id names an existing profile; absent, empty or non-string creates (the
+				// command minting the id), exactly as before the write moved into the command.
+				const existingId =
+					typeof profileData.id === 'string' && profileData.id ? profileData.id : undefined;
+				if (profileData.id && !existingId) {
 					throw new BridgeError('bad_request', 'Printer profile was not found');
 				}
-				const fields = buildPrinterProfileFields(result.data);
-				if (existing) {
-					await existing.patch(fields);
-				} else {
-					await collection.insert({ id, ...fields });
+				try {
+					const { id } = await savePrinterProfile(storeDB, buildPrinterProfileFields(result.data), {
+						id: existingId,
+					});
+					return { profileId: id };
+				} catch (error) {
+					if (error instanceof PrinterProfileNotFoundError) {
+						throw new BridgeError('bad_request', 'Printer profile was not found');
+					}
+					throw error;
 				}
-				// Demote other defaults only once the target is persisted, so a failed save never
-				// leaves the store without a default printer.
-				if (result.data.isDefault) {
-					const defaults = await collection.find({ selector: { isDefault: true } }).exec();
-					for (const doc of defaults) if (doc.id !== id) await doc.patch({ isDefault: false });
-				}
-				return { profileId: id };
 			},
 		}),
 		[printerService, profiles, storeDB]

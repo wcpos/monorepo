@@ -5,10 +5,10 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { derive, readLedger, settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import { config } from '../../../../../jest/cart-write';
 import { createActionContext } from '../../../../extensions/actions';
-import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 import { pendingCompletions } from '../checkout/completion-journal';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';

@@ -24,7 +24,7 @@ import {
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
+import { getServerOwnedStorePatch, SERVER_OWNED_STORE_FIELDS } from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 
 import { LockedRow } from './components/locked-row';
@@ -35,7 +35,6 @@ import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';

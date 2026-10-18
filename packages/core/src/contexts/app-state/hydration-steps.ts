@@ -31,14 +31,14 @@ import type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
-
+import { ensureRegister } from '@wcpos/query/register-session';
 import {
 	mergeServerOwnedStoreFields,
 	normalizeStorePayload,
 	type ServerStorePayload,
-} from '../../utils/merge-stores';
-import { ensureRegister } from '../../services/register/register-document';
-import { upsertSiteData } from '../../utils/site-writes';
+} from '@wcpos/query/user-db';
+import { upsertSiteData } from '@wcpos/query/user-db';
+
 import { initialProps } from './initial-props';
 import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
 
@@ -1008,7 +1008,7 @@ const processInitialPropsStep: HydrationStep = {
 		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
 		// full-document write and would drop the locally-owned `wp_credentials`
 		// link array, which the embedded payload never carries (#902).
-		const siteDoc = await upsertSiteData(userDB.sites, initialSite);
+		const siteDoc = await upsertSiteData(userDB, initialSite);
 		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
 			sanitizeWPCredentialsData(initialProps.wp_credentials)
 		);

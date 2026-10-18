@@ -2,41 +2,23 @@ import * as React from 'react';
 
 import { debounceTime, filter } from 'rxjs';
 
-import { engineCollection, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import {
+	failureFacts,
+	observeRegisterSessionAvailability,
+	runRegisterSessionCycle,
+	sessionRefreshRequests,
+} from '@wcpos/query/register-session';
 
 import { recordRegisterFact } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
-import { readRegister } from '../register/register-document';
-import { writeClosure } from './session-store';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';
-import { failureFacts } from './failure-facts';
-import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions, sessionRefreshRequests } from './refresh';
-import {
-	useCashMovementCollection,
-	useClosureCollection,
-	useRegisterSessionCollection,
-} from './use-register-session-collections';
-
-/**
- * Free's single store is id 0 on the client, while the server keeps NULL for a session on an
- * unassigned register (`store_id` is BIGINT NULL, and Store Reach reads 0 and NULL as the same
- * "no store"). A reservation acknowledged by the server therefore carries NULL where the local
- * draft carried 0; both name this store, so recovery must not stall on the spelling.
- */
-export function sameStore(a: number | null | undefined, b: number | null | undefined): boolean {
-	const unassigned = (id: number | null | undefined) => id == null || id === 0;
-	return unassigned(a) ? unassigned(b) : a === b;
-}
 
 export function RegisterSessionBridge() {
-	const { userDB, site, store } = useStoreSession();
-	const { engine } = useQueryRuntime();
-	const closures = useClosureCollection();
-	const sessions = useRegisterSessionCollection();
-	const movements = useCashMovementCollection();
+	const { storeDB, userDB, site, store } = useStoreSession();
+	const runtime = useQueryRuntime();
 	const http = useRestHttpClient();
 	const { registerId } = useRegisterBinding();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -47,57 +29,13 @@ export function RegisterSessionBridge() {
 	const rerun = React.useRef<(() => void) | null>(null);
 	// Imperative outbox delivery has mount/connectivity and timer triggers, not render state.
 	React.useEffect(() => {
-		if (!sessions || !movements || !closures) return;
+		if (!storeDB) return;
+		let ready = false;
 		// A streak belongs to one register on one store. AppStack stays mounted across a store
 		// switch, so without this the new scope inherits the old one's count and escalates to
 		// warn on its very first hiccup.
 		consecutiveFailures.current = 0;
-		// Which half of the cycle broke is the first thing a diagnosis needs, and the rejection
-		// never carries it — so each stage tags its own failures on the way out.
-		const staged = <T,>(stage: string, work: () => Promise<T>) =>
-			work().catch((error: unknown) => {
-				throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage });
-			});
-		const sync = async () => {
-			const reservation = await staged(
-				'reservation',
-				async () =>
-					(await readRegister(userDB))?.sites[site.uuid!]?.registers?.[registerId ?? '']
-						?.closure_reservation
-			);
-			if (reservation && !reservation.applied && sameStore(reservation.row.store_id, store.id)) {
-				const session = await sessions.findOne(reservation.row.session_id).exec();
-				if (session)
-					await staged('closure', () =>
-						writeClosure({
-							closures,
-							userDB,
-							siteUuid: site.uuid!,
-							session,
-							counted: reservation.row.counted.cash,
-							otherTenders: reservation.row.counted,
-							movements: [],
-							orders: [],
-						})
-					);
-			}
-			if (!online) return;
-			await staged('drain', () =>
-				drainRegisterSessionQueue({
-					sessions,
-					movements,
-					closures,
-					userDB,
-					siteUuid: site.uuid!,
-					orders: engineCollection(engine.active()?.database, 'orders'),
-					http,
-				})
-			);
-			if (registerId)
-				await staged('refresh', () =>
-					refreshSessions({ registerId, sessions, movements, closures, http })
-				);
-		};
+
 		const report = (error: unknown) => {
 			const { status, errorCode, message } = failureFacts(error);
 			const stage = (error as { stage?: string })?.stage ?? 'refresh';
@@ -113,13 +51,23 @@ export function RegisterSessionBridge() {
 			});
 		};
 		const cycle = () => {
+			if (!ready) return;
 			// Coalesce triggers so an older response cannot overwrite a newer snapshot.
 			if (inFlight.current) {
 				rerun.current = cycle;
 				return;
 			}
 			inFlight.current = true;
-			void sync()
+			void runRegisterSessionCycle({
+				storeDB,
+				userDB,
+				siteUuid: site.uuid!,
+				storeId: store.id,
+				registerId,
+				online,
+				engine: runtime.engine,
+				http,
+			})
 				.then(() => {
 					consecutiveFailures.current = 0;
 				}, report)
@@ -132,11 +80,17 @@ export function RegisterSessionBridge() {
 		};
 		const refreshRequests = sessionRefreshRequests
 			.pipe(
-				filter((request) => request.sessions === sessions && request.registerId === registerId),
+				filter((request) => request.storeDB === storeDB && request.registerId === registerId),
 				debounceTime(250)
 			)
 			.subscribe(() => void cycle());
-		void cycle();
+		const availability = observeRegisterSessionAvailability(storeDB).subscribe((available) => {
+			ready = available;
+			if (ready) {
+				consecutiveFailures.current = 0;
+				void cycle();
+			}
+		});
 		const tick = setInterval(() => {
 			void cycle();
 		}, 60_000);
@@ -144,18 +98,8 @@ export function RegisterSessionBridge() {
 			if (rerun.current === cycle) rerun.current = null;
 			clearInterval(tick);
 			refreshRequests.unsubscribe();
+			availability.unsubscribe();
 		};
-	}, [
-		sessions,
-		movements,
-		closures,
-		userDB,
-		site.uuid,
-		store.id,
-		engine,
-		http,
-		registerId,
-		online,
-	]);
+	}, [userDB, storeDB, site.uuid, store.id, runtime.engine, http, registerId, online]);
 	return null;
 }

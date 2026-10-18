@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -45,7 +46,7 @@ import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-res
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useVersionCheck } from '../../../hooks/use-version-check';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
 	user: UserDocument;
@@ -134,13 +135,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}
@@ -224,7 +219,8 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
  * Content inside an accordion item — needs Suspense boundary above it
  */
 function AccordionSiteContent({ site }: { site: SiteDocument }) {
-	const { wcposVersionPass } = useVersionCheck({ site });
+	const { compatibility } = useAppInfo({ site });
+	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 	const t = useT();
 
 	useSiteInfo({ site });

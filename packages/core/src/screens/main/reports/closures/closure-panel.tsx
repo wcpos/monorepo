@@ -7,10 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
-import type { ClosureRow } from '@wcpos/database';
+import {
+	type ClosureRow,
+	readClosure,
+	setClosureReceiptSnapshot,
+} from '@wcpos/query/register-session';
 import { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
 import { log } from '@wcpos/utils/logger';
 
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { buildClosureDocument } from '../../../../services/register-session/closure-document';
@@ -20,7 +25,6 @@ import {
 	deriveSettled,
 	type RecordedFigures,
 } from '../../../../services/register-session/settled-figures';
-import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { RecountSheet } from './recount-sheet';
 import { ReceiptBody } from '../../receipt/receipt-body';
@@ -48,17 +52,10 @@ export function ClosurePanel({
 	const phone = screenSize === 'sm';
 	const { bottom } = useSafeAreaInsets();
 	const context = useClosureDocumentContext(row.store_id ?? 0);
-	const collection = useClosureCollection();
+	const { storeDB } = useStoreSession();
 	const getLocalClosure = React.useCallback(
-		async () =>
-			(await collection
-				?.findOne({
-					selector: {
-						$or: [{ id: row.id }, { server_closure_id: row.server_closure_id ?? row.id }],
-					},
-				})
-				.exec()) ?? null,
-		[collection, row.id, row.server_closure_id]
+		() => readClosure(storeDB, { id: row.id, serverClosureId: row.server_closure_id ?? row.id }),
+		[storeDB, row.id, row.server_closure_id]
 	);
 	const local = React.useMemo(
 		() =>
@@ -85,9 +82,9 @@ export function ClosurePanel({
 			}
 			if (receipt_snapshot === row.receipt_snapshot) return;
 			const record = await getLocalClosure();
-			await record?.incrementalPatch({ receipt_snapshot });
+			if (record) await setClosureReceiptSnapshot(storeDB, record.id, receipt_snapshot);
 		},
-		[getLocalClosure, row.receipt_snapshot]
+		[getLocalClosure, storeDB, row.receipt_snapshot]
 	);
 	// Retain the authoritative baseline WITH its corrections, without touching the frozen/outbox fields.
 	React.useEffect(() => {

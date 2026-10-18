@@ -1,5 +1,6 @@
 import { withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import {
 	createActionContext,
@@ -7,7 +8,6 @@ import {
 	TENDER_COMMIT_EVENT,
 	TENDER_GUARD_IDS,
 } from '../../../../extensions/actions';
-import { RegisterSessionRequiredError } from '../../../../services/register-session/session-store';
 import {
 	enqueueOrderMutation,
 	type OrderMutationContext,
@@ -38,9 +38,9 @@ const ctx: SaleCommitContext = {
 		resolveSession,
 	}),
 	actionActor: { userId: 7, registerId: 'register', sessionId: null },
-	sessions: {
-		findOne: () => ({ exec: async () => openSession }),
-	} as unknown as SaleCommitContext['sessions'],
+	storeDB: {
+		collections: { register_sessions: { findOne: () => ({ exec: async () => openSession }) } },
+	} as unknown as SaleCommitContext['storeDB'],
 	sessionsOn: true,
 	dp: 2,
 };

@@ -114,7 +114,7 @@ export function ReaderRow({
 					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
-		lineClass = 'text-warning text-sm';
+		lineClass = 'text-warn-text text-sm';
 	} else if (updating) {
 		line = t('settings.card_readers.installing');
 		below = (

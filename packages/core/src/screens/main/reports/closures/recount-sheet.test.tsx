@@ -145,7 +145,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
 }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
-jest.mock('../../../../services/register/register-document', () => ({
+jest.mock('@wcpos/query/register-session', () => ({
 	mintUuid: () => mockMint(),
 }));
 jest.mock('../../../../services/register-session/use-session-report', () => ({
