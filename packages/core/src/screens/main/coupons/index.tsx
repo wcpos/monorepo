@@ -150,6 +150,7 @@ function CouponsList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<CouponRow>
 					id="coupons"
+					gutter="page"
 					collectionName="coupons"
 					handle={handle}
 					sort={state.sort}
@@ -206,7 +207,7 @@ function CouponsBody() {
 			{/* A failed coupons read is thrown here; the fallback's reset asks the handle again, and
 			    a changed query (its handle is new) clears the fallback on its own. */}
 			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="coupons" />}>
+				<Suspense fallback={<DataTableSkeleton id="coupons" gutter="page" />}>
 					<CouponsList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
@@ -233,7 +234,7 @@ function CouponsScreenContent() {
 			style={{ paddingBottom: bottom || undefined }}
 		>
 			<ManagementBar
-				title={t('common.coupons')}
+				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
 				testID="coupons-bar"
 				search={
 					<QuerySearchInput

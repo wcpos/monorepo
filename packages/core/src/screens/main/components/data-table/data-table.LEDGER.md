@@ -21,6 +21,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 17. preserved — footer.tsx, untouched
 18. preserved — footer.tsx, untouched
 19. Every table, its skeleton and the POS tile grids sit on one shared surface (`../surface.tsx`): a `bg-card` card with a hairline border and one radius, inset by the filter chips' 8 pt so their edges align; the phone runs edge to edge under a hairline instead. The surface lives inside `v2/index.tsx` and `v2/skeleton.tsx`, not in each screen, so Orders, Products, Customers, Coupons and the POS pane cannot drift — evidence: owner's pick from the 2026-10-05 mockups (`~/Projects/wcpos-handoffs/orders-table-variants-2026-10-05.html`, variant 2 of four; cart left as it was); verified in the running app on the local Metro, list and tiles — platform: all.
+20. The surface's inset follows the container's density, not the chips' 8 pt of line 19: `gutter="page"` (`mx-4 mb-4`) on the management list pages, whose chip row is `p-4` and Customers' body `pt-4`, so search, chips and card share the 16 edge; `dense` (the default, `mx-2 mb-2`) in the POS pane. The card never owns its top margin, so one gutter sits between chips and card and the pending-search line still spans the pane; the phone is unchanged — evidence: owner, 2026-10-18 (list pages lose the bar title); CODING_STANDARDS § Design, Gutters; `surface.test.tsx` — platform: all.
 
 ## Query-handle compat removal (added 2026-10-13)
 

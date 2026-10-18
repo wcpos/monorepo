@@ -73,8 +73,9 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 
 	return (
 		// The products bar's frame: a plain wrapper sizes the row to its chips, so the
-		// horizontal ScrollView never grows into the table's space.
-		<View className="p-2">
+		// horizontal ScrollView never grows into the table's space. The page gutter all round:
+		// the search above and the table card below share this 16 edge.
+		<View className="p-4">
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}

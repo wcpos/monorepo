@@ -47,8 +47,9 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Jane' },
 	}),
 }));
+let mockRedirectLoginUrl: string | null = null;
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => null,
+	peekRedirectLoginUrl: () => mockRedirectLoginUrl,
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
@@ -58,8 +59,13 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../notification-bell/notification-bell', () => ({ NotificationBell: () => null }));
 jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
-jest.mock('../session-hold-banner', () => ({ SessionHoldBanner: () => null }));
-jest.mock('../../pos/cart/user-sheet', () => ({ UserSheet: () => null }));
+let mockHeld = false;
+jest.mock('../session-hold-banner', () => ({
+	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
+}));
+jest.mock('../../pos/cart/user-sheet', () => ({
+	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
+}));
 
 const items: NavigationAreaItem[] = [
 	{
@@ -76,6 +82,8 @@ describe('NavigationAreaLayout', () => {
 		mockNavigate.mockClear();
 		mockPathname = '/settings/tax';
 		mockScreenSize = 'lg';
+		mockHeld = false;
+		mockRedirectLoginUrl = null;
 	});
 
 	it('shows a wide-screen rail, marks the current item, and navigates between pages', () => {
@@ -92,7 +100,8 @@ describe('NavigationAreaLayout', () => {
 			</NavigationAreaLayout>
 		);
 
-		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+		// No bar on `lg`: the page carries its heading, the app rail the bell and the avatar.
+		expect(screen.queryByTestId('settings-bar')).toBeNull();
 		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
 		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
 		expect(screen.getByTestId('settings-screen')).toBeTruthy();
@@ -123,7 +132,55 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
-		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+		expect(screen.queryByTestId('settings-bar')).toBeNull();
+	});
+
+	// The bar's other jobs outlive it on `lg`: the upgrade notice and a held session still show
+	// above the rail, and a redirect login still reopens the cashier sheet to claim its result.
+	it('keeps the notice, the held-session banner and the redirect-login sheet on lg', () => {
+		mockHeld = true;
+		mockRedirectLoginUrl = 'login';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/health"
+				areaLabel="Store health"
+				testID="health-navigation"
+				screenTestID="health-screen"
+				barTestID="health-bar"
+				barNotice={<div data-testid="upgrade-notice" />}
+				leafPagesCarryTitle
+			>
+				<div data-testid="health-content" />
+			</NavigationAreaLayout>
+		);
+		expect(screen.queryByTestId('health-bar')).toBeNull();
+		const banner = screen.getByTestId('session-hold-banner');
+		const notice = screen.getByTestId('upgrade-notice');
+		const area = screen.getByTestId('health-navigation');
+		// Banner, then notice, then the rail and page row: the order the bar gave them.
+		const rows = Array.from(area.parentElement!.children);
+		expect(rows.indexOf(banner)).toBe(0);
+		expect(rows.indexOf(notice)).toBe(1);
+		expect(rows.indexOf(area)).toBe(2);
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	});
+
+	it('leaves the sheet closed on lg when no redirect login is pending for this site', () => {
+		mockRedirectLoginUrl = 'another-site';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				barTestID="settings-bar"
+			>
+				<div />
+			</NavigationAreaLayout>
+		);
+		expect(screen.queryByTestId('user-sheet')).toBeNull();
+		expect(screen.queryByTestId('session-hold-banner')).toBeNull();
 	});
 
 	it('shows no bar title and a single bar crumb to navigate a phone deep link to the index', () => {

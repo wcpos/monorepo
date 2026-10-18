@@ -2,12 +2,18 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Redirect, usePathname, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
 
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
+import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
+import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
+import { UserSheet } from '../../pos/cart/user-sheet';
 import { ManagementBar } from '../management-bar';
+import { SessionHoldBanner } from '../session-hold-banner';
 
 import type { Href } from 'expo-router';
 
@@ -45,6 +51,24 @@ function NavigationItems({
 	));
 }
 
+/**
+ * The cashier sheet the bar hosted on `lg`, where the rail's avatar opens a sheet of its own:
+ * this one only reopens after a redirect login, so the Add user consumer is mounted to claim
+ * the one-shot result, as the bar's and the register bar's do.
+ */
+function RedirectReturnCashierSheet() {
+	const { site } = useStoreSession();
+	const [open, setOpen] = React.useState(() => peekRedirectLoginUrl() === site.wcpos_login_url);
+	return (
+		<UserSheet
+			open={open}
+			onOpenChange={setOpen}
+			portalHost={null}
+			onSwitchRegister={requestRegisterPicker}
+		/>
+	);
+}
+
 export function NavigationAreaLayout({
 	items,
 	indexHref,
@@ -61,7 +85,7 @@ export function NavigationAreaLayout({
 	areaLabel: string;
 	testID: string;
 	screenTestID?: string;
-	/** Every area is on the page bar, so its rail, list and page column sit on `bg-background`. */
+	/** The phone's page bar; `lg` has none, so the rail, list and page column sit on `bg-background`. */
 	barTestID: string;
 	barNotice?: React.ReactNode;
 	/**
@@ -73,59 +97,55 @@ export function NavigationAreaLayout({
 	children: React.ReactNode;
 }) {
 	const { screenSize } = useTheme();
+	const insets = useSafeAreaInsets();
 	const pathname = usePathname();
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
-	const phoneLeaf = screenSize === 'sm' && current;
-	const bar = (
-		<>
-			<ManagementBar
-				testID={barTestID}
-				title={phoneLeaf ? (leafPagesCarryTitle ? undefined : current.label) : areaLabel}
-				back={
-					phoneLeaf
-						? {
-								label: areaLabel,
-								onPress: () => router.navigate(indexHref),
-								testID: `${testID}-back`,
-							}
-						: undefined
-				}
-			/>
-			{barNotice}
-		</>
-	);
-
 	if (screenSize === 'sm') {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
 		return (
 			<View testID={screenTestID} className="bg-background flex-1">
-				{bar}
+				<ManagementBar
+					testID={barTestID}
+					title={current ? (leafPagesCarryTitle ? undefined : current.label) : areaLabel}
+					back={
+						current
+							? {
+									label: areaLabel,
+									onPress: () => router.navigate(indexHref),
+									testID: `${testID}-back`,
+								}
+							: undefined
+					}
+				/>
+				{barNotice}
 				{children}
 			</View>
 		);
 	}
 
-	const content = (
-		<View testID={testID} className="flex-1 flex-row">
-			<View
-				testID={`${testID}-rail`}
-				className="border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r p-3"
-			>
-				<NavigationItems items={items} showChevron={false} />
-			</View>
-			{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
-			    rail's selected row (`bg-card`) and the page card read as the same surface. */}
-			<View testID={screenTestID} className="bg-background min-w-0 flex-1">
-				{children}
-			</View>
-		</View>
-	);
+	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title and
+	// the rail carries the bell and the avatar. What the bar held besides stays: the top inset,
+	// the held-session banner, the upgrade notice and the redirect-login sheet.
 	return (
-		<View className="flex-1">
-			{bar}
-			{content}
+		<View className="bg-background flex-1" style={{ paddingTop: insets.top }}>
+			<SessionHoldBanner />
+			{barNotice}
+			<View testID={testID} className="flex-1 flex-row">
+				<View
+					testID={`${testID}-rail`}
+					className="border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r p-3"
+				>
+					<NavigationItems items={items} showChevron={false} />
+				</View>
+				{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
+				    rail's selected row (`bg-card`) and the page card read as the same surface. */}
+				<View testID={screenTestID} className="bg-background min-w-0 flex-1">
+					{children}
+				</View>
+			</View>
+			<RedirectReturnCashierSheet />
 		</View>
 	);
 }
