@@ -140,7 +140,10 @@ export function SettlementCoordinatorProvider() {
 				report(warnings, { orderId: uuid, site: 'settlement-coordinator' });
 				if (failure)
 					logger.warn('Cart settlement failed', {
-						showToast: true,
+						// No toast while `useCartSettlement` is still mounted: its replay toasts the
+						// same failure for the current order, and a failure writes no patch, so the
+						// pre-flight no-op cannot dedupe the two. PR 2d (hook deleted) flips this on.
+						showToast: false,
 						toast: {
 							title: t(
 								failure.code === 'missing_coupon'
