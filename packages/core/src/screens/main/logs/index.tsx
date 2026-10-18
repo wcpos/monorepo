@@ -8,7 +8,8 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
+import { readRecentErrorLogs } from '@wcpos/query/store-local';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -32,7 +33,6 @@ import {
 	buildDebugInfo,
 	formatCadence,
 	type LogPreset,
-	type LogRow,
 	presetFilters,
 	shouldExtendLedger,
 } from './logs-logic';
@@ -58,14 +58,6 @@ const NOW_TICK_MS = 5_000;
  * spelling both out).
  */
 const HEADER_BLOCK_STYLE = { flexGrow: 0, flexShrink: 1 } as const;
-
-type LogsCollectionLike = {
-	find(query: {
-		selector: Record<string, unknown>;
-		sort: Record<string, 'asc' | 'desc'>[];
-		limit: number;
-	}): { exec(): Promise<{ toJSON(): LogRow }[]> };
-};
 
 /**
  * The live line the retired grey "Sync status" box collapses into: watching
@@ -127,18 +119,14 @@ function LogsScreenContent() {
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
 	const handle = useLogsQueryHandle(state);
-	const runtime = useQueryRuntime();
 	const status = useEngineStatus();
 	const stats = useLogStats();
 	const mutations = useMutationCounts();
 	const { appVersion, platform, platformVersion, site } = useAppInfo();
-	const { store } = useAppState();
+	const { store, storeDB } = useAppState();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const { verbose, setVerbose } = useVerboseDiagnostics();
 	const [preset, setPreset] = React.useState<LogPreset>('all');
-
-	const logsCollection = (runtime.localDB as { collections?: Record<string, unknown> })?.collections
-		?.logs as LogsCollectionLike | undefined;
 
 	const applyFilters = React.useCallback(
 		(nextPreset: LogPreset, verboseOn: boolean) => {
@@ -291,15 +279,7 @@ function LogsScreenContent() {
 	// workstream (spec §7). No button until it exists — no dead buttons.
 	const handleCopy = React.useCallback(async () => {
 		try {
-			const docs = logsCollection
-				? await logsCollection
-						.find({
-							selector: { level: { $eq: 'error' } },
-							sort: [{ timestamp: 'desc' }],
-							limit: 10,
-						})
-						.exec()
-				: [];
+			const recentErrors = await readRecentErrorLogs(storeDB);
 			const lane = status.lanes['change-signal'];
 			const text = buildDebugInfo({
 				generatedAt: new Date().toISOString(),
@@ -318,7 +298,7 @@ function LogsScreenContent() {
 				stuckRecords: stats.stuck,
 				verboseDiagnostics: verbose,
 				lastCheck: lane?.lastTick ?? null,
-				recentErrors: docs.map((doc) => doc.toJSON()),
+				recentErrors,
 			});
 			if (canShare) {
 				// The share sheet is its own confirmation UI — no toast on this path.
@@ -339,7 +319,7 @@ function LogsScreenContent() {
 	}, [
 		appVersion,
 		canShare,
-		logsCollection,
+		storeDB,
 		mutations.syncBacklog,
 		platform,
 		platformVersion,

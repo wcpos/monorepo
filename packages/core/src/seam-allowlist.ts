@@ -1460,10 +1460,25 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"query/terms-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
 	// ADR 0033 per-screen (f12): the receipt print counter is a command in @wcpos/query/mutations.
 	'screens/main/receipt/use-receipt-document.ts :: record mutator :: useReceiptDocument :: order.incrementalModify :: 1',
+	// ADR 0033 per-screen (g1): the logs screen and its unread badge read named reads; mark-as-read is a command.
+	"screens/main/components/drawer-content/logs-badge.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/components/drawer-content/logs-badge.tsx :: raw query construction :: LogsBadge :: count :: 1',
+	'screens/main/components/drawer-content/logs-badge.tsx :: raw query construction :: useUnreadErrorCount :: logsCollection .count :: 1',
+	'screens/main/components/drawer-content/logs-badge.tsx :: record mutator :: useUnreadErrorCount :: storeDB.addState :: 1',
+	'screens/main/components/drawer-content/logs-badge.tsx :: record mutator :: useUnreadErrorCount :: storeDB?.addState :: 1',
+	'screens/main/components/drawer-content/logs-badge.tsx :: storage token :: useUnreadErrorCount :: runtime.localDB :: 1',
+	"screens/main/logs/index.tsx :: raw query construction :: LogsScreenContent :: logsCollection .find({ selector: { level: { $eq: 'error' } }, sort: [{ timestamp: 'desc' }], limit: 10, }) :: 1",
+	'screens/main/logs/index.tsx :: storage token :: LogsScreenContent :: (runtime.localDB as { collections?: Record<string, unknown> })?.collections :: 1',
+	'screens/main/logs/index.tsx :: storage token :: LogsScreenContent :: runtime.localDB :: 1',
+	"screens/main/logs/use-log-stats.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection .find({ selector: { category: { $eq: 'wcpos.sync.engine' }, level: { $eq: 'warn' }, }, sort: [{ timestamp: 'desc' }], }) :: 1",
+	'screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.count :: 1',
+	'screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.count :: 2',
+	"screens/main/logs/use-log-stats.ts :: raw query construction :: createLogStats$ :: logsCollection.find({ selector: { category: { $gte: domain, $lt: `${domain}/` }, operationType: { $eq: 'sync.record' }, }, sort: [{ timestamp: 'desc' }], limit: STUCK_OUTCOME_LIMIT, }) :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 525;
+export const SEAM_RETIRED_FLOOR = 539;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'32141cbdb2b0a4013c7673d0f210b4933d773f9a44c98d79bd393f53801e554f';
+	'b3c4cbed33ffda95cad9c577a793414cca3aac78e23c88fea533dafc6f89cfc7';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

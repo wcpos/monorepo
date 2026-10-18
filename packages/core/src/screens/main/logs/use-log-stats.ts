@@ -4,13 +4,18 @@ import { useObservableState } from 'observable-hooks';
 import { combineLatest, of, timer } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { useLocalCollection$ } from '@wcpos/query';
+import {
+	observeClockCheckRows,
+	observeLogVolume,
+	observeRecordOutcomeRows,
+	type StoreLocalDatabase,
+} from '@wcpos/query/store-local';
 
+import { useAppState } from '../../../contexts/app-state';
 import {
 	type ClockSkewWarning,
 	deriveClockSkew,
 	deriveStuckRecords,
-	type LogRow,
 	startOfLocalDay,
 	type StuckRecord,
 } from './logs-logic';
@@ -53,37 +58,18 @@ export type LogStats = {
 
 const EMPTY_STATS: LogStats = { eventsToday: 0, errorsToday: 0, stuck: [], clockSkew: null };
 
-type LogsCollectionLike = {
-	count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
-	find(query: {
-		selector: Record<string, unknown>;
-		sort: Record<string, 'asc' | 'desc'>[];
-		limit?: number;
-	}): {
-		$: Observable<{ toJSON(): LogRow }[]>;
-	};
-};
-
 /**
  * Module-scope factory: every Date.now() here runs at subscription/emission
  * time (rx callbacks), never during render.
  */
-function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStats> {
+function createLogStats$(storeDB: StoreLocalDatabase): Observable<LogStats> {
 	// Rebuild the inner queries on every tick (not just day-boundary changes):
 	// re-subscribing is how a tick that hit the catchError below gets retried
 	// within a minute instead of staying zeroed until midnight.
 	return timer(0, REFRESH_MS).pipe(
 		switchMap(() => {
 			const dayStart = startOfLocalDay(Date.now());
-			const events$ = logsCollection.count({
-				selector: {
-					timestamp: { $gte: dayStart },
-					level: { $in: ['info', 'warn', 'error'] },
-				},
-			}).$;
-			const errors$ = logsCollection.count({
-				selector: { level: { $eq: 'error' }, timestamp: { $gte: dayStart } },
-			}).$;
+			const volume$ = observeLogVolume(storeDB, dayStart);
 			// A row cap bounds repeated materialization without a timestamp cutoff:
 			// quiet failures remain visible until newer outcomes displace them.
 			// This is a recent diagnostic window, not the engine's standing ledger;
@@ -94,52 +80,16 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 			// path under `wcpos.payments` with the same terminal shape as a sync rejection,
 			// and scanning only the sync range is why a till could lose a payment and still
 			// report 0 stuck.
-			const stuck$ = combineLatest(
-				STUCK_RECORD_DOMAINS.map(
-					(domain) =>
-						logsCollection.find({
-							selector: {
-								category: { $gte: domain, $lt: `${domain}/` },
-								operationType: { $eq: 'sync.record' },
-							},
-							sort: [{ timestamp: 'desc' }],
-							limit: STUCK_OUTCOME_LIMIT,
-						}).$
-				)
-			).pipe(
-				map((perDomain) =>
-					deriveStuckRecords(
-						perDomain
-							.flat()
-							.map((doc) => doc.toJSON())
-							// Each query sorts its own domain, so the concatenation is grouped by
-							// domain rather than by time. The derivation takes the FIRST row per
-							// record as decisive, so an older sync success would otherwise mask a
-							// newer payment refusal on the same order.
-							.sort((a, b) => b.timestamp - a.timestamp)
-					)
-				)
+			const stuck$ = observeRecordOutcomeRows(
+				storeDB,
+				STUCK_RECORD_DOMAINS,
+				STUCK_OUTCOME_LIMIT
+			).pipe(map(deriveStuckRecords));
+			const clockSkew$ = observeClockCheckRows(storeDB).pipe(
+				map((rows) => deriveClockSkew(rows, Date.now()))
 			);
-			// The engine writes its once-per-store-open clock check to this exact
-			// category at `warn`; the derivation ignores unrelated warn rows.
-			const clockSkew$ = logsCollection
-				.find({
-					selector: {
-						category: { $eq: 'wcpos.sync.engine' },
-						level: { $eq: 'warn' },
-					},
-					sort: [{ timestamp: 'desc' }],
-				})
-				.$.pipe(
-					map((docs) =>
-						deriveClockSkew(
-							docs.map((doc) => doc.toJSON()),
-							Date.now()
-						)
-					)
-				);
-			return combineLatest([events$, errors$, stuck$, clockSkew$]).pipe(
-				map(([eventsToday, errorsToday, stuck, clockSkew]): LogStats => ({
+			return combineLatest([volume$, stuck$, clockSkew$]).pipe(
+				map(([{ eventsToday, errorsToday }, stuck, clockSkew]): LogStats => ({
 					eventsToday,
 					errorsToday,
 					stuck,
@@ -162,21 +112,8 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
  * that window.
  */
 export function useLogStats(): LogStats {
-	// Follow the collection: logs-storage-recovery removes and re-creates `logs`
-	// in place, and the stat header has nothing to re-render it when that lands.
-	const collection$ = useLocalCollection$('logs');
-
-	const stats$ = React.useMemo(
-		() =>
-			collection$.pipe(
-				switchMap((collection) =>
-					collection
-						? createLogStats$(collection as unknown as LogsCollectionLike)
-						: of(EMPTY_STATS)
-				)
-			),
-		[collection$]
-	);
+	const { storeDB } = useAppState();
+	const stats$ = React.useMemo(() => createLogStats$(storeDB), [storeDB]);
 
 	return useObservableState(stats$, EMPTY_STATS);
 }
