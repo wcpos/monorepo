@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@wcpos/components/empty-state';
-import { usePointer } from '@wcpos/components/lib/device';
+import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -121,6 +121,7 @@ function CustomersList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<CustomerRow>
 					id="customers"
+					gutter="page"
 					collectionName="customers"
 					handle={handle}
 					sort={state.sort}
@@ -169,12 +170,15 @@ function CustomersList({
 function CustomersBody() {
 	const state = useQueryState<'customers'>();
 	const handle = useCollectionQueryHandle('customers', state);
+	const phone = useIsPhone();
 	return (
-		<View testID="customers-body" className="flex-1">
+		// No chip row here to own the page gutter over the card (TableSurface owns its sides and
+		// bottom only), so the body does; the phone list runs edge to edge under the search row.
+		<View testID="customers-body" className={phone ? 'flex-1' : 'flex-1 pt-4'}>
 			{/* A failed customers read is thrown here; the fallback's reset asks the handle again,
 			    and a changed query (its handle is new) clears the fallback on its own. */}
 			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="customers" />}>
+				<Suspense fallback={<DataTableSkeleton id="customers" gutter="page" />}>
 					<CustomersList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
@@ -201,7 +205,7 @@ function CustomersScreenContent() {
 			style={{ paddingBottom: bottom || undefined }}
 		>
 			<ManagementBar
-				title={t('common.customers')}
+				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
 				testID="customers-bar"
 				search={
 					<QuerySearchInput

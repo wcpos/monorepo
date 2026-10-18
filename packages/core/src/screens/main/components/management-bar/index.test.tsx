@@ -151,3 +151,18 @@ it("puts a scoped room's control in the title's place", () => {
 		screen.getByTestId('reports-bar-title-slot').contains(screen.getByTestId('reports-scope'))
 	).toBe(true);
 });
+// The list pages carry no title (owner, 2026-10-18): the search names the page, so on `lg` it
+// is the first thing in the bar after its left gutter.
+it('puts the search first on a list page that has no title', () => {
+	mockSize = 'lg';
+	render(
+		<ManagementBar testID="products-bar" search={<input data-testid="search" />}>
+			<button data-testid="display" />
+		</ManagementBar>
+	);
+	expect(screen.queryByTestId('products-bar-title')).toBeNull();
+	const row = screen.getByTestId('products-bar').firstElementChild!;
+	const search = screen.getByTestId('products-bar-search');
+	expect(row.firstElementChild!.contains(search)).toBe(true);
+	expect(search.contains(screen.getByTestId('search'))).toBe(true);
+});

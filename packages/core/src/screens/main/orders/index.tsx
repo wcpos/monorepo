@@ -209,6 +209,7 @@ function OrdersList({
 			>
 				<DataTable<OrderListItem>
 					id="orders"
+					gutter="page"
 					collectionName="orders"
 					handle={handle}
 					sort={state.sort}
@@ -306,7 +307,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 				{/* A failed orders read is thrown here; the fallback's reset asks the handle again,
 				    and a changed query (its handle is new) clears the fallback on its own. */}
 				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-					<Suspense fallback={<DataTableSkeleton id="orders" />}>
+					<Suspense fallback={<DataTableSkeleton id="orders" gutter="page" />}>
 						{/* Beside the pane the list has the pane's width left: below the desktop
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar
 						    (number, customer, status, total) until the pane closes. */}
@@ -374,7 +375,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 			style={{ paddingBottom: bottom || undefined }}
 		>
 			<ManagementBar
-				title={t('common.orders')}
+				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
 				testID="orders-bar"
 				search={
 					<QuerySearchInput

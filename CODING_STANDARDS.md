@@ -317,7 +317,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
   | Container | Gutter | Today |
   |---|---|---|
-  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4` |
+  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4`; the list pages' chip row `p-4` and `TableSurface gutter="page"` |
   | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
   | A dense strip: the icon rail, the front drawer's items, a chip row, a bar's own controls | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 |
   | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
@@ -331,7 +331,8 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
 #### Page bars
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
-- The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
+- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
+- The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 - An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
