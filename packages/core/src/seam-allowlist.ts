@@ -1369,10 +1369,21 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: restoreVoidedOrder :: manager.engine.write :: 1',
 	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: restoreVoidedOrder :: manager.engine.write :: 2',
 	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: voidOrder>settleRefusedDelete :: manager.engine.resolveConflict :: 1',
+	// ADR 0033 per-screen (f5): order birth is a command in @wcpos/query/mutations.
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: record mutator :: useAddItemToOrder :: resident.remove :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: insertEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: insertEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: patchEngineResident :: 1',
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 3",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 4",
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: write plane outside a command module :: useAddItemToOrder :: runtime.engine.write :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 442;
+export const SEAM_RETIRED_FLOOR = 452;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'0608c75d52aa04b4bab8a656df425322b94c9dd7c4ad618856dfeb3099f0a8c7';
+	'7a516354c38d880eba7faf59328540299932328ec138f5f711eb380ca6a1ce5d';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1400,7 +1411,10 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	// ADR 0033 per-screen (f4): the void command lives in @wcpos/query/mutations.
 	'screens/main/pos/cart/void-order.ts :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/cart/void-order.ts :: generic resident door :: restoreVoidedOrder :: findEngineResident :: 1',
+	// ADR 0033 per-screen (f5): order birth is a command in @wcpos/query/mutations.
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door :: useAddItemToOrder>run :: findEngineResident :: 1',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 2;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 4;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'd733ca22e45e0de58f5ce338a3b7060e54b73070ec13bbb6d4ada5a77ef29a12';
+	'50d74cecd3af6dcfc1293f634f76198c0f1198bb3b4e53b292f4a9f3cd7d9f2f';
