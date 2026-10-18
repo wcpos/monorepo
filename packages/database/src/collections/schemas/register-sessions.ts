@@ -70,6 +70,50 @@ export const registerSessionsLiteral = {
 		},
 		server_expected_at: { type: ['string', 'null'], default: null },
 		server_sales_count: { type: ['number', 'null'], default: null },
+		/**
+		 * The drawer terms of the same snapshot as `server_expected`, as the detail route serves
+		 * them (four-decimal strings). Null when the server omits them: a blind cashier, or an
+		 * older plugin, and the till strip then derives the terms from this device's rows.
+		 * Nothing is required: a partial block must never fail the whole session's adoption
+		 * (and with it `server_expected`); a missing term reads as zero.
+		 */
+		server_terms: {
+			type: ['object', 'null'],
+			default: null,
+			properties: {
+				float: { type: 'string' },
+				cash_sales: {
+					type: 'object',
+					properties: { amount: { type: 'string' }, count: { type: 'number' } },
+				},
+				paid_in: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							// The cash movement id; older plugins omit it.
+							id: { type: 'string' },
+							amount: { type: 'string' },
+							reason: { type: ['string', 'null'] },
+						},
+					},
+				},
+				paid_out: {
+					type: 'object',
+					properties: {
+						amount: { type: 'string' },
+						count: { type: 'number' },
+						note: { type: ['string', 'null'] },
+					},
+				},
+				cash_refunds: {
+					type: 'object',
+					properties: { amount: { type: 'string' }, count: { type: 'number' } },
+				},
+				no_sales: { type: 'number' },
+				voids: { type: 'number' },
+			},
+		},
 		...sessionOutboxProperties,
 	},
 	required: [
