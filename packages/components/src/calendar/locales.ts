@@ -39,8 +39,13 @@ const getToday = (locale: Locale) => {
 };
 
 // Function to update LocaleConfig
-export const updateLocaleConfig = async (localeCode: string) => {
+export const updateLocaleConfig = async (
+	localeCode: string,
+	isCurrent: () => boolean = () => true
+): Promise<boolean> => {
 	const locale = await loadDateFnsLocale(localeCode);
+	// A newer load or an unmount supersedes this one.
+	if (!isCurrent()) return false;
 
 	const config: CalendarLocaleConfig = {
 		monthNames: getMonthNames(locale),
@@ -54,4 +59,5 @@ export const updateLocaleConfig = async (localeCode: string) => {
 		[localeCode]: config,
 	};
 	LocaleConfig.defaultLocale = localeCode;
+	return true;
 };

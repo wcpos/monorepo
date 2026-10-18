@@ -159,6 +159,8 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 		void sdk.close();
 		isInitialized = false;
 	}
+	// Captures held for a load whose consent has since left must not reach a later consent.
+	if (loading) pendingCaptures.drain();
 	// Denied: what was held before the answer never leaves the device.
 	if (consent === 'denied') pendingCaptures.drain();
 

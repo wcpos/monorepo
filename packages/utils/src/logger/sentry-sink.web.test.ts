@@ -163,6 +163,15 @@ describe('sentry-sink.web', () => {
 		expect(localStorageData.has('wcpos_install_id')).toBe(false);
 	});
 
+	it('discards captures held during a load when consent is cleared before it settles', async () => {
+		setTelemetryConsent('allowed');
+		captureLoggedError({ message: 'Previous user' });
+		setTelemetryConsent('undecided');
+		setTelemetryConsent('allowed');
+		await settleSentryLoad();
+		expect(Sentry.captureMessage).not.toHaveBeenCalledWith('Previous user', expect.anything());
+	});
+
 	it('loads no SDK before consent and swallows a failed load without retrying', async () => {
 		const load = jest.fn(() => {
 			throw new Error('SDK unavailable');

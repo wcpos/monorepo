@@ -62,9 +62,9 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 	React.useEffect(() => {
 		let live = true;
 		if (locale) {
-			void updateLocaleConfig(locale).then(
-				() => {
-					if (live) setLoadedLocale(locale);
+			void updateLocaleConfig(locale, () => live).then(
+				(updated) => {
+					if (updated) setLoadedLocale(locale);
 				},
 				() => undefined
 			);
