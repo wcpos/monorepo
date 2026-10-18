@@ -1,6 +1,6 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import type { StoreDatabase } from '@wcpos/database';
+
+import { mintUuid } from '../mint-uuid';
 
 import type { LocalPrinterProfile } from '../reads/store-local';
 import type { LocalDatabaseWithReset } from '../use-local-collection';
@@ -41,7 +41,7 @@ export async function savePrinterProfile(
 		const twin = await collection.findOne({ selector: { address: fields.address } }).exec();
 		if (twin) existingId = twin.id;
 	}
-	const id = existingId ?? uuidv4();
+	const id = existingId ?? mintUuid();
 	if (existingId !== undefined) {
 		const doc = await collection.findOne(existingId).exec();
 		if (!doc) throw new PrinterProfileNotFoundError(existingId);
