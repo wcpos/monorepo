@@ -1,26 +1,16 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
-
 import {
-	awaitWriteOutcome,
-	COLLECTION_VOCABULARY,
-	useQueryRuntime,
-	type WriteableCollection,
-	WriteOutcomeError,
-} from '@wcpos/query';
+	createEngineResident,
+	CreateScopeChangedTwiceError,
+	ResidentWriteError,
+} from '@wcpos/query/mutations';
+import { useQueryRuntime, type WriteableCollection, WriteOutcomeError } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
-import {
-	documentRecordId,
-	findEngineResident,
-	insertEngineResident,
-	type MutationDocument,
-	useLocalMutation,
-} from './use-local-mutation';
+import { documentRecordId, type MutationDocument, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { pushFailureCode } from '../../contexts/push-failure-code';
-import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
@@ -33,20 +23,6 @@ interface Props {
 	 * success toasts. The success is still logged either way.
 	 */
 	showSuccessToast?: boolean;
-}
-
-class ActiveScopeChangedTwiceError extends Error {
-	public constructor(collection: WriteableCollection) {
-		super(`Active engine scope changed twice during ${collection} create`);
-		this.name = 'ActiveScopeChangedTwiceError';
-	}
-}
-
-function isWriteableCollection(name: string): name is WriteableCollection {
-	return (
-		Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name) &&
-		COLLECTION_VOCABULARY[name as keyof typeof COLLECTION_VOCABULARY].writeable
-	);
 }
 
 /**
@@ -147,85 +123,22 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 			data: Record<string, unknown>;
 			awaitRemoteId?: boolean;
 		}) => {
-			if (!isWriteableCollection(collectionName)) {
-				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
-				handleError(error);
-				return;
-			}
-
 			try {
-				const recordId = uuidv4();
-				const now = convertLocalDateToUTCString(new Date());
-				const payload = {
-					...data,
-					...(data.date_created_gmt === undefined ? { date_created_gmt: now } : {}),
-					...(data.date_modified_gmt === undefined ? { date_modified_gmt: now } : {}),
-				};
-				let resident: Awaited<ReturnType<typeof insertEngineResident>> | undefined;
-				let receipt: Awaited<ReturnType<typeof runtime.engine.write>> | undefined;
-
-				for (let attempt = 0; attempt < 2; attempt += 1) {
-					const scopeId = runtime.engine.status().activeScopeId;
-					resident = await insertEngineResident({
-						manager: runtime,
-						collection: collectionName,
-						recordId,
-						payload,
-					});
-					// `toMutableJSON()`, never `resident.get('payload')`: RxDB hands back a
-					// *Proxy* for object-valued paths, and a Proxy cannot be structured-cloned
-					// into the storage worker — the enqueue dies with "#<Object> could not be
-					// cloned". See `residentPayload` in write-intents for the seam that now
-					// backstops this.
-					const { payload: residentPayload } = resident.toMutableJSON() as {
-						payload: Record<string, unknown>;
-					};
-					let writeError: unknown;
-					try {
-						receipt = await runtime.engine.write({
-							collection: collectionName,
-							operation: 'create',
-							recordId,
-							payload: residentPayload,
-							...(awaitRemoteId ? { explicit: true } : {}),
-						});
-					} catch (error) {
-						writeError = error;
-					}
-
-					if (runtime.engine.status().activeScopeId !== scopeId) {
-						await resident.remove();
-						if (attempt === 1) {
-							throw new ActiveScopeChangedTwiceError(collectionName);
-						}
-						continue;
-					}
-
-					if (writeError) {
-						await resident.remove();
-						throw writeError;
-					}
-					break;
+				const currentResident = await createEngineResident(runtime, {
+					collection: collectionName,
+					data,
+					awaitRemoteId,
+				});
+				if (currentResident instanceof ResidentWriteError) {
+					handleError(currentResident.cause);
+					return;
 				}
 
-				if (!resident || !receipt) {
-					throw new Error(`Failed to enqueue ${collectionName} create`);
-				}
-
-				let currentResident = resident;
-				if (awaitRemoteId) {
-					await awaitWriteOutcome(runtime.engine, receipt.mutationId);
-					const refreshed = await findEngineResident(runtime, collectionName, recordId);
-					if (!refreshed) {
-						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
-					}
-					currentResident = refreshed;
-				}
 				handleSuccess(currentResident as unknown as Record<string, unknown>);
 				return currentResident;
 			} catch (error) {
 				handleError(error);
-				if (awaitRemoteId || error instanceof ActiveScopeChangedTwiceError) {
+				if (awaitRemoteId || error instanceof CreateScopeChangedTwiceError) {
 					throw error;
 				}
 			}
