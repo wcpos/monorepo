@@ -3,7 +3,6 @@ export { QueryProvider, useQueryRuntime } from './provider';
 export type { EngineRecord, EngineRecordCollectionName } from './records/engine-record';
 export { engineCollection, type EngineCollection } from './records/engine-collection';
 export { useDocField, useRecordField } from './records/use-record-field';
-export { mergeIntoDocument, pruneToSchemaProperties } from './records/merge-into-document';
 export {
 	useFollowedCollection,
 	useFollowedCollection$,

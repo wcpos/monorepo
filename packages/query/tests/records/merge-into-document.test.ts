@@ -16,7 +16,7 @@ const schema: RxJsonSchema<Row> = {
 		id: { type: 'string', maxLength: 36 },
 		name: { type: 'string' },
 		note: { type: 'string' },
-		count: { type: 'number' },
+		count: { type: 'number', default: 0 },
 	},
 	required: ['id'],
 };
@@ -51,10 +51,55 @@ describe('mergeIntoDocument', () => {
 		expect(doc).toBe(stored);
 	});
 
-	it('is the fix for what a raw incrementalUpsert does to the same document', async () => {
+	it('RxDB incrementalUpsert replaces wholesale (the reason mergeIntoDocument exists)', async () => {
+		// Canary: if an RxDB bump makes this fail, the primitive may be retirable; do not change
+		// the expectation.
 		await rows().insert({ id: 'a', name: 'old', note: 'local', count: 3 });
 		await rows().incrementalUpsert({ id: 'a', name: 'new' });
-		expect((await rows().findOne('a').exec())?.toJSON()).toEqual({ id: 'a', name: 'new' });
+		// `note` is gone and `count` snapped back to its schema default.
+		expect((await rows().findOne('a').exec())?.toJSON()).toEqual({
+			id: 'a',
+			name: 'new',
+			count: 0,
+		});
+	});
+
+	it('awaits an async merge', async () => {
+		await rows().insert({ id: 'a', name: 'old', note: 'local', count: 3 });
+
+		const doc = await mergeIntoDocument(
+			rows(),
+			'a',
+			async (current) => ({ ...current, count: (await Promise.resolve(current.count ?? 0)) + 1 }),
+			() => ({ id: 'a' })
+		);
+
+		expect(doc.toJSON()).toEqual({ id: 'a', name: 'old', note: 'local', count: 4 });
+	});
+
+	it('leaves the document unchanged when merge returns current (the pending path)', async () => {
+		await rows().insert({ id: 'a', name: 'mine', note: 'local', count: 3 });
+		const create = jest.fn(() => ({ id: 'a', name: 'server' }));
+
+		const doc = await mergeIntoDocument(rows(), 'a', (current) => current, create);
+
+		expect(create).not.toHaveBeenCalled();
+		expect(doc.toJSON()).toEqual({ id: 'a', name: 'mine', note: 'local', count: 3 });
+		expect((await rows().findOne('a').exec())?.toJSON()).toEqual(doc.toJSON());
+		// RxDB still writes a new revision for the unchanged data, which is why a caller that
+		// can see the skip up front (adoptSessionRow's early return) skips the call entirely.
+	});
+
+	it('refuses a create() row keyed to another primary, before writing', async () => {
+		await expect(
+			mergeIntoDocument(
+				rows(),
+				'b',
+				(current) => current,
+				() => ({ id: 'other' })
+			)
+		).rejects.toThrow('mergeIntoDocument: create() returned primary other for b');
+		expect(await rows().find().exec()).toEqual([]);
 	});
 
 	it('creates a missing document from create(), without calling merge', async () => {
@@ -63,8 +108,20 @@ describe('mergeIntoDocument', () => {
 		const doc = await mergeIntoDocument(rows(), 'b', merge, () => ({ id: 'b', name: 'fresh' }));
 
 		expect(merge).not.toHaveBeenCalled();
-		expect(doc.toJSON()).toEqual({ id: 'b', name: 'fresh' });
+		expect(doc.toJSON()).toEqual({ id: 'b', name: 'fresh', count: 0 });
 		expect((await rows().findOne('b').exec())?.name).toBe('fresh');
+	});
+
+	it('merges into a document a concurrent create inserted after the lookup', async () => {
+		await rows().insert({ id: 'a', name: 'theirs', note: 'local', count: 3 });
+		// The lookup misses: the other create had not landed yet when it ran.
+		jest.spyOn(rows(), 'findOne').mockReturnValueOnce({ exec: async () => null } as never);
+		const merge = jest.fn((current: Row) => ({ ...current, name: 'mine' }));
+
+		const doc = await mergeIntoDocument(rows(), 'a', merge, () => ({ id: 'a', name: 'mine' }));
+
+		expect(merge).toHaveBeenCalledTimes(1);
+		expect(doc.toJSON()).toEqual({ id: 'a', name: 'mine', note: 'local', count: 3 });
 	});
 
 	it('revives a removed document from create()', async () => {
@@ -78,7 +135,7 @@ describe('mergeIntoDocument', () => {
 			() => ({ id: 'c' })
 		);
 
-		expect(doc.toJSON()).toEqual({ id: 'c' });
+		expect(doc.toJSON()).toEqual({ id: 'c', count: 0 });
 		expect(doc.deleted).toBe(false);
 	});
 });

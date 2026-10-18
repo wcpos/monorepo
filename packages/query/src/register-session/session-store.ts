@@ -211,7 +211,7 @@ export async function voidMovement(
 		const existing = await movements.findOne(reversalId).exec();
 		if (existing) return existing;
 		try {
-			return await movements.incrementalUpsert({
+			return await movements.insert({
 				id: reversalId,
 				session_id: row.session_id,
 				type: 'void',
@@ -223,6 +223,11 @@ export async function voidMovement(
 				...pending,
 			});
 		} catch (error) {
+			// Another tap inserted this reversal after the lookup above: that row is the reversal.
+			if ((error as { code?: string }).code === 'CONFLICT') {
+				const raced = await movements.findOne(reversalId).exec();
+				if (raced) return raced;
+			}
 			// No reversal row: the claim this call made must not leave the target marked voided.
 			if (reversalId === id)
 				await row.getLatest().incrementalModify((doc) => {
