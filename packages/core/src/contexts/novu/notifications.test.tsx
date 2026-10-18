@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { type Observable, of, Subject } from 'rxjs';
+import { map, type Observable, of, Subject } from 'rxjs';
 
 import {
 	NovuNotificationsProvider,
@@ -33,15 +33,22 @@ let notificationQuery$: Observable<Record<string, unknown>[]> | null = null;
 
 const notificationsCollection = {
 	find: jest.fn(() => ({
-		$: notificationQuery$ ?? of(notificationDocs),
+		$: (notificationQuery$ ?? of(notificationDocs)).pipe(
+			map((rows) => rows.map((row) => ({ ...row, toJSON: () => row })))
+		),
 		exec: jest.fn(async () => []),
 	})),
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
 	upsert: jest.fn(async () => undefined),
 };
 
+const storeDB = {
+	notifications: notificationsCollection,
+	collections: { notifications: notificationsCollection },
+};
+
 jest.mock('../app-state', () => ({
-	useAppState: () => ({ storeDB: { notifications: notificationsCollection } }),
+	useAppState: () => ({ storeDB }),
 }));
 
 jest.mock('./config', () => ({

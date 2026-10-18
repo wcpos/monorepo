@@ -1025,7 +1025,22 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/settings/printing/use-ensure-system-printer.ts :: record mutator :: useEnsureSystemPrinter :: collection.insert :: 1',
 	"screens/main/settings/printing/use-ensure-system-printer.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/settings/printing/use-ensure-system-printer.ts :: storage token :: useEnsureSystemPrinter :: storeDB.collections :: 1',
+	// ADR 0033 per-screen (b): notifications read through a named read and write through commands.
+	'contexts/novu/notifications.tsx :: raw query construction :: NovuNotificationsProvider :: notificationsCollection .find({ selector: { subscriberId, seen: false, }, }) :: 1',
+	"contexts/novu/notifications.tsx :: raw query construction :: NovuNotificationsProvider :: notificationsCollection .find({ selector: { subscriberId, status: 'unread', }, }) :: 1",
+	"contexts/novu/notifications.tsx :: raw query construction :: NovuNotificationsProvider :: notificationsCollection .find({ selector: { subscriberId, }, sort: [{ createdAt: 'desc' }], }) :: 1",
+	'contexts/novu/notifications.tsx :: raw query construction :: NovuNotificationsProvider :: notificationsCollection.findOne :: 1',
+	'contexts/novu/notifications.tsx :: record mutator :: NovuNotificationsProvider :: doc.patch :: 1',
+	'contexts/novu/notifications.tsx :: record mutator :: NovuNotificationsProvider :: doc.patch :: 2',
+	'contexts/novu/notifications.tsx :: record mutator :: NovuNotificationsProvider :: doc.patch :: 3',
+	"contexts/novu/notifications.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"services/novu/bootstrap.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'services/novu/notification-sync.ts :: raw query construction :: syncNotificationToRxDB :: collection.findOne :: 1',
+	'services/novu/notification-sync.ts :: record mutator :: syncNotificationToRxDB :: collection.insert :: 1',
+	'services/novu/notification-sync.ts :: record mutator :: syncNotificationToRxDB :: collection.upsert :: 1',
+	'services/novu/notification-sync.ts :: record mutator :: syncNotificationToRxDB :: existing.incrementalModify :: 1',
+	"services/novu/notification-sync.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 116;
+export const SEAM_RETIRED_FLOOR = 130;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'3290a689e048d8c9aa870c8e9a1d221df94088838dce7e0c62423a00ad52562d';
+	'60cdfa990263fa2c60fb3f385b2780c7b844e4eb93522fe9fd7bef0cba2c4415';
