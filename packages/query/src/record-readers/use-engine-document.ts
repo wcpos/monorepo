@@ -4,22 +4,19 @@ import { ObservableResource } from 'observable-hooks';
 import { EMPTY, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import {
-	engineCollection,
-	type EngineRecord,
-	type EngineRecordCollectionName,
-	observeEngineDatabases,
-	useQueryRuntime,
-} from '@wcpos/query';
 import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
+import { observeEngineDatabases } from '../engine-query';
+import { useQueryRuntime } from '../provider';
+import { engineCollection } from '../records/engine-collection';
 import {
 	acquireEngineResource,
 	releaseEngineResource,
 	retainEngineResource,
 } from './engine-record-resource';
 
+import type { EngineRecord, EngineRecordCollectionName } from '../records/engine-record';
 import type { Observable } from 'rxjs';
 
 /**

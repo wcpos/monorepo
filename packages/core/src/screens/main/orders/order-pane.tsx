@@ -11,12 +11,12 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../contexts/translations';
 import { CreatedVia } from '../components/order/created-via';
 import { useProAccess } from '../contexts/pro-access';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
-import { useEngineRecord } from '../hooks/use-engine-document';
 import { useFirstAnswer } from '../hooks/use-first-answer';
 import {
 	AddressesRail,

@@ -12,9 +12,9 @@ import {
 } from '@wcpos/components/tree-combobox';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { Option } from '@wcpos/components/combobox/types';
+import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../../contexts/translations';
-import { useEngineRecordsByWooId } from '../../../hooks/use-engine-document';
 import { CategoryTreeLoader } from '../category-select';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 

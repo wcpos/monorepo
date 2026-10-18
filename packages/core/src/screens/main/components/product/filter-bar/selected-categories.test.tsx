@@ -14,7 +14,7 @@ type CategoryRecord = { payload: { id: number; name: string }; uuid: string; rem
 
 let mockSelectedResource: ObservableResource<CategoryRecord[]>;
 
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: () => mockSelectedResource,
 }));
 jest.mock('@wcpos/components/tree-combobox', () => ({

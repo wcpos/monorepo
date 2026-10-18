@@ -151,7 +151,7 @@ jest.mock('../contexts/current-order', () => ({
 		setCurrentOrderID: mockSetOrder,
 	}),
 }));
-jest.mock('../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecord: (_collection: string, uuid: keyof typeof mockReceipts) => {
 		if (uuid === mockSuspended) throw mockPending;
 		return mockReceipts[uuid];

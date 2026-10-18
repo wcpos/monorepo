@@ -29,6 +29,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { Option } from '@wcpos/components/combobox/types';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
+import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 
 import {
 	createQuickFilterId,
@@ -41,7 +42,6 @@ import { CurrencyInput } from '../../../components/currency-input';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
 import { BrandSelect } from '../../../components/product/brand-select';
 import { TagSelect } from '../../../components/product/tag-select';
-import { useEngineRecordsByWooId } from '../../../hooks/use-engine-document';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { useT } from '../../../../../contexts/translations';
 

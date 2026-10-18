@@ -17,13 +17,13 @@ import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer, derive, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
+import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useFinishSale } from './use-finish-sale';
 import { finishReceipt } from '../checkout-mode';
 import { useCheckoutBack } from '../column/use-checkout-back';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { CapturedUnfinishedNotice } from '../tender/captured-unfinished-notice';
-import { useEngineRecord } from '../../../hooks/use-engine-document';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { ReceiptActions } from '../../../receipt/receipt-actions';

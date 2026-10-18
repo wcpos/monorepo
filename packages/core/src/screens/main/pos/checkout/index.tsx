@@ -2,11 +2,12 @@ import * as React from 'react';
 
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
+import { useEngineRecord } from '@wcpos/query/record-readers';
+
 import { useTheme } from '../../../../contexts/theme';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout } from './checkout-mode';
 import { Checkout } from './checkout';
-import { useEngineRecord } from '../../hooks/use-engine-document';
 
 export function CheckoutScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();

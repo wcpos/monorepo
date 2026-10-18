@@ -13,6 +13,7 @@
 		"./register-session": "./src/register-session/index.ts",
 		"./register-session/new-till-flag": "./src/register-session/new-till-flag.ts",
 		"./temporary-order": "./src/temporary-order/index.ts",
+		"./record-readers": "./src/record-readers/index.ts",
 		"./store-local": "./src/store-local/index.ts",
 		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",

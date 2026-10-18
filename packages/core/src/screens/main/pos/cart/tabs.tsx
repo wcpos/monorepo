@@ -11,9 +11,9 @@ import { CROSSFADE, EASE } from '@wcpos/components/lib/motion';
 import { SlideOver } from '@wcpos/components/slide-over';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
+import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../contexts/translations';
-import { useEngineRecord } from '../../hooks/use-engine-document';
 import { finishReceipt, selectReceipt, useCheckoutMode } from '../checkout/checkout-mode';
 import { useResumeTerminalLegsForOrders } from '../checkout/payments/server/use-resume-terminal-legs';
 import { useCurrentOrder } from '../contexts/current-order';

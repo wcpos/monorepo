@@ -1,9 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { Suspense } from '@wcpos/components/suspense';
+import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { EditCoupon } from './edit-coupon';
-import { useEngineRecord } from '../../hooks/use-engine-document';
 
 export function EditCouponScreen() {
 	const { couponId } = useLocalSearchParams<{ couponId: string }>();

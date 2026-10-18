@@ -17,7 +17,7 @@ const mockUseEngineRecordByWooId = jest.fn((_collection: string, _id: number) =>
 	kind: 'resource',
 }));
 
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordByWooId: (collection: string, id: number) =>
 		mockUseEngineRecordByWooId(collection, id),
 }));
