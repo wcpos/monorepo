@@ -207,15 +207,12 @@ test('controls share the web keyboard focus outline', () => {
 	);
 });
 
-// WCAG 2 contrast of two `oklch(L C h)` tokens, through OKLab to sRGB (clamped to the gamut,
-// as a browser paints an out-of-gamut colour).
-function oklchLinearRgb(value) {
-	const [L, C, h] = value
-		.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/)
-		.slice(1)
-		.map(Number);
+function oklchToLab(L, C, h) {
 	const a = C * Math.cos((h * Math.PI) / 180);
 	const b = C * Math.sin((h * Math.PI) / 180);
+	return [L, a, b];
+}
+function labToLinearRgb([L, a, b]) {
 	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
 	const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
 	const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -223,7 +220,59 @@ function oklchLinearRgb(value) {
 		4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
 		-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
 		-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-	].map((channel) => Math.min(1, Math.max(0, channel)));
+	];
+}
+function linearRgbToLab([r, g, b]) {
+	const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+	const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+	const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+	return [
+		0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+		1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+		0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+	];
+}
+// CSS Color 4 binary-search gamut mapping with local MINDE, targeting sRGB.
+// https://www.w3.org/TR/css-color-4/#binsearch
+function oklchLinearRgb(value) {
+	const [L, C, h] = value
+		.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/)
+		.slice(1)
+		.map(Number);
+	if (L >= 1) return [1, 1, 1];
+	if (L <= 0) return [0, 0, 0];
+	const inGamut = (rgb) => rgb.every((c) => c >= 0 && c <= 1);
+	const clip = (rgb) => rgb.map((c) => Math.min(1, Math.max(0, c)));
+	const delta = (rgb, lab) => Math.hypot(...linearRgbToLab(rgb).map((c, i) => c - lab[i]));
+	const JND = 0.02;
+	const epsilon = 0.0001;
+	let current = oklchToLab(L, C, h);
+	let rgb = labToLinearRgb(current);
+	if (inGamut(rgb)) return rgb;
+	let clipped = clip(rgb);
+	if (delta(clipped, current) < JND) return clipped;
+	let min = 0;
+	let max = C;
+	let minInGamut = true;
+	while (max - min > epsilon) {
+		const chroma = (min + max) / 2;
+		current = oklchToLab(L, chroma, h);
+		rgb = labToLinearRgb(current);
+		if (minInGamut && inGamut(rgb)) {
+			min = chroma;
+			continue;
+		}
+		clipped = clip(rgb);
+		const E = delta(clipped, current);
+		if (E < JND) {
+			if (JND - E < epsilon) return clipped;
+			minInGamut = false;
+			min = chroma;
+		} else {
+			max = chroma;
+		}
+	}
+	return clipped;
 }
 function luminance([r, g, bl]) {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
@@ -254,6 +303,29 @@ function themeToken(body, token) {
 	const alias = value.match(/^var\(--([\w-]+)\)$/)?.[1];
 	return alias ? themeToken(body, alias) : value;
 }
+
+// Pixels measured in Chrome 155 (headless, sRGB canvas, 2026-10-18). The amber words are
+// outside the sRGB gamut; a hard clip paints them lighter than the browser's chroma
+// reduction does, which is why the mapping is here. L 0.55 is what the round-1 gallery
+// baseline shot; L 0.50 is the shipped light --warn-text.
+test("gamut mapping matches Chromium's rendered pixels", () => {
+	const encode = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+	const warnText55 = oklchLinearRgb('oklch(0.55 0.13 70)').map(encode);
+	const warnText50 = oklchLinearRgb('oklch(0.50 0.13 70)').map(encode);
+	const warn = oklchLinearRgb('oklch(0.68 0.16 70)').map(encode);
+	const card = oklchLinearRgb('oklch(1 0 0)').map(encode);
+	const wash = warn.map((c, i) => 0.1 * c + 0.9 * card[i]);
+	for (const [actual, expected] of [
+		[warnText55, [161, 97, 0]],
+		[warnText50, [145, 82, 0]],
+		[wash, [250, 242, 229]],
+	]) {
+		const pixels = actual.map((c) => Math.round(c * 255));
+		actual.forEach((c, i) => {
+			assert.ok(Math.abs(Math.round(c * 255) - expected[i]) <= 1, `${pixels} != ${expected}`);
+		});
+	}
+});
 
 // Text contrast 4.5:1 (CODING_STANDARDS § Design 7). The light theme's --ok read 4.16:1 under
 // its own success-foreground at L 0.55; every success green is drawn from it.
