@@ -5,7 +5,7 @@ import { act, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { useDocField } from '@wcpos/query';
-import type { WPCredentialsDocument } from '@wcpos/database';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
 import { UserAvatar } from './index';
 
@@ -13,7 +13,7 @@ const displayName$ = new BehaviorSubject<string | undefined>('Ada Lovelace');
 const wpCredentials = {
 	display_name$: displayName$,
 	avatar_url$: new BehaviorSubject<string | undefined>(undefined),
-} as unknown as WPCredentialsDocument;
+} as unknown as ReadonlyWpCredentialsRecord;
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));

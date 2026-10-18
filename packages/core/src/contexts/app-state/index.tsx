@@ -3,14 +3,14 @@ import * as React from 'react';
 import type {
 	CurrentSessionIDs,
 	ExtraDataSlot,
+	ReadonlySiteRecord,
+	ReadonlyStoreRecord,
+	ReadonlyUserRecord,
+	ReadonlyWpCredentialsRecord,
 	SessionAppState,
-	SiteDocument,
 	StoreDatabase,
-	StoreDocument,
 	TranslationsState,
 	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
 } from '@wcpos/query/user-db';
 import { bindSurvivingStoreLogs, hydrateUserSession } from '@wcpos/query/user-db';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -35,11 +35,11 @@ export interface AppState extends HydrationContext {
 	userDB: UserDatabase;
 	appState: SessionAppState;
 	translationsState: TranslationsState;
-	user: UserDocument;
+	user: ReadonlyUserRecord;
 	updateAppState: (updates: Partial<HydrationContext>) => void;
 	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
 	logout: () => Promise<void>;
-	switchStore: (store: StoreDocument) => Promise<void>;
+	switchStore: (store: ReadonlyStoreRecord) => Promise<void>;
 }
 
 /**
@@ -48,9 +48,9 @@ export interface AppState extends HydrationContext {
  * the `(app)` stack is mounted behind `Stack.Protected guard={hasStoreSession(state)}`.
  */
 export interface StoreSessionState extends AppState {
-	site: SiteDocument;
-	wpCredentials: WPCredentialsDocument;
-	store: StoreDocument;
+	site: ReadonlySiteRecord;
+	wpCredentials: ReadonlyWpCredentialsRecord;
+	store: ReadonlyStoreRecord;
 	storeDB: StoreDatabase;
 	extraData: ExtraDataSlot;
 }
@@ -183,7 +183,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	}, [clearStoreSession]);
 
 	const switchStore = React.useCallback(
-		async (store: StoreDocument): Promise<void> => {
+		async (store: ReadonlyStoreRecord): Promise<void> => {
 			const current = await state.appState!.get('current');
 			if (store.localID === current?.storeID) {
 				return;

@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { filter, firstValueFrom } from 'rxjs';
+
+import { observeUserSites, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -56,7 +59,9 @@ export function DemoButton() {
 
 		void (async () => {
 			try {
-				const sites: NonNullable<typeof connectedSite>[] = await user.populate('sites');
+				const sites: NonNullable<typeof connectedSite>[] = await firstValueFrom(
+					observeUserSites(user).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+				);
 				if (cancelled) return;
 				const site = sites.find((site) => site.wcpos_login_url === claim.loginUrl);
 				if (!site) {

@@ -24,7 +24,11 @@ import {
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { getServerOwnedStorePatch, SERVER_OWNED_STORE_FIELDS } from '@wcpos/query/user-db';
+import {
+	getServerOwnedStorePatch,
+	patchStoreSettings,
+	SERVER_OWNED_STORE_FIELDS,
+} from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 
 import { LockedRow } from './components/locked-row';
@@ -41,7 +45,6 @@ import { CustomerSelect } from '../components/customer-select';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
 import { ThousandsStyleSelect } from '../components/thousands-style-select';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -128,7 +131,6 @@ function GeneralSettingsForm({
 	const defaultCustomerData =
 		'getLatest' in defaultCustomer ? defaultCustomer.getLatest().payload : defaultCustomer;
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const http = useRestHttpClient();
@@ -155,12 +157,12 @@ function GeneralSettingsForm({
 			...changes
 		}: Partial<z.infer<typeof formSchema>>) => {
 			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
-			// `localPatch` logs and toasts a failed write and resolves undefined.
+			// `patchStoreSettings` logs and toasts a failed write and resolves undefined.
 			const keys = savedKeys(store.getLatest?.() ?? store, changes);
-			const result = await localPatch({ document: store, data: changes });
+			const result = await patchStoreSettings(store, changes, t);
 			if (result && keys.length > 0) markSaved(keys);
 		},
-		[localPatch, store, markSaved]
+		[t, store, markSaved]
 	);
 
 	useFormChangeHandler({
@@ -192,7 +194,7 @@ function GeneralSettingsForm({
 				SERVER_OWNED_STORE_FIELDS
 			);
 			if (Object.keys(patch).length > 0) {
-				const result = await localPatch({ document: store, data: patch as never });
+				const result = await patchStoreSettings(store, patch, t);
 				if (!result) throw new Error('Restore: the local patch did not apply');
 			}
 			markSaved(['restore']);
@@ -208,7 +210,7 @@ function GeneralSettingsForm({
 		} finally {
 			setLoading(false);
 		}
-	}, [http, localPatch, store, markSaved]);
+	}, [http, t, store, markSaved]);
 
 	/**
 	 *

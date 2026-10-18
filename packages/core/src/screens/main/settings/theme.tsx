@@ -10,13 +10,13 @@ import { Tile } from '@wcpos/components/tile';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-mark';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
 type ThemeOption = {
 	name: string;
@@ -148,7 +148,6 @@ const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
  */
 function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const markSaved = useMarkSaved();
 	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
 
@@ -156,13 +155,13 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 		async (value: string | undefined) => {
 			if (!value) return;
 			try {
-				const result = await localPatch({ document: store, data: { scale: value } });
+				const result = await patchStoreSettings(store, { scale: value }, t);
 				if (result) markSaved(['scale']);
 			} catch (error) {
 				console.error('Failed to persist selected scale', error);
 			}
 		},
-		[localPatch, store, markSaved]
+		[t, store, markSaved]
 	);
 
 	return (
@@ -205,7 +204,6 @@ export function ThemeSettings() {
 function ThemeSettingsContent() {
 	const t = useT();
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const markSaved = useMarkSaved();
 
 	/**
@@ -262,10 +260,7 @@ function ThemeSettingsContent() {
 	const handleThemeChange = React.useCallback(
 		async (themeName: string) => {
 			try {
-				const result = await localPatch({
-					document: store,
-					data: { theme: themeName },
-				});
+				const result = await patchStoreSettings(store, { theme: themeName }, t);
 
 				Uniwind.setTheme(themeName as any);
 				if (result) markSaved(['theme']);
@@ -273,7 +268,7 @@ function ThemeSettingsContent() {
 				console.error('Failed to persist selected theme', error);
 			}
 		},
-		[localPatch, store, markSaved]
+		[t, store, markSaved]
 	);
 
 	return (

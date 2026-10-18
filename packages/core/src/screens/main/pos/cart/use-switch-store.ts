@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Toast } from '@wcpos/components/toast';
-import type { StoreDocument } from '@wcpos/database';
+import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
 import { Platform } from '@wcpos/utils/platform';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -17,7 +17,7 @@ export function useSwitchStore() {
 	const t = useT();
 	const [isSwitching, setIsSwitching] = React.useState(false);
 	const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
-	const handleSwitchStore = async (nextStore: StoreDocument): Promise<boolean> => {
+	const handleSwitchStore = async (nextStore: ReadonlyStoreRecord): Promise<boolean> => {
 		setIsSwitching(true);
 		try {
 			await switchStore(nextStore);

@@ -1,5 +1,5 @@
 import { type MetaDataEntry, withMetaReplaced } from '@wcpos/order-math';
-import type { UserDatabase } from '@wcpos/database';
+import type { UserDatabase } from '@wcpos/query/user-db';
 import type { EngineRecord } from '@wcpos/query';
 
 import { completionMeta } from './stamp-completion';

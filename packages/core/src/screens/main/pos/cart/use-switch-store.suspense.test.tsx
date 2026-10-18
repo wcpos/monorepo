@@ -18,11 +18,17 @@
 import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, startWith } from 'rxjs';
 
 import type { StoreDocument } from '@wcpos/database';
 
 import { SwitchStoreSheet } from './switch-store-sheet';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: {
+		populate$: (key: string) => Observable<StoreDocument[]>;
+	}) => credentials.populate$('stores').pipe(startWith([])),
+}));
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));

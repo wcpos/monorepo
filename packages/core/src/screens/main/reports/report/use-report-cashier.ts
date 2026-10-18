@@ -1,8 +1,9 @@
 import * as React from 'react';
 
+import { filter } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 
-import type { WPCredentialsDocument } from '@wcpos/database';
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -18,9 +19,12 @@ export function useReportCashier() {
 	const t = useT();
 	const value = useQueryState<'orders'>().filters.cashier;
 	const { site } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
 	// Undefined until the directory has emitted: a name cannot be resolved before then.
-	const cashiers = useObservableState(source) as WPCredentialsDocument[] | undefined;
+	const cashiers = useObservableState(source);
 	const match =
 		value === undefined ? undefined : cashiers?.find((row) => String(row.id) === String(value));
 	// The name is read live from the document: the directory does not re-emit on a rename.

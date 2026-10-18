@@ -1259,7 +1259,37 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: wpCredentialsDoc.patch :: 1',
 	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	// ADR 0033 per-screen (e7): the store-settings command; user records are read-only across core.
+	"screens/main/components/order/filter-bar/store-pill.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/components/user-avatar/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/store-list-resource.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/use-image-attachment/types.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/cart/switch-store-sheet.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/cart/use-switch-store.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/cart/user-sheet.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/checkout/provenance/persist-provenance.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/checkout/provenance/provenance-gap.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/checkout/provenance/stamp-completion.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/checkout/sale-completion.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/bar.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/cards/cashiers.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/hero/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/panels/panel.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/report/use-report-cashier.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/reports/till-strip.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/barcode-scanning/settings.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/settings/barcode-scanning/settings.tsx :: resident helper write :: BarcodeSettingsForm :: useLocalMutation :: 1',
+	'screens/main/settings/barcode-scanning/test-panel.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/settings/barcode-scanning/test-panel.tsx :: resident helper write :: TestPanel :: useLocalMutation :: 1',
+	'screens/main/settings/general.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/settings/general.tsx :: resident helper write :: GeneralSettingsForm :: useLocalMutation :: 1',
+	'screens/main/settings/tax.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/settings/tax.tsx :: resident helper write :: TaxSettingsForm :: useLocalMutation :: 1',
+	'screens/main/settings/theme.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/settings/theme.tsx :: resident helper write :: ScaleRow :: useLocalMutation :: 1',
+	'screens/main/settings/theme.tsx :: resident helper write :: ThemeSettingsContent :: useLocalMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 337;
+export const SEAM_RETIRED_FLOOR = 366;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c5d053a5578683e0174b888880bb8e99e286156909829280b94b9cda0ebda3d5';
+	'36e15a4d880ccb9a76d7c824f9e0296634843526c6eecc872c9384bdf96cedf0';
