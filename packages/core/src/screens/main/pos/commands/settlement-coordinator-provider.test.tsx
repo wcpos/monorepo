@@ -30,6 +30,7 @@ const readConfig = () => config;
 const ownsMoney = () => false;
 const mockInputs = { settings: { priceNumDecimals: 2 }, rates: [], baseLocation: {} };
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useQueryRuntime: () => manager,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),

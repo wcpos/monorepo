@@ -6,6 +6,7 @@ import {
 	hasLiveSettlementLeg,
 	readLedger,
 } from '@wcpos/order-math';
+import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { readQuickDiscountIntent } from '../hooks/quick-discount';
@@ -35,6 +36,7 @@ interface Deps {
 function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, dp: number) {
 	const payment = derive(payload.total, readLedger(payload.meta_data), [], { dp });
 	return Boolean(
+		!OPEN_ORDER_STATUSES.some((status) => status === payload.status) ||
 		(record as { isNew?: boolean }).isNew ||
 		hasLiveSettlementLeg(payload.meta_data) ||
 		activeAwaitingCustomer(payload.meta_data) ||
@@ -102,6 +104,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 							if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed);
 						});
 					} catch (error) {
+						seen.delete(uuid);
 						deps.observe({ type: 'settlement.failed', uuid, at: deps.now(), error });
 					}
 				}

@@ -150,6 +150,47 @@ it('coalesces rates gaps and serializes uuid order behind the existing mutation 
 	expect(h.settle).toHaveBeenCalledTimes(7);
 });
 
+it('retries a rejected settlement on the next unchanged emission', async () => {
+	const record = order();
+	const h = start([record], false);
+	h.settle.mockRejectedValueOnce(new Error('write failed'));
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	expect(h.observe).toHaveBeenCalledWith({
+		type: 'settlement.failed',
+		uuid: 'a',
+		at: 123,
+		error: expect.any(Error),
+	});
+	await emit(h.openOrders$, [record]);
+	expect(h.settle).toHaveBeenCalledTimes(2);
+	await expect(h.settle.mock.results[1].value).resolves.toBeUndefined();
+	await emit(h.openOrders$, [record]);
+	expect(h.settle).toHaveBeenCalledTimes(2);
+});
+
+it.each(['completed', 'cancelled'])(
+	'skips an order that becomes %s before its slot',
+	async (status) => {
+		const record = order();
+		let release!: () => void;
+		const held = enqueueOrderMutation(
+			'a',
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		const h = start([record]);
+		await flush();
+		expect(h.settle).not.toHaveBeenCalled();
+		jest.spyOn(record, 'getLatest').mockReturnValue(order('a', { status }));
+		release();
+		await held;
+		await flush();
+		expect(h.settle).not.toHaveBeenCalled();
+	}
+);
+
 it('clears per-order memory on rebind and stops every subscription and queued write', async () => {
 	const h = start();
 	await flush();
