@@ -40,12 +40,14 @@ jest.mock('react-native', () => ({
 		role,
 		'aria-checked': ariaChecked,
 		onKeyDown,
+		tabIndex,
 	}: React.PropsWithChildren<{
 		className?: string;
 		testID?: string;
 		role?: string;
 		'aria-checked'?: boolean;
 		onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+		tabIndex?: number;
 	}>) => (
 		<div
 			data-testid={testID}
@@ -53,6 +55,7 @@ jest.mock('react-native', () => ({
 			role={role}
 			aria-checked={ariaChecked}
 			onKeyDown={onKeyDown}
+			tabIndex={tabIndex}
 		>
 			{children}
 		</div>
@@ -156,9 +159,16 @@ describe('user row status', () => {
 	});
 	it('is a radio, not a button, so its × and Re-authenticate buttons are not nested in one', async () => {
 		mockValid = false;
-		render(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
+		const { rerender } = render(
+			<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />
+		);
 		const row = await screen.findByTestId('wp-user-button');
 		expect(row.getAttribute('role')).toBe('radio');
+		// Roving tab stop: only the selected user's radio is in the tab order.
+		expect(row.getAttribute('tabindex')).toBe('0');
+		rerender(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={jest.fn()} />);
+		expect(screen.getByTestId('wp-user-button').getAttribute('tabindex')).toBe('-1');
+		rerender(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
 		expect(row.getAttribute('aria-checked')).toBe('true');
 		expect(row.contains(screen.getByRole('button', { name: 'auth.remove_2' }))).toBe(false);
 		expect(row.contains(screen.getByText('auth.re_authenticate'))).toBe(false);
