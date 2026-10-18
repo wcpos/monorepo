@@ -50,9 +50,16 @@ import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
 	user: UserDocument;
+	/**
+	 * Fold every site to its header row (the page's connect form is open).
+	 * Display-only: the remembered expansion is kept and returns when this clears.
+	 */
+	collapsed?: boolean;
+	/** A site was expanded by the user — the page closes its connect form. */
+	onExpand?: () => void;
 }
 
-export function Sites({ user }: SitesProps) {
+export function Sites({ user, collapsed = false, onExpand }: SitesProps) {
 	const t = useT();
 	const sites = useObservableSuspense(
 		(
@@ -86,8 +93,11 @@ export function Sites({ user }: SitesProps) {
 		return null;
 	}
 
-	// Single site: render directly without accordion
-	if (sites.length === 1) {
+	const expandedSiteUuid = collapsed ? '' : nextAccordionState.expandedSiteUuid;
+
+	// Single site: render directly without accordion. Folded, it takes the
+	// accordion row below so its header (with chevron) is the way back in.
+	if (sites.length === 1 && !collapsed) {
 		return (
 			<Card className="w-full p-3" testID="logged-in-users-label">
 				<ErrorBoundary>
@@ -97,20 +107,23 @@ export function Sites({ user }: SitesProps) {
 		);
 	}
 
-	// Multiple sites: use accordion
+	// Multiple sites (or a folded single site): use accordion
 	return (
 		<VStack className="w-full gap-2" testID="logged-in-users-label">
-			<Text className="text-sm font-semibold">
-				{t('auth.your_sites_heading', { _tags: 'core' })}
-			</Text>
+			{sites.length > 1 && (
+				<Text className="text-sm font-semibold">
+					{t('auth.your_sites_heading', { _tags: 'core' })}
+				</Text>
+			)}
 			<Accordion
 				className="gap-2"
 				type="single"
 				collapsible
-				value={nextAccordionState.expandedSiteUuid}
-				onValueChange={(value) =>
-					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
-				}
+				value={expandedSiteUuid}
+				onValueChange={(value) => {
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }));
+					if (value) onExpand?.();
+				}}
 			>
 				{sites.map((site) => (
 					<ErrorBoundary key={site.uuid}>
