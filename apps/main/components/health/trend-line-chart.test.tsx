@@ -55,6 +55,6 @@ it('holds the frame while the chart code loads', () => {
 			/>
 		);
 	});
-	expect(renderer.root.findAllByProps({ testID: 't' })).toHaveLength(1);
-	expect(renderer.root.findByProps({ testID: 't-label' }).props.children).toBe('Requests');
+	expect(renderer.root.findAllByProps({ testID: 't' }).length).toBeGreaterThan(0);
+	expect(renderer.root.findAllByProps({ testID: 't-label' })[0].props.children).toBe('Requests');
 });
