@@ -51,6 +51,7 @@ const registered = [
 	'keypad',
 	"'segmented-control': segmentedControl",
 	"'step-progress': stepProgress",
+	'derivation',
 	"'log-view': logView",
 	'tooltip',
 	"'poster-tile': posterTile",

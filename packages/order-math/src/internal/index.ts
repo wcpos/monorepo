@@ -27,6 +27,8 @@
  * any migration:
  *   - `hooks/use-tax-display-values`
  *     — product/tax display.
+ *   - `components/product/tax-based-on/tax-derivation` — the "Tax based on" panel's
+ *     class rate: `calculateTaxesForValue` on 100 is the class's effective percentage.
  *   - `orders/refund/calculate-refund` — refunds.
  *   - `pos/hooks/use-add-coupon`, `pos/hooks/use-recalculate-coupons`,
  *     `pos/hooks/coupon-rejection-message` — shared CouponContext consumers and typed
@@ -53,6 +55,9 @@ export * from './money/precision';
 export * from './money/calculate-taxes';
 export * from './money/sum-taxes';
 export * from './lines/pos-data';
+// The cart's own per-class tax on a value, for surfaces that explain a rate (the POS "Tax based
+// on" panel reads a class's effective percentage off 100, compound and priority honoured).
+export { calculateTaxesForValue } from './lines/calc-taxes-for-value';
 export * from './coupons/discount';
 export * from './coupons/helpers';
 export * from './coupons/recalculate';
