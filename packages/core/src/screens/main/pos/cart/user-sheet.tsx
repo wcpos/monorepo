@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs';
 
-import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
@@ -27,6 +26,7 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { RecordAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
 import { ClearLocalData } from './clear-local-data';
 import { SwitchStoreSheet } from './switch-store-sheet';
@@ -119,7 +119,14 @@ function UserRows() {
 						key={credential.uuid}
 						testID={`user-sheet-user-${credential.uuid}`}
 						onPress={() => void switchUser(credential)}
-						leading={<Avatar fallback={getInitials(credential.display_name)} size="md" />}
+						leading={
+							<RecordAvatar
+								record={credential}
+								avatarUrl={credential.avatar_url}
+								name={credential.display_name}
+								size="md"
+							/>
+						}
 						label={credential.display_name}
 					/>
 				))}

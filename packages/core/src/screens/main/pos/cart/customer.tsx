@@ -6,6 +6,7 @@ import { useRecordField } from '@wcpos/query';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
+import { CustomerAvatar } from '../../components/user-avatar/customer-avatar';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 import { usePanelSide } from '../contexts/overlay-side';
@@ -37,7 +38,8 @@ export function Customer({
 			    as one control set (Paul, 2026-10-09). */}
 			<Chip
 				testID="cart-customer-name"
-				icon="user"
+				// The customer's picture or initials in the icon's slot; the Guest keeps the glyph.
+				leading={<CustomerAvatar customer={{ billing, shipping, id: customer_id }} size="xs" />}
 				label={name}
 				onPress={() => onShowCustomerSelect(true)}
 				// The order sheet has no address editor; keep it on long press.

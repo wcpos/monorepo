@@ -3,21 +3,20 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Icon } from '@wcpos/components/icon';
-import { Image } from '@wcpos/components/image';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 
 import { useProAccess } from '../contexts/pro-access';
+import { RecordAvatar } from '../components/user-avatar';
+import { getCustomerAvatarName } from '../components/user-avatar/customer-avatar';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
-import { useImageAttachment } from '../hooks/use-image-attachment';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 
 export function CustomerRow({ record }: { record: EngineRecord<'customers'> }) {
 	const customer = useRecordField(record, ({ payload }) => payload);
 	const { format } = useCustomerNameFormat();
-	const { uri } = useImageAttachment(record, customer.avatar_url ?? '');
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const router = useRouter();
@@ -35,7 +34,13 @@ export function CustomerRow({ record }: { record: EngineRecord<'customers'> }) {
 					: undefined
 			}
 			leading={
-				<Image source={{ uri }} recyclingKey={record.uuid} className="size-10 rounded-full" />
+				<RecordAvatar
+					record={record}
+					avatarUrl={customer.avatar_url}
+					name={getCustomerAvatarName(customer)}
+					size="lg"
+					recyclingKey={record.uuid}
+				/>
 			}
 			trailing={
 				<>

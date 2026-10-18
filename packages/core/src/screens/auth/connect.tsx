@@ -54,7 +54,8 @@ export function Connect() {
 								</Card>
 							}
 						>
-							<Sites user={user} />
+							{/* One active region: the open connect form folds the sites; expanding one closes it. */}
+							<Sites user={user} collapsed={showAddress} onExpand={() => setShowAddress(false)} />
 						</Suspense>
 					</ErrorBoundary>
 					{siteCount > 0 && !showAddress && (

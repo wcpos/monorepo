@@ -4,6 +4,7 @@
     "./accordion": "./src/accordion/index.tsx",
     "./alert-dialog": "./src/alert-dialog/index.tsx",
     "./avatar": "./src/avatar/index.tsx",
+    "./avatar/gravatar": "./src/avatar/gravatar.ts",
     "./badge": "./src/badge/index.tsx",
     "./breadcrumb": "./src/breadcrumb/index.tsx",
     "./button": "./src/button/index.tsx",
