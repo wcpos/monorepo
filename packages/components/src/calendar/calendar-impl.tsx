@@ -57,11 +57,21 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 	const headerSize = px(xs) ?? 12;
 	const unit = px(spacing) ?? 4;
 
-	// Update locale configuration when language changes
+	const [loadedLocale, setLoadedLocale] = React.useState<string | undefined>();
+	// A failed locale chunk keeps English names; success remounts the calendar to read LocaleConfig.
 	React.useEffect(() => {
+		let live = true;
 		if (locale) {
-			void updateLocaleConfig(locale);
+			void updateLocaleConfig(locale).then(
+				() => {
+					if (live) setLoadedLocale(locale);
+				},
+				() => undefined
+			);
 		}
+		return () => {
+			live = false;
+		};
 	}, [locale]);
 
 	// Derive current month directly from dateRange (no state sync needed)
@@ -140,6 +150,7 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 
 	return (
 		<RNCalendar
+			key={loadedLocale ?? 'default'}
 			firstDay={1}
 			onDayPress={handleDayPress}
 			markedDates={markedDates}

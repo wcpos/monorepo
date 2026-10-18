@@ -202,8 +202,20 @@ const LazyChart = React.lazy(async () => {
 });
 
 export function TrendLineChart(props: React.ComponentProps<typeof LazyChart>) {
+	const { formatDate } = useLocalDate();
+	// The frame holds the chart's footprint while its code loads, so the page does not collapse.
 	return (
-		<React.Suspense fallback={null}>
+		<React.Suspense
+			fallback={
+				<TrendFrame
+					points={props.points}
+					label={props.label}
+					testID={props.testID}
+					formatValue={props.formatValue}
+					formatTime={(x) => formatDate(new Date(x), 'p')}
+				/>
+			}
+		>
 			<LazyChart {...props} />
 		</React.Suspense>
 	);
