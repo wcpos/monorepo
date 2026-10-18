@@ -1047,7 +1047,7 @@ importers:
         version: 4.4.0
       expo-crypto:
         specifier: ~58.0.6
-        version: 58.0.6(expo@58.0.8)
+        version: 58.0.7(expo@58.0.14)
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
