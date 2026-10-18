@@ -1,4 +1,4 @@
-// Pins patches/@expo__cli@58.1.7.patch: a STRING runtimeVersion must be served
+// Pins patches/@expo__cli@58.1.11.patch: a STRING runtimeVersion must be served
 // from the config the manifest request already evaluated, without spawning the
 // `expo-updates runtimeversion:resolve` CLI. Native E2E pins a string runtime
 // (WCPOS_E2E_RUNTIME_VERSION) and the iOS dev launcher gives the manifest a hard

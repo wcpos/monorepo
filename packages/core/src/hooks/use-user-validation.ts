@@ -16,15 +16,20 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
-import { mergeStoresWithResponse } from '@wcpos/query/user-db';
+import {
+	credentialsTokenOwner,
+	type ReadonlySiteRecord,
+	type ReadonlyWpCredentialsRecord,
+	recordCashierProfile,
+} from '@wcpos/query/user-db';
 
 import { useAppState } from '../contexts/app-state';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
-	wpUser: import('@wcpos/database').WPCredentialsDocument;
+	site: ReadonlySiteRecord;
+	wpUser: ReadonlyWpCredentialsRecord;
 }
 
 interface UserValidationResult {
@@ -73,12 +78,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				wcpos_version: wcposVersion,
 				url: siteUrl,
 			},
-			wpUser: {
-				id: userId,
-				refresh_token: refreshToken,
-				incrementalPatch: wpUser.incrementalPatch.bind(wpUser),
-				getLatest: wpUser.getLatest.bind(wpUser),
-			},
+			wpUser: { ...credentialsTokenOwner(wpUser), id: userId, refresh_token: refreshToken },
 			getHttpClient: () => baseHttpClient,
 		});
 	}, [
@@ -146,7 +146,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				siteUrl,
 				siteUuid: site.uuid,
 				wpUserUuid: wpUser.uuid,
-				currentWpUserStores: (wpUser as unknown as { stores?: string[] }).stores,
+				currentWpUserStores: wpUser.stores,
 			},
 		});
 
@@ -267,136 +267,20 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				}
 			};
 
-			/**
-			 * Update user data in local database (DB operation)
-			 */
-			const updateUserInDB = async (data: any) => {
-				try {
-					// Update user fields directly with response data
-					const updateData: any = {};
-					const fieldsToUpdate = [
-						'avatar_url',
-						'display_name',
-						'email',
-						'first_name',
-						'last_access',
-						'last_name',
-						'nice_name',
-						'username',
-					];
-
-					fieldsToUpdate.forEach((field) => {
-						if (data[field] !== undefined) {
-							updateData[field] = data[field];
-						}
-					});
-
-					// Roles can come as an array of slugs (`roles`) or a legacy single
-					// string (`role`) from older plugin versions. Normalize to array.
-					if (Array.isArray(data.roles)) {
-						updateData.roles = data.roles.filter(
-							(r: unknown): r is string => typeof r === 'string' && r.length > 0
-						);
-					} else if (typeof data.role === 'string' && data.role.length > 0) {
-						updateData.roles = [data.role];
-					}
-
-					// Server omits `capabilities` on plugin versions without the capability
-					// payload (absence = unknown = fail open). Never patch the key to
-					// `undefined` — RxDB schema validation rejects undefined values (422),
-					// which failed the whole login validation and left the user stuck on
-					// "Re-authenticate" with no stores. Stale stored caps are cleared via
-					// an incrementalModify below instead, which can actually remove a key.
-					let clearCapabilities = false;
-					if (data.capabilities === undefined) {
-						clearCapabilities = true;
-					} else if (Array.isArray(data.capabilities)) {
-						updateData.capabilities = [
-							...new Set(
-								data.capabilities.filter(
-									(capability: unknown): capability is string =>
-										typeof capability === 'string' && capability.length > 0
-								)
-							),
-						];
-					}
-
-					// Update user data if we have fields to update
-					if (Object.keys(updateData).length > 0) {
-						await wpUser.incrementalPatch(updateData);
-						appLogger.debug('User data updated successfully', {
-							context: {
-								userId,
-								updatedFields: Object.keys(updateData),
-							},
-						});
-					}
-
-					if (
-						clearCapabilities &&
-						(wpUser.getLatest() as unknown as { capabilities?: string[] }).capabilities !==
-							undefined
-					) {
-						await wpUser.getLatest().incrementalModify((docData) => {
-							delete (docData as { capabilities?: string[] }).capabilities;
-							return docData;
-						});
-						appLogger.debug('Cleared stale capabilities (server omitted the field)', {
-							context: { userId },
-						});
-					}
-
-					// Merge stores if present in response
-					if (data.stores && Array.isArray(data.stores)) {
-						appLogger.debug('Merging stores from cashier response', {
-							context: {
-								userId,
-								siteUuid: site.uuid,
-								remoteStoreCount: data.stores.length,
-								remoteStoreIds: data.stores.map((s: any) => s?.id),
-							},
-						});
-						await mergeStoresWithResponse({
-							userDB,
-							wpUser,
-							remoteStores: data.stores,
-							user: { uuid: user.uuid ?? '' },
-							siteID: site.uuid ?? '',
-						});
-					} else {
-						appLogger.debug('Cashier response has no stores array — skipping merge', {
-							context: {
-								userId,
-								siteUuid: site.uuid,
-								dataKeys: Object.keys(data ?? {}),
-								storesType: typeof data?.stores,
-							},
-						});
-					}
-				} catch (error) {
-					const errorMsg = getErrorMessage(error);
-					appLogger.error('Failed to update user in local database', {
-						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-						context: {
-							error: errorMsg,
-							userId,
-						},
-					});
-					throw error;
-				}
-			};
-
 			try {
 				// Fetch user data from server
 				const data = await fetchUserData();
 
 				// Update local database with fetched data
-				await updateUserInDB(data);
+				await recordCashierProfile(userDB, wpUser, data, {
+					userUuid: user.uuid,
+					siteUuid: site.uuid,
+				});
 
 				appLogger.debug('[stores] validation complete, wpUser.stores after patch', {
 					context: {
 						wpUserUuid: wpUser.uuid,
-						storesAfter: (wpUser.getLatest() as unknown as { stores?: string[] }).stores,
+						storesAfter: wpUser.getLatest().stores,
 					},
 				});
 				setIsValid(true);

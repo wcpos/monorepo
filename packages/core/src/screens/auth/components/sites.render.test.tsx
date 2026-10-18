@@ -10,7 +10,11 @@ let mockSites: unknown[] = [];
 let mockCompatible = true;
 const mockAccordion: { onValueChange?: (value?: string) => void } = {};
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
-jest.mock('@wcpos/query/user-db', () => ({ removeSite: jest.fn() }));
+jest.mock('@wcpos/query/user-db', () => ({
+	removeSite: jest.fn(),
+	observeUserSites: () => jest.requireActual('rxjs').of(mockSites),
+	PENDING_USER_DB_READ: Symbol('pending'),
+}));
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
@@ -31,7 +35,10 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 		</button>
 	),
 }));
-jest.mock('observable-hooks', () => ({ useObservableSuspense: () => mockSites }));
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: () => mockSites,
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
 }));
@@ -108,7 +115,7 @@ jest.mock('@wcpos/components/notice', () => ({
 }));
 const a = { uuid: 'a', name: 'A', url: 'https://a.test', wp_credentials: ['u'] };
 const b = { uuid: 'b', name: 'B', url: 'https://b.test', wp_credentials: [] };
-const user = { populateResource: () => ({}) } as unknown as import('@wcpos/database').UserDocument;
+const user = {} as unknown as import('@wcpos/database').UserDocument;
 it('puts the many-sites heading above cards and renders the user counts', () => {
 	mockCompatible = true;
 	mockSites = [a, b];

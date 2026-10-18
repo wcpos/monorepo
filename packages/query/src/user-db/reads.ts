@@ -1,6 +1,11 @@
 import { defer, distinctUntilChanged, map, type Observable, of, startWith, switchMap } from 'rxjs';
 
-import type { SiteDocument, UserDocument, WPCredentialsDocument } from '@wcpos/database';
+import type {
+	SiteDocument,
+	UserDatabase,
+	UserDocument,
+	WPCredentialsDocument,
+} from '@wcpos/database';
 
 import type {
 	ReadonlySiteRecord,
@@ -23,10 +28,12 @@ export const PENDING_USER_DB_READ = Symbol('pending-user-db-read');
 export function observeUserSites(
 	user: ReadonlyUserRecord | UserDocument
 ): Observable<ReadonlySiteRecord[] | typeof PENDING_USER_DB_READ> {
-	return defer(() => (user as ReadonlyUserRecord).populate$('sites')).pipe(
+	return defer(() => (user as UserDocument).populate$('sites')).pipe(
 		map((sites) => {
 			const ids = user.getLatest().sites ?? [];
-			return [...sites].sort((a, b) => ids.indexOf(a.uuid!) - ids.indexOf(b.uuid!));
+			return [...(sites as ReadonlySiteRecord[])].sort(
+				(a, b) => ids.indexOf(a.uuid!) - ids.indexOf(b.uuid!)
+			);
 		}),
 		startWith(PENDING_USER_DB_READ)
 	);
@@ -36,7 +43,8 @@ export function observeUserSites(
 export function observeSiteCredentials(
 	site: ReadonlySiteRecord | SiteDocument
 ): Observable<ReadonlyWpCredentialsRecord[] | typeof PENDING_USER_DB_READ> {
-	return defer(() => (site as ReadonlySiteRecord).populate$('wp_credentials')).pipe(
+	return defer(() => (site as SiteDocument).populate$('wp_credentials')).pipe(
+		map((credentials) => credentials as ReadonlyWpCredentialsRecord[]),
 		startWith(PENDING_USER_DB_READ)
 	);
 }
@@ -68,4 +76,20 @@ export function observeCredentialStores(
 			})
 		);
 	}).pipe(startWith(PENDING_USER_DB_READ));
+}
+
+export function observeStoreByRemoteId(
+	userDB: UserDatabase,
+	id: number
+): Observable<ReadonlyStoreRecord | undefined> {
+	return userDB.stores
+		.findOne({ selector: { id } })
+		.$.pipe(map((store) => (store as unknown as ReadonlyStoreRecord) ?? undefined));
+}
+
+export async function readSiteApiUrls(
+	userDB: UserDatabase
+): Promise<Pick<ReadonlySiteRecord, 'uuid' | 'wp_api_url'>[]> {
+	const sites = await userDB.sites.find().exec();
+	return sites.map(({ uuid, wp_api_url }) => ({ uuid, wp_api_url }));
 }

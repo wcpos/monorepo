@@ -130,14 +130,6 @@ export function useRecordField<TDoc extends Record<string, unknown>, R>(
  * `useObservableEagerState(x.<field>$)` call site — those getters mint a fresh observable
  * per render and resubscribe each time (the app-wide churn class behind #1250).
  */
-export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
-	source: TRecord,
-	select: Selector<ReturnType<TRecord['toJSON']>, R>
-): R;
-export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
-	source: TRecord | null | undefined,
-	select: Selector<ReturnType<TRecord['toJSON']>, R>
-): R | undefined;
 export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxState<TState>,
 	select: Selector<TState, R>
@@ -153,6 +145,14 @@ export function useDocField<TState extends Record<string, unknown>, R>(
 export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxDocument<TState> | RxStateLike<TState> | null | undefined,
 	select: Selector<TState, R>
+): R | undefined;
+export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
+	source: TRecord,
+	select: Selector<ReturnType<TRecord['toJSON']>, R>
+): R;
+export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
+	source: TRecord | null | undefined,
+	select: Selector<ReturnType<TRecord['toJSON']>, R>
 ): R | undefined;
 export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxDocument<TState> | RxStateLike<TState> | ReadonlyUserDatabaseRecord | null | undefined,

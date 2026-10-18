@@ -12,9 +12,15 @@ import { subDays } from 'date-fns/subDays';
 import { subMonths } from 'date-fns/subMonths';
 import { subWeeks } from 'date-fns/subWeeks';
 import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
+import { filter, of } from 'rxjs';
+import get from 'lodash/get';
 
-import type { StoreDocument } from '@wcpos/database';
+import {
+	observeCredentialStores,
+	PENDING_USER_DB_READ,
+	type ReadonlySiteRecord,
+	type ReadonlyStoreRecord,
+} from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
@@ -24,7 +30,6 @@ import { DEVICE_ZONE, inZone, zoneOptions } from './store-zone';
 import { convertLocalDateToUTCString } from './use-local-date';
 
 import type { Day } from 'date-fns';
-import type { RxDocument } from 'rxdb';
 
 const dates = {
 	add,
@@ -133,7 +138,7 @@ export const storeRangeToFilter = ({ from, to }: DayRange) => ({
 export const storeEndOfDayAfter = (now: Date, zone: string, amount: DayAddition): Date =>
 	storeDayBounds(storeToday(dates.add(now, amount, zoneOptions(zone)), zone), zone).to;
 
-type FieldSource = Record<string, unknown>;
+type FieldSource = ReadonlyStoreRecord | ReadonlySiteRecord;
 
 /**
  * A record field that follows the document: a store or site patched by a later sync (a
@@ -141,31 +146,30 @@ type FieldSource = Record<string, unknown>;
  * an observable; a plain object (a hydration snapshot, a test double) is read directly.
  */
 function useLiveField(source: FieldSource | null | undefined, key: string): string | undefined {
-	const document =
-		source && typeof source.$ === 'object' && source.$
-			? (source as unknown as RxDocument<FieldSource>)
-			: undefined;
-	const live = useDocField(document, (value) => value[key]);
-	const value = live ?? source?.[key];
+	const document = source && typeof source.$ === 'object' && source.$ ? source : undefined;
+	const live = useDocField(document, (value) => get(value, key));
+	const value = live ?? get(source, key);
 	return typeof value === 'string' ? value : undefined;
 }
 
 const logger = getLogger(['wcpos', 'app', 'store-day']);
 const loggedTimezones = new Set<string>();
 
-const emptyViewedStores: StoreDocument[] = [];
+const emptyViewedStores: ReadonlyStoreRecord[] = [];
 const noViewedStores = of(emptyViewedStores);
 
-export function useViewedStore(storeId?: number) {
+export function useViewedStore(storeId?: number): ReadonlyStoreRecord | null | undefined {
 	const { store, wpCredentials } = useAppState();
 	const source = React.useMemo(
 		() =>
 			storeId !== undefined && storeId !== store?.id && wpCredentials
-				? wpCredentials.populate$('stores')
+				? observeCredentialStores(wpCredentials).pipe(
+						filter((value) => value !== PENDING_USER_DB_READ)
+					)
 				: noViewedStores,
 		[storeId, store?.id, wpCredentials]
 	);
-	const stores = useObservableState(source, emptyViewedStores) as StoreDocument[];
+	const stores = useObservableState(source, emptyViewedStores);
 	return storeId === undefined || storeId === store?.id
 		? store
 		: (stores.find((row) => row.id === storeId) ??
@@ -176,12 +180,9 @@ export function useViewedStore(storeId?: number) {
 export function useStoreDay(storeId?: number) {
 	const { site } = useAppState();
 	const store = useViewedStore(storeId);
-	const storeTimezone = useLiveField(store as unknown as FieldSource | undefined, 'timezone');
-	const timezone_string = useLiveField(
-		site as unknown as FieldSource | undefined,
-		'timezone_string'
-	);
-	const gmt_offset = useLiveField(site as unknown as FieldSource | undefined, 'gmt_offset');
+	const storeTimezone = useLiveField(store, 'timezone');
+	const timezone_string = useLiveField(site, 'timezone_string');
+	const gmt_offset = useLiveField(site, 'gmt_offset');
 	const { timezone, source } = React.useMemo(
 		() => resolveDayTimezone({ timezone: storeTimezone }, { timezone_string, gmt_offset }),
 		[storeTimezone, timezone_string, gmt_offset]
