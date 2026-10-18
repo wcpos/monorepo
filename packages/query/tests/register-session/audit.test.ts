@@ -1,6 +1,6 @@
 import { getLogger } from '@wcpos/utils/logger';
 
-import { recordRegisterFact, type RegisterFact } from './audit';
+import { recordRegisterFact, type RegisterFact } from '../../src/register-session/audit';
 
 jest.mock('@wcpos/utils/logger', () => {
 	const categories = new Map();
@@ -18,7 +18,6 @@ jest.mock('@wcpos/utils/logger', () => {
 		}),
 	};
 });
-jest.mock('../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 const bindingLogger = jest.mocked(getLogger(['wcpos', 'register']));
 const actor = { id: '7', name: 'Pat' };

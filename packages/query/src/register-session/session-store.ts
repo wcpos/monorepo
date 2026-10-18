@@ -6,9 +6,7 @@ import { POS_META_KEYS } from '@wcpos/sync-core';
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type {
-	CashMovementCollection,
 	CashMovementRow,
-	ClosureCollection,
 	ClosureDocument,
 	ClosureRow,
 	RefundDocumentType,
@@ -16,13 +14,9 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-import {
-	advancePerpetual,
-	mintClosureNumber,
-	mintUuid,
-	readRegister,
-} from '@wcpos/query/register-session';
 
+import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
+import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected } from './expected';
 
 export const pending = {
@@ -43,11 +37,12 @@ export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed
  * may call it before `next`. `requireOpenSession` returns only its id.
  */
 export async function findOpenSession(
-	sessions: RegisterSessionCollection | undefined,
+	storeDB: RegisterStoreDatabase,
 	registerId: string | null,
 	enabled: boolean
 ) {
 	if (!enabled) return null;
+	const sessions = registerCollections(storeDB).register_sessions;
 	const session = await sessions
 		?.findOne({
 			selector: { register_id: registerId ?? '', ...openSessionSelector },
@@ -57,17 +52,17 @@ export async function findOpenSession(
 	return session;
 }
 export async function requireOpenSession(
-	sessions: RegisterSessionCollection | undefined,
+	storeDB: RegisterStoreDatabase,
 	registerId: string | null,
 	enabled: boolean
 ) {
-	const session = await findOpenSession(sessions, registerId, enabled);
+	const session = await findOpenSession(storeDB, registerId, enabled);
 	if (!session) return null;
 	// Retain the baseline; pending rows supply the delta until the next detail refresh.
 	return session.id;
 }
 export function openSession(
-	sessions: RegisterSessionCollection,
+	storeDB: RegisterStoreDatabase,
 	input: {
 		registerId: string;
 		expectedFloat: string | null;
@@ -77,6 +72,7 @@ export function openSession(
 		storeId?: number | null;
 	}
 ) {
+	const sessions = registerCollections(storeDB).register_sessions;
 	const { year, month, day } = input.businessDay;
 	return sessions.insert({
 		id: mintUuid(),
@@ -114,17 +110,20 @@ async function transition(
 		...(status === 'closed' ? { closed_at_gmt: at } : {}),
 	});
 }
-export const startCounting = (sessions: RegisterSessionCollection, id: string) =>
-	transition(sessions, id, 'counting');
-export const backToSelling = (sessions: RegisterSessionCollection, id: string) =>
+export const startCounting = (storeDB: RegisterStoreDatabase, id: string) =>
+	transition(registerCollections(storeDB).register_sessions, id, 'counting');
+export const backToSelling = (storeDB: RegisterStoreDatabase, id: string) =>
 	// The approval snapshot belongs to the counting attempt it was given for; `approval_required`
 	// is the server's flag and stays until the server clears it.
-	transition(sessions, id, 'open', { approved_counted: null });
+	transition(registerCollections(storeDB).register_sessions, id, 'open', {
+		approved_counted: null,
+	});
 export const closeSession = async (
-	sessions: RegisterSessionCollection,
+	storeDB: RegisterStoreDatabase,
 	id: string,
 	input: { counted: Record<string, string>; closedBy?: number; timezone?: string }
 ) => {
+	const sessions = registerCollections(storeDB).register_sessions;
 	const session = await sessions.findOne(id).exec();
 	if (!session) throw new RegisterSessionRequiredError();
 	return transition(sessions, id, 'closed', {
@@ -147,13 +146,14 @@ export const closeSession = async (
  * physically moved, so the cashier needs a way to send it again once whatever the server
  * objected to — a capability, a closed session, a bad field — has been dealt with.
  */
-export async function retryMovement(movements: CashMovementCollection, movementId: string) {
+export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: string) {
+	const movements = registerCollections(storeDB).cash_movements;
 	const row = await movements.findOne(movementId).exec();
 	if (!row) throw new Error('invalid_retry_target');
 	return row.incrementalPatch({ ...pending });
 }
 export function recordMovement(
-	movements: CashMovementCollection,
+	storeDB: RegisterStoreDatabase,
 	input: {
 		sessionId: string;
 		type: 'paid_in' | 'paid_out' | 'no_sale';
@@ -162,6 +162,7 @@ export function recordMovement(
 		actor: number;
 	}
 ) {
+	const movements = registerCollections(storeDB).cash_movements;
 	return movements.insert({
 		id: mintUuid(),
 		session_id: input.sessionId,
@@ -174,10 +175,11 @@ export function recordMovement(
 	});
 }
 export async function voidMovement(
-	movements: CashMovementCollection,
+	storeDB: RegisterStoreDatabase,
 	movementId: string,
 	actor: number
 ) {
+	const movements = registerCollections(storeDB).cash_movements;
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
 	// Repeated Undo taps share one durable reversal: the target's voided_by names it.
@@ -205,7 +207,7 @@ export async function voidMovement(
 }
 
 export async function writeClosure({
-	closures,
+	storeDB,
 	userDB,
 	siteUuid,
 	session,
@@ -220,7 +222,7 @@ export async function writeClosure({
 	timezone = 'device',
 }: {
 	timezone?: string;
-	closures: ClosureCollection;
+	storeDB: RegisterStoreDatabase;
 	userDB: UserDatabase;
 	siteUuid: string;
 	session: Readonly<
@@ -255,6 +257,7 @@ export async function writeClosure({
 		approved_by_name?: string;
 	};
 }) {
+	const closures = registerCollections(storeDB).closures;
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {
 		await advancePerpetual(userDB, siteUuid, session.register_id, {

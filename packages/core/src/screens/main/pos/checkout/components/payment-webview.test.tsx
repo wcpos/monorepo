@@ -2272,17 +2272,22 @@ jest.mock('../hooks/use-sale-context', () => ({
 						typeof import('@wcpos/query/register-session')
 					>('@wcpos/query/register-session');
 					const { findOpenSession } = jest.requireActual<
-						typeof import('../../../../../services/register-session/session-store')
-					>('../../../../../services/register-session/session-store');
+						typeof import('@wcpos/query/register-session')
+					>('@wcpos/query/register-session');
 					const registerId =
 						(await readBoundRegister(mockRegisterDB as never, 'site', 1))?.id ?? null;
-					const session = await findOpenSession(mockSessions as never, registerId, mockSessionsOn);
+					const session = await findOpenSession(
+						{ collections: { register_sessions: mockSessions } },
+						registerId,
+						mockSessionsOn
+					);
 					return { registerId, sessionId: session?.id ?? null };
 				},
 			}),
 		userDB: mockRegisterDB,
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,
+		storeDB: { collections: { register_sessions: mockSessions } },
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },

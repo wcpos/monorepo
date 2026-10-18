@@ -41,8 +41,6 @@ jest.mock('@wcpos/query/register-session', () => ({
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
 	readRegister: async () => ({ sites: { site: { register_id: 'register-A' } } }),
 	nextSaleCounter: async () => 7,
-}));
-jest.mock('../../../../services/register-session/session-store', () => ({
 	requireOpenSession: (...args: unknown[]) => mockSession(...args),
 }));
 jest.mock('./provenance/stamp-completion', () => ({

@@ -11,11 +11,8 @@ import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from 
 import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { openSessionSelector, RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
-import {
-	openSessionSelector,
-	RegisterSessionRequiredError,
-} from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { SESSION_REQUIRED_REASON } from '../tender/tender-guards';

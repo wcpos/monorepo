@@ -1,3 +1,4 @@
+import { backoffMs, MAX_SEND_ATTEMPTS } from '@wcpos/utils/outbox-backoff';
 import { getErrorMessage } from '@wcpos/utils/logger';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -64,23 +65,10 @@ export interface ReceiptEmailQueuePort {
 	};
 }
 
-/** Give up after this many attempts; the row becomes `failed` and stops. */
-export const MAX_SEND_ATTEMPTS = 6;
-/** First retry lands 30s after the failure, doubling from there. */
-export const BASE_BACKOFF_MS = 30_000;
-/** Ceiling, so a till left offline overnight retries every 15 minutes, not every 9 hours. */
-export const MAX_BACKOFF_MS = 15 * 60_000;
 /** Spacing between two sends in one pass — a struggling server is not helped by a burst. */
 export const SEND_SPACING_MS = 1_000;
 /** Safety rail on the re-run loop; a drain must always terminate. */
 const MAX_PASSES = 5;
-
-export function backoffMs(attempts: number): number {
-	const exponent = Math.max(0, attempts - 1);
-	// 2 ** 30 overflows nothing here, but the cap is applied before the shift
-	// matters anyway.
-	return Math.min(BASE_BACKOFF_MS * 2 ** Math.min(exponent, 20), MAX_BACKOFF_MS);
-}
 
 const iso = (ms: number) => new Date(ms).toISOString();
 

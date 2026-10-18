@@ -15,7 +15,7 @@ import {
 	recordMovement,
 	voidMovement,
 	writeClosure,
-} from './session-store';
+} from '../../src/register-session/session-store';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
@@ -44,7 +44,7 @@ afterEach(async () => {
 	await userDB.remove();
 });
 async function seed() {
-	let session = await openSession(db.register_sessions, {
+	let session = await openSession(db, {
 		registerId: 'register',
 		expectedFloat: '100',
 		countedFloat: '100',
@@ -56,16 +56,16 @@ async function seed() {
 		['paid_out', '5'],
 		['paid_out', '7'],
 	] as const) {
-		const row = await recordMovement(db.cash_movements, {
+		const row = await recordMovement(db, {
 			sessionId: session.id,
 			type,
 			amount,
 			reason: '',
 			actor: 7,
 		});
-		if (amount === '7') await voidMovement(db.cash_movements, row.id, 7);
+		if (amount === '7') await voidMovement(db, row.id, 7);
 	}
-	session = await closeSession(db.register_sessions, session.id, {
+	session = await closeSession(db, session.id, {
 		counted: { cash: '150' },
 		closedBy: 7,
 	});
@@ -119,7 +119,7 @@ async function seed() {
 		},
 	];
 	return {
-		closures: db.closures,
+		storeDB: db,
 		userDB,
 		siteUuid: 'site',
 		session,
@@ -302,7 +302,8 @@ it('retains the actor and movement data needed by the local closure document', a
 	expect(row.breakdowns.opened_by).toBe(7);
 	const movements = row.breakdowns.movements as Record<string, unknown>[];
 	expect(movements[0]).toMatchObject({ created_by: 7, created_at_gmt: expect.any(String) });
-	const { buildClosureDocument } = await import('./closure-document');
+	const { buildClosureDocument } =
+		await import('../../../core/src/services/register-session/closure-document');
 	const doc = buildClosureDocument(row.toMutableJSON(), {
 		store: { name: 'Shop' },
 		currency: 'USD',

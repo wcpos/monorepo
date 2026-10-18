@@ -27,6 +27,7 @@ import {
 	toMinor,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -35,7 +36,6 @@ import { isActionRefusal } from '../../../../../extensions/actions';
 import '../cash-rounding-hook';
 import { useActionContext } from '../../hooks/use-action-context';
 import { useCartConfig } from '../../hooks/use-cart-config';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { commitSale, type StampedSale } from '../commit-sale';
 import {
 	getTerminalPaymentsService,
