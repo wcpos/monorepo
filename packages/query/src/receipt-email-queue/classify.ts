@@ -1,4 +1,4 @@
-import { PREFLIGHT_BLOCK } from '@wcpos/hooks/use-http-client';
+import { PREFLIGHT_BLOCK } from '@wcpos/hooks/use-http-client/request-state-manager';
 
 /**
  * Why a receipt email send failed, in the only two flavours the queue cares

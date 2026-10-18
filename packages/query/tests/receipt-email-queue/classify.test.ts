@@ -1,4 +1,4 @@
-import { classifyEmailSendError } from './classify';
+import { classifyEmailSendError } from '../../src/receipt-email-queue/classify';
 
 const axios = (over: Record<string, unknown>) =>
 	Object.assign(new Error(String(over.message ?? 'boom')), { isAxiosError: true }, over);
