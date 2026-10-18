@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
@@ -182,10 +182,12 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 				    the date: it always shows the till now, and is the way into Closures. */}
 				<Suspense
 					fallback={
-						<View className="gap-4 p-4">
+						// The same scrolling shell as the settled page: on a short phone the strip
+						// can push the date button below the fold (Codex, #2720).
+						<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
 							{strip}
 							<HeroShell title={title} />
-						</View>
+						</ScrollView>
 					}
 				>
 					<ReportsProvider
