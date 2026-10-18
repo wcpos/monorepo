@@ -14,6 +14,7 @@ import {
 	type ActionContext,
 	type ActionRefusal,
 	dispatchAction,
+	isActionRefusal,
 } from '../../../../extensions/actions';
 import { useCartWrite } from '../commands/use-cart-write';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
@@ -142,7 +143,7 @@ export const useUpdateCartLine = () => {
 			reportEngineWarnings(warnings, { orderId: order.uuid, site: lineInfo[type].site });
 			if (!updated || !updatedLines) return;
 			const result = await localPatch({ document: order, queue, data: { [type]: updatedLines } });
-			if (result && type === 'line_items' && previous) {
+			if (result && !isActionRefusal(result) && type === 'line_items' && previous) {
 				const line = previous as LineItem;
 				lineInfo[type].logger.info('Cart line item updated', {
 					context: {

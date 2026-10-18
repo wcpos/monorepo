@@ -11,6 +11,7 @@ import {
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
 import { type CouponReferences, replayContentKey } from './coupon-continuation';
+import { isActionRefusal } from '../../../../extensions/actions';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import { readQuickDiscountIntent } from '../hooks/quick-discount';
 
@@ -109,6 +110,15 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			completionGeneration,
 		]);
 	};
+	const settle = async (...args: Parameters<Deps['settle']>) => {
+		const outcome = await deps.settle(...args);
+		// Catalog refusals remain eligible; only an input emission schedules the next pass.
+		if (
+			isActionRefusal(outcome) &&
+			['pos_cart.only_n_available', 'pos_products.out_of_stock'].includes(outcome.deny.reasonKey)
+		)
+			seen.delete(args[0]);
+	};
 	async function replay(record: CurrentOrderRecord, key: string, pass: number) {
 		const uuid = record.uuid;
 		const content = replayContentKey(record);
@@ -131,7 +141,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					fingerprint(fresh) === key &&
 					replayContentKey({ uuid, payload }) === content &&
 					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
-				if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, coupons, slot);
+				if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, coupons, slot);
 			});
 		} catch (error) {
 			if (flights.get(uuid) === flight) seen.delete(uuid);
@@ -172,7 +182,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 								current() &&
 								!hasCoupons({ payload }) &&
 								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
-							if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, undefined, slot);
+							if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, undefined, slot);
 						});
 					} catch (error) {
 						seen.delete(uuid);

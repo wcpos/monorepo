@@ -11,6 +11,7 @@ import {
 	snapshotFromOrderJSON,
 } from '@wcpos/order-math';
 import {
+	observeCatalogChanges,
 	observeCoverage,
 	readStorePaymentsContract,
 	useDocField,
@@ -129,8 +130,9 @@ export function SettlementCoordinatorProvider() {
 					}
 					return result.changed ? settlementPatch(result) : {};
 				});
+				let outcome;
 				if (boundary)
-					await commitAtBoundary(
+					outcome = await commitAtBoundary(
 						{
 							...saleContext,
 							source: 'system',
@@ -168,6 +170,7 @@ export function SettlementCoordinatorProvider() {
 						},
 						context: failure,
 					});
+				return outcome;
 			},
 		});
 		// Both live database rebind causes are announced before db$ (engine scope/reset contract).
@@ -189,12 +192,16 @@ export function SettlementCoordinatorProvider() {
 			?.get$('paymentMethods')
 			.pipe(skip(1))
 			.subscribe(() => inputs$.next(inputs$.value));
+		const stock = observeCatalogChanges(manager.engine).subscribe(() =>
+			inputs$.next(inputs$.value)
+		);
 		const offCheckout = subscribeCheckoutMode(() => openOrders$.next(openOrders$.value));
 		return () => {
 			coordinator.stop();
 			offEvents();
 			offCheckout();
 			contract?.unsubscribe();
+			stock.unsubscribe();
 			rates.unsubscribe();
 			orders.unsubscribe();
 		};

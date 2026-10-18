@@ -36,10 +36,20 @@ const subscribe = (source: Subject<any>) => (fn: any) => {
 };
 const engine = {
 	events: subscribe(events),
+	active: () => ({ database: databases.value }),
+	db$: (fn: any) => subscribe(databases)(fn),
+	ready: Promise.resolve(),
 	status: () => statuses.value,
 	statusChanges: subscribe(statuses),
 };
 const manager = { engine };
+const stockChanges = { products: new Subject(), variations: new Subject() };
+const databases = new BehaviorSubject({
+	collections: {
+		products: { $: stockChanges.products },
+		variations: { $: stockChanges.variations },
+	},
+});
 const writes: Record<string, unknown>[] = [];
 const sessionChanges = new Subject();
 let sessionOpen = true;
@@ -74,6 +84,7 @@ jest.mock('@wcpos/query', () => ({
 	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
+	observeCatalogChanges: jest.requireActual('@wcpos/query').observeCatalogChanges,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
 }));
@@ -629,3 +640,52 @@ it('marks coordinator boundary work as system rather than cashier initiated', as
 	);
 	view.unmount();
 });
+
+it.each([
+	['products', 'pos_cart.only_n_available', false],
+	['variations', 'pos_products.out_of_stock', true],
+	['products', 'pos_checkout.order_changed_retry', false],
+] as const)(
+	'reconsiders %s stock refusals (%s), but not closed orders',
+	async (collection, reasonKey, coupon) => {
+		context.coupons = new Map([
+			['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+		]);
+		references.next({ ready: true, generation: '0:0' });
+		const a = record({
+			status: 'pos-partial',
+			line_items: [{ product_id: 1, quantity: 1, subtotal: '4', total: '4' }],
+			coupon_lines: coupon ? [{ code: 'summer' }] : [],
+			meta_data: [
+				{
+					key: '_wcpos_payments',
+					value: {
+						schema: 1,
+						payments: [{ id: 'leg', status: 'captured', amount: '4' }],
+					},
+				},
+			],
+		});
+		jest.mocked(commitAtBoundary).mockResolvedValueOnce({ deny: { reasonKey } });
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			expect(writes).toEqual([]);
+			expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+			// The catalog now has enough stock; no order/config/session emission accompanies it.
+			act(() => stockChanges[collection].next({}));
+			await flush();
+			const closed = reasonKey === 'pos_checkout.order_changed_retry';
+			expect(a.payload.status).toBe(closed ? 'pos-partial' : 'completed');
+			expect(commitAtBoundary).toHaveBeenCalledTimes(closed ? 1 : 2);
+			act(() => stockChanges[collection].next({}));
+			await flush();
+			expect(commitAtBoundary).toHaveBeenCalledTimes(closed ? 1 : 2);
+		} finally {
+			view.unmount();
+		}
+		expect(stockChanges[collection].observed).toBe(false);
+		expect(databases.observed).toBe(false);
+	}
+);

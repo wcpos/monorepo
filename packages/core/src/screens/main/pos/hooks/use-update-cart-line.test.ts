@@ -357,3 +357,18 @@ it('refuses an increase queued behind completion and returns refusal to the hook
 	expect(mockPatch).toHaveBeenCalledTimes(1);
 	mockPatch.mockClear(); // Boundary writes intentionally carry intent only.
 });
+
+it('presents a closed-order write refusal without recording the requested line update', async () => {
+	mockOrder.payload.status = 'completed';
+	const { result } = renderHook(() => useWriter());
+	await act(async () => {
+		expect(await result.current.updateCartLine('line_items', 'line', { quantity: 3 })).toBe(false);
+	});
+	expect(mockWarn).toHaveBeenCalledWith(
+		'warn',
+		'pos_checkout.order_changed_retry',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(mockPatch).not.toHaveBeenCalled();
+});
