@@ -7,12 +7,14 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
-import { ensureRegister, readRegister } from '@wcpos/query/register-session';
+import { ensureRegister, readClosure, readRegister } from '@wcpos/query/register-session';
 
 import {
 	closeSession,
 	openSession,
 	recordMovement,
+	refreshClosureRow,
+	setClosureReceiptSnapshot,
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
@@ -331,4 +333,26 @@ it('derives a legacy closure day from opening in store time', async () => {
 		...{ timezone: 'America/Los_Angeles' },
 	});
 	expect(closure.business_day).toBe('2026-09-16');
+});
+
+it('patches only the receipt snapshot and corrections count, including server identity', async () => {
+	const closure = await writeClosure(await seed());
+	await closure.incrementalPatch({ server_closure_id: 'remote' });
+	const before = closure.getLatest().toJSON();
+	await setClosureReceiptSnapshot(db, closure.id, '{}');
+	await refreshClosureRow(db, 'remote', 3);
+	await expect(readClosure(db, { serverClosureId: 'remote' })).resolves.toMatchObject({
+		id: closure.id,
+	});
+	expect(closure.getLatest().toJSON()).toEqual({
+		...before,
+		receipt_snapshot: '{}',
+		corrections_count: 3,
+	});
+	await expect(setClosureReceiptSnapshot(null, closure.id, '{}')).rejects.toMatchObject({
+		name: 'StoreDatabaseUnavailableError',
+	});
+	await expect(refreshClosureRow(null, 'remote', 3)).rejects.toMatchObject({
+		name: 'StoreDatabaseUnavailableError',
+	});
 });

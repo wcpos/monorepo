@@ -34,9 +34,6 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front' }),
 }));
-jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => undefined,
-}));
 let storeTimezone = 'America/Los_Angeles';
 const mockSession = {
 	get store() {

@@ -48,11 +48,20 @@ export {
 	startCounting,
 	voidMovement,
 	writeClosure,
+	setClosureReceiptSnapshot,
+	refreshClosureRow,
+	recordClosurePrint,
 } from './session-store';
 
 export {
 	createSessionAccountingState,
 	observeRegisterSessions,
+	observeRegisterSessionAvailability,
+	observeClosure,
+	readClosure,
+	observeClosures,
+	observeOpenSessionPresence,
+	type ReadonlyClosureDocument,
 	observeCashMovements,
 	observeRegisterClosures,
 	observeSessionAccounting,

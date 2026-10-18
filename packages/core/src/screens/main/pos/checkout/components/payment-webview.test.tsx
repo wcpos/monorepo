@@ -2286,8 +2286,7 @@ jest.mock('../hooks/use-sale-context', () => ({
 			}),
 		userDB: mockRegisterDB,
 		sessionsOn: mockSessionsOn,
-		sessions: mockSessions,
-		storeDB: { collections: { register_sessions: mockSessions } },
+		storeDB: mockSessionStoreDB,
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
@@ -2314,6 +2313,7 @@ jest.mock('../completion-journal', () => ({
 let mockSessionsOn = false;
 const mockOpenSession = new BehaviorSubject<{ id: string; status?: string } | null>(null);
 const mockSessions = { findOne: jest.fn() };
+const mockSessionStoreDB = { collections: { register_sessions: mockSessions } };
 type SessionFixture = {
 	id: string;
 	register_id: string;

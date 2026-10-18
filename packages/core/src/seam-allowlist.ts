@@ -1127,7 +1127,25 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: sessions.find({ selector: { register_id: binding.registerId, status: 'closed' }, }) :: 1",
 	"services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: sessions.find({ selector: { register_id: binding.registerId, status: { $in: ['open', 'counting'] } }, }) :: 1",
 	"services/register-session/use-register-session.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (c4): closures and reports read named reads; the register collections hook is gone.
+	'screens/main/pos/checkout/components/payment-webview.tsx :: raw query construction :: PaymentWebview :: ctx.sessions ?.findOne :: 1',
+	'screens/main/receipt/use-receipt-document.ts :: record mutator :: useReceiptDocument :: closure.incrementalModify :: 1',
+	'screens/main/receipt/use-receipt-document.ts :: record mutator :: useReceiptDocument :: closure.incrementalModify :: 2',
+	"screens/main/receipt/use-receipt-document.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/reports/closures/closure-panel.tsx :: raw query construction :: ClosurePanel :: collection ?.findOne :: 1',
+	'screens/main/reports/closures/closure-panel.tsx :: record mutator :: ClosurePanel :: record?.incrementalPatch :: 1',
+	"screens/main/reports/closures/closure-panel.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/reports/closures/session-card.tsx :: raw query construction :: RemoteSessionCard :: collection ?.findOne :: 1',
+	'screens/main/reports/closures/use-closure-rows.ts :: raw query construction :: useClosureRows :: collection.find() :: 1',
+	'screens/main/reports/closures/use-closure-rows.ts :: raw query construction :: useClosureRows>refreshRow>update :: collection ?.findOne :: 1',
+	'screens/main/reports/closures/use-closure-rows.ts :: record collection back-reference :: useClosureRows :: observed?.collection :: 1',
+	'screens/main/reports/closures/use-closure-rows.ts :: record mutator :: useClosureRows>refreshRow>update :: local?.incrementalPatch :: 1',
+	"screens/main/reports/closures/use-closure-rows.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'services/register-session/use-register-session-collections.ts :: record collection back-reference :: useSessionCollection :: swap?.collection :: 1',
+	"services/register-session/use-register-session-collections.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'services/register-session/use-register-session-collections.ts :: storage token :: useSessionCollection :: storeDB?.collections :: 1',
+	'services/register-session/use-session-report.ts :: raw query construction :: useSessionReport :: collection?.findOne :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 214;
+export const SEAM_RETIRED_FLOOR = 231;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1c7b52512194edc15fda2baac8d75e310ca30d5dd4e4b14ab8bf16694d1e8b48';
+	'3fc5df9a3a42b71e769a7a7f9c0b749ae2ba89cdcdb588250c3084845476131a';

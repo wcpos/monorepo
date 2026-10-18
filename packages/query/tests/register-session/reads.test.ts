@@ -1,9 +1,13 @@
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import {
 	observeCashMovements,
+	observeClosure,
+	observeClosures,
+	observeOpenSessionPresence,
 	observeRegisterClosures,
 	observeRegisterSessions,
+	readClosure,
 } from '../../src/register-session/reads';
 
 // A replacement must clear the old rows before its delayed first answer, and late old answers
@@ -59,4 +63,50 @@ it('keeps movements unscoped, scopes closures, and declares null absence for all
 	expect(closures).toEqual([null, [{ id: 'row' }]]);
 	a.unsubscribe();
 	b.unsubscribe();
+});
+
+it('distinguishes unavailable open-session presence from a closed session', () => {
+	const row = new BehaviorSubject<unknown>(null);
+	const findOne = jest.fn(() => ({ $: row }));
+	const db = { collections: { register_sessions: { findOne } } };
+	const values: unknown[] = [];
+	const sub = observeOpenSessionPresence(db, { sessionId: 'session' }).subscribe((value) =>
+		values.push(value)
+	);
+	row.next({ id: 'session' });
+	expect(values).toEqual([null, false, true]);
+	expect(findOne).toHaveBeenCalledWith({
+		selector: { status: 'open', sync_status: { $ne: 'failed' }, id: 'session' },
+	});
+	sub.unsubscribe();
+	for (const read of [observeClosure, observeClosures, observeOpenSessionPresence]) {
+		const absent: unknown[] = [];
+		read(null, { id: 'id', sessionId: 'session' }).subscribe((value) => absent.push(value));
+		expect(absent).toEqual([null]);
+	}
+});
+
+it('answers a missing print closure even when the store has a live reset stream', async () => {
+	await expect(
+		readClosure({ collections: {}, reset$: new Subject() }, { id: 'missing' })
+	).resolves.toBeNull();
+});
+
+// A reset before the first answer must move the lookup to the replacement, not resolve null.
+it('readClosure waits for an answered query of the collection that is current', async () => {
+	const reset$ = new Subject<never>();
+	const pending = new Subject<unknown>();
+	const original = { findOne: jest.fn(() => ({ $: pending })) };
+	const storeDB = { collections: { closures: original }, reset$ };
+	const answer = readClosure(storeDB, { id: 'closure' });
+	const replacement = {
+		name: 'closures',
+		database: storeDB,
+		findOne: jest.fn(() => ({ $: of({ id: 'closure', from: 'replacement' }) })),
+	};
+	storeDB.collections.closures = replacement as unknown as typeof original;
+	reset$.next(replacement as never);
+	await expect(answer).resolves.toMatchObject({ id: 'closure', from: 'replacement' });
+	expect(original.findOne).toHaveBeenCalledWith('closure');
+	expect(replacement.findOne).toHaveBeenCalledWith('closure');
 });

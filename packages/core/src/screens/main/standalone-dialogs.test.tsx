@@ -174,9 +174,6 @@ jest.mock('../../services/register-session/settled-figures', () => ({
 jest.mock('../../services/register-session/use-closure-document-context', () => ({
 	useClosureDocumentContext: () => ({}),
 }));
-jest.mock('../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => null,
-}));
 jest.mock('./hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
 jest.mock('./receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ templates: [] }),

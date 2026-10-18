@@ -441,14 +441,6 @@ it.each([false, true])(
 
 let mockSessionsOn = false;
 let mockSessionId: string | null = 'session';
-jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => ({
-		findOne: () => ({
-			exec: async () =>
-				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
-		}),
-	}),
-}));
 beforeEach(() => {
 	mockSessionsOn = false;
 	mockSessionId = 'session';

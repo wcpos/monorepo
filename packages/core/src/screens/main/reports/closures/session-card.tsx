@@ -8,13 +8,13 @@ import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import type { RegisterSessionRow, WPCredentialsDocument } from '@wcpos/database';
+import { readClosure } from '@wcpos/query/register-session';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -173,21 +173,13 @@ export function RemoteSessionCard({
 	localCard?: (unavailableReason?: string) => React.ReactNode;
 }) {
 	const { data, online, load, unavailable } = useLastClosure(register, storeId, summary);
-	const { wpCredentials } = useStoreSession();
+	const { wpCredentials, storeDB } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (row) => row.capabilities);
 	const t = useT();
-	const collection = useClosureCollection();
 	const closureId = data.closure?.server_closure_id ?? data.closure?.id;
 	const getLocalClosure = React.useCallback(
-		async () =>
-			closureId
-				? ((await collection
-						?.findOne({
-							selector: { $or: [{ id: closureId }, { server_closure_id: closureId }] },
-						})
-						.exec()) ?? null)
-				: null,
-		[collection, closureId]
+		async () => (closureId ? readClosure(storeDB, { serverClosureId: closureId }) : null),
+		[storeDB, closureId]
 	);
 	const document = data.session
 		? `xreport:${data.session.id}`

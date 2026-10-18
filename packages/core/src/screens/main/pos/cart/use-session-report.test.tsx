@@ -51,9 +51,6 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `£${value.toFixed(2)}` }),
 }));
-jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useClosureCollection: () => undefined,
-}));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		session: { id: 's', register_id: 'r', opened_by: mockOpenedBy },

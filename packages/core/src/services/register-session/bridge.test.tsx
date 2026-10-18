@@ -23,7 +23,9 @@ jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
 const userDB = {};
-const storeDB = { collections: { register_sessions: sessions } };
+const storeDB = {
+	collections: { register_sessions: sessions, cash_movements: sessions, closures: sessions },
+};
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -38,7 +40,6 @@ jest.mock('../../contexts/app-state', () => {
 	});
 	return { useStoreSession: session, useAppState: session };
 });
-const movements = sessions;
 const http = {};
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -49,11 +50,6 @@ jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
 }));
 jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register' }),
-}));
-jest.mock('./use-register-session-collections', () => ({
-	useClosureCollection: () => sessions,
-	useRegisterSessionCollection: () => sessions,
-	useCashMovementCollection: () => movements,
 }));
 const mockRefreshRequests = new Subject<unknown>();
 jest.mock('@wcpos/query/register-session', () => ({

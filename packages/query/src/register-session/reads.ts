@@ -3,6 +3,7 @@ import {
 	concatMap,
 	distinctUntilChanged,
 	finalize,
+	firstValueFrom,
 	map,
 	type Observable,
 	of,
@@ -14,6 +15,7 @@ import {
 
 import type {
 	CashMovementRow,
+	ClosureDocument,
 	ClosureRow,
 	RefundDocumentType,
 	RegisterSessionRow,
@@ -22,10 +24,12 @@ import { readLedger } from '@wcpos/order-math';
 import { mintRemoteId, POS_META_KEYS } from '@wcpos/sync-core';
 import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 
+import { openSessionSelector } from './session-store';
 import { observeEngineQuery } from '../engine-query';
 import { declareRequirements } from '../requirement-bridge';
 import { observeFollowedCollection } from '../use-local-collection';
 
+import type { RxCollection } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { RegisterStoreDatabase } from './store-database';
 
@@ -66,6 +70,107 @@ export function observeRegisterClosures(storeDB: RegisterStoreDatabase, register
 		switchMap((closures) =>
 			closures && registerId
 				? closures.find({ selector: { register_id: registerId } }).$.pipe(startWith(null))
+				: of(null)
+		)
+	);
+}
+
+/** Absent → false. Bridge cycles also follow in-place register collection replacements. */
+export function observeRegisterSessionAvailability(storeDB: RegisterStoreDatabase) {
+	return combineLatest(
+		['register_sessions', 'cash_movements', 'closures'].map((name) =>
+			observeFollowedCollection(storeDB, name)
+		)
+	).pipe(
+		map((collections) => collections.every(Boolean)),
+		startWith(false)
+	);
+}
+
+/** Reactive closure identity without storage or mutation doors. */
+export type ReadonlyClosureDocument = Readonly<ClosureRow> &
+	Pick<ClosureDocument, 'toJSON' | 'toMutableJSON'> & {
+		getLatest(): ReadonlyClosureDocument;
+		readonly $: Observable<ReadonlyClosureDocument>;
+	};
+export type ClosureIdentity =
+	{ id: string; serverClosureId?: string } | { serverClosureId: string; id?: string };
+
+function closureQuery(closures: RxCollection<ClosureRow>, identity: ClosureIdentity) {
+	return closures.findOne(
+		'serverClosureId' in identity
+			? {
+					selector: {
+						$or: [
+							{ id: identity.id ?? identity.serverClosureId },
+							{ server_closure_id: identity.serverClosureId ?? identity.id },
+						],
+					},
+				}
+			: identity.id
+	).$ as unknown as Observable<ReadonlyClosureDocument | null>;
+}
+
+/** Absent → null. Reports may know the local UUID, the server identity, or both. */
+export function observeClosure(
+	storeDB: RegisterStoreDatabase,
+	identity: ClosureIdentity
+): Observable<ReadonlyClosureDocument | null> {
+	return observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
+		switchMap((closures) =>
+			closures ? closureQuery(closures, identity).pipe(startWith(null)) : of(null)
+		)
+	);
+}
+
+/**
+ * Fresh one-shot answer for print callbacks: the first ANSWERED query of the collection that
+ * is current when it answers. A reset landing before the first answer moves the lookup to the
+ * replacement (switchMap drops the superseded query), so a loading emission is never mistaken
+ * for "no such closure" (CodeRabbit, #2700).
+ */
+export function readClosure(storeDB: RegisterStoreDatabase, identity: ClosureIdentity) {
+	if (!storeDB?.collections.closures) return Promise.resolve(null);
+	return firstValueFrom(
+		observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
+			switchMap((closures) => (closures ? closureQuery(closures, identity) : of(null)))
+		),
+		{ defaultValue: null }
+	);
+}
+
+/** Absent → null (unavailable), not [] (loaded empty); the Reports list is unscoped. */
+export function observeClosures(storeDB: RegisterStoreDatabase): Observable<ClosureRow[] | null> {
+	return observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
+		switchMap((closures) =>
+			closures
+				? closures.find().$.pipe(
+						map((rows) => rows.map((row) => row.toMutableJSON())),
+						startWith(null)
+					)
+				: of(null)
+		)
+	);
+}
+
+/** Absent → null; only an answered query may invalidate or reopen checkout. */
+export function observeOpenSessionPresence(
+	storeDB: RegisterStoreDatabase,
+	scope: { sessionId: string } | { registerId: string }
+): Observable<boolean | null> {
+	return observeFollowedCollection<RegisterSessionRow>(storeDB, 'register_sessions').pipe(
+		switchMap((sessions) =>
+			sessions
+				? sessions
+						.findOne({
+							selector: {
+								...openSessionSelector,
+								...('sessionId' in scope
+									? { id: scope.sessionId }
+									: { register_id: scope.registerId }),
+							},
+						})
+						.$.pipe(map(Boolean), startWith(null))
 				: of(null)
 		)
 	);
