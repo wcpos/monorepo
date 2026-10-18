@@ -16,6 +16,7 @@
     "./combobox": "./src/combobox/index.ts",
     "./combobox/types": "./src/combobox/types.ts",
     "./data-table/types": "./src/data-table/types.ts",
+    "./derivation": "./src/derivation/index.tsx",
     "./dialog": "./src/dialog/index.tsx",
     "./docs-link": "./src/docs-link/index.tsx",
     "./dnd": "./src/dnd/index.ts",
