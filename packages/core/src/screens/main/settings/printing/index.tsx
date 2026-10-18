@@ -11,14 +11,11 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import { type ActiveTemplate, observeTemplatePrinterOverrides } from '@wcpos/query';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
-import type {
-	PrinterProfileDocument,
-	TemplateDocument,
-	TemplatePrinterOverrideDocument,
-} from '@wcpos/database';
+import type { PrinterProfileDocument } from '@wcpos/database';
 
 import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
@@ -69,15 +66,13 @@ export function PrintingSettings() {
 		};
 	}, [printerService]);
 
-	// Subscribe to all overrides
+	// Subscribe to all overrides through the reset-following named read (CodeRabbit, #2694).
 	const overrides$ = React.useMemo(
 		() =>
-			storeDB.collections.template_printer_overrides.find().$.pipe(
+			observeTemplatePrinterOverrides(storeDB).pipe(
 				map((docs) => {
 					const m = new Map<string, string>();
-					for (const doc of docs as TemplatePrinterOverrideDocument[]) {
-						m.set(doc.template_id, doc.printer_profile_id);
-					}
+					for (const doc of docs) m.set(doc.template_id, doc.printer_profile_id);
 					return m;
 				})
 			),
@@ -86,7 +81,7 @@ export function PrintingSettings() {
 	const overrides = useObservableState(overrides$, new Map<string, string>());
 
 	const autoMatchLabel = React.useCallback(
-		(tmpl: TemplateDocument) => {
+		(tmpl: ActiveTemplate) => {
 			const templateInfo = {
 				id: String(tmpl.id),
 				output_type: tmpl.output_type ?? 'html',

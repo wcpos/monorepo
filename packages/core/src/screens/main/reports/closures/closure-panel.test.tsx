@@ -81,6 +81,9 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
+	// The resolved-printer hook reads the overrides through this named read; the test's
+	// override rows (`mockOverrides`) drive the Thermal route exactly as the collection did.
+	observeTemplatePrinterOverrides: () => mockOverrides,
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({

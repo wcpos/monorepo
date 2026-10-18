@@ -42,7 +42,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { useDocField } from '@wcpos/query';
+import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
 import { NO_STORE, PROTECTED_ORDER_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -175,7 +175,7 @@ export function EditOrderMetaForm({
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
 			if (
-				!['pos-open', 'pos-partial', 'pending'].includes(fields.status) ||
+				!(OPEN_ORDER_STATUSES as readonly string[]).includes(fields.status) ||
 				cashier_id !== String(cashierID)
 			) {
 				setCurrentOrderID('');

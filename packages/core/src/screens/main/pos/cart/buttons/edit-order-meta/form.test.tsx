@@ -106,6 +106,8 @@ jest.mock('@wcpos/query', () => {
 		}
 	}
 	return {
+		OPEN_ORDER_STATUSES: jest.requireActual('../../../../../../../../query/src/open-orders-scope')
+			.OPEN_ORDER_STATUSES,
 		useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
 		WriteDeferredError,
 		WriteOutcomeError: class WriteOutcomeError extends Error {},

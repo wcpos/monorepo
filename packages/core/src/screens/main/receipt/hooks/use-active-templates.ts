@@ -1,10 +1,8 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
-import type { TemplateDocument } from '@wcpos/database';
-import { useDocField } from '@wcpos/query';
+import { type ActiveTemplate, observeActiveTemplates, useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
@@ -20,7 +18,7 @@ import { useTemplatesSync } from './use-templates-sync';
 export function useActiveTemplates(
 	type: 'receipt' | 'report' | 'closure' = 'receipt',
 	storeId?: number
-): TemplateDocument[] {
+): ActiveTemplate[] {
 	return useActiveTemplatesState(type, storeId).templates;
 }
 
@@ -28,7 +26,7 @@ export function useActiveTemplates(
 export function useActiveTemplatesState(
 	type: 'receipt' | 'report' | 'closure' = 'receipt',
 	storeId?: number
-): { templates: TemplateDocument[]; synced: boolean } {
+): { templates: ActiveTemplate[]; synced: boolean } {
 	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
@@ -46,24 +44,11 @@ export function useActiveTemplatesState(
 		(value) => value.active_templates ?? []
 	) as TemplateAssignment[];
 
-	// Query all receipt templates from RxDB
-	const query = React.useMemo(() => {
-		return storeDB.templates.find({
-			selector: { type, ...(type === 'closure' ? { closure_store_id: storeId ?? store.id } : {}) },
-			sort: [{ menu_order: 'asc' }],
-		});
-	}, [storeDB, type, storeId, store.id]);
-
 	const allTemplates$ = React.useMemo(
-		() =>
-			query.$.pipe(
-				map((docs: TemplateDocument[]) =>
-					docs.filter((doc) => doc.is_virtual || doc.status === 'publish')
-				)
-			),
-		[query]
+		() => observeActiveTemplates(storeDB, { type, storeId: storeId ?? store.id }),
+		[storeDB, type, storeId, store.id]
 	);
-	const allTemplates = useObservableState(allTemplates$, [] as TemplateDocument[]);
+	const allTemplates = useObservableState(allTemplates$, [] as ActiveTemplate[]);
 
 	// Apply per-store filtering for Pro users
 	const templates = React.useMemo(() => {

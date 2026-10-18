@@ -1,7 +1,7 @@
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { toMinor } from '@wcpos/order-math';
+import { isFinalPaymentStatus, toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
 import type {
@@ -120,7 +120,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		const status = response.payment.status;
 		// Publish finality with the mirrored row, not after returning through another await:
 		// checkout can unmount when the paid row lands, before it consumes the outcome.
-		if (status === 'captured' || status === 'failed' || status === 'voided') {
+		if (isFinalPaymentStatus(status)) {
 			finish(
 				status === 'voided' && (result?.outcome === 'declined' || intentRefused)
 					? 'failed'

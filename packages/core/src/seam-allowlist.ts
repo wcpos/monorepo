@@ -978,7 +978,22 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/checkout/use-rejected-order-saves.ts :: raw query construction :: useRejectedOrderSavesSync :: mutations.find({ selector: { status: { $in: ['rejected', 'conflicted', 'needs-revision'] }, collectionName: { $eq: 'orders' }, }, }) :: 1",
 	'screens/main/pos/checkout/use-rejected-order-saves.ts :: storage token :: useRejectedOrderSavesSync :: database.collections :: 1',
 	'screens/main/pos/checkout/use-rejected-order-saves.ts :: storage token :: useRejectedOrderSavesSync :: engine.db$ :: 1',
+	// ADR 0033 PR 4: named store-local reads return plain rows.
+	"screens/main/receipt/hooks/use-active-templates.ts :: raw query construction :: useActiveTemplatesState :: storeDB.templates.find({ selector: { type, ...(type === 'closure' ? { closure_store_id: storeId ?? store.id } : {}) }, sort: [{ menu_order: 'asc' }], }) :: 1",
+	"screens/main/receipt/hooks/use-active-templates.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/receipt/hooks/use-resolved-printer.ts :: raw query construction :: useResolvedPrinter :: storeDB.collections.template_printer_overrides.find() :: 1',
+	"screens/main/receipt/hooks/use-resolved-printer.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/receipt/hooks/use-resolved-printer.ts :: storage token :: useResolvedPrinter :: storeDB.collections :: 1',
+	"screens/main/receipt/hooks/use-template-renderer.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/receipt/template-switcher.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/settings/printer/printer-profile.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printer/use-available-printer-profiles.ts :: raw query construction :: useAvailablePrinterProfiles :: storeDB.collections.printer_profiles .find() :: 1',
+	"screens/main/settings/printer/use-available-printer-profiles.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printer/use-available-printer-profiles.ts :: storage token :: useAvailablePrinterProfiles :: storeDB.collections :: 1',
+	"screens/main/settings/printing/template-row.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: storeDB.collections.template_printer_overrides.find() :: 1',
+	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 4',
 ];
-export const SEAM_RETIRED_FLOOR = 71;
+export const SEAM_RETIRED_FLOOR = 85;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'af51562682223f0785087aee45c50581cdc0e04c6fe7fdab4f4ed03707bffa6d';
+	'b6f46720000be80e4dd533a8daa404b5245444fc3d981c5ad61871e85de3d18e';

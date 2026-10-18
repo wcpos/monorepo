@@ -71,6 +71,10 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),
 }));
 
+jest.mock('@wcpos/sync-engine', () =>
+	jest.requireActual('../../../../../../../sync-engine/src/write-path/local-work-guard')
+);
+
 jest.mock('rxdb', () => ({ isRxDocument: () => true }));
 
 /**

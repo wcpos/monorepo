@@ -13,6 +13,7 @@ import {
 	derive,
 	fromMinor,
 	isLivePaymentStatus,
+	isSettledPaymentRow,
 	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
@@ -280,9 +281,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
 		const planRows = rows
 			.slice(storedPlan?.from ?? rows.length)
-			.filter(
-				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-			)
+			.filter(isSettledPaymentRow)
 			.map((row) => ({
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -423,9 +422,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
 	const rowsSinceFrom = rows
 		.slice(state.plan?.from ?? rows.length)
-		.filter(
-			(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-		)
+		.filter(isSettledPaymentRow)
 		.map((row) => ({
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -631,20 +628,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
 			else latest[index] = row;
-			const counts = (candidate: PaymentRow) =>
-				candidate.status === 'captured' ||
-				(candidate.status === 'authorized' && candidate.recorded_offline);
-			const paidAfter = latest.filter(counts).reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			const paidAfter = latest
+				.filter(isSettledPaymentRow)
+				.reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
 			const action: TenderAction = {
 				type: 'tender-recorded',
 				balanceMinor: Math.max(0, toMinor(order.getLatest().payload.total, dp) - paidAfter),
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
-					.filter(
-						(candidate) =>
-							candidate.status === 'captured' ||
-							(candidate.status === 'authorized' && candidate.recorded_offline)
-					)
+					.filter(isSettledPaymentRow)
 					.map((candidate) => ({
 						amountMinor: toMinor(candidate.amount, dp),
 						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
