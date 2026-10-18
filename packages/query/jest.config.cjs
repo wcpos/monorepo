@@ -30,6 +30,7 @@ module.exports = {
 	testEnvironment: 'jsdom',
 	globals: { __DEV__: true },
 	moduleNameMapper: {
+		'^@wcpos/database/create-db$': '<rootDir>/tests/__mocks__/create-db.ts',
 		'^expo-crypto$': '<rootDir>/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/utils/src/logger$': '<rootDir>/tests/__mocks__/logger.ts',
 		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',

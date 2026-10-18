@@ -8,10 +8,14 @@ const itRolling = TRANSLATION_VERSION === 'next' ? it : it.skip;
 
 function createBackend(options: { translationsState?: any } = {}) {
 	const backend = new RxDBBackend();
+	const translationsState = options.translationsState;
 	backend.init(
 		{},
 		{
-			translationsState: options.translationsState ?? null,
+			translationsState: translationsState
+				? { get: (key: string) => translationsState[key] }
+				: undefined,
+			userDB: { states: { translations_v2: translationsState } },
 		}
 	);
 	return backend;

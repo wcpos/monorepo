@@ -1,3 +1,5 @@
+import type { CurrentSessionIDs, HydratedStoreSession, UserDatabase } from '@wcpos/query/user-db';
+
 import { registerEngineScopeSwitcher } from './engine-scope-port';
 import {
 	clearStoreSession,
@@ -6,8 +8,6 @@ import {
 	SIGNED_OUT_SESSION,
 } from './store-session';
 
-import type { CurrentSessionIDs, hydrateUserSession, SessionAppState } from './hydration-steps';
-
 const ids = { siteID: 'site-1', wpCredentialsID: 'credentials-1', storeID: 'store-2' };
 const session = {
 	site: { uuid: ids.siteID },
@@ -15,14 +15,18 @@ const session = {
 	store: { localID: ids.storeID },
 	storeDB: {},
 	extraData: {},
-} as Awaited<ReturnType<typeof hydrateUserSession>>;
+} as HydratedStoreSession;
 
 function pointerState() {
 	let current: CurrentSessionIDs | null = { ...ids, storeID: 'store-1' };
 	const set = jest.fn(async (_key: string, update: () => CurrentSessionIDs | null) => {
 		current = update();
 	});
-	return { appState: { set } as unknown as SessionAppState, set, current: () => current };
+	return {
+		userDB: { states: { v2: { set } } } as unknown as UserDatabase,
+		set,
+		current: () => current,
+	};
 }
 
 afterEach(() => registerEngineScopeSwitcher(null));
@@ -33,7 +37,7 @@ describe('commitStoreSession', () => {
 		const switchEngineScope = jest.fn();
 		registerEngineScopeSwitcher(switchEngineScope);
 		await expect(
-			commitStoreSession(state.appState, { ids, session: { ...session, store: undefined } })
+			commitStoreSession(state.userDB, { ids, session: { ...session, store: undefined } })
 		).rejects.toBeInstanceOf(IncompleteStoreSessionError);
 		expect(switchEngineScope).not.toHaveBeenCalled();
 		expect(state.set).not.toHaveBeenCalled();
@@ -49,7 +53,7 @@ describe('commitStoreSession', () => {
 				})
 		);
 		registerEngineScopeSwitcher(switchEngineScope);
-		const committing = commitStoreSession(state.appState, { ids, session });
+		const committing = commitStoreSession(state.userDB, { ids, session });
 		expect(switchEngineScope).toHaveBeenCalledWith(session);
 		expect(state.set).not.toHaveBeenCalled();
 		resolveEngine();
@@ -64,7 +68,7 @@ describe('commitStoreSession', () => {
 		registerEngineScopeSwitcher(async () => {
 			throw error;
 		});
-		await expect(commitStoreSession(state.appState, { ids, session })).rejects.toBe(error);
+		await expect(commitStoreSession(state.userDB, { ids, session })).rejects.toBe(error);
 		expect(state.set).not.toHaveBeenCalled();
 		expect(state.current()).toBe(previous);
 	});
@@ -74,7 +78,7 @@ describe('commitStoreSession', () => {
 		const error = new Error('persistence rejected');
 		state.set.mockRejectedValue(error);
 		const publish = jest.fn();
-		await expect(commitStoreSession(state.appState, { ids, session }).then(publish)).rejects.toBe(
+		await expect(commitStoreSession(state.userDB, { ids, session }).then(publish)).rejects.toBe(
 			error
 		);
 		expect(publish).not.toHaveBeenCalled();
@@ -82,7 +86,7 @@ describe('commitStoreSession', () => {
 
 	it('bootstrap commit succeeds without an engine port', async () => {
 		const state = pointerState();
-		await expect(commitStoreSession(state.appState, { ids, session })).resolves.toBe(session);
+		await expect(commitStoreSession(state.userDB, { ids, session })).resolves.toBe(session);
 		expect(state.current()).toEqual(ids);
 	});
 
@@ -90,7 +94,7 @@ describe('commitStoreSession', () => {
 		const state = pointerState();
 		const switchEngineScope = jest.fn();
 		registerEngineScopeSwitcher(switchEngineScope);
-		await expect(clearStoreSession(state.appState)).resolves.toBe(SIGNED_OUT_SESSION);
+		await expect(clearStoreSession(state.userDB)).resolves.toBe(SIGNED_OUT_SESSION);
 		expect(SIGNED_OUT_SESSION).toStrictEqual({
 			site: undefined,
 			wpCredentials: undefined,
