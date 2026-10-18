@@ -16,6 +16,7 @@ import type {
 import { backoffMs, MAX_SEND_ATTEMPTS } from '@wcpos/utils/outbox-backoff';
 
 import { engineCollection, type EngineCollection } from '../records/engine-collection';
+import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
 	adoptCounters,
@@ -26,6 +27,93 @@ import {
 } from './register-document';
 import { failureFacts } from './failure-facts';
 import { recordRegisterFact } from './audit';
+
+/**
+ * A cash movement as the server serves it (`Cash_Movement_Store`: `SELECT *`, and the POST
+ * echo): the table's columns, with the cashier under `actor`. It has no `created_by` and no
+ * outbox fields, so it is never written to the collection as-is — `movementFromServer` maps it.
+ */
+export type ServerMovementRow = Omit<CashMovementRow, 'created_by' | keyof typeof synced> & {
+	actor: number | null;
+};
+
+/** The local movement without its outbox fields: what the server can speak for. */
+type MovementContent = Omit<CashMovementRow, keyof typeof synced>;
+
+/**
+ * The server's movement row in the local shape: `actor` is `created_by`; unknown keys drop.
+ * The declared return type is the drift alarm — a column added to the schema and served by
+ * the server fails the build here instead of vanishing on every refresh.
+ */
+export function movementFromServer(server: ServerMovementRow): MovementContent {
+	const { id, session_id, type, amount, reason, created_at_gmt, actor, voids, voided_by } = server;
+	return {
+		id,
+		session_id,
+		type,
+		amount,
+		reason,
+		created_at_gmt,
+		created_by: actor ?? null,
+		voids: voids ?? null,
+		voided_by: voided_by ?? null,
+	};
+}
+
+/**
+ * The one rule for landing a server movement over the local one: the server's columns win,
+ * except a local reversal claim (`voided_by`) whose reversal is still on its way to the
+ * server, which must survive or the closure renders the movement as never voided. The server
+ * lets `voided_by` change only while it is null, so a void it already holds (made on another
+ * device) is final and replaces the claim; and a claim whose reversal the server refused
+ * (`failed`) is dropped, since the refusal leaves the original standing. Used by the POST
+ * acknowledgement and by the refresh, which keep their own pending policies.
+ */
+export function mergeServerMovement(
+	local: CashMovementRow,
+	server: MovementContent,
+	claimStands: boolean
+) {
+	return {
+		...local,
+		...server,
+		...synced,
+		voided_by: server.voided_by ?? (claimStands ? local.voided_by : null),
+	};
+}
+
+/**
+ * Whether a local reversal claim still stands. A pending reversal is on its way and a synced
+ * one the server already reflects: the claim stands. A reversal the server REFUSED (`failed`)
+ * retires it. A reversal row that does not exist is either `voidMovement` mid-flight (it
+ * claims the target first and inserts the row after; the id is in `reversalsInFlight`) and
+ * the claim stands, or an orphan (the insert failed, or the process died between the two
+ * writes; nothing will ever create the row) and the claim yields to the server.
+ */
+async function claimStands(movements: CashMovementCollection, local: CashMovementRow) {
+	if (!local.voided_by) return false;
+	const reversal = await movements.findOne(local.voided_by).exec();
+	if (!reversal) return reversalsInFlight.has(local.voided_by);
+	return reversal.getLatest().sync_status !== 'failed';
+}
+
+/** Adopt a server movement row over the local one: merged, never replaced (see `adoptSessionRow`). */
+export async function adoptMovementRow(
+	movements: CashMovementCollection,
+	server: ServerMovementRow
+) {
+	const adopted = movementFromServer(server);
+	const local = await movements.findOne(adopted.id).exec();
+	if (!local) {
+		await movements.incrementalUpsert({ ...adopted, ...synced });
+		return;
+	}
+	await local.incrementalModify(async (current) =>
+		current.sync_status === 'pending'
+			? current
+			: mergeServerMovement(current, adopted, await claimStands(movements, current))
+	);
+}
 
 export type SessionHttp = {
 	get: (
@@ -371,12 +459,10 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					...(row.voids ? { voids: row.voids } : {}),
 				});
 				try {
-					await row.incrementalModify((local) => ({
-						...local,
-						...(response.data as CashMovementRow),
-						...synced,
-						voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
-					}));
+					const accepted = movementFromServer(response.data as ServerMovementRow);
+					await row.incrementalModify(async (local) =>
+						mergeServerMovement(local, accepted, await claimStands(movements, local))
+					);
 				} catch (error) {
 					// The store already accepted this movement; see the `persist` note in send().
 					throw Object.assign(error instanceof Error ? error : new Error(String(error)), {

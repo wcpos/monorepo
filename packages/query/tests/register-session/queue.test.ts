@@ -4,7 +4,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 import { getLogger } from '@wcpos/utils/logger';
-import type { StoreDatabase, UserDatabase } from '@wcpos/database';
+import type { CashMovementRow, StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
@@ -14,12 +14,17 @@ import {
 	closeSession,
 	openSession,
 	recordMovement,
+	retryMovement,
 	startCounting,
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
-import { drainRegisterSessionQueue } from '../../src/register-session/queue';
+import {
+	drainRegisterSessionQueue,
+	type ServerMovementRow,
+} from '../../src/register-session/queue';
 import { refreshSessions } from '../../src/register-session/refresh';
+import { reversalsInFlight } from '../../src/register-session/reversal-claims';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
@@ -296,6 +301,202 @@ it('keeps a cashier transition that lands while the list row is being adopted', 
 		status: 'counting',
 		pending_status: 'counting',
 		sync_status: 'pending',
+	});
+});
+/** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
+const serverMovementRow = (
+	local: CashMovementRow,
+	server: Partial<Pick<ServerMovementRow, 'voided_by'>> = {}
+): ServerMovementRow => ({
+	id: local.id,
+	session_id: local.session_id,
+	type: local.type,
+	amount: local.amount,
+	reason: local.reason,
+	actor: local.created_by ?? 0,
+	voids: local.voids ?? null,
+	// The server knows nothing of a void this device has not posted yet.
+	voided_by: server.voided_by ?? null,
+	created_at_gmt: local.created_at_gmt,
+});
+it('adopts a server movement row in the local shape: `actor` is `created_by`, nothing else', async () => {
+	const row = await open();
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	http.post.mockImplementation(async (url) => ({
+		data:
+			url === 'movements'
+				? serverMovementRow(movement.toJSON())
+				: { ...row.getLatest().toJSON(), status: 'open' },
+	}));
+	await drain();
+	expect(movement.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', created_by: 7 });
+	expect(movement.getLatest().toJSON()).not.toHaveProperty('actor');
+});
+it('a refresh keeps a reversal claim the server has not acknowledged, and the cashier', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	// Seeded as synced rather than drained, so the refresh alone is under test here.
+	await target.incrementalPatch({ sync_status: 'synced' });
+	// The void claims the target locally; its reversal is still pending when the refresh lands.
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().toJSON()).toMatchObject({
+		sync_status: 'synced',
+		created_by: 7,
+		voided_by: reversal.id,
+	});
+	expect(target.getLatest().toJSON()).not.toHaveProperty('actor');
+	expect(reversal.getLatest().sync_status).toBe('pending');
+});
+it('a refresh drops a reversal claim whose reversal the server refused', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await target.incrementalPatch({ sync_status: 'synced' });
+	const reversal = await voidMovement(db, target.id, 7);
+	// The refusal leaves the original standing on the server; the reversal row is `failed`.
+	await reversal.incrementalPatch({ sync_status: 'failed', sync_error: 'void_refused' });
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', voided_by: null });
+	// Retrying the refused reversal restores the claim, so a close before the server's next
+	// snapshot still records the target as voided; the claim then stands through a refresh.
+	await retryMovement(db, reversal.id);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+});
+it.each([
+	['mid-flight (voidMovement has claimed, not yet inserted)', true, 'reversal-not-yet-written'],
+	['an orphan (the insert failed or the process died in between)', false, null],
+])('a refresh with a claim naming a missing reversal row that is %s', async (_, inFlight, kept) => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	// `voidMovement` claims the target first and inserts the reversal after; this is the gap.
+	await target.incrementalPatch({ sync_status: 'synced', voided_by: 'reversal-not-yet-written' });
+	if (inFlight) reversalsInFlight.add('reversal-not-yet-written');
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	try {
+		await refreshSessions({ registerId: 'register', http, storeDB: db });
+	} finally {
+		reversalsInFlight.delete('reversal-not-yet-written');
+	}
+	expect(target.getLatest().voided_by).toBe(kept);
+});
+it('a void whose reversal insert fails rolls its claim back and leaves nothing in flight', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	jest.spyOn(db.cash_movements, 'incrementalUpsert').mockRejectedValueOnce(new Error('disk'));
+	await expect(voidMovement(db, target.id, 7)).rejects.toThrow('disk');
+	expect(target.getLatest().voided_by).toBeNull();
+	expect(reversalsInFlight.size).toBe(0);
+	// The next tap starts clean and creates the reversal.
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	expect(reversalsInFlight.size).toBe(0);
+});
+it('a refresh adopts a void made on another device, and keeps a movement posted meanwhile', async () => {
+	const row = await open();
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	http.post.mockImplementation(async (url) => ({
+		data:
+			url === 'movements'
+				? serverMovementRow(movement.toJSON())
+				: { ...row.getLatest().toJSON(), status: 'open' },
+	}));
+	await drain();
+	const listRow = serverListRow(row.getLatest().toJSON());
+	const served = serverMovementRow(movement.getLatest().toJSON(), { voided_by: 'elsewhere' });
+	let raced = false;
+	http.get.mockImplementation(async (url: string) => {
+		if (url === 'sessions') return { data: [listRow] };
+		// Once, queued and not awaited: a local write lands between the adoption's read and its write.
+		if (!raced) {
+			raced = true;
+			void movement.getLatest().incrementalPatch({ sync_status: 'pending', reason: 'Edited' });
+		}
+		return { data: { ...listRow, expected: { cash: '105' }, movements: [served] } };
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	// The pending local write is kept whole; the server's value for it waits for the next read.
+	expect(movement.getLatest().toJSON()).toMatchObject({ sync_status: 'pending', reason: 'Edited' });
+	expect(movement.getLatest().voided_by).toBeFalsy();
+	await movement.getLatest().incrementalPatch({ sync_status: 'synced' });
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(movement.getLatest().toJSON()).toMatchObject({
+		sync_status: 'synced',
+		voided_by: 'elsewhere',
+		created_by: 7,
 	});
 });
 it('closes a predecessor before creating its successor on the same register', async () => {

@@ -1,10 +1,15 @@
 import { Subject } from 'rxjs';
 
-import type { CashMovementRow, RegisterSessionRow } from '@wcpos/database';
+import type { RegisterSessionRow } from '@wcpos/database';
 
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { recordRegisterFact } from './audit';
-import { adoptSessionRow, type SessionHttp, synced } from './queue';
+import {
+	adoptMovementRow,
+	adoptSessionRow,
+	type ServerMovementRow,
+	type SessionHttp,
+} from './queue';
 
 export const sessionRefreshRequests = new Subject<{
 	storeDB: RegisterStoreDatabase;
@@ -40,7 +45,7 @@ export async function refreshSessions({
 			refund_ids?: number[];
 			ledger_rows?: RegisterSessionRow['server_ledger_rows'];
 			refunds?: RegisterSessionRow['server_refunds'];
-			movements: CashMovementRow[];
+			movements: ServerMovementRow[];
 			// Omitted for a cashier without the reports capability: the count is blind.
 			expected?: Record<string, string>;
 			sales_count?: number;
@@ -63,11 +68,7 @@ export async function refreshSessions({
 			server_refunds: detail.refunds ?? null,
 			server_sales_count: detail.sales_count ?? null,
 		});
-		for (const movement of detail.movements ?? []) {
-			const local = await movements.findOne(movement.id).exec();
-			if (local?.sync_status === 'pending') continue;
-			await movements.incrementalUpsert({ ...movement, ...synced });
-		}
+		for (const movement of detail.movements ?? []) await adoptMovementRow(movements, movement);
 	}
 	const expired = await sessions
 		.find({
