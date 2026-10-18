@@ -23,15 +23,18 @@ type Movement = {
 	voided_by?: string | null;
 	voids?: string | null;
 };
-/** The detail route's drawer terms, from the same snapshot as `server_expected`. */
+/**
+ * The detail route's drawer terms, from the same snapshot as `server_expected`. Every field is
+ * optional: a partial block reads its missing terms as zero rather than failing adoption.
+ */
 type ServerTerms = {
-	float: string;
-	cash_sales: { amount: string; count: number };
-	paid_in: readonly { amount: string; reason?: string | null }[];
-	paid_out: { amount: string; count: number; note?: string | null };
-	cash_refunds: { amount: string; count: number };
-	no_sales: number;
-	voids: number;
+	float?: string;
+	cash_sales?: { amount?: string; count?: number };
+	paid_in?: readonly { id?: string; amount?: string; reason?: string | null }[];
+	paid_out?: { amount?: string; count?: number; note?: string | null };
+	cash_refunds?: { amount?: string; count?: number };
+	no_sales?: number;
+	voids?: number;
 };
 /** Shared drawer/closure debits, in four-decimal minor units. */
 export function attributeRefunds(
@@ -203,8 +206,8 @@ export function deriveDrawerTerms(
 ) {
 	const expected = deriveExpected(input, baselineHas).cash;
 	const full = localTerms(input);
-	const server = input.session.server_terms;
-	if (!server || !baselineHas) {
+	const terms = input.session.server_terms;
+	if (!terms || !baselineHas) {
 		return {
 			float: fromMinor(full.float, 4),
 			cashSales: { amount: fromMinor(full.cashSales, 4), count: full.cashSalesCount },
@@ -220,29 +223,69 @@ export function deriveDrawerTerms(
 			expected,
 		};
 	}
+	// A missing term is zero; the float, which both views share, falls back to the session's.
+	const server = {
+		float: terms.float ?? input.session.counted_float,
+		cash_sales: { amount: terms.cash_sales?.amount ?? '0', count: terms.cash_sales?.count ?? 0 },
+		paid_in: terms.paid_in ?? [],
+		paid_out: {
+			amount: terms.paid_out?.amount ?? '0',
+			count: terms.paid_out?.count ?? 0,
+			note: terms.paid_out?.note,
+		},
+		cash_refunds: {
+			amount: terms.cash_refunds?.amount ?? '0',
+			count: terms.cash_refunds?.count ?? 0,
+		},
+		no_sales: terms.no_sales ?? 0,
+		voids: terms.voids ?? 0,
+	};
 	const known = localTerms(baselineView(input, baselineHas));
 	const plus = (amount: string, delta: number) => fromMinor(toMinor(amount, 4) + delta, 4);
-	const voidedCash = sumMinor(
-		voidedBaselineLegs(input, baselineHas).filter((row) => row.kind === 'cash')
+	const voidedLegs = voidedBaselineLegs(input, baselineHas).filter((row) => row.kind === 'cash');
+	// A voided leg's sale leaves the count once its order has no captured cash leg left.
+	const capturedOrders = new Set(
+		input.ledgerRowsBySession
+			.filter(
+				(row) =>
+					row.session_id === input.session.id && row.status === 'captured' && row.kind === 'cash'
+			)
+			.map((row) => row.order)
 	);
+	const voidedSales = voidedLegs.every((row) => row.order)
+		? new Set(voidedLegs.map((row) => row.order).filter((order) => !capturedOrders.has(order))).size
+		: voidedLegs.length;
 	// Paid-ins are listed: the server's, less any this device has since voided, then the new ones.
 	const paidIn = server.paid_in.map((row) => ({
-		amount: display(row.amount),
+		id: row.id,
+		minor: toMinor(row.amount ?? '0', 4),
 		note: row.reason ?? undefined,
 	}));
 	const fullIds = new Set(full.paidIn.map((row) => row.id));
+	let correction = 0;
 	for (const row of known.paidIn.filter(({ id }) => !fullIds.has(id))) {
-		const at = paidIn.findIndex(
-			(entry) =>
-				toMinor(entry.amount, 4) === toMinor(row.amount, 4) &&
-				(entry.note ?? null) === (row.reason ?? null)
-		);
-		// The server lists no ids; with no matching entry the debit still has to show.
+		const amount = toMinor(row.amount, 4);
+		let at = paidIn.findIndex((entry) => entry.id === row.id);
+		// Older servers list no ids: match by amount and reason among the entries without one.
+		if (at < 0)
+			at = paidIn.findIndex(
+				(entry) =>
+					entry.id === undefined &&
+					entry.minor === amount &&
+					(entry.note ?? null) === (row.reason ?? null)
+			);
 		if (at >= 0) paidIn.splice(at, 1);
-		else paidIn.push({ amount: fromMinor(-toMinor(row.amount, 4), 4), note: row.reason });
+		else correction += amount;
+	}
+	// An unmatched debit comes off the listed entries from the end, never as a negative row.
+	for (let at = paidIn.length - 1; at >= 0 && correction > 0; at--) {
+		const taken = Math.min(paidIn[at].minor, correction);
+		paidIn[at].minor -= taken;
+		correction -= taken;
+		if (!paidIn[at].minor) paidIn.splice(at, 1);
 	}
 	for (const row of full.paidIn.filter(({ id }) => !baselineHas(id)))
-		paidIn.push({ amount: display(row.amount), note: row.reason });
+		paidIn.push({ id: row.id, minor: toMinor(row.amount, 4), note: row.reason });
 	const paidOutCount = server.paid_out.count + full.paidOut.length - known.paidOut.length;
 	// With one paid-out left, it is the one new here, or else the server's only one.
 	const fresh = full.paidOut.filter(({ id }) => !baselineHas(id));
@@ -258,10 +301,13 @@ export function deriveDrawerTerms(
 		// Both views share the session's float; the server's figure is the anchor.
 		float: display(server.float),
 		cashSales: {
-			amount: plus(server.cash_sales.amount, full.cashSales - voidedCash - known.cashSales),
-			count: server.cash_sales.count + full.cashSalesCount - known.cashSalesCount,
+			amount: plus(
+				server.cash_sales.amount,
+				full.cashSales - sumMinor(voidedLegs) - known.cashSales
+			),
+			count: server.cash_sales.count + full.cashSalesCount - known.cashSalesCount - voidedSales,
 		},
-		paidIn,
+		paidIn: paidIn.map(({ minor, note }) => ({ amount: fromMinor(minor, 4), note })),
 		paidOut: {
 			amount: plus(server.paid_out.amount, sumMinor(full.paidOut) - sumMinor(known.paidOut)),
 			count: paidOutCount,

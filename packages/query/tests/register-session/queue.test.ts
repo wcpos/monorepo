@@ -24,6 +24,7 @@ import {
 	type ServerMovementRow,
 } from '../../src/register-session/queue';
 import { refreshSessions } from '../../src/register-session/refresh';
+import { deriveDrawerTerms } from '../../src/register-session/expected';
 import { reversalsInFlight } from '../../src/register-session/reversal-claims';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -287,6 +288,41 @@ it('keeps the server anchor through the list adoption while the detail read is i
 		server_movement_ids: [],
 		approval_required: true,
 		sync_status: 'synced',
+	});
+});
+it('adopts and derives a partial terms block rather than refusing the session', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	const listRow = serverListRow(row.getLatest().toJSON());
+	const partial = { float: '100.0000', cash_sales: { amount: '579.0000', count: 3 } };
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '679.0000' },
+						terms: partial,
+						as_of_gmt: '2026-10-18T09:05:00Z',
+						movements: [],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	const session = row.getLatest().toJSON();
+	expect(session).toMatchObject({ server_expected: { cash: '679.0000' }, server_terms: partial });
+	expect(
+		deriveDrawerTerms({ session, movements: [], ledgerRowsBySession: [] }, () => false)
+	).toEqual({
+		float: '100.0000',
+		cashSales: { amount: '579.0000', count: 3 },
+		paidIn: [],
+		paidOut: { amount: '0.0000', count: 0, note: undefined },
+		cashRefunds: { amount: '0.0000', count: 0 },
+		noSales: 0,
+		voids: 0,
+		expected: '679.0000',
 	});
 });
 it('keeps a cashier transition that lands while the list row is being adopted', async () => {

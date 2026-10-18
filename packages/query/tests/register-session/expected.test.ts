@@ -446,27 +446,69 @@ describe('drawer terms anchored to the server terms', () => {
 			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000', 'voided')],
 		};
 		const terms = deriveDrawerTerms(input, baselineHas);
-		expect(terms.cashSales.amount).toBe('500.0000');
+		// Its order has no captured cash leg left, so the sale leaves the count too.
+		expect(terms.cashSales).toEqual({ amount: '500.0000', count: 2 });
 		expect(terms.expected).toBe('645.0000');
 		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+		// A split sale whose other cash leg still stands stays one sale.
+		const split = deriveDrawerTerms(
+			{ ...input, ledgerRowsBySession: [...input.ledgerRowsBySession, leg('leg1b', 'o1', '1')] },
+			(id) => id === 'leg1b' || baselineHas(id)
+		);
+		expect(split.cashSales.count).toBe(3);
 	});
 
-	it('drops a baseline paid-in voided here from the server list', () => {
+	const voidedChange = [
+		outMilk,
+		{ id: 'in1', session_id: 'S', type: 'paid_in', amount: '50', reason: 'change' },
+		{ id: 'v1', session_id: 'S', type: 'void', amount: '50', voids: 'in1' },
+	];
+	const hasChange = (id: string | number | null | undefined) => id === 'in1' || baselineHas(id);
+
+	it('drops a baseline paid-in voided here from the server list by its id', () => {
 		const input = {
-			session,
-			movements: [
-				outMilk,
-				{ id: 'in1', session_id: 'S', type: 'paid_in', amount: '50', reason: 'change' },
-				{ id: 'v1', session_id: 'S', type: 'void', amount: '50', voids: 'in1' },
-			],
+			// The id decides, even where the amount and reason would point elsewhere.
+			session: {
+				...session,
+				server_terms: {
+					...serverTerms,
+					paid_in: [{ id: 'in1', amount: '50.0000', reason: 'float top-up' }],
+				},
+			},
+			movements: voidedChange,
 			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000')],
 		};
-		const has = (id: string | number | null | undefined) => id === 'in1' || baselineHas(id);
-		const terms = deriveDrawerTerms(input, has);
+		const terms = deriveDrawerTerms(input, hasChange);
 		expect(terms.paidIn).toEqual([]);
 		expect(terms.voids).toBe(1);
 		expect(terms.expected).toBe('674.0000');
 		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
+	it('matches by amount and reason when the server lists no ids, never listing a negative', () => {
+		const input = {
+			session,
+			movements: voidedChange,
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000')],
+		};
+		const matched = deriveDrawerTerms(input, hasChange);
+		expect(matched.paidIn).toEqual([]);
+		expect(sum(matched)).toBe(toMinor(matched.expected, 4));
+		// Nothing matches: the debit comes off the listed total instead of a negative row.
+		const unmatched = deriveDrawerTerms(
+			{
+				...input,
+				session: {
+					...session,
+					server_expected: { cash: '754.0000' },
+					server_terms: { ...serverTerms, paid_in: [{ amount: '80.0000', reason: 'mixed' }] },
+				},
+			},
+			hasChange
+		);
+		expect(unmatched.paidIn).toEqual([{ amount: '30.0000', note: 'mixed' }]);
+		expect(unmatched.expected).toBe('704.0000');
+		expect(sum(unmatched)).toBe(toMinor(unmatched.expected, 4));
 	});
 
 	it('derives the local terms when the server sends none', () => {
