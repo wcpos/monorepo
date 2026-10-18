@@ -1,4 +1,6 @@
-import type { SiteCollection, SiteDocument } from '@wcpos/database';
+import type { SiteCollection, SiteDocument, UserDatabase } from '@wcpos/database';
+
+import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
 
 /**
  * Fields on the site document that are owned by the local app, never by the server.
@@ -70,9 +72,11 @@ export function pruneUnknownSiteFields<T extends SiteData>(
 const OMIT_EMPTY_SITE_FIELDS = ['locale'] as const;
 
 export async function upsertSiteData(
-	collection: SiteCollection,
+	userDB: UserDatabase | null | undefined,
 	siteData: SiteData
 ): Promise<SiteDocument> {
+	if (!userDB) throw new UserDatabaseUnavailableError();
+	const collection = userDB.sites;
 	const patch = pruneUnknownSiteFields(collection, stripLocalOnlySiteFields(siteData));
 	for (const field of OMIT_EMPTY_SITE_FIELDS) {
 		if (patch[field] === '') {

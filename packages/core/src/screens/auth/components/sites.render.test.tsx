@@ -36,8 +36,8 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => mockCreateTestT(),
 }));
-jest.mock('../../../hooks/use-version-check', () => ({
-	useVersionCheck: () => ({ wcposVersionPass: mockCompatible }),
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ compatibility: { wcposVersionPass: mockCompatible } }),
 }));
 jest.mock('../../../hooks/use-site-info', () => ({ useSiteInfo: () => {} }));
 jest.mock('../../../hooks/use-wcpos-auth/redirect-result', () => ({

@@ -1042,6 +1042,9 @@ importers:
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
+      expo-crypto:
+        specifier: ~58.0.6
+        version: 58.0.6(expo@58.0.8)
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
@@ -1076,6 +1079,9 @@ importers:
       ts-jest:
         specifier: 29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.2)(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@25.9.3))(typescript@5.9.3)
+      z-schema:
+        specifier: 12.4.6
+        version: 12.4.6
 
   packages/receipt-renderer:
     dependencies:

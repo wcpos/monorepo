@@ -5,9 +5,9 @@ import { router } from 'expo-router';
 import { sanitizeWPCredentialsData } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { linkCredentialsToSite } from '@wcpos/query/user-db';
 
 import { useAppState } from '../../../contexts/app-state';
-import { linkCredentialsToSite } from '../../../utils/site-writes';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
 

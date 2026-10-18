@@ -4,10 +4,10 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { upsertSiteData } from '@wcpos/query/user-db';
 
 import { createTestT } from '../../../../jest/translate';
 import { URL_IMPLEMENTATIONS, withGlobalUrl } from '../../../../jest/url-implementations';
-import { upsertSiteData } from '../../../utils/site-writes';
 import { connectionAddressOf, normalizeSiteAddress, useSiteConnect } from './use-site-connect';
 
 const mockT = createTestT();
@@ -49,7 +49,7 @@ jest.mock('./use-api-discovery', () => ({
 jest.mock('./use-url-discovery', () => ({
 	useUrlDiscovery: () => ({ discoverWpApiUrl: mockDiscoverWpApiUrl }),
 }));
-jest.mock('../../../utils/site-writes', () => ({
+jest.mock('@wcpos/query/user-db', () => ({
 	upsertSiteData: jest.fn(async () => mockSavedSite),
 }));
 

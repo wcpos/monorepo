@@ -11,7 +11,8 @@
 		"./testing": "./src/testing.ts",
 		"./collection-map": "./src/collection-map.ts",
 		"./register-session": "./src/register-session/index.ts",
-		"./receipt-email-queue": "./src/receipt-email-queue/index.ts"
+		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",
+		"./user-db": "./src/user-db/index.ts"
 	},
 	"type": "module",
 	"files": [
@@ -36,7 +37,8 @@
 		"lodash": "^4.18.1",
 		"observable-hooks": "^4.2.4",
 		"rxdb": "17.6.0",
-		"rxjs": "7.8.2"
+		"rxjs": "7.8.2",
+		"expo-crypto": "~58.0.6"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.3",
@@ -45,6 +47,7 @@
 		"ajv": "^8.20.0",
 		"jest": "^30.5.2",
 		"jest-environment-jsdom": "^30.5.2",
-		"ts-jest": "29.4.12"
+		"ts-jest": "29.4.12",
+		"z-schema": "12.4.6"
 	}
 }

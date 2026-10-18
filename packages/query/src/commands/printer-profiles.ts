@@ -16,6 +16,13 @@ export class StoreDatabaseUnavailableError extends Error {
 	}
 }
 
+export class UserDatabaseUnavailableError extends Error {
+	constructor() {
+		super('User database is unavailable');
+		this.name = 'UserDatabaseUnavailableError';
+	}
+}
+
 export class PrinterProfileNotFoundError extends Error {
 	constructor(readonly id: string) {
 		super(`Printer profile ${id} no longer exists`);
