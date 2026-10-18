@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
@@ -119,20 +119,18 @@ function TaxDerivation({
 			<ScrollView className="min-h-0 shrink">
 				<Derivation>
 					<DerivationStep label={t('common.calculated_from')} title={source}>
-						{/* Text that behaves as a button (CODING_STANDARDS § Buttons, `link`): inline under
-					    the title, no control box, so it sits where the board puts it. */}
-						{/* The slop gives the finger its 44 round a 20-tall line (§ Design 2). */}
-						<Pressable
+						{/* Text that behaves as a button (CODING_STANDARDS § Buttons, `link`), the shared
+					    Button so the raw-Pressable ratchet and the 36 px target both hold. */}
+						<Button
+							variant="link"
+							size="sm"
 							role="link"
 							testID="tax-based-on-change-setting"
-							className="mt-1 self-start"
-							hitSlop={{ top: 12, bottom: 12 }}
+							className="self-start px-0"
 							onPress={() => go('/settings/tax')}
 						>
-							<Text variant="link" className="text-primary text-sm">
-								{t('common.change_in_settings_tax')}
-							</Text>
-						</Pressable>
+							<ButtonText>{t('common.change_in_settings_tax')}</ButtonText>
+						</Button>
 					</DerivationStep>
 					{failure === 'address' ? (
 						<DerivationStep
