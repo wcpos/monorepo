@@ -229,3 +229,24 @@ it('restores resync print counts in a new repository and consumes the stash', as
 		await harness.dispose();
 	}
 });
+
+it.each([undefined, 'server', null])(
+	'retains the resident money hint over pull value %s',
+	async (value) => {
+		const { db, orderUpserts } = orderDatabase();
+		const { storedDocument } = materializedOrder();
+		const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+		const resident = structuredClone(storedDocument);
+		resident.payload.meta_data = [...meta, hint];
+		db.orders.findByIds = () => ({
+			exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+		});
+		storedDocument.payload.meta_data = [
+			...meta,
+			...(value === undefined ? [] : [{ ...hint, value }]),
+		];
+		await new EngineOrderRepository(db).upsertMany([storedDocument]);
+		expect(orderUpserts[0][0]).toMatchObject({ payload: { meta_data: [...meta, hint] } });
+	}
+);

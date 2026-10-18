@@ -17,6 +17,8 @@ import {
 } from '../contexts/current-order/temporary-order';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
+export { findEngineResident } from '../../hooks/mutations/use-local-mutation';
+
 /** Shared pure resolver wrapper; the hook and background commands use the same write path. */
 export async function plainPatch<TDocument extends MutationDocument>(
 	manager: ReturnType<typeof useQueryRuntime>,

@@ -42,11 +42,12 @@ const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
  */
 export const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
 
-/** POS identity metadata whose resident values must survive server adoption. */
+/** POS identity and money-ownership metadata whose resident values survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
 	POS_META_KEYS.user,
 	POS_META_KEYS.store,
 	POS_META_KEYS.taxBasedOn,
+	'_wcpos_money_owner_hint',
 ] as const;
 
 type StoredOrderDoc = {

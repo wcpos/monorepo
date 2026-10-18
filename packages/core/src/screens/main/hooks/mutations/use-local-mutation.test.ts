@@ -1279,6 +1279,38 @@ describe('durable divergence ownership', () => {
 	});
 	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
 	const other = { id: 7, key: 'unrelated', value: 'keep' };
+	it.each([null, 'foreign'])('replaces a non-server hint (%s) in place', async (value) => {
+		mockWrite.mockClear().mockResolvedValue({});
+		const stored = {
+			uuid: 'hint-order',
+			payload: { meta_data: [{ id: 8, ...hint, value }, other], total: '99' },
+		};
+		const resident = {
+			...stored,
+			getLatest: () => resident,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+			incrementalModify: async (modify: (old: typeof stored) => typeof stored) => {
+				Object.assign(stored, modify(stored));
+				return resident;
+			},
+		};
+		mockFindOneExec.mockResolvedValue(resident);
+		renderHook(() => useServerOwnsMoneyReader(), { wrapper: OrderMoneyDivergenceProvider });
+		await act(async () => {
+			divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(stored.payload.meta_data).toEqual([{ id: 8, ...hint }, other]);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: {
+					meta_data: [{ id: 8, ...hint }, other],
+					date_modified_gmt: '2026-03-02T00:00:00',
+				},
+			})
+		);
+	});
 	it.each(['new', 'existing', 'missing', 'failure', 'switched'])(
 		'enqueues a money-free hint once: %s resident',
 		async (scenario) => {

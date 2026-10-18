@@ -27,7 +27,3 @@ it('reads ownership immediately from an event, before another render, and clears
 		expect(read('target')).toBe(false);
 	});
 });
-
-jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	findEngineResident: async () => null,
-}));

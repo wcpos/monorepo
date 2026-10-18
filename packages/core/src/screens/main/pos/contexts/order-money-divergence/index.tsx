@@ -4,11 +4,9 @@ import { useQueryRuntime } from '@wcpos/query';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 
-import {
-	findEngineResident,
-	type MutationDocument,
-} from '../../../hooks/mutations/use-local-mutation';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+
+import type { MutationDocument } from '../../../hooks/mutations/use-local-mutation';
 
 const logger = getLogger(['wcpos', 'pos', 'money-owner']);
 
@@ -245,18 +243,23 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			const pendingOwnership = ownership.current;
 			void enqueueOrderMutation(orderId, async () => {
 				if (ownership.current !== pendingOwnership) return;
-				const document = await findEngineResident(manager, 'orders', orderId);
-				if (!document) return;
 				// Lazy: `plain-patch` reaches `uuid` (ESM-only), which jest cannot require from the
 				// many suites that import this provider; the write is rare and already async.
-				const { plainPatch } = await import('../../commands/plain-patch');
+				const { findEngineResident, plainPatch } = await import('../../commands/plain-patch');
+				const document = await findEngineResident(manager, 'orders', orderId);
+				if (!document) return;
 				await plainPatch(manager, 'orders', {
 					document: document as unknown as MutationDocument,
 					changes: (payload) => {
 						if (ownership.current !== pendingOwnership) return {};
 						const meta = (payload.meta_data ?? []) as MetaDataEntry[];
-						if (meta.some(({ key }) => key === '_wcpos_money_owner_hint')) return {};
-						return { meta_data: [...meta, { key: '_wcpos_money_owner_hint', value: 'server' }] };
+						const hint = meta.find(({ key }) => key === '_wcpos_money_owner_hint');
+						if (hint?.value === 'server') return {};
+						return {
+							meta_data: hint
+								? meta.map((entry) => (entry === hint ? { ...entry, value: 'server' } : entry))
+								: [...meta, { key: '_wcpos_money_owner_hint', value: 'server' }],
+						};
 					},
 				});
 				pendingOwnership.ids.delete(orderId);
