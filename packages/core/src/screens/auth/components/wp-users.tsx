@@ -38,16 +38,13 @@ export function WPUsers({ site }: WpUsersProps) {
 	// Explicit user/store choice (null until picked), held above the accordion so
 	// it survives a fold. The effective selection is derived during render so we
 	// never need an effect to sync it.
-	const [{ pickedUserUuid, selectedStoreId }, updateSelection] = useSiteSelection(
-		site.uuid ?? ''
-	);
+	const [{ pickedUserUuid, selectedStoreId }, updateSelection] = useSiteSelection(site.uuid ?? '');
 
 	// Derive the selected user: the explicit pick if it still exists, otherwise
 	// fall back to the first available credential.
 	const selectedUser =
 		(pickedUserUuid ? wpCreds.find((c) => c.uuid === pickedUserUuid) : undefined) ?? wpCreds[0];
 	const selectedUserUuid = selectedUser?.uuid ?? null;
-
 
 	return (
 		<VStack space="md">

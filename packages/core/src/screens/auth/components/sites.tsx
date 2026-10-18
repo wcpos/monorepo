@@ -41,6 +41,7 @@ import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
 import { Site, SiteHeader } from './site';
+import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { WPUsers } from './wp-users';
@@ -59,7 +60,19 @@ interface SitesProps {
 	onExpand?: () => void;
 }
 
-export function Sites({ user, collapsed = false, onExpand }: SitesProps) {
+/**
+ * The selection provider sits at one fixed position above both layouts, so a
+ * fold (which unmounts WPUsers, and swaps a lone site's layout) keeps the picks.
+ */
+export function Sites(props: SitesProps) {
+	return (
+		<SiteSelectionProvider>
+			<SitesContent {...props} />
+		</SiteSelectionProvider>
+	);
+}
+
+function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
 	const t = useT();
 	const sites = useObservableSuspense(
 		(
@@ -99,13 +112,11 @@ export function Sites({ user, collapsed = false, onExpand }: SitesProps) {
 	// accordion row below so its header (with chevron) is the way back in.
 	if (sites.length === 1 && !collapsed) {
 		return (
-			<SiteSelectionProvider value={selections}>
-				<Card className="w-full p-3" testID="logged-in-users-label">
-					<ErrorBoundary>
-						<Site user={user} site={sites[0]} />
-					</ErrorBoundary>
-				</Card>
-			</SiteSelectionProvider>
+			<Card className="w-full p-3" testID="logged-in-users-label">
+				<ErrorBoundary>
+					<Site user={user} site={sites[0]} />
+				</ErrorBoundary>
+			</Card>
 		);
 	}
 
