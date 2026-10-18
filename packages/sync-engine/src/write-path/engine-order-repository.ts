@@ -330,11 +330,25 @@ export class EngineOrderRepository {
 				const localEntry = localMeta.find((meta) => meta?.key === key);
 				if (!localEntry) continue;
 				const index = serverMeta.findIndex((meta) => meta?.key === key);
-				if (index === -1) serverMeta.push(localEntry);
-				// The local value wins, but a Woo-assigned id on the server's entry is kept: a
-				// resident entry written before its acknowledgement has none, and a later full
-				// meta save without the id would make Woo append a duplicate row.
-				else serverMeta[index] = { ...localEntry, id: localEntry.id ?? serverMeta[index].id };
+				if (index === -1) {
+					serverMeta.push(localEntry);
+					continue;
+				}
+				// The money-owner hint is one-way: `server` is the only value that means anything
+				// and it is never un-set by a till, so an incoming `server` beats a local
+				// tombstone or stale value (another till's older meta edit) instead of being
+				// masked by it. Everything else keeps the local value.
+				const incoming = serverMeta[index];
+				const winner =
+					key === '_wcpos_money_owner_hint' &&
+					incoming?.value === 'server' &&
+					localEntry.value !== 'server'
+						? incoming
+						: localEntry;
+				// A Woo-assigned id is kept whichever value wins: a resident entry written before
+				// its acknowledgement has none, and a later full meta save without the id would
+				// make Woo append a duplicate row.
+				serverMeta[index] = { ...winner, id: winner.id ?? localEntry.id ?? incoming?.id };
 			}
 			if (serverMeta.length > 0) {
 				entry.storedDocument = {

@@ -251,6 +251,26 @@ it.each([undefined, 'server', null])(
 	}
 );
 
+it('lets an incoming server hint replace a local tombstone (Codex on #2688)', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+	const resident = structuredClone(storedDocument);
+	// This till tombstoned the hint in an older meta edit; the diverging till wrote `server`.
+	resident.payload.meta_data = [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: null }];
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	storedDocument.payload.meta_data = [
+		...meta,
+		{ id: 8, key: '_wcpos_money_owner_hint', value: 'server' },
+	];
+	await new EngineOrderRepository(db).upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { meta_data: [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: 'server' }] },
+	});
+});
+
 it('keeps the server-assigned id when the resident protected entry has none (Codex on #2688)', async () => {
 	const { db, orderUpserts } = orderDatabase();
 	const { storedDocument } = materializedOrder();
