@@ -1,4 +1,4 @@
-import { protectOrderMeta } from './protected-order-meta';
+import { protectOrderMeta } from '../../src/mutations/protected-order-meta';
 
 describe.each(['_wcpos_money_owner_hint', '_wcpos_money_owner'])('%s', (key) => {
 	const current = { meta_data: [{ key, value: 'server', id: 8 }] };

@@ -10,7 +10,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { pushFailureCode } from './push-failure-code';
 import { usePushDocument } from './use-push-document';
 
-jest.mock('../pos/contexts/current-order/temporary-order', () => ({
+jest.mock('@wcpos/query/temporary-order', () => ({
 	patchTemporaryOrderPayload: jest.fn(),
 	getTemporaryOrder: jest.fn(),
 	removeTemporaryOrder: jest.fn(),

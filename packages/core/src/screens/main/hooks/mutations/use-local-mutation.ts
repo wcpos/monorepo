@@ -24,14 +24,11 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getCurrentBoundRegisterId, getRegisterId } from '@wcpos/query/register-session';
+import { getTemporaryOrder, patchTemporaryOrderPayload } from '@wcpos/query/temporary-order';
+import { protectOrderMeta } from '@wcpos/query/mutations';
 
-import { protectOrderMeta } from './protected-order-meta';
 import { plainPatch } from '../../pos/commands/plain-patch';
 import { useT } from '../../../../contexts/translations';
-import {
-	getTemporaryOrder,
-	patchTemporaryOrderPayload,
-} from '../../pos/contexts/current-order/temporary-order';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 import type { RxDocument } from 'rxdb';

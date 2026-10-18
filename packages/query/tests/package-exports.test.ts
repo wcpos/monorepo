@@ -92,6 +92,34 @@ describe('package exports', () => {
 		});
 	});
 
+	it('resolves the temporary-order subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/temporary-order');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'temporary-order'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the mutations subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/mutations');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'mutations'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
 	it('resolves the receipt-email-queue subpath identically through Node exports and Metro', () => {
 		const nodeResolved = requireFromMain.resolve('@wcpos/query/receipt-email-queue');
 		const metroResolved = metroResolve(

@@ -936,7 +936,7 @@ it('stamps the original register through the real writer when binding switches d
 	outcome.mockRestore();
 });
 
-jest.mock('../../contexts/current-order/temporary-order', () => ({}));
+jest.mock('@wcpos/query/temporary-order', () => ({}));
 
 jest.mock('../../../../../hooks/use-local-date', () => ({}));
 

@@ -202,7 +202,7 @@ jest.mock('../hooks/use-action-context', () => ({
 	}),
 }));
 
-jest.mock('../contexts/current-order/temporary-order', () => ({
+jest.mock('@wcpos/query/temporary-order', () => ({
 	getTemporaryOrder: async () => null,
 	patchTemporaryOrderPayload: async () => null,
 }));

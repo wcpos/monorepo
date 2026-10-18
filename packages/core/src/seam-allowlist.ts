@@ -1289,7 +1289,15 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/settings/theme.tsx :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/settings/theme.tsx :: resident helper write :: ScaleRow :: useLocalMutation :: 1',
 	'screens/main/settings/theme.tsx :: resident helper write :: ThemeSettingsContent :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (f1): the temporary-order database lives in @wcpos/query/temporary-order.
+	'screens/main/pos/contexts/current-order/temporary-order.ts :: raw query construction ::  :: db.orders.findOne :: 1',
+	'screens/main/pos/contexts/current-order/temporary-order.ts :: raw query construction :: getTemporaryOrder :: db.orders.findOne :: 1',
+	'screens/main/pos/contexts/current-order/temporary-order.ts :: record mutator ::  :: db.orders .insert :: 1',
+	'screens/main/pos/contexts/current-order/temporary-order.ts :: record mutator :: patchTemporaryOrderPayload :: document.incrementalModify :: 1',
+	'screens/main/pos/contexts/current-order/temporary-order.ts :: record mutator :: removeTemporaryOrder :: document.remove :: 1',
+	"screens/main/pos/contexts/current-order/temporary-order.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/contexts/current-order/temporary-order.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 366;
+export const SEAM_RETIRED_FLOOR = 373;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'36e15a4d880ccb9a76d7c824f9e0296634843526c6eecc872c9384bdf96cedf0';
+	'26b9690bd352ed2eef7ca1d1c38cda024017d00efd3c48cb8867813942c059d8';

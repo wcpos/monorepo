@@ -6,6 +6,7 @@ import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
+import { removeTemporaryOrder } from '@wcpos/query/temporary-order';
 
 import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
@@ -27,7 +28,6 @@ import {
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
-import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
 
 import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';

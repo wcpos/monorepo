@@ -5,9 +5,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { protectOrderMeta } from '@wcpos/query/mutations';
 
 import { EditOrderMetaForm } from './form';
-import { protectOrderMeta } from '../../../../hooks/mutations/protected-order-meta';
 import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
 const mockBeforePatch = jest.fn();
