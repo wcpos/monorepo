@@ -145,58 +145,69 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 
 	return (
 		<>
+			{/*
+			 * Two ListItems, so the row's buttons are not inside the radio. ARIA radios have
+			 * presentational children (a × or Re-authenticate inside one can lose its name and
+			 * role), and before this the row was a <button> holding buttons, which React flags
+			 * on /connect. The OUTER item is the tile (surface, selected/warning, hover) with
+			 * no onPress, so it is a plain <div> and no tab stop; it holds Re-authenticate and
+			 * the × beside the radio. The INNER item is the radio (avatar, name, status): no
+			 * surface of its own, and it takes the tile's left and vertical padding so the
+			 * selectable area still runs to the tile's edge.
+			 */}
 			<ListItem
-				testID="wp-user-button"
-				// The row picks one user (a radio), and holds its own buttons (× and
-				// Re-authenticate). Left to ListItem's default `button` role, react-native-web
-				// renders it as a <button>, so those would be buttons inside a button: invalid
-				// HTML that React flags on /connect. A radio renders as a focusable <div>.
-				// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
-				role="radio"
-				aria-checked={isSelected}
-				onPress={onSelect}
-				// react-native-web presses on Space only for the button role (Enter works for any
-				// role), so the radio row takes Space here, without scrolling the page. Only the
-				// row's own key: a Space on its × or Re-authenticate button is theirs.
-				onKeyDown={(event) => {
-					if (
-						event.nativeEvent.key === ' ' &&
-						event.target === event.currentTarget &&
-						!event.defaultPrevented
-					) {
-						event.preventDefault();
-						onSelect();
-					}
-				}}
+				testID="wp-user-row"
+				className="py-0 pl-0"
 				selected={isSelected}
 				// ListItem gives explicit `variant` priority over `selected` styling,
 				// so only apply the warning variant to unselected expired rows —
 				// otherwise the currently-selected expired user loses its selected
 				// highlight despite driving StoreSelect below.
 				variant={isSelected ? 'selected' : showReauth ? 'warning' : 'default'}
-				leading={
-					<Avatar
-						source={wpUser.avatar_url ? { uri: wpUser.avatar_url } : undefined}
-						fallback={initials}
-						size="md"
-					/>
-				}
 				trailing={trailing}
 				removable
 				removeLabel={t('auth.remove_2', { name: displayName })}
 				onRemove={() => setDeleteDialogOpened(true)}
 			>
-				<Text className="text-base font-medium">{displayName}</Text>
-				{roleLabel && <Text className="text-muted-foreground text-sm">{roleLabel}</Text>}
-				{isLoading ? (
-					<Loader size="xs" variant="muted" />
-				) : (
-					<StatusBadge
-						className="self-start"
-						label={isValid ? t('auth.signed_in') : t('auth.sign_in_again')}
-						variant={isValid ? 'success' : 'warning'}
-					/>
-				)}
+				<ListItem
+					testID="wp-user-button"
+					className="min-h-0 rounded-none border-0 bg-transparent py-2 pr-0 pl-3"
+					// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
+					role="radio"
+					aria-checked={isSelected}
+					onPress={onSelect}
+					// react-native-web presses on Space only for the button role (Enter works for
+					// any role), so the radio takes Space here, without scrolling the page.
+					onKeyDown={(event) => {
+						if (
+							event.nativeEvent.key === ' ' &&
+							event.target === event.currentTarget &&
+							!event.defaultPrevented
+						) {
+							event.preventDefault();
+							onSelect();
+						}
+					}}
+					leading={
+						<Avatar
+							source={wpUser.avatar_url ? { uri: wpUser.avatar_url } : undefined}
+							fallback={initials}
+							size="md"
+						/>
+					}
+				>
+					<Text className="text-base font-medium">{displayName}</Text>
+					{roleLabel && <Text className="text-muted-foreground text-sm">{roleLabel}</Text>}
+					{isLoading ? (
+						<Loader size="xs" variant="muted" />
+					) : (
+						<StatusBadge
+							className="self-start"
+							label={isValid ? t('auth.signed_in') : t('auth.sign_in_again')}
+							variant={isValid ? 'success' : 'warning'}
+						/>
+					)}
+				</ListItem>
 			</ListItem>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>

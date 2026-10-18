@@ -62,7 +62,11 @@ jest.mock('react-native', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
+		<button aria-label={accessibilityLabel} />
+	),
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
@@ -145,7 +149,10 @@ describe('user row status', () => {
 		await waitFor(() =>
 			expect(screen.getByText(valid ? 'auth.signed_in' : 'auth.sign_in_again')).toBeTruthy()
 		);
-		if (!valid) expect(screen.getByRole('button').getAttribute('data-variant')).toBe('outline');
+		if (!valid)
+			expect(
+				screen.getByText('auth.re_authenticate').closest('button')?.getAttribute('data-variant')
+			).toBe('outline');
 	});
 	it('is a radio, not a button, so its × and Re-authenticate buttons are not nested in one', async () => {
 		mockValid = false;
@@ -153,6 +160,8 @@ describe('user row status', () => {
 		const row = await screen.findByTestId('wp-user-button');
 		expect(row.getAttribute('role')).toBe('radio');
 		expect(row.getAttribute('aria-checked')).toBe('true');
+		expect(row.contains(screen.getByRole('button', { name: 'auth.remove_2' }))).toBe(false);
+		expect(row.contains(screen.getByText('auth.re_authenticate'))).toBe(false);
 	});
 	it('selects the row on Space, as Enter does, without scrolling the page', async () => {
 		mockValid = true;
@@ -167,8 +176,8 @@ describe('user row status', () => {
 		mockValid = false;
 		render(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
 		await waitFor(() =>
-			expect(screen.getByTestId('wp-user-button').className).toContain('border-primary')
+			expect(screen.getByTestId('wp-user-row').className).toContain('border-primary')
 		);
-		expect(screen.getByTestId('wp-user-button').className).not.toContain('border-warning');
+		expect(screen.getByTestId('wp-user-row').className).not.toContain('border-warning');
 	});
 });
