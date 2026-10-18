@@ -23,9 +23,6 @@ const row = {
 function fixture(initial: query.NotificationRow[] = [row]) {
 	const stored = new Map(initial.map((item) => [item.id, { ...item }]));
 	const document = (id: string) => ({
-		getLatest() {
-			return this;
-		},
 		patch: async (patch: Partial<query.NotificationRow>) => {
 			stored.set(id, { ...stored.get(id)!, ...patch });
 		},
@@ -36,7 +33,6 @@ function fixture(initial: query.NotificationRow[] = [row]) {
 		},
 	});
 	const collection = {
-		schema: { primaryPath: 'id' },
 		findOne: jest.fn((id: string) => ({
 			exec: async () => (stored.has(id) ? document(id) : null),
 		})),
@@ -50,6 +46,9 @@ function fixture(initial: query.NotificationRow[] = [row]) {
 					)
 					.map((item) => document(item.id)),
 		})),
+		upsert: jest.fn(async (next: query.NotificationRow) => {
+			stored.set(next.id, next);
+		}),
 		insert: jest.fn(async (next: query.NotificationRow) => {
 			stored.set(next.id, next);
 		}),
@@ -104,10 +103,24 @@ it.each([
 	await expect(commands[name](database, row.subscriberId)).resolves.toBe(0);
 });
 
-it('overwrites local state with the full row when not preserving it', async () => {
-	const { database, stored } = fixture([{ ...row, status: 'read', seen: true }]);
+it.each([true, false])(
+	'refuses a row without an id before any read or write (preserveLocalState %s)',
+	async (preserveLocalState) => {
+		const { database, collection } = fixture([]);
+		await expect(
+			query.upsertNotification(database, { ...row, id: '' }, { preserveLocalState })
+		).rejects.toThrow('Cannot save a notification without an id');
+		expect(collection.findOne).not.toHaveBeenCalled();
+		expect(collection.insert).not.toHaveBeenCalled();
+		expect(collection.upsert).not.toHaveBeenCalled();
+	}
+);
+
+it('upserts without preserving state when requested', async () => {
+	const { database, stored, collection } = fixture([{ ...row, status: 'read', seen: true }]);
 	await query.upsertNotification(database, row, { preserveLocalState: false });
 	expect(stored.get(row.id)).toEqual(row);
+	expect(collection.upsert).toHaveBeenCalledWith(row);
 });
 
 it.each(['read', 'archived'] as const)(
@@ -133,31 +146,13 @@ it('accepts server read/seen state when the local row is unread/unseen', async (
 	expect(stored.get(row.id)).toMatchObject({ status: 'read', seen: true });
 });
 
-it('inserts missing snapshot rows', async () => {
+it('inserts missing snapshot rows and lets a concurrent primary-key conflict reject', async () => {
 	const { database, stored, collection } = fixture([]);
 	await query.upsertNotification(database, row, { preserveLocalState: true });
 	expect(stored.get(row.id)).toEqual(row);
-	expect(collection.insert).toHaveBeenCalledWith(row);
-});
-
-it('merges into a row a concurrent insert created, keeping its local read state', async () => {
-	const { database, stored, collection } = fixture([]);
-	collection.insert.mockImplementationOnce(async () => {
-		stored.set(row.id, { ...row, status: 'read', seen: true });
-		throw Object.assign(new Error('conflict'), { code: 'CONFLICT' });
-	});
-	await query.upsertNotification(
-		database,
-		{ ...row, title: 'Updated' },
-		{ preserveLocalState: true }
-	);
-	expect(stored.get(row.id)).toEqual({ ...row, title: 'Updated', status: 'read', seen: true });
-});
-
-it('rejects an insert failure that is not a conflict', async () => {
-	const { database, collection } = fixture([]);
-	collection.insert.mockRejectedValueOnce(new Error('disk full'));
+	stored.clear();
+	collection.insert.mockRejectedValueOnce(new Error('conflict'));
 	await expect(
 		query.upsertNotification(database, row, { preserveLocalState: true })
-	).rejects.toThrow('disk full');
+	).rejects.toThrow('conflict');
 });

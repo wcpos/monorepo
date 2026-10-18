@@ -1,6 +1,5 @@
 import type { StoreDatabase } from '@wcpos/database';
 
-import { mergeIntoDocument } from '../records/merge-into-document';
 import { StoreDatabaseUnavailableError } from './printer-profiles';
 
 import type { NotificationRow, StoreLocalDatabase } from '../reads/store-local';
@@ -50,20 +49,21 @@ export async function upsertNotification(
 ): Promise<void> {
 	const collection = notifications(database);
 	if (!row.id) throw new Error('Cannot save a notification without an id');
-	// `row` is a full document. Preserving local state, a snapshot never takes back a read,
-	// archive or seen made locally, including on a row a concurrent WebSocket insert created.
-	await mergeIntoDocument(
-		collection,
-		row.id,
-		(current) =>
-			preserveLocalState
-				? {
-						...current,
-						...row,
-						status: current.status === 'unread' ? row.status : current.status,
-						seen: current.seen || row.seen,
-					}
-				: { ...current, ...row },
-		() => row
-	);
+	if (preserveLocalState) {
+		const existing = await collection.findOne(row.id).exec();
+		if (existing) {
+			await existing.incrementalModify((current) => ({
+				...current,
+				...row,
+				status: current.status === 'unread' ? row.status : current.status,
+				seen: current.seen || row.seen,
+			}));
+		} else {
+			// A concurrent WebSocket insert wins any primary-key conflict instead of being
+			// overwritten by this older snapshot.
+			await collection.insert(row);
+		}
+	} else {
+		await collection.upsert(row);
+	}
 }

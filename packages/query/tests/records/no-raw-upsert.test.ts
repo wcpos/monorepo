@@ -14,6 +14,8 @@ import ts from 'typescript';
 const SOURCE_ROOT = join(__dirname, '../../src');
 
 const ALLOWED: Record<string, string> = {
+	'commands/notifications.ts :: upsertNotification :: collection.upsert':
+		'full document by design: with preserveLocalState false, a complete NotificationRow replaces local read/seen state on purpose',
 	'commands/template-printer-overrides.ts :: setTemplatePrinterOverride :: collection.upsert':
 		'full document: both of the schema\u2019s two properties set',
 };
