@@ -1416,10 +1416,21 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/receipt/hooks/use-templates-sync.ts :: storage import ::  :: from 'rxdb' :: 1",
 	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB :: 1',
 	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB.collections :: 1',
+	// ADR 0033 per-screen (f9): the stock and variation-parent refresh demands are named reads in @wcpos/query.
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 1',
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 2',
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 3',
+	'screens/main/hooks/use-stock-adjustment.ts :: require plane outside a named read :: stockAdjustment :: runtime.engine.require :: 1',
+	"screens/main/hooks/use-stock-adjustment.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/hooks/use-variation-parent-refresh.ts :: engine handle aliased :: useVariationParentRefresh :: engine = runtime.engine :: 1',
+	"screens/main/hooks/use-variation-parent-refresh.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/use-variation-parent-refresh.ts :: raw query construction :: parentOfAcknowledgedVariation :: variations?.findOne :: 1',
+	'screens/main/hooks/use-variation-parent-refresh.ts :: record collection back-reference :: useVariationParentRefresh :: event.collection :: 1',
+	'screens/main/hooks/use-variation-parent-refresh.ts :: require plane outside a named read :: useVariationParentRefresh>refresh :: engine.require :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 485;
+export const SEAM_RETIRED_FLOOR = 495;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'ac326502905e66a9a4a1ebfec9392029e8844d9d114d62964d7514c447af0abc';
+	'dddc57286b07ab2a465291bba5f35ae7643b212f98ef5a959864914f2b34850d';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

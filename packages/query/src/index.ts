@@ -163,3 +163,5 @@ export {
 	markAllNotificationsSeen,
 	upsertNotification,
 } from './commands/notifications';
+
+export { refreshStockFor, watchVariationParentRefresh } from './reads/refresh-demands';
