@@ -44,7 +44,7 @@ function start(records = [order()], ready = true) {
 		Promise<void>,
 		[string, CurrentOrderRecord, (payload: OrderPayload) => boolean]
 	>(async () => {});
-	const serverOwnsMoney = jest.fn(() => false);
+	const serverOwnsMoney = jest.fn<boolean, [string]>(() => false);
 	const orderSaveState = jest.fn<{ kind: string } | null, [string]>(() => null);
 	const inCheckout = jest.fn(() => false);
 	const references$ = new BehaviorSubject({ ready: false, generation: '0:0' });
@@ -68,7 +68,7 @@ function start(records = [order()], ready = true) {
 	return { ...deps, ...coordinator };
 }
 
-it('settles bind, new orders, config and order content changes, not its own money writes', async () => {
+it('#1472 settles bind, new orders, config and order content changes, not its own money writes', async () => {
 	const a = order();
 	const h = start([order('b'), a]);
 	await flush();
@@ -224,7 +224,7 @@ it('clears per-order memory on rebind and stops every subscription and queued wr
 const couponOrder = (payload: OrderPayload = {}) =>
 	order('a', { coupon_lines: [{ code: 'summer' }], ...payload });
 
-it('owns reference demand across tab emissions and releases it when the last coupon cart leaves', async () => {
+it('#963 continuation survives switching tabs and #952 owns demand until the last coupon cart leaves', async () => {
 	const a = couponOrder();
 	const h = start([a]);
 	await flush();
@@ -310,5 +310,149 @@ it('does not aggregate a cart that gains a coupon while its slot is queued', asy
 	await flush();
 	expect(h.settle).not.toHaveBeenCalled();
 	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.settle).toHaveBeenCalledTimes(1);
+});
+
+// Re-homed from the removed UI settlement hook. These are coordinator contracts,
+// not its former moneyWriteChain, render memo or foreground/background flight keys.
+it('#952 settles a quick-discount-only cart on bind without declaring reference demand', async () => {
+	const a = order('a', {
+		coupon_lines: [
+			{
+				code: 'discount',
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			},
+		],
+	});
+	const h = start([a]);
+	await flush();
+	expect(h.references$.observed).toBe(false);
+	expect(h.readCoupons).toHaveBeenCalledWith(a.payload);
+	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+});
+
+it.each([undefined, [], [{ code: null }]])(
+	'#952 declares no demand for absent/removed coupon lines: %j',
+	async (coupon_lines) => {
+		const h = start([order('a', { coupon_lines })]);
+		await flush();
+		expect(h.references$.observed).toBe(false);
+		expect(h.readCoupons).not.toHaveBeenCalled();
+		expect(h.settle).toHaveBeenCalledTimes(1);
+		await emit(h.openOrders$, [couponOrder()]);
+		expect(h.references$.observed).toBe(true);
+		expect(h.readCoupons).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['memory', 'payload'] as const)(
+	'#1472 keeps queued order A ownership after a tab switch (%s)',
+	async (owner) => {
+		const a = order();
+		let release!: () => void;
+		const held = enqueueOrderMutation(
+			'a',
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		const h = start([a]);
+		await flush();
+		if (owner === 'memory') h.serverOwnsMoney.mockImplementation((uuid) => uuid === 'a');
+		else a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+		h.openOrders$.next([a, order('b')]);
+		release();
+		await held;
+		await flush();
+		expect(h.settle.mock.calls.map(([uuid]) => uuid)).toEqual(['b']);
+	}
+);
+
+it.each(['owner', 'memory', 'status', 'id', 'line_items', 'fee_lines', 'shipping_lines'] as const)(
+	'#963 rejects stale coupon work when %s changes during the context read',
+	async (change) => {
+		const a = couponOrder();
+		const h = start([a]);
+		const pending = new Subject<CouponContext>();
+		h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
+		await emit(h.references$, { ready: true, generation: '0:0' });
+		if (change === 'owner') a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+		else if (change === 'memory') h.serverOwnsMoney.mockReturnValue(true);
+		else if (change === 'status') a.payload.status = 'completed';
+		else if (change === 'id') a.payload.id = 4711;
+		else if (change === 'fee_lines') a.payload.fee_lines = [{ name: 'Handling', total: '3' }];
+		else if (change === 'shipping_lines')
+			a.payload.shipping_lines = [{ method_id: 'flat_rate', total: '4' }];
+		else a.payload.line_items = [{ total: '30' }];
+		pending.next(emptyContext);
+		await flush();
+		expect(h.settle).not.toHaveBeenCalled();
+	}
+);
+
+it('#963 ignores unrelated revision stamps and same-order re-emissions during replay', async () => {
+	const a = couponOrder();
+	const h = start([a]);
+	const pending = new Subject<CouponContext>();
+	h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	a.payload.date_modified_gmt = '2099-01-01T00:00:00';
+	await emit(h.openOrders$, [a]);
+	pending.next(emptyContext);
+	await flush();
+	expect(h.readCoupons).toHaveBeenCalledTimes(1);
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	expect(h.settle.mock.calls[0][1].payload.date_modified_gmt).toBe('2099-01-01T00:00:00');
+});
+
+it('#963 uses current tax settings and supersedes an older in-flight config replay', async () => {
+	const h = start([couponOrder()]);
+	const pending = new Subject<CouponContext>();
+	h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	const updated = {
+		...inputs,
+		settings: { ...inputs.settings, priceNumDecimals: 2, pricesIncludeTax: true },
+	};
+	await emit(h.inputs$, updated);
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	pending.next(emptyContext);
+	await flush();
+	expect(h.settle).toHaveBeenCalledTimes(1);
+});
+
+it('#952 a quick discount mixed with a catalog coupon still waits for reference demand', async () => {
+	const a = couponOrder();
+	a.payload.coupon_lines!.push({
+		code: 'discount',
+		meta_data: [
+			{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+		],
+	});
+	const h = start([a]);
+	await flush();
+	expect(h.references$.observed).toBe(true);
+	expect(h.settle).not.toHaveBeenCalled();
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+});
+
+it('#952/#963 server ownership stops coupon reads and subsequent settlement passes', async () => {
+	const a = couponOrder();
+	const h = start([a]);
+	await flush();
+	h.serverOwnsMoney.mockReturnValue(true);
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.readCoupons).not.toHaveBeenCalled();
+	expect(h.settle).not.toHaveBeenCalled();
+	h.serverOwnsMoney.mockReturnValue(false);
+	await emit(h.openOrders$, [a]);
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	h.serverOwnsMoney.mockReturnValue(true);
+	await emit(h.inputs$, { ...inputs, baseLocation: { country: 'NZ' } });
+	expect(h.readCoupons).toHaveBeenCalledTimes(1);
 	expect(h.settle).toHaveBeenCalledTimes(1);
 });

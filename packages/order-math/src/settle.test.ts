@@ -538,7 +538,7 @@ describe('settleCart', () => {
 		 * The fixed point, asserted as the property rather than as byte-equality of the
 		 * two patches. The second settle omits `fee_lines`, because on the applied
 		 * snapshot the percent fee recomputes to what it already holds — and an
-		 * unchanged line array must not ride along: `use-cart-settlement` writes the
+		 * unchanged line array must not ride along: the settlement coordinator writes the
 		 * patch as a whole field, and `fee_lines[].total` is cashier intent the server
 		 * keeps, so attaching it turns a local-only money settle into a server push.
 		 *

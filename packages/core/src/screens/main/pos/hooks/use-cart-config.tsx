@@ -95,14 +95,6 @@ export const useCartConfigInputs = () => {
 	);
 };
 
-export const useCartConfigForOrder = () => {
-	const inputs = useCartConfigInputs();
-	return React.useCallback(
-		(order?: OrderPayload): CartConfig => cartConfigForOrder({ ...inputs, order }),
-		[inputs]
-	);
-};
-
 /** The location provider dedupes cart writes before they reach product tiles. */
 export const useCartConfig = (): CartConfig => {
 	const { settings, rates } = useCartConfigInputs();

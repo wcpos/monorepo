@@ -206,7 +206,7 @@ it('settles the target post-edit address, not the rendered order, without repric
 			order: payload,
 		})
 	);
-	jest.requireMock('./use-cart-config').useCartConfigForOrder.mockReturnValueOnce(configForOrder);
+	jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValueOnce(configForOrder);
 	const product = {
 		product_id: 1,
 		quantity: 1,

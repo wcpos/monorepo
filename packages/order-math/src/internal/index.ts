@@ -6,9 +6,9 @@
  * nothing, so the imports point here instead.
  *
  * The public index (`@wcpos/order-math`) is the settle pipeline. It IS now
- * live: `use-cart-settlement.ts` calls `settleCart`, `settleAggregate`,
- * `createCartConfig` and `snapshotFromOrderJSON` as the cart's single writer
- * (#1505, 2026-08-23). That cutover retired the PRODUCTION coupon-replay and
+ * live: cart commands and the session-owned settlement coordinator call its
+ * settlement functions with the shared cart config (ADR 0033). The original
+ * cutover (#1505, 2026-08-23) retired the PRODUCTION coupon-replay and
  * order-totals consumers — `pos/hooks/calculate-order-totals` survives as a test
  * seam, see below.
  *

@@ -11,8 +11,5 @@
 	},
 	"packages/core/src/screens/main/pos/contexts/current-order/temporary-order.ts": {
 		"collection-write": 1
-	},
-	"packages/core/src/screens/main/pos/hooks/use-cart-settlement.ts": {
-		"local-write": 1
 	}
 }
