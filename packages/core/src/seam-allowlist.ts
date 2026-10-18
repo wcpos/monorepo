@@ -993,7 +993,39 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/settings/printing/template-row.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: storeDB.collections.template_printer_overrides.find() :: 1',
 	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 4',
+	// ADR 0033 per-screen (a): printer writes own their command module.
+	'screens/main/mini-apps/capabilities/printers.ts :: raw query construction :: usePrinterCapabilities :: collection.find({ selector: { isDefault: true } }) :: 1',
+	'screens/main/mini-apps/capabilities/printers.ts :: raw query construction :: usePrinterCapabilities :: collection.findOne :: 1',
+	'screens/main/mini-apps/capabilities/printers.ts :: record mutator :: usePrinterCapabilities :: collection.insert :: 1',
+	'screens/main/mini-apps/capabilities/printers.ts :: record mutator :: usePrinterCapabilities :: doc.patch :: 1',
+	'screens/main/mini-apps/capabilities/printers.ts :: record mutator :: usePrinterCapabilities :: existing.patch :: 1',
+	'screens/main/mini-apps/capabilities/printers.ts :: storage token :: usePrinterCapabilities :: storeDB.collections :: 1',
+	'screens/main/settings/printer/persist-printer-profile.ts :: raw query construction :: persistPrinterProfile :: collection.find({ selector: { isDefault: true } }) :: 1',
+	'screens/main/settings/printer/persist-printer-profile.ts :: raw query construction :: persistPrinterProfile :: collection.findOne :: 1',
+	'screens/main/settings/printer/persist-printer-profile.ts :: raw query construction :: persistPrinterProfile :: collection.findOne :: 2',
+	'screens/main/settings/printer/persist-printer-profile.ts :: record mutator :: persistPrinterProfile :: collection.insert :: 1',
+	'screens/main/settings/printer/persist-printer-profile.ts :: record mutator :: persistPrinterProfile :: doc.patch :: 1',
+	'screens/main/settings/printer/persist-printer-profile.ts :: record mutator :: persistPrinterProfile :: doc.patch :: 2',
+	"screens/main/settings/printer/persist-printer-profile.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printer/persist-printer-profile.ts :: storage token :: persistPrinterProfile :: storeDB.collections :: 1',
+	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: collection.findOne :: 1',
+	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: storeDB.collections.printer_profiles .find() :: 1',
+	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: storeDB.collections.printer_profiles.findOne :: 1',
+	'screens/main/settings/printing/index.tsx :: record mutator :: PrintingSettings :: collection.upsert :: 1',
+	'screens/main/settings/printing/index.tsx :: record mutator :: PrintingSettings :: doc.patch :: 1',
+	'screens/main/settings/printing/index.tsx :: record mutator :: PrintingSettings :: doc.patch :: 2',
+	'screens/main/settings/printing/index.tsx :: record mutator :: PrintingSettings :: doc.remove :: 1',
+	'screens/main/settings/printing/index.tsx :: record mutator :: PrintingSettings :: existing.remove :: 1',
+	"screens/main/settings/printing/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 1',
+	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 2',
+	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 3',
+	'screens/main/settings/printing/use-ensure-system-printer.ts :: raw query construction :: useEnsureSystemPrinter :: collection .findOne :: 1',
+	'screens/main/settings/printing/use-ensure-system-printer.ts :: raw query construction :: useEnsureSystemPrinter :: collection.findOne :: 1',
+	'screens/main/settings/printing/use-ensure-system-printer.ts :: record mutator :: useEnsureSystemPrinter :: collection.insert :: 1',
+	"screens/main/settings/printing/use-ensure-system-printer.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printing/use-ensure-system-printer.ts :: storage token :: useEnsureSystemPrinter :: storeDB.collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 85;
+export const SEAM_RETIRED_FLOOR = 116;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b6f46720000be80e4dd533a8daa404b5245444fc3d981c5ad61871e85de3d18e';
+	'3290a689e048d8c9aa870c8e9a1d221df94088838dce7e0c62423a00ad52562d';

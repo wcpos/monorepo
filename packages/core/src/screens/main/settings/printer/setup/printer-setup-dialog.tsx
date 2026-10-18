@@ -26,6 +26,7 @@ import {
 	PrinterService,
 	usePrinterDiscovery,
 } from '@wcpos/printer';
+import { savePrinterProfile } from '@wcpos/query';
 
 import { CodePageSelect } from '../components/code-page-select';
 import { VendorSelect } from '../components/vendor-select';
@@ -35,7 +36,6 @@ import { WebVendorSegmented } from '../dialog/connection/web-vendor-segmented';
 import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
 import { TestPrintError } from '../dialog/test-print-error';
-import { persistPrinterProfile } from '../persist-printer-profile';
 import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 import {
@@ -55,8 +55,8 @@ import {
 } from './use-printer-setup-flow';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 
-import type { PrinterDialogPrefill } from '../profile-config';
 import type * as z from 'zod';
 
 /**
@@ -126,7 +126,10 @@ export function PrinterSetupDialog({
 		{
 			discovery,
 			printerService,
-			persist: (data) => persistPrinterProfile(storeDB, data),
+			persist: (data) =>
+				savePrinterProfile(storeDB, buildPrinterProfileFields(data), { reuseByAddress: true }).then(
+					({ id }) => id
+				),
 			t,
 			printerCount,
 			prefill: prefillDraft(prefill),
