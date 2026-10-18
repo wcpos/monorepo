@@ -1115,7 +1115,19 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'services/register-session/session-store.ts :: record mutator :: voidMovement :: row.incrementalModify :: 1',
 	'services/register-session/session-store.ts :: record mutator :: writeClosure :: closures.insert :: 1',
 	"services/register-session/session-store.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (c3): the register hook reads named reads; the bridge cycle and approval are commands.
+	'screens/main/pos/cart/approve-sheet.tsx :: record mutator :: ApproveSheet>confirm :: session.incrementalPatch :: 1',
+	"screens/main/pos/cart/approve-sheet.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'services/register-session/bridge.tsx :: engine handle aliased :: RegisterSessionBridge :: { engine } = useQueryRuntime() :: 1',
+	'services/register-session/bridge.tsx :: raw query construction :: RegisterSessionBridge>sync :: sessions.findOne :: 1',
+	'services/register-session/use-register-session.ts :: engine handle aliased :: useRegisterSession :: { engine, locale } = useQueryRuntime() :: 1',
+	"services/register-session/use-register-session.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: closures.find({ selector: { register_id: binding.registerId } }) :: 1',
+	'services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: movements.find() :: 1',
+	"services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: sessions.find({ selector: { register_id: binding.registerId, status: 'closed' }, }) :: 1",
+	"services/register-session/use-register-session.ts :: raw query construction :: useRegisterSession :: sessions.find({ selector: { register_id: binding.registerId, status: { $in: ['open', 'counting'] } }, }) :: 1",
+	"services/register-session/use-register-session.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 203;
+export const SEAM_RETIRED_FLOOR = 214;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'bf7791040c271c9419656cdce2f16e357c96339f92384aec1f55d4b5bd4d543f';
+	'1c7b52512194edc15fda2baac8d75e310ca30d5dd4e4b14ab8bf16694d1e8b48';

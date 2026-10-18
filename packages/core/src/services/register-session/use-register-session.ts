@@ -1,36 +1,23 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import {
-	combineLatest,
-	concatMap,
-	distinctUntilChanged,
-	finalize,
-	map,
-	of,
-	Subject,
-	switchMap,
-	tap,
-	timer,
-} from 'rxjs';
+import { combineLatest, distinctUntilChanged, map, of, timer } from 'rxjs';
 
-import {
-	declareRequirements,
-	type EngineRecord,
-	observeEngineQuery,
-	useDocField,
-	useQueryRuntime,
-} from '@wcpos/query';
+import { type ReadonlyEngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
-import { mintRemoteId, POS_META_KEYS } from '@wcpos/sync-core';
-import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
-import { hasPendingLocalWork, type RequirementHandle } from '@wcpos/sync-engine';
+import { POS_META_KEYS } from '@wcpos/sync-core';
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import {
 	backToSelling,
 	closeSession,
+	createSessionAccountingState,
 	deriveDrawerTerms,
 	deriveExpected,
+	observeCashMovements,
+	observeRegisterClosures,
+	observeRegisterSessions,
+	observeSessionAccounting,
 	openSession,
 	recordMovement,
 	RegisterSessionRequiredError,
@@ -46,11 +33,6 @@ import { useStoreDay } from '../../hooks/use-store-day';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
-import {
-	useCashMovementCollection,
-	useClosureCollection,
-	useRegisterSessionCollection,
-} from './use-register-session-collections';
 
 const logger = getLogger(['wcpos', 'registerSession']);
 // A drain that has not answered in fifteen seconds is offline or stalled, and the till must
@@ -79,8 +61,8 @@ function outsideBaseline(
 	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
 }
 function baselineContains(
-	orders: readonly EngineRecord<'orders'>[],
-	refunds: readonly EngineRecord<'refunds'>[],
+	orders: readonly ReadonlyEngineRecord<'orders'>[],
+	refunds: readonly ReadonlyEngineRecord<'refunds'>[],
 	movements: readonly { id: string }[],
 	baselineAt?: string | null,
 	movementIds: readonly string[] = [],
@@ -132,172 +114,57 @@ function isPastClose(closeTime: string | null | undefined) {
 }
 
 export function useRegisterSession() {
-	const missingParentKey = React.useRef('');
-	const [accountingChanges] = React.useState(() => new Subject<void>());
-	const pendingParents = React.useRef<RequirementHandle[]>([]);
-	const latestAccounting = React.useRef<{
-		orders: EngineRecord<'orders'>[];
-		refundRecords: RefundDocumentType[];
-		refundSources: EngineRecord<'refunds'>[];
-	} | null>(null);
 	const { store, wpCredentials, userDB, storeDB, site } = useStoreSession();
 	const actor = useRegisterActor();
 	const { today, timezone } = useStoreDay();
-	const { engine, locale } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const binding = useRegisterBinding();
-	const sessions = useRegisterSessionCollection();
-	const movements = useCashMovementCollection();
-	const closures = useClosureCollection();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
 	const closeTime = useDocField(store, (value) => value.expected_close_time);
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const [accountingState] = React.useState(createSessionAccountingState);
 	const source = React.useMemo(() => {
-		if (!sessions || !movements || !closures || !binding.registerId || !sessionsOn) return of(null);
-		const active$ = sessions.find({
-			selector: { register_id: binding.registerId, status: { $in: ['open', 'counting'] } },
-		}).$;
-		const closed$ = sessions.find({
-			selector: { register_id: binding.registerId, status: 'closed' },
-		}).$;
-		// An older order can be paid in this session too, so the bound is the modified date,
-		// not the birth date; ledger provenance then binds it.
-		const accounting$ = combineLatest([active$, closed$]).pipe(
-			map(
-				([active, closed]) =>
-					active.find((row) => row.sync_status !== 'failed') ??
-					closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced')
+		const sessions$ = observeRegisterSessions(storeDB, binding.registerId);
+		const accounting = observeSessionAccounting(
+			runtime.engine,
+			sessions$.pipe(
+				map((rows) =>
+					rows === null
+						? null
+						: (rows.active.find((row) => row.sync_status !== 'failed') ??
+							rows.closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced'))
+				)
 			),
-			distinctUntilChanged((previous, current) => previous?.id === current?.id),
-			// eslint-disable-next-line react-hooks/refs -- RxJS invokes this on subscription emissions, not while constructing the observable during render.
-			switchMap((current) => {
-				if (!current)
-					return of({
-						orders: { hits: [] as never[] },
-						refundRecords: [] as RefundDocumentType[],
-						refundSources: [] as EngineRecord<'refunds'>[],
-					});
-				return observeEngineQuery(engine, {
-					collection: 'orders',
-					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
-					limit: Number.MAX_SAFE_INTEGER,
-				}).pipe(
-					switchMap((recent) => {
-						const ids = recent.hits.flatMap(({ record }) =>
-							readLedger(record.payload.meta_data)
-								.filter((row) => row.session_id === current.id)
-								.flatMap((row) => (row.refunds ?? []).map(({ id }) => id))
-						);
-						return observeEngineQuery(engine, {
-							collection: 'refunds',
-							selector: {
-								$or: [{ session_id: current.id }, { id: { $in: ids } }],
-							},
-							limit: Number.MAX_SAFE_INTEGER,
-						}).pipe(
-							switchMap((refunds) => {
-								const refundRecords = refunds.hits.map(
-									({ record }) => record.payload as RefundDocumentType
-								);
-								const parentIds = refundRecords
-									.filter((refund) =>
-										refund.meta_data?.some(
-											({ key, value }) => key === POS_META_KEYS.session && value === current.id
-										)
-									)
-									.map((refund) => refund.parent_id);
-								const parents$: ReturnType<typeof observeEngineQuery> = parentIds.length
-									? observeEngineQuery(engine, {
-											collection: 'orders',
-											selector: { id: { $in: parentIds } },
-											limit: Number.MAX_SAFE_INTEGER,
-										})
-									: of({ count: 0, hits: [] });
-								let missingKey = '';
-								let parentRequirements: RequirementHandle[] = [];
-								return parents$.pipe(
-									tap((parents) => {
-										const held = new Set(parents.hits.map(({ record }) => record.payload.id));
-										const missing = [...new Set(parentIds)]
-											.filter((id) => !held.has(id))
-											.sort((a, b) => a - b);
-										const key = missing.join(',');
-										missingParentKey.current = key;
-										if (key === missingKey) return;
-										missingKey = key;
-										parentRequirements.forEach((handle) => handle.release());
-										parentRequirements = missing.length
-											? declareRequirements(engine, [
-													{
-														id: 'register-session:refund-parents',
-														kind: 'targeted-records',
-														collection: 'orders',
-														remoteIds: missing.map((id) => mintRemoteId(id, 'refund parent')),
-													},
-												])
-											: [];
-										pendingParents.current = parentRequirements;
-									}),
-									finalize(() => {
-										parentRequirements.forEach((handle) => handle.release());
-										if (pendingParents.current === parentRequirements) pendingParents.current = [];
-									}),
-									map((parents) => ({
-										orders: {
-											hits: [
-												...new Map(
-													[...recent.hits, ...parents.hits].map((hit) => [hit.record.uuid, hit])
-												).values(),
-											],
-										},
-										refundRecords,
-										refundSources: refunds.hits.map(({ record }) => record),
-									}))
-								);
-							})
-						);
-					}),
-					tap((accounting) => {
-						latestAccounting.current = {
-							orders: accounting.orders.hits.map(({ record }) => record),
-							refundRecords: accounting.refundRecords,
-							refundSources: accounting.refundSources,
-						};
-						accountingChanges.next();
-					}),
-					// Preserve the existing asynchronous accounting emission boundary.
-					concatMap(async (accounting) => accounting)
-				);
-			})
+			accountingState
 		);
-		return combineLatest([
-			active$,
-			closed$,
-			movements.find().$,
-			accounting$,
-			closures.find({ selector: { register_id: binding.registerId } }).$,
-		]).pipe(
-			map(([active, closed, entries, accounting, closureRows]) => ({
-				sessions,
-				registerId: binding.registerId,
-				active,
-				closed,
-				entries,
-				...accounting,
-				closureRows,
-			}))
-		);
-	}, [
-		sessions,
-		movements,
-		closures,
-		binding.registerId,
-		sessionsOn,
-		engine,
-		locale,
-		accountingChanges,
-	]);
-	const observed = useObservableState(source, null);
+		const stream =
+			!binding.registerId || !sessionsOn
+				? of(null)
+				: combineLatest([
+						sessions$,
+						observeCashMovements(storeDB),
+						accounting.stream,
+						observeRegisterClosures(storeDB, binding.registerId),
+					]).pipe(
+						map(([rows, entries, accounting, closureRows]) =>
+							rows && entries && accounting && closureRows
+								? {
+										storeDB,
+										registerId: binding.registerId,
+										...rows,
+										entries,
+										...accounting,
+										closureRows,
+									}
+								: null
+						)
+					);
+		return { ...accounting, stream };
+		// Locale historically rebinds the reads; the close's state must survive that rebind.
+	}, [storeDB, binding.registerId, sessionsOn, runtime.engine, runtime.locale, accountingState]);
+	const { missingParentKey, pendingParents, accountingChanges, latestAccounting } = source;
+	const observed = useObservableState(source.stream, null);
 	// The clock is not in the data stream: there it re-rendered every consumer once a minute
 	// with nothing changed (roadmap#423). This stream emits only when the verdict flips.
 	const pastClose$ = React.useMemo(
@@ -313,7 +180,10 @@ export function useRegisterSession() {
 	// the tick before the new stream emits.
 	useObservableState(pastClose$, () => isPastClose(closeTime));
 	const data =
-		observed?.sessions === sessions && observed?.registerId === binding.registerId && sessionsOn
+		observed?.storeDB === storeDB &&
+		observed?.registerId === binding.registerId &&
+		observed?.isCurrent() &&
+		sessionsOn
 			? observed
 			: null;
 	const session =
@@ -396,9 +266,9 @@ export function useRegisterSession() {
 		);
 	// Ask the existing bridge to refresh external state; it debounces requests across consumers.
 	React.useEffect(() => {
-		if (baselineStale && sessions && binding.registerId)
-			sessionRefreshRequests.next({ sessions, registerId: binding.registerId });
-	}, [baselineStale, sessions, binding.registerId]);
+		if (baselineStale && storeDB && binding.registerId)
+			sessionRefreshRequests.next({ storeDB, registerId: binding.registerId });
+	}, [baselineStale, storeDB, binding.registerId]);
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
@@ -454,7 +324,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
-				if (!sessions || !session) throw new RegisterSessionRequiredError();
+				if (!session) throw new RegisterSessionRequiredError();
 				const row = await startCounting(storeDB, session.id);
 				recordRegisterFact({
 					kind: 'counting-started',
@@ -465,7 +335,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			backToSelling: async () => {
-				if (!sessions || !session) throw new RegisterSessionRequiredError();
+				if (!session) throw new RegisterSessionRequiredError();
 				const row = await backToSelling(storeDB, session.id);
 				recordRegisterFact({
 					kind: 'counting-abandoned',
@@ -476,7 +346,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
-				if (!sessions || !session) throw new RegisterSessionRequiredError();
+				if (!session) throw new RegisterSessionRequiredError();
 				const closed =
 					session!.status === 'closed'
 						? session!
@@ -528,7 +398,8 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
-				const cashiers: WPCredentialsDocument[] = await site.populate('wp_credentials');
+				const cashiers: { id?: number; display_name?: string }[] =
+					await site.populate('wp_credentials');
 				const actorName = (id: number | null | undefined) =>
 					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
 						?.display_name ?? '';

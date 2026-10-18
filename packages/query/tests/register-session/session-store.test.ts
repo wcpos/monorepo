@@ -10,6 +10,7 @@ import {
 	backToSelling,
 	closeSession,
 	openSession,
+	recordApproval,
 	recordMovement,
 	requireOpenSession,
 	retryMovement,
@@ -150,4 +151,19 @@ it('rejects an unavailable store database for enabled session reads and writes',
 	await expect(requireOpenSession(undefined, 'register', true)).rejects.toMatchObject({
 		name: 'StoreDatabaseUnavailableError',
 	});
+});
+
+it('records the approved count without changing the transition or losing the session', async () => {
+	const row = await openSession(db, input);
+	await recordApproval(db, row.id, { approvedBy: 42, approvedCounted: { cash: '101' } });
+	expect(row.getLatest()).toMatchObject({
+		approved_by: 42,
+		approved_counted: { cash: '101' },
+		approval_required: false,
+		sync_error: null,
+		status: 'open',
+	});
+	await expect(
+		recordApproval(db, 'missing', { approvedBy: 42, approvedCounted: {} })
+	).rejects.toBeInstanceOf(Error);
 });
