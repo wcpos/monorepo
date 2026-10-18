@@ -394,7 +394,18 @@ export class EngineOrderRepository {
 						return current;
 					}
 					skipped.delete(document.uuid);
-					return withPreservedPrintCount(current, document as unknown as Record<string, unknown>);
+					// A hint may have landed and drained since the early residency snapshot.
+					const localMeta = (current.payload as Record<string, unknown> | undefined)?.meta_data;
+					return withPreservedPrintCount(current, {
+						...document,
+						payload: {
+							...document.payload,
+							meta_data: mergeProtectedOrderMeta(
+								Array.isArray(localMeta) ? localMeta : [],
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+							),
+						},
+					});
 				});
 			} else {
 				assertBulkSuccess(
