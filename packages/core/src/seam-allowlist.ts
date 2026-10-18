@@ -991,7 +991,9 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/settings/printer/use-available-printer-profiles.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/settings/printer/use-available-printer-profiles.ts :: storage token :: useAvailablePrinterProfiles :: storeDB.collections :: 1',
 	"screens/main/settings/printing/template-row.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/settings/printing/index.tsx :: raw query construction :: PrintingSettings :: storeDB.collections.template_printer_overrides.find() :: 1',
+	'screens/main/settings/printing/index.tsx :: storage token :: PrintingSettings :: storeDB.collections :: 4',
 ];
-export const SEAM_RETIRED_FLOOR = 83;
+export const SEAM_RETIRED_FLOOR = 85;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'a5bd3d8be418ab89297a798f292d8f8d1623a8bf06f73f9d518228aa1f05f762';
+	'b6f46720000be80e4dd533a8daa404b5245444fc3d981c5ad61871e85de3d18e';
