@@ -1,14 +1,17 @@
 import * as React from 'react';
 
-import { BehaviorSubject, combineLatest, EMPTY, Observable } from 'rxjs';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { BehaviorSubject } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
-import { hasPendingLocalWork } from '@wcpos/sync-engine';
-import { engineCollection, hasQueuedDelete, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { hasQueuedDelete, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { getTemporaryOrder } from '@wcpos/query/temporary-order';
+import {
+	isCollectionEvent,
+	observeOrderLinkStates,
+	readCustomerRemoteId,
+	readOrderLinkState,
+} from '@wcpos/query/mutations';
 import {
 	customerLinkChanges,
 	dropCustomerLink,
@@ -17,11 +20,7 @@ import {
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import {
-	findEngineResident,
-	type MutationDocument,
-	useLocalMutation,
-} from '../../hooks/mutations/use-local-mutation';
+import { useCustomerLinkStamp } from '../commands/use-customer-link-stamp';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import {
 	dispatchAction,
@@ -31,8 +30,6 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import { useActionContext } from '../hooks/use-action-context';
 import { type CustomerLinkDeps, reconcileCustomerLink } from './new-customer-link';
-
-import type { RxDatabase } from 'rxdb';
 
 const linkLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
@@ -57,7 +54,7 @@ let passes: Promise<void> = Promise.resolve();
 export function NewCustomerLinkBridge(): null {
 	const { storeDB } = useStoreSession();
 	const runtime = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
+	const { stampCustomer } = useCustomerLinkStamp();
 	const { ctx: actionCtx, actor } = useActionContext();
 	const { format } = useCustomerNameFormat();
 	const t = useT();
@@ -67,30 +64,11 @@ export function NewCustomerLinkBridge(): null {
 		let disposed = false;
 		const deps: CustomerLinkDeps = {
 			activeScopeId: () => runtime.engine.status().activeScopeId,
-			findCustomer: async (uuid) => {
-				const resident = await findEngineResident(runtime, 'customers', uuid);
-				if (!resident) return null;
-				const { remoteId, payload } = resident.toMutableJSON() as {
-					remoteId?: unknown;
-					payload?: Record<string, unknown>;
-				};
-				const id = remoteIdOrNull(remoteId) ?? remoteIdOrNull(payload?.id);
-				return { remoteId: id === null ? null : Number(id) };
-			},
-			findOrder: async (uuid) => {
-				const document =
-					(await getTemporaryOrder(uuid)) ?? (await findEngineResident(runtime, 'orders', uuid));
-				if (!document) return null;
-				const { payload, local } = document.toMutableJSON() as {
-					payload?: Record<string, unknown>;
-					local?: { dirty?: boolean };
-				};
-				return { document, payload: payload ?? {}, dirty: hasPendingLocalWork({ local }) };
-			},
+			findCustomer: (uuid) => readCustomerRemoteId(runtime, uuid),
+			findOrder: (uuid) => readOrderLinkState(runtime, uuid),
 			// The acknowledged Woo id reaches the order through the same event as any customer
 			// set, as a system action: a hook on `cart.customer.set` sees the real id arrive.
 			stampCustomer: async (order, customerId, slot) => {
-				const document = order.document as MutationDocument;
 				const orderId = order.uuid;
 				const outcome = await dispatchAction({
 					event: 'cart.customer.set',
@@ -108,7 +86,7 @@ export function NewCustomerLinkBridge(): null {
 							taxIds: null,
 						},
 					},
-					bottom: () => localPatch({ document, data: { customer_id: customerId } }),
+					bottom: () => stampCustomer(order, customerId),
 				});
 				if (isActionRefusal(outcome)) {
 					presentActionRefusal(actionCtx, outcome, { orderId, customerId });
@@ -171,29 +149,8 @@ export function NewCustomerLinkBridge(): null {
 		};
 
 		const journal = customerLinkChanges(storeDB).subscribe(() => pass());
-		const linkedResidents = combineLatest([
-			new Observable<RxDatabase | null>((subscriber) =>
-				runtime.engine.db$((database) => subscriber.next(database))
-			),
-			linkedOrders,
-		])
-			.pipe(
-				switchMap(([database, orderUuids]) => {
-					const orders = engineCollection(database, 'orders');
-					if (!orders || orderUuids.length === 0) return EMPTY;
-					return orders.find({ selector: { uuid: { $in: orderUuids } } }).$.pipe(
-						map((documents) =>
-							documents
-								.map((document) => {
-									const { uuid, payload, local } = document.toJSON();
-									return `${uuid}:${payload.status}:${payload.customer_id}:${hasPendingLocalWork({ local })}`;
-								})
-								.join('|')
-						),
-						distinctUntilChanged()
-					);
-				})
-			)
+		const linkedResidents = linkedOrders
+			.pipe(switchMap((uuids) => observeOrderLinkStates(runtime.engine, uuids)))
 			.subscribe({
 				next: () => pass(),
 				// The write events and the journal still run passes.
@@ -208,14 +165,13 @@ export function NewCustomerLinkBridge(): null {
 				pass();
 				return;
 			}
-			if (!('collection' in event)) return;
 			// A link whose order was away for a resync waits; the next order the
 			// till sends is a cheap moment to look for it again.
-			if (event.collection === 'orders' && event.type === 'write-acknowledged') {
+			if (isCollectionEvent(event, 'orders') && event.type === 'write-acknowledged') {
 				pass();
 				return;
 			}
-			if (event.collection !== 'customers') return;
+			if (!isCollectionEvent(event, 'customers')) return;
 			switch (event.type) {
 				case 'write-acknowledged':
 				case 'write-ack-rematerialized':
@@ -233,7 +189,7 @@ export function NewCustomerLinkBridge(): null {
 			linkedResidents.unsubscribe();
 			unsubscribe();
 		};
-	}, [storeDB, runtime, localPatch, format, t, actionCtx, actor]);
+	}, [storeDB, runtime, stampCustomer, format, t, actionCtx, actor]);
 
 	return null;
 }
