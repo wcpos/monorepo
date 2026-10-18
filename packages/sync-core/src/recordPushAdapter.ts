@@ -126,6 +126,8 @@ const OUTCOME_BY_OP: Record<RecordMutation['operation'], Exclude<PushOutcome, 'c
 
 export async function pushRecordMutation(input: {
 	mutation: RecordMutation;
+	expectedEpoch?: number;
+	tillAggregate?: Record<string, unknown>;
 	resolveEndpoint: EndpointResolver;
 	/**
 	 * The transport port — REQUIRED, never defaulted to the global `fetch`. A silent
@@ -175,6 +177,8 @@ export async function pushRecordMutation(input: {
 		recordId: mutation.recordId,
 		baseRevision: mutation.baseRevision,
 	};
+	if (input.expectedEpoch !== undefined) envelope.expectedEpoch = input.expectedEpoch;
+	if (input.tillAggregate !== undefined) envelope.tillAggregate = input.tillAggregate;
 	if (mutation.operation !== 'delete') {
 		if (mutation.collectionName === 'products' || mutation.collectionName === 'variations') {
 			envelope.payload = mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? []);

@@ -1,3 +1,5 @@
+import { APP_PAYMENTS_CONTRACT } from './payments-contract';
+
 /**
  * Sending this value is the client's claim that it tolerates the 2.0.0 boundary
  * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
@@ -92,8 +94,9 @@ export function sendsProtocolQueryTwins(
 	return platform !== 'web' || useProtocolHeaders !== true;
 }
 
+/** Platform/app version and the independent payments=<major.minor> contract token. */
 export function formatClientSignal(platform: string, version: string): string {
-	return `${platform}/${version.trim() || 'unknown'}`;
+	return `${platform}/${version.trim() || 'unknown'} payments=${APP_PAYMENTS_CONTRACT}`;
 }
 
 /**

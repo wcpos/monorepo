@@ -65,6 +65,7 @@ async function writeCouponLines(
 		queue,
 		data: { coupon_lines: result.couponLines, line_items: result.lineItems },
 	});
+	if (isActionRefusal(patched)) return patched;
 	return patched ? { patched, couponLines: result.couponLines } : false;
 }
 

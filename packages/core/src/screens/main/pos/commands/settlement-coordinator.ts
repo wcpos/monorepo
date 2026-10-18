@@ -28,6 +28,7 @@ interface Deps {
 	references$: Observable<CouponReferences>;
 	readCoupons: (payload: OrderPayload) => Promise<CouponContext>;
 	serverOwnsMoney: (uuid: string) => boolean;
+	storeContract?: () => string | null;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	settle: (
@@ -54,7 +55,7 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 		) ||
 		deps.inCheckout(record.uuid) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		serverOwnsMoney(payload.meta_data)
+		serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() })
 	);
 }
 
@@ -64,7 +65,7 @@ const needsReferences = (record: { payload: OrderPayload }) =>
 const hasCoupons = (record: { payload: OrderPayload }) =>
 	record.payload.coupon_lines?.some((line) => line.code != null);
 
-/** One sequential drain; only content (never aggregate money or revision) invalidates a pass. */
+/** One sequential drain; content and payment coverage (not aggregates/revisions) invalidate a pass. */
 export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let records: CurrentOrderRecord[] = [];
 	let inputs: CartConfigInputs;
@@ -98,6 +99,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					key === '_wcpos_money_owner' ||
 					key === '_wcpos_money_owner_hint'
 			),
+			// A guard can outlive a ledger update that supersedes a paid-balance completion.
+			readLedger(p.meta_data)
+				.filter(({ status }) => status === 'authorized' || status === 'captured')
+				.map(({ id, status, amount, refunded_amount }) => [id, status, amount, refunded_amount]),
 			closed(p, record, deps, inputs.settings.priceNumDecimals),
 			inputs,
 			rates.generation,

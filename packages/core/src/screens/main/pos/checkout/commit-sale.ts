@@ -50,7 +50,7 @@ export function commitSale<R>(
 	ctx: SaleCommitContext,
 	{ order, methodId, bindingStatus, amounts }: SaleCommitRequest,
 	write: (sale: StampedSale, queue: OrderMutationContext) => Promise<R>,
-	options?: { queue?: OrderMutationContext }
+	options?: { queue?: OrderMutationContext; source?: 'user' | 'system' }
 ): Promise<ActionRefusal | R> {
 	const run = async (queue: OrderMutationContext): Promise<ActionRefusal | R> => {
 		const latest = order.getLatest().payload;
@@ -88,7 +88,7 @@ export function commitSale<R>(
 			input: {
 				orderId: order.uuid,
 				actor: ctx.actionActor,
-				source: 'user',
+				source: options?.source ?? 'user',
 				payload: {
 					methodId,
 					mode: whole

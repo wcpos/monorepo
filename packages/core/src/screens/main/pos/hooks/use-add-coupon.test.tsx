@@ -227,6 +227,20 @@ describe('useAddCoupon engine reads', () => {
 		]);
 	});
 
+	it('returns the closed-order refusal instead of coupon success', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, ...{ status: 'completed' }, coupon_lines: [] };
+		recalculate.mockResolvedValue({
+			couponLines: [{ code: 'bonus' }],
+			lineItems: orderSnapshot.line_items,
+		});
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'pos_checkout.order_changed_retry',
+		});
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it('rejects when an applied mixed-case code is individual_use', async () => {
 		orderSnapshot = {
 			...baseOrderSnapshot,

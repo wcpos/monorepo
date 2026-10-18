@@ -95,6 +95,7 @@ const isWeb = Platform.isWeb;
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
 
 export interface CreateAppSyncEngineOptions {
+	paymentsContract?: () => string | null;
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
 	/**
@@ -141,6 +142,7 @@ export interface CreateAppSyncEngineOptions {
 // scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
+	| 'paymentsContract'
 	| 'credentials'
 	| 'refreshAuth'
 	| 'useJwtAsParam'
@@ -442,6 +444,7 @@ export function createSessionFetcherOptions(
 function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOptions {
 	return {
 		credentials: options.credentials,
+		paymentsContract: options.paymentsContract,
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
@@ -952,6 +955,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	}
 	const engine = createRxdbSyncEngine(
 		{
+			paymentsContract: () => fetcherOptions.paymentsContract?.() ?? null,
 			site: {
 				...site,
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,

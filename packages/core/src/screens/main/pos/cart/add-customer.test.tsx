@@ -70,6 +70,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));
 

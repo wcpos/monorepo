@@ -1,7 +1,7 @@
 // ===== @wcpos/order-math public surface =====
 // The settle surface is per SPEC §3; the payments section is Payments Contract v1.
 
-export { serverOwnsMoney } from './payments/money-owner';
+export { readMoneyEpoch, serverOwnsMoney } from './payments/money-owner';
 
 export { createCartConfig } from './config';
 export type { CartConfig, CartConfigInput } from './config';
@@ -134,3 +134,9 @@ export type {
 	FieldsVerbKind,
 	GatewaySubmitResponse,
 } from './payments';
+
+export {
+	APP_PAYMENTS_CONTRACT,
+	parsePaymentsContract,
+	paymentsContractAtLeast,
+} from './payments/contract';

@@ -730,3 +730,19 @@ describe('reconcileCreateAck', () => {
 		).toThrow(/never be re-keyed/);
 	});
 });
+
+it('passes the optional payments 1.3 envelope fields unchanged', async () => {
+	const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(200, { id: 1 }));
+	const tillAggregate = { total: '12.340000', total_tax: '2.340000' };
+	await pushRecordMutation({
+		mutation: mut({ collectionName: 'orders', operation: 'update' }),
+		resolveEndpoint,
+		fetcher,
+		expectedEpoch: 2,
+		tillAggregate,
+	});
+	expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toMatchObject({
+		expectedEpoch: 2,
+		tillAggregate,
+	});
+});

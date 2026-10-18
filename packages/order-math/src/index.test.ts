@@ -27,8 +27,11 @@ test('public value surface is exactly the spec', () => {
 		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
+		'parsePaymentsContract',
+		'paymentsContractAtLeast',
 		'readAwaitingCustomer',
 		'readLedger',
+		'readMoneyEpoch',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then
 		// deducts a total. Without a shared rule for "what one refund is worth" the
 		// rows and the deduction were computed differently and could disagree on

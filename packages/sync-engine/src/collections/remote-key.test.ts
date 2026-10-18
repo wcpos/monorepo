@@ -67,11 +67,11 @@ it.each(['products', 'variations', 'customers', 'coupons'] as const)(
 	}
 );
 
-it('order acknowledgement retains the Woo id on an id-less resident hint', async () => {
+it('order acknowledgement clears an absent server stamp and retains the hint with its Woo id', async () => {
 	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
 	const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000077' };
 	const resident = {
-		payload: { meta_data: [uuid, hint] },
+		payload: { meta_data: [uuid, hint, { key: '_wcpos_money_owner', value: 'server' }] },
 		local: { pendingMutationIds: ['hint'] },
 	};
 	const db = {
@@ -93,5 +93,5 @@ it('order acknowledgement retains the Woo id on an id-less resident hint', async
 		document: { id: 7, meta_data: [uuid, { ...hint, id: 8 }] },
 		mutation: { mutationId: 'hint', operation: 'update', recordId: uuid.value },
 	});
-	expect(resident.payload.meta_data).toContainEqual({ ...hint, id: 8 });
+	expect(resident.payload.meta_data).toEqual([uuid, { ...hint, id: 8 }]);
 });

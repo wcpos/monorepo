@@ -1,20 +1,33 @@
+import { BehaviorSubject, of } from 'rxjs';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { derive, readLedger, settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
+import {
+	derive,
+	readLedger,
+	settleAggregate,
+	settlementPatch,
+	snapshotFromOrderJSON,
+	withLedger,
+} from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 
 import { config } from '../../../../../jest/cart-write';
-import { createActionContext } from '../../../../extensions/actions';
+import { createActionContext, registerActionHook } from '../../../../extensions/actions';
 import { pendingCompletions } from '../checkout/completion-journal';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { commitAtBoundary } from './boundary-commit';
+import { createSettlementCoordinator } from './settlement-coordinator';
 
-jest.mock('../../../../services/register/register-document', () => ({
+import type { CartConfigInputs } from './cart-config-for-order';
+
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	requireOpenSession: async () => 'session',
 	readRegister: async () => ({ sites: { site: { register_id: 'register' } } }),
 	nextSaleCounter: async () => 7,
 }));
@@ -51,7 +64,6 @@ beforeEach(async () => {
 		storeId: 1,
 		dp: 2,
 		sessionsOn: true,
-		sessions: { findOne: () => ({ exec: async () => ({ id: 'session' }) }) },
 		localPatch: jest.fn(async ({ document, data, changes }) => {
 			expect((await pendingCompletions(ctx.storeDB))[document.uuid].source).toBe('zero-balance');
 			Object.assign(document.payload, changes ? changes(document.payload) : data);
@@ -223,5 +235,130 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 			'settlement.boundary-superseded',
 			expect.anything()
 		);
+	}
+);
+
+const dispatchSource = jest.fn();
+registerActionHook(
+	'checkout.tender.commit',
+	async (_ctx, event, next) => {
+		dispatchSource(event.source);
+		return next(event);
+	},
+	{ id: 'test.boundary-source', tier: 'extension' }
+);
+
+it.each([undefined, 'system'] as const)(
+	'dispatches boundary source %s (user by default)',
+	async (source) => {
+		const order = orderFor();
+		await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					...{ source },
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete: async () => {},
+				},
+				{
+					order,
+					queue,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			)
+		);
+		expect(dispatchSource).toHaveBeenCalledWith(source ?? 'user');
+		expect(order.payload.status).toBe('completed');
+	}
+);
+
+it.each(['amount', 'status', 'refund'])(
+	're-settles after a ledger %s change supersedes the guarded boundary',
+	async (change) => {
+		const order = orderFor();
+		order.payload.meta_data = withLedger(
+			order.payload.meta_data,
+			readLedger(order.payload.meta_data).map((row) => ({ ...row, status: 'captured' }))
+		);
+		const openOrders$ = new BehaviorSubject([order]);
+		resolveSession.mockImplementationOnce(async () => {
+			const payment = readLedger(order.payload.meta_data)[0];
+			order.payload.meta_data = [
+				{
+					key: '_wcpos_payments',
+					value: {
+						schema: 1,
+						payments: [
+							{
+								...payment,
+								...(change === 'amount'
+									? { amount: '2' }
+									: change === 'status'
+										? { status: 'failed' }
+										: { refunded_amount: '5' }),
+							},
+						],
+					},
+				},
+			];
+			openOrders$.next([order]);
+			return { registerId: 'register', sessionId: 'session' };
+		});
+		const outcomes: unknown[] = [];
+		const complete = jest.fn();
+		const settle = jest.fn(async (_uuid, _record, _allowed, _coupons, queue) => {
+			const result = settleAggregate(snapshotFromOrderJSON(order.payload), config);
+			if (!outcomes.length)
+				outcomes.push(
+					await commitAtBoundary(
+						{
+							...ctx,
+							bindingStatus: 'bound',
+							configForOrder: () => config,
+							serverOwnsMoney: () => false,
+							complete,
+						},
+						{
+							order,
+							result,
+							queue,
+							write: (changes) => ctx.localPatch({ document: order, changes }),
+						}
+					)
+				);
+			else Object.assign(order.payload, settlementPatch(result));
+		});
+		const observe = jest.fn();
+		const coordinator = createSettlementCoordinator({
+			inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
+			openOrders$,
+			ratesReady$: of({ ready: true, generation: 0 }),
+			references$: of({ ready: true, generation: '0' }),
+			readCoupons: async () => ({
+				coupons: new Map(),
+				productCategories: new Map(),
+				categoryParents: new Map(),
+			}),
+			serverOwnsMoney: () => false,
+			orderSaveState: () => null,
+			inCheckout: () => false,
+			settle,
+			now: Date.now,
+			observe,
+		});
+		try {
+			await enqueueOrderMutation(order.uuid, async () => {});
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(observe).not.toHaveBeenCalled();
+			expect(outcomes).toEqual(['superseded']);
+			expect(complete).not.toHaveBeenCalled();
+			expect(settle).toHaveBeenCalledTimes(2);
+			expect(order.payload).toMatchObject({ status: 'pos-partial', total: '4' });
+		} finally {
+			coordinator.stop();
+		}
 	}
 );

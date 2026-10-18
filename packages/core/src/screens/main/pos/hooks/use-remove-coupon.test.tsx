@@ -110,6 +110,20 @@ describe('useRemoveCoupon', () => {
 		};
 	});
 
+	it('presents the closed-order refusal instead of reporting coupon removal', async () => {
+		orderSnapshot = { ...orderSnapshot, ...{ status: 'completed' } };
+		recalculate.mockResolvedValue({ couponLines: [], lineItems });
+		const { result } = renderHook(() => useRemoveCoupon());
+		await result.current.removeCoupon('save10');
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_checkout.order_changed_retry',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockLoggerInfo).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it.each([undefined, 12])(
 		'removes a virtual line with id %p without a catalog lookup',
 		async (id) => {

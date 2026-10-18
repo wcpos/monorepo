@@ -45,6 +45,7 @@ const engine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	readResidentMoneyEpoch: () => 0,
 	useQueryRuntime: () => ({ engine }),
 }));
 

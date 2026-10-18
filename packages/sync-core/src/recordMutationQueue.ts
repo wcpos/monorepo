@@ -1439,7 +1439,7 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 7,
+	version: 8,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
@@ -1450,6 +1450,7 @@ export const recordMutationQueueSchema = {
 		origin: { type: 'string', enum: ['existing', 'server-meta', 'minted'] },
 		payload: { type: 'object', additionalProperties: true },
 		baseRevision: { type: ['string', 'null'] },
+		expectedEpoch: { type: 'integer' },
 		queuedAt: { type: 'string', maxLength: 32 },
 		explicit: { type: 'boolean' },
 		seq: { type: 'number', minimum: 1, multipleOf: 1 },
@@ -1538,4 +1539,6 @@ export const recordMutationQueueMigrationStrategies = {
 	// Optional void mark; preserve existing queued work without a schema-hash reset.
 	6: (doc: QueuedMutation): QueuedMutation => doc,
 	7: (doc: QueuedMutation): QueuedMutation => doc,
+	// Never invent an epoch for a mutation queued by an older app.
+	8: (doc: QueuedMutation): QueuedMutation => doc,
 };

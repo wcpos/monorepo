@@ -1,12 +1,33 @@
+/** @jest-environment jsdom */
+import { setImmediate } from 'node:timers';
+
+import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
 
 import type { CouponContext } from '@wcpos/order-math';
 
+import {
+	OrderMoneyDivergenceProvider,
+	useServerOwnsMoneyReader,
+} from '../contexts/order-money-divergence';
 import { createSettlementCoordinator } from './settlement-coordinator';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { CartConfigInputs, OrderPayload } from './cart-config-for-order';
+let mockEpoch = 0;
+let mockDivergence: (event: { type: string; recordId: string }) => void;
+const mockEngine = {
+	events: (fn: typeof mockDivergence) => {
+		mockDivergence = fn;
+		return () => {};
+	},
+};
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	readResidentMoneyEpoch: () => mockEpoch,
+}));
 
 // prettier-ignore
 const inputs: CartConfigInputs = {
@@ -36,7 +57,12 @@ const emptyContext: CouponContext = {
 };
 const stops: (() => void)[] = [];
 afterEach(() => stops.splice(0).forEach((stop) => stop()));
-function start(records = [order()], ready = true) {
+function start(
+	records = [order()],
+	ready = true,
+	storeContract: string | null = null,
+	ownership = (_uuid: string) => false
+) {
 	const inputs$ = new BehaviorSubject(inputs);
 	const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(records);
 	const ratesReady$ = new BehaviorSubject({ ready, generation: 0 });
@@ -44,13 +70,14 @@ function start(records = [order()], ready = true) {
 		Promise<void>,
 		[string, CurrentOrderRecord, (payload: OrderPayload) => boolean]
 	>(async () => {});
-	const serverOwnsMoney = jest.fn<boolean, [string]>(() => false);
+	const serverOwnsMoney = jest.fn<boolean, [string]>(ownership);
 	const orderSaveState = jest.fn<{ kind: string } | null, [string]>(() => null);
 	const inCheckout = jest.fn(() => false);
 	const references$ = new BehaviorSubject({ ready: false, generation: '0:0' });
 	const readCoupons = jest.fn<Promise<CouponContext>, [OrderPayload]>(async () => emptyContext);
 	const observe = jest.fn();
 	const deps = {
+		storeContract: () => storeContract,
 		inputs$,
 		openOrders$,
 		ratesReady$,
@@ -481,5 +508,27 @@ it('#952/#963 server ownership stops coupon reads and subsequent settlement pass
 	h.serverOwnsMoney.mockReturnValue(true);
 	await emit(h.inputs$, { ...inputs, baseLocation: { country: 'NZ' } });
 	expect(h.readCoupons).toHaveBeenCalledTimes(1);
+	expect(h.settle).toHaveBeenCalledTimes(1);
+});
+
+it.each([false, true])('ignores the pre-1.3 hint after reopen (coupons=%s)', async (coupons) => {
+	mockEpoch = 0;
+	const { result } = renderHook(useServerOwnsMoneyReader, {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	act(() => mockDivergence({ type: 'order-money-divergence', recordId: 'a' }));
+	mockEpoch = 1;
+	const h = start(
+		[
+			order('a', {
+				meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }],
+				coupon_lines: coupons ? [{ code: 'sale' }] : [],
+			}),
+		],
+		true,
+		'1.3',
+		result.current
+	);
+	await emit(h.references$, { ready: true, generation: '1' });
 	expect(h.settle).toHaveBeenCalledTimes(1);
 });

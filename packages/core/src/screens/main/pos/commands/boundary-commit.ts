@@ -29,8 +29,10 @@ const logger = getLogger(['wcpos', 'pos', 'settlement']);
 export async function commitAtBoundary(
 	ctx: SaleContext & {
 		bindingStatus: SaleCommitRequest['bindingStatus'];
+		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
+		storeContract?: () => string | null;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
 	},
 	{
@@ -65,7 +67,11 @@ export async function commitAtBoundary(
 				complete: ctx.complete,
 				changes: (payload) => {
 					overpaid = undefined;
-					if (serverOwnsMoney(payload.meta_data) || ctx.serverOwnsMoney(order.uuid)) return null;
+					if (
+						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
+						ctx.serverOwnsMoney(order.uuid)
+					)
+						return null;
 					const config = ctx.configForOrder(payload);
 					const snapshot = snapshotFromOrderJSON(payload);
 					const fresh = coupons
@@ -89,7 +95,7 @@ export async function commitAtBoundary(
 			} else if (overpaid) logger.warn('settlement.boundary-overpaid', { context: overpaid });
 			return completion;
 		},
-		{ queue }
+		{ queue, source: ctx.source }
 	);
 	if (isActionRefusal(outcome))
 		logger.warn('settlement.boundary-deferred', {

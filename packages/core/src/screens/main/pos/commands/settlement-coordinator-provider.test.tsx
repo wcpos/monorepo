@@ -23,6 +23,8 @@ jest.mock('@wcpos/order-math', () => ({
 	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
 }));
 
+const paymentMethods = new BehaviorSubject<unknown>(null);
+const extraData = { get: () => paymentMethods.value, get$: () => paymentMethods };
 const events = new Subject<{ type: string; collection?: string }>();
 const coverage = new BehaviorSubject({ complete: true });
 const statuses = new BehaviorSubject({ collections: { taxRates: { coverageGeneration: 0 } } });
@@ -41,7 +43,11 @@ const manager = { engine };
 const writes: Record<string, unknown>[] = [];
 const sessionChanges = new Subject();
 let sessionOpen = true;
-const saleContext = { sessions: { $: sessionChanges } };
+const saleContext = { storeDB: {} };
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	observeOpenSessionPresence: () => sessionChanges,
+}));
 jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => saleContext }));
 jest.mock('./boundary-commit', () => ({
 	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
@@ -65,13 +71,14 @@ let mockInputs = {
 };
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 } }),
+	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 }, extraData }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register', status: 'bound' }),
@@ -121,6 +128,7 @@ const flush = async () => {
 	});
 };
 beforeEach(() => {
+	paymentMethods.next(null);
 	currentConfig = config;
 	sessionOpen = true;
 	ownsMoney.mockReset().mockReturnValue(false);
@@ -582,5 +590,42 @@ it('leaves a coupon edit to the continuation and completes once at the redistrib
 	await flush();
 	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
 	expect(writes).toHaveLength(1);
+	view.unmount();
+});
+
+it('wakes a hint-only open order when the store contract resolves to 1.3', async () => {
+	orders.next({
+		ready: true,
+		hits: [
+			{ record: record({ meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }) },
+		],
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toHaveLength(0);
+	act(() => paymentMethods.next({ schema: 1, methods: [], contract: '1.3' }));
+	await flush();
+	expect(writes).toHaveLength(1);
+	view.unmount();
+});
+
+it('marks coordinator boundary work as system rather than cashier initiated', async () => {
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledWith(
+		expect.objectContaining({ source: 'system' }),
+		expect.anything()
+	);
 	view.unmount();
 });

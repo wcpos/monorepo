@@ -1,11 +1,31 @@
+/** @jest-environment jsdom */
+import { act, renderHook } from '@testing-library/react';
+
 import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
 
+import {
+	OrderMoneyDivergenceProvider,
+	useServerOwnsMoneyReader,
+} from '../contexts/order-money-divergence';
 import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
 import { settleCartWrite } from './settle-cart-write';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
+let mockEpoch = 0;
+let mockDivergence: (event: { type: string; recordId: string }) => void;
+const mockEngine = {
+	events: (fn: typeof mockDivergence) => {
+		mockDivergence = fn;
+		return () => {};
+	},
+};
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	readResidentMoneyEpoch: () => mockEpoch,
+}));
 
 const line = {
 	product_id: 1,
@@ -177,4 +197,26 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 		expect(order.payload.total).toBe('6');
 		expect(commitAtBoundary).not.toHaveBeenCalled();
 	}
+});
+
+it('settles a 1.3 order whose stamp was cleared despite a lingering hint', async () => {
+	mockEpoch = 0;
+	const { result } = renderHook(useServerOwnsMoneyReader, {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	act(() => mockDivergence({ type: 'order-money-divergence', recordId: 'target' }));
+	mockEpoch = 1;
+	const order = record();
+	order.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
+	const configForOrder = jest.fn(() => config);
+	settleCartWrite(
+		{ document: order, data: {} },
+		{
+			localPatch: resolveCartWrite(jest.fn()),
+			configForOrder,
+			serverOwnsMoney: result.current,
+			storeContract: () => '1.3',
+		}
+	);
+	expect(configForOrder).toHaveBeenCalled();
 });
