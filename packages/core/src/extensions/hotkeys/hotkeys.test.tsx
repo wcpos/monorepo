@@ -64,6 +64,26 @@ jest.mock('@wcpos/components/button', () => ({
 		<button data-testid={testID}>{children}</button>
 	),
 }));
+// The help sheet's rows are MenuRows (icon + uniwind ESM underneath); the same stand-in as Button.
+jest.mock('@wcpos/components/menu-row', () => ({
+	MenuRow: ({
+		label,
+		trailing,
+		onPress,
+		testID,
+	}: {
+		label?: React.ReactNode;
+		trailing?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{label}
+			{trailing}
+		</button>
+	),
+	MenuRowSeparator: () => null,
+}));
 jest.mock('../../screens/main/pos/contexts/overlay-side', () => ({
 	usePanelSide: () => 'right',
 }));
