@@ -1,4 +1,4 @@
-import type { NotificationCollection } from '@wcpos/database';
+import { type StoreLocalDatabase, upsertNotification } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
@@ -95,13 +95,13 @@ function processNotificationBehavior(
 /**
  * Sync a single notification to RxDB (v3 API)
  *
- * @param collection - The local notifications collection
+ * @param database - The store-local database
  * @param subscriberId - The Novu subscriber the notification belongs to
  * @param notification - The Novu notification object
  * @param isNewNotification - Whether this is a newly received notification (triggers behavior)
  */
 export async function syncNotificationToRxDB(
-	collection: NotificationCollection,
+	database: StoreLocalDatabase,
 	subscriberId: string,
 	notification: NovuNotification,
 	isNewNotification = false,
@@ -142,23 +142,7 @@ export async function syncNotificationToRxDB(
 			channel: notification.channelType || 'in_app',
 		};
 
-		if (preserveLocalState) {
-			const existing = await collection.findOne(nextNotification.id).exec();
-			if (existing) {
-				await existing.incrementalModify((current) => ({
-					...current,
-					...nextNotification,
-					status: current.status === 'unread' ? nextNotification.status : current.status,
-					seen: current.seen || nextNotification.seen,
-				}));
-			} else {
-				// A concurrent WebSocket insert wins any primary-key conflict instead of being
-				// overwritten by this older snapshot.
-				await collection.insert(nextNotification);
-			}
-		} else {
-			await collection.upsert(nextNotification);
-		}
+		await upsertNotification(database, nextNotification, { preserveLocalState });
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
 		novuLogger.error('Novu: Failed to sync notification to RxDB', {
@@ -174,14 +158,14 @@ export async function syncNotificationToRxDB(
  * Used for initial load and refresh - these are NOT new notifications, so no toast.
  */
 export async function syncNotificationsToRxDB(
-	collection: NotificationCollection,
+	database: StoreLocalDatabase,
 	subscriberId: string,
 	notifications: NovuNotification[]
 ): Promise<void> {
 	// Pass isNewNotification=false to avoid showing toasts for old notifications
 	await Promise.all(
 		notifications.map((notification) =>
-			syncNotificationToRxDB(collection, subscriberId, notification, false, true)
+			syncNotificationToRxDB(database, subscriberId, notification, false, true)
 		)
 	);
 }

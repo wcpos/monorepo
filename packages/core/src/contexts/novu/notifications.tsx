@@ -1,10 +1,15 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
-import { type Observable, of } from 'rxjs';
-import { map, startWith } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
-import type { NotificationCollection, NotificationDocument } from '@wcpos/database';
+import {
+	markAllNotificationsRead,
+	markAllNotificationsSeen,
+	markNotificationRead,
+	type NotificationRow,
+	observeNotifications,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -92,19 +97,17 @@ const NovuNotificationsContext = React.createContext<UseNovuNotificationsResult 
 
 const EMPTY_NOTIFICATIONS: Notification[] = [];
 
-/**
- * Stand-in stream for "no subscriber".
- *
- * It has to *emit* `[]` rather than be `EMPTY`: this provider outlives logout, so a stream that
- * never emits would leave the previous session's notifications on screen (the hook's initial
- * value only applies on first mount). Module scope keeps the identity stable so swapping to it
- * is the only thing that triggers a resubscribe.
- *
- * This covers logout (`subscriberId` -> `null`). A store switch changes `subscriberId` from one
- * value straight to another and never swaps in this stream, so the real query clears itself with
- * `startWith(EMPTY_NOTIFICATIONS)` below.
- */
-const EMPTY_NOTIFICATIONS$ = of(EMPTY_NOTIFICATIONS);
+function toNotification(rows: NotificationRow[]): Notification[] {
+	return rows.map((row) => ({
+		id: row.id ?? '',
+		title: row.title || '',
+		body: row.body || '',
+		status: row.status as 'unread' | 'read' | 'archived',
+		seen: row.seen ?? false,
+		createdAt: row.createdAt ?? 0,
+		workflowId: row.workflowId ?? undefined,
+	}));
+}
 
 interface NovuNotificationsProviderProps {
 	children: React.ReactNode;
@@ -122,9 +125,6 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 	const { storeDB } = useAppState();
 	const { subscriberId, subscriberMetadata, isConfigured } = useNovu();
 
-	// Get notifications collection
-	const notificationsCollection = storeDB?.notifications as NotificationCollection | undefined;
-
 	/**
 	 * Drive the session from this one effect.
 	 *
@@ -136,13 +136,13 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 	 * (store switch), which shows up here as a new dependency value.
 	 */
 	React.useEffect(() => {
-		if (!subscriberId || !subscriberMetadata || !isConfigured || !notificationsCollection) {
+		if (!subscriberId || !subscriberMetadata || !isConfigured || !storeDB) {
 			stopNovuBootstrap();
 			return;
 		}
 
-		startNovuBootstrap({ subscriberId, subscriberMetadata, notificationsCollection });
-	}, [subscriberId, subscriberMetadata, isConfigured, notificationsCollection]);
+		startNovuBootstrap({ subscriberId, subscriberMetadata, database: storeDB });
+	}, [subscriberId, subscriberMetadata, isConfigured, storeDB]);
 
 	// Shared bootstrap status (one stream, every consumer reads the same values).
 	// `useObservableEagerState`, not `useObservableState(status$, getNovuBootstrapStatus())`:
@@ -154,43 +154,12 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 	const status = useObservableEagerState(novuBootstrapStatus$);
 	const isConnected = status.subscriberId === subscriberId && status.isConnected;
 
-	// Subscribe to notifications from RxDB - one query for the whole app
-	const notifications$ = React.useMemo(() => {
-		if (!notificationsCollection || !subscriberId) {
-			return null;
-		}
-
-		return notificationsCollection
-			.find({
-				selector: {
-					subscriberId,
-				},
-				sort: [{ createdAt: 'desc' }],
-			})
-			.$.pipe(
-				map((docs: NotificationDocument[]) =>
-					docs.map((doc) => ({
-						id: doc.id ?? '',
-						title: doc.title || '',
-						body: doc.body || '',
-						status: doc.status as 'unread' | 'read' | 'archived',
-						seen: doc.seen ?? false,
-						createdAt: doc.createdAt ?? 0,
-						workflowId: doc.workflowId ?? undefined,
-					}))
-				),
-				// The RxDB query emits asynchronously, so without this the previous session's
-				// notifications and badge counts stay on screen until the new query resolves.
-				// This observable is only rebuilt when the subscriber or collection changes -
-				// i.e. when the old list is already invalid - so there is nothing to preserve.
-				startWith(EMPTY_NOTIFICATIONS)
-			);
-	}, [notificationsCollection, subscriberId]);
-
-	const notifications: Notification[] = useObservableState(
-		(notifications$ ?? EMPTY_NOTIFICATIONS$) as Observable<Notification[]>,
-		EMPTY_NOTIFICATIONS
+	// One named read for the whole app; it clears the old list before every binding.
+	const notifications$ = React.useMemo(
+		() => observeNotifications(storeDB, subscriberId).pipe(map(toNotification)),
+		[storeDB, subscriberId]
 	);
+	const notifications = useObservableState(notifications$, EMPTY_NOTIFICATIONS);
 
 	// Calculate counts from local data
 	const unreadCount = React.useMemo(
@@ -206,14 +175,11 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 	// Mark a single notification as read (both Novu and RxDB)
 	const markAsRead = React.useCallback(
 		async (notificationId: string) => {
-			if (!notificationsCollection) return;
+			if (!storeDB) return;
 
 			try {
 				// Update RxDB first for immediate UI feedback
-				const doc = await notificationsCollection.findOne(notificationId).exec();
-				if (doc) {
-					await doc.patch({ status: 'read', seen: true });
-				}
+				await markNotificationRead(storeDB, notificationId);
 
 				// Then update Novu
 				await novuMarkAsRead(notificationId);
@@ -224,27 +190,16 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				});
 			}
 		},
-		[notificationsCollection]
+		[storeDB]
 	);
 
 	// Mark all notifications as read (both Novu and RxDB)
 	const markAllAsRead = React.useCallback(async () => {
-		if (!notificationsCollection || !subscriberId) return;
+		if (!storeDB || !subscriberId) return;
 
 		try {
 			// Update RxDB first
-			const unreadDocs = await notificationsCollection
-				.find({
-					selector: {
-						subscriberId,
-						status: 'unread',
-					},
-				})
-				.exec();
-
-			await Promise.all(
-				unreadDocs.map((doc: NotificationDocument) => doc.patch({ status: 'read', seen: true }))
-			);
+			await markAllNotificationsRead(storeDB, subscriberId);
 
 			// Then update Novu
 			await novuMarkAllAsRead();
@@ -254,24 +209,15 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				context: { error },
 			});
 		}
-	}, [notificationsCollection, subscriberId]);
+	}, [storeDB, subscriberId]);
 
 	// Mark all notifications as seen without marking as read (both Novu and RxDB)
 	const markAllAsSeen = React.useCallback(async () => {
-		if (!notificationsCollection || !subscriberId) return;
+		if (!storeDB || !subscriberId) return;
 
 		try {
 			// Update RxDB first - only set seen: true, don't change status
-			const unseenDocs = await notificationsCollection
-				.find({
-					selector: {
-						subscriberId,
-						seen: false,
-					},
-				})
-				.exec();
-
-			await Promise.all(unseenDocs.map((doc: NotificationDocument) => doc.patch({ seen: true })));
+			await markAllNotificationsSeen(storeDB, subscriberId);
 
 			// Then update Novu
 			await novuMarkAllAsSeen();
@@ -281,7 +227,7 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				context: { error },
 			});
 		}
-	}, [notificationsCollection, subscriberId]);
+	}, [storeDB, subscriberId]);
 
 	// Refresh notifications from Novu server
 	const refresh = React.useCallback(async () => {
