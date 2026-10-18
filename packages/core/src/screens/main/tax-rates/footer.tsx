@@ -3,6 +3,7 @@ import * as React from 'react';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
+import { rateCount } from './rate-rows';
 import { useT } from '../../../contexts/translations';
 import { useQueryHandleFields, useQueryStateActions } from '../../../query';
 import { SyncButton } from '../components/sync-button';
@@ -11,6 +12,7 @@ import { useCollectionReset } from '../hooks/use-collection-reset';
 import type { QueryHandle } from '../../../query';
 
 type TaxRatesFooterProps = {
+	/** The store total across classes, not one tab's rows. */
 	count: number;
 	/** The live handle the modal owns: the sync button acts on it and spins with it. */
 	handle: QueryHandle;
@@ -18,6 +20,10 @@ type TaxRatesFooterProps = {
 	shown: QueryHandle;
 };
 
+/**
+ * The left slot of the panel's one bottom bar (Close is the right): the count and the sync
+ * button. It renders inside the `DialogFooter`; there is no second bar.
+ */
 export function TaxRatesFooter({ count, handle, shown }: TaxRatesFooterProps) {
 	const { clearAndSync } = useCollectionReset('taxes');
 	const { clearSearch, resetFilters } = useQueryStateActions<'tax-rates'>();
@@ -34,15 +40,8 @@ export function TaxRatesFooter({ count, handle, shown }: TaxRatesFooterProps) {
 	const t = useT();
 
 	return (
-		<HStack className="border-border justify-end gap-0 border-t p-2">
-			<Text className="text-xs">
-				{vouched === null
-					? t('common.showing_n', { shown: count.toLocaleString() })
-					: t('common.showing_of', {
-							shown: count.toLocaleString(),
-							total: vouched.toLocaleString(),
-						})}
-			</Text>
+		<HStack className="gap-1">
+			<Text className="text-muted-foreground text-sm">{rateCount(count, vouched, t)}</Text>
 			<SyncButton sync={handle.sync} clearAndSync={resetQueryAndCollection} active={active} />
 		</HStack>
 	);

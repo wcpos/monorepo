@@ -7,8 +7,8 @@ import {
 	noRateCause,
 	postalLine,
 	rateWhy,
-	roundPercent,
 } from './tax-derivation';
+import { roundPercent } from '../../../hooks/round-percent';
 
 import type { TaxRateData } from '../../../contexts/tax-rates';
 

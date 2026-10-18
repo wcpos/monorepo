@@ -19,16 +19,12 @@ import {
 	noRateCause,
 	postalLine,
 	type RateWhy,
-	roundPercent,
 } from './tax-derivation';
 import { CountriesProvider, useCountries } from '../../../../../contexts/countries';
 import { useT } from '../../../../../contexts/translations';
-import { type NumberFormatOptions, useNumberFormat } from '../../../hooks/use-number-format';
+import { usePercentFormat } from '../../../hooks/use-percent-format';
 
 import type { TaxBasedOn, TaxLocation, TaxRateData } from '../../../contexts/tax-rates';
-
-/** Up to the four places WooCommerce stores a rate in; a module constant so `format` is stable. */
-const PERCENT_FORMAT: NumberFormatOptions = { decimalScale: 4 };
 
 /**
  * Everything from the tax, cart and order providers arrives as props: on native this renders
@@ -77,8 +73,7 @@ function TaxDerivation({
 	const countries = useCountries();
 	// The lookup normalises case and decodes; the field strip keeps the code as stored.
 	const countryName = countryDisplayName(countries, location.country);
-	const { format } = useNumberFormat(PERCENT_FORMAT);
-	const percent = (value: number) => `${format(roundPercent(value))}%`;
+	const percent = usePercentFormat();
 
 	const failure = derivationFailure(location, isOrderAddress, rates.length);
 	const ledgers = React.useMemo(
@@ -193,7 +188,7 @@ function TaxDerivation({
 												key={rate.id}
 												name={rate.name ?? ''}
 												why={why(reason)}
-												percent={percent(parseFloat(rate.rate ?? '0'))}
+												percent={percent(rate.rate ?? '0')}
 											/>
 										))}
 									</React.Fragment>
