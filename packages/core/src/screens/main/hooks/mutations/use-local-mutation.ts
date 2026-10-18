@@ -24,6 +24,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { plainPatch } from '../../pos/commands/plain-patch';
 import {
 	getCurrentBoundRegisterId,
 	getRegisterId,
@@ -71,7 +72,7 @@ type LocalPatchProps<TDocument extends MutationDocument, TData extends object> =
 	document: TDocument;
 } & ({ data: TData; changes?: never } | { data?: never; changes: PayloadChanges });
 
-function writeableCollection(name: string | undefined): WriteableCollection | null {
+export function writeableCollection(name: string | undefined): WriteableCollection | null {
 	return name && WRITEABLE_COLLECTIONS.has(name as WriteableCollection)
 		? (name as WriteableCollection)
 		: null;
@@ -96,7 +97,7 @@ function withPromotedFields(
 	};
 }
 
-function syncableChanges(
+export function syncableChanges(
 	collection: WriteableCollection,
 	changes: Record<string, unknown>
 ): Record<string, unknown> {
@@ -457,42 +458,8 @@ export const useLocalMutation = () => {
 		}: LocalPatchProps<TDocument, TData>) => {
 			try {
 				const collectionName = document.collection?.name;
-				if (resolveChanges) {
-					const collection = writeableCollection(collectionName);
-					const recordId = documentRecordId(document);
-					if (!collection || !recordId) throw new Error('Payload changes require an engine record');
-					let changes: Record<string, unknown> = {};
-					const resolve: PayloadChanges = (payload) => {
-						changes = cloneDeep(
-							Object.fromEntries(
-								Object.entries(resolveChanges(payload)).filter(([, value]) => value !== undefined)
-							)
-						);
-						if (Object.keys(changes).length === 0) return changes;
-						changes.date_modified_gmt = convertLocalDateToUTCString(new Date());
-						return syncableChanges(collection, changes);
-					};
-					if (collection === 'orders' && (document as { isNew?: boolean }).isNew) {
-						const latest = (await getTemporaryOrder(recordId))?.getLatest();
-						if (
-							latest &&
-							Object.keys(resolve(latest.payload as Record<string, unknown>)).length === 0
-						)
-							return { changes, document: latest as TDocument };
-					}
-					const patched =
-						collection === 'orders' && (document as { isNew?: boolean }).isNew
-							? await patchTemporaryOrderPayload(recordId, resolve)
-							: await patchAndEnqueueEngineResident({
-									manager,
-									collection,
-									recordId,
-									changes: resolve,
-									registerId: getCurrentBoundRegisterId() ?? undefined,
-								});
-					if (!patched) throw new Error('Temporary order is missing from the temporary DB');
-					return { changes, document: patched as TDocument };
-				}
+				if (resolveChanges)
+					return await plainPatch(manager, collectionName, { document, changes: resolveChanges });
 				// `cloneDeep`, not a spread: RxDB serves object-valued document fields as
 				// **Proxies** (`getDocumentProperty`), nested ones included, and a Proxy
 				// cannot be structured-cloned — which is how every optimistic write ends

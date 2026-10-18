@@ -3,6 +3,7 @@
  */
 
 import {
+	hasLiveSettlementLeg,
 	isLivePaymentStatus,
 	mintDevicePayment,
 	mintManualPayment,
@@ -329,3 +330,12 @@ it('recognizes only pending, authorized, and captured as live payment statuses',
 		)
 	).toEqual([true, true, true, false, false, false, false]);
 });
+
+it.each(['pending', 'authorized', 'captured', 'failed', 'voided'] as const)(
+	'settlement live leg is exactly pending or authorized: %s',
+	(status) => {
+		expect(hasLiveSettlementLeg(withLedger([], [row({ status })]))).toBe(
+			['pending', 'authorized'].includes(status)
+		);
+	}
+);

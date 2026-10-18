@@ -54,6 +54,11 @@ export function readLedger(metaData: readonly MetaDataEntry[] | null | undefined
 	);
 }
 
+/** In-flight settlement gate, deliberately NOT the ledger's captured-inclusive live set. */
+export function hasLiveSettlementLeg(meta: readonly MetaDataEntry[] | null | undefined): boolean {
+	return readLedger(meta).some(({ status }) => status === 'pending' || status === 'authorized');
+}
+
 export function withLedger(
 	metaData: readonly MetaDataEntry[] | null | undefined,
 	rows: readonly PaymentRow[]

@@ -26,7 +26,7 @@ import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
  * is a dependency of the settlement subscription: a fresh object every render would
  * re-arm it on every render.
  */
-const useCartConfigInputs = () => {
+export const useCartConfigInputs = () => {
 	const baseLocation = useBaseTaxLocation();
 	const { country, state, city, postcode } = baseLocation;
 	const {
