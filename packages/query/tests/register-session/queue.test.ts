@@ -4,7 +4,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 import { getLogger } from '@wcpos/utils/logger';
-import type { StoreDatabase, UserDatabase } from '@wcpos/database';
+import type { CashMovementRow, StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
@@ -18,7 +18,10 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
-import { drainRegisterSessionQueue } from '../../src/register-session/queue';
+import {
+	drainRegisterSessionQueue,
+	type ServerMovementRow,
+} from '../../src/register-session/queue';
 import { refreshSessions } from '../../src/register-session/refresh';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -299,16 +302,10 @@ it('keeps a cashier transition that lands while the list row is being adopted', 
 	});
 });
 /** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
-const serverMovementRow = (local: {
-	id: string;
-	session_id: string;
-	type: string;
-	amount: string;
-	reason: string;
-	created_at_gmt: string;
-	created_by?: number | null;
-	voids?: string | null;
-}) => ({
+const serverMovementRow = (
+	local: CashMovementRow,
+	server: Partial<Pick<ServerMovementRow, 'voided_by'>> = {}
+): ServerMovementRow => ({
 	id: local.id,
 	session_id: local.session_id,
 	type: local.type,
@@ -316,7 +313,8 @@ const serverMovementRow = (local: {
 	reason: local.reason,
 	actor: local.created_by ?? 0,
 	voids: local.voids ?? null,
-	voided_by: null,
+	// The server knows nothing of a void this device has not posted yet.
+	voided_by: server.voided_by ?? null,
 	created_at_gmt: local.created_at_gmt,
 });
 it('adopts a server movement row in the local shape: `actor` is `created_by`, nothing else', async () => {
@@ -347,14 +345,8 @@ it('a refresh keeps a reversal claim the server has not acknowledged, and the ca
 		reason: 'Milk',
 		actor: 7,
 	});
-	http.post.mockImplementation(async (url) => ({
-		data:
-			url === 'movements'
-				? serverMovementRow(target.toJSON())
-				: { ...row.getLatest().toJSON(), status: 'open' },
-	}));
-	await drain();
-	expect(target.getLatest().sync_status).toBe('synced');
+	// Seeded as synced rather than drained, so the refresh alone is under test here.
+	await target.incrementalPatch({ sync_status: 'synced' });
 	// The void claims the target locally; its reversal is still pending when the refresh lands.
 	const reversal = await voidMovement(db, target.id, 7);
 	expect(target.getLatest().voided_by).toBe(reversal.id);
@@ -378,6 +370,46 @@ it('a refresh keeps a reversal claim the server has not acknowledged, and the ca
 	});
 	expect(target.getLatest().toJSON()).not.toHaveProperty('actor');
 	expect(reversal.getLatest().sync_status).toBe('pending');
+});
+it('a refresh adopts a void made on another device, and keeps a movement posted meanwhile', async () => {
+	const row = await open();
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	http.post.mockImplementation(async (url) => ({
+		data:
+			url === 'movements'
+				? serverMovementRow(movement.toJSON())
+				: { ...row.getLatest().toJSON(), status: 'open' },
+	}));
+	await drain();
+	const listRow = serverListRow(row.getLatest().toJSON());
+	const served = serverMovementRow(movement.getLatest().toJSON(), { voided_by: 'elsewhere' });
+	let raced = false;
+	http.get.mockImplementation(async (url: string) => {
+		if (url === 'sessions') return { data: [listRow] };
+		// Once, queued and not awaited: a local write lands between the adoption's read and its write.
+		if (!raced) {
+			raced = true;
+			void movement.getLatest().incrementalPatch({ sync_status: 'pending', reason: 'Edited' });
+		}
+		return { data: { ...listRow, expected: { cash: '105' }, movements: [served] } };
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	// The pending local write is kept whole; the server's value for it waits for the next read.
+	expect(movement.getLatest().toJSON()).toMatchObject({ sync_status: 'pending', reason: 'Edited' });
+	expect(movement.getLatest().voided_by).toBeFalsy();
+	await movement.getLatest().incrementalPatch({ sync_status: 'synced' });
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(movement.getLatest().toJSON()).toMatchObject({
+		sync_status: 'synced',
+		voided_by: 'elsewhere',
+		created_by: 7,
+	});
 });
 it('closes a predecessor before creating its successor on the same register', async () => {
 	const predecessor = await open();

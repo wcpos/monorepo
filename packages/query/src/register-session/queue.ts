@@ -36,8 +36,15 @@ export type ServerMovementRow = Omit<CashMovementRow, 'created_by' | keyof typeo
 	actor: number | null;
 };
 
-/** The server's movement row in the local shape: `actor` is `created_by`; unknown keys drop. */
-export function movementFromServer(server: ServerMovementRow) {
+/** The local movement without its outbox fields: what the server can speak for. */
+type MovementContent = Omit<CashMovementRow, keyof typeof synced>;
+
+/**
+ * The server's movement row in the local shape: `actor` is `created_by`; unknown keys drop.
+ * The declared return type is the drift alarm — a column added to the schema and served by
+ * the server fails the build here instead of vanishing on every refresh.
+ */
+export function movementFromServer(server: ServerMovementRow): MovementContent {
 	const { id, session_id, type, amount, reason, created_at_gmt, actor, voids, voided_by } = server;
 	return {
 		id,
@@ -53,24 +60,30 @@ export function movementFromServer(server: ServerMovementRow) {
 }
 
 /**
- * Adopt a server movement row over the local one. Merged, never replaced (see
- * `adoptSessionRow`): a local reversal claim (`voided_by`) the server has not acknowledged yet
- * must survive the refresh, or the closure renders the movement as never voided.
+ * The one rule for landing a server movement over the local one: the server's columns win,
+ * except a local reversal claim (`voided_by`) the server has not acknowledged yet, which must
+ * survive or the closure renders the movement as never voided. The server lets `voided_by`
+ * change only while it is null, so a void it already holds (made on another device) is final
+ * and replaces the local claim. Used by the POST acknowledgement and by the refresh, which
+ * keep their own pending policies.
  */
+export function mergeServerMovement(local: CashMovementRow, server: MovementContent) {
+	return { ...local, ...server, ...synced, voided_by: server.voided_by ?? local.voided_by };
+}
+
+/** Adopt a server movement row over the local one: merged, never replaced (see `adoptSessionRow`). */
 export async function adoptMovementRow(
 	movements: CashMovementCollection,
 	server: ServerMovementRow
 ) {
-	const adopted = { ...movementFromServer(server), ...synced };
+	const adopted = movementFromServer(server);
 	const local = await movements.findOne(adopted.id).exec();
 	if (!local) {
-		await movements.incrementalUpsert(adopted);
+		await movements.incrementalUpsert({ ...adopted, ...synced });
 		return;
 	}
 	await local.incrementalModify((current) =>
-		current.sync_status === 'pending'
-			? current
-			: { ...current, ...adopted, voided_by: current.voided_by || adopted.voided_by }
+		current.sync_status === 'pending' ? current : mergeServerMovement(current, adopted)
 	);
 }
 
@@ -419,12 +432,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 				});
 				try {
 					const accepted = movementFromServer(response.data as ServerMovementRow);
-					await row.incrementalModify((local) => ({
-						...local,
-						...accepted,
-						...synced,
-						voided_by: local.voided_by || accepted.voided_by,
-					}));
+					await row.incrementalModify((local) => mergeServerMovement(local, accepted));
 				} catch (error) {
 					// The store already accepted this movement; see the `persist` note in send().
 					throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
