@@ -530,12 +530,22 @@ export async function adoptSessionRow(
 	) as RegisterSessionRow;
 	const local = await sessions.findOne(row.id).exec();
 	if (local?.sync_status === 'pending') return;
-	await sessions.incrementalUpsert({
-		...row,
-		...synced,
-		server_status: row.status,
-		pending_status: null,
-	});
+	const adopted = { ...row, ...synced, server_status: row.status, pending_status: null };
+	/**
+	 * Merge over the local document, never replace it: the list route serves only the
+	 * session's own columns, and `incrementalUpsert` writes its input wholesale. Replacing
+	 * reset the detail route's anchor (`server_expected` and its membership ids) to the schema
+	 * defaults for the length of the detail round trip on every refresh, and the till strip
+	 * rendered that gap as the local figure — "Expected in drawer" flickered between the
+	 * server's number and the device's own each cycle.
+	 */
+	if (local)
+		// Re-check inside the modifier: a cashier transition that lands between the read above
+		// and this write must not be overwritten (the same reason `acknowledge` reads `local`).
+		await local.incrementalModify((current) =>
+			current.sync_status === 'pending' ? current : { ...current, ...adopted }
+		);
+	else await sessions.incrementalUpsert(adopted);
 }
 
 export function adoptSession(

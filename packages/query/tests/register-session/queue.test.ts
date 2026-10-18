@@ -211,6 +211,93 @@ it('sends movements after create but before a deferred counting transition', asy
 		server_expected_at: expect.any(String),
 	});
 });
+/** The server's session table (`Register_Session_Store::schema_sql`): what the list route serves. */
+const SERVER_SESSION_COLUMNS = [
+	'id',
+	'register_id',
+	'store_id',
+	'status',
+	'business_day',
+	'opened_at_gmt',
+	'opened_by',
+	'expected_float',
+	'counted_float',
+	'opening_variance',
+	'counting_started_at_gmt',
+	'closed_at_gmt',
+	'closed_by',
+	'approved_by',
+	'approved_counted',
+	'counted',
+	'closure_id',
+] as const;
+const serverListRow = (local: Record<string, unknown>) => ({
+	...Object.fromEntries(SERVER_SESSION_COLUMNS.map((key) => [key, local[key] ?? null])),
+	created_at_gmt: local.opened_at_gmt,
+});
+const anchor = {
+	server_expected: { cash: '679' },
+	server_expected_at: '2026-10-18T09:00:00.000Z',
+	server_ledger_row_ids: ['row-1'],
+	server_movement_ids: ['movement-1'],
+};
+it('keeps the server anchor through the list adoption while the detail read is in flight', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	// Device-only columns the server never serves must survive the list adoption as well.
+	await row.getLatest().incrementalPatch({ ...anchor, approval_required: true });
+	const listRow = serverListRow(row.getLatest().toJSON());
+	let betweenReads: Record<string, unknown> | undefined;
+	http.get.mockImplementation(async (url: string) => {
+		if (url === 'sessions') return { data: [listRow] };
+		// The list adoption has landed; this is the window the till strip renders.
+		betweenReads = row.getLatest().toJSON();
+		return {
+			data: {
+				...listRow,
+				expected: { cash: '679' },
+				as_of_gmt: '2026-10-18T09:05:00Z',
+				movements: [],
+			},
+		};
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(betweenReads).toMatchObject({ ...anchor, approval_required: true });
+	expect(row.getLatest().toJSON()).toMatchObject({
+		server_expected: { cash: '679' },
+		server_expected_at: '2026-10-18T09:05:00.000Z',
+		server_movement_ids: [],
+		approval_required: true,
+		sync_status: 'synced',
+	});
+});
+it('keeps a cashier transition that lands while the list row is being adopted', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	await row.getLatest().incrementalPatch(anchor);
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) => {
+		if (url !== 'sessions')
+			return { data: { ...listRow, expected: { cash: '679' }, movements: [] } };
+		// Queued, not awaited: it lands between the adoption's read of the row and its write.
+		void row.getLatest().incrementalPatch({
+			status: 'counting',
+			pending_status: 'counting',
+			sync_status: 'pending',
+			status_at: '2026-10-18T09:01:00.000Z',
+		});
+		return { data: [listRow] };
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(row.getLatest().toJSON()).toMatchObject({
+		...anchor,
+		status: 'counting',
+		pending_status: 'counting',
+		sync_status: 'pending',
+	});
+});
 it('closes a predecessor before creating its successor on the same register', async () => {
 	const predecessor = await open();
 	await predecessor.incrementalPatch({
