@@ -16,6 +16,7 @@ import type {
 import { backoffMs, MAX_SEND_ATTEMPTS } from '@wcpos/utils/outbox-backoff';
 
 import { engineCollection, type EngineCollection } from '../records/engine-collection';
+import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
 	adoptCounters,
@@ -82,15 +83,18 @@ export function mergeServerMovement(
 }
 
 /**
- * Whether a local reversal claim still stands: only a reversal row the server REFUSED
- * (`failed`) retires it. A pending one is on its way; a synced one the server already
- * reflects; and a row not written yet is `voidMovement` mid-flight — it claims the target
- * first and inserts the reversal after, so a refresh in between must not undo the claim.
+ * Whether a local reversal claim still stands. A pending reversal is on its way and a synced
+ * one the server already reflects: the claim stands. A reversal the server REFUSED (`failed`)
+ * retires it. A reversal row that does not exist is either `voidMovement` mid-flight (it
+ * claims the target first and inserts the row after; the id is in `reversalsInFlight`) and
+ * the claim stands, or an orphan (the insert failed, or the process died between the two
+ * writes; nothing will ever create the row) and the claim yields to the server.
  */
 async function claimStands(movements: CashMovementCollection, local: CashMovementRow) {
 	if (!local.voided_by) return false;
 	const reversal = await movements.findOne(local.voided_by).exec();
-	return reversal?.getLatest().sync_status !== 'failed';
+	if (!reversal) return reversalsInFlight.has(local.voided_by);
+	return reversal.getLatest().sync_status !== 'failed';
 }
 
 /** Adopt a server movement row over the local one: merged, never replaced (see `adoptSessionRow`). */

@@ -16,6 +16,7 @@ import type {
 } from '@wcpos/database';
 
 import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
+import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected } from './expected';
 
@@ -196,28 +197,43 @@ export async function voidMovement(
 	const movements = registerCollections(storeDB).cash_movements;
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
-	// Repeated Undo taps share one durable reversal: the target's voided_by names it.
+	// Repeated Undo taps share one durable reversal: the target's voided_by names it. The claim
+	// lands before the reversal row exists; `reversalsInFlight` tells a refresh in that gap
+	// apart from an orphaned claim (see `claimStands`).
 	const id = mintUuid();
-	const claimed = await row.incrementalModify((doc) => {
-		doc.voided_by ??= id;
-		return doc;
-	});
-	const reversalId = claimed.voided_by!;
-	const existing = await movements.findOne(reversalId).exec();
-	const reversal =
-		existing ??
-		(await movements.incrementalUpsert({
-			id: reversalId,
-			session_id: row.session_id,
-			type: 'void',
-			amount: row.amount,
-			reason: row.reason,
-			created_by: actor,
-			created_at_gmt: new Date().toISOString(),
-			voids: row.id,
-			...pending,
-		}));
-	return reversal;
+	reversalsInFlight.add(id);
+	try {
+		const claimed = await row.incrementalModify((doc) => {
+			doc.voided_by ??= id;
+			return doc;
+		});
+		const reversalId = claimed.voided_by!;
+		const existing = await movements.findOne(reversalId).exec();
+		if (existing) return existing;
+		try {
+			return await movements.incrementalUpsert({
+				id: reversalId,
+				session_id: row.session_id,
+				type: 'void',
+				amount: row.amount,
+				reason: row.reason,
+				created_by: actor,
+				created_at_gmt: new Date().toISOString(),
+				voids: row.id,
+				...pending,
+			});
+		} catch (error) {
+			// No reversal row: the claim this call made must not leave the target marked voided.
+			if (reversalId === id)
+				await row.getLatest().incrementalModify((doc) => {
+					if (doc.voided_by === id) doc.voided_by = null;
+					return doc;
+				});
+			throw error;
+		}
+	} finally {
+		reversalsInFlight.delete(id);
+	}
 }
 
 export async function writeClosure({

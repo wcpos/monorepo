@@ -24,6 +24,7 @@ import {
 	type ServerMovementRow,
 } from '../../src/register-session/queue';
 import { refreshSessions } from '../../src/register-session/refresh';
+import { reversalsInFlight } from '../../src/register-session/reversal-claims';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
@@ -406,7 +407,10 @@ it('a refresh drops a reversal claim whose reversal the server refused', async (
 	await refreshSessions({ registerId: 'register', http, storeDB: db });
 	expect(target.getLatest().voided_by).toBe(reversal.id);
 });
-it('a refresh keeps a claim whose reversal row is not written yet (voidMovement mid-flight)', async () => {
+it.each([
+	['mid-flight (voidMovement has claimed, not yet inserted)', true, 'reversal-not-yet-written'],
+	['an orphan (the insert failed or the process died in between)', false, null],
+])('a refresh with a claim naming a missing reversal row that is %s', async (_, inFlight, kept) => {
 	const row = await open();
 	const target = await recordMovement(db, {
 		sessionId: row.id,
@@ -417,6 +421,7 @@ it('a refresh keeps a claim whose reversal row is not written yet (voidMovement 
 	});
 	// `voidMovement` claims the target first and inserts the reversal after; this is the gap.
 	await target.incrementalPatch({ sync_status: 'synced', voided_by: 'reversal-not-yet-written' });
+	if (inFlight) reversalsInFlight.add('reversal-not-yet-written');
 	const listRow = serverListRow(row.getLatest().toJSON());
 	http.get.mockImplementation(async (url: string) =>
 		url === 'sessions'
@@ -429,8 +434,30 @@ it('a refresh keeps a claim whose reversal row is not written yet (voidMovement 
 					},
 				}
 	);
-	await refreshSessions({ registerId: 'register', http, storeDB: db });
-	expect(target.getLatest().voided_by).toBe('reversal-not-yet-written');
+	try {
+		await refreshSessions({ registerId: 'register', http, storeDB: db });
+	} finally {
+		reversalsInFlight.delete('reversal-not-yet-written');
+	}
+	expect(target.getLatest().voided_by).toBe(kept);
+});
+it('a void whose reversal insert fails rolls its claim back and leaves nothing in flight', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	jest.spyOn(db.cash_movements, 'incrementalUpsert').mockRejectedValueOnce(new Error('disk'));
+	await expect(voidMovement(db, target.id, 7)).rejects.toThrow('disk');
+	expect(target.getLatest().voided_by).toBeNull();
+	expect(reversalsInFlight.size).toBe(0);
+	// The next tap starts clean and creates the reversal.
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	expect(reversalsInFlight.size).toBe(0);
 });
 it('a refresh adopts a void made on another device, and keeps a movement posted meanwhile', async () => {
 	const row = await open();
