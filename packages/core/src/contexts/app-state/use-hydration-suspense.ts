@@ -22,13 +22,16 @@ interface UseHydrationSuspenseReturn {
  * Stored outside the hook so it persists across renders/remounts.
  */
 let globalHydrationPromise: Promise<HydrationContext> | null = null;
+let hydrationRejected = false;
 
 /**
- * The only way to re-run hydration. The crash screen's "Try again" calls this
- * before resetting the error boundary; tests use it to reset the cache too.
+ * Clears the cache only after a hydration rejection, so 'Try again' re-runs hydration
+ * when hydration is what failed, and only remounts the tree when the crash came later.
  */
 export function resetHydration(): void {
-	globalHydrationPromise = null;
+	if (hydrationRejected) {
+		globalHydrationPromise = null;
+	}
 }
 
 function getOrCreateHydrationPromise(
@@ -40,6 +43,7 @@ function getOrCreateHydrationPromise(
 
 	hydrationLogger.debug('Creating hydration promise');
 
+	hydrationRejected = false;
 	globalHydrationPromise = (async () => {
 		let currentContext = {} as HydrationContext;
 		let totalProgress = 0;
@@ -93,6 +97,7 @@ function getOrCreateHydrationPromise(
 		setProgress(100);
 		return currentContext;
 	})().catch((err) => {
+		hydrationRejected = true;
 		const error = err instanceof Error ? err : new Error(String(err));
 		// Step failures are reported above; keep the rejection cached for the boundary.
 		hydrationLogger.debug(

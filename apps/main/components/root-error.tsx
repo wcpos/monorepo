@@ -149,7 +149,7 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 	const handleTryAgain = () => {
 		if (isResetting) return;
 		setConfirming(null);
-		// Without this, "Try again" would immediately re-throw the cached rejection.
+		// "Try again" re-runs hydration only if hydration was what failed.
 		resetHydration();
 		resetErrorBoundary();
 	};

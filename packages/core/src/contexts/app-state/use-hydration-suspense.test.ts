@@ -1,7 +1,8 @@
-import { getLogger, markErrorReported } from '@wcpos/utils/logger';
-
-import { hydrationSteps } from './hydration-steps';
-import { resetHydration, useHydrationSuspense } from './use-hydration-suspense';
+let resetHydration: typeof import('./use-hydration-suspense').resetHydration;
+let useHydrationSuspense: typeof import('./use-hydration-suspense').useHydrationSuspense;
+let markErrorReported: typeof import('@wcpos/utils/logger').markErrorReported;
+let hydrationLogger: ReturnType<typeof import('@wcpos/utils/logger').getLogger>;
+let steps: Record<string, unknown>[];
 
 const mockSetProgress = jest.fn();
 
@@ -13,7 +14,7 @@ jest.mock('react', () => ({
 }));
 
 // Mutable array: each test installs its own steps. The hydration promise cache
-// persists after both rejection and resolution, so each test explicitly resets it.
+// persists after resolution, so each test loads a fresh module.
 jest.mock('./hydration-steps', () => ({
 	hydrationSteps: [],
 }));
@@ -22,16 +23,17 @@ jest.mock('../../screens/splash', () => ({
 	useSplashProgress: () => ({ setProgress: mockSetProgress }),
 }));
 
-const steps = hydrationSteps as unknown as Record<string, unknown>[];
-const hydrationLogger = getLogger(['wcpos', 'app-state', 'hydration']);
-
 // The mocked `use` throws the hydration promise; each test catches it inline.
 // (A shared helper trips rules-of-hooks/react-compiler whatever it is named.)
 
 beforeEach(() => {
-	resetHydration();
+	jest.resetModules();
 	jest.clearAllMocks();
-	steps.length = 0;
+	({ resetHydration, useHydrationSuspense } = jest.requireActual('./use-hydration-suspense'));
+	({ hydrationSteps: steps } = jest.requireMock('./hydration-steps'));
+	const logger = jest.requireActual<typeof import('@wcpos/utils/logger')>('@wcpos/utils/logger');
+	markErrorReported = logger.markErrorReported;
+	hydrationLogger = logger.getLogger(['wcpos', 'app-state', 'hydration']);
 });
 
 it('serializes a failed hydration error in both logger contexts', async () => {
@@ -116,6 +118,31 @@ it('resetHydration lets the next render re-run hydration', async () => {
 	await expect(secondPromise).rejects.toBe(failure);
 	expect(secondPromise).not.toBe(firstPromise);
 	expect(execute).toHaveBeenCalledTimes(2);
+});
+
+it('resetHydration keeps a fulfilled hydration cached', async () => {
+	const execute = jest.fn().mockResolvedValue({ user: 'user-1' });
+	steps.push({ name: 'hydrate-session', progressIncrement: 100, execute });
+
+	let firstPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		firstPromise = error as Promise<unknown>;
+	}
+	await expect(firstPromise).resolves.toEqual({ user: 'user-1' });
+
+	resetHydration();
+
+	let secondPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		secondPromise = error as Promise<unknown>;
+	}
+	await expect(secondPromise).resolves.toEqual({ user: 'user-1' });
+	expect(secondPromise).toBe(firstPromise);
+	expect(execute).toHaveBeenCalledTimes(1);
 });
 
 it('continues past a failed fail-soft step instead of rejecting the boot', async () => {
