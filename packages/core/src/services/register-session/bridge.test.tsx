@@ -8,7 +8,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { drainRegisterSessionQueue, refreshSessions } from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
-import { RegisterSessionBridge, sameStore } from './bridge';
+import { RegisterSessionBridge } from './bridge';
+import { sameStore } from '../../../../query/src/register-session/cycle';
 
 const sessions = {
 	find: () => ({ $: of([]) }),
@@ -22,11 +23,9 @@ jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
 const userDB = {};
-const storeDB = {};
+const storeDB = { collections: { register_sessions: sessions } };
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
-	engineCollection: () => null,
-	observeEngineQuery: () => of({ hits: [] }),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 jest.mock('../../contexts/app-state', () => {
@@ -59,14 +58,25 @@ jest.mock('./use-register-session-collections', () => ({
 const mockRefreshRequests = new Subject<unknown>();
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
-	readRegister: async () => registerDoc,
-	writeClosure: (...args: unknown[]) => closure(...args),
-	drainRegisterSessionQueue: jest.fn(),
-	refreshSessions: jest.fn(),
+	observeSessionAccounting: () => ({ stream: of({ orders: { hits: [] } }) }),
 	get sessionRefreshRequests() {
 		return mockRefreshRequests;
 	},
 }));
+
+jest.mock('../../../../query/src/register-session/register-document', () => ({
+	...jest.requireActual('../../../../query/src/register-session/register-document'),
+	readRegister: async () => registerDoc,
+}));
+jest.mock('../../../../query/src/register-session/session-store', () => ({
+	...jest.requireActual('../../../../query/src/register-session/session-store'),
+	writeClosure: (...args: unknown[]) => closure(...args),
+}));
+jest.mock('../../../../query/src/register-session/queue', () => ({
+	...jest.requireActual('../../../../query/src/register-session/queue'),
+	drainRegisterSessionQueue: jest.fn(),
+}));
+jest.mock('../../../../query/src/register-session/refresh', () => ({ refreshSessions: jest.fn() }));
 
 const log = jest.mocked(getLogger(['wcpos', 'registerSession']));
 const drain = jest.mocked(drainRegisterSessionQueue);
@@ -234,7 +244,8 @@ it('forgets the failure streak once a cycle succeeds', async () => {
 it('recovers only an interrupted local close; imported history and written closures are never current', () => {
 	const closed = { id: 'history', closure_id: 'history', status: 'closed', sync_status: 'synced' };
 	const data = {
-		sessions,
+		storeDB,
+		isCurrent: () => true,
 		registerId: 'register',
 		active: [] as unknown[],
 		closed: [closed] as unknown[],
@@ -269,8 +280,8 @@ it('debounces snapshot refresh requests through the existing bridge cycle', asyn
 	render(<RegisterSessionBridge />);
 	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 	await act(async () => {
-		mockRefreshRequests.next({ sessions, registerId: 'register' });
-		mockRefreshRequests.next({ sessions, registerId: 'register' });
+		mockRefreshRequests.next({ storeDB, registerId: 'register' });
+		mockRefreshRequests.next({ storeDB, registerId: 'register' });
 		await jest.advanceTimersByTimeAsync(500);
 	});
 	expect(refresh).toHaveBeenCalledTimes(2);
@@ -296,7 +307,7 @@ it('coalesces mid-cycle invalidations without overlapping or overwriting the lat
 	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 	for (let i = 0; i < 2; i++) {
 		await act(async () => {
-			mockRefreshRequests.next({ sessions, registerId: 'register' });
+			mockRefreshRequests.next({ storeDB, registerId: 'register' });
 			await jest.advanceTimersByTimeAsync(250);
 		});
 	}

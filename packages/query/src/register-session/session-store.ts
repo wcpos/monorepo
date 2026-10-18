@@ -454,3 +454,25 @@ type ClosureOrder = {
 		}[];
 	};
 };
+
+/** Store-local approval acknowledgement; no engine mutation is queued. */
+export async function recordApproval(
+	storeDB: RegisterStoreDatabase,
+	sessionId: string,
+	{
+		approvedBy,
+		approvedCounted,
+	}: {
+		approvedBy: number;
+		approvedCounted: Record<string, string>;
+	}
+) {
+	const session = await registerCollections(storeDB).register_sessions.findOne(sessionId).exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	await session.incrementalPatch({
+		approved_by: approvedBy,
+		approved_counted: approvedCounted,
+		approval_required: false,
+		sync_error: null,
+	});
+}

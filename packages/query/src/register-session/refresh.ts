@@ -1,17 +1,13 @@
 import { Subject } from 'rxjs';
 
-import type {
-	CashMovementRow,
-	RegisterSessionCollection,
-	RegisterSessionRow,
-} from '@wcpos/database';
+import type { CashMovementRow, RegisterSessionRow } from '@wcpos/database';
 
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { recordRegisterFact } from './audit';
 import { adoptSessionRow, type SessionHttp, synced } from './queue';
 
 export const sessionRefreshRequests = new Subject<{
-	sessions: RegisterSessionCollection;
+	storeDB: RegisterStoreDatabase;
 	registerId: string;
 }>();
 

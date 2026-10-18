@@ -41,6 +41,7 @@ export {
 	openSession,
 	openSessionSelector,
 	recordMovement,
+	recordApproval,
 	RegisterSessionRequiredError,
 	requireOpenSession,
 	retryMovement,
@@ -48,3 +49,12 @@ export {
 	voidMovement,
 	writeClosure,
 } from './session-store';
+
+export {
+	createSessionAccountingState,
+	observeRegisterSessions,
+	observeCashMovements,
+	observeRegisterClosures,
+	observeSessionAccounting,
+} from './reads';
+export { runRegisterSessionCycle } from './cycle';
