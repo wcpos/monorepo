@@ -29,6 +29,7 @@ import {
 	useOpenOrdersHandle,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
+import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/commands/settlement-coordinator-provider';
 import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
@@ -192,6 +193,7 @@ function POSStack() {
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
 			<CartConfigProvider>
+				<SettlementCoordinatorProvider />
 				<View
 					ref={registerPOSContainer}
 					className="bg-background flex-1"

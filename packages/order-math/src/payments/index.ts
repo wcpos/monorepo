@@ -24,6 +24,7 @@ export {
 	PAYMENT_METHOD_INDEX_META_KEY,
 	LIVE_PAYMENT_STATUSES,
 	isLivePaymentStatus,
+	hasLiveSettlementLeg,
 } from './ledger';
 export type {
 	MetaDataEntry,

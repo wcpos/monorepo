@@ -12,6 +12,7 @@ test('public value surface is exactly the spec', () => {
 		'derive',
 		'fromMinor',
 		'getNetPaymentTotal',
+		'hasLiveSettlementLeg',
 		'hasSaleProvenance',
 		'hasSaleTime',
 		'isActiveCouponLine',
