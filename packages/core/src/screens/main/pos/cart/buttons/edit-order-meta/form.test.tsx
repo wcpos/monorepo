@@ -7,6 +7,7 @@ import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { EditOrderMetaForm } from './form';
+import { protectOrderMeta } from '../../../../hooks/mutations/protected-order-meta';
 import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
 const mockBeforePatch = jest.fn();
@@ -172,11 +173,15 @@ async function confirm() {
 }
 beforeEach(() => {
 	jest.clearAllMocks();
+	order.payload = payload;
 	mockPatch.mockImplementation((input) => {
 		mockBeforePatch();
-		input.data = input.changes?.(input.document.getLatest().payload) ?? input.data;
+		const resident = input.document.getLatest();
+		const changes = input.changes?.(resident.payload) ?? input.data;
+		input.data = protectOrderMeta(resident.payload, changes);
 		delete input.changes;
-		return Promise.resolve({ document: order });
+		resident.payload = { ...resident.payload, ...input.data };
+		return Promise.resolve({ document: resident });
 	});
 	mockPush.mockResolvedValue(order);
 	mockGuard.mockReturnValue(false);
@@ -280,7 +285,8 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	view.rerender(<EditOrderMetaForm order={resident as never} formData={edited} />);
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
 	if (status === 'completed') await confirm();
-	expect(mockPatch.mock.calls[0][0].data.meta_data).toEqual([custom, ...protectedMeta]);
+	expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...protectedMeta]));
+	expect(resident.payload.meta_data).toHaveLength(protectedMeta.length + 1);
 });
 
 it.each(['pos-open', 'completed'])(
@@ -297,27 +303,50 @@ it.each(['pos-open', 'completed'])(
 		render(<EditOrderMetaForm order={resident as never} formData={formData} />);
 		await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
 		if (status === 'completed') await confirm();
-		expect(mockPatch.mock.calls[0][0].data.meta_data).toEqual([custom, ...meta, hint]);
+		expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...meta, hint]));
+		expect(resident.payload.meta_data).toHaveLength(meta.length + 2);
 	}
 );
 
 it('keeps a hint queued during a failed send when rolling back', async () => {
+	const sentCashiers: unknown[] = [];
 	const hint = { id: 42, key: '_wcpos_money_owner_hint', value: 'server' };
 	const resident = { ...order, payload: { ...payload } };
 	resident.getLatest = () => resident;
 	mockPush.mockImplementationOnce(() => {
+		sentCashiers.push(resident.payload.meta_data.find((entry) => entry.key === '_pos_user')?.value);
 		void enqueueOrderMutation(resident.uuid, async () => {
 			await Promise.resolve();
-			resident.payload = { ...payload, meta_data: [...meta, hint] };
+			resident.payload = { ...resident.payload, meta_data: [...resident.payload.meta_data, hint] };
 		});
 		return Promise.reject(new Error('offline'));
 	});
-	const formData = { ...payload, status: 'completed', cashier_id: '7' };
+	const formData = { ...payload, status: 'completed', cashier_id: '9' };
 	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
 	await confirm();
-	expect(mockPatch.mock.calls[1][0].data).toEqual({
+	expect(sentCashiers).toEqual(['9']);
+	expect(resident.payload).toEqual({
+		...payload,
 		status: 'pos-open',
 		meta_data: [...meta, hint],
 	});
+});
+
+it('rolls back the cashier after a failed hand-off without losing concurrent ownership', async () => {
+	const sentCashiers: unknown[] = [];
+	const hint = { id: 42, key: '_wcpos_money_owner_hint', value: 'server' };
+	const resident = { ...order, payload: { ...payload } };
+	resident.getLatest = () => resident;
+	mockPush.mockImplementationOnce(() => {
+		sentCashiers.push(resident.payload.meta_data.find((entry) => entry.key === '_pos_user')?.value);
+		resident.payload = { ...resident.payload, meta_data: [...resident.payload.meta_data, hint] };
+		return Promise.reject(new Error('offline'));
+	});
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(sentCashiers).toEqual(['9']);
+	expect(resident.payload.meta_data).toEqual([...meta, hint]);
 });

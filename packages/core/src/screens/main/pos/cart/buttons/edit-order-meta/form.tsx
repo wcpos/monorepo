@@ -119,16 +119,6 @@ export function EditOrderMetaForm({
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
-	const restoreProtectedMeta = (
-		meta: FormValues['meta_data'],
-		current: Record<string, unknown>
-	) => [
-		...meta.filter((entry) => !PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')),
-		...((current.meta_data ?? []) as FormValues['meta_data']).filter((entry) =>
-			PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')
-		),
-	];
-
 	/**
 	 * Apply the form. Resolves true only when the edits are written locally; false when the
 	 * identity change awaits its confirmation (the send flow owns that) — a caller that pushes
@@ -146,10 +136,7 @@ export function EditOrderMetaForm({
 		const written = !!(await enqueueOrderMutation(order.uuid, () =>
 			localPatch({
 				document: order,
-				changes: (current) => ({
-					...patch,
-					meta_data: restoreProtectedMeta(patch.meta_data, current),
-				}),
+				changes: () => patch,
 			})
 		));
 		if (written && close) closeDialog();
@@ -165,9 +152,9 @@ export function EditOrderMetaForm({
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, ...fields } = pending;
-		const patch = (current: Record<string, unknown>) => ({
+		const patch = () => ({
 			...fields,
-			meta_data: wooMetaCarrier.stampIdentity(restoreProtectedMeta(fields.meta_data, current), {
+			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
@@ -198,9 +185,9 @@ export function EditOrderMetaForm({
 				const reverted = await enqueueOrderMutation(order.uuid, () =>
 					localPatch({
 						document: order,
-						changes: (current) => ({
+						changes: () => ({
 							status: previous.status,
-							meta_data: restoreProtectedMeta(previous.meta_data ?? [], current),
+							meta_data: previous.meta_data ?? [],
 						}),
 					})
 				);

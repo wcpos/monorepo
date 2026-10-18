@@ -74,3 +74,5 @@ export type { CouponReferenceOrderby, TermReferenceOrderby } from './scheduler';
 export type { WooRefundPayload, LocalRefundDocument } from './collections/refund-schema';
 
 export { hasPendingLocalWork } from './write-path/local-work-guard';
+
+export { mergeProtectedOrderMeta } from './write-path/merge-protected-order-meta';
