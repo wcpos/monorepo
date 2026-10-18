@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  *
  * The wake behaviour of `useTemplatesSync`. The deferral is recorded inside the
- * module-level `syncTemplates` (not in the hook), so the hook and the sync
+ * query-owned `syncTemplates` (not in the hook), so the hook and the sync
  * function have to agree on the SAME collection identity for the retry to fire —
  * a mismatch there would fail silently, leaving the template set empty until the
  * next remount. These tests pin that handshake.
@@ -14,14 +14,12 @@ import { useTemplatesSync } from './use-templates-sync';
 const mockGet = jest.fn();
 const mockHttp = { get: mockGet };
 const mockWakeCallbacks: (() => void)[] = [];
-const collection = { name: 'templates' };
+const session = { storeDB: { templates: { name: 'templates' } } };
 
 jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ localDB: { collections: { templates: collection } } }),
-}));
+jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => session }));
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	// The real predicate — a stub here would ratify the test instead of checking
 	// the guard the code actually runs.

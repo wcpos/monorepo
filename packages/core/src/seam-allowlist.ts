@@ -1407,10 +1407,19 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: resident helper write :: NewCustomerLinkBridge :: useLocalMutation :: 1',
 	"screens/main/pos/cart/new-customer-link-bridge.tsx :: storage import ::  :: from 'rxdb' :: 1",
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: runtime.engine.db$ :: 1',
+	// ADR 0033 per-screen (f8): the templates cache sync is owned by @wcpos/query/store-local.
+	'screens/main/receipt/hooks/use-templates-sync.ts :: raw query construction :: syncTemplates :: collection .find({ selector: { type, closure_store_id: storeId ?? 0 } }) :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record collection back-reference :: useTemplatesSync :: settled.collection :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record collection back-reference :: useTemplatesSync>settle :: previous.collection :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record mutator :: syncTemplates :: collection.bulkUpsert :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record mutator :: syncTemplates :: row.remove :: 1',
+	"screens/main/receipt/hooks/use-templates-sync.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB.collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 477;
+export const SEAM_RETIRED_FLOOR = 485;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'5af0f85cb64638a61c32697fef6b7cfe2a2451f3212cc7c978d75506b1909d0b';
+	'ac326502905e66a9a4a1ebfec9392029e8844d9d114d62964d7514c447af0abc';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
