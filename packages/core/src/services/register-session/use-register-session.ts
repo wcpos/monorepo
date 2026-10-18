@@ -23,7 +23,7 @@ import {
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
-import { mintRemoteId } from '@wcpos/sync-core';
+import { mintRemoteId, POS_META_KEYS } from '@wcpos/sync-core';
 import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
 import { hasPendingLocalWork, type RequirementHandle } from '@wcpos/sync-engine';
 
@@ -190,7 +190,7 @@ export function useRegisterSession() {
 								const parentIds = refundRecords
 									.filter((refund) =>
 										refund.meta_data?.some(
-											({ key, value }) => key === '_wcpos_session' && value === current.id
+											({ key, value }) => key === POS_META_KEYS.session && value === current.id
 										)
 									)
 									.map((refund) => refund.parent_id);
@@ -338,7 +338,7 @@ export function useRegisterSession() {
 			({ record }) =>
 				record.payload.meta_data?.some(
 					({ key, value }: { key?: string; value?: unknown }) =>
-						key === '_wcpos_session' && value === session?.id
+						key === POS_META_KEYS.session && value === session?.id
 				) || readLedger(record.payload.meta_data).some((row) => row.session_id === session?.id)
 		) ?? [];
 	const accountingOrders = data?.orders.hits ?? [];

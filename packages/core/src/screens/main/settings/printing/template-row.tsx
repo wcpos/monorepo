@@ -12,13 +12,13 @@ import {
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import type { PrinterProfile } from '@wcpos/printer';
-import type { TemplateDocument } from '@wcpos/database';
+import type { ActiveTemplate } from '@wcpos/query';
 
 import { AUTO_VALUE, templateTypeLabel } from './utils';
 import { useT } from '../../../../contexts/translations';
 
 interface TemplateRowProps {
-	template: TemplateDocument;
+	template: ActiveTemplate;
 	currentValue: string;
 	selectedLabel: string;
 	autoLabel: string;

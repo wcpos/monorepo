@@ -4,7 +4,7 @@ import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
-import type { TemplateDocument } from '@wcpos/database';
+import type { ActiveTemplate } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { useLocale } from '../../../../hooks/use-locale';
@@ -74,7 +74,7 @@ interface TemplateRendererResult {
 	documentError: Error | null;
 	refetch: () => void;
 	serverReceiptData: Record<string, unknown> | null;
-	templates: TemplateDocument[];
+	templates: ActiveTemplate[];
 	templatesReady: boolean;
 	selectedTemplateId: string | number | null;
 	setSelectedTemplateId: (id: string | number) => void;

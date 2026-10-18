@@ -1,3 +1,4 @@
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { EngineCollection } from '@wcpos/query';
 import type {
@@ -392,7 +393,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 			row.movement_ids.every((id) =>
 				entries.some((entry) => entry.id === id && entry.sync_status === 'synced')
 			) &&
-			dependencies.every((order) => order && !order.local?.dirty);
+			dependencies.every((order) => order && !hasPendingLocalWork(order));
 		const failedMovement = entries.find(
 			(entry) => row.movement_ids.includes(entry.id) && entry.sync_status === 'failed'
 		);

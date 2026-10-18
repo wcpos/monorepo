@@ -1,3 +1,4 @@
+import { isFinalPaymentStatus } from '@wcpos/order-math';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -170,7 +171,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
 		const status = data.payment.status;
-		if (status === 'captured' || status === 'failed' || status === 'voided') finish(status);
+		if (isFinalPaymentStatus(status)) finish(status);
 		return current(seq);
 	};
 	const afterResponse = async (route: Route) => {

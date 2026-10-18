@@ -129,3 +129,11 @@ export {
 	emptyCollectionCounts,
 	type EngineCollectionCounts,
 } from './reads/collection-counts';
+
+export {
+	observeTemplatePrinterOverrides,
+	observePrinterProfiles,
+	observeActiveTemplates,
+	type ActiveTemplate,
+	type LocalPrinterProfile,
+} from './reads/store-local';

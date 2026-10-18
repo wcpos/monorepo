@@ -1,3 +1,4 @@
+import { isFailedPaymentStatus } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import type { TileDisabledReason } from './tiles';
@@ -17,7 +18,7 @@ export function statusLabelKey(status: PaymentRow['status']): string {
 /** Colour the chip by what the cashier has to do about the row, not by the wire value. */
 export function statusVariant(status: PaymentRow['status']) {
 	if (status === 'captured' || status === 'authorized') return 'success' as const;
-	if (status === 'failed' || status === 'voided') return 'error' as const;
+	if (isFailedPaymentStatus(status)) return 'error' as const;
 	return 'info' as const;
 }
 

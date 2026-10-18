@@ -11,14 +11,11 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import type { ActiveTemplate } from '@wcpos/query';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
-import type {
-	PrinterProfileDocument,
-	TemplateDocument,
-	TemplatePrinterOverrideDocument,
-} from '@wcpos/database';
+import type { PrinterProfileDocument, TemplatePrinterOverrideDocument } from '@wcpos/database';
 
 import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
@@ -86,7 +83,7 @@ export function PrintingSettings() {
 	const overrides = useObservableState(overrides$, new Map<string, string>());
 
 	const autoMatchLabel = React.useCallback(
-		(tmpl: TemplateDocument) => {
+		(tmpl: ActiveTemplate) => {
 			const templateInfo = {
 				id: String(tmpl.id),
 				output_type: tmpl.output_type ?? 'html',

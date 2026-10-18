@@ -1,3 +1,4 @@
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { RefundDocumentType } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
@@ -30,7 +31,7 @@ export function attributeRefunds(
 ) {
 	const stamped = new Map(
 		refundRecords.flatMap((refund) => {
-			const stamp = refund.meta_data?.find(({ key }) => key === '_wcpos_session')?.value;
+			const stamp = refund.meta_data?.find(({ key }) => key === POS_META_KEYS.session)?.value;
 			return typeof stamp === 'string' && stamp
 				? [[refund.id, { refund, sessionId: stamp }] as const]
 				: [];

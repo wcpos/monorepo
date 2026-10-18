@@ -20,6 +20,21 @@ export function isLivePaymentStatus(status: string): boolean {
 	return (LIVE_PAYMENT_STATUSES as readonly string[]).includes(status);
 }
 
+/** Money settled locally, including authorizations recorded offline. */
+export function isSettledPaymentRow(row: Pick<PaymentRow, 'status' | 'recorded_offline'>): boolean {
+	return (
+		row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline === true)
+	);
+}
+
+export function isFailedPaymentStatus(status: string): status is 'failed' | 'voided' {
+	return status === 'failed' || status === 'voided';
+}
+
+export function isFinalPaymentStatus(status: string): status is 'captured' | 'failed' | 'voided' {
+	return status === 'captured' || isFailedPaymentStatus(status);
+}
+
 /** One `meta_data` entry as the order document carries it (`key` is optional there). */
 export type MetaDataEntry = {
 	id?: number;

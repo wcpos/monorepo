@@ -1,8 +1,10 @@
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	isCompletingStatus,
+	isSettledPaymentRow,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
@@ -105,7 +107,7 @@ export async function persistSaleProvenance(
 		input = {
 			...input,
 			extraMeta: withMetaReplaced(input.extraMeta, [
-				{ key: '_wcpos_session', value: input.sessionId },
+				{ key: POS_META_KEYS.session, value: input.sessionId },
 			]),
 		};
 	}
@@ -397,7 +399,7 @@ async function finishSale(
 	if (outcome.source === 'gateway-snapshot') {
 		const reduced = (latest.line_items ?? []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(
-				(meta) => meta.key === '_reduced_stock'
+				(meta) => meta.key === POS_META_KEYS.reducedStock
 			)
 		);
 		if (ctx.stockAdjustment) ctx.stockAdjustment(reduced);
@@ -412,9 +414,7 @@ async function finishSale(
 			orderUUID: order.uuid,
 			orderNumber: latest.number ?? null,
 			total: latest.total ?? null,
-			paymentLegs: readLedger(latest.meta_data).filter(
-				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-			).length,
+			paymentLegs: readLedger(latest.meta_data).filter(isSettledPaymentRow).length,
 		},
 	};
 }

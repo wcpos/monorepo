@@ -6,6 +6,9 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { refundValue } from '@wcpos/order-math';
+
+import { RefundsFallback } from './sections/refunds';
 import { RefundsBoundary } from './refunds-boundary';
 
 const push = jest.fn();
@@ -84,4 +87,16 @@ it.each([12, undefined])('opens the receipt for refund %s only when it has an id
 	} finally {
 		mockRefundsHandle = {};
 	}
+});
+
+jest.mock('@wcpos/order-math', () => ({
+	...jest.requireActual('@wcpos/order-math'),
+	refundValue: jest.fn(jest.requireActual('@wcpos/order-math').refundValue),
+}));
+it.each(['5.00', '-5.00'])('uses the shared refund value in the local summary (%s)', (total) => {
+	const refund = { id: 99, total, reason: '' };
+	jest.mocked(refundValue).mockClear();
+	render(<RefundsFallback refunds={[refund]} onRetry={() => {}} />);
+	expect(screen.getByText('-5')).toBeInTheDocument();
+	expect(refundValue).toHaveBeenCalledWith(refund);
 });

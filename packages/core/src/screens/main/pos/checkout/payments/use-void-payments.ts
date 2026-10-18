@@ -3,7 +3,7 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
+import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -67,7 +67,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 			const ledger = readLedger(after.meta_data ?? []);
 			const known = new Set(ledger.map(({ id }) => id));
 			const dead = new Set(
-				ledger.flatMap(({ id, status }) => (status === 'voided' || status === 'failed' ? [id] : []))
+				ledger.flatMap(({ id, status }) => (isFailedPaymentStatus(status) ? [id] : []))
 			);
 			let dropped = false;
 			let droppedMinor = 0;
