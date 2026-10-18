@@ -57,6 +57,7 @@ import { stories as tabs } from '@wcpos/components/tabs/gallery';
 import { stories as panels } from '@wcpos/components/panels/gallery';
 import { stories as table } from '@wcpos/components/table/gallery';
 import { stories as listItem } from '@wcpos/components/list-item/gallery';
+import { stories as menuRow } from '@wcpos/components/menu-row/gallery';
 import { stories as listRow } from '@wcpos/components/list-row/gallery';
 import { stories as tile } from '@wcpos/components/tile/gallery';
 import { stories as tooltip } from '@wcpos/components/tooltip/gallery';
@@ -76,6 +77,7 @@ const registry: Record<string, Story[]> = {
 	table,
 	'list-item': listItem,
 	'list-row': listRow,
+	'menu-row': menuRow,
 	tile,
 	tooltip,
 	'poster-tile': posterTile,
