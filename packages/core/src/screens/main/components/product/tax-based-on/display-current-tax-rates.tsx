@@ -15,6 +15,7 @@ import type { CartConfig } from '@wcpos/order-math';
 import {
 	classLedgers,
 	derivationFailure,
+	noRateCause,
 	postalLine,
 	type RateWhy,
 	roundPercent,
@@ -34,6 +35,8 @@ const PERCENT_FORMAT: NumberFormatOptions = { decimalScale: 4 };
  */
 export interface DisplayCurrentTaxRatesProps {
 	rates: TaxRateData[];
+	/** Every rate the store has, to say whether a no-match is the country or this address. */
+	allRates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
 	/** False on the standalone Products screen, where the address is the shop base. */
@@ -57,6 +60,7 @@ export function DisplayCurrentTaxRates(props: DisplayCurrentTaxRatesProps) {
 
 function TaxDerivation({
 	rates,
+	allRates,
 	taxBasedOn,
 	location,
 	hasOrder,
@@ -82,7 +86,7 @@ function TaxDerivation({
 	);
 
 	// The popover (a sheet on a phone) would otherwise stay open over where we go.
-	const go = (href: '/(app)/(drawer)/settings/tax' | '/(app)/(modals)/tax-rates') => {
+	const go = (href: '/settings/tax' | '/(app)/(modals)/tax-rates') => {
 		onOpenChange(false);
 		router.push(href);
 	};
@@ -106,90 +110,100 @@ function TaxDerivation({
 	if (taxBasedOn === 'billing') source = t('common.customer_billing_address');
 	if (taxBasedOn === 'shipping') source = t('common.customer_shipping_address');
 
+	// One scroll container: the rail scrolls inside whatever height the sheet or popover leaves,
+	// and the hairline and View-all row sit outside it, so a long US ledger on a short handset
+	// (or landscape) never pushes the escape off a phone's sheet, which has no scroll of its own.
+	// No fixed height: the anchored popover still sizes to its content.
 	return (
-		<View className="p-2">
-			<Derivation>
-				<DerivationStep label={t('common.calculated_from')} title={source}>
-					{/* Text that behaves as a button (CODING_STANDARDS § Buttons, `link`): inline under
+		<View className="max-h-full p-2">
+			<ScrollView className="min-h-0 shrink">
+				<Derivation>
+					<DerivationStep label={t('common.calculated_from')} title={source}>
+						{/* Text that behaves as a button (CODING_STANDARDS § Buttons, `link`): inline under
 					    the title, no control box, so it sits where the board puts it. */}
-					{/* The slop gives the finger its 44 round a 20-tall line (§ Design 2). */}
-					<Pressable
-						role="link"
-						testID="tax-based-on-change-setting"
-						className="mt-0.5 self-start"
-						hitSlop={{ top: 12, bottom: 12 }}
-						onPress={() => go('/(app)/(drawer)/settings/tax')}
-					>
-						<Text variant="link" className="text-primary text-sm">
-							{t('common.change_in_settings_tax')}
-						</Text>
-					</Pressable>
-				</DerivationStep>
-				{failure === 'address' ? (
-					<DerivationStep
-						state="failed"
-						label={t('common.no_address_on_the_order')}
-						title={
-							taxBasedOn === 'billing'
-								? t('common.order_has_no_billing_address')
-								: t('common.order_has_no_shipping_address')
-						}
-						detail={t('common.add_a_customer_with_an_address')}
-					>
-						<AddressFields location={location} />
+						{/* The slop gives the finger its 44 round a 20-tall line (§ Design 2). */}
+						<Pressable
+							role="link"
+							testID="tax-based-on-change-setting"
+							className="mt-1 self-start"
+							hitSlop={{ top: 12, bottom: 12 }}
+							onPress={() => go('/settings/tax')}
+						>
+							<Text variant="link" className="text-primary text-sm">
+								{t('common.change_in_settings_tax')}
+							</Text>
+						</Pressable>
 					</DerivationStep>
-				) : (
-					<DerivationStep
-						label={isOrderAddress ? t('common.address_on_the_order') : t('common.shop_address')}
-						title={postalLine(location, countryName)}
-					>
-						<AddressFields location={location} />
-					</DerivationStep>
-				)}
-				{failure === 'address' ? (
-					<DerivationStep
-						state="quiet"
-						label={t('common.rates_that_match_it')}
-						detail={t('common.none')}
-					/>
-				) : failure === 'rates' ? (
-					<DerivationStep
-						state="failed"
-						label={t('common.no_rate_matches_it')}
-						title={
-							countryName
-								? t('common.store_has_no_tax_rate_for', { country: countryName })
-								: t('common.store_has_no_tax_rate_for_this_address')
-						}
-						detail={t('common.add_one_in_woocommerce_tax')}
-					/>
-				) : (
-					<DerivationStep state="result" label={t('common.rates_that_match_it')}>
-						{/* About ten rate lines, then it scrolls: a long US ledger must not push the
-						    View-all row off a phone's sheet, which has no scroll of its own. */}
-						<ScrollView className="mt-1.5 max-h-80">
-							{ledgers.map((ledger, index) => (
-								<React.Fragment key={ledger.slug}>
-									<RateLine
-										name={ledger.name}
-										percent={percent(ledger.percent)}
-										className={index > 0 ? 'mt-1 min-h-8' : 'min-h-8'}
-										strong
-									/>
-									{ledger.rates.map(({ rate, why: reason }) => (
+					{failure === 'address' ? (
+						<DerivationStep
+							state="failed"
+							label={t('common.no_address_on_the_order')}
+							title={
+								taxBasedOn === 'billing'
+									? t('common.order_has_no_billing_address')
+									: t('common.order_has_no_shipping_address')
+							}
+							detail={t('common.add_a_customer_with_an_address')}
+						>
+							<AddressFields location={location} />
+						</DerivationStep>
+					) : (
+						<DerivationStep
+							label={isOrderAddress ? t('common.address_on_the_order') : t('common.shop_address')}
+							title={postalLine(location, countryName)}
+						>
+							<AddressFields location={location} />
+						</DerivationStep>
+					)}
+					{failure === 'address' ? (
+						<DerivationStep
+							state="quiet"
+							label={t('common.rates_that_match_it')}
+							detail={t('common.none')}
+						/>
+					) : failure === 'rates' ? (
+						<DerivationStep
+							state="failed"
+							label={t('common.no_rate_matches_it')}
+							title={
+								{
+									'no-country': t('common.store_has_no_tax_rate_for_this_address'),
+									'not-covered': t('common.no_rate_covers_this_address_in', {
+										country: countryName,
+									}),
+									'no-rate-for-country': t('common.store_has_no_tax_rate_for', {
+										country: countryName,
+									}),
+								}[noRateCause(allRates, location)]
+							}
+							detail={t('common.add_one_in_woocommerce_tax')}
+						/>
+					) : (
+						<DerivationStep state="result" label={t('common.rates_that_match_it')}>
+							<View className="mt-2">
+								{ledgers.map((ledger, index) => (
+									<React.Fragment key={ledger.slug}>
 										<RateLine
-											key={rate.id}
-											name={rate.name ?? ''}
-											why={why(reason)}
-											percent={percent(parseFloat(rate.rate ?? '0'))}
+											name={ledger.name}
+											percent={percent(ledger.percent)}
+											className={index > 0 ? 'mt-1 min-h-8' : 'min-h-8'}
+											strong
 										/>
-									))}
-								</React.Fragment>
-							))}
-						</ScrollView>
-					</DerivationStep>
-				)}
-			</Derivation>
+										{ledger.rates.map(({ rate, why: reason }) => (
+											<RateLine
+												key={rate.id}
+												name={rate.name ?? ''}
+												why={why(reason)}
+												percent={percent(parseFloat(rate.rate ?? '0'))}
+											/>
+										))}
+									</React.Fragment>
+								))}
+							</View>
+						</DerivationStep>
+					)}
+				</Derivation>
+			</ScrollView>
 			<View className="border-border mt-1 border-t pt-1">
 				<Button
 					variant="ghost"
@@ -217,14 +231,14 @@ function AddressFields({ location }: { location: TaxLocation }) {
 		[t('common.postcode'), location.postcode],
 	] as const;
 	return (
-		<View className="mt-2.5 flex-row gap-3">
+		<View className="mt-2 flex-row gap-3">
 			{fields.map(([label, value]) => (
 				<View key={label} className="min-w-0 flex-1">
 					<Text className={TABLE_HEAD_TEXT} numberOfLines={1}>
 						{label}
 					</Text>
 					<Text
-						className={value ? 'mt-px text-base' : 'text-muted-foreground mt-px text-base'}
+						className={value ? 'text-base' : 'text-muted-foreground text-base'}
 						numberOfLines={1}
 					>
 						{value || '—'}

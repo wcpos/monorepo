@@ -59,6 +59,7 @@ const props = (
 	];
 	return {
 		rates,
+		allRates: rates,
 		taxBasedOn: 'base',
 		location: { country: 'GB', state: '', city: '', postcode: '' },
 		hasOrder: false,
@@ -101,7 +102,7 @@ it('the settings link closes the panel, then goes to Settings › Tax', () => {
 	render(<DisplayCurrentTaxRates {...props()} />);
 	fireEvent.click(screen.getByTestId('tax-based-on-change-setting'));
 	expect(mockClose).toHaveBeenCalledWith(false);
-	expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/settings/tax');
+	expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 });
 
 it("reads the order's address on an order, with its postal line", () => {
@@ -134,6 +135,23 @@ it('breaks at the rates when the address matched none, naming the country', () =
 	expect(screen.getByText('common.no_rate_matches_it')).toBeTruthy();
 	expect(screen.getByText('common.store_has_no_tax_rate_for {"country":"Iceland"}')).toBeTruthy();
 	expect(screen.getByText('common.add_one_in_woocommerce_tax')).toBeTruthy();
+});
+
+it('says the rates for the country miss this address when the store has some for it', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({
+				taxBasedOn: 'shipping',
+				hasOrder: true,
+				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
+				rates: [],
+				allRates: [rate({ country: 'US', state: 'CA', name: 'California' })],
+			})}
+		/>
+	);
+	expect(
+		screen.getByText('common.no_rate_covers_this_address_in {"country":"United States (US)"}')
+	).toBeTruthy();
 });
 
 it('falls back to a countryless cause when the address has no country', () => {
