@@ -314,6 +314,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
 					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
+				insert: jest.fn(async () => siteDoc),
 			},
 			wp_credentials: documentLookup(wpCredentialsDoc),
 			stores: {
@@ -372,6 +373,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					...documentLookup(null),
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 					incrementalUpsert: jest.fn(async () => site),
+					insert: jest.fn(async () => site),
 				},
 				wp_credentials: documentLookup(credentials),
 				stores: { ...documentLookup(null), bulkInsert: jest.fn() },
@@ -441,8 +443,9 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					...documentLookup(null),
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 					incrementalUpsert: jest.fn(async () => site),
+					insert: jest.fn(async () => site),
 				},
-				wp_credentials: { ...credentialLookup, upsert, incrementalUpsert: upsert },
+				wp_credentials: { ...credentialLookup, upsert, incrementalUpsert: upsert, insert: upsert },
 				stores: {
 					...documentLookup(null),
 					bulkInsert: jest.fn(async () => {
@@ -508,6 +511,7 @@ describe('HYDRATE_USER_SESSION', () => {
 							.mockReturnValue({ exec: async () => site }),
 						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 						incrementalUpsert: async () => site,
+						insert: async () => site,
 					},
 					wp_credentials: documentLookup(credentials),
 					stores: {
@@ -641,6 +645,7 @@ describe('PROCESS_INITIAL_PROPS display advertisement', () => {
 					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
 					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
+				insert: jest.fn(async () => siteDoc),
 			},
 			wp_credentials: documentLookup(wpCredentialsDoc),
 			stores: {

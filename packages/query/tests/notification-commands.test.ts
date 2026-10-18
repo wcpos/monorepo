@@ -116,6 +116,12 @@ it.each([true, false])(
 	}
 );
 
+it('reports a missing id even when the database is unavailable', async () => {
+	await expect(
+		query.upsertNotification(null, { ...row, id: '' }, { preserveLocalState: true })
+	).rejects.toThrow('Cannot save a notification without an id');
+});
+
 it('upserts without preserving state when requested', async () => {
 	const { database, stored, collection } = fixture([{ ...row, status: 'read', seen: true }]);
 	await query.upsertNotification(database, row, { preserveLocalState: false });

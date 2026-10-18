@@ -47,8 +47,8 @@ export async function upsertNotification(
 	row: NotificationRow,
 	{ preserveLocalState }: { preserveLocalState: boolean }
 ): Promise<void> {
-	const collection = notifications(database);
 	if (!row.id) throw new Error('Cannot save a notification without an id');
+	const collection = notifications(database);
 	if (preserveLocalState) {
 		const existing = await collection.findOne(row.id).exec();
 		if (existing) {
