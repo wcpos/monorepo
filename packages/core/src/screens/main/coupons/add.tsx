@@ -11,10 +11,10 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../components/coupon/coupon-form';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCouponRecord } from './commands/use-coupon-record';
 
 export function AddCouponScreen() {
-	const { create } = useMutation({ collectionName: 'coupons' });
+	const { createCoupon } = useCouponRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const router = useRouter();
@@ -30,7 +30,7 @@ export function AddCouponScreen() {
 		async (data: z.infer<typeof couponFormSchema>) => {
 			setLoading(true);
 			try {
-				const created = await create({ data });
+				const created = await createCoupon(data);
 				if (created) {
 					router.back();
 				}
@@ -38,7 +38,7 @@ export function AddCouponScreen() {
 				setLoading(false);
 			}
 		},
-		[create, router]
+		[createCoupon, router]
 	);
 
 	return (

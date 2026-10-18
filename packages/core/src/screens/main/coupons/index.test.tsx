@@ -178,7 +178,10 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 	}),
 }));
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ patch: mockPatch }),
+	useMutation: () => ({ patch: mockPatch, patchRecord: mockPatch }),
+}));
+jest.mock('../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
 }));
 jest.mock('../hooks/use-date-format', () => ({
 	useDateFormat: (value: string | undefined) => value ?? '',

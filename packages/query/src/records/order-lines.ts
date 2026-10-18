@@ -8,5 +8,6 @@ export type OrderCouponLine = NonNullable<OrderPayload['coupon_lines']>[number];
 export type OrderTaxLines = OrderPayload['tax_lines'];
 export type OrderMetaData = NonNullable<OrderPayload['meta_data']>;
 export type CustomerPayload = EngineRecord<'customers'>['payload'];
+export type CouponPayload = EngineRecord<'coupons'>['payload'];
 export type ProductPayload = EngineRecord<'products'>['payload'];
 export type VariationPayload = EngineRecord<'variations'>['payload'];

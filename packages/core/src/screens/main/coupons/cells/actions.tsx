@@ -27,6 +27,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
+import { refreshCollection } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -55,23 +56,18 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 	const { caps } = useUserCapabilities();
 
 	const handleRefresh = React.useCallback(() => {
-		const handle = runtime.engine.require({
+		void refreshCollection(runtime.engine, {
 			id: 'coupon-actions:refresh',
 			collection: 'coupons',
-			kind: 'refresh',
-			forceRefresh: true,
-		});
-		void handle.ready
-			.finally(() => handle.release())
-			.catch((error) => {
-				syncLogger.error('Failed to refresh coupons', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					showToast: true,
-					context: {
-						error: getErrorMessage(error),
-					},
-				});
+		}).catch((error) => {
+			syncLogger.error('Failed to refresh coupons', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				showToast: true,
+				context: {
+					error: getErrorMessage(error),
+				},
 			});
+		});
 	}, [runtime]);
 
 	const handleDelete = React.useCallback(async () => {

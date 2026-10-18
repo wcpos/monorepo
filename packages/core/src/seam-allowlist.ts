@@ -1666,10 +1666,20 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: enqueueDocumentWrite :: latest.collection :: 1',
 	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: usePushDocument :: latest.collection :: 1',
 	'screens/main/contexts/use-push-document.ts :: write plane outside a command module :: enqueueDocumentWrite :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (h3): the coupons screens write through a command and refresh through a named read.
+	'screens/main/coupons/add.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/add.tsx :: resident helper write :: AddCouponScreen :: useMutation :: 1',
+	'screens/main/coupons/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write :: EditCouponForm :: useLocalMutation :: 1',
+	"screens/main/coupons/edit/form.tsx :: storage import :: EditCouponForm :: from '@wcpos/database' :: 1",
+	'screens/main/coupons/index.tsx :: record mutator :: CouponsList :: patch :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write :: CouponsList :: useMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 716;
+export const SEAM_RETIRED_FLOOR = 725;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'f877b17080b855ac18a2242a8d3ed888eb22c15468b66f389057126d901b3016';
+	'67c3b343f017040b9b495b59f57a218b6dc281910adc7408adc016844b4c0fb3';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
