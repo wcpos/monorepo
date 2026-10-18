@@ -23,7 +23,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -51,25 +51,20 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> 
 
 	const handleRefresh = React.useCallback(() => {
 		if (!product.id) return;
-		const handle = runtime.engine.require({
+		void refreshRecordByWooId(runtime.engine, {
 			id: `product-actions:refresh:${product.id}`,
 			collection: 'products',
-			kind: 'targeted-records',
-			remoteIds: [product.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		void handle.ready
-			.finally(() => handle.release())
-			.catch((error) => {
-				syncLogger.error('Failed to refresh product', {
-					code: ERROR_CODES.PRODUCT_UNEXPECTED,
-					showToast: true,
-					context: {
-						productId: product.id,
-						error: getErrorMessage(error),
-					},
-				});
+			wooId: product.id,
+		}).catch((error) => {
+			syncLogger.error('Failed to refresh product', {
+				code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				showToast: true,
+				context: {
+					productId: product.id,
+					error: getErrorMessage(error),
+				},
 			});
+		});
 	}, [runtime, product.id]);
 
 	/**

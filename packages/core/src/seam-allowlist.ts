@@ -1683,10 +1683,24 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/customers/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/customers/edit/form.tsx :: resident helper write :: EditCustomerForm :: useLocalMutation :: 1',
 	"screens/main/customers/edit/form.tsx :: storage import :: EditCustomerForm :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (h5): the products screens write through a command and refresh through the named read.
+	'screens/main/products/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/products/cells/variation-actions.tsx :: require plane outside a named read :: VariationActions :: runtime.engine.require :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write :: EditProductForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/product/form.tsx :: storage import :: EditProductForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/edit/variation/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/variation/form.tsx :: resident helper write :: EditVariationForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/variation/form.tsx :: storage import :: EditVariationForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: productsPatch :: 1',
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: variationsPatch :: 1',
+	'screens/main/products/products.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 2',
 ];
-export const SEAM_RETIRED_FLOOR = 731;
+export const SEAM_RETIRED_FLOOR = 744;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'aa0cb933edbe84c401055c98efcae1050290e413644f38feb587cb42c4a9e659';
+	'3d32e7e28cf7c2980623feefb8298f4297bc1523018b34ebcb71706b2abc76de';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
