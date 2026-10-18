@@ -1,4 +1,6 @@
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
+
+import type { CouponContext } from '@wcpos/order-math';
 
 import { createSettlementCoordinator } from './settlement-coordinator';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
@@ -27,6 +29,11 @@ async function emit<T>(subject: BehaviorSubject<T>, value: T) {
 	subject.next(value);
 	await flush();
 }
+const emptyContext: CouponContext = {
+	coupons: new Map(),
+	productCategories: new Map(),
+	categoryParents: new Map(),
+};
 const stops: (() => void)[] = [];
 afterEach(() => stops.splice(0).forEach((stop) => stop()));
 function start(records = [order()], ready = true) {
@@ -40,12 +47,16 @@ function start(records = [order()], ready = true) {
 	const serverOwnsMoney = jest.fn(() => false);
 	const orderSaveState = jest.fn<{ kind: string } | null, [string]>(() => null);
 	const inCheckout = jest.fn(() => false);
+	const references$ = new BehaviorSubject({ ready: false, generation: '0:0' });
+	const readCoupons = jest.fn<Promise<CouponContext>, [OrderPayload]>(async () => emptyContext);
 	const observe = jest.fn();
 	const deps = {
 		inputs$,
 		openOrders$,
 		ratesReady$,
 		settle,
+		references$,
+		readCoupons,
 		serverOwnsMoney,
 		orderSaveState,
 		inCheckout,
@@ -67,7 +78,7 @@ it('settles bind, new orders, config and order content changes, not its own mone
 	await emit(h.inputs$, { ...inputs, baseLocation: { country: 'NZ' } });
 	expect(h.settle.mock.calls.map(([uuid]) => uuid)).toEqual(['a', 'b', 'c', 'a', 'b', 'c']);
 	h.openOrders$.next([
-		order('a', { total: '10', total_tax: '0', date_modified_gmt: 'later' }),
+		order('a', { id: 123, total: '10', total_tax: '0', date_modified_gmt: 'later' }),
 		order('b'),
 		order('c'),
 	]);
@@ -84,14 +95,18 @@ const payloadCases: [string, OrderPayload, boolean][] = [
 	['completed ledger', { total: '0.004', meta_data: ledger('captured', '0.004') }, true],
 	['awaiting customer', { meta_data: [{ key: '_wcpos_awaiting_customer', value: { method_id: 'invoice', attempt_id: 'one' } }] }, true],
 	['server meta', { meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] }, true],
-	['coupon', { coupon_lines: [{ code: 'summer' }] }, true],
 	['partial capture', { meta_data: ledger('captured') }, false],
 	['provenance alone', { meta_data: [{ key: '_wcpos_sale_time', value: 'before-failed-leg' }] }, false],
 	['quick discount', { coupon_lines: [{ code: 'discount', meta_data: [{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } }] }] }, false],
 ];
-it.each(payloadCases)('gates %s and replays when the exclusion lifts', async (_, payload, skip) => {
+it.each(
+	payloadCases.flatMap(([name, payload, skip]): typeof payloadCases => [
+		[name, payload, skip],
+		[`coupon: ${name}`, { ...payload, coupon_lines: [{ code: 'summer' }] }, skip],
+	])
+)('gates %s and replays when the exclusion lifts', async (_, payload, skip) => {
 	const h = start([order('a', payload)]);
-	await flush();
+	await emit(h.references$, { ready: true, generation: '0:0' });
 	expect(h.settle).toHaveBeenCalledTimes(skip ? 0 : 1);
 	if (skip) await emit(h.openOrders$, [order()]);
 	expect(h.settle).toHaveBeenCalledTimes(1);
@@ -204,4 +219,96 @@ it('clears per-order memory on rebind and stops every subscription and queued wr
 	expect([h.inputs$, h.openOrders$, h.ratesReady$].every((subject) => !subject.observed)).toBe(
 		true
 	);
+});
+
+const couponOrder = (payload: OrderPayload = {}) =>
+	order('a', { coupon_lines: [{ code: 'summer' }], ...payload });
+
+it('owns reference demand across tab emissions and releases it when the last coupon cart leaves', async () => {
+	const a = couponOrder();
+	const h = start([a]);
+	await flush();
+	expect(h.references$.observed).toBe(true);
+	expect(h.readCoupons).not.toHaveBeenCalled();
+	expect(h.settle).not.toHaveBeenCalled();
+	await emit(h.openOrders$, [order('other-tab'), a]);
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.settle.mock.calls.filter(([uuid]) => uuid === 'a')).toHaveLength(1);
+	await emit(h.openOrders$, [a]);
+	expect(h.readCoupons).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, []);
+	expect(h.references$.observed).toBe(false);
+});
+
+it.each(['failed', 'cancelled', 'captured'])(
+	'retains a coupon replay through a live leg ending %s with balance',
+	async (status) => {
+		const a = couponOrder();
+		const h = start([a]);
+		const pending = new Subject<CouponContext>();
+		h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
+		await emit(h.references$, { ready: true, generation: '0:0' });
+		a.payload.meta_data = ledger('pending');
+		await emit(h.openOrders$, [a]);
+		pending.next(emptyContext);
+		await flush();
+		expect(h.settle).not.toHaveBeenCalled();
+		a.payload.meta_data = ledger(status);
+		a.payload.status = status === 'captured' ? 'pos-partial' : 'pos-open';
+		await emit(h.openOrders$, [a]);
+		expect(h.settle).toHaveBeenCalledTimes(1);
+	}
+);
+
+it.each(['content', 'stop', 'rebind', 'generation'])(
+	'invalidates an in-flight coupon context on %s',
+	async (change) => {
+		const a = couponOrder();
+		const h = start([a]);
+		const pending = new Subject<CouponContext>();
+		h.readCoupons.mockReturnValueOnce(firstValueFrom(pending));
+		h.settle.mockImplementation(async (_uuid, record, allowed) => {
+			expect(allowed(record.payload)).toBe(true);
+			expect(allowed({ ...record.payload, id: 99 })).toBe(false);
+		});
+		await emit(h.references$, { ready: true, generation: '0:0' });
+		// Context reads never hold the slot; a newer key can finish before the old read.
+		await enqueueOrderMutation('a', async () => {
+			if (change === 'content') a.payload.line_items = [{ total: '30' }];
+		});
+		if (change === 'content') await emit(h.openOrders$, [a]);
+		else if (change === 'stop') h.stop();
+		else if (change === 'rebind') h.openOrders$.next(null);
+		else h.references$.next({ ready: false, generation: '1:0' });
+		expect(pending.observed).toBe(true);
+		pending.next(emptyContext);
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(change === 'content' ? 1 : 0);
+		if (change === 'generation') {
+			await emit(h.references$, { ready: true, generation: '1:0' });
+			expect(h.settle).toHaveBeenCalledTimes(1);
+		} else if (change !== 'content') expect(h.references$.observed).toBe(false);
+	}
+);
+
+it('does not aggregate a cart that gains a coupon while its slot is queued', async () => {
+	const a = order();
+	let release!: () => void;
+	const held = enqueueOrderMutation(
+		'a',
+		() =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			})
+	);
+	const h = start([a]);
+	await flush();
+	a.payload.coupon_lines = [{ code: 'summer' }];
+	h.openOrders$.next([a]);
+	release();
+	await held;
+	await flush();
+	expect(h.settle).not.toHaveBeenCalled();
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.settle).toHaveBeenCalledTimes(1);
 });

@@ -2,7 +2,12 @@ import { combineLatest, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { foldSearchText, searchTerms } from '@wcpos/sync-core';
-import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type {
+	CoverageTarget,
+	CoverageVerdict,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 import {
 	engineCollectionNameFor,
@@ -90,6 +95,14 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 			.catch(() => undefined);
 		return unsubscribe;
 	});
+}
+
+/** Identity used to invalidate reference demand after a scope switch or collection reset. */
+export function readCoverageGeneration(
+	engine: RxdbSyncEngine,
+	collection: SyncCollectionName
+): number {
+	return engine.status().collections[collection].coverageGeneration;
 }
 
 /**

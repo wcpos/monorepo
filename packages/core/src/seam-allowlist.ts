@@ -935,7 +935,8 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	// Settlement result reads now go through the order-math accessor.
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 1',
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 2',
+	'query/scope-key.ts :: storage token :: useCoverageGeneration :: engine.status().collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 30;
+export const SEAM_RETIRED_FLOOR = 31;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'f07dfd64d37ba293d1b8ebdb0239232a7ec6d9c1f3dd2ea610bd03365681791c';
+	'078542919ca07a9e22e69a9231de5be6df587bc874085f762996ef0765210dd8';

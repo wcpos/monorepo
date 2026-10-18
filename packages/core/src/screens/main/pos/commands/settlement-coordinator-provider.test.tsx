@@ -27,10 +27,13 @@ const manager = { engine };
 const writes: Record<string, unknown>[] = [];
 const report = jest.fn();
 const readConfig = () => config;
+const t = (key: string) => key;
+jest.mock('../../../../contexts/translations', () => ({ useT: () => t }));
 const ownsMoney = () => false;
 const mockInputs = { settings: { priceNumDecimals: 2 }, rates: [], baseLocation: {} };
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
@@ -141,5 +144,60 @@ it.each(['0.30', '0.40'])(
 			expect.anything()
 		);
 		view.unmount();
+	}
+);
+
+const references = new BehaviorSubject({ ready: false, generation: '0:0' });
+const context = {
+	coupons: new Map([['summer', { code: 'summer', discount_type: 'percent', amount: '10' }]]),
+	productCategories: new Map(),
+	categoryParents: new Map(),
+};
+jest.mock('./coupon-continuation', () => ({
+	...jest.requireActual('./coupon-continuation'),
+	couponReferences: () => references,
+}));
+jest.mock('../hooks/use-coupon-context', () => ({ readCouponContext: async () => context }));
+
+it.each(['valid', 'missing', 'boundary'])(
+	'replays a %s coupon only after references, once',
+	async (kind) => {
+		references.next({ ready: false, generation: '0:0' });
+		const coupon = { code: 'summer', discount_type: 'percent', amount: '10' };
+		context.coupons = new Map(kind === 'missing' ? [] : [['summer', coupon]]);
+		// prettier-ignore
+		const a = record({
+			line_items: [{ product_id: 1, quantity: 1, total: '10', subtotal: '10' }],
+			coupon_lines: [{ code: 'summer' }],
+			...(kind === 'boundary' ? { status: 'pos-partial', meta_data: [{ key: '_wcpos_payments', value: {
+				schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '9', refunded_amount: '0' }],
+			} }] } : {}),
+		});
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(references.observed).toBe(true);
+		expect(writes).toHaveLength(0);
+		act(() => references.next({ ready: true, generation: '0:0' }));
+		await flush();
+		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
+		if (kind === 'valid')
+			expect(writes[0]).toEqual(expect.objectContaining({ total: '9', discount_total: '1' }));
+		if (kind === 'boundary')
+			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
+				'settlement.boundary-deferred',
+				expect.anything()
+			);
+		if (kind === 'missing')
+			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
+				'Cart settlement failed',
+				expect.objectContaining({ context: expect.objectContaining({ code: 'missing_coupon' }) })
+			);
+		expect(report).toHaveBeenCalledTimes(1);
+		act(() => orders.next({ ready: true, hits: [{ record: a }] }));
+		await flush();
+		expect(report).toHaveBeenCalledTimes(1);
+		view.unmount();
+		expect(references.observed).toBe(false);
 	}
 );

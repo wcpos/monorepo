@@ -43,6 +43,7 @@ export type {
 export { variationAllMatch, variationAttributesMatch } from './engine-adapter/translate-selector';
 export {
 	observeCoverage,
+	readCoverageGeneration,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,

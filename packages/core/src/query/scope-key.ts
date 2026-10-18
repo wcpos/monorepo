@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-import { engineCollectionNameFor, type LegacyCollectionName, useQueryRuntime } from '@wcpos/query';
+import {
+	engineCollectionNameFor,
+	type LegacyCollectionName,
+	readCoverageGeneration,
+	useQueryRuntime,
+} from '@wcpos/query';
 import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 export function useCoverageGeneration(
@@ -12,7 +17,7 @@ export function useCoverageGeneration(
 		[engine]
 	);
 	const getSnapshot = React.useCallback(
-		() => engine.status().collections[collection].coverageGeneration,
+		() => readCoverageGeneration(engine, collection),
 		[collection, engine]
 	);
 	return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
