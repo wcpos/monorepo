@@ -1,14 +1,16 @@
-import { awaitWriteOutcome, type useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { requestServerDelete } from './request-server-delete';
 import {
 	findEngineResident,
 	insertEngineResident,
 	patchAndEnqueueEngineResident,
 	patchEngineResident,
-} from '../../hooks/mutations/use-local-mutation';
+} from './resident';
+import { awaitWriteOutcome, WriteOutcomeError } from '../await-write-outcome';
+
+import type { useQueryRuntime } from '../provider';
 
 type QueryManager = ReturnType<typeof useQueryRuntime>;
 

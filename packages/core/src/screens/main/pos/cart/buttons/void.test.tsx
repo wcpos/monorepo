@@ -10,7 +10,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { VoidButton } from './void';
 import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
-/** Scripted result for one awaitWriteOutcome call, consumed in order. */
+/** Scripted engine event for one real outcome watch, consumed in order. */
 type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
 
 const mockCartLogger = {
@@ -25,7 +25,33 @@ const mockFindEngineResident = jest.fn();
 const mockInsertEngineResident = jest.fn();
 let mockOutcomes: ScriptedOutcome[] = [];
 let mockConnectivity: 'online' | 'offline' | 'degraded' = 'online';
+let mockOutcomeTimeoutMs = 0;
 let mockAwaitCalls: { mutationId: string; timeoutMs?: number }[] = [];
+const mockRefusal = {
+	type: 'write-rejected',
+	mutationId: 'delete-1',
+	status: 403,
+	reason: 'woocommerce_rest_cannot_delete',
+};
+type OutcomeListener = (event: typeof mockRefusal) => void;
+
+beforeAll(() => {
+	jest.useFakeTimers();
+	const setTimeout = globalThis.setTimeout;
+	jest.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+		if (delay === 15_000 || delay === 120_000) mockOutcomeTimeoutMs = delay;
+		// Expire only the scripted first watch; the real waiter owns rejection and cleanup.
+		return setTimeout(
+			callback,
+			delay === 15_000 && mockOutcomes[0] === 'timeout' ? 0 : delay,
+			...args
+		);
+	});
+});
+afterAll(() => {
+	jest.restoreAllMocks();
+	jest.useRealTimers();
+});
 
 const mockEngine = {
 	write: jest.fn(async ({ operation }: { operation: string }) => ({
@@ -33,6 +59,15 @@ const mockEngine = {
 		annihilated: false,
 	})),
 	status: jest.fn(() => ({ connectivity: mockConnectivity })),
+	events: jest.fn(
+		(listener: OutcomeListener, { replayWriteOutcomeFor }: { replayWriteOutcomeFor: string }) => {
+			mockAwaitCalls.push({ mutationId: replayWriteOutcomeFor, timeoutMs: mockOutcomeTimeoutMs });
+			const next = mockOutcomes.shift() ?? 'acknowledged';
+			if (next !== 'timeout') listener({ ...mockRefusal, type: `write-${next}` });
+			return jest.fn();
+		}
+	),
+	sync: jest.fn(async () => undefined),
 	resolveConflict: jest.fn(async (_mutationId: string, _resolution: string) => undefined),
 };
 const mockSetCurrentOrderID = jest.fn();
@@ -69,39 +104,8 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 
 jest.mock('@wcpos/query', () => {
-	class WriteOutcomeError extends Error {
-		eventType: 'write-rejected' | 'write-conflict';
-		status?: number;
-		reason?: string;
-
-		constructor(reason?: string, status?: number) {
-			super(`write-rejected for mutation "delete-1"`);
-			this.name = 'WriteOutcomeError';
-			this.eventType = 'write-rejected';
-			this.status = status;
-			this.reason = reason;
-		}
-	}
-
-	return {
-		useQueryRuntime: () => mockManager,
-		WriteOutcomeError,
-		awaitWriteOutcome: (
-			_engine: typeof mockEngine,
-			mutationId: string,
-			options?: { timeoutMs?: number }
-		) => {
-			mockAwaitCalls.push({ mutationId, timeoutMs: options?.timeoutMs });
-			const next = mockOutcomes.shift() ?? 'acknowledged';
-			if (next === 'rejected') {
-				return Promise.reject(new WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
-			}
-			if (next === 'timeout') {
-				return Promise.reject(new Error(`Timed out waiting for mutation "${mutationId}"`));
-			}
-			return Promise.resolve('success');
-		},
-	};
+	const { awaitWriteOutcome, WriteOutcomeError } = jest.requireActual('@wcpos/query');
+	return { useQueryRuntime: () => mockManager, awaitWriteOutcome, WriteOutcomeError };
 });
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -117,7 +121,7 @@ jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
+jest.mock('../../../../../../../query/src/mutations/resident', () => ({
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	patchEngineResident: (...args: unknown[]) => mockPatchEngineResident(...args),
@@ -197,6 +201,34 @@ describe('VoidButton', () => {
 		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
 		expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+	});
+
+	it('skips the outcome watch for an annihilated local order', async () => {
+		mockEngine.write.mockResolvedValueOnce({ mutationId: 'delete-1', annihilated: true });
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_removed',
+				expect.any(Object)
+			)
+		);
+		expect(mockEngine.events).not.toHaveBeenCalled();
+		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+	});
+
+	it('reports conversion without waiting for discard to finish', async () => {
+		mockOutcomes = ['rejected'];
+		mockEngine.resolveConflict.mockReturnValueOnce(new Promise(() => {}));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_voided_cancelled',
+				expect.any(Object)
+			)
+		);
+		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard');
 	});
 
 	it('cancels a refused void on the store and enqueues the update', async () => {
@@ -313,6 +345,7 @@ describe('VoidButton', () => {
 		);
 		expect(mockAwaitCalls).toHaveLength(2);
 		expect(mockAwaitCalls[1]?.timeoutMs).toBeGreaterThan(15_000);
+		expect(mockAwaitCalls[1]?.timeoutMs).toBe(120_000);
 		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalledWith(
 			expect.objectContaining({ changes: { status: 'cancelled' } })
 		);
@@ -323,19 +356,12 @@ describe('VoidButton', () => {
 	it('does not convert on a late refusal after the cashier already undid the void, but settles its dead letter', async () => {
 		let releaseLateWatch: (() => void) | undefined;
 		mockOutcomes = ['timeout'];
-		const lateRejection = new Promise<never>((_resolve, reject) => {
-			releaseLateWatch = () => {
-				const { WriteOutcomeError } = jest.requireMock('@wcpos/query');
-				reject(new WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
-			};
+		// The second engine subscription hangs until Undo, then delivers the refusal.
+		const original = mockEngine.events.getMockImplementation()!;
+		mockEngine.events.mockImplementationOnce(original).mockImplementationOnce((listener) => {
+			releaseLateWatch = () => listener(mockRefusal);
+			return jest.fn();
 		});
-		// Second call hangs until the undo has run, then rejects with the refusal.
-		const query = jest.requireMock('@wcpos/query');
-		const original = query.awaitWriteOutcome;
-		query.awaitWriteOutcome = jest
-			.fn()
-			.mockImplementationOnce(original)
-			.mockImplementationOnce(() => lateRejection);
 
 		try {
 			render(<VoidButton />);
@@ -358,7 +384,7 @@ describe('VoidButton', () => {
 			expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
 			expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
 		} finally {
-			query.awaitWriteOutcome = original;
+			mockEngine.events.mockImplementation(original);
 		}
 	});
 
@@ -857,7 +883,7 @@ it('stamps the original register through the real writer when binding switches d
 	])
 		query[key] = realQuery[key];
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
-		'../../../hooks/mutations/use-local-mutation'
+		'../../../../../../../query/src/mutations/resident'
 	);
 	const { readBoundRegister } = jest.requireActual('@wcpos/query/register-session');
 	await readBoundRegister(
@@ -896,15 +922,13 @@ it('stamps the original register through the real writer when binding switches d
 		patchAndEnqueueEngineResident({ ...input, manager })
 	);
 	let refuse!: () => void;
-	const outcome = jest.spyOn(query, 'awaitWriteOutcome').mockImplementationOnce(
-		() =>
-			new Promise((_resolve, reject) => {
-				refuse = () => reject(new query.WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
-			})
-	);
+	mockEngine.events.mockImplementationOnce((listener) => {
+		refuse = () => listener(mockRefusal);
+		return jest.fn();
+	});
 	render(<VoidButton />);
 	fireEvent.click(screen.getByTestId('void-button'));
-	await waitFor(() => expect(outcome).toHaveBeenCalled());
+	await waitFor(() => expect(mockEngine.events).toHaveBeenCalled());
 	await readBoundRegister(
 		{
 			getLocal: async () => ({
@@ -933,7 +957,6 @@ it('stamps the original register through the real writer when binding switches d
 			})
 		)
 	);
-	outcome.mockRestore();
 });
 
 jest.mock('@wcpos/query/temporary-order', () => ({}));

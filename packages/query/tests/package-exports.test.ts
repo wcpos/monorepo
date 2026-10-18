@@ -5,6 +5,8 @@ import path from 'node:path';
 
 import { resolve as metroResolve, type ResolutionContext } from 'metro-resolver';
 
+import * as mutations from '../src/mutations';
+
 const repoRoot = path.resolve(__dirname, '../../..');
 const querySourceRoot = path.join(repoRoot, 'packages/query/src');
 const requireFromMain = createRequire(path.join(repoRoot, 'apps/main/package.json'));
@@ -54,6 +56,15 @@ const metroContext: ResolutionContext = {
 };
 
 describe('package exports', () => {
+	it('exports the void and restore commands from mutations', () => {
+		expect(mutations).toEqual(
+			expect.objectContaining({
+				voidOrder: expect.any(Function),
+				restoreVoidedOrder: expect.any(Function),
+			})
+		);
+	});
+
 	it('resolves the root entry identically through Node exports and Metro', () => {
 		const nodeResolved = requireFromMain.resolve('@wcpos/query');
 		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'index'), 'ios');
