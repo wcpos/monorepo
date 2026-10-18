@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -19,9 +20,10 @@ export const DEMO_CLAIM_KEY = 'demo';
 export function DemoButton() {
 	const { user } = useAppState();
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
-	const [connectedSite, setConnectedSite] = React.useState<
-		import('@wcpos/database').SiteDocument | null
-	>(null);
+	const [connectedSite, setConnectedSite] = React.useState<Pick<
+		ReadonlySiteRecord,
+		'uuid' | 'name' | 'wcpos_login_url'
+	> | null>(null);
 	const t = useT();
 
 	// Track which response we've already processed to prevent double-execution

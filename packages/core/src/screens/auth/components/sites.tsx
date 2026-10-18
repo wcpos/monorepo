@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -134,13 +135,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}

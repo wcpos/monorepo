@@ -1,6 +1,10 @@
-import type { SiteCollection, SiteDocument, UserDatabase } from '@wcpos/database';
+import type { SiteCollection, SiteDocument, UserDatabase, UserDocument } from '@wcpos/database';
+import { asciiHost } from '@wcpos/utils/ascii-host';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
+
+import type { ReadonlySiteRecord, ReadonlyUserRecord } from './records';
 
 /**
  * Fields on the site document that are owned by the local app, never by the server.
@@ -157,4 +161,112 @@ export async function linkCredentialsToSite(
 	});
 
 	return appended;
+}
+
+/**
+ * The address as an identity: scheme dropped, host lower-cased, trailing
+ * slash dropped, port and path kept, so `example.com/staging` is another
+ * site and `https://Example.com/` is `example.com`. A missing address
+ * compares as empty rather than throwing inside the save.
+ * A non-ASCII host compares in its punycode form, so `münchen-laden.de`
+ * and `xn--mnchen-laden-dlb.de` are the same site.
+ */
+export function normalizeSiteAddress(url: string | undefined): string {
+	return (url ?? '')
+		.replace(/^https?:\/\//i, '')
+		.replace(/^[^/]+/, (segment) =>
+			segment.replace(/^[^?#\\]+/, (host) => asciiHost(host)).toLowerCase()
+		)
+		.replace(/\/$/, '');
+}
+
+/**
+ * The address a connect actually reached, from its discovered API URL: the
+ * normalised site address with the REST suffix (`/wp-json/...` or
+ * `?rest_route=...`) cut off, so a permalink-style change is not a move but
+ * a different host or site path is.
+ */
+export function connectionAddressOf(apiUrl: string | undefined): string {
+	const address = apiUrl ?? '';
+	return normalizeSiteAddress(address.slice(0, restSuffixStart(address)));
+}
+
+/**
+ * Where the REST suffix begins: the first `/wp-json` at a word boundary, or the first
+ * `?rest_route=` (with the `/` before it, when there is one), whichever comes first; the
+ * string's length when there is neither. A linear scan rather than the alternation regex
+ * it replaced, which CodeQL flagged as polynomial on library input (#2706).
+ */
+function restSuffixStart(address: string): number {
+	const lower = address.toLowerCase();
+	let cut = lower.length;
+	for (let from = 0; ;) {
+		const index = lower.indexOf('/wp-json', from);
+		if (index === -1) break;
+		const next = lower.charAt(index + '/wp-json'.length);
+		if (next === '' || !/[a-z0-9_]/.test(next)) {
+			cut = index;
+			break;
+		}
+		from = index + 1;
+	}
+	const rest = lower.indexOf('?rest_route=');
+	if (rest !== -1) {
+		const start = rest > 0 && lower.charAt(rest - 1) === '/' ? rest - 1 : rest;
+		if (start < cut) cut = start;
+	}
+	return cut;
+}
+
+export class SiteIdentityClashError extends Error {
+	constructor(public readonly existingName: string | undefined) {
+		super('Site identity already belongs to another address');
+		this.name = 'SiteIdentityClashError';
+	}
+}
+
+export async function saveConnectedSite(
+	userDB: UserDatabase | null | undefined,
+	user: ReadonlyUserRecord | UserDocument,
+	siteData: { uuid: string; url: string; name?: string },
+	connectionAddress: string | undefined
+): Promise<ReadonlySiteRecord> {
+	if (!userDB) throw new UserDatabaseUnavailableError();
+	if (!siteData.uuid) throw new Error('Cannot save site data without a uuid');
+	const parsedData = userDB.sites.parseRestResponse(siteData);
+	const existingSite: SiteDocument | null = await userDB.sites.findOneFix(siteData.uuid).exec();
+	if (
+		existingSite &&
+		(normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url) ||
+			connectionAddressOf(existingSite.wcpos_api_url) !== connectionAddressOf(connectionAddress))
+	)
+		throw new SiteIdentityClashError(existingSite.name);
+	const siteDoc = await upsertSiteData(userDB, parsedData);
+	// Read-only records are the original RxDB instances; mutation is confined to commands.
+	const mutableUser = user as UserDocument;
+	const currentSites: string[] = mutableUser.getLatest().sites ?? [];
+	const siteLogger = getLogger(['wcpos', 'auth', 'site']);
+	if (!currentSites.includes(siteData.uuid)) {
+		await mutableUser.getLatest().incrementalUpdate({ $push: { sites: siteData.uuid } });
+		siteLogger.debug(
+			existingSite ? `Re-added site to user: ${siteData.name}` : `Added new site: ${siteData.name}`
+		);
+	}
+	if (existingSite) siteLogger.debug(`Updated site: ${siteData.name}`);
+	// Preserve the RxDB instance; typed populateResource makes the two faces invariant.
+	return siteDoc.getLatest() as unknown as ReadonlySiteRecord;
+}
+
+export async function removeSite(
+	user: ReadonlyUserRecord | UserDocument,
+	siteUuid: string | undefined
+): Promise<void> {
+	if (!siteUuid) throw new Error('Cannot remove site without a uuid');
+	// Read-only records retain their RxDB identity; only this command opens the write door.
+	const mutableUser = user as UserDocument;
+	const site = await mutableUser.collection.database.sites.findOne(siteUuid).exec();
+	if (!site) throw new Error('Cannot remove missing site');
+	const latest = site.getLatest();
+	await latest.remove();
+	await mutableUser.incrementalUpdate({ $pullAll: { sites: [latest.uuid] } });
 }

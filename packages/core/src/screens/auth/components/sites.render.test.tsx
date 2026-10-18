@@ -9,6 +9,7 @@ import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 let mockSites: unknown[] = [];
 let mockCompatible = true;
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/query/user-db', () => ({ removeSite: jest.fn() }));
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,

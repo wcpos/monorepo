@@ -1187,7 +1187,23 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'utils/site-writes.ts :: record mutator :: upsertSiteData :: collection.incrementalUpsert :: 1',
 	'utils/site-writes.ts :: record mutator :: upsertSiteData>merge :: doc.getLatest().incrementalModify :: 1',
 	"utils/site-writes.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (e2): auth writes are commands in @wcpos/query/user-db.
+	"screens/auth/components/demo-button.tsx :: storage import :: DemoButton :: from '@wcpos/database' :: 1",
+	'screens/auth/components/site.tsx :: record mutator :: Site :: latest.remove :: 1',
+	'screens/auth/components/site.tsx :: record mutator :: Site :: user.incrementalUpdate :: 1',
+	"screens/auth/components/site.tsx :: storage import :: SiteHeader :: from '@wcpos/database' :: 1",
+	'screens/auth/components/sites.tsx :: record mutator :: AccordionSite :: latest.remove :: 1',
+	'screens/auth/components/sites.tsx :: record mutator :: AccordionSite :: user.incrementalUpdate :: 1',
+	'screens/auth/components/wp-user.tsx :: record mutator :: WpUser :: site.getLatest().incrementalUpdate :: 1',
+	'screens/auth/components/wp-user.tsx :: record mutator :: WpUser :: wpUser.incrementalRemove :: 1',
+	'screens/auth/hooks/use-login-handler.ts :: raw query construction :: useLoginHandler :: userDB.wp_credentials .findOne :: 1',
+	'screens/auth/hooks/use-login-handler.ts :: record mutator :: useLoginHandler :: existingCredentials.incrementalPatch :: 1',
+	'screens/auth/hooks/use-login-handler.ts :: record mutator :: useLoginHandler :: userDB.wp_credentials.insert :: 1',
+	"screens/auth/hooks/use-login-handler.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/hooks/use-login-handler.ts :: storage import :: useLoginHandler :: from '@wcpos/database' :: 1",
+	'screens/auth/hooks/use-site-connect.ts :: record mutator :: useSiteConnect :: user.getLatest().incrementalUpdate :: 1',
+	"screens/auth/hooks/use-site-connect.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 271;
+export const SEAM_RETIRED_FLOOR = 286;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b9afa2ca7cacfa17eff52457e5f30a71610e90655e00dac7dc6d4316671fc63f';
+	'8389f4b1b13adeaf48b91ffbd39acadb1f7796ab7520bf86d1df2a7889dd4197';
