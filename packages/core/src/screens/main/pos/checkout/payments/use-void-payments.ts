@@ -5,11 +5,12 @@ import cloneDeep from 'lodash/cloneDeep';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { mirrorServerOrder } from '@wcpos/query/mutations';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
-import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { parsePosData } from '../../hooks/utils';
 import { voidPayments } from './void-payments';
@@ -22,7 +23,7 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'payments']);
 export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<VoidPaymentsOutcome> {
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
-	const { localPatch } = useLocalMutation();
+	const { recordLedger } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
 	const { store } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
@@ -32,8 +33,8 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 		async (order) => {
 			const latest = () => order.getLatest?.().payload ?? order.payload;
 			const payload = latest();
-			const enqueue = async (changes: object) => {
-				const result = await localPatch({ document: order, data: changes });
+			const enqueue = async (changes: Parameters<typeof recordLedger>[1]) => {
+				const result = await recordLedger(order, changes);
 				if (!result) throw new Error('offline_void_local_patch_failed');
 			};
 			const outcome = await voidPayments(
@@ -48,12 +49,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 					isOnline: () => onlineStatus.status === 'online-website-available',
 					patchAndEnqueue: enqueue,
 					mirror: async (changes) => {
-						await patchEngineResident({
-							manager,
-							collection: 'orders',
-							recordId: order.uuid,
-							changes,
-						});
+						await mirrorServerOrder(manager, order.uuid, changes);
 					},
 				}
 			);
@@ -98,6 +94,6 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				);
 			return outcome;
 		},
-		[http, onlineStatus.status, localPatch, manager, dp]
+		[http, onlineStatus.status, recordLedger, manager, dp]
 	);
 }

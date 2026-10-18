@@ -14,7 +14,9 @@ import { useTerminalPaymentsService } from './use-terminal-payments-service';
 import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 
-const mockManager = { engine: { db$: () => () => {} } };
+const mockManager = {
+	engine: { active: () => null, ready: new Promise(() => {}), db$: () => () => {} },
+};
 let mockSession = {
 	store: { id: 1 },
 	site: { id: 1 },
@@ -43,7 +45,6 @@ jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: 
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
 	findEngineResident: (...args: unknown[]) => mockFind(...args),
-	patchEngineResident: (...args: unknown[]) => mockPatch(...args),
 }));
 jest.mock('../../checkout-mode', () => ({
 	subscribeCheckoutMode: () => () => {},
@@ -308,4 +309,11 @@ jest.mock('@wcpos/query/store-local', () => ({
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
+}));
+
+jest.mock('@wcpos/query/mutations', () => ({
+	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+		mockPatch({ manager, collection: 'orders', recordId, changes }),
+	observeOfflineDeviceAuthorizations:
+		jest.requireActual('@wcpos/query/mutations').observeOfflineDeviceAuthorizations,
 }));

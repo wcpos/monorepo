@@ -37,9 +37,11 @@ const mockDocuments = new BehaviorSubject([mockResident]);
 const mockFind = jest.fn(() => ({ $: mockDocuments }));
 const mockRuntime = {
 	engine: {
+		active: () => null,
+		ready: new Promise(() => {}),
 		require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
 		db$: (listener: (db: object) => void) => {
-			listener({});
+			listener({ collections: { orders: { find: mockFind } } });
 			return () => {};
 		},
 	},
@@ -85,7 +87,6 @@ jest.mock('../../../../hooks/use-payment-methods', () => ({
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
 	findEngineResident: async () => mockResident,
-	patchEngineResident: (input: unknown) => mockMirror(input),
 }));
 afterEach(() => {
 	stopTerminalPaymentsService();
@@ -436,4 +437,11 @@ jest.mock('@wcpos/query/store-local', () => ({
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
+}));
+
+jest.mock('@wcpos/query/mutations', () => ({
+	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+		mockMirror({ manager, collection: 'orders', recordId, changes }),
+	observeOfflineDeviceAuthorizations:
+		jest.requireActual('@wcpos/query/mutations').observeOfflineDeviceAuthorizations,
 }));

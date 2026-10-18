@@ -1380,10 +1380,28 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 3",
 	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 4",
 	'screens/main/pos/hooks/use-add-item-to-order.ts :: write plane outside a command module :: useAddItemToOrder :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (f6): the payment mirror, the offline-authorization read and the ledger command own the five payment flows' writes.
+	"screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: raw query construction :: useTerminalPaymentsService :: collection .find({ selector: { 'payload.meta_data': { $elemMatch: { key: '_wcpos_payments', 'value.payments': { $elemMatch: { capture_mode: 'device', recorded_offline: true, status: 'authorized', }, }, }, }, }, }) :: 1",
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write :: useTerminalPaymentsService :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write :: useTerminalPaymentsService :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: storage token :: useTerminalPaymentsService :: manager.engine.db$ :: 1',
+	'screens/main/pos/checkout/payments/use-gateway-payment.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-gateway-payment.ts :: resident helper write :: useGatewayPayment :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write :: useRecordManualPayment :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write :: useRecordManualPayment :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: useLocalMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 452;
+export const SEAM_RETIRED_FLOOR = 469;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'7a516354c38d880eba7faf59328540299932328ec138f5f711eb380ca6a1ce5d';
+	'86dd9d221a3357bc9213f441eb3acee60d7f77ae76b1d9fe9c814e80d247aa26';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

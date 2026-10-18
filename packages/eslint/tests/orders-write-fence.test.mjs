@@ -10,6 +10,7 @@ import test from 'node:test';
 import { prContext, readBlob, readEvent } from '../../../scripts/check-test-removal.mjs';
 import {
 	BOTTOM_HANDLERS,
+	COMMAND_MODULE_ROOT,
 	countSites,
 	ROOT,
 	scanRepository,
@@ -65,6 +66,17 @@ test('a bottom handler is exempt', () => {
 		),
 		[]
 	);
+});
+
+test('a pos commands module is exempt: it is the screen\u2019s bottom handler (ADR 0033 item 6)', () => {
+	assert.deepEqual(
+		scanSource(
+			'localPatch({ document: order, data: changes })',
+			`${COMMAND_MODULE_ROOT}use-order-ledger-write.ts`
+		),
+		[]
+	);
+	assert.ok(existsSync(`${ROOT}/${COMMAND_MODULE_ROOT}`), COMMAND_MODULE_ROOT);
 });
 
 test('the exempt list names only files that exist', () => {

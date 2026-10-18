@@ -35,7 +35,6 @@ jest.mock('../../../../../contexts/app-state', () => ({
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
-	patchEngineResident: (input: unknown) => mockPatchEngineResident(input),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
@@ -571,3 +570,8 @@ it.each([
 		expect(row.currency).toBe(minted);
 	}
 );
+
+jest.mock('@wcpos/query/mutations', () => ({
+	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+		mockPatchEngineResident({ manager, collection: 'orders', recordId, changes }),
+}));

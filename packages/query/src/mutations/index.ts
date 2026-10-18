@@ -23,3 +23,5 @@ export {
 	type VoidOrderResult,
 } from './void-order';
 export { birthOrder, findBirthState } from './order-birth';
+export { mirrorServerOrder } from './mirror-server-order';
+export { observeOfflineDeviceAuthorizations } from '../reads/offline-device-authorizations';
