@@ -287,6 +287,25 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 	});
 	for (const counter of [1, 2, 3]) expect(await nextSaleCounter(db, 'site')).toBe(counter);
 	expect(await nextSaleCounter(db, 'other')).toBe(1);
+	// A closure the source till has in flight is the source's, not the clone's.
+	const doc = await db.getLocal<{ sites: Record<string, { registers?: Record<string, unknown> }> }>(
+		'register'
+	);
+	await doc!.incrementalModify((data) => ({
+		...data,
+		sites: {
+			...data.sites,
+			site: {
+				...data.sites.site,
+				registers: {
+					'server-register': {
+						...data.sites.site.registers?.['server-register'],
+						closure_reservation: { row: { id: 'closure-1', number: 5 }, applied: false },
+					},
+				},
+			},
+		},
+	}));
 
 	// The suite pins uuid v4 to one value; the re-mint must draw a different one.
 	jest
@@ -301,8 +320,9 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 		register_id: 'server-register',
 		register_name: 'Front',
 		register_store_id: 1,
-		registers: { 'server-register': { last_closure_number: 4 } },
+		registers: { 'server-register': { last_closure_number: 4, perpetual_sales_total: '10.0000' } },
 	});
+	expect(fresh.sites.site.registers?.['server-register']).not.toHaveProperty('closure_reservation');
 	expect(fresh.sites.other.sale_counter).toBe(0);
 	// The next sale starts the new till's own run, and the cached identity moved with it.
 	expect(await nextSaleCounter(db, 'site')).toBe(1);

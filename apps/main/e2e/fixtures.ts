@@ -14,6 +14,7 @@ import {
 	isWcposPluginCompatible,
 	MINIMUM_WCPOS_PLUGIN_VERSION,
 } from '@wcpos/core/utils/wcpos-plugin-version';
+import { NEW_TILL_ON_NEXT_LOAD_KEY } from '@wcpos/query/register-session/new-till-flag';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -25,7 +26,6 @@ import {
 } from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
-import { NEW_TILL_ON_NEXT_LOAD_KEY } from '../../../packages/query/src/register-session/new-till-flag';
 import { restoreOPFS } from './opfs-helpers';
 import {
 	resolveProbeOptions,
