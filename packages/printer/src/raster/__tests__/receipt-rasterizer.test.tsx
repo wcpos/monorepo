@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { render, waitFor } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 
 import ReceiptRasterizer from '../receipt-rasterizer.dom';
 
