@@ -182,12 +182,12 @@ it('a row says who, what, how long and its status; from three entries the line i
 		expect(screen.getByTestId('open-orders-row-b-items').textContent).toBe('pos_cart.cart_empty');
 		expect(screen.queryByTestId('open-orders-row-b-age')).toBeNull();
 		// A cart with a line that has sat for hours shows its age gone stale.
-		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warning');
+		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warn-text');
 		// The age follows the live-line test, not the summary text (Greptile/Codex on #2467).
 		expect(screen.getByTestId('open-orders-row-d-items').textContent).toBe('pos_cart.cart_empty');
 		expect(screen.getByTestId('open-orders-row-d-age')).toBeTruthy();
 		// An emptied cart that cannot restart (it holds a payment) keeps its age and warning.
-		expect(screen.getByTestId('open-orders-row-e-age').className).toContain('text-warning');
+		expect(screen.getByTestId('open-orders-row-e-age').className).toContain('text-warn-text');
 		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {

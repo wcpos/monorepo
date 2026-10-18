@@ -184,7 +184,7 @@ export function PerformanceScreen() {
 			>
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
-					<Text className={healthy ? 'text-success font-semibold' : 'text-warning font-semibold'}>
+					<Text className={healthy ? 'text-success font-semibold' : 'text-warn-text font-semibold'}>
 						{healthy
 							? t('health.performance.status_normal')
 							: t('health.performance.status_attention')}
@@ -357,7 +357,7 @@ export function PerformanceScreen() {
 						    may still be inside its ten-sample slow window. */}
 						<Text
 							className={
-								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warning text-sm'
+								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warn-text text-sm'
 							}
 							testID="server-pace"
 						>

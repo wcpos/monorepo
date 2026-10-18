@@ -145,7 +145,7 @@ function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabe
 				? 'bg-warning/10 border-warning'
 				: 'border-transparent';
 	const tone =
-		level === 'error' ? 'text-destructive' : level === 'warn' ? 'text-warning' : 'text-success';
+		level === 'error' ? 'text-destructive' : level === 'warn' ? 'text-warn-text' : 'text-success';
 	return (
 		<View className={cn('border-l-2 pr-2 pl-1', tint)}>
 			{/* Every column is text, separators included: a drag-select on web reads like `logToText`. */}

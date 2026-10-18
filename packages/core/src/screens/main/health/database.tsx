@@ -689,7 +689,7 @@ export function DatabaseScreen() {
 
 				{stats.clockSkew ? (
 					<Callout tone="warning" testID="db-clock-skew">
-						<Text className="text-warning text-sm">
+						<Text className="text-warn-text text-sm">
 							{`${
 								stats.clockSkew.skewSeconds > 0
 									? t('health.database.clock_skew_ahead', {
@@ -705,7 +705,7 @@ export function DatabaseScreen() {
 
 				{status.connectivity === 'offline' ? (
 					<Callout tone="warning">
-						<Text className="text-warning text-sm">
+						<Text className="text-warn-text text-sm">
 							{readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')}
 						</Text>
 					</Callout>
