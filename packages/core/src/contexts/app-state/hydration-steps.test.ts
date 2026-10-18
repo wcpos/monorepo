@@ -1,4 +1,10 @@
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+/** @jest-environment jsdom */
+
+const mockRegisterPlugins = jest.fn();
+jest.mock('@wcpos/query/user-db/bootstrap', () => {
+	mockRegisterPlugins();
+	return {};
+});
 
 jest.mock('expo-crypto', () => ({
 	CryptoDigestAlgorithm: { SHA256: 'SHA256' },
@@ -21,11 +27,15 @@ const platformFetchRef: { fn: (...args: unknown[]) => unknown } = {
 
 jest.mock('@wcpos/database/create-db', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
+	createUserDB: jest.fn(),
 }));
 
-jest.mock('@wcpos/database', () => ({
-	createUserDB: jest.fn(),
-	sanitizeWPCredentialsData: (data: unknown) => data,
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	applyEmbeddedBootPayload: jest.fn(),
+	openUserDatabase: jest.fn(),
+	readSiteTransportInputs: jest.fn(),
+	recordSiteTransport: jest.fn(),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -45,11 +55,27 @@ jest.mock('@wcpos/hooks/platform-fetch', () => ({
 	platformFetch: (...args: unknown[]) => platformFetchRef.fn(...args),
 }));
 
+// eslint-disable-next-line import/first -- Jest mocks must be registered before loading query commands.
+import {
+	applyEmbeddedBootPayload,
+	openUserDatabase,
+	readSiteTransportInputs,
+	recordSiteTransport,
+} from '@wcpos/query/user-db';
+// eslint-disable-next-line import/first -- Keep imports after the logger mock initialization.
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import { type HydrationContext, hydrationSteps, switchUserSessionStore } from './hydration-steps';
 // eslint-disable-next-line import/first -- Register the real engine port for session commits.
 import { registerEngineScopeSwitcher } from './engine-scope-port';
 
+beforeEach(() => {
+	jest.mocked(applyEmbeddedBootPayload).mockReset();
+	jest.mocked(openUserDatabase).mockReset();
+	jest.mocked(readSiteTransportInputs).mockReset().mockResolvedValue({});
+	jest.mocked(recordSiteTransport).mockReset();
+});
 afterEach(() => registerEngineScopeSwitcher(null));
 
 const documentLookup = (document: unknown) => ({
@@ -59,6 +85,11 @@ const documentLookup = (document: unknown) => ({
 // The embedded boot merges its payload into an existing credential document.
 const mergeable = <T extends object>(doc: T) =>
 	Object.assign(doc, { getLatest: () => doc, incrementalModify: jest.fn(async () => undefined) });
+
+const pluginRegistrationsAtModuleLoad = mockRegisterPlugins.mock.calls.length;
+it('loads the database plugins with the hydration module, before executing any step', () => {
+	expect(pluginRegistrationsAtModuleLoad).toBe(1);
+});
 
 describe('switchUserSessionStore', () => {
 	beforeEach(() => {
@@ -266,77 +297,74 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		jest.clearAllMocks();
 	});
 
-	it('merges server-owned fields into existing stores and inserts new stores', async () => {
+	it.each(['site', 'credentials', 'stores'])(
+		'preserves URL cleanup ordering when the %s write throws',
+		async (failureAt) => {
+			window.history.replaceState({}, '', '/pos?store=2&keep=1');
+			const failure = new Error('write failed');
+			const write = (stage: string, value: unknown) => async () => {
+				if (failureAt === stage) throw failure;
+				return value;
+			};
+			const site = { uuid: 'site-1' };
+			const userDB = {
+				sites: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					insert: write('site', site),
+				},
+				wp_credentials: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					insert: write('credentials', { uuid: 'cred-1' }),
+				},
+				stores: { ...documentLookup(null), bulkInsert: write('stores', undefined) },
+			};
+			jest
+				.mocked(applyEmbeddedBootPayload)
+				.mockImplementation(jest.requireActual('@wcpos/query/user-db').applyEmbeddedBootPayload);
+			try {
+				await expect(
+					hydrationSteps[1].execute({
+						userDB,
+						appState: { get: () => null },
+						user: { uuid: 'user-1' },
+						initialProps: { site, wp_credentials: { uuid: 'cred-1' }, stores: [{ id: 2 }] },
+					} as unknown as HydrationContext)
+				).rejects.toBe(failure);
+				expect(window.location.search).toBe(failureAt === 'stores' ? '?keep=1' : '?store=2&keep=1');
+			} finally {
+				window.history.replaceState({}, '', '/');
+			}
+		}
+	);
+
+	it('hydrates and commits the processed store selection', async () => {
+		const site = { uuid: 'site-1' };
+		const credentials = { uuid: 'credentials-1' };
+		const store = { localID: '0123456789' };
+		const appState = { get: jest.fn(() => ({ storeID: store.localID })), set: jest.fn() };
 		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
-		const existingStore: any = {
-			id: 1,
-			localID: '0123456789',
-			currency: 'USD',
-			theme: 'dark',
-			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
-				Object.assign(existingStore, patch);
-			}),
-		};
-		existingStore.getLatest = jest.fn(() => existingStore);
-
-		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = mergeable({
-			uuid: 'credentials-1',
-			patch: jest.fn(async () => undefined),
+		jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+			siteUuid: site.uuid,
+			wpCredentialsUuid: credentials.uuid,
+			stores: [{ id: 1, localID: store.localID }],
 		});
-		const bulkInsert = jest.fn(async () => undefined);
-		const userDB = {
-			sites: {
-				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
-				incrementalUpsert: jest.fn(async () => siteDoc),
-				insert: jest.fn(async () => siteDoc),
-			},
-			wp_credentials: documentLookup(wpCredentialsDoc),
-			stores: {
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => existingStore) })
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => existingStore) }),
-				bulkInsert,
-			},
-		};
-		const appState = {
-			get: jest.fn(async () => ({ storeID: existingStore.localID })),
-			set: jest.fn(async () => undefined),
-		};
-		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
-
-		await step!.execute({
-			userDB: { ...userDB, states: { v2: appState } } as any,
-			appState: appState as any,
-			user: { uuid: 'user-1' } as any,
-			initialProps: {
-				site: siteDoc,
-				wp_credentials: wpCredentialsDoc,
-				stores: [
-					{ id: 1, currency: 'EUR', calc_taxes: 'yes', theme: 'light' },
-					{ id: 2, name: 'New Store' },
-				],
-			},
-		});
-
-		// calc_taxes is auto-synced; currency is app-editable and must NOT auto-sync
-		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({ calc_taxes: 'yes' });
-		expect(existingStore.theme).toBe('dark');
-		expect(createStoreDBMock).toHaveBeenCalledWith(existingStore.localID);
+		await hydrationSteps
+			.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!
+			.execute({
+				userDB: {
+					sites: documentLookup(site),
+					wp_credentials: documentLookup(credentials),
+					stores: documentLookup(store),
+					states: { v2: appState },
+				} as any,
+				appState: appState as any,
+				user: { uuid: 'user-1' } as any,
+				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+			});
+		expect(createStoreDBMock).toHaveBeenCalledWith(store.localID);
 		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
-		expect(bulkInsert).toHaveBeenCalledWith([
-			expect.objectContaining({
-				id: 2,
-				name: 'New Store',
-				prevent_overselling: false,
-			}),
-		]);
 	});
 
 	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
@@ -351,7 +379,6 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				sites: {
 					...documentLookup(null),
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-					incrementalUpsert: jest.fn(async () => site),
 					insert: jest.fn(async () => site),
 				},
 				wp_credentials: documentLookup(credentials),
@@ -359,6 +386,11 @@ describe('PROCESS_INITIAL_PROPS', () => {
 			},
 			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
 		} as unknown as HydrationContext;
+		jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+			siteUuid: site.uuid,
+			wpCredentialsUuid: credentials.uuid,
+			stores: [{ id: 1, localID: '0123456789' }],
+		});
 		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
 		expect(step.failSoft).toBe(true);
 		await expect(step.execute(context)).resolves.not.toHaveProperty('session');
@@ -378,72 +410,31 @@ describe('PROCESS_INITIAL_PROPS', () => {
 	});
 
 	it('merges the embedded credential, so a failure before the stores patch keeps its links', async () => {
-		// The payload carries no `stores`, `last_access` or `date_*`. A full-document
-		// upsert reset them until the step's final patch, so a throw in between (the
-		// step fails soft) persisted `stores: []` and the app showed no stores.
-		const original = {
-			uuid: 'credentials-1',
-			display_name: 'Old Name',
-			stores: ['store-a'],
-			last_access: '2026-10-01T00:00:00.000Z',
-			date_created_gmt: '2026-01-01T00:00:00',
-			date_modified_gmt: '2026-09-01T00:00:00',
+		// Storage preservation is pinned in query's applyEmbeddedBootPayload suite.
+		// Core passes the narrow payload through and must not commit after a failure.
+		const failure = new Error('store insert failed');
+		jest.mocked(applyEmbeddedBootPayload).mockRejectedValueOnce(failure);
+		const userDB = {};
+		const user = { uuid: 'user-1' };
+		const initialProps = {
+			site: { uuid: 'site-1' },
+			wp_credentials: { uuid: 'credentials-1', display_name: 'New Name' },
+			stores: [{ id: 1 }],
 		};
-		let stored: Record<string, unknown> = { ...original };
-		type Modifier = (current: Record<string, unknown>) => Record<string, unknown>;
-		const credentialDoc = {
-			uuid: original.uuid,
-			getLatest: () => credentialDoc,
-			incrementalModify: jest.fn(async (modify: Modifier) => {
-				stored = modify({ ...stored });
-			}),
-			patch: jest.fn(async (patch: Record<string, unknown>) => {
-				stored = { ...stored, ...patch };
-			}),
-		};
-		// RxDB's `upsert` replaces the document: omitted properties take their defaults.
-		const upsert = jest.fn(async (json: Record<string, unknown>) => {
-			stored = {
-				stores: [],
-				last_access: '',
-				date_created_gmt: '',
-				date_modified_gmt: '',
-				...json,
-			};
-			return credentialDoc;
-		});
-		const credentialLookup = documentLookup(credentialDoc);
-		const site = { uuid: 'site-1' };
-		const context = {
-			appState: { get: jest.fn(async () => null), set: jest.fn() },
-			user: { uuid: 'user-1' },
-			userDB: {
-				sites: {
-					...documentLookup(null),
-					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-					incrementalUpsert: jest.fn(async () => site),
-					insert: jest.fn(async () => site),
-				},
-				wp_credentials: { ...credentialLookup, upsert, incrementalUpsert: upsert, insert: upsert },
-				stores: {
-					...documentLookup(null),
-					bulkInsert: jest.fn(async () => {
-						throw new Error('store insert failed');
-					}),
-				},
-			},
-			initialProps: {
-				site,
-				wp_credentials: { uuid: original.uuid, display_name: 'New Name' },
-				stores: [{ id: 1 }],
-			},
-		} as unknown as HydrationContext;
+		const appState = { get: jest.fn(async () => null), set: jest.fn() };
 		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
 
-		await expect(step.execute(context)).rejects.toThrow('store insert failed');
-		expect(credentialLookup.findOne).toHaveBeenCalledWith('credentials-1');
-		expect(upsert).not.toHaveBeenCalled();
-		expect(stored).toEqual({ ...original, display_name: 'New Name' });
+		expect(step.failSoft).toBe(true);
+		await expect(
+			step.execute({ userDB, user, initialProps, appState } as unknown as HydrationContext)
+		).rejects.toBe(failure);
+		expect(applyEmbeddedBootPayload).toHaveBeenCalledWith(
+			userDB,
+			initialProps,
+			user,
+			expect.any(Function)
+		);
+		expect(appState.set).not.toHaveBeenCalled();
 	});
 });
 
@@ -484,34 +475,38 @@ describe('HYDRATE_USER_SESSION', () => {
 				user: { uuid: 'user-1' },
 				userDB: {
 					sites: {
-						findOne: jest
-							.fn()
-							.mockReturnValueOnce({ exec: async () => null })
-							.mockReturnValue({ exec: async () => site }),
+						findOne: jest.fn().mockReturnValue({ exec: async () => site }),
 						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-						incrementalUpsert: async () => site,
 						insert: async () => site,
 					},
 					wp_credentials: documentLookup(credentials),
 					stores: {
-						findOne: jest
-							.fn()
-							.mockReturnValueOnce({ exec: async () => null })
-							.mockReturnValue({ exec: async () => store }),
+						findOne: jest.fn().mockReturnValue({ exec: async () => store }),
 						bulkInsert: jest.fn(),
 					},
 				},
 				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
 			} as unknown as HydrationContext;
-			const database = Object.assign(context.userDB!, {
-				states: { v2: context.appState },
-				addState: async () => context.appState,
-				users: documentLookup(context.user),
-				// CREATE_USER_DB also ensures the register document on this lane; an existing
-				// one keeps ensureRegister from inserting.
-				getLocal: async () => ({ toJSON: () => ({ data: { id: 'register-1', sites: {} } }) }),
+			Object.assign(context.userDB!, { states: { v2: context.appState } });
+			jest.mocked(openUserDatabase).mockResolvedValue({
+				userDB: context.userDB!,
+				sessionPointer: context.appState!,
+				translationsCache: context.appState!,
+				user: context.user!,
 			});
-			jest.requireMock('@wcpos/database').createUserDB.mockResolvedValue(database);
+			jest.mocked(applyEmbeddedBootPayload).mockResolvedValue({
+				siteUuid: site.uuid,
+				wpCredentialsUuid: credentials.uuid,
+				stores: [{ id: 1, localID: store.localID }],
+			});
+			jest.mocked(recordSiteTransport).mockImplementation(async (_db, _uuid, flags) => {
+				latestSite = {
+					...latestSite,
+					use_jwt_as_param: !!flags.useJwtAsParam,
+					use_rest_route_param: !!flags.useRestRouteParam,
+					use_protocol_headers: !!flags.useProtocolHeaders,
+				};
+			});
 			jest.requireMock('./initial-props').initialProps = context.initialProps;
 			const originalFetch = platformFetchRef.fn;
 			platformFetchRef.fn = jest.fn(async (url) => ({
@@ -583,77 +578,6 @@ describe('HYDRATE_USER_SESSION', () => {
 	});
 });
 
-describe('PROCESS_INITIAL_PROPS display advertisement', () => {
-	it('keeps a display advertisement the initial props do not carry', async () => {
-		// The free plugin builds inline initial props without Pro's store filters,
-		// so `display` is never present there; the cashier response is the only
-		// payload that may withdraw it.
-		type StoreData = Record<string, unknown> & { display?: unknown };
-		type StoreDouble = StoreData & {
-			incrementalPatch: jest.Mock<Promise<void>, [Record<string, unknown>]>;
-			incrementalModify: jest.Mock<Promise<void>, [(doc: StoreData) => StoreData]>;
-			getLatest: () => StoreDouble;
-		};
-		const existingStore: StoreDouble = {
-			id: 1,
-			localID: '0123456789',
-			display: { contract: 1, signaling: '/wcpos/v2/display' },
-			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
-				Object.assign(existingStore, patch);
-			}),
-			incrementalModify: jest.fn(async (modify: (doc: StoreData) => StoreData) => {
-				const next = modify({ ...existingStore });
-				delete existingStore.display;
-				Object.assign(existingStore, next);
-			}),
-			getLatest: () => existingStore,
-		};
-		const siteDoc = { uuid: 'site-1' };
-		const wpCredentialsDoc = mergeable({
-			uuid: 'credentials-1',
-			patch: jest.fn(async () => undefined),
-		});
-		// The changed pointer is hydrated before it is committed (main #2127): the
-		// existence check sees no site yet, the hydration afterwards finds the upserted
-		// one, the credentials and the store, and opens the store database.
-		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({ id: 'state' })) });
-		const userDB = {
-			sites: {
-				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest
-					.fn()
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
-					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
-				incrementalUpsert: jest.fn(async () => siteDoc),
-				insert: jest.fn(async () => siteDoc),
-			},
-			wp_credentials: documentLookup(wpCredentialsDoc),
-			stores: {
-				findOne: jest.fn(() => ({ exec: jest.fn(async () => existingStore) })),
-				bulkInsert: jest.fn(async () => undefined),
-			},
-		};
-		const appState = {
-			get: jest.fn(async () => ({ storeID: existingStore.localID })),
-			set: jest.fn(async () => undefined),
-		};
-		type StepContext = Parameters<NonNullable<(typeof hydrationSteps)[number]['execute']>>[0];
-		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
-		await step!.execute({
-			userDB: { ...userDB, states: { v2: appState } } as unknown as StepContext['userDB'],
-			appState: appState as unknown as StepContext['appState'],
-			user: { uuid: 'user-1' } as unknown as StepContext['user'],
-			initialProps: {
-				site: siteDoc,
-				wp_credentials: wpCredentialsDoc,
-				stores: [{ id: 1, calc_taxes: 'yes' }],
-			},
-		});
-		expect(existingStore.display).toEqual({ contract: 1, signaling: '/wcpos/v2/display' });
-		expect(existingStore.incrementalModify).not.toHaveBeenCalled();
-	});
-});
-
 describe('TEST_AUTHORIZATION', () => {
 	const fetchMock = jest.fn();
 
@@ -706,15 +630,16 @@ describe('TEST_AUTHORIZATION', () => {
 			},
 		});
 
-		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
-			use_jwt_as_param: false,
-			use_rest_route_param: false,
-			use_protocol_headers: false,
-			use_instance_header: false,
-		});
-		expect(siteDoc.use_jwt_as_param).toBe(false);
-		expect(siteDoc.use_rest_route_param).toBe(false);
-		expect(siteDoc.use_protocol_headers).toBe(false);
+		expect(recordSiteTransport).toHaveBeenCalledWith(
+			expect.anything(),
+			'site-1',
+			expect.objectContaining({
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: false,
+				useInstanceHeader: false,
+			})
+		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -748,7 +673,7 @@ describe('TEST_AUTHORIZATION', () => {
 			})
 		).resolves.toEqual({});
 
-		expect(siteDoc.incrementalPatch).not.toHaveBeenCalled();
+		expect(recordSiteTransport).not.toHaveBeenCalled();
 	});
 
 	it('standalone web resolves the current session site and persists the transport verdict', async () => {
@@ -788,6 +713,13 @@ describe('TEST_AUTHORIZATION', () => {
 		siteDoc.getLatest.mockReturnValue(siteDoc);
 		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
 
+		jest.mocked(readSiteTransportInputs).mockResolvedValue({
+			siteUuid: siteDoc.uuid,
+			wcposApiUrl: siteDoc.wcpos_api_url,
+			accessToken: 'token',
+			wpApiUrl: undefined,
+			wcposVersion: undefined,
+		});
 		await step!.execute({
 			userDB: {
 				sites: documentLookup(siteDoc),
@@ -799,13 +731,16 @@ describe('TEST_AUTHORIZATION', () => {
 			initialProps: null,
 		});
 
-		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
-			use_jwt_as_param: false,
-			use_rest_route_param: false,
-			use_protocol_headers: true,
-			use_instance_header: false,
-		});
-		expect(siteDoc.use_protocol_headers).toBe(true);
+		expect(recordSiteTransport).toHaveBeenCalledWith(
+			expect.anything(),
+			'site-1',
+			expect.objectContaining({
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: true,
+				useInstanceHeader: false,
+			})
+		);
 		// Unsent floor names are unknown, not dead: no false alarm on a healthy store.
 		expect(mockAppLogger.warn).not.toHaveBeenCalledWith(
 			'Some POS request headers do not reach this server',

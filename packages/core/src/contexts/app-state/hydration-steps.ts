@@ -1,28 +1,27 @@
-import * as Crypto from 'expo-crypto';
+import '@wcpos/query/user-db/bootstrap';
 
-import { createUserDB } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
-import type {
-	SiteDocument,
-	StoreDatabase,
-	StoreDocument,
-	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
-} from '@wcpos/database';
-import { ensureRegister } from '@wcpos/query/register-session';
 import {
+	applyEmbeddedBootPayload,
 	type ExtraDataSlot,
+	type HydratedStoreSession,
 	hydrateUserSession,
-	mergeServerOwnedStoreFields,
-	normalizeStorePayload,
-	type ServerStorePayload,
+	openUserDatabase,
+	type PreparedStorePayload,
+	type ReadonlyUserRecord,
+	readSiteTransportInputs,
+	recordSiteTransport,
 	type SessionAppState,
+	type SiteDocument,
+	type StoreDatabase,
+	type StoreDocument,
 	type TranslationsState,
+	type UserDatabase,
+	type UserDocument,
+	type WPCredentialsDocument,
 } from '@wcpos/query/user-db';
-import { upsertEmbeddedCredentials, upsertSiteData } from '@wcpos/query/user-db';
 
 import { initialProps } from './initial-props';
 import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
@@ -31,22 +30,6 @@ import { testAuthorizationMethod } from './connect-probes';
 import type { InitialProps } from './initial-props.types';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
-/**
- * Generate a unique id for stores
- */
-async function generateHashId(dataObject: any): Promise<string> {
-	// Convert the object to a JSON string
-	const dataString = JSON.stringify(dataObject);
-
-	// Create a SHA-256 hash of the string
-	const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, dataString, {
-		encoding: Crypto.CryptoEncoding.HEX,
-	});
-
-	// Return the first 10 characters of the hash
-	return hash.substring(0, 10);
-}
-
 export async function switchUserSessionStore(
 	userDB: UserDatabase,
 	appState: SessionAppState,
@@ -57,9 +40,6 @@ export async function switchUserSessionStore(
 	const sessionData = await hydrateUserSession(userDB, newState);
 	return commitStoreSession(userDB, { ids: newState, session: sessionData });
 }
-
-/** A store payload from the embedded page, normalized and stamped with its local id. */
-export type PreparedStorePayload = ServerStorePayload & { localID: string };
 
 /**
  * Context that accumulates data as hydration steps complete.
@@ -74,8 +54,6 @@ export type PreparedStorePayload = ServerStorePayload & { localID: string };
  * IS the app's session carrier and predates the rule. The named aliases keep
  * the members typed without widening the exception.
  */
-// U4a keeps the existing mutable core carrier until the U4b orchestration move;
-// query returns the same document instances through their read-only types.
 export interface HydrationContext {
 	session?: Awaited<ReturnType<typeof hydrateUserSession>>;
 	userDB?: UserDatabase;
@@ -92,6 +70,14 @@ export interface HydrationContext {
 	extraData?: ExtraDataSlot;
 	stores?: PreparedStorePayload[];
 	storeLocalIDs?: string[];
+}
+
+/** Query returns the same RxDB instances; read-only flip pending U6. */
+export function toHydrationContext(
+	value: Partial<Omit<HydrationContext, 'user' | keyof HydratedStoreSession>> &
+		Partial<HydratedStoreSession> & { user?: ReadonlyUserRecord | null }
+): Partial<HydrationContext> {
+	return value as Partial<HydrationContext>;
 }
 
 /**
@@ -119,18 +105,12 @@ const initializeUserDBStep: HydrationStep = {
 	message: 'Setting up user database...',
 	progressIncrement: 20,
 	execute: async (context) => {
-		const userDB = await createUserDB();
-		if (!userDB) {
-			throw new Error('Failed to create user database');
-		}
-		const appState = await userDB.addState('v2');
-		const translationsState = await userDB.addState('translations_v2');
-		let user = await userDB.users.findOne().exec();
-		if (!user) {
-			user = await userDB.users.insert({ first_name: 'Global', last_name: 'User' });
-		}
-
-		await ensureRegister(userDB);
+		const {
+			userDB,
+			sessionPointer: appState,
+			translationsCache: translationsState,
+			user,
+		} = await openUserDatabase();
 
 		const result = {
 			userDB,
@@ -142,7 +122,7 @@ const initializeUserDBStep: HydrationStep = {
 			timestamp: new Date().toISOString(),
 		};
 
-		return result;
+		return toHydrationContext(result);
 	},
 };
 
@@ -177,53 +157,29 @@ const processInitialPropsStep: HydrationStep = {
 		}
 
 		const { initialProps, userDB, appState, user } = context;
-		const initialStores = initialProps.stores ?? [];
 		const oldState = await appState.get('current');
 
-		// Upsert site and credentials.
-		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
-		// full-document write and would drop the locally-owned `wp_credentials`
-		// link array, which the embedded payload never carries (#902).
-		const siteDoc = await upsertSiteData(userDB, initialSite);
-		// The credential merges for the same reason: its `stores` links reset to `[]` otherwise.
-		const wpCredentialsDoc = await upsertEmbeddedCredentials(userDB, initialProps.wp_credentials);
-
-		// Handle URL store parameter
 		let urlStoreID: number | null = null;
-		if (typeof window !== 'undefined') {
-			const urlParams = new URLSearchParams(window.location.search);
-			const storeParam = urlParams.get('store');
-			if (storeParam) {
-				urlStoreID = parseInt(storeParam, 10);
-				// Remove from URL so it doesn't get used again
-				urlParams.delete('store');
-				window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
-			}
-		}
-
-		// Process stores and generate local IDs
-		let selectedStoreID: string | undefined;
-		const stores = await Promise.all(
-			initialStores.map(async (store: ServerStorePayload) => {
-				const normalizedStore = normalizeStorePayload(store);
-				const localID = await generateHashId({
-					user: user.uuid,
-					siteID: siteDoc.uuid,
-					wpCredentialsID: wpCredentialsDoc.uuid,
-					storeID: normalizedStore.id,
-				});
-
-				// Check if this is the URL-selected store
-				if (urlStoreID === store.id) {
-					selectedStoreID = localID;
+		const { siteUuid, wpCredentialsUuid, stores } = await applyEmbeddedBootPayload(
+			userDB,
+			{ ...initialProps, site: initialSite },
+			user,
+			() => {
+				// Handle URL store parameter after credentials, before store writes.
+				if (typeof window !== 'undefined') {
+					const urlParams = new URLSearchParams(window.location.search);
+					const storeParam = urlParams.get('store');
+					if (storeParam) {
+						urlStoreID = parseInt(storeParam, 10);
+						// Remove from URL so it doesn't get used again
+						urlParams.delete('store');
+						window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+					}
 				}
-
-				return {
-					...normalizedStore,
-					localID,
-				};
-			})
+			}
 		);
+
+		const selectedStoreID = stores.find((store) => urlStoreID === store.id)?.localID;
 
 		const storeLocalIDs = stores.map((store) => store.localID);
 
@@ -240,33 +196,10 @@ const processInitialPropsStep: HydrationStep = {
 			storeID = stores[0].localID;
 		}
 
-		// Patch existing documents without touching local preferences; insert new stores.
-		const newStores = [];
-		for (let index = 0; index < stores.length; index++) {
-			const preparedStore = stores[index];
-			const existingStore = await userDB.stores.findOne(preparedStore.localID).exec();
-			if (existingStore) {
-				// Inline initial props come from the free plugin without Pro's store
-				// filters, so they never carry `display`; letting them revoke it
-				// stopped the customer display service on every reload of /pos/.
-				await mergeServerOwnedStoreFields(existingStore, initialStores[index], {
-					revokeDisplayOnAbsence: false,
-				});
-			} else {
-				newStores.push(preparedStore);
-			}
-		}
-		if (newStores.length > 0) {
-			await userDB.stores.bulkInsert(newStores);
-		}
-		await wpCredentialsDoc.patch({
-			stores: storeLocalIDs,
-		});
-
 		// Update app state if changed
 		const newState = {
-			siteID: siteDoc.uuid,
-			wpCredentialsID: wpCredentialsDoc.uuid,
+			siteID: siteUuid,
+			wpCredentialsID: wpCredentialsUuid,
 			storeID,
 		};
 
@@ -335,18 +268,8 @@ const testAuthorizationStep: HydrationStep = {
 			wcposVersion = initialSite.wcpos_version;
 			accessToken = context.initialProps?.wp_credentials?.access_token;
 		} else if (context.appState) {
-			const current = await context.appState.get('current');
-			if (current?.siteID) {
-				const siteDoc = await userDB.sites.findOne(current.siteID).exec();
-				const wpCredentials = current.wpCredentialsID
-					? await userDB.wp_credentials.findOne(current.wpCredentialsID).exec()
-					: null;
-				siteUuid = siteDoc?.uuid;
-				wcposApiUrl = siteDoc?.wcpos_api_url;
-				wpApiUrl = typeof siteDoc?.wp_api_url === 'string' ? siteDoc.wp_api_url : undefined;
-				wcposVersion = siteDoc?.wcpos_version;
-				accessToken = wpCredentials?.access_token;
-			}
+			({ siteUuid, wcposApiUrl, wpApiUrl, wcposVersion, accessToken } =
+				await readSiteTransportInputs(userDB, await context.appState.get('current')));
 		}
 
 		// The uuid guard also keeps the write below off `findOne(undefined)`,
@@ -368,20 +291,7 @@ const testAuthorizationStep: HydrationStep = {
 			 * overwrites (#902), so a stale `true` from an earlier session would
 			 * otherwise keep the prior transport forever.
 			 */
-			const siteDoc = await userDB.sites.findOne(siteUuid).exec();
-			if (siteDoc) {
-				await siteDoc.getLatest().incrementalPatch({
-					use_jwt_as_param: !!result.useJwtAsParam,
-					use_rest_route_param: !!result.useRestRouteParam,
-					use_protocol_headers: !!result.useProtocolHeaders,
-					use_instance_header: !!result.useInstanceHeader,
-				});
-				if (result.useJwtAsParam) {
-					appLogger.info('Site configured to use JWT as query parameter', {
-						context: { siteId: siteUuid },
-					});
-				}
-			}
+			await recordSiteTransport(userDB, siteUuid, result);
 		}
 
 		return {};
@@ -408,14 +318,14 @@ const hydrateUserSessionStep: HydrationStep = {
 			session.wpCredentials?.uuid === current.wpCredentialsID &&
 			session.store?.localID === current.storeID
 		) {
-			return {
+			return toHydrationContext({
 				...session,
 				site: session.site?.getLatest?.() ?? session.site,
 				wpCredentials: session.wpCredentials?.getLatest?.() ?? session.wpCredentials,
 				store: session.store?.getLatest?.() ?? session.store,
-			} as Partial<HydrationContext>;
+			});
 		}
-		return (await hydrateUserSession(context.userDB, current || {})) as Partial<HydrationContext>;
+		return toHydrationContext(await hydrateUserSession(context.userDB, current || {}));
 	},
 };
 

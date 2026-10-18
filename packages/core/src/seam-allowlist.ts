@@ -1245,7 +1245,22 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"contexts/app-state/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'contexts/app-state/index.tsx :: storage token :: AppStateProvider :: state.storeDB?.collections :: 1',
 	"screens/main/contexts/extra-data/context.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (e6): the hydration steps' storage is owned by @wcpos/query/user-db.
+	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.sites.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.sites.findOne :: 2',
+	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.stores.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.users.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.wp_credentials.findOne :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: siteDoc.getLatest().incrementalPatch :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.addState :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.addState :: 2',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.stores.bulkInsert :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.users.insert :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.wp_credentials.upsert :: 1',
+	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: wpCredentialsDoc.patch :: 1',
+	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 2",
 ];
-export const SEAM_RETIRED_FLOOR = 324;
+export const SEAM_RETIRED_FLOOR = 338;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c7b1e91517f9a238ebb3ba39bf7565642e872603d7ea014fa3a7e4a1b82b7855';
+	'be6c26782775d8ae5b8c934d2cfbac917090b7c1f9087c3708b80f30b3cf8a82';

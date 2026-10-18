@@ -27,7 +27,10 @@ jest.mock('@wcpos/query/user-db', () => ({
 	hydrateUserSession: jest.fn(),
 }));
 
+jest.mock('@wcpos/query/user-db/bootstrap', () => ({}));
+
 jest.mock('./hydration-steps', () => ({
+	...jest.requireActual('./hydration-steps'),
 	switchUserSessionStore: jest.fn(),
 }));
 
