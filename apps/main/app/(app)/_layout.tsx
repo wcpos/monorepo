@@ -32,7 +32,7 @@ import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
-import { QueryProvider, useDocField } from '@wcpos/query';
+import { QueryProvider, readStorePaymentsContract, useDocField } from '@wcpos/query';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
@@ -79,7 +79,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB, extraData } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
@@ -142,14 +142,14 @@ function AppStack() {
 	React.useEffect(() => {
 		registerEngineScopeSwitcher(async (session) => {
 			if (!session.site || !session.wpCredentials) return;
-			await switchAppEngineScope(
-				session,
-				createSessionFetcherOptions(
+			await switchAppEngineScope(session, {
+				paymentsContract: () => readStorePaymentsContract(session.extraData),
+				...createSessionFetcherOptions(
 					session.site.getLatest(),
 					session.wpCredentials,
 					t('auth.session_renewed_automatically')
-				)
-			);
+				),
+			});
 		});
 		return () => registerEngineScopeSwitcher(null);
 	}, [t]);
@@ -159,6 +159,7 @@ function AppStack() {
 			createAppSyncEngine({
 				wpApiUrl,
 				siteDocument: site,
+				paymentsContract: () => readStorePaymentsContract(extraData),
 				...createSessionFetcherOptions(
 					{
 						wcpos_api_url: wcposApiUrl,
@@ -177,6 +178,7 @@ function AppStack() {
 			}),
 		[
 			site,
+			extraData,
 			wpApiUrl,
 			wcposApiUrl,
 			storeID,

@@ -19,6 +19,7 @@ export function settleCartWrite<T>(
 		localPatch: (input: { document: CurrentOrderRecord; changes: PayloadChanges }) => T;
 		configForOrder: (order: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
+		storeContract?: () => string | null;
 	}
 ): T {
 	const document = input.document.getLatest();
@@ -41,7 +42,9 @@ export function settleCartWrite<T>(
 				}
 			}
 			const after = { ...payload, ...intent };
-			const owned = serverOwnsMoney(payload.meta_data) || deps.serverOwnsMoney(document.uuid);
+			const owned =
+				serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() }) ||
+				deps.serverOwnsMoney(document.uuid);
 			const result = owned
 				? undefined
 				: settleAggregate(snapshotFromOrderJSON(after), deps.configForOrder(after));

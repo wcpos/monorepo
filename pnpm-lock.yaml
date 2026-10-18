@@ -926,6 +926,9 @@ importers:
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../utils
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
@@ -1021,6 +1024,9 @@ importers:
       '@wcpos/database':
         specifier: workspace:*
         version: link:../database
+      '@wcpos/order-math':
+        specifier: workspace:*
+        version: link:../order-math
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core
@@ -1154,6 +1160,9 @@ importers:
 
   packages/sync-engine:
     dependencies:
+      '@wcpos/order-math':
+        specifier: workspace:*
+        version: link:../order-math
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core

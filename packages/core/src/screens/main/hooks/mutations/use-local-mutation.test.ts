@@ -82,7 +82,13 @@ const readActive = () => {
 	return engineScope(activeScopeId);
 };
 
+jest.mock('../../contexts/extra-data/use-extra-data', () => ({
+	useExtraData: () => ({ extraData: undefined }),
+}));
+
 jest.mock('@wcpos/query', () => ({
+	readResidentMoneyEpoch: () => 0,
+	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
 	...(() => {
@@ -118,6 +124,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({}),
 	useAppState: () => ({ site: { uuid: 'site' } }),
 }));
 

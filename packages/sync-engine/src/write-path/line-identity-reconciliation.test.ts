@@ -142,3 +142,60 @@ describe('checkout line identity', () => {
 		}
 	});
 });
+
+it.each([true, false])(
+	'pending successor adopts server money keys (stamp=%s), not editable fields',
+	async (stamped) => {
+		const { engine } = await createEngineHarness({ mode: 'manual' });
+		try {
+			await engine.ready;
+			const db = engine.active()!.database;
+			const facet = writeFacetFor('orders')!;
+			const previous = stamped ? 'old' : 'server';
+			const keys = [
+				'_wcpos_money_owner',
+				'_wcpos_money_epoch',
+				'_wcpos_completed_at',
+				'_wcpos_completed_epoch',
+				'_wcpos_reopened_at',
+			];
+			await facet.upsertServerDocument(
+				db,
+				facet.documentFromServerPayload({
+					...truth,
+					customer_note: 'successor',
+					meta_data: [...meta_data, ...keys.map((key) => ({ key, value: previous }))],
+				})
+			);
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID,
+				payload: { customer_note: 'successor' },
+			});
+			const serverMeta = stamped
+				? keys.map((key) => ({ key, value: key === '_wcpos_money_owner' ? 'server' : '2' }))
+				: [];
+			const server = {
+				...truth,
+				customer_note: 'old note',
+				meta_data: [...meta_data, ...serverMeta],
+			};
+			await facet.reconcile(db, {
+				recordId: UUID,
+				remoteId: remoteId(900),
+				currentRevision: 'r2',
+				mutation: { mutationId: 'previous', operation: 'update', recordId: UUID },
+				document: server,
+				identityDocument: server,
+			});
+			const doc = await db.collections.orders.findOne(UUID).exec();
+			expect(doc!.toJSON().payload).toMatchObject({
+				customer_note: 'successor',
+				meta_data: [...meta_data, ...serverMeta],
+			});
+		} finally {
+			await engine.dispose();
+		}
+	}
+);

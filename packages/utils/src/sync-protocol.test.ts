@@ -10,12 +10,12 @@ import {
 
 describe('sync protocol client signal', () => {
 	it('formats the platform and version', () => {
-		expect(formatClientSignal('electron', '2.0.0')).toBe('electron/2.0.0');
-		expect(formatClientSignal('electron', ' 2.0.0 ')).toBe('electron/2.0.0');
+		expect(formatClientSignal('electron', '2.0.0')).toBe('electron/2.0.0 payments=1.3');
+		expect(formatClientSignal('electron', ' 2.0.0 ')).toBe('electron/2.0.0 payments=1.3');
 	});
 
 	it.each(['', '   ', '\t'])('substitutes unknown for a blank version %p', (version) => {
-		expect(formatClientSignal('web', version)).toBe('web/unknown');
+		expect(formatClientSignal('web', version)).toBe('web/unknown payments=1.3');
 	});
 });
 

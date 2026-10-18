@@ -27,6 +27,7 @@ interface Deps {
 	references$: Observable<CouponReferences>;
 	readCoupons: (payload: OrderPayload) => Promise<CouponContext>;
 	serverOwnsMoney: (uuid: string) => boolean;
+	storeContract?: () => string | null;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	settle: (
@@ -52,7 +53,7 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 		) ||
 		deps.inCheckout(record.uuid) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		serverOwnsMoney(payload.meta_data)
+		serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() })
 	);
 }
 

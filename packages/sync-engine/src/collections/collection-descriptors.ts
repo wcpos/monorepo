@@ -40,6 +40,7 @@ import {
 	type RemoteId,
 	remoteIdOrNull,
 	remoteKeyFor,
+	SERVER_ORDER_MONEY_META_KEYS,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
@@ -663,10 +664,21 @@ const ordersWriteFacet = createWriteFacet({
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
-	// cart. Identity only, never a value. The display-field strip re-applies
-	// because a payload may predate it (#885/#890) and this rewrites line arrays.
+	// cart. Editable values stay local; server-owned money facts replace local meta.
+	// The display-field strip re-applies for payloads predating it (#885/#890).
 	graftAckIdentity: (payload, source, options) =>
-		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
+		stripNonStringMetaDisplayFields({
+			...graftServerLineIdentity(payload, source, options),
+			// Even with a successor, the server owns these facts; editable intent stays local.
+			meta_data: [
+				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
+					(entry) => !['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+				),
+				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+					['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+				),
+			],
+		}),
 	upsert: async (db, document, context) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany(
 			[document as never],

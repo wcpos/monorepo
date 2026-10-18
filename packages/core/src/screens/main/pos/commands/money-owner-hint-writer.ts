@@ -1,3 +1,4 @@
+import { paymentsContractAtLeast } from '@wcpos/order-math';
 import type { useQueryRuntime } from '@wcpos/query';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
@@ -9,7 +10,10 @@ import type { MutationDocument } from '../../hooks/mutations/use-local-mutation'
 const logger = getLogger(['wcpos', 'pos', 'money-owner']);
 
 /** Persist ownership even when no POS screen is mounted. */
-export function createMoneyOwnerHintWriter(manager: ReturnType<typeof useQueryRuntime>) {
+export function createMoneyOwnerHintWriter(
+	manager: ReturnType<typeof useQueryRuntime>,
+	deps: { storeContract: () => string | null }
+) {
 	let pending = new Set<string>();
 	const unsubscribe = manager.engine.events((event) => {
 		if (event.type === 'scope-switched') {
@@ -17,6 +21,10 @@ export function createMoneyOwnerHintWriter(manager: ReturnType<typeof useQueryRu
 			return;
 		}
 		if (event.type !== 'order-money-divergence') return;
+		if (paymentsContractAtLeast(deps.storeContract(), '1.3')) {
+			logger.debug('Server stamps money ownership at payments contract 1.3');
+			return;
+		}
 		const orderId = event.recordId;
 		if (!orderId || pending.has(orderId)) return;
 		const pendingOwnership = pending;

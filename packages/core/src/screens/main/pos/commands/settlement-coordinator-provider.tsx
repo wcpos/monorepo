@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, skip } from 'rxjs';
 
 import {
 	derive,
@@ -14,7 +14,12 @@ import {
 	snapshotFromOrderJSON,
 	toMinor,
 } from '@wcpos/order-math';
-import { observeCoverage, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	observeCoverage,
+	readStorePaymentsContract,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { couponReferences } from './coupon-continuation';
@@ -49,7 +54,7 @@ const observe = (event: SettlementDiagnostic) => logger.warn(event.type, { conte
 /** Session-owned, beside the config reader; no cart tab owns this subscription. */
 export function SettlementCoordinatorProvider() {
 	const manager = useQueryRuntime();
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, extraData } = useStoreSession();
 	const cashier = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeId = useDocField(store, (value) => value.id) as number | undefined;
 	const { registerId } = useRegisterBinding();
@@ -87,6 +92,7 @@ export function SettlementCoordinatorProvider() {
 					couponLines: payload.coupon_lines ?? [],
 				}),
 			serverOwnsMoney,
+			storeContract: () => readStorePaymentsContract(extraData),
 			orderSaveState: getOrderSaveState,
 			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			now: Date.now,
@@ -100,6 +106,7 @@ export function SettlementCoordinatorProvider() {
 					{
 						configForOrder: read,
 						serverOwnsMoney,
+						storeContract: () => readStorePaymentsContract(extraData),
 						localPatch: ({ document: latest, changes }) =>
 							plainPatch(manager, 'orders', {
 								document: latest,
@@ -167,14 +174,31 @@ export function SettlementCoordinatorProvider() {
 			if (value.ready && !value.error)
 				openOrders$.next(value.hits.map(({ record }) => record as CurrentOrderRecord));
 		});
+		// Descriptor arrival changes ownership eligibility without changing any order.
+		const contract = extraData
+			?.get$('paymentMethods')
+			.pipe(skip(1))
+			.subscribe(() => inputs$.next(inputs$.value));
 		const offCheckout = subscribeCheckoutMode(() => openOrders$.next(openOrders$.value));
 		return () => {
 			coordinator.stop();
 			offEvents();
 			offCheckout();
+			contract?.unsubscribe();
 			rates.unsubscribe();
 			orders.unsubscribe();
 		};
-	}, [manager, handle, read, serverOwnsMoney, report, t, inputs$, ratesReady$, coverage$]);
+	}, [
+		manager,
+		handle,
+		read,
+		serverOwnsMoney,
+		report,
+		t,
+		inputs$,
+		ratesReady$,
+		coverage$,
+		extraData,
+	]);
 	return null;
 }

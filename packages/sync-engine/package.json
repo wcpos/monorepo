@@ -34,6 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@wcpos/order-math": "workspace:*",
     "@wcpos/sync-core": "workspace:*"
   },
   "peerDependencies": {

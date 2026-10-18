@@ -1,4 +1,9 @@
-import { type MetaDataEntry, POS_META_KEYS, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
+import {
+	type MetaDataEntry,
+	POS_META_KEYS,
+	PROTECTED_ORDER_META_KEYS,
+	SERVER_ORDER_MONEY_META_KEYS,
+} from '@wcpos/sync-core';
 
 /** POS identity and money-ownership metadata whose resident values survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
@@ -30,6 +35,11 @@ export function mergeProtectedOrderMeta(
 				? localMeta.indexOf(localEntry)
 				: serverMeta.length;
 		serverMeta = serverMeta.filter((meta) => meta?.key !== key);
+
+		if (SERVER_ORDER_MONEY_META_KEYS.includes(key)) {
+			if (localEntry) serverMeta.splice(index, 0, localEntry);
+			continue;
+		}
 
 		// Editor identity changes win; server adoption retains the resident identity.
 		// Money ownership is one-way at either boundary.
