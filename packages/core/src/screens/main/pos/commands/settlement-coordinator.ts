@@ -1,13 +1,15 @@
-import { combineLatest, type Observable } from 'rxjs';
+import { combineLatest, type Observable, Subscription } from 'rxjs';
 
 import {
 	activeAwaitingCustomer,
+	type CouponContext,
 	derive,
 	hasLiveSettlementLeg,
 	readLedger,
 } from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
+import { type CouponReferences, replayContentKey } from './coupon-continuation';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { readQuickDiscountIntent } from '../hooks/quick-discount';
 
@@ -21,13 +23,16 @@ interface Deps {
 	// null is a rebind: discard old records AND queued work before accepting the new scope.
 	openOrders$: Observable<CurrentOrderRecord[] | null>;
 	ratesReady$: Observable<RatesReady>;
+	references$: Observable<CouponReferences>;
+	readCoupons: (payload: OrderPayload) => Promise<CouponContext>;
 	serverOwnsMoney: (uuid: string) => boolean;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	settle: (
 		uuid: string,
 		record: CurrentOrderRecord,
-		allowed: (payload: OrderPayload) => boolean
+		allowed: (payload: OrderPayload) => boolean,
+		coupons?: CouponContext
 	) => Promise<unknown>;
 	now: () => number;
 	observe: (event: SettlementDiagnostic) => void;
@@ -46,12 +51,12 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 		) ||
 		deps.inCheckout(record.uuid) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		payload.meta_data?.some(
-			({ key, value }) => key === '_wcpos_money_owner' && value === 'server'
-		) ||
-		payload.coupon_lines?.some((line) => line.code != null && !readQuickDiscountIntent(line))
+		payload.meta_data?.some(({ key, value }) => key === '_wcpos_money_owner' && value === 'server')
 	);
 }
+
+const hasCoupons = (record: { payload: OrderPayload }) =>
+	record.payload.coupon_lines?.some((line) => line.code != null && !readQuickDiscountIntent(line));
 
 /** One sequential drain; only content (never aggregate money or revision) invalidates a pass. */
 export function createSettlementCoordinator(deps: Deps): { stop(): void } {
@@ -63,16 +68,23 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let running = false;
 	let dirty = false;
 	const seen = new Map<string, string>();
+	const flights = new Map<string, symbol>();
+	let references: CouponReferences = { ready: false, generation: '' };
+	let referenceSubscription: Subscription | undefined;
+	const releaseReferences = () => {
+		referenceSubscription?.unsubscribe();
+		referenceSubscription = undefined;
+		references = { ready: false, generation: '' };
+	};
 	const fingerprint = (record: CurrentOrderRecord) => {
 		const p = record.payload;
 		return JSON.stringify([
-			p.line_items,
-			p.fee_lines,
-			p.shipping_lines,
-			p.coupon_lines,
+			hasCoupons(record)
+				? replayContentKey(record)
+				: [p.line_items, p.fee_lines, p.shipping_lines, p.coupon_lines, p.status],
+			hasCoupons(record) ? references : null,
 			p.billing,
 			p.shipping,
-			p.status,
 			p.meta_data?.filter(
 				({ key }) => key === '_woocommerce_pos_tax_based_on' || key === '_wcpos_money_owner'
 			),
@@ -81,6 +93,35 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			rates.generation,
 		]);
 	};
+	async function replay(record: CurrentOrderRecord, key: string, pass: number) {
+		const uuid = record.uuid;
+		const content = replayContentKey(record);
+		seen.set(uuid, key);
+		const flight = Symbol();
+		flights.set(uuid, flight);
+		try {
+			// Collection reads must not hold a per-order mutation slot.
+			const coupons = await deps.readCoupons(record.payload);
+			await enqueueOrderMutation(uuid, async (slot) => {
+				const fresh = (slot.order ?? record).getLatest();
+				const allowed = (payload: OrderPayload) =>
+					!stopped &&
+					pass === epoch &&
+					rates.ready &&
+					references.ready &&
+					seen.get(uuid) === key &&
+					flights.get(uuid) === flight &&
+					records.some((r) => r.uuid === uuid) &&
+					fingerprint(fresh) === key &&
+					replayContentKey({ uuid, payload }) === content &&
+					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
+				if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed, coupons);
+			});
+		} catch (error) {
+			if (flights.get(uuid) === flight) seen.delete(uuid);
+			deps.observe({ type: 'settlement.failed', uuid, at: deps.now(), error });
+		}
+	}
 	async function drain() {
 		if (running || stopped) return;
 		running = true;
@@ -91,6 +132,17 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				for (const record of [...records].sort((a, b) => a.uuid.localeCompare(b.uuid))) {
 					if (stopped || pass !== epoch || !rates.ready) break;
 					const uuid = record.uuid;
+					if (hasCoupons(record.getLatest())) {
+						const fresh = record.getLatest();
+						const key = fingerprint(fresh);
+						if (closed(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
+							seen.delete(uuid);
+							flights.delete(uuid);
+							continue;
+						}
+						if (references.ready && seen.get(uuid) !== key) void replay(fresh, key, pass);
+						continue;
+					}
 					if (seen.get(uuid) === fingerprint(record.getLatest())) continue;
 					try {
 						await enqueueOrderMutation(uuid, async (slot) => {
@@ -100,7 +152,9 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 							if (!current()) return;
 							seen.set(uuid, fingerprint(fresh));
 							const allowed = (payload: OrderPayload) =>
-								current() && !closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
+								current() &&
+								!hasCoupons({ payload }) &&
+								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
 							if (allowed(fresh.payload)) await deps.settle(uuid, fresh, allowed);
 						});
 					} catch (error) {
@@ -120,10 +174,31 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			if (!rates.ready) seen.clear();
 			if (nextRecords === null) {
 				epoch++;
+				releaseReferences();
 				seen.clear();
+				flights.clear();
 			}
 			records = nextRecords ?? [];
-			for (const uuid of seen.keys()) if (!records.some((r) => r.uuid === uuid)) seen.delete(uuid);
+			if (!records.some(hasCoupons)) releaseReferences();
+			else if (!referenceSubscription) {
+				referenceSubscription = new Subscription();
+				referenceSubscription.add(
+					deps.references$.subscribe({
+						next: (value) => {
+							references = value;
+							dirty = true;
+							void drain();
+						},
+						error: (error) =>
+							deps.observe({ type: 'settlement.failed', uuid: '', at: deps.now(), error }),
+					})
+				);
+			}
+			for (const uuid of seen.keys())
+				if (!records.some((r) => r.uuid === uuid)) {
+					seen.delete(uuid);
+					flights.delete(uuid);
+				}
 			dirty = true;
 			void drain();
 		}
@@ -133,7 +208,9 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			stopped = true;
 			epoch++;
 			subscription.unsubscribe();
+			releaseReferences();
 			seen.clear();
+			flights.clear();
 			records = [];
 		},
 	};

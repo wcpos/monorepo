@@ -9,6 +9,7 @@ import {
 	getNetPaymentTotal,
 	readLedger,
 	settleAggregate,
+	settleCart,
 	settlementPatch,
 	snapshotFromOrderJSON,
 	toMinor,
@@ -16,6 +17,8 @@ import {
 import { observeCoverage, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { couponReferences } from './coupon-continuation';
+import { readCouponContext } from '../hooks/use-coupon-context';
 import { plainPatch } from './plain-patch';
 import { settleCartWrite } from './settle-cart-write';
 import {
@@ -23,6 +26,7 @@ import {
 	type RatesReady,
 	type SettlementDiagnostic,
 } from './settlement-coordinator';
+import { useT } from '../../../../contexts/translations';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useCoverageGeneration } from '../../../../query/scope-key';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -54,6 +58,7 @@ export function SettlementCoordinatorProvider() {
 	const read = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const report = useReportEngineWarnings();
+	const t = useT();
 	const generation = useCoverageGeneration(manager.engine, 'taxRates');
 	const coverage$ = React.useMemo(
 		() => observeCoverage(manager.engine, { collection: 'taxRates', lane: 'reference' }),
@@ -75,14 +80,21 @@ export function SettlementCoordinatorProvider() {
 			inputs$,
 			openOrders$,
 			ratesReady$,
+			references$: couponReferences(manager.engine),
+			readCoupons: (payload) =>
+				readCouponContext(manager, {
+					lineItems: payload.line_items ?? [],
+					couponLines: payload.coupon_lines ?? [],
+				}),
 			serverOwnsMoney,
 			orderSaveState: getOrderSaveState,
 			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			now: Date.now,
 			observe,
-			settle: async (uuid, document, allowed) => {
+			settle: async (uuid, document, allowed, coupons) => {
 				let warnings: readonly EngineWarning[] = [];
 				let boundary = false;
+				let failure: Extract<ReturnType<typeof settleCart>, { ok: false }>['error'] | undefined;
 				await settleCartWrite(
 					{ document, data: {} },
 					{
@@ -94,8 +106,15 @@ export function SettlementCoordinatorProvider() {
 								changes: (payload) => {
 									if (!allowed(payload as OrderPayload)) return {};
 									const config = read(payload as OrderPayload);
-									const result = settleAggregate(snapshotFromOrderJSON(payload), config);
+									const snapshot = snapshotFromOrderJSON(payload);
+									const result = coupons
+										? settleCart(snapshot, config, { coupons })
+										: settleAggregate(snapshot, config);
 									warnings = result.warnings;
+									if ('error' in result) {
+										failure = result.error;
+										return {};
+									}
 									const rows = readLedger((payload as OrderPayload).meta_data);
 									const paid = derive(payload.total as string, rows, [], { dp: config.dp }).paid;
 									const netPaid = getNetPaymentTotal(
@@ -109,12 +128,28 @@ export function SettlementCoordinatorProvider() {
 										result.changed &&
 										toMinor(settlementPatch(result).total, config.dp) <=
 											toMinor(netPaid, config.dp);
-									return boundary ? {} : changes(payload);
+									return boundary || !result.changed
+										? {}
+										: coupons
+											? settlementPatch(result)
+											: changes(payload);
 								},
 							}),
 					}
 				);
 				report(warnings, { orderId: uuid, site: 'settlement-coordinator' });
+				if (failure)
+					logger.warn('Cart settlement failed', {
+						showToast: true,
+						toast: {
+							title: t(
+								failure.code === 'missing_coupon'
+									? 'pos_cart.coupon_not_found'
+									: 'pos_cart.coupon_apply_failed'
+							),
+						},
+						context: failure,
+					});
 				if (boundary) observe({ type: 'settlement.boundary-deferred', uuid, at: Date.now() });
 			},
 		});
@@ -140,6 +175,6 @@ export function SettlementCoordinatorProvider() {
 			rates.unsubscribe();
 			orders.unsubscribe();
 		};
-	}, [manager, handle, read, serverOwnsMoney, report, inputs$, ratesReady$, coverage$]);
+	}, [manager, handle, read, serverOwnsMoney, report, t, inputs$, ratesReady$, coverage$]);
 	return null;
 }
