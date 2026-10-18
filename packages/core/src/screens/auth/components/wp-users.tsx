@@ -3,14 +3,15 @@ import { Platform, type ViewProps } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { type ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { WPCredentialsDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { credentialsListResource } from '../../../hooks/user-db-list-resources';
 import { AddUserButton } from './add-user-button';
 import { useSiteSelection } from './site-selection';
 import { StoreSelect } from './store-select';
@@ -49,19 +50,11 @@ const onUsersKeyDown: NonNullable<ViewProps['onKeyDown']> = (event) => {
 };
 
 interface WpUsersProps {
-	site: import('@wcpos/database').SiteDocument;
+	site: ReadonlySiteRecord;
 }
 
 export function WPUsers({ site }: WpUsersProps) {
-	const wpCreds = useObservableSuspense(
-		(
-			site as unknown as {
-				populateResource: (
-					key: string
-				) => import('observable-hooks').ObservableResource<WPCredentialsDocument[]>;
-			}
-		).populateResource('wp_credentials')
-	);
+	const wpCreds = useObservableSuspense(credentialsListResource(site));
 	const t = useT();
 	const { login } = useAppState();
 	// Explicit user/store choice (null until picked), held above the accordion so

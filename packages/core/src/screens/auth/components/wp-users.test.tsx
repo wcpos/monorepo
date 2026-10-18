@@ -14,6 +14,12 @@ jest.mock('observable-hooks', () => ({
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/app-state', () => ({ useAppState: () => ({ login: jest.fn() }) }));
 jest.mock('./add-user-button', () => ({ AddUserButton: () => null }));
+// The credentials list reads a named read through a Suspense resource since ADR 0033 (e4); the
+// fixture still describes the site's rows through `populateResource`, so the resource maps onto it.
+jest.mock('../../../hooks/user-db-list-resources', () => ({
+	credentialsListResource: (site: { populateResource: (key: string) => unknown }) =>
+		site.populateResource('wp_credentials'),
+}));
 jest.mock('./store-select', () => ({ StoreSelect: () => null }));
 jest.mock('./wp-user', () => ({
 	WpUser: ({

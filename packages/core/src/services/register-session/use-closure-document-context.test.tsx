@@ -33,6 +33,12 @@ const session = {
 	},
 };
 jest.mock('../../contexts/app-state', () => ({ useAppState: () => session }));
+// useViewedStore reads observeCredentialStores since ADR 0033 (e4); the fixture still describes the
+// credential's stores through populate$, so the read maps onto it.
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: () => session.wpCredentials.populate$(),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(row: T, select: (value: T) => unknown) => (row ? select(row) : undefined),
 }));

@@ -9,11 +9,12 @@ import { ListItem } from '@wcpos/components/list-item';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { WPCredentialsDocument } from '@wcpos/database';
 import {
 	observeCredentialStores,
 	PENDING_USER_DB_READ,
+	type ReadonlySiteRecord,
 	type ReadonlyStoreRecord,
+	type ReadonlyWpCredentialsRecord,
 } from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -29,7 +30,7 @@ type StoreResource = ObservableResource<
 	ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ,
 	ReadonlyStoreRecord[]
 >;
-const resourcesByCredentials = new WeakMap<WPCredentialsDocument, StoreResource>();
+const resourcesByCredentials = new WeakMap<ReadonlyWpCredentialsRecord, StoreResource>();
 
 /** `numeric` so "Store 2" precedes "Store 10"; `base` so case never decides order. */
 const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -55,8 +56,8 @@ function sortStores(stores: ReadonlyStoreRecord[]): ReadonlyStoreRecord[] {
 }
 
 interface StoreSelectProps {
-	site: import('@wcpos/database').SiteDocument;
-	wpUser: WPCredentialsDocument;
+	site: ReadonlySiteRecord;
+	wpUser: ReadonlyWpCredentialsRecord;
 	selectedStoreId: string | null;
 	onStoreSelect: (storeId: string | null) => void;
 	onLogin: (storeId: string) => void;

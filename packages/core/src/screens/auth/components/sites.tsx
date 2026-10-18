@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { removeSite } from '@wcpos/query/user-db';
+import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -37,9 +37,9 @@ import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { siteListResource } from '../../../hooks/user-db-list-resources';
 import { Site, SiteHeader } from './site';
 import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
@@ -50,7 +50,7 @@ import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
-	user: UserDocument;
+	user: ReadonlyUserRecord;
 	/**
 	 * Fold every site to its header row (the page's connect form is open).
 	 * Display-only: the remembered expansion is kept and returns when this clears.
@@ -74,15 +74,7 @@ export function Sites(props: SitesProps) {
 
 function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
 	const t = useT();
-	const sites = useObservableSuspense(
-		(
-			user as unknown as {
-				populateResource: (
-					key: string
-				) => import('observable-hooks').ObservableResource<SiteDocument[]>;
-			}
-		).populateResource('sites')
-	);
+	const sites = useObservableSuspense(siteListResource(user));
 
 	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
 	const [accordionState, setAccordionState] = React.useState(() => {
@@ -155,7 +147,7 @@ function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
  * - Remove button on the right
  * - Each item has its own card
  */
-function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument }) {
+function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: ReadonlySiteRecord }) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 
@@ -245,7 +237,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 /**
  * Content inside an accordion item — needs Suspense boundary above it
  */
-function AccordionSiteContent({ site }: { site: SiteDocument }) {
+function AccordionSiteContent({ site }: { site: ReadonlySiteRecord }) {
 	const { compatibility } = useAppInfo({ site });
 	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 	const t = useT();

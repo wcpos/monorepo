@@ -1,3 +1,6 @@
+import { filter, firstValueFrom } from 'rxjs';
+
+import { observeUserSites, PENDING_USER_DB_READ } from './reads';
 import { useDocField } from '../records/use-record-field';
 
 import type {
@@ -23,16 +26,19 @@ site.$.subscribe((latest) => {
 // @ts-expect-error Attachments cannot recover mutable documents.
 record.getAttachment('receipt');
 declare const user: ReadonlyUserRecord;
-void user.populate('sites').then((sites) => {
+const sites$ = observeUserSites(user).pipe(filter((value) => value !== PENDING_USER_DB_READ));
+void firstValueFrom(sites$).then((sites) => {
 	// @ts-expect-error Populated records remain read-only.
 	sites[0].patch({});
 });
-user.populate$('sites').subscribe((sites) => {
+sites$.subscribe((sites) => {
 	// @ts-expect-error Populated streams remain read-only.
 	sites[0].getLatest().remove();
 });
-// @ts-expect-error Suspense populated records remain read-only.
-void user.populateResource('sites').read()[0].collection;
+sites$.subscribe((sites) => {
+	// @ts-expect-error Named reads expose no collection back-reference.
+	void sites[0].collection;
+});
 declare const store: ReadonlyStoreRecord | undefined;
 function useReadonlyFields() {
 	const url: string | undefined = useDocField(site, (data) => data.url);

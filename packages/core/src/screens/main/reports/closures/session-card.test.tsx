@@ -6,6 +6,11 @@ import { of } from 'rxjs';
 
 import { RemoteSessionCard, SessionCard } from './session-card';
 import { Closures } from './index';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 // The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
 jest.mock('@wcpos/components/icon-button', () => ({

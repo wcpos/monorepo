@@ -6,11 +6,12 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: ReadonlySiteRecord;
 }
 
 interface SiteInfoResult {
@@ -89,29 +90,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 
-				// Only patch if we have at least one valid field to update
-				const hasValidData =
-					data.wp_version ||
-					data.wc_version ||
-					data.wcpos_version ||
-					data.wcpos_pro_version ||
-					data.license;
-				if (hasValidData) {
-					const patch: Record<string, unknown> = {
-						wp_version: data?.wp_version ?? '',
-						wc_version: data?.wc_version ?? '',
-						wcpos_version: data?.wcpos_version ?? '',
-						wcpos_pro_version: data?.wcpos_pro_version ?? '',
-					};
-					if (data.license !== undefined) patch.license = data.license || {};
-					// The store's filter-added search meta keys (#2411): a filter added after this
-					// till connected reaches it here, at launch, not only at the next connect. A
-					// plugin that predates the key leaves the saved value alone.
-					if (data.search_meta_keys !== undefined) {
-						patch.search_meta_keys = data.search_meta_keys || {};
-					}
-					await site.incrementalPatch(patch);
-				}
+				await recordSiteInfo(site, data);
 			} catch (err) {
 				if (isAsleepBlock(err)) {
 					deferredRef.current = true;

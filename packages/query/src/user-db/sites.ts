@@ -270,3 +270,53 @@ export async function removeSite(
 	await latest.remove();
 	await mutableUser.incrementalUpdate({ $pullAll: { sites: [latest.uuid] } });
 }
+
+export class SiteRemovedError extends Error {
+	constructor() {
+		super('Cannot update a removed site');
+		this.name = 'SiteRemovedError';
+	}
+}
+
+export async function recordSiteInfo(
+	site: ReadonlySiteRecord | SiteDocument,
+	data: Record<string, unknown>
+): Promise<void> {
+	const document = site as SiteDocument;
+	// Only patch if we have at least one valid field to update
+	const hasValidData =
+		data.wp_version ||
+		data.wc_version ||
+		data.wcpos_version ||
+		data.wcpos_pro_version ||
+		data.license;
+	if (hasValidData) {
+		if (document.getLatest().deleted) throw new SiteRemovedError();
+		const patch: Record<string, unknown> = {
+			wp_version: data?.wp_version ?? '',
+			wc_version: data?.wc_version ?? '',
+			wcpos_version: data?.wcpos_version ?? '',
+			wcpos_pro_version: data?.wcpos_pro_version ?? '',
+		};
+		if (data.license !== undefined) patch.license = data.license || {};
+		// The store's filter-added search meta keys (#2411): a filter added after this
+		// till connected reaches it here, at launch, not only at the next connect. A
+		// plugin that predates the key leaves the saved value alone.
+		if (data.search_meta_keys !== undefined) {
+			patch.search_meta_keys = data.search_meta_keys || {};
+		}
+		try {
+			await document.incrementalPatch(patch);
+		} catch (error) {
+			if (document.getLatest().deleted) throw new SiteRemovedError();
+			throw error;
+		}
+	}
+}
+
+export async function migrateSiteApiUrl(
+	site: ReadonlySiteRecord | SiteDocument,
+	apiURL: string
+): Promise<void> {
+	await (site as SiteDocument).incrementalPatch({ wcpos_api_url: apiURL });
+}

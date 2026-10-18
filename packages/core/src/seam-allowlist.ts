@@ -1210,7 +1210,33 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/auth/components/store-select.helpers.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/auth/components/store-select.tsx :: raw query construction :: StoreSelect :: storesCollection.find({ selector: { localID: { $in: validIds } } }) :: 1',
 	'screens/auth/components/store-select.tsx :: record collection back-reference :: StoreSelect :: wpUserAny.collection :: 1',
+	// ADR 0033 per-screen (e4): site-info, cashier profile, token owner and store hooks are commands and reads in @wcpos/query/user-db; the site and credentials lists read named reads.
+	'hooks/use-site-info.ts :: record mutator :: useSiteInfo>fetchSiteInfo :: site.incrementalPatch :: 1',
+	'hooks/use-user-validation.ts :: record mutator :: useUserValidation :: wpUser.incrementalPatch :: 1',
+	'hooks/use-user-validation.ts :: record mutator :: useUserValidation>validateUser>updateUserInDB :: wpUser.getLatest().incrementalModify :: 1',
+	'hooks/use-user-validation.ts :: record mutator :: useUserValidation>validateUser>updateUserInDB :: wpUser.incrementalPatch :: 1',
+	"hooks/use-app-info.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"hooks/use-site-info.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"hooks/use-store-day.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"hooks/use-store-day.ts :: storage import ::  :: from 'rxdb' :: 1",
+	"hooks/use-user-validation.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"hooks/use-user-validation.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/auth/components/site.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/site.tsx :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/auth/components/sites.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/store-select.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/store-select.tsx :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/auth/components/wp-user.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/wp-user.tsx :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/auth/components/wp-users.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/wp-users.tsx :: storage import ::  :: from '@wcpos/database' :: 2",
+	'screens/main/health/use-storage-footprint.ts :: raw query construction :: useStorageFootprint :: userDB.sites.find() :: 1',
+	'screens/main/hooks/use-rest-http-client/index.ts :: record mutator :: useRestHttpClient :: site.incrementalPatch :: 1',
+	'screens/main/hooks/use-store-label.ts :: raw query construction :: useStoreLabel :: db.stores.findOne :: 1',
+	"screens/main/hooks/use-store-label.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/use-store-label.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/main/pos/cart/register-panel.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 291;
+export const SEAM_RETIRED_FLOOR = 316;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c744e6850e7bef9c2a95518aa3743bdd969ec0cc96b6c6196093dc7b32f85214';
+	'1960931220d8255101664ba147a0f00a93acab80154a455fbd9fea40890cd3d1';

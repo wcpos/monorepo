@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { readSiteApiUrls } from '@wcpos/query/user-db';
 import { measureAppStorage } from '@wcpos/database';
 import { useQueryRuntime } from '@wcpos/query';
 import { siteHashFor } from '@wcpos/sync-core';
@@ -58,7 +59,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 
 			const knownSiteHashes = new Set<string>();
 			try {
-				const sites = await userDB.sites.find().exec();
+				const sites = await readSiteApiUrls(userDB);
 				for (const site of sites) {
 					if (!site.wp_api_url) continue;
 					try {

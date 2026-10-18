@@ -36,6 +36,11 @@ const mockStore = {
 };
 // The shared boundary pulls in a tooltip primitive jest cannot parse; the real react-error-boundary
 // behind it is what the comparison-failure case exercises.
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));

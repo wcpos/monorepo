@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import { removeCredentials } from '@wcpos/query/user-db';
+import {
+	type ReadonlySiteRecord,
+	type ReadonlyWpCredentialsRecord,
+	removeCredentials,
+} from '@wcpos/query/user-db';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -29,8 +33,8 @@ import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
-	wpUser: import('@wcpos/database').WPCredentialsDocument;
+	site: ReadonlySiteRecord;
+	wpUser: ReadonlyWpCredentialsRecord;
 	isSelected: boolean;
 	onSelect: () => void;
 }
@@ -55,7 +59,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 	const initials = getInitials(displayName);
 	const showReauth = !isLoading && !isValid;
 	const roleLabel = React.useMemo(() => {
-		const roles = (wpUser as unknown as { roles?: string[] }).roles;
+		const roles = wpUser.roles;
 		if (!Array.isArray(roles) || roles.length === 0) return undefined;
 		const humanize = (slug: string) =>
 			slug

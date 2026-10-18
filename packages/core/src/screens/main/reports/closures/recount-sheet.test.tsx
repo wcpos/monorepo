@@ -9,6 +9,11 @@ import { RegisterAmount } from '../../pos/cart/movement-sheet';
 import { RecountSheet } from './recount-sheet';
 
 import type { Correction } from '../../../../services/register-session/settled-figures';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 // The approve sheet (rendered by the recount sheet) toasts on failure; the toast module is ESM-only.
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));

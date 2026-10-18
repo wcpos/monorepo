@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { type ReadonlySiteRecord, removeSite } from '@wcpos/query/user-db';
+import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -34,8 +34,8 @@ import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface Props {
-	user: import('@wcpos/database').UserDocument;
-	site: import('@wcpos/database').SiteDocument;
+	user: ReadonlyUserRecord;
+	site: ReadonlySiteRecord;
 }
 
 function getUrlWithoutProtocol(url: string) {
