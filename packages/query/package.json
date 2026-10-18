@@ -10,7 +10,8 @@
 		".": "./src/index.ts",
 		"./testing": "./src/testing.ts",
 		"./collection-map": "./src/collection-map.ts",
-		"./register-session": "./src/register-session/index.ts"
+		"./register-session": "./src/register-session/index.ts",
+		"./receipt-email-queue": "./src/receipt-email-queue/index.ts"
 	},
 	"type": "module",
 	"files": [
@@ -26,6 +27,7 @@
 	"dependencies": {
 		"@date-fns/tz": "^1.5.0",
 		"@wcpos/database": "workspace:*",
+		"@wcpos/hooks": "workspace:*",
 		"@wcpos/order-math": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",

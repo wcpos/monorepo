@@ -1024,6 +1024,9 @@ importers:
       '@wcpos/database':
         specifier: workspace:*
         version: link:../database
+      '@wcpos/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@wcpos/order-math':
         specifier: workspace:*
         version: link:../order-math

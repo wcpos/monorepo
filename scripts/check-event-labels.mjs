@@ -31,10 +31,11 @@ export const EVENT_SOURCE_ROOTS = [
 	'packages/sync-engine/src',
 	'apps/main/lib',
 	// The receipt-email queue writes `context.type` rows the Logs UI titles the
-	// same way (#165). Scoped to the queue directory rather than to all of
-	// packages/core: every event this feature emits lives here by design, so the
-	// gate stays enforcing instead of degrading to an unused-label warning.
-	'packages/core/src/screens/main/receipt/email-queue',
+	// same way (#165). Scoped to the queue module rather than to all of
+	// packages/query: every event this feature emits lives here by design, so the
+	// gate stays enforcing instead of degrading to an unused-label warning. The
+	// module moved out of packages/core with ADR 0033 per-screen (d).
+	'packages/query/src/receipt-email-queue',
 	// The app-level online-status mount writes `connectivity.*` rows the Logs UI
 	// titles the same way. Scoped to its own directory for the same reason as
 	// the email queue above.
@@ -46,7 +47,11 @@ export const EVENT_SOURCE_ROOTS = [
 	'packages/core/src/screens/main/pos/checkout',
 	'packages/core/src/services/terminal-payments',
 	// Register actions and their system outcomes write `register.*` rows titled
-	// from the same registry: session/outbox/audit and device binding.
+	// from the same registry: session/outbox/audit and device binding. The
+	// session store, outbox, audit and register document live in
+	// packages/query since ADR 0033 per-screen (c1)–(c4); the React adapters
+	// (bridge, hooks, binding) stay in packages/core.
+	'packages/query/src/register-session',
 	'packages/core/src/services/register-session',
 	'packages/core/src/services/register',
 	// The shared ErrorBoundary writes one `render.error` row per caught render

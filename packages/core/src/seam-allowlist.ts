@@ -1145,7 +1145,32 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"services/register-session/use-register-session-collections.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	'services/register-session/use-register-session-collections.ts :: storage token :: useSessionCollection :: storeDB?.collections :: 1',
 	'services/register-session/use-session-report.ts :: raw query construction :: useSessionReport :: collection?.findOne :: 1',
+	// ADR 0033 per-screen (d): the receipt email queue is a command module in @wcpos/query/receipt-email-queue.
+	"screens/main/health/use-queued-emails.ts :: raw query construction :: queued$ :: collection.find({ selector: { status: { $in: ['pending', 'failed'] } } }) :: 1",
+	"screens/main/receipt/email-queue/queue.ts :: raw query construction :: drainOnce :: deps.collection.find({ selector: { status: { $eq: 'pending' } } }) :: 1",
+	"screens/main/receipt/email-queue/queue.ts :: raw query construction :: drainRow :: deps.collection .find({ selector: { localID: { $eq: snapshot.localID }, status: { $eq: 'pending' }, }, }) :: 1",
+	"screens/main/receipt/email-queue/queue.ts :: raw query construction :: enqueueOnce :: deps.collection.find({ selector: { status: { $eq: 'pending' } } }) :: 1",
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainOnce :: deps.collection :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainOnce :: deps.collection :: 2',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainOnce :: deps.collection :: 3',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainOnce :: deps.collection :: 4',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainReceiptEmailQueue :: deps.collection :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainReceiptEmailQueue :: deps.collection :: 2',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainReceiptEmailQueue :: deps.collection :: 3',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: drainRow :: deps.collection :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: enqueueOnce :: deps.collection :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: enqueueOnce :: deps.collection :: 2',
+	'screens/main/receipt/email-queue/queue.ts :: record collection back-reference :: enqueueReceiptEmail :: deps.collection :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: enqueueOnce :: deps.collection.insert :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: enqueueOnce :: duplicate.incrementalPatch :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: forget :: latest(doc).remove :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: patch :: doc.incrementalPatch :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: removeReceiptEmail :: current.remove :: 1',
+	'screens/main/receipt/email-queue/queue.ts :: record mutator :: retryReceiptEmail :: current.incrementalPatch :: 1',
+	'screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: record collection back-reference :: useReceiptEmailQueueCollection :: swap.collection :: 1',
+	"screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: storage token :: useReceiptEmailQueueCollection :: storeDB?.collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 231;
+export const SEAM_RETIRED_FLOOR = 255;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'3fc5df9a3a42b71e769a7a7f9c0b749ae2ba89cdcdb588250c3084845476131a';
+	'8974e4f9e1e7b6d6bc3248ac5ea8394b956c8c897f22206e0d2db2338a4f3d79';

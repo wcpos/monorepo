@@ -14,13 +14,16 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	classifyEmailSendError,
+	type EmailSendFailure,
+	enqueueReceiptEmail,
+} from '@wcpos/query/receipt-email-queue';
 
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { classifyEmailSendError, type EmailSendFailure } from './email-queue/classify';
-import { enqueueReceiptEmail, type ReceiptEmailQueuePort } from './email-queue/queue';
-import { useReceiptEmailQueueCollection } from './email-queue/use-receipt-email-queue-collection';
+import { useAppState } from '../../../contexts/app-state';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 const queueLogger = getLogger(['wcpos', 'receipt', 'emailQueue']);
@@ -47,7 +50,7 @@ interface Props {
  */
 export function EmailForm({ order }: Props) {
 	const http = useRestHttpClient();
-	const queueCollection = useReceiptEmailQueueCollection();
+	const { storeDB } = useAppState();
 	const { status } = useOnlineStatus();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
@@ -59,7 +62,6 @@ export function EmailForm({ order }: Props) {
 	// 'online-website-unavailable' counts as offline here: the device has a
 	// network but the store cannot be reached, which fails exactly the same way.
 	const isOffline = status !== 'online-website-available';
-	const queue = queueCollection as unknown as ReceiptEmailQueuePort | undefined;
 
 	/**
 	 * Persist the send so it survives an app restart, and tell the cashier what
@@ -73,17 +75,17 @@ export function EmailForm({ order }: Props) {
 			reason: string,
 			failure?: EmailSendFailure
 		): Promise<boolean> => {
-			if (!queue || typeof orderID !== 'number') return false;
+			if (!storeDB || typeof orderID !== 'number') return false;
 			try {
 				await enqueueReceiptEmail(
-					{ collection: queue, logger: queueLogger },
 					{
 						orderId: orderID,
 						orderNumber: typeof orderNumber === 'string' ? orderNumber : undefined,
 						email,
 						saveTo: saveEmail ? 'billing' : '',
 						...(failure ? { failure } : {}),
-					}
+					},
+					{ storeDB, logger: queueLogger }
 				);
 				Toast.show({
 					type: 'success',
@@ -104,7 +106,7 @@ export function EmailForm({ order }: Props) {
 				return false;
 			}
 		},
-		[orderID, orderNumber, queue, t]
+		[orderID, orderNumber, storeDB, t]
 	);
 
 	/**

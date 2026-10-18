@@ -6,10 +6,9 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
+import type { ReceiptEmailRow } from '@wcpos/query/receipt-email-queue';
 
 import { EmailForm } from './email';
-
-import type { ReceiptEmailRow } from './email-queue/queue';
 
 const mockPost = jest.fn();
 const mockToast = jest.fn();
@@ -103,8 +102,12 @@ jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost }),
 }));
-jest.mock('./email-queue/use-receipt-email-queue-collection', () => ({
-	useReceiptEmailQueueCollection: () => queueCollection,
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({
+		storeDB: queueCollection
+			? { collections: { receipt_email_queue: queueCollection } }
+			: undefined,
+	}),
 }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(

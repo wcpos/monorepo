@@ -58,10 +58,10 @@ jest.mock('@wcpos/utils/logger', () => ({
 jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: jest.fn(async () => ({ data: { success: true } })) }),
 }));
-jest.mock('../receipt/email-queue/use-receipt-email-queue-collection', () => ({
-	useReceiptEmailQueueCollection: () => ({ name: 'receipt_email_queue' }),
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({ storeDB: { collections: {} } }),
 }));
-jest.mock('../receipt/email-queue/queue', () => ({
+jest.mock('@wcpos/query/receipt-email-queue', () => ({
 	drainReceiptEmailQueue: (...args: unknown[]) => mockDrain(...(args as [])),
 	receiptEmailPostRequest: (row: { orderId: number; email: string; saveTo?: string }) => [
 		`/orders/${row.orderId}/email`,
@@ -84,7 +84,6 @@ jest.mock('../../../contexts/translations', () => {
 
 const row = (over: Partial<QueuedEmail> = {}): QueuedEmail =>
 	({
-		doc: { localID: over.localID ?? 'row-1' },
 		localID: 'row-1',
 		orderId: 42,
 		orderNumber: '1042',

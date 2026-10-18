@@ -12,7 +12,7 @@ import {
 	type ReceiptEmailRow,
 	removeReceiptEmail,
 	retryReceiptEmail,
-} from './queue';
+} from '../../src/receipt-email-queue/queue';
 
 const silentLogger = () => ({
 	debug: jest.fn(),
