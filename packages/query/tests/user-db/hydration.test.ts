@@ -279,7 +279,7 @@ it('does not link an embedded store rejected by schema validation', async () => 
 		};
 		const site = { uuid: 'site-1' };
 		const bulkInsert = jest.spyOn(db.stores, 'bulkInsert');
-		await applyEmbeddedBootPayload(
+		const applied = await applyEmbeddedBootPayload(
 			{
 				sites: {
 					...documentLookup(null),
@@ -307,6 +307,9 @@ it('does not link an embedded store rejected by schema validation', async () => 
 		expect(await db.stores.findOne('validstore').exec()).not.toBeNull();
 		expect(await db.stores.findOne('badstore00').exec()).toBeNull();
 		expect(credentials.stores).toEqual(['validstore']);
+		// The rejected row is not a selection candidate either (Codex on #2718): offering it
+		// would select a store that was never persisted and fail the boot.
+		expect(applied.stores.map((store) => store.localID)).toEqual(['validstore']);
 	} finally {
 		await db.close();
 	}

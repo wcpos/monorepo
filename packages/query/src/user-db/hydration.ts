@@ -105,12 +105,18 @@ export async function applyEmbeddedBootPayload(
 	const failedDocIds = await insertStorePayloads(userDB, newStores);
 	// With no stores, core's selection fails before committing a session. The old
 	// step also stopped before patching credential links in that case.
+	// A rejected store row was never persisted: it must not be linked, and it must not be
+	// offered to the selection either, or the boot selects a store it cannot open and falls
+	// back instead of using another store that did insert.
+	const persistedStores = stores.filter((store) => !failedDocIds.has(store.localID));
 	if (stores.length > 0) {
-		await wpCredentialsDoc.patch({
-			stores: stores.map((store) => store.localID).filter((id) => !failedDocIds.has(id)),
-		});
+		await wpCredentialsDoc.patch({ stores: persistedStores.map((store) => store.localID) });
 	}
-	return { siteUuid: siteDoc.uuid, wpCredentialsUuid: wpCredentialsDoc.uuid, stores };
+	return {
+		siteUuid: siteDoc.uuid,
+		wpCredentialsUuid: wpCredentialsDoc.uuid,
+		stores: persistedStores,
+	};
 }
 
 export async function readSiteTransportInputs(
