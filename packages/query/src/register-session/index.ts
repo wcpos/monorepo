@@ -14,8 +14,10 @@ export {
 	readBoundRegister,
 	readCounters,
 	readRegister,
+	remintRegister,
 	unbindRegister,
 } from './register-document';
+export { consumeNewTillOnNextLoad, NEW_TILL_ON_NEXT_LOAD_KEY } from './new-till-flag';
 export type { RegisterCounters, RegisterDocument } from './register-document';
 export type {
 	CashMovementRow,

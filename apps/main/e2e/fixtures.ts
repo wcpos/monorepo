@@ -25,6 +25,7 @@ import {
 } from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
+import { NEW_TILL_ON_NEXT_LOAD_KEY } from '../../../packages/query/src/register-session/new-till-flag';
 import { restoreOPFS } from './opfs-helpers';
 import {
 	resolveProbeOptions,
@@ -1106,9 +1107,14 @@ export async function hydrateAuthenticatedPage(
 			await page.route('**/*', blockScriptRequests);
 			await page.goto('/', { waitUntil: 'commit' });
 
-			// Restore OPFS and localStorage while JS is blocked (no worker running)
+			// Restore OPFS and localStorage while JS is blocked (no worker running).
+			// The snapshot carries the login's register document (till id + sale
+			// counters), so every test restoring it is a clone of one till and would
+			// stamp the same till and counter #1 on its sales — Store health on the dev
+			// stores then lists one "duplicate counter" row per CI run. Arming the
+			// new-till flag makes hydration re-mint the till before the test sells.
 			await restoreOPFS(page, state.opfs);
-			await restoreLocalStorage(page, state.localStorage);
+			await restoreLocalStorage(page, { ...state.localStorage, [NEW_TILL_ON_NEXT_LOAD_KEY]: '1' });
 
 			// Unblock JS and reload so the app picks up the restored OPFS state
 			await page.unroute('**/*', blockScriptRequests);

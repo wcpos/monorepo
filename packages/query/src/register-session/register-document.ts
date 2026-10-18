@@ -81,6 +81,32 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
 	}
 }
 
+/**
+ * Give a cloned installation its own identity: a new till id and name, and every
+ * site's sale counter back at zero, so its sales never share a till or a counter with
+ * the copy it came from. The store bindings (`register_id`, `register_store_id`) and
+ * the adopted closure floors stay — a new device bound to the same register would
+ * hold exactly those. Without a document this is a plain mint.
+ */
+export async function remintRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) return ensureRegister(userDB);
+	const id = mintUuid().toLowerCase();
+	const updated = await doc.incrementalModify((data) => ({
+		...data,
+		id,
+		name: `Register ${id.slice(-4).toUpperCase()}`,
+		created_at: new Date().toISOString(),
+		sites: Object.fromEntries(
+			Object.entries(data.sites).map(([site, bucket]) => [site, { ...bucket, sale_counter: 0 }])
+		),
+	}));
+	const register = updated.toJSON(true).data;
+	currentRegisterId = register.id;
+	currentRegister = register;
+	return register;
+}
+
 export function observeRegister$(userDB: UserDatabase) {
 	return userDB
 		.getLocal$<RegisterDocument>('register')
