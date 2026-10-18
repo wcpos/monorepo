@@ -26,6 +26,7 @@ import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { CaptionRowInset } from '../../../components/data-table/surface';
 import { ProductsFooter } from '../footer';
 
 import type { RxCollection } from 'rxdb';
@@ -94,14 +95,17 @@ function GridStatusFooter({
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
+	// The tile grid stands on the POS pane's dense card: the inset DataTable's footer mount gives.
 	return (
-		<ProductsFooter
-			collectionName="products"
-			active={active}
-			total={total}
-			sync={handle.sync}
-			count={count}
-		/>
+		<CaptionRowInset>
+			<ProductsFooter
+				collectionName="products"
+				active={active}
+				total={total}
+				sync={handle.sync}
+				count={count}
+			/>
+		</CaptionRowInset>
 	);
 }
 const ACTIVE_FIELD: SnapshotFields = ['active'];

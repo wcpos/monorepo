@@ -32,8 +32,9 @@ export function ProductsFooter({
 	const actions = useQueryStateActions();
 	const t = useT();
 	return (
-		// Same caption row as the data-table footer: on the ground, no rule, card-aligned text.
-		<HStack className="min-h-ctl items-center px-5">
+		// Same caption row as the data-table footer: on the ground, no rule; its mount aligns the
+		// text with the card's cells (`CaptionRowInset`).
+		<HStack className="min-h-ctl items-center">
 			{/* Keep the tax label shrinkable and counts at their natural width. */}
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">
 				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}

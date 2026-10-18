@@ -36,7 +36,7 @@ import { getRowTestID, DataTableRow as RowView } from './rows';
 import { ResizeHead } from './resize';
 import { DataTableSkeletonRows } from './skeleton';
 import { getColumnStyle } from './column-style';
-import { TableSurface } from './surface';
+import { CaptionRowInset, TableSurface } from './surface';
 
 import type { DataTableFooterProps } from './footer';
 import type { TableSurfaceGutter } from './surface';
@@ -442,13 +442,16 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 			</TableSurface>
 			{showFooter && (
 				<TableFooter>
-					<HandleFooter
-						Footer={props.TableFooterComponent ?? DataTableFooter}
-						collectionName={props.collectionName}
-						handle={props.handle}
-						shown={props.shown}
-						count={result.hits.length}
-					/>
+					{/* The footer's text lines up with the cells' by the card's own gutter (surface.tsx). */}
+					<CaptionRowInset gutter={gutter}>
+						<HandleFooter
+							Footer={props.TableFooterComponent ?? DataTableFooter}
+							collectionName={props.collectionName}
+							handle={props.handle}
+							shown={props.shown}
+							count={result.hits.length}
+						/>
+					</CaptionRowInset>
 				</TableFooter>
 			)}
 		</View>

@@ -40,3 +40,23 @@ export function TableSurface({
 		/>
 	);
 }
+
+/**
+ * The caption row's inset under the card, derived from the same gutter: the card's gutter plus
+ * the cell's own 12 (`px-3`), so the footer's text lines up with the cells' — 8 + 12 = 20
+ * (`px-5`) in a dense pane, 16 + 12 = 28 (`px-7`) on a page. The mount owns it; a footer
+ * component carries no horizontal padding of its own.
+ */
+export function CaptionRowInset({
+	gutter = 'dense',
+	children,
+}: {
+	gutter?: TableSurfaceGutter;
+	children: React.ReactNode;
+}) {
+	return (
+		<View testID="data-table-caption-inset" className={gutter === 'page' ? 'px-7' : 'px-5'}>
+			{children}
+		</View>
+	);
+}

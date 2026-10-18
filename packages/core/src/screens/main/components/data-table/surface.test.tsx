@@ -3,13 +3,19 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { TableSurface } from './surface';
+import { CaptionRowInset, TableSurface } from './surface';
 
 let mockPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 jest.mock('react-native', () => ({
-	View: ({ className, testID }: { className?: string; testID?: string }) => (
-		<div data-testid={testID} data-class={className} />
+	View: ({
+		className,
+		testID,
+		children,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<div data-testid={testID} data-class={className}>
+			{children}
+		</div>
 	),
 }));
 
@@ -31,6 +37,25 @@ it('insets a page by 16 on its sides and bottom, leaving the top to the row abov
 	expect(classes()).toEqual(expect.arrayContaining(['mx-4', 'mb-4', 'rounded-lg', 'border']));
 	expect(classes()).not.toContain('mx-2');
 	expect(classes().some((name) => /^(m|mt|my)-/.test(name))).toBe(false);
+});
+
+// The caption row's text sits on the cells' text: the card's gutter plus the cell's 12.
+it('insets the caption row by the gutter plus the cell padding', () => {
+	const inset = (gutter?: 'page' | 'dense') => {
+		const { unmount } = render(
+			<CaptionRowInset gutter={gutter}>
+				<span data-testid="caption" />
+			</CaptionRowInset>
+		);
+		const node = screen.getByTestId('data-table-caption-inset');
+		expect(node.contains(screen.getByTestId('caption'))).toBe(true);
+		const value = node.getAttribute('data-class');
+		unmount();
+		return value;
+	};
+	expect(inset('page')).toBe('px-7');
+	expect(inset()).toBe('px-5');
+	expect(inset('dense')).toBe('px-5');
 });
 
 it.each(['page', 'dense'] as const)('runs edge to edge on a phone (%s)', (gutter) => {
