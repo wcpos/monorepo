@@ -3,6 +3,7 @@ import * as React from 'react';
 import { BehaviorSubject, combineLatest, EMPTY, Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { engineCollection, hasQueuedDelete, useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -85,7 +86,7 @@ export function NewCustomerLinkBridge(): null {
 					payload?: Record<string, unknown>;
 					local?: { dirty?: boolean };
 				};
-				return { document, payload: payload ?? {}, dirty: local?.dirty === true };
+				return { document, payload: payload ?? {}, dirty: hasPendingLocalWork({ local }) };
 			},
 			// The acknowledged Woo id reaches the order through the same event as any customer
 			// set, as a system action: a hook on `cart.customer.set` sees the real id arrive.
@@ -186,7 +187,7 @@ export function NewCustomerLinkBridge(): null {
 							documents
 								.map((document) => {
 									const { uuid, payload, local } = document.toJSON();
-									return `${uuid}:${payload.status}:${payload.customer_id}:${local?.dirty}`;
+									return `${uuid}:${payload.status}:${payload.customer_id}:${hasPendingLocalWork({ local })}`;
 								})
 								.join('|')
 						),

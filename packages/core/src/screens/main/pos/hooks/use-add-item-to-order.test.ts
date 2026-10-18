@@ -5,10 +5,17 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
+
 import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
+
+jest.mock('@wcpos/sync-engine', () => ({
+	...jest.requireActual('@wcpos/sync-engine'),
+	hasPendingLocalWork: jest.fn(jest.requireActual('@wcpos/sync-engine').hasPendingLocalWork),
+}));
 
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -434,6 +441,7 @@ describe('useAddItemToOrder', () => {
 			} as never);
 		});
 
+		expect(hasPendingLocalWork).toHaveBeenCalledWith(resident);
 		expect(mockInsertEngineResident).not.toHaveBeenCalled();
 		expect(mockPatchEngineResident).not.toHaveBeenCalled();
 		expect(mockWrite).not.toHaveBeenCalled();

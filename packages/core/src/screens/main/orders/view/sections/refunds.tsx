@@ -173,7 +173,7 @@ export function RefundsFallback({
 									{refund.reason || t('orders.no_reason_provided')}
 								</Text>
 								<Text className="text-destructive text-sm font-semibold tabular-nums">
-									{format(-Math.abs(toNumber(refund.total)))}
+									{format(-refundValue(refund))}
 								</Text>
 							</View>
 						))}

@@ -1,6 +1,8 @@
 import { tz } from '@date-fns/tz';
 import { format, parseISO } from 'date-fns';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type {
@@ -265,7 +267,7 @@ export async function writeClosure({
 	const bound = orders.filter(
 		(order) =>
 			order.payload.meta_data?.some(
-				({ key, value }) => key === '_wcpos_session' && value === session.id
+				({ key, value }) => key === POS_META_KEYS.session && value === session.id
 			) || readLedger(order.payload.meta_data).some((row) => row.session_id === session.id)
 	);
 	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
@@ -312,7 +314,7 @@ export async function writeClosure({
 			};
 		}
 	}
-	const dirtyOrders = bound.filter((order) => order.local?.dirty);
+	const dirtyOrders = bound.filter(hasPendingLocalWork);
 	const dirtyMovements = entries.filter((row) => row.sync_status === 'pending');
 
 	const counters = bound

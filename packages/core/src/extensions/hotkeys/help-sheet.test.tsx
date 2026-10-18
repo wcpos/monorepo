@@ -10,19 +10,6 @@ import type { CommandContext } from '../commands';
 
 // The sheet takes its context as a prop; the provider and its router stay out of this suite.
 jest.mock('../commands/provider', () => ({}));
-// The host Button turns `disabled` into `aria-disabled` and its dimmed style; the stand-in keeps the prop.
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		onPress,
-		testID,
-		disabled,
-	}: React.PropsWithChildren<{ onPress: () => void; testID: string; disabled?: boolean }>) => (
-		<button data-testid={testID} onClick={onPress} disabled={disabled} aria-disabled={disabled}>
-			{children}
-		</button>
-	),
-}));
 jest.mock('@wcpos/components/dialog', () => {
 	function Wrapper({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
 		return <div data-testid={testID}>{children}</div>;
@@ -72,12 +59,14 @@ it('lists the eight commands with their chords', () => {
 });
 
 it('greys the commands that are not available', () => {
-	render(<HelpSheet open onOpenChange={jest.fn()} ctx={makeCtx({ lineCount: 0 })} />);
+	const onOpenChange = jest.fn();
+	render(<HelpSheet open onOpenChange={onOpenChange} ctx={makeCtx({ lineCount: 0 })} />);
 	const pay = screen.getByTestId('hotkeys-help-row-pos.checkout.open');
 	expect(pay.getAttribute('aria-disabled')).toBe('true');
-	expect((pay as HTMLButtonElement).disabled).toBe(true);
+	fireEvent.click(pay);
+	expect(onOpenChange).not.toHaveBeenCalled();
 	const search = screen.getByTestId('hotkeys-help-row-pos.search.focus');
-	expect((search as HTMLButtonElement).disabled).toBe(false);
+	expect(search.getAttribute('aria-disabled')).not.toBe('true');
 });
 
 it('a row press closes the sheet and runs its command with source ui', async () => {
@@ -107,3 +96,5 @@ it('renders no rows while closed', () => {
 	render(<HelpSheet open={false} onOpenChange={jest.fn()} ctx={makeCtx()} />);
 	expect(screen.queryByTestId('hotkeys-help-sheet')).toBeNull();
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

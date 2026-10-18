@@ -4,7 +4,10 @@
 
 import {
 	hasLiveSettlementLeg,
+	isFailedPaymentStatus,
+	isFinalPaymentStatus,
 	isLivePaymentStatus,
+	isSettledPaymentRow,
 	mintDevicePayment,
 	mintManualPayment,
 	mintServerPayment,
@@ -339,3 +342,17 @@ it.each(['pending', 'authorized', 'captured', 'failed', 'voided'] as const)(
 		);
 	}
 );
+
+// Settled money includes offline authorizations; terminal finality does not.
+it.each([
+	['captured', false, true, true, false],
+	['authorized', true, true, false, false],
+	['authorized', false, false, false, false],
+	['pending', false, false, false, false],
+	['failed', false, false, true, true],
+	['voided', false, false, true, true],
+] as const)('classifies %s (offline %s)', (status, offline, settled, final, failed) => {
+	expect(isSettledPaymentRow(row({ status, recorded_offline: offline }))).toBe(settled);
+	expect(isFinalPaymentStatus(status)).toBe(final);
+	expect(isFailedPaymentStatus(status)).toBe(failed);
+});

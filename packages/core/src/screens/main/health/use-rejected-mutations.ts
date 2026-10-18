@@ -1,14 +1,14 @@
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { from, Observable, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { type Observable, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
-import { useQueryRuntime, WRITEABLE_REMOTE_ID_FIELD } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
-import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
-import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-
-const healthLogger = getLogger(['wcpos', 'health']);
+import {
+	type DescribedQueueRow,
+	observeDescribedQueueRows,
+	REJECTED_QUEUE_STATUSES,
+	useQueryRuntime,
+} from '@wcpos/query';
+import type { QueueRow, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 /**
  * The dead-letter feed for Store health → Database (#832).
@@ -67,28 +67,7 @@ export type RejectedMutation = {
 	residentUnknown: boolean;
 };
 
-/**
- * The record's shared server-identity column (`remoteId`),
- * derived exactly like `usePushDocument` derives it: the legacy `id` field's
- * engine path. A resident with no value there has never existed server-side.
- */
-const REMOTE_ID_FIELD: Record<string, string | undefined> = WRITEABLE_REMOTE_ID_FIELD;
-
-type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
-type MutationRow = EngineConflict | { toJSON(): EngineConflict };
-type MutationCollection = {
-	find(query: { selector: { status: { $eq: string } } }): {
-		$: Observable<readonly MutationRow[]>;
-	};
-};
-
-function toJson(row: MutationRow): EngineConflict {
-	return 'toJSON' in row && typeof row.toJSON === 'function'
-		? row.toJSON()
-		: (row as EngineConflict);
-}
-
-function labelFor(resident: Record<string, unknown> | null, entry: EngineConflict): string | null {
+function labelFor(resident: Record<string, unknown> | null, entry: QueueRow): string | null {
 	const payload = (entry.payload ?? {}) as Record<string, unknown>;
 	// Three sources, best first: orders promote `number`/`total` to the document
 	// root; a collection without promoted columns keeps them in the resident's
@@ -103,86 +82,26 @@ function labelFor(resident: Record<string, unknown> | null, entry: EngineConflic
 	return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-async function describe(
-	database: EngineDatabase,
-	rows: readonly MutationRow[]
-): Promise<RejectedMutation[]> {
-	const described = await Promise.all(
-		rows.map(async (row) => {
-			const entry = toJson(row);
-			// A failed read must NOT reject this Promise.all: the observable would
-			// error, useObservableSuspense would rethrow during render, and Suspense
-			// does not catch errors — one bad storage read would blank the entire
-			// Database health screen. This is a diagnostic surface; it degrades.
-			// `readFailed` is tracked separately from "no such record" because they
-			// mean opposite things for recovery: a genuinely absent record cannot be
-			// rebuilt, while a read that merely failed says nothing about the record,
-			// so requeue must stay offered rather than be silently disabled.
-			let resident: Record<string, unknown> | null = null;
-			let readFailed = false;
-			try {
-				const doc = await database.collections[entry.collectionName]
-					?.findOne(entry.recordId)
-					.exec();
-				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
-			} catch (error) {
-				readFailed = true;
-				healthLogger.warn('Rejected-mutations panel could not read the local record', {
-					context: {
-						collection: entry.collectionName,
-						recordId: entry.recordId,
-						error: getErrorMessage(error),
-					},
-				});
-			}
-			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
-			// The engine's OWN resolution order, mirrored exactly
-			// (`conflict-resolution.ts`): the resident's column, then — for a
-			// non-order, which is the only kind it pre-fetches for — the queued
-			// payload's `id` and the conflict document's. A create whose payload names
-			// a server record is NOT born-local, and the engine will fetch and keep it;
-			// reading only the column made the dialog promise a deletion that never
-			// happened (PR #1016 review).
-			const columnRemoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
-			const queuedRemoteId =
-				entry.collectionName === 'orders'
-					? undefined
-					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
-						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
-			const remoteId = remoteIdOrNull(columnRemoteId) ?? remoteIdOrNull(queuedRemoteId);
-			// A non-order row WITH a server identity is the engine's other destructive
-			// branch: it fetches the server document and removes the resident when the
-			// server 404s. Orders skip that fetch entirely, so they never take it.
-			const mayDestroyRecord =
-				entry.collectionName !== 'orders' && resident !== null && remoteId !== null;
-			return {
-				mutationId: entry.mutationId,
-				collectionName: entry.collectionName,
-				recordId: entry.recordId,
-				operation: entry.operation,
-				label: labelFor(resident, entry),
-				reason: entry.rejectedReason ?? null,
-				message: entry.rejectedMessage ?? null,
-				status: entry.rejectedStatus ?? null,
-				rejectedAt: entry.rejectedAt ?? null,
-				requeueCount: entry.requeueCount ?? 0,
-				residentMissing: resident === null && !readFailed,
-				residentUnknown: readFailed,
-				// Born-local CREATE ⇒ discard deletes the record. A read failure says
-				// nothing about the record, so it never claims destruction — and neither
-				// does a verdict that says the SERVER matched this record's uuid
-				// (`identity-ambiguous`): the engine keeps the resident in that case, so
-				// promising deletion here would be a lie the confirm dialog tells.
-				destroysRecord:
-					entry.operation === 'create' &&
-					resident !== null &&
-					!readFailed &&
-					remoteId === null &&
-					!rejectionSuggestsServerRecord(entry.rejectedReason),
-				mayDestroyRecord: mayDestroyRecord && !readFailed,
-			};
-		})
-	);
+function describe(rows: readonly DescribedQueueRow[]): RejectedMutation[] {
+	const described = rows.map((entry) => {
+		const { resident, residentRead, discard } = entry;
+		return {
+			mutationId: entry.mutationId,
+			collectionName: entry.collectionName,
+			recordId: entry.recordId,
+			operation: entry.operation,
+			label: labelFor(resident, entry),
+			reason: entry.rejectedReason ?? null,
+			message: entry.rejectedMessage ?? null,
+			status: entry.rejectedStatus ?? null,
+			rejectedAt: entry.rejectedAt ?? null,
+			requeueCount: entry.requeueCount ?? 0,
+			residentMissing: residentRead === 'missing',
+			residentUnknown: residentRead === 'failed',
+			destroysRecord: discard === 'destroys-record',
+			mayDestroyRecord: discard === 'may-destroy-record',
+		};
+	});
 	// Newest refusal first — the row a cashier is most likely looking for.
 	return described.sort((a, b) => (b.rejectedAt ?? '').localeCompare(a.rejectedAt ?? ''));
 }
@@ -196,19 +115,8 @@ async function describe(
 export type RejectedMutationsRead = { rows: RejectedMutation[]; readError: boolean };
 
 function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutationsRead> {
-	return new Observable<EngineDatabase | null>((subscriber) =>
-		engine.db$((database) => subscriber.next(database))
-	).pipe(
-		switchMap((database) => {
-			if (!database) return of<RejectedMutationsRead>({ rows: [], readError: false });
-			const mutations = database.collections[
-				MUTATION_QUEUE_RXDB_COLLECTION
-			] as unknown as MutationCollection;
-			return mutations.find({ selector: { status: { $eq: 'rejected' } } }).$.pipe(
-				switchMap((rows) => from(describe(database, rows))),
-				map((rows) => ({ rows, readError: false }))
-			);
-		}),
+	return observeDescribedQueueRows(engine, { statuses: REJECTED_QUEUE_STATUSES }).pipe(
+		map((rows) => ({ rows: describe(rows), readError: false })),
 		// The resource is cached for the engine's whole life (that is the fix), so a
 		// stream error must never be able to POISON it: `ObservableResource` latches
 		// the error and `read()` would then throw forever, on every remount and every

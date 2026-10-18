@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
@@ -59,12 +60,10 @@ type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>
  */
 function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	const record = resident as unknown as {
-		local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 		sync?: { revision?: unknown };
 		remoteId?: unknown;
 	};
-	if (record.local?.dirty === true) return true;
-	if ((record.local?.pendingMutationIds?.length ?? 0) > 0) return true;
+	if (hasPendingLocalWork(resident)) return true;
 	if (record.remoteId !== null && record.remoteId !== undefined) return true;
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }

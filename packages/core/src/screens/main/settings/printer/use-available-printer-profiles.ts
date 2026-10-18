@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { observePrinterProfiles } from '@wcpos/query';
 import type { PrinterProfile } from '@wcpos/printer';
-import type { PrinterProfileDocument } from '@wcpos/database';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -29,10 +29,7 @@ export function useAvailablePrinterProfiles() {
 	const [cloudSettled, setCloudSettled] = React.useState(false);
 
 	const profiles$ = React.useMemo(
-		() =>
-			storeDB.collections.printer_profiles
-				.find()
-				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
+		() => observePrinterProfiles(storeDB).pipe(map((docs) => docs.map(toPrinterProfile))),
 		[storeDB]
 	);
 	const localProfiles = useObservableState<PrinterProfile[] | undefined>(profiles$, undefined);

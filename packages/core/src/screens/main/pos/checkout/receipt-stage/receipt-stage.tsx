@@ -14,7 +14,7 @@ import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
+import { activeAwaitingCustomer, derive, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
@@ -133,9 +133,7 @@ function ReceiptStageDocument({
 	const derived = derive(payload.total, rows, methods, { dp });
 	// A split sale names every method that took money, in ledger order; `derive` only
 	// reports the primary one.
-	const settledRows = rows.filter(
-		(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-	);
+	const settledRows = rows.filter(isSettledPaymentRow);
 	const methodTitles = Array.from(
 		new Set(
 			settledRows.map(

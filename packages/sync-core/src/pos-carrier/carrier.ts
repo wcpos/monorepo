@@ -45,6 +45,8 @@ export const POS_META_KEYS = {
 	user: '_pos_user',
 	store: '_pos_store',
 	register: '_wcpos_register',
+	session: '_wcpos_session',
+	reducedStock: '_reduced_stock',
 	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
 	lineUuid: RECORD_UUID_META_KEY,

@@ -65,7 +65,7 @@ function splitLine(lineItemToSplit: LineItem, cartConfig: ReturnType<typeof useC
 	// A value that reads as nothing (zero, negative, unreadable) is dropped from every half.
 	let reduced = reducedStockQuantity(lineItemToSplit);
 	const hasReducedMeta = (lineItemToSplit.meta_data ?? []).some(
-		(meta) => meta.key === '_reduced_stock'
+		(meta) => meta.key === POS_META_KEYS.reducedStock
 	);
 	const splitLineItems = !hasReducedMeta
 		? newLineItems // never reduced: split as before
@@ -74,7 +74,7 @@ function splitLine(lineItemToSplit: LineItem, cartConfig: ReturnType<typeof useC
 				const share = last ? reduced : Math.min(Math.floor(line.quantity ?? 0), reduced);
 				reduced -= share;
 				const meta_data = (line.meta_data ?? []).flatMap((meta) => {
-					if (meta.key !== '_reduced_stock') return [meta];
+					if (meta.key !== POS_META_KEYS.reducedStock) return [meta];
 					if (share === 0) return []; // dropped, not '0': the server reads it as never reduced
 					return [{ ...meta, value: typeof meta.value === 'number' ? share : String(share) }];
 				});

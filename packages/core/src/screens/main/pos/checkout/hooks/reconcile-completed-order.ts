@@ -1,5 +1,5 @@
 import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { POS_META_KEYS, remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { stockAdjustment } from '../../../hooks/use-stock-adjustment';
@@ -89,7 +89,9 @@ export async function reconcileCompletedOrder(
 
 	const latest = order.getLatest().payload;
 	const reducedStockItems = (latest.line_items || []).filter((item) =>
-		(item.meta_data as { key: string }[] | undefined)?.some((meta) => meta.key === '_reduced_stock')
+		(item.meta_data as { key: string }[] | undefined)?.some(
+			(meta) => meta.key === POS_META_KEYS.reducedStock
+		)
 	);
 	adjustStock(reducedStockItems);
 	return refreshOutcome;

@@ -132,6 +132,7 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/portal', () => ({ Portal: passthrough }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
@@ -141,6 +142,7 @@ jest.mock('react-native-reanimated', () => ({
 	FadeIn: { duration: () => ({}) },
 }));
 jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
 	Linking: { openURL: jest.fn() },
 	Text: passthrough,
 	ScrollView: passthrough,

@@ -8,13 +8,13 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
-import type { TemplateDocument } from '@wcpos/database';
+import type { ActiveTemplate } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 
 interface TemplateSwitcherProps {
 	alwaysVisible?: boolean;
-	templates: TemplateDocument[];
+	templates: ActiveTemplate[];
 	selectedId: string | number | null;
 	onSelect: (id: string | number) => void;
 	isOffline: boolean;
@@ -38,7 +38,7 @@ export function TemplateSwitcher({
 		return null;
 	}
 
-	function buildLabel(tmpl: TemplateDocument): string {
+	function buildLabel(tmpl: ActiveTemplate): string {
 		return tmpl.title ?? '';
 	}
 
