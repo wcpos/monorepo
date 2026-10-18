@@ -8,6 +8,10 @@ import { StoreSelect } from './store-select';
 import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 
 const mockStores = new BehaviorSubject<unknown[]>([]);
+jest.mock('@wcpos/query/user-db', () => ({
+	PENDING_USER_DB_READ: Symbol('pending'),
+	observeCredentialStores: () => mockStores,
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -69,8 +73,6 @@ jest.mock('../../../services/register/use-register', () => ({ useRegister: () =>
 const site = { uuid: 'site' } as import('@wcpos/database').SiteDocument;
 const wpUser = {
 	uuid: 'user',
-	get$: () => new BehaviorSubject(['a', 'b']),
-	collection: { database: { stores: { find: () => ({ $: mockStores }) } } },
 } as unknown as import('@wcpos/database').WPCredentialsDocument;
 const a = { id: 1, localID: 'a', name: 'Store 1' };
 const b = { id: 2, localID: 'b', name: 'Store 2' };

@@ -1205,7 +1205,12 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/auth/hooks/use-site-connect.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	// The embedded boot's credential write is a merge command in @wcpos/query/user-db.
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.wp_credentials.upsert :: 1',
+	// ADR 0033 per-screen (e3): auth reads are named reads in @wcpos/query/user-db.
+	"screens/auth/components/add-user-button.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/auth/components/store-select.helpers.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/auth/components/store-select.tsx :: raw query construction :: StoreSelect :: storesCollection.find({ selector: { localID: { $in: validIds } } }) :: 1',
+	'screens/auth/components/store-select.tsx :: record collection back-reference :: StoreSelect :: wpUserAny.collection :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 287;
+export const SEAM_RETIRED_FLOOR = 291;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b1912710495fed88c23b7bce526b293c1e5ab9481d9568ccea6c2a646cd04fd2';
+	'c744e6850e7bef9c2a95518aa3743bdd969ec0cc96b6c6196093dc7b32f85214';
