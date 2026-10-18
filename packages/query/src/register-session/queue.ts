@@ -16,6 +16,7 @@ import type {
 import { backoffMs, MAX_SEND_ATTEMPTS } from '@wcpos/utils/outbox-backoff';
 
 import { engineCollection, type EngineCollection } from '../records/engine-collection';
+import { mergeIntoDocument, pruneToSchemaProperties } from '../records/merge-into-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
@@ -103,15 +104,14 @@ export async function adoptMovementRow(
 	server: ServerMovementRow
 ) {
 	const adopted = movementFromServer(server);
-	const local = await movements.findOne(adopted.id).exec();
-	if (!local) {
-		await movements.incrementalUpsert({ ...adopted, ...synced });
-		return;
-	}
-	await local.incrementalModify(async (current) =>
-		current.sync_status === 'pending'
-			? current
-			: mergeServerMovement(current, adopted, await claimStands(movements, current))
+	await mergeIntoDocument(
+		movements,
+		adopted.id,
+		async (current) =>
+			current.sync_status === 'pending'
+				? current
+				: mergeServerMovement(current, adopted, await claimStands(movements, current)),
+		() => ({ ...adopted, ...synced })
 	);
 }
 
@@ -609,29 +609,26 @@ export async function adoptSessionRow(
 	 * `additionalProperties: false`, so an unfiltered upsert throws VD2 and no server session
 	 * can ever be adopted.
 	 */
-	const row = Object.fromEntries(
-		Object.entries(server).filter(([key]) =>
-			Object.prototype.hasOwnProperty.call(sessions.schema.jsonSchema.properties, key)
-		)
-	) as RegisterSessionRow;
+	const row = pruneToSchemaProperties(sessions, server) as RegisterSessionRow;
 	const local = await sessions.findOne(row.id).exec();
 	if (local?.sync_status === 'pending') return;
 	const adopted = { ...row, ...synced, server_status: row.status, pending_status: null };
 	/**
 	 * Merge over the local document, never replace it: the list route serves only the
-	 * session's own columns, and `incrementalUpsert` writes its input wholesale. Replacing
-	 * reset the detail route's anchor (`server_expected` and its membership ids) to the schema
-	 * defaults for the length of the detail round trip on every refresh, and the till strip
-	 * rendered that gap as the local figure — "Expected in drawer" flickered between the
-	 * server's number and the device's own each cycle.
+	 * session's own columns (see `mergeIntoDocument`). Replacing reset the detail route's
+	 * anchor (`server_expected` and its membership ids) to the schema defaults for the length
+	 * of the detail round trip on every refresh, and the till strip rendered that gap as the
+	 * local figure — "Expected in drawer" flickered between the server's number and the
+	 * device's own each cycle. The modifier re-checks `pending`: a cashier transition that
+	 * lands between the read above and this write must not be overwritten (the same reason
+	 * `acknowledge` reads `local`).
 	 */
-	if (local)
-		// Re-check inside the modifier: a cashier transition that lands between the read above
-		// and this write must not be overwritten (the same reason `acknowledge` reads `local`).
-		await local.incrementalModify((current) =>
-			current.sync_status === 'pending' ? current : { ...current, ...adopted }
-		);
-	else await sessions.incrementalUpsert(adopted);
+	await mergeIntoDocument(
+		sessions,
+		row.id,
+		(current) => (current.sync_status === 'pending' ? current : { ...current, ...adopted }),
+		() => adopted
+	);
 }
 
 export function adoptSession(
