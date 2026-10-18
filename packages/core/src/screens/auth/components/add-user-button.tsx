@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { ListItem } from '@wcpos/components/list-item';
@@ -14,7 +15,7 @@ import { useLoginHandler } from '../hooks/use-login-handler';
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: Pick<ReadonlySiteRecord, 'uuid' | 'name' | 'wcpos_login_url'>;
 	hasExistingUsers: boolean;
 	compact?: boolean;
 }

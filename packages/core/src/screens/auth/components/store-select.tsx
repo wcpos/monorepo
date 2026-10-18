@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap, tap } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { distinctUntilChanged, map, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { EmptyState } from '@wcpos/components/empty-state';
@@ -10,7 +9,12 @@ import { ListItem } from '@wcpos/components/list-item';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+import type { WPCredentialsDocument } from '@wcpos/database';
+import {
+	observeCredentialStores,
+	PENDING_USER_DB_READ,
+	type ReadonlyStoreRecord,
+} from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { resolvePreselectedStore, storeListsEqual } from './store-select.helpers';
@@ -19,6 +23,13 @@ import { useUserValidation } from '../../../hooks/use-user-validation';
 import { useRegister } from '../../../services/register/use-register';
 
 const storeLogger = getLogger(['wcpos', 'auth', 'stores']);
+
+// Survive Suspense retries without rebuilding the read; each cashier has their own resource.
+type StoreResource = ObservableResource<
+	ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ,
+	ReadonlyStoreRecord[]
+>;
+const resourcesByCredentials = new WeakMap<WPCredentialsDocument, StoreResource>();
 
 /** `numeric` so "Store 2" precedes "Store 10"; `base` so case never decides order. */
 const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -35,7 +46,7 @@ const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity:
  * only thing they actually read — the name — and fall back to the numeric store
  * id so blank or duplicate names still land in a fixed order.
  */
-function sortStores(stores: StoreDocument[]): StoreDocument[] {
+function sortStores(stores: ReadonlyStoreRecord[]): ReadonlyStoreRecord[] {
 	return [...stores].sort((a, b) => {
 		const byName = storeCollator.compare(a.name ?? '', b.name ?? '');
 		if (byName !== 0) return byName;
@@ -55,7 +66,12 @@ interface StoreSelectProps {
  * Store selection and login button — separated because it uses Suspense
  * to resolve the stores population from the selected user.
  */
-export function StoreSelect({
+export function StoreSelect(props: StoreSelectProps) {
+	// The Suspense hook retains state across resource changes; a cashier switch needs a new reader.
+	return <StoreSelectReader key={props.wpUser.uuid} {...props} />;
+}
+
+function StoreSelectReader({
 	site,
 	wpUser,
 	selectedStoreId,
@@ -66,70 +82,45 @@ export function StoreSelect({
 	const register = useRegister();
 	const { isValid, isLoading: isValidating } = useUserValidation({ site, wpUser });
 
-	// Resolve stores reactively by combining wpUser.stores$ (the localID array)
-	// with a reactive query on the stores collection. The populate$ plugin uses
-	// findByIds(...).exec() which is a one-shot Promise, so it misses the case
-	// where store docs are inserted *after* the ids are already written to the
-	// parent (e.g. stale pointer from prior session → cashier re-creates doc
-	// with same hash, parent ids never change, populate$ never re-emits).
-	//
-	// `startWith([])` clears the prior user's list as soon as the source switches
-	// (when `wpUser` changes the memo rebuilds the observable), so we don't briefly
-	// render stale stores while the new subscription spins up.
-	const stores$ = React.useMemo(() => {
-		const wpUserAny = wpUser as unknown as {
-			collection: { database: { stores: any } };
-			get$: (key: string) => import('rxjs').Observable<any>;
-			stores?: string[];
-			uuid?: string;
-		};
-		const storesCollection = wpUserAny.collection.database.stores;
-		const ids$ = wpUserAny.get$('stores');
-
-		storeLogger.debug('[stores] StoreSelect subscribing (direct collection query)', {
-			context: {
-				wpUserUuid: wpUser.uuid,
-				storesOnDoc: wpUserAny.stores,
-				hasIdsObservable: !!ids$,
-			},
-		});
-
-		const idsEqual = (a: string[], b: string[]) =>
-			a.length === b.length && a.every((v, i) => v === b[i]);
-
-		return ids$.pipe(
-			tap((ids) => {
-				storeLogger.debug('[stores] wpUser.get$(stores) emitted', {
-					context: { wpUserUuid: wpUser.uuid, ids },
-				});
-			}),
-			distinctUntilChanged((a, b) => Array.isArray(a) && Array.isArray(b) && idsEqual(a, b)),
-			switchMap((ids: string[]) => {
-				const validIds = Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
-				if (validIds.length === 0) return of([] as StoreDocument[]);
-				// Use a reactive find() query — findByIds(...).$ on filesystem-node
-				// storage does not re-emit when matching docs are inserted *after*
-				// the query was created. find({selector: { $in }}).$ does.
-				return storesCollection.find({ selector: { localID: { $in: validIds } } })
-					.$ as import('rxjs').Observable<StoreDocument[]>;
-			}),
-			map(sortStores),
-			distinctUntilChanged(storeListsEqual),
-			tap((resolved: StoreDocument[]) => {
-				storeLogger.debug('[stores] StoreSelect stores resolved', {
-					context: {
-						wpUserUuid: wpUser.uuid,
-						storeCount: resolved.length,
-						storeIDs: resolved.map((s) => s.id),
-						storeLocalIDs: resolved.map((s) => s.localID),
+	let resource = resourcesByCredentials.get(wpUser);
+	if (!resource) {
+		// The constructor subscribes synchronously, so an error can precede cache insertion.
+		const holder: { resource?: StoreResource; failed: boolean } = { failed: false };
+		resource = new ObservableResource(
+			observeCredentialStores(wpUser).pipe(
+				map((value) => (value === PENDING_USER_DB_READ ? value : sortStores(value))),
+				distinctUntilChanged((a, b) =>
+					a === PENDING_USER_DB_READ || b === PENDING_USER_DB_READ ? a === b : storeListsEqual(a, b)
+				),
+				tap((resolved) => {
+					if (resolved === PENDING_USER_DB_READ) return;
+					storeLogger.debug('[stores] StoreSelect stores resolved', {
+						context: {
+							wpUserUuid: wpUser.uuid,
+							storeCount: resolved.length,
+							storeIDs: resolved.map((s) => s.id),
+							storeLocalIDs: resolved.map((s) => s.localID),
+						},
+					});
+				}),
+				tap({
+					error: () => {
+						holder.failed = true;
+						if (holder.resource && resourcesByCredentials.get(wpUser) === holder.resource) {
+							resourcesByCredentials.delete(wpUser);
+						}
 					},
-				});
-			}),
-			startWith([] as StoreDocument[])
+				})
+			),
+			(
+				value: ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ
+			): value is ReadonlyStoreRecord[] => value !== PENDING_USER_DB_READ
 		);
-	}, [wpUser]);
+		holder.resource = resource;
+		if (!holder.failed) resourcesByCredentials.set(wpUser, resource);
+	}
 
-	const offeredStores = useObservableState(stores$, []);
+	const offeredStores = useObservableSuspense(resource);
 	const preselectedStore = resolvePreselectedStore(
 		offeredStores,
 		register?.sites[site.uuid!]?.store_id
