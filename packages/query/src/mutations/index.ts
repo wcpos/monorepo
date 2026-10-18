@@ -31,3 +31,4 @@ export {
 	readCustomerRemoteId,
 	isCollectionEvent,
 } from '../reads/customer-link';
+export { recordReceiptPrint } from './record-receipt-print';

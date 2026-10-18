@@ -21,6 +21,16 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) =>
 		source == null ? undefined : select(source),
 }));
+// Only the print-counter command is real: it writes through the same fake order the
+// cases below assert on.
+jest.mock('@wcpos/query/mutations', () => ({
+	recordReceiptPrint: (...args: unknown[]) =>
+		(
+			jest.requireActual('@wcpos/query/mutations') as typeof import('@wcpos/query/mutations')
+		).recordReceiptPrint(
+			...(args as Parameters<typeof import('@wcpos/query/mutations').recordReceiptPrint>)
+		),
+}));
 jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print: mockPrint, isPrinting: false }),
 	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')

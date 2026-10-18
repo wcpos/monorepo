@@ -1458,10 +1458,12 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'query/terms-handles.ts :: record collection back-reference :: useAllTermsHandle :: refreshFor.collection :: 1',
 	'query/terms-handles.ts :: record collection back-reference :: useProductsCarryingTermsHandle :: query.collection :: 1',
 	"query/terms-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (f12): the receipt print counter is a command in @wcpos/query/mutations.
+	'screens/main/receipt/use-receipt-document.ts :: record mutator :: useReceiptDocument :: order.incrementalModify :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 524;
+export const SEAM_RETIRED_FLOOR = 525;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1ee94079c086dbb679fcf112d6e21bfbc68e1c5d3b65ba81840ae1142b4fb5a0';
+	'32141cbdb2b0a4013c7673d0f210b4933d773f9a44c98d79bd393f53801e554f';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
