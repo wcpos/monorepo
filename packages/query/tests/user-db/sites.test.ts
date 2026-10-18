@@ -16,6 +16,7 @@ import '@wcpos/database/plugins';
 import { userCollections } from '@wcpos/database/collections';
 
 import {
+	connectionAddressOf,
 	linkCredentialsToSite,
 	stripLocalOnlySiteFields,
 	upsertSiteData,
@@ -482,4 +483,19 @@ describe('auth write commands', () => {
 			expect((await db.wp_credentials.findOne(params.uuid).exec())!.deleted).toBe(false);
 		}
 	);
+});
+
+// The REST suffix cut is a linear scan now (CodeQL, #2706); these pin the regex's semantics.
+describe('connectionAddressOf', () => {
+	it.each([
+		['https://Example.com/wp-json/wcpos/v1', 'example.com'],
+		['https://example.com/shop/?rest_route=/wcpos/v1', 'example.com/shop'],
+		['https://example.com/shop?rest_route=/wcpos/v1', 'example.com/shop'],
+		['https://example.com/wp-jsonx/other', 'example.com/wp-jsonx/other'],
+		['https://example.com/a/wp-jsonx/wp-json/v1', 'example.com/a/wp-jsonx'],
+		['https://example.com/wp-json', 'example.com'],
+		[undefined, ''],
+	])('%s → %s', (input, expected) => {
+		expect(connectionAddressOf(input)).toBe(expected);
+	});
 });

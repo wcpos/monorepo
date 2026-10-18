@@ -187,7 +187,35 @@ export function normalizeSiteAddress(url: string | undefined): string {
  * a different host or site path is.
  */
 export function connectionAddressOf(apiUrl: string | undefined): string {
-	return normalizeSiteAddress((apiUrl ?? '').replace(/(\/wp-json\b.*|\/?\?rest_route=.*)$/i, ''));
+	const address = apiUrl ?? '';
+	return normalizeSiteAddress(address.slice(0, restSuffixStart(address)));
+}
+
+/**
+ * Where the REST suffix begins: the first `/wp-json` at a word boundary, or the first
+ * `?rest_route=` (with the `/` before it, when there is one), whichever comes first; the
+ * string's length when there is neither. A linear scan rather than the alternation regex
+ * it replaced, which CodeQL flagged as polynomial on library input (#2706).
+ */
+function restSuffixStart(address: string): number {
+	const lower = address.toLowerCase();
+	let cut = lower.length;
+	for (let from = 0; ;) {
+		const index = lower.indexOf('/wp-json', from);
+		if (index === -1) break;
+		const next = lower.charAt(index + '/wp-json'.length);
+		if (next === '' || !/[a-z0-9_]/.test(next)) {
+			cut = index;
+			break;
+		}
+		from = index + 1;
+	}
+	const rest = lower.indexOf('?rest_route=');
+	if (rest !== -1) {
+		const start = rest > 0 && lower.charAt(rest - 1) === '/' ? rest - 1 : rest;
+		if (start < cut) cut = start;
+	}
+	return cut;
 }
 
 export class SiteIdentityClashError extends Error {
