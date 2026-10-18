@@ -263,6 +263,9 @@ for (const name of themeNames) {
 		['destructive-foreground', 'destructive'],
 		['action-foreground', 'action'],
 		['warning-foreground', 'warn'],
+		['info-foreground', 'info'],
+		['info', 'card'],
+		['info', 'background'],
 	]) {
 		test(`${name}: ${text} on ${ground} reaches 4.5:1`, () => {
 			const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
