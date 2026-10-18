@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
+import { createStoreDB, createUserDB } from '@wcpos/database';
 import { platformFetch } from '@wcpos/hooks/platform-fetch';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
@@ -37,7 +37,7 @@ import {
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '@wcpos/query/user-db';
-import { upsertSiteData } from '@wcpos/query/user-db';
+import { upsertEmbeddedCredentials, upsertSiteData } from '@wcpos/query/user-db';
 
 import { initialProps } from './initial-props';
 import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
@@ -1009,9 +1009,8 @@ const processInitialPropsStep: HydrationStep = {
 		// full-document write and would drop the locally-owned `wp_credentials`
 		// link array, which the embedded payload never carries (#902).
 		const siteDoc = await upsertSiteData(userDB, initialSite);
-		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
-			sanitizeWPCredentialsData(initialProps.wp_credentials)
-		);
+		// The credential merges for the same reason: its `stores` links reset to `[]` otherwise.
+		const wpCredentialsDoc = await upsertEmbeddedCredentials(userDB, initialProps.wp_credentials);
 
 		// Handle URL store parameter
 		let urlStoreID: number | null = null;
