@@ -371,6 +371,34 @@ it('a refresh keeps a reversal claim the server has not acknowledged, and the ca
 	expect(target.getLatest().toJSON()).not.toHaveProperty('actor');
 	expect(reversal.getLatest().sync_status).toBe('pending');
 });
+it('a refresh drops a reversal claim whose reversal the server refused', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await target.incrementalPatch({ sync_status: 'synced' });
+	const reversal = await voidMovement(db, target.id, 7);
+	// The refusal leaves the original standing on the server; the reversal row is `failed`.
+	await reversal.incrementalPatch({ sync_status: 'failed', sync_error: 'void_refused' });
+	const listRow = serverListRow(row.getLatest().toJSON());
+	http.get.mockImplementation(async (url: string) =>
+		url === 'sessions'
+			? { data: [listRow] }
+			: {
+					data: {
+						...listRow,
+						expected: { cash: '95' },
+						movements: [serverMovementRow(target.getLatest().toJSON())],
+					},
+				}
+	);
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(target.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', voided_by: null });
+});
 it('a refresh adopts a void made on another device, and keeps a movement posted meanwhile', async () => {
 	const row = await open();
 	const movement = await recordMovement(db, {

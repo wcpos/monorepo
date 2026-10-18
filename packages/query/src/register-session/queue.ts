@@ -61,14 +61,31 @@ export function movementFromServer(server: ServerMovementRow): MovementContent {
 
 /**
  * The one rule for landing a server movement over the local one: the server's columns win,
- * except a local reversal claim (`voided_by`) the server has not acknowledged yet, which must
- * survive or the closure renders the movement as never voided. The server lets `voided_by`
- * change only while it is null, so a void it already holds (made on another device) is final
- * and replaces the local claim. Used by the POST acknowledgement and by the refresh, which
- * keep their own pending policies.
+ * except a local reversal claim (`voided_by`) whose reversal is still on its way to the
+ * server, which must survive or the closure renders the movement as never voided. The server
+ * lets `voided_by` change only while it is null, so a void it already holds (made on another
+ * device) is final and replaces the claim; and a claim whose reversal the server refused
+ * (`failed`) is dropped, since the refusal leaves the original standing. Used by the POST
+ * acknowledgement and by the refresh, which keep their own pending policies.
  */
-export function mergeServerMovement(local: CashMovementRow, server: MovementContent) {
-	return { ...local, ...server, ...synced, voided_by: server.voided_by ?? local.voided_by };
+export function mergeServerMovement(
+	local: CashMovementRow,
+	server: MovementContent,
+	claimPending: boolean
+) {
+	return {
+		...local,
+		...server,
+		...synced,
+		voided_by: server.voided_by ?? (claimPending ? local.voided_by : null),
+	};
+}
+
+/** Whether the reversal a local claim names is still pending; a missing or failed one is not. */
+async function reversalPending(movements: CashMovementCollection, local: CashMovementRow) {
+	if (!local.voided_by) return false;
+	const reversal = await movements.findOne(local.voided_by).exec();
+	return reversal?.getLatest().sync_status === 'pending';
 }
 
 /** Adopt a server movement row over the local one: merged, never replaced (see `adoptSessionRow`). */
@@ -82,8 +99,10 @@ export async function adoptMovementRow(
 		await movements.incrementalUpsert({ ...adopted, ...synced });
 		return;
 	}
-	await local.incrementalModify((current) =>
-		current.sync_status === 'pending' ? current : mergeServerMovement(current, adopted)
+	await local.incrementalModify(async (current) =>
+		current.sync_status === 'pending'
+			? current
+			: mergeServerMovement(current, adopted, await reversalPending(movements, current))
 	);
 }
 
@@ -432,7 +451,9 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 				});
 				try {
 					const accepted = movementFromServer(response.data as ServerMovementRow);
-					await row.incrementalModify((local) => mergeServerMovement(local, accepted));
+					await row.incrementalModify(async (local) =>
+						mergeServerMovement(local, accepted, await reversalPending(movements, local))
+					);
 				} catch (error) {
 					// The store already accepted this movement; see the `persist` note in send().
 					throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
