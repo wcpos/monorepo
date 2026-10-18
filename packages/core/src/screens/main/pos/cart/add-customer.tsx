@@ -20,6 +20,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { recordCustomerLink } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -29,7 +30,7 @@ import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 import { usePanelSide } from '../contexts/overlay-side';
-import { customerLinkIdentity, recordCustomerLink } from './new-customer-link';
+import { customerLinkIdentity } from './new-customer-link';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 

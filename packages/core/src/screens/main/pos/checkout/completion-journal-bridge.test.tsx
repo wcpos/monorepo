@@ -14,10 +14,10 @@ import {
 	markLegacyDrainPending,
 	rememberLegacyUnsentChanges,
 } from '@wcpos/utils/unsent-changes';
+import * as journal from '@wcpos/query/store-local';
+import { pendingCompletions, recordCompletionAttempt } from '@wcpos/query/store-local';
 
 import { createActionContext } from '../../../../extensions/actions';
-import * as journal from './completion-journal';
-import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
 import { SaleCompletionBridge } from './completion-journal-bridge';
 import * as owner from './sale-completion';
 

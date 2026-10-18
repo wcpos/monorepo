@@ -1,4 +1,5 @@
 import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
@@ -9,9 +10,10 @@ import {
 	pendingCompletions,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
-} from './completion-journal';
+} from '../../src/store-local';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
+addRxPlugin(RxDBMigrationSchemaPlugin);
 let db: StoreDatabase;
 beforeEach(async () => {
 	db = await createRxDatabase({

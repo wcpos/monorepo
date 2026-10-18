@@ -9,6 +9,11 @@ import {
 	legacyUnsentOrderUuids,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
+import {
+	failCompletionAttempt,
+	pendingCompletions,
+	resolveCompletionAttempt,
+} from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import {
@@ -16,11 +21,6 @@ import {
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { findEngineResident } from '../../hooks/mutations/use-local-mutation';
-import {
-	failCompletionAttempt,
-	pendingCompletions,
-	resolveCompletionAttempt,
-} from './completion-journal';
 import { useSaleContext } from './hooks/use-sale-context';
 import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 

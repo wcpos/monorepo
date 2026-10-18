@@ -10,11 +10,11 @@ import {
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
+import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
 import { isActionRefusal } from '../../../../extensions/actions';
 import { commitSale, type SaleCommitRequest } from '../checkout/commit-sale';
 import { recordSaleAttempt, type SaleContext } from '../checkout/sale-completion';
-import { resolveCompletionAttempt } from '../checkout/completion-journal';
 import {
 	type BoundaryResult,
 	crossesPaidBalanceBoundary,

@@ -14,10 +14,10 @@ import {
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
+import { pendingCompletions } from '@wcpos/query/store-local';
 
 import { config } from '../../../../../jest/cart-write';
 import { createActionContext, registerActionHook } from '../../../../extensions/actions';
-import { pendingCompletions } from '../checkout/completion-journal';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { enqueueCartAction } from '../hooks/enqueue-cart-action';
