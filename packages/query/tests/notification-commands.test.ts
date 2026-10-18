@@ -103,6 +103,25 @@ it.each([
 	await expect(commands[name](database, row.subscriberId)).resolves.toBe(0);
 });
 
+it.each([true, false])(
+	'refuses a row without an id before any read or write (preserveLocalState %s)',
+	async (preserveLocalState) => {
+		const { database, collection } = fixture([]);
+		await expect(
+			query.upsertNotification(database, { ...row, id: '' }, { preserveLocalState })
+		).rejects.toThrow('Cannot save a notification without an id');
+		expect(collection.findOne).not.toHaveBeenCalled();
+		expect(collection.insert).not.toHaveBeenCalled();
+		expect(collection.upsert).not.toHaveBeenCalled();
+	}
+);
+
+it('reports a missing id even when the database is unavailable', async () => {
+	await expect(
+		query.upsertNotification(null, { ...row, id: '' }, { preserveLocalState: true })
+	).rejects.toThrow('Cannot save a notification without an id');
+});
+
 it('upserts without preserving state when requested', async () => {
 	const { database, stored, collection } = fixture([{ ...row, status: 'read', seen: true }]);
 	await query.upsertNotification(database, row, { preserveLocalState: false });
