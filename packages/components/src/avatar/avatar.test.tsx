@@ -21,13 +21,16 @@ jest.mock('../image', () => ({
 		onError,
 		onLoad,
 		source,
+		accessibilityLabel,
 	}: {
 		onError: () => void;
 		onLoad: () => void;
 		source?: { uri?: string } | string;
+		accessibilityLabel?: string;
 	}) => (
 		<img
 			alt="Avatar"
+			data-label={accessibilityLabel}
 			src={typeof source === 'string' ? source : source?.uri}
 			onError={onError}
 			onLoad={onLoad}
@@ -117,12 +120,31 @@ it('contains no arbitrary text sizes or palette greys', () => {
 	expect(source).not.toContain('gray');
 });
 
-it('keeps the initials under the picture until it has loaded', () => {
+it('keeps the initials under the picture through its load and fade', () => {
 	const { container } = render(
 		<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="AL" />
 	);
 	expect(container.querySelector('img')).not.toBeNull();
 	expect(container.textContent).toBe('AL');
 	fireEvent.load(container.querySelector('img')!);
-	expect(container.textContent).toBe('');
+	expect(container.querySelector('img')).not.toBeNull();
+	expect(container.textContent).toBe('AL');
+});
+
+it('names the picture by its initials, hides the fallback beneath, and derives nothing from an icon', () => {
+	const { container, rerender } = render(
+		<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="PK" />
+	);
+	expect(container.querySelector('img')!.getAttribute('data-label')).toBe('PK');
+	expect(container.querySelector('span')!.parentElement!.getAttribute('aria-hidden')).toBe('true');
+	rerender(<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="PK" icon="user" />);
+	expect(container.querySelector('img')!.getAttribute('data-label')).toBeNull();
+	rerender(
+		<Avatar
+			source={{ uri: 'https://shop.example/me.jpg' }}
+			fallback="PK"
+			accessibilityLabel="Paul"
+		/>
+	);
+	expect(container.querySelector('img')!.getAttribute('data-label')).toBe('Paul');
 });

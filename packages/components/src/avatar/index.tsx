@@ -139,14 +139,12 @@ export function Avatar({
 	shape,
 	variant,
 	className,
-	onLoad,
 	onError,
 	...imageProps
 }: AvatarProps) {
 	const resolvedSource = resolveSource(source);
 	const [errored, setErrored] = React.useState(false);
-	const [loaded, setLoaded] = React.useState(false);
-	// Reset error and load state if the source changes (e.g. site URL edited) by adjusting
+	// Reset error state if the source changes (e.g. site URL edited) by adjusting
 	// state during render instead of in an effect — React's recommended pattern for
 	// resetting state when a prop changes (https://react.dev/learn/you-might-not-need-an-effect).
 	const sourceKey = getSourceKey(resolvedSource);
@@ -154,7 +152,6 @@ export function Avatar({
 	if (sourceKey !== prevSourceKey) {
 		setPrevSourceKey(sourceKey);
 		setErrored(false);
-		setLoaded(false);
 	}
 
 	const hasSource = Boolean(resolvedSource);
@@ -186,19 +183,27 @@ export function Avatar({
 		</Text>
 	) : null;
 
+	// The picture's accessible name: the caller's, else the initials; an icon (the Guest) is a
+	// glyph, not a name, and a picture the caller marked decorative is left unnamed.
+	const decorative = imageProps.accessible === false || Boolean(imageProps['aria-hidden']);
+	const imageLabel =
+		imageProps.accessibilityLabel ??
+		imageProps.alt ??
+		(icon || decorative ? undefined : initials || undefined);
+
 	return (
 		<View className={containerClass}>
-			{/* The initials stand until the picture has loaded: a person with no Gravatar waits for
-			    its 404, and an empty accent disc in the meantime reads as broken. */}
-			{!(showImage && loaded) && fallbackContent}
+			{/* The initials stay mounted under the picture for its whole life: a person with no
+			    Gravatar waits for its 404, and on web expo-image reports the load before its 250 ms
+			    fade, so dropping them on load drew an empty accent disc. The opaque picture covers
+			    them; the container clips. */}
+			{/* Hidden from assistive tech while a picture shows, so the name is announced once. */}
+			{fallbackContent && <View aria-hidden={showImage}>{fallbackContent}</View>}
 			{showImage && (
 				<Image
 					{...imageProps}
+					accessibilityLabel={imageLabel}
 					source={resolvedSource}
-					onLoad={(event) => {
-						setLoaded(true);
-						onLoad?.(event);
-					}}
 					onError={(event) => {
 						setErrored(true);
 						onError?.(event);
