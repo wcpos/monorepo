@@ -66,3 +66,32 @@ it.each(['products', 'variations', 'customers', 'coupons'] as const)(
 		expect(written[0]).toMatchObject({ remoteId: '7', remoteKey: '7' });
 	}
 );
+
+it('order acknowledgement retains the Woo id on an id-less resident hint', async () => {
+	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+	const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000077' };
+	const resident = {
+		payload: { meta_data: [uuid, hint] },
+		local: { pendingMutationIds: ['hint'] },
+	};
+	const db = {
+		collections: {
+			orders: {
+				findOne: () => ({
+					exec: async () => ({
+						incrementalModify: async (modify: (row: typeof resident) => typeof resident) =>
+							Object.assign(resident, modify(resident)),
+					}),
+				}),
+			},
+		},
+	} as unknown as RxDatabase;
+	await writeFacetFor('orders')!.reconcile(db, {
+		recordId: uuid.value,
+		remoteId: remoteId(7),
+		currentRevision: 'r1',
+		document: { id: 7, meta_data: [uuid, { ...hint, id: 8 }] },
+		mutation: { mutationId: 'hint', operation: 'update', recordId: uuid.value },
+	});
+	expect(resident.payload.meta_data).toContainEqual({ ...hint, id: 8 });
+});

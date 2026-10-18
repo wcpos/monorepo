@@ -24,6 +24,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { protectOrderMeta } from './protected-order-meta';
 import { plainPatch } from '../../pos/commands/plain-patch';
 import {
 	getCurrentBoundRegisterId,
@@ -332,6 +333,7 @@ export async function patchAndEnqueueEngineResident(input: {
 				changes =
 					typeof input.changes === 'function' ? input.changes(currentPayload) : input.changes;
 				const collection = input.collection;
+				if (collection === 'orders') changes = protectOrderMeta(currentPayload, changes);
 				shouldEnqueue =
 					typeof input.changes !== 'function' ||
 					(Object.keys(changes).length > 0 && assertsSomething(collection, changes));

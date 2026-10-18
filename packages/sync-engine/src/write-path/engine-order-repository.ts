@@ -6,7 +6,6 @@ import {
 	hasPosRefundStamp,
 	normalizeCheckpoint,
 	type OrderDocument,
-	POS_META_KEYS,
 	reconcileRefundIds,
 	type RemoteId,
 	type SyncCheckpoint,
@@ -22,6 +21,7 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
+import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
@@ -32,6 +32,7 @@ import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seed
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';
+export { POS_ORDER_IDENTITY_META_KEYS } from './merge-protected-order-meta';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 /**
@@ -41,14 +42,6 @@ const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
  * stashes the counts its database held for orders the current one does not hold yet.
  */
 export const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
-
-/** POS identity and money-ownership metadata whose resident values survive server adoption. */
-export const POS_ORDER_IDENTITY_META_KEYS = [
-	POS_META_KEYS.user,
-	POS_META_KEYS.store,
-	POS_META_KEYS.taxBasedOn,
-	'_wcpos_money_owner_hint',
-] as const;
 
 type StoredOrderDoc = {
 	toJSON(): unknown;
@@ -323,33 +316,13 @@ export class EngineOrderRepository {
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
-			const serverMeta = Array.isArray(entry.storedDocument.payload.meta_data)
-				? [...entry.storedDocument.payload.meta_data]
-				: [];
-			for (const key of POS_ORDER_IDENTITY_META_KEYS) {
-				const localEntry = localMeta.find((meta) => meta?.key === key);
-				if (!localEntry) continue;
-				const index = serverMeta.findIndex((meta) => meta?.key === key);
-				if (index === -1) {
-					serverMeta.push(localEntry);
-					continue;
-				}
-				// The money-owner hint is one-way: `server` is the only value that means anything
-				// and it is never un-set by a till, so an incoming `server` beats a local
-				// tombstone or stale value (another till's older meta edit) instead of being
-				// masked by it. Everything else keeps the local value.
-				const incoming = serverMeta[index];
-				const winner =
-					key === '_wcpos_money_owner_hint' &&
-					incoming?.value === 'server' &&
-					localEntry.value !== 'server'
-						? incoming
-						: localEntry;
-				// A Woo-assigned id is kept whichever value wins: a resident entry written before
-				// its acknowledgement has none, and a later full meta save without the id would
-				// make Woo append a duplicate row.
-				serverMeta[index] = { ...winner, id: winner.id ?? localEntry.id ?? incoming?.id };
-			}
+			const serverMeta = mergeProtectedOrderMeta(
+				localMeta,
+				Array.isArray(entry.storedDocument.payload.meta_data)
+					? entry.storedDocument.payload.meta_data
+					: []
+			);
+
 			if (serverMeta.length > 0) {
 				entry.storedDocument = {
 					...entry.storedDocument,

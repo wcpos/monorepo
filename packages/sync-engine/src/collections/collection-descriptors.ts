@@ -46,6 +46,7 @@ import {
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
+import { mergeProtectedOrderMeta } from '../write-path/merge-protected-order-meta';
 import {
 	type BarcodeSelectors,
 	barcodeSelectorsFor,
@@ -352,14 +353,11 @@ function ackBookkeeping(options: {
 						const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
 							? [...adoptedPayload.meta_data]
 							: [];
-						for (const key of preserveMetaKeys) {
-							const localEntry = localMeta.find((entry) => entry?.key === key);
-							if (!localEntry) continue;
-							const index = adoptedMeta.findIndex((entry) => entry?.key === key);
-							if (index === -1) adoptedMeta.push(localEntry);
-							else adoptedMeta[index] = localEntry;
-						}
-						adoptedPayload = { ...adoptedPayload, meta_data: adoptedMeta };
+
+						adoptedPayload = {
+							...adoptedPayload,
+							meta_data: mergeProtectedOrderMeta(localMeta, adoptedMeta),
+						};
 					}
 					adoptionPatch = withOrderColumns({ ...adoptionPatch, payload: adoptedPayload });
 				}

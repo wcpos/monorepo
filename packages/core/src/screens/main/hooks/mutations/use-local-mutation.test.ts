@@ -1051,10 +1051,11 @@ it('register attribution starts with resident metadata and retains a simultaneou
 	expect(mockWrite).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			payload: {
-				// A caller-supplied array is taken as-is (never merged with resident
-				// entries, which could collapse repeated keys); only the register is appended.
+				// Protected resident entries survive replacement; the caller's ledger edit
+				// still lands, while unprotected resident entries are not carried through.
 				meta_data: [
 					{ key: '_wcpos_payments', value: 'new' },
+					{ key: '_pos_user', value: 'original' },
 					{ key: '_wcpos_register', value: 'register' },
 					{ key: '_wcpos_till', value: 'installation' },
 				],
@@ -1169,10 +1170,10 @@ it.each([undefined, 17])(
 			registerId: 'different',
 			changes: { meta_data: [{ key: 'caller', value: 'keep' }] },
 		});
-		expect(stored.payload.meta_data).toEqual([{ key: 'caller', value: 'keep' }, register]);
+		expect(stored.payload.meta_data).toEqual([register, { key: 'caller', value: 'keep' }]);
 		expect(mockWrite).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				payload: { meta_data: [{ key: 'caller', value: 'keep' }, register] },
+				payload: { meta_data: [register, { key: 'caller', value: 'keep' }] },
 			})
 		);
 	}
@@ -1356,6 +1357,36 @@ describe('durable divergence ownership', () => {
 				});
 				expect(stored.payload.total).toBe('99');
 			}
+		}
+	);
+});
+
+describe('protected order meta at the mutation boundary', () => {
+	it.each([{ meta_data: [] }, { meta_data: [{ key: '_wcpos_money_owner_hint', value: null }] }])(
+		'localPatch restores omitted or tombstoned protected meta: %j',
+		async ({ meta_data }) => {
+			activeScopeId = 'scope-1';
+			mockStatus.mockReturnValue({ activeScopeId });
+			mockWrite.mockResolvedValue({});
+			const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+			const stored = { payload: { meta_data: [hint] } };
+			const resident = {
+				toJSON: () => stored,
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+					Object.assign(stored, modify(stored)),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const { result } = renderHook(() => useLocalMutation());
+			await result.current.localPatch({
+				document: { uuid: 'order', collection: { name: 'orders' } } as never,
+				data: { meta_data },
+			});
+			expect(stored.payload.meta_data).toEqual([hint]);
+			expect(mockWrite).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					payload: expect.objectContaining({ meta_data: [hint] }),
+				})
+			);
 		}
 	);
 });
