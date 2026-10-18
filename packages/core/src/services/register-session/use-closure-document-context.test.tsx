@@ -42,6 +42,10 @@ jest.mock('@wcpos/query/user-db', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(row: T, select: (value: T) => unknown) => (row ? select(row) : undefined),
 }));
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: () => session.wpCredentials.populate$(),
+}));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/use-locale', () => ({
 	...jest.requireActual('../../hooks/use-locale'),

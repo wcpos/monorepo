@@ -1,13 +1,15 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { filter } from 'rxjs';
 import { format as formatDate } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
-import type { RegisterSessionRow, WPCredentialsDocument } from '@wcpos/database';
+import type { RegisterSessionRow } from '@wcpos/database';
 import { readClosure } from '@wcpos/query/register-session';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
@@ -77,8 +79,11 @@ function SessionCardContent({
 }) {
 	const active = session?.status === 'open' || session?.status === 'counting';
 	const { site } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const cashiers = useObservableState(source, []);
 	const { timezone } = useStoreDay(storeId);
 	const viewedStore = useViewedStore(storeId);
 	const settings = useDocField(viewedStore, (value) => value);

@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import { filter } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
-import type { ClosureDocument, ClosureRow, WPCredentialsDocument } from '@wcpos/database';
-import { readClosure } from '@wcpos/query/register-session';
+import type { ClosureRow } from '@wcpos/database';
+import { readClosure, type ReadonlyClosureDocument } from '@wcpos/query/register-session';
 
 import { useStoreSession } from '../../contexts/app-state';
 import { recordRegisterFact, useRegisterActor } from './audit';
@@ -19,15 +21,18 @@ import { useResolvedPrinter } from '../../screens/main/receipt/hooks/use-resolve
 const REPORT_TEMPLATE = { id: 'register-session', output_type: 'escpos', paper_width: null };
 
 export function useSessionReport(
-	closure?: ClosureDocument | null,
+	closure?: ReadonlyClosureDocument | null,
 	isReprint = false,
 	knownClosure?: ClosureRow,
 	previewEnabled = true
 ) {
 	const actor = useRegisterActor();
 	const { site, storeDB } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const cashiers = useObservableState(source, []);
 	const { session, expected, blind, binding, movements, salesCount } = useRegisterSession();
 	const snapshot = useDocField(closure, (row) => row) ?? knownClosure;
 	const { resolvedPrinter } = useResolvedPrinter({ template: REPORT_TEMPLATE });

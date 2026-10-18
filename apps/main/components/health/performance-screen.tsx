@@ -16,7 +16,7 @@ import { useT } from '@wcpos/core/contexts/translations';
 import { AreaPage } from '@wcpos/core/screens/main/components/navigation-area/area-page';
 import { Section } from '@wcpos/core/screens/main/health/components';
 import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
-import { useLocalMutation } from '@wcpos/core/screens/main/hooks/mutations/use-local-mutation';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 import { useEngineStatus } from '@wcpos/core/screens/main/hooks/use-engine-monitor';
 
 import { getMetricsBuckets } from '../../lib/metrics';
@@ -54,7 +54,6 @@ const formatCount = (value: number) => value.toLocaleString();
 export function PerformanceScreen() {
 	const t = useT();
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const status = useEngineStatus();
 
 	const storedCheckIntervalMs =
@@ -111,7 +110,7 @@ export function PerformanceScreen() {
 		sync_pull_batch_size?: number;
 	}) => {
 		// The SyncConfigBridge observes these fields and re-arms the engine live.
-		await localPatch({ document: store, data });
+		await patchStoreSettings(store, data, t);
 	};
 
 	const persistDebounced = (data: {

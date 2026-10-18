@@ -103,8 +103,9 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ store, site }) }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
 }));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
 jest.mock('../hooks/use-default-customer', () => ({

@@ -115,6 +115,19 @@ describe('package exports', () => {
 			filePath: fs.realpathSync(nodeResolved),
 		});
 	});
+	it('resolves the user-db bootstrap subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/user-db/bootstrap');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'user-db/bootstrap'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
 
 	it('rejects the removed query subpaths', () => {
 		for (const specifier of ['@wcpos/query/engine-compat', '@wcpos/query/requirements']) {

@@ -3,14 +3,14 @@ import * as React from 'react';
 import type {
 	CurrentSessionIDs,
 	ExtraDataSlot,
+	ReadonlySiteRecord,
+	ReadonlyStoreRecord,
+	ReadonlyUserRecord,
+	ReadonlyWpCredentialsRecord,
 	SessionAppState,
-	SiteDocument,
 	StoreDatabase,
-	StoreDocument,
 	TranslationsState,
 	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
 } from '@wcpos/query/user-db';
 import { bindSurvivingStoreLogs, hydrateUserSession } from '@wcpos/query/user-db';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -18,7 +18,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { switchUserSessionStore } from './hydration-steps';
+import { switchUserSessionStore, toHydrationContext } from './hydration-steps';
 import {
 	clearStoreSession as clearPersistedStoreSession,
 	commitStoreSession,
@@ -35,11 +35,11 @@ export interface AppState extends HydrationContext {
 	userDB: UserDatabase;
 	appState: SessionAppState;
 	translationsState: TranslationsState;
-	user: UserDocument;
+	user: ReadonlyUserRecord;
 	updateAppState: (updates: Partial<HydrationContext>) => void;
 	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
 	logout: () => Promise<void>;
-	switchStore: (store: StoreDocument) => Promise<void>;
+	switchStore: (store: ReadonlyStoreRecord) => Promise<void>;
 }
 
 /**
@@ -48,9 +48,9 @@ export interface AppState extends HydrationContext {
  * the `(app)` stack is mounted behind `Stack.Protected guard={hasStoreSession(state)}`.
  */
 export interface StoreSessionState extends AppState {
-	site: SiteDocument;
-	wpCredentials: WPCredentialsDocument;
-	store: StoreDocument;
+	site: ReadonlySiteRecord;
+	wpCredentials: ReadonlyWpCredentialsRecord;
+	store: ReadonlyStoreRecord;
 	storeDB: StoreDatabase;
 	extraData: ExtraDataSlot;
 }
@@ -139,10 +139,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			});
 			try {
 				updateAppState(
-					(await commitStoreSession(state.userDB!, {
-						ids: { siteID, wpCredentialsID, storeID },
-						session: sessionData,
-					})) as Partial<HydrationContext>
+					toHydrationContext(
+						await commitStoreSession(state.userDB!, {
+							ids: { siteID, wpCredentialsID, storeID },
+							session: sessionData,
+						})
+					)
 				);
 			} catch (error) {
 				if (error instanceof IncompleteStoreSessionError) {
@@ -161,7 +163,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * recovery below, so anything added to signing out reaches both.
 	 */
 	const clearStoreSession = React.useCallback(async () => {
-		updateAppState((await clearPersistedStoreSession(state.userDB!)) as Partial<HydrationContext>);
+		updateAppState(toHydrationContext(await clearPersistedStoreSession(state.userDB!)));
 	}, [state.userDB, updateAppState]);
 
 	const logout = React.useCallback(async () => {
@@ -181,7 +183,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	}, [clearStoreSession]);
 
 	const switchStore = React.useCallback(
-		async (store: StoreDocument): Promise<void> => {
+		async (store: ReadonlyStoreRecord): Promise<void> => {
 			const current = await state.appState!.get('current');
 			if (store.localID === current?.storeID) {
 				return;
@@ -205,7 +207,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				}
 				throw error;
 			}
-			updateAppState(sessionData as Partial<HydrationContext>);
+			updateAppState(toHydrationContext(sessionData));
 		},
 		[state.appState, state.userDB, updateAppState]
 	);
@@ -255,7 +257,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			sessionLogger.warn('Could not clear the incomplete session pointer', {
 				context: { error: getErrorMessage(error) },
 			});
-			updateAppState(SIGNED_OUT_SESSION as Partial<HydrationContext>);
+			updateAppState(toHydrationContext(SIGNED_OUT_SESSION));
 		});
 	}, [missingSessionFields, state.storeDB, state.appState, clearStoreSession, updateAppState]);
 

@@ -10,7 +10,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import type { StoreDocument } from '@wcpos/database';
+import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
 import type { EngineRecord } from '@wcpos/query';
 
 import { QueryStateProvider, useQueryState } from '../../../../../query';
@@ -243,7 +243,7 @@ describe('order filter pills', () => {
 	});
 
 	it('sets either a numeric store or created_via value and clears the composite field', () => {
-		const stores = new ObservableResource(of([{ id: 12, name: 'Madrid' } as StoreDocument]));
+		const stores = new ObservableResource(of([{ id: 12, name: 'Madrid' } as ReadonlyStoreRecord]));
 		mockSelectOption = { value: '12', label: 'Madrid' };
 		const { unmount } = renderPill(<StorePill resource={stores} />);
 		fireEvent.click(screen.getByTestId('select-option'));
@@ -264,7 +264,7 @@ describe('order filter pills', () => {
 	// the entity while the open menu read correctly.
 	it('decodes the store name in the closed pill, not just in the menu', () => {
 		const stores = new ObservableResource(
-			of([{ id: 12, name: 'Ben &amp; Jerry&#039;s' } as StoreDocument])
+			of([{ id: 12, name: 'Ben &amp; Jerry&#039;s' } as ReadonlyStoreRecord])
 		);
 		renderPill(<StorePill resource={stores} />, { store: '12' });
 

@@ -19,6 +19,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { LockedRow } from './components/locked-row';
 import { SavedFieldProvider, savedKeys, useMarkSaved } from './components/saved-mark';
@@ -31,7 +32,6 @@ import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
 import { TaxBasedOnSelect } from '../components/tax-based-on-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { useExtraData } from '../contexts/extra-data';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { INHERIT_TAX_CLASS, taxClassFromWire } from '../hooks/tax-class';
 
 const formSchema = z.object({
@@ -58,7 +58,6 @@ function TaxSettingsForm() {
 	const { store, site } = useStoreSession();
 	const t = useT();
 	const router = useRouter();
-	const { localPatch } = useLocalMutation();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as {
 		name: string;
@@ -111,17 +110,18 @@ function TaxSettingsForm() {
 	const handleChange = React.useCallback(
 		async (data: Partial<z.infer<typeof formSchema>>) => {
 			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
-			// `localPatch` logs and toasts a failed write and resolves undefined.
+			// `patchStoreSettings` logs and toasts a failed write and resolves undefined.
 			const keys = savedKeys(store.getLatest?.() ?? store, data);
-			const result = await localPatch({
-				document: store,
-				data: Object.fromEntries(
+			const result = await patchStoreSettings(
+				store,
+				Object.fromEntries(
 					Object.entries(data).filter(([key]) => Object.keys(formSchema.shape).includes(key))
 				),
-			});
+				t
+			);
 			if (result && keys.length > 0) markSaved(keys);
 		},
-		[localPatch, store, markSaved]
+		[t, store, markSaved]
 	);
 
 	useFormChangeHandler({

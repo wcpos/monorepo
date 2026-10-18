@@ -1,9 +1,10 @@
 import * as React from 'react';
 
+import { filter } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
-import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -20,8 +21,11 @@ export function CashiersCard() {
 		{ storeId } = useReportsPeriod(),
 		{ site } = useStoreSession();
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const directory = useObservableState(source) as WPCredentialsDocument[] | undefined;
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const directory = useObservableState(source);
 	const rows = React.useMemo(() => cashiers(totals), [totals]);
 	if (!store || !directory)
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;

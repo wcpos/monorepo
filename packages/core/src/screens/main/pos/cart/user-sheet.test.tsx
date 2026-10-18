@@ -5,9 +5,15 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { of } from 'rxjs';
 
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
+import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { UserSheet, useSalesToday } from './user-sheet';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeSiteCredentials: () => of(mockCredentials),
+	observeCredentialStores: () => of(PENDING_USER_DB_READ, mockOtherStores),
+}));
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -35,6 +41,9 @@ jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
 
+let mockOtherStores = [{ id: 2, localID: 'other-store' }];
+const mockLogout = jest.fn();
+const mockReplace = jest.fn();
 let mockStoreId = 2;
 let mockStores = ['store-a'];
 const mockLogin = jest.fn(async (_input: unknown) => {});
@@ -42,7 +51,6 @@ const mockCredentials = [
 	{
 		uuid: 'other',
 		display_name: 'Other cashier',
-		populate: async () => [{ id: 2, localID: 'other-store' }],
 	},
 ];
 jest.mock('observable-hooks', () => ({
@@ -51,7 +59,7 @@ jest.mock('observable-hooks', () => ({
 }));
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn(), push: mockPush }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, push: mockPush }) }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/database', () => ({
 	clearAllDB: jest.fn(),
@@ -78,7 +86,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
 		store: { id: mockStoreId },
 		site: { uuid: 'site', home: 'https://shop.example', populateResource: () => ({}) },
-		logout: jest.fn(),
+		logout: mockLogout,
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -142,6 +150,16 @@ it('switches credentials without retaining the previous cashier authentication o
 		})
 	);
 	expect(requestStateManager.getRefreshedToken()).toBeNull();
+});
+it('signs out to connect when the other cashier has no stores', async () => {
+	mockOtherStores = [];
+	mockLogin.mockClear();
+	render(<UserSheet open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+	await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/connect'));
+	expect(mockLogout).toHaveBeenCalledTimes(1);
+	expect(mockLogin).not.toHaveBeenCalled();
+	mockOtherStores = [{ id: 2, localID: 'other-store' }];
 });
 afterEach(() => requestStateManager.reset());
 

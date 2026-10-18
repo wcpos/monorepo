@@ -1,9 +1,15 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
+import {
+	observeCredentialStores,
+	observeSiteCredentials,
+	PENDING_USER_DB_READ,
+} from '@wcpos/query/user-db';
 import { Button } from '@wcpos/components/button';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
@@ -11,7 +17,6 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
-import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useStoreSession } from '../../../contexts/app-state';
@@ -64,8 +69,14 @@ export function Bar({
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
-	const source = React.useMemo(() => wpCredentials.populate$('stores'), [wpCredentials]);
-	const stores = useObservableState(source, []) as StoreDocument[];
+	const source = React.useMemo(
+		() =>
+			observeCredentialStores(wpCredentials).pipe(
+				filter((value) => value !== PENDING_USER_DB_READ)
+			),
+		[wpCredentials]
+	);
+	const stores = useObservableState(source, []);
 	const directory = useRegisterDirectory(
 		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
 	);
@@ -212,8 +223,11 @@ export function Bar({
 export function CashierButton({ scope, onScopeChange }: ScopeProps) {
 	const t = useT();
 	const { site } = useStoreSession();
-	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const cashiers = useObservableState(source, []);
 	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	return (
 		<Popover>

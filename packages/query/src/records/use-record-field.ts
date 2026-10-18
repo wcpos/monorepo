@@ -3,9 +3,10 @@ import { combineLatest, defer, type Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
-import type { TemporaryOrderDocument } from '@wcpos/database';
+import type { ClosureRow, TemporaryOrderDocument } from '@wcpos/database';
 
 import type { EngineRecord, EngineRecordCollectionName, EngineRecordShape } from './engine-record';
+import type { ReadonlyClosureDocument } from '../register-session/reads';
 import type { ReadonlyUserDatabaseRecord } from '../user-db/records';
 import type { RxDocument, RxState } from 'rxdb';
 
@@ -146,6 +147,10 @@ export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxDocument<TState> | RxStateLike<TState> | null | undefined,
 	select: Selector<TState, R>
 ): R | undefined;
+export function useDocField<R>(
+	source: ReadonlyClosureDocument | null | undefined,
+	select: Selector<ClosureRow, R>
+): R | undefined;
 export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
 	source: TRecord,
 	select: Selector<ReturnType<TRecord['toJSON']>, R>
@@ -155,7 +160,13 @@ export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
 	select: Selector<ReturnType<TRecord['toJSON']>, R>
 ): R | undefined;
 export function useDocField<TState extends Record<string, unknown>, R>(
-	source: RxDocument<TState> | RxStateLike<TState> | ReadonlyUserDatabaseRecord | null | undefined,
+	source:
+		| RxDocument<TState>
+		| RxStateLike<TState>
+		| ReadonlyUserDatabaseRecord
+		| ReadonlyClosureDocument
+		| null
+		| undefined,
 	select: Selector<TState, R>
 ): R | undefined {
 	return useSelectedValue(source, select, sourceData$);
@@ -170,7 +181,8 @@ function recordData$<TDoc extends Record<string, unknown>>(
 }
 
 function sourceData$<TState extends Record<string, unknown>>(
-	source: RxDocument<TState> | RxStateLike<TState> | ReadonlyUserDatabaseRecord
+	source:
+		RxDocument<TState> | RxStateLike<TState> | ReadonlyUserDatabaseRecord | ReadonlyClosureDocument
 ): Observable<TState> {
 	if (isRxDocumentLike(source)) {
 		return recordData$(source as RxDocument<TState>);

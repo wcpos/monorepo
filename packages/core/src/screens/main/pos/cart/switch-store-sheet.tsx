@@ -10,7 +10,7 @@ import { Loader } from '@wcpos/components/loader';
 import { Portal } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { StoreDocument } from '@wcpos/database';
+import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -80,7 +80,7 @@ function StoreRows({
 	onSwitch,
 }: {
 	isSwitching: boolean;
-	onSwitch: (store: StoreDocument) => Promise<void>;
+	onSwitch: (store: ReadonlyStoreRecord) => Promise<void>;
 }) {
 	const { wpCredentials, store } = useStoreSession();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));

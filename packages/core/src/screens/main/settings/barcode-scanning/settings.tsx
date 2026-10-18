@@ -20,6 +20,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { Platform } from '@wcpos/utils/platform';
 import { useDocField } from '@wcpos/query';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -34,7 +35,6 @@ import {
 } from '../../pos/products/scan-sound-themes';
 import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from '../components/saved-mark';
 import { SettingsRow } from '../components/settings-row';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
 	barcode_scanning_avg_time_input_threshold: z.number().default(24),
@@ -64,7 +64,6 @@ function BarcodeSettingsForm() {
 	const markSaved = useMarkSaved();
 	const { store } = useStoreSession();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
@@ -101,15 +100,12 @@ function BarcodeSettingsForm() {
 	const handleChange = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
 			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
-			// `localPatch` logs and toasts a failed write and resolves undefined.
+			// `patchStoreSettings` logs and toasts a failed write and resolves undefined.
 			const keys = savedKeys(store.getLatest?.() ?? store, data);
-			const result = await localPatch({
-				document: store,
-				data,
-			});
+			const result = await patchStoreSettings(store, data, t);
 			if (result && keys.length > 0) markSaved(keys);
 		},
-		[localPatch, store, markSaved]
+		[t, store, markSaved]
 	);
 
 	useFormChangeHandler({

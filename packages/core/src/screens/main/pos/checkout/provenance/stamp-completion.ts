@@ -1,4 +1,4 @@
-import type { UserDatabase } from '@wcpos/database';
+import type { UserDatabase } from '@wcpos/query/user-db';
 import {
 	hasSaleProvenance,
 	hasSaleTime,

@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
 import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
 
-import type { StoreDocument } from '@wcpos/database';
+import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -122,10 +122,15 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
 	const { wpCredentials, store, site } = useAppState();
 	const storesSource = React.useMemo(
-		() => wpCredentials?.populate$('stores') ?? of([]),
+		() =>
+			wpCredentials
+				? observeCredentialStores(wpCredentials).pipe(
+						filter((value) => value !== PENDING_USER_DB_READ)
+					)
+				: of([]),
 		[wpCredentials]
 	);
-	const stores = useObservableState(storesSource, []) as StoreDocument[];
+	const stores = useObservableState(storesSource, []);
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
