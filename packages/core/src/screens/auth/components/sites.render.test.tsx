@@ -64,7 +64,9 @@ jest.mock('@wcpos/components/accordion', () => ({
 		return <div data-value={value}>{children}</div>;
 	},
 	AccordionItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AccordionTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AccordionTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
 	AccordionContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/card', () => ({
@@ -140,6 +142,10 @@ it.each([[a], [a, b]])('folds every site to its header while collapsed: %j', (..
 	const { container } = render(<Sites user={user} collapsed onExpand={onExpand} />);
 	expect(container.querySelector('[data-value]')?.getAttribute('data-value')).toBe('');
 	expect(screen.queryByText('Your sites') === null).toBe(sites.length === 1);
+	// Each folded header is the stable way back in for an automated flow.
+	sites.forEach((site) =>
+		expect(screen.getByTestId(`auth-site-trigger-${site.uuid}`)).toBeTruthy()
+	);
 	act(() => mockAccordion.onValueChange?.(''));
 	expect(onExpand).not.toHaveBeenCalled();
 	act(() => mockAccordion.onValueChange?.('a'));

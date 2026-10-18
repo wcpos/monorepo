@@ -71,11 +71,11 @@ jest.mock('@wcpos/components/accordion', () => {
 		AccordionItem: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
 			<Item.Provider value={value}>{children}</Item.Provider>
 		),
-		AccordionTrigger: ({ children }: React.PropsWithChildren) => {
+		AccordionTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => {
 			const root = R.useContext(Root);
 			const item = R.useContext(Item);
 			return (
-				<button data-testid={`trigger-${item}`} onClick={() => root.onValueChange?.(item)}>
+				<button data-testid={testID} onClick={() => root.onValueChange?.(item)}>
 					{children}
 				</button>
 			);
@@ -145,7 +145,7 @@ it('keeps the picked user and store across a fold and expand', () => {
 	fireEvent.click(screen.getByTestId('fold'));
 	expect(screen.queryByTestId('store-select')).toBeNull();
 
-	fireEvent.click(screen.getByTestId('trigger-a'));
+	fireEvent.click(screen.getByTestId('auth-site-trigger-a'));
 	expect(screen.getByTestId('user-u2').getAttribute('data-selected')).toBe('true');
 	expect(screen.getByTestId('user-u1').getAttribute('data-selected')).toBe('false');
 	expect(screen.getByTestId('store-select').getAttribute('data-store')).toBe('store-2');

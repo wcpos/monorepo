@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform, type ViewProps } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
@@ -18,6 +19,34 @@ import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
+
+const ARROW_STEP: Record<string, 1 | -1> = {
+	ArrowDown: 1,
+	ArrowRight: 1,
+	ArrowUp: -1,
+	ArrowLeft: -1,
+};
+
+/**
+ * The ARIA radio-group keys (web): an arrow on a user's radio moves to the previous or next
+ * user, wrapping, and selects it. Only the selected radio is a tab stop (`WpUser`), so Tab
+ * enters and leaves the group in one step. The next radio is focused and then clicked, the
+ * same press a pointer makes, so selection keeps one path; arrows on a row's own buttons
+ * (× and Re-authenticate) are left alone.
+ */
+const onUsersKeyDown: NonNullable<ViewProps['onKeyDown']> = (event) => {
+	const step = ARROW_STEP[event.nativeEvent.key];
+	const target = event.target as unknown as HTMLElement;
+	if (!step || target.getAttribute('role') !== 'radio') return;
+	const group = event.currentTarget as unknown as HTMLElement;
+	const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'));
+	const index = radios.indexOf(target);
+	if (index === -1) return;
+	event.preventDefault();
+	const next = radios[(index + step + radios.length) % radios.length];
+	next.focus();
+	next.click();
+};
 
 interface WpUsersProps {
 	site: import('@wcpos/database').SiteDocument;
@@ -61,6 +90,7 @@ export function WPUsers({ site }: WpUsersProps) {
 							space="sm"
 							role="radiogroup"
 							aria-label={t('auth.wordpress_users_heading', { _tags: 'core' })}
+							onKeyDown={Platform.OS === 'web' ? onUsersKeyDown : undefined}
 						>
 							{wpCreds.map((wpCred) => (
 								<ErrorBoundary key={wpCred.uuid}>

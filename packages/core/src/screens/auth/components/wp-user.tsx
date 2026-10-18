@@ -175,6 +175,9 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
 					role="radio"
 					aria-checked={isSelected}
+					// Roving tab stop: the group always has a selected user (the first by
+					// default), so Tab lands on it and arrows move between users (WPUsers).
+					tabIndex={isSelected ? 0 : -1}
 					onPress={onSelect}
 					// react-native-web presses on Space only for the button role (Enter works for
 					// any role), so the radio takes Space here, without scrolling the page.

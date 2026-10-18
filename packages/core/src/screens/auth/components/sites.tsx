@@ -176,6 +176,7 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
 				<AccordionItem value={site.uuid ?? ''} className="border-b-0">
 					<HStack className="items-center gap-2">
 						<AccordionTrigger
+							testID={`auth-site-trigger-${site.uuid}`}
 							headerClassName="flex-1"
 							className="min-h-row gap-3 py-2"
 							chevronPosition="left"
