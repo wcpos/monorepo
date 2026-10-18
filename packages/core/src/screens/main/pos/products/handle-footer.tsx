@@ -40,7 +40,7 @@ export function HandleProductsFooter({
 				active={active}
 				total={total}
 				sync={handle.sync}
-				count={count}
+				drawnCount={count}
 			>
 				{children}
 			</ProductsFooter>

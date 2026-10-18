@@ -18,7 +18,7 @@ import type { CollectionKey } from '../../hooks/use-collection-reset';
 export type DataTableFooterProps = {
 	collectionName: CollectionKey;
 	/** The rows drawn. */
-	count: number;
+	drawnCount: number;
 	/** The engine is pulling the collection now (the live handle's `active`): the sync button turns. */
 	active: boolean;
 	/** The drawn rows' denominator, or null when nothing vouches for one ("Showing N"). */
@@ -33,7 +33,7 @@ export function DataTableFooter({
 	active: loading,
 	total,
 	sync,
-	count,
+	drawnCount,
 	children,
 }: DataTableFooterProps) {
 	const { clearAndSync } = useCollectionReset(collectionName);
@@ -47,14 +47,14 @@ export function DataTableFooter({
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null
-						? t('common.showing_n', { shown: count.toLocaleString() })
+						? t('common.showing_n', { shown: drawnCount.toLocaleString() })
 						: t('common.showing_of', {
-								shown: count.toLocaleString(),
+								shown: drawnCount.toLocaleString(),
 								total: total.toLocaleString(),
 							})}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
-					{count}
+					{drawnCount}
 				</Text>
 				<Text testID="data-table-total-count" className="hidden">
 					{total ?? ''}

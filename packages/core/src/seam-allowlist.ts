@@ -1653,10 +1653,18 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/cart/clear-local-data.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/pos/cart/user-sheet.tsx :: engine handle aliased :: useSalesToday :: { engine, locale } = useQueryRuntime() :: 1',
 	"screens/main/pos/cart/user-sheet.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	// ADR 0033 per-screen (h1): the data table's props stop borrowing storage names.
+	'screens/main/components/data-table/footer.tsx :: raw query construction :: DataTableFooter :: count :: 1',
+	'screens/main/components/data-table/index.tsx :: engine handle aliased :: DataTableBody :: { result, syncing, engine } = props :: 1',
+	'screens/main/components/data-table/index.tsx :: raw query construction :: HandleFooter :: count :: 1',
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 2",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 3",
+	'screens/main/pos/products/footer.tsx :: raw query construction :: ProductsFooter :: count :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 705;
+export const SEAM_RETIRED_FLOOR = 712;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c2433c2564cc40d6a8aa3909188268ec5134e92ccbfec52177cb2ef6c2c9fa79';
+	'7ed4e9f3a8408157912b9659e0769fb26cb3324176612a893dd695929cde18d9';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

@@ -103,7 +103,7 @@ function GridStatusFooter({
 				active={active}
 				total={total}
 				sync={handle.sync}
-				count={count}
+				drawnCount={count}
 			/>
 		</CaptionRowInset>
 	);

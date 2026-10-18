@@ -159,7 +159,7 @@ it('the drawn rows stay while a changed handle answers, then its rows show', asy
 it('a custom footer gets the drawn total as a value in the rows’ commit', async () => {
 	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
 	const renders: { count: number; total: number | null | undefined }[] = [];
-	function Probe({ count, total }: DataTableFooterProps) {
+	function Probe({ drawnCount: count, total }: DataTableFooterProps) {
 		renders.push({ count, total });
 		return <div data-testid="footer-probe">{`${count}/${String(total)}`}</div>;
 	}
@@ -239,7 +239,7 @@ it('a custom footer is handed values, never streams, with the table’s collecti
 	renderTable({ handle, TableFooterComponent: Footer });
 	expect(props.at(-1)).toEqual({
 		collectionName: 'products',
-		count: 1,
+		drawnCount: 1,
 		active: true,
 		total: 27,
 		sync: handle.sync,

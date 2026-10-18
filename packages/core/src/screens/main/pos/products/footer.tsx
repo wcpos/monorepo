@@ -24,7 +24,7 @@ export function ProductsFooter({
 	active: loading,
 	total,
 	sync,
-	count,
+	drawnCount,
 	children,
 }: ProductsFooterProps) {
 	const { calcTaxes } = useTaxSettings();
@@ -43,14 +43,14 @@ export function ProductsFooter({
 				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null
-						? t('common.showing_n', { shown: count.toLocaleString() })
+						? t('common.showing_n', { shown: drawnCount.toLocaleString() })
 						: t('common.showing_of', {
-								shown: count.toLocaleString(),
+								shown: drawnCount.toLocaleString(),
 								total: total.toLocaleString(),
 							})}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
-					{count}
+					{drawnCount}
 				</Text>
 				<Text testID="data-table-total-count" className="hidden">
 					{total ?? ''}
