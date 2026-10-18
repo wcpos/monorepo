@@ -74,7 +74,18 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxInput: mockInput,
 	ComboboxTrigger: mockWrap,
 }));
-jest.mock('@wcpos/components/button', () => ({ Button: mockButton }));
+jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
+jest.mock('@wcpos/components/collapsible', () => ({
+	Collapsible: mockWrap,
+	CollapsibleContent: mockWrap,
+	CollapsibleTrigger: mockWrap,
+}));
+jest.mock('@wcpos/components/tooltip', () => ({
+	Tooltip: mockWrap,
+	TooltipContent: mockWrap,
+	TooltipTrigger: mockWrap,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: mockButton }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: mockWrap }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('@wcpos/components/text', () => ({ Text: mockWrap }));
@@ -119,7 +130,7 @@ jest.mock('../../../../components/order/order-status-select', () => ({
 }));
 jest.mock('../../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../components/meta-data-form', () => ({
-	MetaDataForm: () => null,
+	MetaDataForm: jest.requireActual('../../../../components/meta-data-form').MetaDataForm,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),
 }));
 jest.mock('../../../../hooks/use-cashier-label', () => ({
@@ -244,4 +255,23 @@ it('does not write or push when storage is degraded', async () => {
 	expect(mockGuard).toHaveBeenCalledWith('save-order', { orderId: 'order-1' });
 	expect(mockPatch).not.toHaveBeenCalled();
 	expect(mockPush).not.toHaveBeenCalled();
+});
+it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
+	const protectedMeta = [
+		...meta,
+		{ id: 42, key: '_wcpos_money_owner_hint', value: 'server' },
+		{ id: 43, key: '_wcpos_money_owner', value: 'server' },
+	];
+	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
+	resident.getLatest = () => resident;
+	const custom = { key: 'custom', value: 'edited' };
+	const formData = { ...payload, status, cashier_id: '7', meta_data: [...protectedMeta, custom] };
+	const view = render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	expect(screen.queryAllByDisplayValue('server')).toHaveLength(0);
+	expect(screen.getByDisplayValue('custom')).toBeTruthy();
+	const edited = { ...formData, meta_data: [{ ...protectedMeta[4], value: null }, custom] };
+	view.rerender(<EditOrderMetaForm order={resident as never} formData={edited} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	if (status === 'completed') await confirm();
+	expect(mockPatch.mock.calls[0][0].data.meta_data).toEqual([custom, ...protectedMeta]);
 });

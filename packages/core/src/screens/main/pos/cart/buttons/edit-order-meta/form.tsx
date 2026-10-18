@@ -43,7 +43,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
-import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
+import { NO_STORE, PROTECTED_ORDER_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -118,6 +118,13 @@ export function EditOrderMetaForm({
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
+	const restoreProtectedMeta = (meta: FormValues['meta_data']) => [
+		...meta.filter((entry) => !PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')),
+		...(order.getLatest().payload.meta_data ?? []).filter((entry) =>
+			PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')
+		),
+	];
+
 	/**
 	 * Apply the form. Resolves true only when the edits are written locally; false when the
 	 * identity change awaits its confirmation (the send flow owns that) — a caller that pushes
@@ -132,6 +139,7 @@ export function EditOrderMetaForm({
 			return false;
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
+		patch.meta_data = restoreProtectedMeta(patch.meta_data);
 		const written = !!(await localPatch({ document: order, data: patch }));
 		if (written && close) closeDialog();
 		return written;
@@ -148,7 +156,7 @@ export function EditOrderMetaForm({
 		const { cashier_id, ...fields } = pending;
 		const patch = {
 			...fields,
-			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
+			meta_data: wooMetaCarrier.stampIdentity(restoreProtectedMeta(fields.meta_data), {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
@@ -326,7 +334,7 @@ export function EditOrderMetaForm({
 						)}
 					/>
 				</HStack>
-				<MetaDataForm />
+				<MetaDataForm hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.cancel')}</DialogClose>

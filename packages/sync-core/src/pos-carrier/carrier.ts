@@ -51,6 +51,16 @@ export const POS_META_KEYS = {
 	posData: '_woocommerce_pos_data',
 } as const;
 
+export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
+	POS_META_KEYS.user,
+	POS_META_KEYS.store,
+	POS_META_KEYS.register,
+	POS_META_KEYS.till,
+	RECORD_UUID_META_KEY,
+	'_wcpos_money_owner',
+	'_wcpos_money_owner_hint',
+];
+
 function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string | null {
 	if (!Array.isArray(meta)) return null;
 	for (const entry of meta) {

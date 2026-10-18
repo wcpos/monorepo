@@ -19,13 +19,18 @@ export { metaDataSchema } from './meta-data-schema';
 
 interface MetaDataFormProps {
 	name?: string;
+	hiddenKeys?: readonly string[];
 	withDisplayValues?: boolean;
 }
 
 /**
  *
  */
-export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaDataFormProps) {
+export function MetaDataForm({
+	name = 'meta_data',
+	withDisplayValues,
+	hiddenKeys,
+}: MetaDataFormProps) {
 	const t = useT();
 	const { control, setValue, getValues } = useFormContext();
 	const { fields, append, remove } = useFieldArray({
@@ -45,8 +50,8 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 				<VStack>
 					{fields.map((field, index) => {
 						const value = watchedFields[index]?.value;
-						// Hide items with value = null
-						if (value === null) {
+						// Hide tombstones and caller-protected metadata.
+						if (value === null || hiddenKeys?.includes(watchedFields[index]?.key)) {
 							return null;
 						}
 						return (
