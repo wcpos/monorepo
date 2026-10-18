@@ -96,10 +96,7 @@ export type ReadonlyClosureDocument = Readonly<ClosureRow> &
 export type ClosureIdentity =
 	{ id: string; serverClosureId?: string } | { serverClosureId: string; id?: string };
 
-function closureQuery(
-	closures: { findOne: (q: unknown) => { $: Observable<unknown> } },
-	identity: ClosureIdentity
-) {
+function closureQuery(closures: RxCollection<ClosureRow>, identity: ClosureIdentity) {
 	return closures.findOne(
 		'serverClosureId' in identity
 			? {
