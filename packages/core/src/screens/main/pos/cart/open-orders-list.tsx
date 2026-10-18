@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { type Pressable, View } from 'react-native';
 
-import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -11,6 +10,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+import { CustomerAvatar } from '../../components/user-avatar/customer-avatar';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
@@ -146,13 +146,14 @@ function OrderRow({
 			ref={focusCurrent}
 			onPress={onPress}
 			leading={
-				name ? (
-					<Avatar fallback={getInitials(name)} size="md" />
-				) : (
-					<View className="bg-muted size-9 items-center justify-center rounded-full">
-						<Icon name="user" size="sm" className="text-muted-foreground" />
-					</View>
-				)
+				// The billing name only, as the row's title reads it: a nameless guest is "Guest".
+				<CustomerAvatar
+					customer={{
+						billing: { first_name: billing?.first_name, last_name: billing?.last_name },
+						id: payload.customer_id,
+					}}
+					size="md"
+				/>
 			}
 			trailing={
 				<View className="items-end gap-0.5">

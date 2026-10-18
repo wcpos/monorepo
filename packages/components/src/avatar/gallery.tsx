@@ -14,6 +14,8 @@ export const stories = [
 		),
 	},
 	{ id: 'rounded', render: () => <Avatar shape="rounded" fallback="CM" /> },
+	// The Guest customer is not a person: a neutral glyph, never initials on the accent.
+	{ id: 'guest', render: () => <Avatar icon="user" variant="muted" /> },
 	{
 		id: 'variants',
 		render: () => (

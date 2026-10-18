@@ -41,7 +41,9 @@ jest.mock('@wcpos/components/icon', () => ({
 	),
 }));
 jest.mock('@wcpos/components/avatar', () => ({
-	Avatar: ({ fallback }: { fallback: string }) => <b data-testid="avatar">{fallback}</b>,
+	// The nameless Guest is drawn with a glyph, not initials.
+	Avatar: ({ fallback, icon }: { fallback?: string; icon?: string }) =>
+		icon ? <i data-icon={icon} /> : <b data-testid="avatar">{fallback}</b>,
 	getInitials: (name: string) =>
 		name
 			.split(' ')

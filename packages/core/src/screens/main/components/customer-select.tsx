@@ -27,6 +27,7 @@ import {
 	useSearchSelect,
 } from '../../../query';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
+import { getCustomerInitials, GuestAvatar } from './user-avatar/customer-avatar';
 
 import type { SearchSelect } from '../../../query';
 import type { CustomerData } from '../hooks/use-customer-name-format/helpers';
@@ -182,17 +183,18 @@ function CustomerSelectItem({
 	if (isGuestCustomer(customer.id)) {
 		return (
 			<HStack className="items-center">
-				<Avatar
-					source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
-					recyclingKey="guest"
-				/>
+				<GuestAvatar />
 				<Text className="flex-1">{t('common.guest')}</Text>
 			</HStack>
 		);
 	} else {
 		return (
 			<HStack className="items-start">
-				<Avatar source={customer.avatar_url} recyclingKey={recyclingKey} />
+				<Avatar
+					source={customer.avatar_url}
+					fallback={getCustomerInitials(customer)}
+					recyclingKey={recyclingKey}
+				/>
 				<VStack space="xs">
 					<Text>{format(customer)}</Text>
 

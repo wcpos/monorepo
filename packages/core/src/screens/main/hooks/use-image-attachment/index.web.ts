@@ -4,6 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { defer, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
+import { isGravatarUrl } from '@wcpos/components/avatar/gravatar';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -56,11 +57,16 @@ async function fetchImageBlob(
 	// status table has no meaning for it — a missing upload would otherwise be
 	// logged as AUTH311 "store route unavailable". The registered meaning of a
 	// failure here is PRODUCT201: the image is unavailable, the product still sells.
+	// A Gravatar URL asks for `d=404` (`withoutDefaultGravatar`), so its 404 is the answer "this
+	// person has no picture", not a failure: it resolves, and throws below without a log row.
 	const response = await get(imageUrl, {
 		responseType: 'arraybuffer',
 		wcposHeaders: false,
 		quietErrors: true,
 		failureCode: ERROR_CODES.PRODUCT_IMAGE_UNAVAILABLE,
+		...(isGravatarUrl(imageUrl) && {
+			validateStatus: (status: number) => (status >= 200 && status < 300) || status === 404,
+		}),
 	});
 
 	if (!response || response.status !== 200) {
