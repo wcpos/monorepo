@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
-import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
@@ -13,7 +12,6 @@ import type { SaleContext } from '../sale-completion';
 
 export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext['actor']> } {
 	const { userDB, storeDB, site, store, wpCredentials } = useStoreSession();
-	const sessions = useRegisterSessionCollection();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	// The latest store document, not the session's snapshot (see use-tender-flow).
@@ -35,7 +33,6 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			storeDB,
 			siteUuid: site.uuid!,
 			storeId: store.id,
-			sessions,
 			sessionsOn,
 			runtime,
 			dp,
@@ -52,7 +49,6 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			site.uuid,
 			store.id,
 			dp,
-			sessions,
 			sessionsOn,
 			runtime,
 			actor,

@@ -53,9 +53,6 @@ jest.mock('@wcpos/query/register-session', () => ({
 		return session?.id ?? null;
 	},
 }));
-jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => 'storeDB',
-}));
 jest.mock('./read-stock-document', () => ({ readStockDocument: jest.fn() }));
 jest.mock('../../hooks/use-payment-methods', () => {
 	// One map, as the real hook memoises it: the context's memo keys on it.

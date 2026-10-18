@@ -19,6 +19,8 @@ import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './r
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected } from './expected';
 
+import type { ReadonlyClosureDocument } from './reads';
+
 export const pending = {
 	sync_status: 'pending',
 	sync_attempts: 0,
@@ -475,4 +477,40 @@ export async function recordApproval(
 		approval_required: false,
 		sync_error: null,
 	});
+}
+
+export async function setClosureReceiptSnapshot(
+	storeDB: RegisterStoreDatabase,
+	closureId: string,
+	receiptSnapshot: string
+) {
+	const record = await registerCollections(storeDB).closures?.findOne(closureId).exec();
+	await record?.incrementalPatch({ receipt_snapshot: receiptSnapshot });
+}
+
+export async function refreshClosureRow(
+	storeDB: RegisterStoreDatabase,
+	identity: string,
+	correctionsCount: ClosureRow['corrections_count']
+) {
+	const local = await registerCollections(storeDB)
+		.closures?.findOne({
+			selector: { $or: [{ id: identity }, { server_closure_id: identity }] },
+		})
+		.exec();
+	await local?.incrementalPatch({ corrections_count: correctionsCount });
+}
+
+/** Mirror a dispatched print on the same document that supplied its prospective count. */
+export async function recordClosurePrint(
+	closure: ReadonlyClosureDocument,
+	count: number,
+	printedAt: () => string,
+	server = false
+) {
+	await (closure as ClosureDocument).incrementalModify((row) => ({
+		...row,
+		print_count: Math.max(row.print_count + (server ? 1 : 0), count),
+		printed_at: row.printed_at ?? printedAt(),
+	}));
 }
