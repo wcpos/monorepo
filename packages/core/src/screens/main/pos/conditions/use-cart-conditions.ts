@@ -2,31 +2,23 @@ import * as React from 'react';
 
 import isEqual from 'lodash/isEqual';
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, of } from 'rxjs';
+import { of } from 'rxjs';
 import { distinctUntilChanged, switchMap } from 'rxjs/operators';
 
 import {
-	engineCollection,
-	observeEngineDatabases,
+	observeCatalogByWooIds,
+	readStockPayload,
 	useDocField,
 	useQueryRuntime,
 	useRecordField,
 } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { conditionRules, type UnmetCondition } from './evaluate';
 import { countConditionsInSlot } from './snapshot';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { readStockDocument } from '../hooks/read-stock-document';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order/context';
 
 const NONE: UnmetCondition[] = [];
-const inIds = (ids: (number | null | undefined)[]) => ({
-	remoteId: {
-		$in: [...new Set(ids)].map((id) => remoteIdOrNull(id ?? 0)).filter((id) => id !== null),
-	},
-});
-
 /** Re-judged when the lines or the catalog records they name move; idle with overselling allowed. */
 export function useCartConditions(order: CurrentOrderRecord | undefined): {
 	unmet: UnmetCondition[];
@@ -40,19 +32,13 @@ export function useCartConditions(order: CurrentOrderRecord | undefined): {
 		const rules = conditionRules(preventOverselling);
 		if (!preventOverselling || !order || items.length === 0) return of(NONE);
 		const catalog = (kind: 'product' | 'variation', id: number) =>
-			readStockDocument(runtime, kind === 'product' ? 'products' : 'variations', id);
+			readStockPayload(runtime.engine, kind === 'product' ? 'products' : 'variations', id);
 		const count = () => countConditionsInSlot(order, { read: { catalog } }, rules);
-		return observeEngineDatabases(runtime.engine).pipe(
-			switchMap((database) => {
-				const products = engineCollection(database, 'products');
-				const variations = engineCollection(database, 'variations');
-				return products && variations
-					? combineLatest([
-							products.find({ selector: inIds(items.map((line) => line.product_id)) }).$,
-							variations.find({ selector: inIds(items.map((line) => line.variation_id)) }).$,
-						]).pipe(switchMap(count))
-					: of(NONE);
-			}),
+		return observeCatalogByWooIds(runtime.engine, {
+			productIds: items.map((line) => line.product_id),
+			variationIds: items.map((line) => line.variation_id),
+		}).pipe(
+			switchMap(({ available }) => (available ? count() : of(NONE))),
 			distinctUntilChanged(isEqual)
 		);
 	}, [runtime, preventOverselling, lineItems, order]);

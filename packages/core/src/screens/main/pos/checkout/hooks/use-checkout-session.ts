@@ -3,7 +3,12 @@ import * as React from 'react';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
+import {
+	type EngineRecord,
+	resolveStockOwnerId,
+	useQueryRuntime,
+	useRecordField,
+} from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -29,7 +34,6 @@ import {
 	setStockRejection,
 	stockRejection$,
 } from '../../hooks/stock-rejection';
-import { resolveStockOwnerId } from '../../hooks/read-stock-document';
 import { isActionRefusal } from '../../../../../extensions/actions';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
@@ -181,7 +185,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 						rejectedItems.map(async (item) => ({
 							...item,
 							stock_owner_id: await resolveStockOwnerId(
-								runtime,
+								runtime.engine,
 								item.product_id,
 								item.variation_id
 							),

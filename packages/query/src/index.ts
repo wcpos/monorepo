@@ -189,3 +189,10 @@ export {
 	type StorageContext,
 	type StorageFootprintSummary,
 } from './reads/storage-footprint';
+
+export {
+	readStockPayload,
+	resolveStockOwnerId,
+	observeCatalogByWooIds,
+} from './reads/stock-record';
+export { readCouponCatalog } from './reads/coupon-catalog';

@@ -1,14 +1,9 @@
 import * as React from 'react';
 
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, readCouponCatalog, useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 import type { CouponContext, CouponInput } from '@wcpos/order-math';
 
-import {
-	readEngineCategories,
-	readEngineCoupons,
-	readEngineProductRecordsByWooId,
-} from './engine-coupon-data';
 import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
 type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 type CouponLine = import('@wcpos/query').OrderCouponLine;
@@ -44,11 +39,11 @@ export async function readCouponContext(
 	const productIds = lineItems
 		.map((item) => item.product_id)
 		.filter((id): id is number => id != null && id > 0);
-	const [couponRecords, productRecords, categoryRecords] = await Promise.all([
-		readEngineCoupons(runtime),
-		readEngineProductRecordsByWooId(runtime, productIds),
-		readEngineCategories(runtime),
-	]);
+	const {
+		coupons: couponRecords,
+		products: productRecords,
+		categories: categoryRecords,
+	} = await readCouponCatalog(runtime.engine, productIds);
 
 	const coupons = new Map<string, CouponInput>();
 	for (const record of couponRecords) {

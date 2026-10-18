@@ -1,5 +1,6 @@
 import type { EngineRecord, EngineRecordCollectionName } from './engine-record';
 import type { Observable } from 'rxjs';
+import type { RxCollection } from 'rxdb';
 
 /**
  * THE typed boundary onto `database.collections` (ADR 0028; review candidate 5).
@@ -41,7 +42,9 @@ export type EngineCollection<C extends EngineRecordCollectionName> = {
 	 * Storage-level read that can see tombstones — the deleted-document read path
 	 * (e.g. the cart stock guard resolving stock for a pruned catalog row).
 	 */
+	schema: RxCollection['schema'];
 	storageInstance: {
+		query: RxCollection['storageInstance']['query'];
 		findDocumentsById(ids: string[], withDeleted: boolean): Promise<unknown[]>;
 	};
 };
