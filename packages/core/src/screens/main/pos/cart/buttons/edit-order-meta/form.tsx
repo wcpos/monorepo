@@ -60,6 +60,7 @@ import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
+import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
@@ -118,9 +119,12 @@ export function EditOrderMetaForm({
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
-	const restoreProtectedMeta = (meta: FormValues['meta_data']) => [
+	const restoreProtectedMeta = (
+		meta: FormValues['meta_data'],
+		current: Record<string, unknown>
+	) => [
 		...meta.filter((entry) => !PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')),
-		...(order.getLatest().payload.meta_data ?? []).filter((entry) =>
+		...((current.meta_data ?? []) as FormValues['meta_data']).filter((entry) =>
 			PROTECTED_ORDER_META_KEYS.includes(entry.key ?? '')
 		),
 	];
@@ -139,8 +143,15 @@ export function EditOrderMetaForm({
 			return false;
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
-		patch.meta_data = restoreProtectedMeta(patch.meta_data);
-		const written = !!(await localPatch({ document: order, data: patch }));
+		const written = !!(await enqueueOrderMutation(order.uuid, () =>
+			localPatch({
+				document: order,
+				changes: (current) => ({
+					...patch,
+					meta_data: restoreProtectedMeta(patch.meta_data, current),
+				}),
+			})
+		));
 		if (written && close) closeDialog();
 		return written;
 	}
@@ -154,35 +165,45 @@ export function EditOrderMetaForm({
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, ...fields } = pending;
-		const patch = {
+		const patch = (current: Record<string, unknown>) => ({
 			...fields,
-			meta_data: wooMetaCarrier.stampIdentity(restoreProtectedMeta(fields.meta_data), {
+			meta_data: wooMetaCarrier.stampIdentity(restoreProtectedMeta(fields.meta_data, current), {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
 				tillId: identity.tillId,
 			}),
-		};
+		});
 		setLoading(true);
 		let patched = false;
 		try {
-			if (!(await localPatch({ document: order, data: patch }))) return;
+			if (
+				!(await enqueueOrderMutation(order.uuid, () =>
+					localPatch({ document: order, changes: patch })
+				))
+			)
+				return;
 			patched = true;
 			await pushDocument(order);
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
 			if (
-				!['pos-open', 'pos-partial', 'pending'].includes(patch.status) ||
+				!['pos-open', 'pos-partial', 'pending'].includes(fields.status) ||
 				cashier_id !== String(cashierID)
 			) {
 				setCurrentOrderID('');
 			}
 		} catch (error) {
 			if (patched) {
-				const reverted = await localPatch({
-					document: order,
-					data: { status: previous.status, meta_data: previous.meta_data },
-				});
+				const reverted = await enqueueOrderMutation(order.uuid, () =>
+					localPatch({
+						document: order,
+						changes: (current) => ({
+							status: previous.status,
+							meta_data: restoreProtectedMeta(previous.meta_data ?? [], current),
+						}),
+					})
+				);
 				// The failed send may still land: a timed-out outcome is unknown and a queued
 				// mutation is retried. Open orders only reach the server on an explicit push,
 				// so the revert is pushed too — the last write wins and the server ends up

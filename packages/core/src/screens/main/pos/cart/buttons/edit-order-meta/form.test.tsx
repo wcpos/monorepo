@@ -7,7 +7,9 @@ import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { EditOrderMetaForm } from './form';
+import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 
+const mockBeforePatch = jest.fn();
 const mockPatch = jest.fn(),
 	mockPush = jest.fn(),
 	mockMove = jest.fn(),
@@ -170,7 +172,12 @@ async function confirm() {
 }
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockPatch.mockResolvedValue({ document: order });
+	mockPatch.mockImplementation((input) => {
+		mockBeforePatch();
+		input.data = input.changes?.(input.document.getLatest().payload) ?? input.data;
+		delete input.changes;
+		return Promise.resolve({ document: order });
+	});
 	mockPush.mockResolvedValue(order);
 	mockGuard.mockReturnValue(false);
 });
@@ -274,4 +281,43 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
 	if (status === 'completed') await confirm();
 	expect(mockPatch.mock.calls[0][0].data.meta_data).toEqual([custom, ...protectedMeta]);
+});
+
+it.each(['pos-open', 'completed'])(
+	'keeps a hint arriving at the %s write boundary',
+	async (status) => {
+		const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+		const custom = { key: 'custom', value: 'edited' };
+		const resident = { ...order, payload: { ...payload } };
+		resident.getLatest = () => resident;
+		mockBeforePatch.mockImplementationOnce(() => {
+			resident.payload = { ...payload, meta_data: [...meta, hint] };
+		});
+		const formData = { ...payload, status, cashier_id: '7', meta_data: [...meta, custom] };
+		render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+		if (status === 'completed') await confirm();
+		expect(mockPatch.mock.calls[0][0].data.meta_data).toEqual([custom, ...meta, hint]);
+	}
+);
+
+it('keeps a hint queued during a failed send when rolling back', async () => {
+	const hint = { id: 42, key: '_wcpos_money_owner_hint', value: 'server' };
+	const resident = { ...order, payload: { ...payload } };
+	resident.getLatest = () => resident;
+	mockPush.mockImplementationOnce(() => {
+		void enqueueOrderMutation(resident.uuid, async () => {
+			await Promise.resolve();
+			resident.payload = { ...payload, meta_data: [...meta, hint] };
+		});
+		return Promise.reject(new Error('offline'));
+	});
+	const formData = { ...payload, status: 'completed', cashier_id: '7' };
+	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(mockPatch.mock.calls[1][0].data).toEqual({
+		status: 'pos-open',
+		meta_data: [...meta, hint],
+	});
 });
