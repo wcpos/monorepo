@@ -335,7 +335,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					/>
 				) : null}
 				{!flow.online ? (
-					<Text testID="checkout-offline" className="text-warning text-xs">
+					<Text testID="checkout-offline" className="text-warn-text text-xs">
 						{t('pos_checkout.offline')}
 					</Text>
 				) : null}
@@ -348,7 +348,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
-				className={`min-h-6 text-sm ${noChange ? 'text-warning' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
+				className={`min-h-6 text-sm ${noChange ? 'text-warn-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
 				decodeHtml
 			>
 				{hint}
@@ -420,7 +420,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						))}
 			</MethodRows>
 			{slow ? (
-				<Text testID="checkout-save-slow" className="text-warning text-sm">
+				<Text testID="checkout-save-slow" className="text-warn-text text-sm">
 					{t('pos_checkout.store_not_answering')}
 				</Text>
 			) : null}

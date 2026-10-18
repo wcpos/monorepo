@@ -37,6 +37,7 @@ Prefer semantic classes over hardcoded colors to preserve theme compatibility.
 | `bg-card` | Card/elevated surfaces |
 | `bg-sidebar` | Navigation sidebar |
 | `bg-muted` | Muted elements/buttons |
+| `text-warn-text` | warning words; `warn` is the fill and the icon |
 | `bg-table-header` | Data table headers |
 
 ### Theme Switching and Native Issues

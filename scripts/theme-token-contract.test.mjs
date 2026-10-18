@@ -21,10 +21,10 @@ test('the theme exposes radius-md to rounded utilities', () => {
 	assert.ok(themes.some(([, body]) => /--radius-md\s*:/.test(body)));
 });
 
-const themeBody = [...css.matchAll(/@theme\s*\{([^{}]*)\}/g)]
-	.map(([, body]) => body).join('\n');
+const themeBody = [...css.matchAll(/@theme\s*\{([^{}]*)\}/g)].map(([, body]) => body).join('\n');
 const inlineThemeBody = [...css.matchAll(/@theme\s+inline\s*\{([^{}]*)\}/g)]
-	.map(([, body]) => body).join('\n');
+	.map(([, body]) => body)
+	.join('\n');
 
 // The type tokens a step scopes directly (scale.ts SCALE_STEPS); every other
 // text token derives from these, so it must resolve inline.
@@ -44,22 +44,62 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 });
 const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
 const newColors = [
-	'rail', 'rail-foreground', 'rail-border', 'ok', 'ok-bg', 'warn', 'warn-bg',
-	'bad', 'bad-bg', 'neutral', 'scrim', 'c1', 'c2', 'c3', 'c4', 'c5',
+	'rail',
+	'rail-foreground',
+	'rail-border',
+	'ok',
+	'ok-bg',
+	'warn',
+	'warn-text',
+	'warn-bg',
+	'bad',
+	'bad-bg',
+	'neutral',
+	'scrim',
+	'c1',
+	'c2',
+	'c3',
+	'c4',
+	'c5',
 ];
 const aliases = {
-	sidebar: 'rail', 'sidebar-foreground': 'rail-foreground', 'sidebar-border': 'rail-border',
-	success: 'ok', warning: 'warn', attention: 'warn',
-	accent: 'muted', 'accent-foreground': 'foreground',
-	popover: 'card', 'popover-foreground': 'card-foreground', input: 'card',
-	'card-header': 'muted', footer: 'muted', 'table-header': 'muted',
-	'table-row': 'card', 'table-row-alt': 'background',
-	secondary: 'muted-foreground', 'secondary-foreground': 'card',
-	'chart-1': 'c1', 'chart-2': 'c2', 'chart-3': 'c3', 'chart-4': 'c4', 'chart-5': 'c5',
+	sidebar: 'rail',
+	'sidebar-foreground': 'rail-foreground',
+	'sidebar-border': 'rail-border',
+	success: 'ok',
+	warning: 'warn',
+	attention: 'warn',
+	accent: 'muted',
+	'accent-foreground': 'foreground',
+	popover: 'card',
+	'popover-foreground': 'card-foreground',
+	input: 'card',
+	'card-header': 'muted',
+	footer: 'muted',
+	'table-header': 'muted',
+	'table-row': 'card',
+	'table-row-alt': 'background',
+	secondary: 'muted-foreground',
+	'secondary-foreground': 'card',
+	'chart-1': 'c1',
+	'chart-2': 'c2',
+	'chart-3': 'c3',
+	'chart-4': 'c4',
+	'chart-5': 'c5',
 };
 
 test('the nine scale tokens are plain px numbers in @theme', () => {
-	for (const token of ['spacing', 'text-base', 'spacing-ctl', 'spacing-row', 'spacing-tile', 'radius', 'text-amt', 'text-xs', 'text-2xs']) {
+	for (const token of [
+		'spacing',
+		'text-base',
+		'spacing-ctl',
+		'spacing-row',
+		'spacing-tile',
+		'radius',
+		'text-amt',
+		'text-xs',
+		'text-2xs',
+	]) {
 		assert.match(themeBody, new RegExp(`--${token}\\s*:\\s*\\d+(?:\\.\\d+)?px\\s*;`), token);
 	}
 });
@@ -90,11 +130,24 @@ for (const name of themeNames) {
 	test(`${name} declares every new color and legacy alias without a theme radius`, () => {
 		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
 		assert.ok(body, `Missing ${name} theme`);
-		for (const token of [...newColors, 'info', 'success-foreground', 'warning-foreground', 'info-foreground', 'attention-foreground', 'action', 'action-foreground']) {
+		for (const token of [
+			...newColors,
+			'info',
+			'success-foreground',
+			'warning-foreground',
+			'info-foreground',
+			'attention-foreground',
+			'action',
+			'action-foreground',
+		]) {
 			assert.match(body, new RegExp(`--${token}\\s*:\\s*[^;]+;`), `${name}: ${token}`);
 		}
 		for (const [alias, target] of Object.entries(aliases)) {
-			assert.match(body, new RegExp(`--${alias}\\s*:\\s*var\\(--${target}\\)\\s*;`), `${name}: ${alias}`);
+			assert.match(
+				body,
+				new RegExp(`--${alias}\\s*:\\s*var\\(--${target}\\)\\s*;`),
+				`${name}: ${alias}`
+			);
 		}
 		assert.doesNotMatch(body, /--radius\s*:/);
 	});
@@ -106,7 +159,10 @@ for (const name of themeNames) {
 test('the table-row-alt alias stays mapped and no imperative read names it', () => {
 	assert.match(themeBody, /--color-table-row-alt\s*:\s*var\(--table-row-alt\)\s*;/);
 	for (const file of ['index.tsx', 'pulse-row.tsx']) {
-		const source = readFileSync(new URL(`../packages/components/src/table/${file}`, import.meta.url), 'utf8');
+		const source = readFileSync(
+			new URL(`../packages/components/src/table/${file}`, import.meta.url),
+			'utf8'
+		);
 		assert.doesNotMatch(source, /table-row-alt/, file);
 	}
 });
@@ -154,7 +210,10 @@ test('controls share the web keyboard focus outline', () => {
 // WCAG 2 contrast of two `oklch(L C h)` tokens, through OKLab to sRGB (clamped to the gamut,
 // as a browser paints an out-of-gamut colour).
 function oklchLuminance(value) {
-	const [L, C, h] = value.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/).slice(1).map(Number);
+	const [L, C, h] = value
+		.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/)
+		.slice(1)
+		.map(Number);
 	const a = C * Math.cos((h * Math.PI) / 180);
 	const b = C * Math.sin((h * Math.PI) / 180);
 	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
@@ -195,4 +254,21 @@ for (const name of themeNames) {
 			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${pair} is ${ratio.toFixed(2)}:1`);
 		}
 	});
+}
+
+for (const name of themeNames) {
+	for (const [text, ground] of [
+		['warn-text', 'card'],
+		['warn-text', 'background'],
+		['destructive-foreground', 'destructive'],
+		['action-foreground', 'action'],
+		['warning-foreground', 'warn'],
+	]) {
+		test(`${name}: ${text} on ${ground} reaches 4.5:1`, () => {
+			const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+			assert.ok(body, `Missing ${name} theme`);
+			const ratio = contrast(themeToken(body, text), themeToken(body, ground));
+			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${text} on ${ground} is ${ratio.toFixed(2)}:1`);
+		});
+	}
 }
