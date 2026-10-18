@@ -10,17 +10,16 @@ import {
 	hydrateUserSession,
 	openUserDatabase,
 	type PreparedStorePayload,
+	type ReadonlySiteRecord,
+	type ReadonlyStoreRecord,
 	type ReadonlyUserRecord,
+	type ReadonlyWpCredentialsRecord,
 	readSiteTransportInputs,
 	recordSiteTransport,
 	type SessionAppState,
-	type SiteDocument,
 	type StoreDatabase,
-	type StoreDocument,
 	type TranslationsState,
 	type UserDatabase,
-	type UserDocument,
-	type WPCredentialsDocument,
 } from '@wcpos/query/user-db';
 
 import { initialProps } from './initial-props';
@@ -60,24 +59,24 @@ export interface HydrationContext {
 	/** Session pointer (`current`). */
 	appState?: SessionAppState;
 	translationsState?: TranslationsState;
-	user?: UserDocument | null;
+	user?: ReadonlyUserRecord | null;
 	/** Embedded-mode boot payload; null in standalone web, `{}` on native/electron. */
 	initialProps?: InitialProps | null;
-	site?: SiteDocument | null;
-	wpCredentials?: WPCredentialsDocument | null;
-	store?: StoreDocument | null;
+	site?: ReadonlySiteRecord | null;
+	wpCredentials?: ReadonlyWpCredentialsRecord | null;
+	store?: ReadonlyStoreRecord | null;
 	storeDB?: StoreDatabase | null;
 	extraData?: ExtraDataSlot;
 	stores?: PreparedStorePayload[];
 	storeLocalIDs?: string[];
 }
 
-/** Query returns the same RxDB instances; read-only flip pending U6. */
+/** Query records already satisfy the read-only hydration context. */
 export function toHydrationContext(
 	value: Partial<Omit<HydrationContext, 'user' | keyof HydratedStoreSession>> &
 		Partial<HydratedStoreSession> & { user?: ReadonlyUserRecord | null }
 ): Partial<HydrationContext> {
-	return value as Partial<HydrationContext>;
+	return value;
 }
 
 /**

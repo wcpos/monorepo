@@ -1,4 +1,4 @@
-import type { UserDatabase } from '@wcpos/database';
+import type { UserDatabase } from '@wcpos/query/user-db';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { readRegister } from '@wcpos/query/register-session';

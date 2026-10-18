@@ -4,7 +4,7 @@ import { Avatar, type AvatarProps, getInitials } from '@wcpos/components/avatar'
 import { withoutDefaultGravatar } from '@wcpos/components/avatar/gravatar';
 import { Suspense } from '@wcpos/components/suspense';
 import { useDocField } from '@wcpos/query';
-import type { WPCredentialsDocument } from '@wcpos/database';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 
@@ -70,7 +70,7 @@ export function UserAvatar({
 	wpCredentials,
 	displayName,
 }: {
-	wpCredentials: WPCredentialsDocument;
+	wpCredentials: ReadonlyWpCredentialsRecord;
 	displayName?: string;
 }) {
 	const avatarUrl = useDocField(wpCredentials, (value) => value.avatar_url) as string | undefined;

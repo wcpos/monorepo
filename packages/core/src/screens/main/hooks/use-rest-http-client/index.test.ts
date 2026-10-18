@@ -56,6 +56,11 @@ const mockSite = {
 	wp_api_url: 'https://example.com/wp-json/',
 };
 
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	credentialsTokenOwner: (credentials: unknown) => credentials,
+}));
+
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	requestStateManager: {
 		getRefreshedToken: () => null,

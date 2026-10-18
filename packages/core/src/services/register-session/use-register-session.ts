@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged, map, of, timer } from 'rxjs';
+import { combineLatest, distinctUntilChanged, filter, firstValueFrom, map, of, timer } from 'rxjs';
 
+import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { type ReadonlyEngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
@@ -398,8 +399,9 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
-				const cashiers: { id?: number; display_name?: string }[] =
-					await site.populate('wp_credentials');
+				const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
+					observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+				);
 				const actorName = (id: number | null | undefined) =>
 					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
 						?.display_name ?? '';

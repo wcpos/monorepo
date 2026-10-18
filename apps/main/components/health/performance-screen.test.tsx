@@ -62,8 +62,8 @@ jest.mock('@wcpos/core/contexts/translations', () => {
 		},
 	};
 });
-jest.mock('@wcpos/core/screens/main/hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: jest.fn() }),
+jest.mock('@wcpos/query/user-db', () => ({
+	patchStoreSettings: jest.fn(),
 }));
 const idlePressure = () => ({
 	multiplier: 1,

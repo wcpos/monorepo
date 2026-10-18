@@ -25,3 +25,4 @@ export type {
 	WPCredentialsDocument,
 } from '@wcpos/database';
 export * from './hydration';
+export * from './store-settings';

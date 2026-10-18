@@ -13,12 +13,12 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 const BAR_HEIGHT_CAP_MS = 60;
@@ -82,7 +82,6 @@ function TimingChart({
 export function TestPanel() {
 	const t = useT();
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const { barcode$, onKeyPress: detectorOnKeyPress } = useBarcodeDetection();
 	const detectedBarcode = useObservableState(barcode$) as string | undefined;
 	const { currentKeys, attempts, onKeyPress: captureOnKeyPress } = useScanTraceCapture();
@@ -131,9 +130,9 @@ export function TestPanel() {
 
 	const applySuggestion = React.useCallback(
 		async (suggestion: TraceSuggestion) => {
-			await localPatch({ document: store, data: suggestion.patch });
+			await patchStoreSettings(store, suggestion.patch, t);
 		},
-		[localPatch, store]
+		[t, store]
 	);
 
 	const liveKeys = (currentKeys.length > 0 ? currentKeys : (latestAttempt ?? []))

@@ -6,6 +6,10 @@ import { calculateTotals } from '../report/utils';
 
 import type { LocalProduct } from './aggregate';
 import type { ReportOrder, ReportsData } from '../context';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeSiteCredentials: () => mockCredentials,
+}));
 
 export const mockCategories = new BehaviorSubject<
 	{ id: number; name: string; parent: number }[] | undefined
@@ -14,7 +18,7 @@ export const mockProducts = new BehaviorSubject<LocalProduct[] | undefined>([]);
 export const mockCredentials = new BehaviorSubject<
 	{ id: number; display_name: string }[] | undefined
 >([]);
-const mockSite = { populate$: () => mockCredentials };
+const mockSite = {};
 const mockRuntime = { engine: {}, locale: 'en' };
 export const mockState = {
 	register: undefined as string | undefined,

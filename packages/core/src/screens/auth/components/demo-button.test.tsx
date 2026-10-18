@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
+import { from } from 'rxjs';
 import { act, render, waitFor } from '@testing-library/react';
 
 import {
@@ -8,6 +9,10 @@ import {
 	saveRedirectState,
 } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { DEMO_CLAIM_KEY, DemoButton } from './demo-button';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeUserSites: () => from(mockUser.populate()),
+}));
 
 const mockExpoPromptAsync = jest.fn();
 const mockError = jest.fn();

@@ -75,8 +75,9 @@ jest.mock('../components/incl-excl-tax-radio-group', () => ({ InclExclRadioGroup
 jest.mock('../components/tax-based-on-select', () => ({ TaxBasedOnSelect: () => null }));
 jest.mock('../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
 jest.mock('../components/tax-display-radio-group', () => ({ TaxDisplayRadioGroup: () => null }));
-jest.mock('../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
 }));
 jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ get: jest.fn() }),
