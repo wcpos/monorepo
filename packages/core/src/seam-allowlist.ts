@@ -1648,10 +1648,15 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: raw query construction :: acquireOpenOrdersQueryHandle :: collection.find({ selector: openOrdersSelector(cashierId, storeId, registerId), sort: OPEN_ORDERS_SORT, }) :: 1',
 	"screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: storage import ::  :: from 'rxdb' :: 1",
 	'screens/main/pos/contexts/order-money-divergence/index.tsx :: engine handle aliased :: OrderMoneyDivergenceProvider :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (g13): the till menu's clear-local-data and sales-today go through query.
+	'screens/main/pos/cart/clear-local-data.tsx :: engine handle aliased :: ClearLocalData :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/pos/cart/clear-local-data.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/cart/user-sheet.tsx :: engine handle aliased :: useSalesToday :: { engine, locale } = useQueryRuntime() :: 1',
+	"screens/main/pos/cart/user-sheet.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 701;
+export const SEAM_RETIRED_FLOOR = 705;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1e55c112d3179a2437defea26fa95e6b703fbcb9b6d3f45d1f6f327dcc40f51a';
+	'c2433c2564cc40d6a8aa3909188268ec5134e92ccbfec52177cb2ef6c2c9fa79';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

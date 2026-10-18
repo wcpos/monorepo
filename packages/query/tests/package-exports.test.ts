@@ -117,7 +117,7 @@ describe('package exports', () => {
 		});
 	});
 
-	it.each(['mutations', 'store-local', 'record-readers', 'query-state'])(
+	it.each(['mutations', 'store-local', 'record-readers', 'query-state', 'local-data-reset'])(
 		'resolves the %s subpath identically through Node exports and Metro',
 		(subpath) => {
 			const nodeResolved = requireFromMain.resolve(`@wcpos/query/${subpath}`);

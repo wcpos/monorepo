@@ -45,6 +45,7 @@ let mockOtherStores = [{ id: 2, localID: 'other-store' }];
 const mockLogout = jest.fn();
 const mockReplace = jest.fn();
 let mockStoreId = 2;
+let mockStoreTimezone: string | undefined;
 let mockStores = ['store-a'];
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
@@ -61,9 +62,9 @@ jest.mock('observable-hooks', () => ({
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, push: mockPush }) }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
-jest.mock('@wcpos/database', () => ({
-	clearAllDB: jest.fn(),
-	scheduleClearLocalDataOnNextLoad: jest.fn(),
+jest.mock('@wcpos/query/local-data-reset', () => ({
+	clearLocalDataNow: jest.fn(),
+	scheduleLocalDataReset: jest.fn(),
 }));
 jest.mock('../../../../utils/reload-app', () => ({ reloadApp: jest.fn() }));
 jest.mock('@wcpos/utils/platform', () => ({
@@ -75,16 +76,21 @@ const mockObserve = jest.fn((..._args: unknown[]) =>
 		hits: [{ record: { payload: { total: '12.30' } } }, { record: { payload: { total: '7.70' } } }],
 	})
 );
+jest.mock('../../../../../../query/src/engine-query', () => ({
+	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => ({ engine: 'engine', locale: 'en' }),
-	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
+	observeCashierSalesTotal: jest.fn(
+		jest.requireActual('../../../../../../query/src/reads/cashier-sales').observeCashierSalesTotal
+	),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ login: mockLogin }),
+	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
 	useStoreSession: () => ({
 		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
-		store: { id: mockStoreId },
+		store: { id: mockStoreId, price_num_decimals: 2 },
 		site: { uuid: 'site', home: 'https://shop.example', populateResource: () => ({}) },
 		logout: mockLogout,
 	}),
@@ -347,4 +353,48 @@ describe('switch store', () => {
 		// Off the POS the sheet portals to the root host, so the store sheet must too.
 		expect(screen.getByTestId('switch-store-sheet').getAttribute('data-host')).toBe('null');
 	});
+});
+
+it('uses the store day, re-subscribes at store midnight and cleans up its timer', async () => {
+	jest.useFakeTimers();
+	jest.setSystemTime(new Date('2026-10-25T10:59:59Z'));
+	mockStoreTimezone = 'Pacific/Pago_Pago';
+	mockObserve.mockClear();
+	try {
+		const { unmount } = renderHook(() => useSalesToday());
+		expect(mockObserve).toHaveBeenCalledTimes(1);
+		const { observeCashierSalesTotal } = jest.requireMock('@wcpos/query');
+		expect(observeCashierSalesTotal).toHaveBeenLastCalledWith(
+			'engine',
+			expect.objectContaining({ fromGmt: '2026-10-24T11:00:00', toGmt: '2026-10-25T11:00:00' })
+		);
+		await act(async () => {
+			jest.advanceTimersByTime(1001);
+		});
+		expect(mockObserve).toHaveBeenCalledTimes(2);
+		const descriptor = mockObserve.mock.calls[1][1] as { selector: { date_created_gmt: unknown } };
+		expect(descriptor.selector.date_created_gmt).toEqual({
+			$gte: '2026-10-25T11:00:00',
+			$lt: '2026-10-26T11:00:00',
+		});
+		await act(async () => {
+			jest.advanceTimersByTime(new Date('2026-10-26T11:00:00Z').getTime() - Date.now());
+		});
+		expect(mockObserve).toHaveBeenCalledTimes(3);
+		expect(mockObserve.mock.calls[2][1]).toMatchObject({
+			selector: {
+				date_created_gmt: {
+					$gte: '2026-10-26T11:00:00',
+					$lt: '2026-10-27T11:00:00',
+				},
+			},
+		});
+		unmount();
+		// Async React act queues microtasks; they are not the midnight timer.
+		jest.runAllTicks();
+		expect(jest.getTimerCount()).toBe(0);
+	} finally {
+		mockStoreTimezone = undefined;
+		jest.useRealTimers();
+	}
 });

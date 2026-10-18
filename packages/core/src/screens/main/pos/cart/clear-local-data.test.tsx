@@ -9,9 +9,9 @@ import { resetRestartLockForTests } from './restart-lock';
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
-jest.mock('@wcpos/database', () => ({
-	clearAllDB: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
-	scheduleClearLocalDataOnNextLoad: jest.fn(),
+jest.mock('@wcpos/query/local-data-reset', () => ({
+	clearLocalDataNow: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
+	scheduleLocalDataReset: jest.fn(),
 }));
 jest.mock('../../../../utils/reload-app', () => ({ reloadApp: jest.fn() }));
 jest.mock('@wcpos/utils/platform', () => ({
@@ -69,7 +69,9 @@ const renderReset = () =>
  * restart overlay with the data still intact.
  */
 describe('ClearLocalData', () => {
-	const { clearAllDB, scheduleClearLocalDataOnNextLoad } = jest.requireMock('@wcpos/database');
+	const { clearLocalDataNow, scheduleLocalDataReset } = jest.requireMock(
+		'@wcpos/query/local-data-reset'
+	);
 	const { reloadApp } = jest.requireMock('../../../../utils/reload-app');
 	const { Toast } = jest.requireMock('@wcpos/components/toast');
 	const { Platform: mockPlatform } = jest.requireMock('@wcpos/utils/platform');
@@ -87,21 +89,21 @@ describe('ClearLocalData', () => {
 	beforeEach(() => {
 		resetRestartLockForTests();
 		jest.clearAllMocks();
-		clearAllDB.mockResolvedValue({ success: true, message: 'cleared' });
+		clearLocalDataNow.mockResolvedValue({ success: true, message: 'cleared' });
 		mockPlatform.OS = 'web';
 		mockPlatform.isWeb = true;
 		mockPlatform.isNative = false;
 	});
 
 	it('schedules the pre-hydration clear and reloads without touching the databases', async () => {
-		scheduleClearLocalDataOnNextLoad.mockReturnValue(true);
+		scheduleLocalDataReset.mockReturnValue(true);
 		reloadApp.mockReturnValue(true);
 
 		await confirmReset();
 
-		expect(scheduleClearLocalDataOnNextLoad).toHaveBeenCalled();
+		expect(scheduleLocalDataReset).toHaveBeenCalled();
 		expect(reloadApp).toHaveBeenCalled();
-		expect(clearAllDB).not.toHaveBeenCalled();
+		expect(clearLocalDataNow).not.toHaveBeenCalled();
 		expect(Toast.show).not.toHaveBeenCalled();
 		expect(screen.queryByTestId('clear-local-data-restart-overlay')).toBeNull();
 	});
@@ -110,20 +112,20 @@ describe('ClearLocalData', () => {
 		mockPlatform.OS = 'ios';
 		mockPlatform.isWeb = false;
 		mockPlatform.isNative = true;
-		scheduleClearLocalDataOnNextLoad.mockReturnValue(true);
+		scheduleLocalDataReset.mockReturnValue(true);
 		reloadApp.mockReturnValue(false);
 
 		await confirmReset();
 
 		expect(screen.getByTestId('clear-local-data-restart-overlay')).toBeTruthy();
-		expect(clearAllDB).not.toHaveBeenCalled();
+		expect(clearLocalDataNow).not.toHaveBeenCalled();
 	});
 
 	it('keeps the restart overlay when the confirming host unmounts', async () => {
 		mockPlatform.OS = 'ios';
 		mockPlatform.isWeb = false;
 		mockPlatform.isNative = true;
-		scheduleClearLocalDataOnNextLoad.mockReturnValue(true);
+		scheduleLocalDataReset.mockReturnValue(true);
 		reloadApp.mockReturnValue(false);
 
 		const { rerender } = render(
@@ -154,11 +156,11 @@ describe('ClearLocalData', () => {
 		mockPlatform.OS = 'ios';
 		mockPlatform.isWeb = false;
 		mockPlatform.isNative = true;
-		scheduleClearLocalDataOnNextLoad.mockReturnValue(false);
+		scheduleLocalDataReset.mockReturnValue(false);
 
 		await confirmReset();
 
-		expect(clearAllDB).not.toHaveBeenCalled();
+		expect(clearLocalDataNow).not.toHaveBeenCalled();
 		expect(reloadApp).not.toHaveBeenCalled();
 		expect(Toast.show).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'error', title: 'common.clear_all_local_data_failed' })
@@ -166,12 +168,12 @@ describe('ClearLocalData', () => {
 	});
 
 	it('falls back to a direct clear plus reload on web when the flag cannot be scheduled', async () => {
-		scheduleClearLocalDataOnNextLoad.mockReturnValue(false);
+		scheduleLocalDataReset.mockReturnValue(false);
 		reloadApp.mockReturnValue(true);
 
 		await confirmReset();
 
-		expect(clearAllDB).toHaveBeenCalled();
+		expect(clearLocalDataNow).toHaveBeenCalled();
 		expect(reloadApp).toHaveBeenCalled();
 	});
 });

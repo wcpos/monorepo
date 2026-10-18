@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { filter, firstValueFrom, map } from 'rxjs';
+import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Icon } from '@wcpos/components/icon';
@@ -16,8 +16,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
-import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
-import { identityColumnFilter } from '@wcpos/sync-core';
+import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -25,6 +24,7 @@ import { credentialsListResource } from '../../../../hooks/user-db-list-resource
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
+import { useStoreDay } from '../../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -37,32 +37,29 @@ import { isCartAttributed } from '../../../../services/register-session/cart-att
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
-	const { engine, locale } = useQueryRuntime();
+	const runtime = useQueryRuntime();
+	const storeDay = useStoreDay();
 	const sales$ = React.useMemo(() => {
-		const today = new Date();
-		const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-		const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-		// Local read only: opening the user sheet must not declare a new server fetch.
-		return observeEngineQuery(engine, {
-			collection: 'orders',
-			limit: Number.MAX_SAFE_INTEGER,
-			selector: {
-				status: 'completed',
-				date_created_gmt: {
-					$gte: convertLocalDateToUTCString(start),
-					$lt: convertLocalDateToUTCString(end),
-				},
-				...identityColumnFilter({
+		// Re-arm at each store midnight (including DST); unsubscribing cancels the timer.
+		const midnight$ = defer(() => {
+			const { to } = storeDay.dayBounds(storeDay.today());
+			return timer(new Date(to.getTime() + 1));
+		}).pipe(repeat(), startWith(0));
+		return midnight$.pipe(
+			switchMap(() => {
+				const { from, to } = storeDay.dayBounds(storeDay.today());
+				// dayBounds ends inclusively; the read uses an exclusive upper bound.
+				const end = new Date(to.getTime() + 1);
+				// Local read only: opening the user sheet must not declare a new server fetch.
+				return observeCashierSalesTotal(runtime.engine, {
 					cashierId: String(wpCredentials.id),
 					storeId: store.id ? String(store.id) : 'woocommerce-pos',
-				}),
-			},
-		}).pipe(
-			map((result) =>
-				result.hits.reduce((sum, hit) => sum + Number(hit.record.payload.total || 0), 0)
-			)
+					fromGmt: convertLocalDateToUTCString(from),
+					toGmt: convertLocalDateToUTCString(end),
+				});
+			})
 		);
-	}, [engine, locale, wpCredentials.id, store.id]);
+	}, [runtime.engine, runtime.locale, wpCredentials.id, store.id, storeDay]);
 	return useObservableState(sales$, 0);
 }
 

@@ -202,3 +202,5 @@ export {
 	observeCatalogByWooIds,
 } from './reads/stock-record';
 export { readCouponCatalog } from './reads/coupon-catalog';
+
+export { observeCashierSalesTotal } from './reads/cashier-sales';
