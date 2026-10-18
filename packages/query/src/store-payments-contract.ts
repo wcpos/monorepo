@@ -2,7 +2,7 @@ import { parsePaymentsContract } from '@wcpos/order-math';
 
 import { useDocField } from './records/use-record-field';
 
-import type { RxState } from 'rxdb';
+import type { ExtraDataSlot } from './user-db/state';
 
 function contractFromEnvelope(value: unknown): string | null {
 	if (!value || typeof value !== 'object') return null;
@@ -21,8 +21,6 @@ export function readStorePaymentsContract(
 	return contractFromEnvelope(extraData?.get('paymentMethods'));
 }
 
-export function useStorePaymentsContract(
-	extraData: RxState<Record<string, unknown>>
-): string | null {
+export function useStorePaymentsContract(extraData: ExtraDataSlot): string | null {
 	return useDocField(extraData, (state) => contractFromEnvelope(state.paymentMethods));
 }
