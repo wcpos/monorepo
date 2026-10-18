@@ -1021,6 +1021,9 @@ importers:
       '@wcpos/database':
         specifier: workspace:*
         version: link:../database
+      '@wcpos/order-math':
+        specifier: workspace:*
+        version: link:../order-math
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../sync-core

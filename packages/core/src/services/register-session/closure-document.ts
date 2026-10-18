@@ -1,7 +1,7 @@
 import { tz } from '@date-fns/tz';
 import { format } from 'date-fns';
 
-import type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
+import type { ClosureRow, RegisterSessionRow } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 type Values = Record<string, unknown>;

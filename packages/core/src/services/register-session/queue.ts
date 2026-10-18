@@ -13,14 +13,14 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-
 import {
 	adoptCounters,
 	mintClosureNumber,
 	readCounters,
 	readRegister,
 	type RegisterCounters,
-} from '../register/register-document';
+} from '@wcpos/query/register-session';
+
 import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
 import { failureFacts } from './failure-facts';
 import { recordRegisterFact } from './audit';

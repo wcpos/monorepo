@@ -7,8 +7,8 @@ import {
 	ERROR_CODES,
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { mintUuid } from '@wcpos/query/register-session';
 
-import { mintUuid } from '../register/register-document';
 import { useStoreSession } from '../../contexts/app-state';
 
 import type { failureFacts } from './failure-facts';

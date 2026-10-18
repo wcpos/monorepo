@@ -2269,8 +2269,8 @@ jest.mock('../hooks/use-sale-context', () => ({
 				// The session gate reads the bound register and its open session the way the app does.
 				resolveSession: async () => {
 					const { readBoundRegister } = jest.requireActual<
-						typeof import('../../../../../services/register/register-document')
-					>('../../../../../services/register/register-document');
+						typeof import('@wcpos/query/register-session')
+					>('@wcpos/query/register-session');
 					const { findOpenSession } = jest.requireActual<
 						typeof import('../../../../../services/register-session/session-store')
 					>('../../../../../services/register-session/session-store');

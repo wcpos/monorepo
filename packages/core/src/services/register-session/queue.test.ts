@@ -8,8 +8,8 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
+import { ensureRegister, readRegister } from '@wcpos/query/register-session';
 
-import { ensureRegister, readRegister } from '../register/register-document';
 import {
 	closeSession,
 	openSession,

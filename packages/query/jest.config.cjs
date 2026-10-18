@@ -30,6 +30,7 @@ module.exports = {
 	testEnvironment: 'jsdom',
 	moduleNameMapper: {
 		'^@wcpos/utils/src/logger$': '<rootDir>/tests/__mocks__/logger.ts',
+		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',
 		'^@wcpos/utils/logger$': '<rootDir>/tests/__mocks__/logger.ts',
 		'^@wcpos/hooks/use-http-client/parse-wp-error$': '<rootDir>/tests/__mocks__/http.ts',
 		'^@wcpos/database$': '<rootDir>/tests/helpers/db.ts',

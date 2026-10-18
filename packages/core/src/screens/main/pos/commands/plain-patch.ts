@@ -1,6 +1,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 
 import type { useQueryRuntime } from '@wcpos/query';
+import { getCurrentBoundRegisterId } from '@wcpos/query/register-session';
 
 import {
 	documentRecordId,
@@ -10,7 +11,6 @@ import {
 	syncableChanges,
 	writeableCollection,
 } from '../../hooks/mutations/use-local-mutation';
-import { getCurrentBoundRegisterId } from '../../../../services/register/register-document';
 import {
 	getTemporaryOrder,
 	patchTemporaryOrderPayload,

@@ -4,10 +4,10 @@ import { debounceTime, filter } from 'rxjs';
 
 import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { readRegister } from '@wcpos/query/register-session';
 
 import { recordRegisterFact } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
-import { readRegister } from '../register/register-document';
 import { writeClosure } from './session-store';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';

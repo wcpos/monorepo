@@ -9,7 +9,8 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./testing": "./src/testing.ts",
-		"./collection-map": "./src/collection-map.ts"
+		"./collection-map": "./src/collection-map.ts",
+		"./register-session": "./src/register-session/index.ts"
 	},
 	"type": "module",
 	"files": [
@@ -24,6 +25,7 @@
 	},
 	"dependencies": {
 		"@wcpos/database": "workspace:*",
+		"@wcpos/order-math": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",

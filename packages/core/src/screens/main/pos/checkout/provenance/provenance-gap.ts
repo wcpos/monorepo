@@ -1,8 +1,7 @@
 import type { UserDatabase } from '@wcpos/database';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
-
-import { readRegister } from '../../../../../services/register/register-document';
+import { readRegister } from '@wcpos/query/register-session';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
