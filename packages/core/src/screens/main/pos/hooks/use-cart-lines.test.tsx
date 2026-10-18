@@ -14,7 +14,7 @@ import { useCartLines } from './use-cart-lines';
  * single-flight ref and its own re-push latch. While settlement ran only for couponed
  * carts that was survivable; once settle became the writer for every cart change it
  * would have meant three concurrent writes per edit. The write moved to
- * useCartSettlement, which OpenOrders mounts once.
+ * cart commands and the session-owned settlement coordinator.
  *
  * This suite pins the property that makes the three mounts safe: the selector never
  * writes. If settlement is ever moved back in here, this fails.

@@ -55,8 +55,11 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 	);
 }
 
-const hasCoupons = (record: { payload: OrderPayload }) =>
+const needsReferences = (record: { payload: OrderPayload }) =>
 	record.payload.coupon_lines?.some((line) => line.code != null && !readQuickDiscountIntent(line));
+
+const hasCoupons = (record: { payload: OrderPayload }) =>
+	record.payload.coupon_lines?.some((line) => line.code != null);
 
 /** One sequential drain; only content (never aggregate money or revision) invalidates a pass. */
 export function createSettlementCoordinator(deps: Deps): { stop(): void } {
@@ -79,10 +82,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	const fingerprint = (record: CurrentOrderRecord) => {
 		const p = record.payload;
 		return JSON.stringify([
-			hasCoupons(record)
+			needsReferences(record)
 				? replayContentKey(record)
 				: [p.line_items, p.fee_lines, p.shipping_lines, p.coupon_lines, p.status],
-			hasCoupons(record) ? references : null,
+			needsReferences(record) ? references : null,
 			p.billing,
 			p.shipping,
 			p.meta_data?.filter(
@@ -108,7 +111,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					!stopped &&
 					pass === epoch &&
 					rates.ready &&
-					references.ready &&
+					(!needsReferences(fresh) || references.ready) &&
 					seen.get(uuid) === key &&
 					flights.get(uuid) === flight &&
 					records.some((r) => r.uuid === uuid) &&
@@ -140,7 +143,8 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 							flights.delete(uuid);
 							continue;
 						}
-						if (references.ready && seen.get(uuid) !== key) void replay(fresh, key, pass);
+						if ((!needsReferences(fresh) || references.ready) && seen.get(uuid) !== key)
+							void replay(fresh, key, pass);
 						continue;
 					}
 					if (seen.get(uuid) === fingerprint(record.getLatest())) continue;
@@ -179,7 +183,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				flights.clear();
 			}
 			records = nextRecords ?? [];
-			if (!records.some(hasCoupons)) releaseReferences();
+			if (!records.some(needsReferences)) releaseReferences();
 			else if (!referenceSubscription) {
 				referenceSubscription = new Subscription();
 				referenceSubscription.add(

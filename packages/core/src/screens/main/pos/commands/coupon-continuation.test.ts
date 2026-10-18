@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
-it('shares retained handles with the hook; release is not readiness; outlives the hook deadline and releases on reset/teardown', async () => {
+it('#963 shares retained handles with the hook; release is not readiness; outlives the hook deadline and releases on reset/teardown', async () => {
 	const hook = acquireReferenceDemandHandle(engine, 'coupons', 0);
 	const releaseHook = hook.retain();
 	const values: boolean[] = [];

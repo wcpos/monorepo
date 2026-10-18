@@ -13,8 +13,7 @@ export const config = createCartConfig({
 	taxClassSlugs: [],
 	calcDiscountsSequentially: false,
 });
-export const useCartConfigForOrder = jest.fn(() => () => config);
-export const useCartConfigReader = useCartConfigForOrder;
+export const useCartConfigReader = jest.fn(() => () => config);
 
 /** Every existing command case also pins its merged write contract. */
 export function expectSettledWrites(patch: jest.Mock) {

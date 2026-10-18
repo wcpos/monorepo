@@ -5,9 +5,22 @@ import { act, render } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
+import * as orderMath from '@wcpos/order-math';
+import { createCartConfig } from '@wcpos/order-math';
 
+import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { settleCartWrite } from './settle-cart-write';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
+import { quickDiscountCouponInput } from '../hooks/quick-discount';
+
+import type { CurrentOrderRecord } from '../contexts/current-order/context';
+import type { OrderPayload } from './cart-config-for-order';
+
+jest.mock('@wcpos/order-math', () => ({
+	...jest.requireActual('@wcpos/order-math'),
+	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
+}));
 
 const events = new Subject<{ type: string; collection?: string }>();
 const coverage = new BehaviorSubject({ complete: true });
@@ -26,11 +39,18 @@ const engine = {
 const manager = { engine };
 const writes: Record<string, unknown>[] = [];
 const report = jest.fn();
-const readConfig = () => config;
-const t = (key: string) => key;
+let currentConfig = config;
+const readConfig = () => currentConfig;
+const beforeResolve = jest.fn<Promise<void>, []>(async () => {});
+const { createTestT } = jest.requireActual('../../../../../jest/translate');
+const t = createTestT();
 jest.mock('../../../../contexts/translations', () => ({ useT: () => t }));
-const ownsMoney = () => false;
-const mockInputs = { settings: { priceNumDecimals: 2 }, rates: [], baseLocation: {} };
+const ownsMoney = jest.fn<boolean, [string]>(() => false);
+let mockInputs = {
+	settings: { priceNumDecimals: 2 },
+	rates: [] as { id: number; rate: string }[],
+	baseLocation: {},
+};
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
@@ -61,12 +81,17 @@ jest.mock('../contexts/order-engine-warnings', () => ({ useReportEngineWarnings:
 jest.mock('./plain-patch', () => ({
 	plainPatch: async (_manager: unknown, collection: string, input: any) => {
 		expect(collection).toBe('orders');
+		input.changes(input.document.payload);
+		await beforeResolve();
 		const changes = input.changes(input.document.payload);
-		if (Object.keys(changes).length) writes.push(changes);
+		if (Object.keys(changes).length) {
+			writes.push(changes);
+			Object.assign(input.document.payload, changes);
+		}
 		return { changes, document: input.document };
 	},
 }));
-const record = (payload = {}) => ({
+const record = (payload: OrderPayload = {}) => ({
 	uuid: 'a',
 	payload: {
 		status: 'pos-open',
@@ -84,6 +109,9 @@ const flush = async () => {
 	});
 };
 beforeEach(() => {
+	currentConfig = config;
+	ownsMoney.mockReset().mockReturnValue(false);
+	beforeResolve.mockReset().mockResolvedValue(undefined);
 	writes.length = 0;
 	jest.clearAllMocks();
 	coverage.next({ complete: true });
@@ -160,7 +188,7 @@ jest.mock('./coupon-continuation', () => ({
 jest.mock('../hooks/use-coupon-context', () => ({ readCouponContext: async () => context }));
 
 it.each(['valid', 'missing', 'boundary'])(
-	'replays a %s coupon only after references, once',
+	'#963 replays a %s coupon only after references, once, with a translated failure toast',
 	async (kind) => {
 		references.next({ ready: false, generation: '0:0' });
 		const coupon = { code: 'summer', discount_type: 'percent', amount: '10' };
@@ -191,13 +219,272 @@ it.each(['valid', 'missing', 'boundary'])(
 		if (kind === 'missing')
 			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 				'Cart settlement failed',
-				expect.objectContaining({ context: expect.objectContaining({ code: 'missing_coupon' }) })
+				expect.objectContaining({
+					showToast: true,
+					toast: { title: 'Coupon not found' },
+					context: expect.objectContaining({ code: 'missing_coupon' }),
+				})
 			);
 		expect(report).toHaveBeenCalledTimes(1);
 		act(() => orders.next({ ready: true, hits: [{ record: a }] }));
 		await flush();
-		expect(report).toHaveBeenCalledTimes(1);
+		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
+		expect(getLogger(['test']).warn).toHaveBeenCalledTimes(kind === 'valid' ? 0 : 1);
 		view.unmount();
 		expect(references.observed).toBe(false);
+	}
+);
+
+it('#952 replays a quick discount after a line edit without demanding catalog references', async () => {
+	const intent = { discount_type: 'percent' as const, amount: '10' };
+	const code = 'pos-discount';
+	context.coupons = new Map([[code, quickDiscountCouponInput(code, intent)]]);
+	references.next({ ready: false, generation: '0:0' });
+	// The first line already has 10% off; the newly added line has not been redistributed yet.
+	const a = record({
+		total: '190',
+		line_items: [
+			{ product_id: 1, quantity: 1, subtotal: '100', total: '90' },
+			{ product_id: 2, quantity: 1, subtotal: '100', total: '100' },
+		],
+		coupon_lines: [{ code, meta_data: [{ key: '_wcpos_quick_discount', value: intent }] }],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		expect(references.observed).toBe(false);
+		expect(writes).toHaveLength(1);
+		expect(writes[0]).toMatchObject({
+			total: '180',
+			discount_total: '20',
+			line_items: [{ total: '90' }, { total: '90' }],
+		});
+	} finally {
+		view.unmount();
+	}
+});
+
+it('#1472 bind settles stale money; a subsequent bind with correct totals writes nothing', async () => {
+	const a = record();
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const first = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toHaveLength(1);
+	expect(a.payload.total).toBe('10');
+	first.unmount();
+	writes.length = 0;
+	const second = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toEqual([]);
+	second.unmount();
+});
+
+it('#1472 tax rates change persisted shipping money without changing a product line', async () => {
+	const rates = [{ id: 1, rate: '10', class: 'standard', shipping: true, priority: 1 }];
+	currentConfig = createCartConfig({ ...config, calcTaxes: true, rates, allRates: rates });
+	const a = record({ shipping_lines: [{ method_id: 'flat_rate', total: '10' }] });
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(a.payload.total).toBe('21');
+	const changedRates = [{ ...rates[0], rate: '20' }];
+	currentConfig = createCartConfig({
+		...config,
+		calcTaxes: true,
+		rates: changedRates,
+		allRates: changedRates,
+	});
+	mockInputs = { ...mockInputs, rates: changedRates };
+	view.rerender(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toHaveLength(2);
+	expect(a.payload.total).toBe('22');
+	expect(a.payload.line_items).toEqual([{ total: '10', subtotal: '10' }]);
+	view.unmount();
+});
+
+it('#1472 serializes emissions so the newest money lands last', async () => {
+	const a = record();
+	orders.next({ ready: true, hits: [{ record: a }] });
+	let release!: () => void;
+	beforeResolve.mockImplementationOnce(
+		() =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			})
+	);
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	await act(async () => {
+		a.payload.line_items = [{ total: '30', subtotal: '30' }];
+		orders.next({ ready: true, hits: [{ record: a }] });
+	});
+	release();
+	await flush();
+	expect(a.payload.total).toBe('30');
+	expect(writes.map((patch) => patch.total)).toEqual(['30']);
+	view.unmount();
+});
+
+it('#1472 a queued settlement cannot overwrite a command or rewrite its settled aggregate', async () => {
+	const a = record();
+	let release!: () => void;
+	const command = enqueueOrderMutation('a', async () => {
+		await new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		settleCartWrite(
+			{
+				document: a as CurrentOrderRecord,
+				data: { line_items: [{ total: '30', subtotal: '30' }] },
+			},
+			{
+				configForOrder: readConfig,
+				serverOwnsMoney: () => false,
+				localPatch: ({ changes }) => Object.assign(a.payload, changes(a.payload)),
+			}
+		);
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	release();
+	await command;
+	await flush();
+	expect(a.payload.total).toBe('30');
+	expect(writes).toEqual([]);
+	view.unmount();
+});
+
+it('#1472 persists recomputed percentage fees in the single settlement write', async () => {
+	const a = record({
+		fee_lines: [
+			{
+				name: 'Service',
+				total: '0',
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ amount: '10', percent: true, prices_include_tax: false }),
+					},
+				],
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toHaveLength(1);
+	expect(writes[0]).toMatchObject({ total: '11', fee_lines: [{ total: '1' }] });
+	view.unmount();
+});
+
+it.each(['aggregate', 'failed coupon'] as const)(
+	'#1560 reports warnings on a %s pass even without a write',
+	async (kind) => {
+		currentConfig = createCartConfig({ ...config, calcTaxes: true });
+		context.coupons = new Map();
+		references.next({ ready: true, generation: '0:0' });
+		// The engine result contract carries warnings on failure too, even though today's
+		// missing-coupon gate returns before collecting them. Pin the reporting boundary.
+		const failed =
+			kind === 'failed coupon'
+				? jest.mocked(orderMath.settleCart).mockReturnValue({
+						ok: false,
+						error: { code: 'missing_coupon', missingCodes: ['missing'] },
+						warnings: [{ code: 'unknown_tax_rate_id', rateId: 42 }],
+					})
+				: undefined;
+		const a = record({
+			line_items: [
+				{
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					subtotal_tax: '1',
+					total_tax: '1',
+					taxes: [{ id: 42, subtotal: '1', total: '1' }],
+				},
+			],
+			...(kind === 'failed coupon' ? { coupon_lines: [{ code: 'missing' }] } : {}),
+		});
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const first = render(<SettlementCoordinatorProvider />);
+		await flush();
+		first.unmount();
+		writes.length = 0;
+		report.mockClear();
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(writes).toEqual([]);
+		expect(report).toHaveBeenCalledTimes(1);
+		expect(report).toHaveBeenCalledWith(
+			expect.arrayContaining([{ code: 'unknown_tax_rate_id', rateId: 42 }]),
+			{ orderId: 'a', site: 'settlement-coordinator' }
+		);
+		view.unmount();
+		failed?.mockImplementation(jest.requireActual('@wcpos/order-math').settleCart);
+	}
+);
+
+it('#1560 only reports authoritative warnings after the resolver preflight', async () => {
+	currentConfig = createCartConfig({ ...config, calcTaxes: true });
+	const a = record({
+		line_items: [{ subtotal: '10', total: '10', total_tax: '1', taxes: [{ id: 41, total: '1' }] }],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	// plainPatch may evaluate a resolver before the authoritative resident write.
+	beforeResolve.mockImplementationOnce(async () => {
+		expect(report).not.toHaveBeenCalled();
+		a.payload.line_items = [
+			{ subtotal: '10', total: '10', total_tax: '1', taxes: [{ id: 42, total: '1' }] },
+		];
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(report).toHaveBeenCalledTimes(1);
+	expect(report).toHaveBeenCalledWith([{ code: 'unknown_tax_rate_id', rateId: 42 }], {
+		orderId: 'a',
+		site: 'settlement-coordinator',
+	});
+	view.unmount();
+});
+
+it.each(['divergence', 'command', 'replay-owner', 'replay-edit'] as const)(
+	'#1472/#963 rechecks %s at the authoritative resident write',
+	async (scenario) => {
+		const replay = scenario.startsWith('replay');
+		context.coupons = new Map([
+			['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+		]);
+		references.next({ ready: true, generation: '0:0' });
+		const a = record({
+			line_items: [{ product_id: 1, quantity: 1, subtotal: '10', total: '10' }],
+			...(replay ? { coupon_lines: [{ code: 'summer' }] } : {}),
+		});
+		orders.next({ ready: true, hits: [{ record: a }] });
+		let release!: () => void;
+		beforeResolve.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		if (scenario === 'divergence') ownsMoney.mockReturnValue(true);
+		else if (scenario === 'replay-owner')
+			a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+		else {
+			a.payload.line_items = [{ product_id: 1, quantity: 1, subtotal: '30', total: '30' }];
+			a.payload.total = '30';
+		}
+		release();
+		await flush();
+		if (scenario === 'command') expect(writes[0]).toMatchObject({ total: '30' });
+		else expect(writes).toEqual([]);
+		view.unmount();
 	}
 );

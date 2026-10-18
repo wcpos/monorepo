@@ -701,8 +701,7 @@ export async function readCartMoney(
 	const marker = (testId: string) => page.getByTestId(testId);
 	const total = marker('cart-order-total');
 	// Exactly one: OpenOrders — and so the cart, and so these markers — is
-	// mounted once, by design (see useCartSettlement's "mounted exactly once"
-	// note). Two would mean two carts, which is a defect in its own right and
+	// mounted once, by design. Two would mean two carts, a defect in its own right, and
 	// would make "the" cart total ambiguous.
 	await expect(total, 'exactly one cart-order-total must be rendered').toHaveCount(1);
 	await expect(total, 'the cart must settle a total before it can be compared').toHaveText(/\d/, {

@@ -44,7 +44,6 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1', isNew: mockIsNew } }),
 }));
-jest.mock('../hooks/use-cart-settlement', () => ({ useCartSettlement: () => undefined }));
 jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));

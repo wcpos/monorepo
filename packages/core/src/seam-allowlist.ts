@@ -936,7 +936,11 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 1',
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 2',
 	'query/scope-key.ts :: storage token :: useCoverageGeneration :: engine.status().collections :: 1',
+	// ADR 0033 PR 2d: the UI settlement hook and its remaining writes are deleted.
+	'screens/main/pos/hooks/use-cart-settlement.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-cart-settlement.ts :: resident helper write :: useCartSettlement :: useLocalMutation :: 1',
+	"screens/main/pos/hooks/use-cart-settlement.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 31;
+export const SEAM_RETIRED_FLOOR = 34;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'078542919ca07a9e22e69a9231de5be6df587bc874085f762996ef0765210dd8';
+	'd830d302947d41ff729b2dc6b0e9b2bdb6f7c90b9a5fb70deb47c0030938b819';

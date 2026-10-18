@@ -19,7 +19,6 @@ import { useEngineRecord } from '../../hooks/use-engine-document';
 import { StilledCart } from './stilled-cart';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';
-import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { useVoidOrder } from '../hooks/use-void-order';
 import { CartTable } from './table';
 import { EmptyCart } from './empty-cart';
@@ -71,11 +70,6 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
-	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
-	// useOrderTotals below all mount useCartLines — and settlement state must not be
-	// duplicated across them. Keep it mounted in checkout too: swapping the cart
-	// for its stilled table must not remove its single settlement writer. See use-cart-settlement.ts.
-	useCartSettlement();
 	const { status: bindingStatus } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.

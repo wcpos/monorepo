@@ -27,7 +27,7 @@ import { useQueryRuntime } from '@wcpos/query';
  * ── Why entries are STICKY (ADR 0032, replacing the retire-on-clean-ack rule) ─
  *
  * A held divergence does two jobs. It shows the cashier a notice, and it tells
- * `useCartSettlement` that this order's money now belongs to the server — so
+ * the settlement coordinator that this order's money now belongs to the server — so
  * the POS stops re-deriving that aggregate (`serverOwnsMoney` below).
  *
  * That second job is what makes retirement wrong. Once the POS has stopped
