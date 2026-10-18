@@ -288,7 +288,8 @@ jest.mock('./use-sale-context', () => ({
 }));
 
 // Journal storage is exercised against RxDB in the owner/journal suites.
-jest.mock('../completion-journal', () => ({
+jest.mock('@wcpos/query/store-local', () => ({
+	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),

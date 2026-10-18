@@ -106,19 +106,18 @@ describe('package exports', () => {
 		});
 	});
 
-	it('resolves the mutations subpath identically through Node exports and Metro', () => {
-		const nodeResolved = requireFromMain.resolve('@wcpos/query/mutations');
-		const metroResolved = metroResolve(
-			metroContext,
-			path.join(querySourceRoot, 'mutations'),
-			'ios'
-		);
+	it.each(['mutations', 'store-local'])(
+		'resolves the %s subpath identically through Node exports and Metro',
+		(subpath) => {
+			const nodeResolved = requireFromMain.resolve(`@wcpos/query/${subpath}`);
+			const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, subpath), 'ios');
 
-		expect(metroResolved).toEqual({
-			type: 'sourceFile',
-			filePath: fs.realpathSync(nodeResolved),
-		});
-	});
+			expect(metroResolved).toEqual({
+				type: 'sourceFile',
+				filePath: fs.realpathSync(nodeResolved),
+			});
+		}
+	);
 
 	it('resolves the receipt-email-queue subpath identically through Node exports and Metro', () => {
 		const nodeResolved = requireFromMain.resolve('@wcpos/query/receipt-email-queue');

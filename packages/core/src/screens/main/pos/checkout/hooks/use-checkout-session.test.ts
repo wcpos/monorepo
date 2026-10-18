@@ -9,10 +9,10 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { recordCompletionAttempt } from '@wcpos/query/store-local';
 
 import { createActionContext } from '../../../../../extensions/actions';
 import { persistSaleProvenance } from '../sale-completion';
-import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
 
 jest.mock('@wcpos/database/live-tab', () => ({
@@ -800,7 +800,8 @@ jest.mock('../hooks/use-sale-context', () => ({
 }));
 
 // Journal storage is exercised against RxDB in the owner/journal suites.
-jest.mock('../completion-journal', () => ({
+jest.mock('@wcpos/query/store-local', () => ({
+	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),

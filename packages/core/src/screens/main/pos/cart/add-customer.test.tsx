@@ -73,8 +73,8 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));
 
-jest.mock('./new-customer-link', () => ({
-	...jest.requireActual('./new-customer-link'),
+jest.mock('@wcpos/query/store-local', () => ({
+	...jest.requireActual('@wcpos/query/store-local'),
 	recordCustomerLink: (...args: unknown[]) => mockRecordCustomerLink(...args),
 }));
 

@@ -1,15 +1,23 @@
-import type { StoreDatabase } from '@wcpos/database';
+import { ensureLocalDocument, storeDatabase } from './ensure-local-document';
 
-import type { SaleContext, SaleOutcome } from './sale-completion';
+import type { StoreLocalDatabase } from '../reads/store-local';
 
 type Attempt = {
-	source: SaleOutcome['source'];
+	source:
+		| 'manual'
+		| 'terminal'
+		| 'gateway'
+		| 'gateway-settled'
+		| 'gateway-contract'
+		| 'gateway-snapshot'
+		| 'zero-balance'
+		| 'replay';
 	paymentId?: string;
 	at: string;
 	attempts: number;
 	missingStarts?: number;
 	unpaidStarts?: number;
-	actor?: SaleContext['actor'];
+	actor?: { id: string; name: string };
 	/**
 	 * The POS Order Status the merchant stored for a gateway attempt's gateway, so replay
 	 * settles the order as the pay window would (sale-completion isSettledOrderStatus).
@@ -27,21 +35,8 @@ type Attempt = {
 type Journal = { pending: Record<string, Attempt> };
 const ID = 'sale-completions';
 
-async function journal(storeDB: StoreDatabase) {
-	const existing = await storeDB.getLocal<Journal>(ID);
-	if (existing) return existing;
-	try {
-		return await storeDB.insertLocal<Journal>(ID, { pending: {} });
-	} catch (error) {
-		// Another tab may have initialized it. Never replace that tab's pending work.
-		const winner = await storeDB.getLocal<Journal>(ID);
-		if (winner) return winner;
-		throw error;
-	}
-}
-
 export async function recordCompletionAttempt(
-	storeDB: StoreDatabase,
+	storeDB: StoreLocalDatabase,
 	{
 		orderUuid,
 		...facts
@@ -55,7 +50,7 @@ export async function recordCompletionAttempt(
 		| 'settledOrderStatuses'
 	>
 ) {
-	const doc = await journal(storeDB);
+	const doc = await ensureLocalDocument<Journal>(storeDB, ID, { pending: {} });
 	await doc.incrementalModify((data) => {
 		data.pending[orderUuid] = { ...facts, at: new Date().toISOString(), attempts: 0 };
 		return data;
@@ -63,11 +58,11 @@ export async function recordCompletionAttempt(
 }
 
 export async function resolveCompletionAttempt(
-	storeDB: StoreDatabase,
+	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	expectAt?: string
 ) {
-	const doc = await storeDB.getLocal<Journal>(ID);
+	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
 		if (expectAt !== undefined && data.pending[orderUuid]?.at !== expectAt) return data;
 		delete data.pending[orderUuid];
@@ -76,7 +71,7 @@ export async function resolveCompletionAttempt(
 }
 
 export async function failCompletionAttempt(
-	storeDB: StoreDatabase,
+	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	error: unknown,
 	options: {
@@ -86,7 +81,9 @@ export async function failCompletionAttempt(
 		facts?: Pick<Attempt, 'source' | 'actor'>;
 	} = {}
 ) {
-	const doc = options.facts ? await journal(storeDB) : await storeDB.getLocal<Journal>(ID);
+	const doc = options.facts
+		? await ensureLocalDocument<Journal>(storeDB, ID, { pending: {} })
+		: await storeDatabase(storeDB).getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
 		if (options.expectAt !== undefined && data.pending[orderUuid]?.at !== options.expectAt)
 			return data;
@@ -103,6 +100,6 @@ export async function failCompletionAttempt(
 	});
 }
 
-export async function pendingCompletions(storeDB: StoreDatabase) {
-	return (await storeDB.getLocal<Journal>(ID))?.toJSON(true).data.pending ?? {};
+export async function pendingCompletions(storeDB: StoreLocalDatabase) {
+	return (await storeDatabase(storeDB).getLocal<Journal>(ID))?.toJSON(true).data.pending ?? {};
 }

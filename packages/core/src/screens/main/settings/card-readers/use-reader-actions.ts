@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-math';
+import { rememberedReaders } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { getDriver } from '../../../../services/payment-drivers/registry';
 import { getTerminalPaymentsService } from '../../../../services/terminal-payments';
-import { rememberedReaders } from '../../pos/checkout/tender/remembered-readers';
 import { deviceTransports } from '../../pos/checkout/tender/tiles';
 
 import type { ReaderInfo } from '../../../../services/payment-drivers/types';

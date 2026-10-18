@@ -14,6 +14,11 @@ import {
 } from '@wcpos/order-math';
 import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import {
+	failCompletionAttempt,
+	recordCompletionAttempt,
+	resolveCompletionAttempt,
+} from '@wcpos/query/store-local';
 
 import {
 	type ActionActor,
@@ -27,11 +32,6 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
-import {
-	failCompletionAttempt,
-	recordCompletionAttempt,
-	resolveCompletionAttempt,
-} from './completion-journal';
 import { enterReceipt } from './checkout-mode';
 import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';

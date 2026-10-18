@@ -3,6 +3,8 @@
  */
 import * as React from 'react';
 
+import { Subject } from 'rxjs';
+import { map, startWith } from 'rxjs/operators';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
@@ -11,6 +13,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
+import { recordCompletionAttempt, rememberedReaders } from '@wcpos/query/store-local';
 
 import {
 	createActionContext,
@@ -19,7 +22,6 @@ import {
 	TENDER_COMMIT_EVENT,
 } from '../../../../../extensions/actions';
 import { cashRounding } from '../cash-rounding-hook';
-import { recordCompletionAttempt } from '../completion-journal';
 import { useTerminalPaymentsService } from '../payments/server/use-terminal-payments-service';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
@@ -38,7 +40,6 @@ import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
-import { rememberedReaders } from './remembered-readers';
 
 import type {
 	TerminalLegState,
@@ -61,10 +62,17 @@ let mockLeg: TerminalLegState | null = null;
 type MockReader = { id: string; label: string; transport?: string };
 const mockReaderPreferences: Record<string, MockReader> = {};
 const mockReadersInUse = new Map<string, { orderUuid: string; orderNumber: string }>();
+const mockReaderChanges = new Subject<void>();
 const mockReaderState = {
+	get$: () =>
+		mockReaderChanges.pipe(
+			startWith(undefined),
+			map(() => mockReaderPreferences)
+		),
 	get: (path: string) => mockReaderPreferences[path],
 	set: async (path: string, modify: (value: MockReader | undefined) => MockReader) => {
 		mockReaderPreferences[path] = modify(mockReaderPreferences[path]);
+		mockReaderChanges.next();
 	},
 };
 const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
@@ -2543,7 +2551,8 @@ jest.mock('../hooks/use-sale-context', () => ({
 }));
 
 // Journal storage is exercised against RxDB in the owner/journal suites.
-jest.mock('../completion-journal', () => ({
+jest.mock('@wcpos/query/store-local', () => ({
+	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),

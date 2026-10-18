@@ -7,14 +7,11 @@ import { Query } from 'mingo';
 import { BehaviorSubject, map, startWith, Subject } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
+import { pendingCustomerLinks, recordCustomerLink } from '@wcpos/query/store-local';
 
 import { enqueueDocumentWrite } from '../../contexts/use-push-document';
 import { NewCustomerLinkBridge } from './new-customer-link-bridge';
-import {
-	customerLinkIdentity,
-	pendingCustomerLinks,
-	recordCustomerLink,
-} from './new-customer-link';
+import { customerLinkIdentity } from './new-customer-link';
 
 /**
  * The bridge end to end below the engine: the REAL `useLocalMutation` turns the

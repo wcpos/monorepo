@@ -1332,10 +1332,37 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/mutations/use-mutation.ts :: record mutator :: useMutation :: resident.remove :: 1',
 	'screens/main/hooks/mutations/use-mutation.ts :: record mutator :: useMutation :: resident.remove :: 2',
 	'screens/main/hooks/mutations/use-mutation.ts :: write plane outside a command module :: useMutation :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (f3): the till-local journals and the remembered readers live in @wcpos/query/store-local.
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: customerLinkChanges :: storeDB.getLocal$ :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: dropCustomerLink :: doc?.incrementalModify :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: dropCustomerLink :: storeDB.getLocal :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: journal :: storeDB.getLocal :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: journal :: storeDB.getLocal :: 2',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: journal :: storeDB.insertLocal :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: pendingCustomerLinks :: storeDB.getLocal :: 1',
+	'screens/main/pos/cart/new-customer-link.ts :: record mutator :: recordCustomerLink :: doc.incrementalModify :: 1',
+	"screens/main/pos/cart/new-customer-link.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: failCompletionAttempt :: doc?.incrementalModify :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: failCompletionAttempt :: storeDB.getLocal :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: journal :: storeDB.getLocal :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: journal :: storeDB.getLocal :: 2',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: journal :: storeDB.insertLocal :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: pendingCompletions :: storeDB.getLocal :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: recordCompletionAttempt :: doc.incrementalModify :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: resolveCompletionAttempt :: doc?.incrementalModify :: 1',
+	'screens/main/pos/checkout/completion-journal.ts :: record mutator :: resolveCompletionAttempt :: storeDB.getLocal :: 1',
+	"screens/main/pos/checkout/completion-journal.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: rememberedReaders>get :: storeDB.addState :: 1',
+	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: rememberedReaders>remove :: storeDB.addState :: 1',
+	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: rememberedReaders>set :: storeDB.addState :: 1',
+	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: useRememberedReader :: storeDB .addState :: 1',
+	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: useRememberedReaders :: storeDB .addState :: 1',
+	"screens/main/pos/checkout/tender/remembered-readers.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/checkout/tender/remembered-readers.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 407;
+export const SEAM_RETIRED_FLOOR = 433;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'8d6329959dd60f6aa1f784e7a98d36a49d1ddb5e0e11692c8a0cca5cb1a52d66';
+	'b6571b82243543c7f7db8b907b9d130782007ab571a740eb1107558090df8eb7';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

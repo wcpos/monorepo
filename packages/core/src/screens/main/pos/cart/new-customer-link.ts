@@ -1,40 +1,5 @@
 import { isGuestCustomer } from '@wcpos/sync-core';
-import type { StoreDatabase } from '@wcpos/database';
-
-/**
- * A customer created from the cart, attached to its order before the store has
- * given it an id (#1523).
- *
- * The cart never waits on the network: Save copies the new customer's billing
- * and shipping onto the order at once and leaves `customer_id` at the guest
- * value, because a born-local customer has no Woo id to put there and a local
- * uuid must never reach the server. This journal remembers which order is
- * waiting for which customer, so the id can be stamped on when the customer's
- * create is acknowledged, whether that is seconds later or after a relaunch.
- *
- * It lives in the store database's LOCAL documents, never in the replicated
- * customer or order records: writing local-only state into a replicated record
- * makes the downstream skip the next pulled version (TallyUI #53).
- */
-
-/**
- * The billing identity the attach copied onto the order. The stamp only lands
- * while the order still carries it: a cashier who has since picked another
- * customer, or gone back to a guest, has changed their mind, and the late id
- * must not overwrite that.
- */
-export type CustomerLinkIdentity = { first_name: string; last_name: string; email: string };
-
-export type CustomerLink = {
-	customerUuid: string;
-	/** The engine scope both records live in; another scope's link waits for its own. */
-	scopeId: string;
-	identity: CustomerLinkIdentity;
-	at: string;
-};
-
-type Journal = { links: Record<string, CustomerLink> };
-const ID = 'cart-customer-links';
+import type { CustomerLink, CustomerLinkIdentity } from '@wcpos/query/store-local';
 
 /**
  * How long a link may wait for its customer's id or its records. A missing
@@ -52,19 +17,6 @@ export const CUSTOMER_LINK_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const VOIDED_ORDER_STATUSES = new Set(['cancelled', 'trash']);
 
-async function journal(storeDB: StoreDatabase) {
-	const existing = await storeDB.getLocal<Journal>(ID);
-	if (existing) return existing;
-	try {
-		return await storeDB.insertLocal<Journal>(ID, { links: {} });
-	} catch (error) {
-		// Two first writes can race on the insert. Never replace the winner's links.
-		const winner = await storeDB.getLocal<Journal>(ID);
-		if (winner) return winner;
-		throw error;
-	}
-}
-
 function text(value: unknown): string {
 	return typeof value === 'string' ? value.trim() : '';
 }
@@ -81,44 +33,6 @@ export function customerLinkIdentity(billing: unknown): CustomerLinkIdentity {
 
 function sameIdentity(a: CustomerLinkIdentity, b: CustomerLinkIdentity): boolean {
 	return a.first_name === b.first_name && a.last_name === b.last_name && a.email === b.email;
-}
-
-/** Remember that `orderUuid` is waiting for `link.customerUuid`'s id. Replaces any earlier link. */
-export async function recordCustomerLink(
-	storeDB: StoreDatabase,
-	orderUuid: string,
-	link: CustomerLink
-): Promise<void> {
-	const doc = await journal(storeDB);
-	await doc.incrementalModify((data) => {
-		data.links[orderUuid] = link;
-		return data;
-	});
-}
-
-/** Forget a link, unless it has been replaced since `expectAt` was read. */
-export async function dropCustomerLink(
-	storeDB: StoreDatabase,
-	orderUuid: string,
-	expectAt: string
-): Promise<void> {
-	const doc = await storeDB.getLocal<Journal>(ID);
-	await doc?.incrementalModify((data) => {
-		if (data.links[orderUuid]?.at !== expectAt) return data;
-		delete data.links[orderUuid];
-		return data;
-	});
-}
-
-export async function pendingCustomerLinks(
-	storeDB: StoreDatabase
-): Promise<Record<string, CustomerLink>> {
-	return (await storeDB.getLocal<Journal>(ID))?.toJSON(true).data.links ?? {};
-}
-
-/** Emits whenever the journal changes, and once on subscribe. */
-export function customerLinkChanges(storeDB: StoreDatabase) {
-	return storeDB.getLocal$<Journal>(ID);
 }
 
 export type CustomerLinkOutcome =
