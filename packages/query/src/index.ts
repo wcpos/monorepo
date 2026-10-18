@@ -1,3 +1,4 @@
+export type { ReadonlyEngineRecord } from './records/readonly-engine-record';
 export { QueryProvider, useQueryRuntime } from './provider';
 export type { EngineRecord, EngineRecordCollectionName } from './records/engine-record';
 export { engineCollection, type EngineCollection } from './records/engine-collection';
@@ -109,3 +110,22 @@ export {
 export { observeProductMetaKeys } from './reads/product-meta-keys';
 export { observeUnsentWorkCount } from './reads/unsent-work-count';
 export { hasQueuedDelete } from './reads/queued-delete';
+
+export {
+	observeQueueRows,
+	observeQueueCounts,
+	type EngineMutationCounts,
+	type QueueSelection,
+	BACKLOG_QUEUE_STATUSES,
+	PARKED_QUEUE_STATUSES,
+	REJECTED_QUEUE_STATUSES,
+	TERMINAL_QUEUE_STATUSES,
+} from './reads/queue-rows';
+
+export { observeDescribedQueueRows, type DescribedQueueRow } from './reads/described-queue-rows';
+
+export {
+	observeCollectionCounts,
+	EMPTY_COLLECTION_COUNTS,
+	type EngineCollectionCounts,
+} from './reads/collection-counts';

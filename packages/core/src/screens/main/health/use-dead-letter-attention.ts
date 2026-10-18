@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { Observable, of } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
-import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { observeQueueRows, REJECTED_QUEUE_STATUSES, useQueryRuntime } from '@wcpos/query';
+import type { QueueRow, RxdbSyncEngine } from '@wcpos/sync-engine';
 
+import type { Observable } from 'rxjs';
 import type { StuckRecord } from '../logs/logs-logic';
 
 /**
@@ -30,21 +29,7 @@ import type { StuckRecord } from '../logs/logs-logic';
  * whose other panels are already live, and a banner is not worth a Suspense
  * boundary of its own.
  */
-type MutationCollection = {
-	find(query: { selector: { status: { $in: string[] } } }): {
-		$: Observable<readonly (EngineConflict | { toJSON(): EngineConflict })[]>;
-	};
-};
-
-type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
-
-function toJson(row: EngineConflict | { toJSON(): EngineConflict }): EngineConflict {
-	return 'toJSON' in row && typeof row.toJSON === 'function'
-		? row.toJSON()
-		: (row as EngineConflict);
-}
-
-export function deadLetterToStuckRecord(entry: EngineConflict): StuckRecord {
+export function deadLetterToStuckRecord(entry: QueueRow): StuckRecord {
 	const reason =
 		[entry.rejectedReason, entry.rejectedMessage]
 			.filter((part): part is string => typeof part === 'string' && part !== '')
@@ -65,30 +50,20 @@ export function deadLetterToStuckRecord(entry: EngineConflict): StuckRecord {
 }
 
 function deadLetterStuck$(engine: RxdbSyncEngine): Observable<StuckRecord[]> {
-	return new Observable<EngineDatabase | null>((subscriber) =>
-		engine.db$((database) => subscriber.next(database))
-	).pipe(
-		switchMap((database) => {
-			if (!database) return of<StuckRecord[]>([]);
-			const mutations = database.collections[
-				MUTATION_QUEUE_RXDB_COLLECTION
-			] as unknown as MutationCollection;
-			return mutations.find({ selector: { status: { $in: ['rejected'] } } }).$.pipe(
-				map((rows) => {
-					const described = rows.map((row) => deadLetterToStuckRecord(toJson(row)));
-					// Newest refusal first. The RxDB query has no sort clause (`rejectedAt`
-					// is not indexed), so without this the row the panel puts forward as
-					// THE one to act on is whatever order storage happened to return.
-					described.sort((a, b) => b.lastSeen - a.lastSeen);
-					// One entry per RECORD, not per mutation: a record can hold several
-					// dead letters (a requeue that was refused again leaves its own row),
-					// and counting them separately would tell the cashier there are three
-					// problems where there is one record to fix.
-					const byRecord = new Map<string, StuckRecord>();
-					for (const row of described) if (!byRecord.has(row.key)) byRecord.set(row.key, row);
-					return [...byRecord.values()];
-				})
-			);
+	return observeQueueRows(engine, { statuses: REJECTED_QUEUE_STATUSES }).pipe(
+		map((rows) => {
+			const described = rows.map((row) => deadLetterToStuckRecord(row));
+			// Newest refusal first. The RxDB query has no sort clause (`rejectedAt`
+			// is not indexed), so without this the row the panel puts forward as
+			// THE one to act on is whatever order storage happened to return.
+			described.sort((a, b) => b.lastSeen - a.lastSeen);
+			// One entry per RECORD, not per mutation: a record can hold several
+			// dead letters (a requeue that was refused again leaves its own row),
+			// and counting them separately would tell the cashier there are three
+			// problems where there is one record to fix.
+			const byRecord = new Map<string, StuckRecord>();
+			for (const row of described) if (!byRecord.has(row.key)) byRecord.set(row.key, row);
+			return [...byRecord.values()];
 		})
 	);
 }

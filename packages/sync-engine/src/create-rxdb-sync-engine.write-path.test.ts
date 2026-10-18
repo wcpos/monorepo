@@ -28,6 +28,7 @@ import {
 } from './create-rxdb-sync-engine';
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
+import { discardConsequence } from './write-path/conflict-resolution';
 import { heldOpenCartMutations } from './write-path/open-cart-hold';
 import * as refundChildren from './write-path/refund-children';
 
@@ -3833,46 +3834,60 @@ describe('#507 offline write flows through the public handle', () => {
 	 * matching orders. Destroying there deletes a real sale on an inference the
 	 * client is not entitled to make.
 	 */
-	it('#832 R7b: a create rejected as identity-ambiguous is NOT born-local — discard keeps the order', async () => {
-		const server = createFakeWriteServer();
-		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
-		try {
-			await engine.ready;
-			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
-				total: '25.00',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
-			});
-			const scope = engine.active();
-			if (!scope) throw new Error('no active scope');
-			const queue = queueFor(scope.database);
-			const stale = await queue.enqueue({
-				mutationId: 'ambiguous-create',
-				collectionName: 'orders',
-				operation: 'create',
-				recordId: UUID_A,
-				origin: 'minted',
-				payload: { status: 'pos-paid', total: '25.00' },
-				baseRevision: null,
-				queuedAt: '2026-01-05T00:00:00.000Z',
-			});
-			await queue.replace({
-				...stale,
-				status: 'rejected',
-				rejectedStatus: 409,
-				rejectedReason: 'identity-ambiguous',
-				rejectedMessage: 'This record matches more than one order.',
-			});
+	it.each([null, '123'])(
+		'#832 R7b: a create rejected as identity-ambiguous is NOT born-local — discard keeps the order',
+		async (remoteId) => {
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A, {
+					status: 'pos-paid',
+					total: '25.00',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+				});
+				const scope = engine.active();
+				if (!scope) throw new Error('no active scope');
+				const queue = queueFor(scope.database);
+				const stale = await queue.enqueue({
+					mutationId: 'ambiguous-create',
+					collectionName: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					origin: 'minted',
+					payload: { status: 'pos-paid', total: '25.00' },
+					baseRevision: null,
+					queuedAt: '2026-01-05T00:00:00.000Z',
+				});
+				await queue.replace({
+					...stale,
+					status: 'rejected',
+					rejectedStatus: 409,
+					rejectedReason: remoteId ? 'rest_invalid_param' : 'identity-ambiguous',
+					rejectedMessage: 'This record matches more than one order.',
+				});
 
-			await engine.resolveConflict('ambiguous-create', 'discard');
+				if (remoteId) {
+					const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
+					await resident.incrementalPatch({ remoteId });
+				}
+				expect(
+					discardConsequence({
+						row: (await engine.conflicts())[0],
+						resident: await orderJson(engine, UUID_A),
+						remoteIdField: 'remoteId',
+					})
+				).toBe('keeps-record');
+				await engine.resolveConflict('ambiguous-create', 'discard');
 
-			// The order survives: the server may hold it, and a pull can reconcile.
-			expect(await orderJson(engine, UUID_A)).not.toBeNull();
-			expect(await engine.conflicts()).toEqual([]);
-		} finally {
-			await engine.dispose();
+				// The order survives: the server may hold it, and a pull can reconcile.
+				expect(await orderJson(engine, UUID_A)).not.toBeNull();
+				expect(await engine.conflicts()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
 		}
-	});
+	);
 
 	it('#832 R7b: a destructive discard refuses while anything is still queued to send for the record', async () => {
 		const server = createFakeWriteServer();

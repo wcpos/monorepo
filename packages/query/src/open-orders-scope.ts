@@ -1,5 +1,9 @@
+import { map, type Observable, of } from 'rxjs';
+
+import { OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
 import { identityColumnFilter, NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
+import { engineCollection } from './records/engine-collection';
 import { resolveLegacyField } from './engine-adapter/collection-map';
 
 import type { EngineDocument } from './engine-adapter/collection-map';
@@ -48,4 +52,25 @@ export function openOrdersSelector(
 		}),
 		...register,
 	} as MangoQuerySelector<EngineDocument>;
+}
+
+/** All resident open carts, not just this cashier's tabs: the engine holds all of them. */
+export function openCartRecordIds$(
+	database: Parameters<typeof engineCollection>[0]
+): Observable<ReadonlySet<string>> {
+	const orders = engineCollection(database, 'orders');
+	return orders
+		? orders
+				.find({ selector: { status: { $eq: OPEN_CART_ORDER_STATUS } } })
+				.$.pipe(
+					map(
+						(documents) =>
+							new Set(
+								documents
+									.map((document) => document.uuid)
+									.filter((uuid): uuid is typeof uuid & string => uuid !== undefined)
+							)
+					)
+				)
+		: of(new Set<string>());
 }
