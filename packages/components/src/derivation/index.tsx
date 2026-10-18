@@ -82,7 +82,7 @@ function DerivationStep({
 					{label}
 				</Text>
 				{title != null || trailing != null ? (
-					<View className="mt-0.5 flex-row items-baseline gap-3">
+					<View className="mt-1 flex-row items-baseline gap-3">
 						<View className="min-w-0 flex-1">
 							{typeof title === 'string' ? (
 								<Text
@@ -102,7 +102,7 @@ function DerivationStep({
 				) : null}
 				{children}
 				{detail != null ? (
-					<Text className={cn('text-muted-foreground text-sm', hasContent ? 'mt-2' : 'mt-0.5')}>
+					<Text className={cn('text-muted-foreground text-sm', hasContent ? 'mt-2' : 'mt-1')}>
 						{detail}
 					</Text>
 				) : null}

@@ -51,7 +51,10 @@ const mockLocation = {
 	taxBasedOn: 'base',
 	location: { country: 'GB', state: '', city: '', postcode: '' },
 };
-jest.mock('../../../contexts/tax-rates', () => ({ useTaxLocation: () => mockLocation }));
+jest.mock('../../../contexts/tax-rates', () => ({
+	useTaxLocation: () => mockLocation,
+	useTaxSettings: () => ({ allRates: mockLocation.rates }),
+}));
 let mockOrder: object | undefined;
 jest.mock('../../../pos/contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => mockOrder,
@@ -125,15 +128,17 @@ describe.each([false, true])('phone: %s', (phone) => {
 		expect(screen.getAllByText('20%')).toHaveLength(2);
 		fireEvent.click(screen.getByTestId('tax-based-on-change-setting'));
 		act(() => jest.advanceTimersByTime(1000));
-		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/settings/tax');
+		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
 	});
 
 	it('an order with no billing address breaks the chain at the address', () => {
 		mockOrder = {};
 		mockLocation.taxBasedOn = 'billing';
-		const { location } = mockLocation;
+		const { location, rates } = mockLocation;
 		mockLocation.location = { country: '', state: '', city: '', postcode: '' };
+		// Nothing matched: a worldwide rate on an empty address would not be a failure.
+		mockLocation.rates = [];
 		try {
 			renderTaxBasedOn();
 			fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
@@ -141,6 +146,7 @@ describe.each([false, true])('phone: %s', (phone) => {
 			expect(screen.getByText('common.none')).toBeTruthy();
 		} finally {
 			mockLocation.location = location;
+			mockLocation.rates = rates;
 		}
 	});
 

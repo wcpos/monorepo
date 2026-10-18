@@ -417,6 +417,7 @@
 	"common.change_sign": "Change sign",
 	"common.next_tab": "Next tab",
 	"common.no_address_on_the_order": "No address on the order",
+	"common.no_rate_covers_this_address_in": "The store's rates for {country} don't cover this address",
 	"common.no_rate_matches_it": "No rate matches it",
 	"common.order_has_no_billing_address": "This order has no billing address, so no rate can match",
 	"common.order_has_no_shipping_address": "This order has no shipping address, so no rate can match",

@@ -76,18 +76,35 @@ export function classLedgers(
 }
 
 /**
- * The order's own address with none of the four fields is the break at node 2: there is no
- * fallback to the shop base (`orderTaxLocation`). An address that matched nothing breaks at
- * node 3. A missing state that leaves only a country-wide rate is not a failure.
+ * Anything matched is no failure (a missing state that leaves only a country-wide rate, an
+ * empty address that a worldwide rate still covers). Otherwise the order's own address with
+ * none of the four fields is the break at node 2: there is no fallback to the shop base
+ * (`orderTaxLocation`). Any other address that matched nothing breaks at node 3.
  */
 export function derivationFailure(
 	location: TaxLocation,
 	isOrderAddress: boolean,
 	matchedCount: number
 ): DerivationFailure {
+	// Whatever matched is what the engine applies: a worldwide rate matches even an empty address.
+	if (matchedCount > 0) return null;
 	const empty = !location.country && !location.state && !location.city && !location.postcode;
-	if (isOrderAddress && empty) return 'address';
-	return matchedCount === 0 ? 'rates' : null;
+	return isOrderAddress && empty ? 'address' : 'rates';
+}
+
+/**
+ * Why nothing matched, as strongly as the store's rates allow: no country to name; rates for
+ * the country that do not reach this address (a California rate, an Oregon order); or no rate
+ * for the country at all.
+ */
+export type NoRateCause = 'no-country' | 'not-covered' | 'no-rate-for-country';
+
+export function noRateCause(allRates: TaxRateData[], location: TaxLocation): NoRateCause {
+	const country = (location.country ?? '').toUpperCase();
+	if (!country) return 'no-country';
+	return allRates.some((rate) => (rate.country ?? '').toUpperCase() === country)
+		? 'not-covered'
+		: 'no-rate-for-country';
 }
 
 /** "Portland OR 97201, United States (US)": whatever of city, state, postcode and country exists. */

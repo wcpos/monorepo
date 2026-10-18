@@ -3,6 +3,7 @@ import { createCartConfig } from '@wcpos/order-math';
 import {
 	classLedgers,
 	derivationFailure,
+	noRateCause,
 	postalLine,
 	rateWhy,
 	roundPercent,
@@ -109,8 +110,12 @@ describe('classLedgers', () => {
 describe('derivationFailure', () => {
 	const empty = { country: '', state: '', city: '', postcode: '' };
 
-	it('breaks at the address when the order has none of the four fields', () => {
+	it('breaks at the address when the order has none of the four fields and nothing matched', () => {
 		expect(derivationFailure(empty, true, 0)).toBe('address');
+	});
+
+	it('does not fail an empty address that a worldwide rate still matched', () => {
+		expect(derivationFailure(empty, true, 1)).toBeNull();
 	});
 
 	it('breaks at the rates when an address matched nothing', () => {
@@ -133,4 +138,22 @@ it('writes the postal line from whatever fields exist', () => {
 	expect(
 		postalLine({ country: 'GB', state: '', city: '', postcode: '' }, 'United Kingdom (UK)')
 	).toBe('United Kingdom (UK)');
+});
+
+describe('noRateCause', () => {
+	const oregon = { country: 'us', state: 'OR', city: 'Portland', postcode: '97201' };
+
+	it('says the country is covered elsewhere when the store has rates for it (case-insensitive)', () => {
+		expect(noRateCause([rate({ country: 'US', state: 'CA' })], oregon)).toBe('not-covered');
+	});
+
+	it('says the store has no rate for the country when none names it', () => {
+		expect(noRateCause([rate({ country: 'GB' }), rate({ country: '' })], oregon)).toBe(
+			'no-rate-for-country'
+		);
+	});
+
+	it('names no country when the address has none', () => {
+		expect(noRateCause([rate({})], { ...oregon, country: '' })).toBe('no-country');
+	});
 });

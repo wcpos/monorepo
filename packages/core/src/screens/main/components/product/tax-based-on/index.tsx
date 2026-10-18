@@ -9,7 +9,7 @@ import { useDocField } from '@wcpos/query';
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';
 import { useExtraData } from '../../../contexts/extra-data';
-import { useTaxLocation } from '../../../contexts/tax-rates';
+import { useTaxLocation, useTaxSettings } from '../../../contexts/tax-rates';
 import { useCurrentOrderOptional } from '../../../pos/contexts/current-order/context';
 import { useCartConfig } from '../../../pos/hooks/use-cart-config';
 
@@ -18,6 +18,7 @@ import { useCartConfig } from '../../../pos/hooks/use-cart-config';
  */
 export function TaxBasedOn() {
 	const { rates, taxBasedOn, location } = useTaxLocation();
+	const { allRates } = useTaxSettings();
 	const t = useT();
 	/**
 	 * Everything the panel reads from the tax, cart and order providers is read HERE and passed
@@ -74,6 +75,7 @@ export function TaxBasedOn() {
 			<PopoverContent side="top" align="start" className="w-96" testID="tax-based-on-content">
 				<DisplayCurrentTaxRates
 					rates={rates}
+					allRates={allRates}
 					taxBasedOn={taxBasedOn}
 					location={location}
 					hasOrder={hasOrder}
