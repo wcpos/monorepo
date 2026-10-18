@@ -1297,7 +1297,69 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/contexts/current-order/temporary-order.ts :: record mutator :: removeTemporaryOrder :: document.remove :: 1',
 	"screens/main/pos/contexts/current-order/temporary-order.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"screens/main/pos/contexts/current-order/temporary-order.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (f2): the resident write primitive lives in @wcpos/query/mutations.
+	'screens/main/hooks/mutations/request-server-delete.ts :: record collection back-reference :: requestServerDelete :: collection :: 1',
+	'screens/main/hooks/mutations/request-server-delete.ts :: write plane outside a command module :: requestServerDelete :: engine.write :: 1',
+	"screens/main/hooks/mutations/use-local-mutation.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/mutations/use-local-mutation.ts :: raw query construction :: findEngineResidentIn :: residentCollectionIn(scope, collection) .findOne :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: insertEngineResident :: input.collection :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: insertEngineResident :: input.collection :: 2',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: insertEngineResident :: input.collection :: 3',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: insertEngineResident :: input.collection :: 4',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 2',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 3',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 4',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 5',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 6',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 7',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchAndEnqueueEngineResident :: input.collection :: 8',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchEngineResident :: input.collection :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchEngineResident :: input.collection :: 2',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchEngineResident :: input.collection :: 3',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: patchEngineResident :: input.collection :: 4',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: useLocalMutation :: document.collection :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record collection back-reference :: useLocalMutation :: document.collection :: 2',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record mutator :: applyEngineResidentChanges :: resident.incrementalModify :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record mutator :: insertEngineResident :: residentCollection.insert :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record mutator :: patchAndEnqueueEngineResident :: resident.incrementalModify :: 1',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record mutator :: patchAndEnqueueEngineResident :: resident.incrementalModify :: 2',
+	'screens/main/hooks/mutations/use-local-mutation.ts :: record mutator :: patchLocalResident :: document.incrementalModify :: 1',
+	"screens/main/hooks/mutations/use-local-mutation.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/mutations/use-local-mutation.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/main/hooks/mutations/use-local-mutation.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/hooks/mutations/use-local-mutation.ts :: write plane outside a command module :: patchAndEnqueueEngineResident :: input.manager.engine.write :: 1',
+	'screens/main/hooks/mutations/use-mutation.ts :: record mutator :: useMutation :: resident.remove :: 1',
+	'screens/main/hooks/mutations/use-mutation.ts :: record mutator :: useMutation :: resident.remove :: 2',
+	'screens/main/hooks/mutations/use-mutation.ts :: write plane outside a command module :: useMutation :: runtime.engine.write :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 373;
+export const SEAM_RETIRED_FLOOR = 407;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'26b9690bd352ed2eef7ca1d1c38cda024017d00efd3c48cb8867813942c059d8';
+	'8d6329959dd60f6aa1f784e7a98d36a49d1ddb5e0e11692c8a0cca5cb1a52d66';
+
+export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
+	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: enqueueDocumentWrite :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: usePushDocument :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
+	'screens/main/pos/cart/void-order.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: generic resident door :: restoreVoidedOrder :: findEngineResident :: 1',
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door :: SaleCompletionBridge>findOrder :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door :: useCheckoutSave :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 2',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 3',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 4',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 5',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door :: useAddItemToOrder>run :: findEngineResident :: 1',
+];
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [];
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 0;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
+	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';

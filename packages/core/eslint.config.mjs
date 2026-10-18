@@ -19,11 +19,7 @@ export default [
 	{
 		files: ['src/screens/**/*.ts', 'src/screens/**/*.tsx'],
 		// Tests may spell the literal: pinning delete intents in tests is the point.
-		ignores: [
-			'src/screens/main/hooks/mutations/request-server-delete.ts',
-			'src/screens/**/*.test.ts',
-			'src/screens/**/*.test.tsx',
-		],
+		ignores: ['src/screens/**/*.test.ts', 'src/screens/**/*.test.tsx'],
 		rules: {
 			// This block REPLACES the shared `no-restricted-syntax` for src/screens/** (flat config
 			// does not merge a rule's options), so the design-system ownership selectors are
