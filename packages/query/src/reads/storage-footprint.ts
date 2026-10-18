@@ -1,6 +1,7 @@
-// Subpath imports keep this module pure: the package index pulls in the RxDB
-// plugin chain, which node-side jest cannot parse and this classifier does not
-// need.
+import type { UserDatabase } from '@wcpos/database';
+import { siteHashFor } from '@wcpos/sync-core';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import {
 	isFastStoreDatabaseName,
 	isLegacyAppDatabaseName,
@@ -8,6 +9,8 @@ import {
 } from '@wcpos/database/database-names';
 import type { StorageFootprintEntry } from '@wcpos/database/measure-storage-types';
 import { SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
+
+import { readSiteApiUrls } from '../user-db';
 
 const RXDB_ENTRY_PREFIX = 'rxdb-';
 /**
@@ -157,4 +160,80 @@ export function classifyStorageEntries(
 
 	breakdown.otherStoresCount = otherStoreKeys.size;
 	return breakdown;
+}
+
+const healthLogger = getLogger(['wcpos', 'health']);
+
+export type StorageFootprintSummary = {
+	breakdown: StorageBreakdown;
+	cachedImagesBytes: number | null;
+	browserEstimateBytes: number | null;
+	totalBytes: number;
+	unattributedBytes: number;
+};
+
+/** Measure and classify the active sign-in's device storage; null on unsupported platforms. */
+export async function measureStorageFootprint(
+	engine: RxdbSyncEngine,
+	userDB: UserDatabase,
+	storeDbName: string | null
+): Promise<StorageFootprintSummary | null> {
+	// Query's root also serves non-storage readers; load the platform probe only on demand.
+	const { measureAppStorage } = await import('@wcpos/database');
+	const footprint = await measureAppStorage();
+	if (footprint === null) return null;
+
+	let activeScopeDbName: string | null = null;
+	try {
+		const scope = await engine.whenActive();
+		activeScopeDbName = scope.database.name;
+	} catch {
+		// No active scope (engine disposed mid-probe, or the store was
+		// removed) — classify without one rather than attributing every
+		// byte to the store the engine happened to boot on.
+	}
+
+	const knownSiteHashes = new Set<string>();
+	try {
+		const sites = await readSiteApiUrls(userDB);
+		for (const site of sites) {
+			if (!site.wp_api_url) continue;
+			try {
+				knownSiteHashes.add(siteHashFor(site.wp_api_url));
+			} catch (error) {
+				// A site row without a usable url cannot own scope data — its bytes
+				// land in "other stores"; record which site so the bucket is explicable.
+				healthLogger.warn('Storage footprint could not hash a site url', {
+					context: {
+						siteId: site.uuid,
+						error: getErrorMessage(error),
+					},
+				});
+			}
+		}
+	} catch (error) {
+		// Unknown sites collapse "signed-out stores" into "other stores" —
+		// wrong bucket, never a hidden byte — but the misclassification must
+		// be visible in the log pipeline.
+		healthLogger.warn(
+			'Storage footprint could not read the sites list; buckets may be misattributed',
+			{
+				context: { error: getErrorMessage(error) },
+			}
+		);
+	}
+
+	const breakdown = classifyStorageEntries(footprint.entries, {
+		activeScopeDbName,
+		storeDbName,
+		userDbName: userDB?.name ?? null,
+		knownSiteHashes,
+	});
+	return {
+		breakdown,
+		cachedImagesBytes: footprint.imageCacheBytes,
+		browserEstimateBytes: footprint.estimateBytes,
+		totalBytes: breakdown.measuredTotalBytes + (footprint.imageCacheBytes ?? 0),
+		unattributedBytes: breakdown.unknownBytes,
+	};
 }

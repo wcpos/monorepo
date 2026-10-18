@@ -3,8 +3,10 @@ import * as React from 'react';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
+import type { LegacyCollectionName } from '@wcpos/query';
+import type { CollectionKey as QueryCollectionKey } from '@wcpos/query/query-state';
 
-import type { CollectionKey } from './use-collection';
+export type CollectionKey = LegacyCollectionName | QueryCollectionKey;
 
 const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 

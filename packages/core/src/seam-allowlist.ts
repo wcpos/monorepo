@@ -1531,10 +1531,25 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useCollectionCounts :: { engine } = useQueryRuntime() :: 1',
 	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useEngineStatus :: { engine } = useQueryRuntime() :: 1',
 	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useMutationCounts :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (g6): the health screen's storage reads are named reads; the dead useCollection hook is deleted.
+	'screens/main/health/attention-panel.tsx :: engine handle aliased :: useStuckRecordLabel :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/attention-panel.tsx :: raw query construction :: useStuckRecordLabel :: collection?.findOne :: 1',
+	'screens/main/health/attention-panel.tsx :: storage token :: useStuckRecordLabel :: scope?.database?.collections :: 1',
+	"screens/main/health/storage-footprint-logic.ts :: storage import ::  :: from '@wcpos/database/database-names' :: 1",
+	"screens/main/health/storage-footprint-logic.ts :: storage import ::  :: from '@wcpos/database/measure-storage-types' :: 1",
+	'screens/main/health/use-collection-sizes.ts :: engine handle aliased :: useCollectionSizes :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-collection-sizes.ts :: raw query construction :: useCollectionSizes :: collection.find({ limit: SAMPLE_LIMIT }) :: 1',
+	'screens/main/health/use-collection-sizes.ts :: storage token :: useCollectionSizes :: database.collections :: 1',
+	'screens/main/health/use-storage-footprint.ts :: engine handle aliased :: useStorageFootprint :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/health/use-storage-footprint.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/use-collection.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/hooks/use-collection.ts :: query escape hatch ::  :: from '@wcpos/query' :: 2",
+	"screens/main/hooks/use-collection.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/hooks/use-collection.ts :: storage import ::  :: from '@wcpos/database' :: 2",
 ];
-export const SEAM_RETIRED_FLOOR = 591;
+export const SEAM_RETIRED_FLOOR = 605;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'f2f84b74d606f2870e593a8afc9f8d22819b036c6e2170c0d6da4000bad7147d';
+	'e7c58c45e7739420661bd3f5cf4d5464c1e2178f6d105f332c1f3690eba027de';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

@@ -27,12 +27,6 @@ jest.mock('./use-cart-config', () => ({
 	}),
 }));
 
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => {
-		throw new Error('legacy storeDB read');
-	},
-}));
-
 type EngineDocument = Record<string, unknown> & {
 	uuid: string;
 	payload: Record<string, unknown>;

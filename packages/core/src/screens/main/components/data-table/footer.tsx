@@ -8,7 +8,7 @@ import { useQueryStateActions } from '../../../../query';
 import { SyncButton } from '../sync-button';
 import { useCollectionReset } from '../../hooks/use-collection-reset';
 
-import type { CollectionKey } from '../../hooks/use-collection';
+import type { CollectionKey } from '../../hooks/use-collection-reset';
 
 /**
  * What a table footer is handed: VALUES, read by its owner from the query handles in the same

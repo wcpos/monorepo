@@ -1,25 +1,13 @@
 import * as React from 'react';
 
-import { readSiteApiUrls } from '@wcpos/query/user-db';
-import { measureAppStorage } from '@wcpos/database';
-import { useQueryRuntime } from '@wcpos/query';
-import { siteHashFor } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import {
+	measureStorageFootprint,
+	type StorageFootprintSummary,
+	useQueryRuntime,
+} from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useEngineStatus } from '../hooks/use-engine-monitor';
-import { classifyStorageEntries, type StorageBreakdown } from './storage-footprint-logic';
-
-const healthLogger = getLogger(['wcpos', 'health']);
-
-export type StorageFootprintSummary = {
-	breakdown: StorageBreakdown;
-	cachedImagesBytes: number | null;
-	browserEstimateBytes: number | null;
-	totalBytes: number;
-	unattributedBytes: number;
-};
-
 /**
  * Measure and classify every byte of app storage on this device. One-shot per
  * scope (matching the old other-scopes probe): storage moves slowly and the
@@ -28,7 +16,7 @@ export type StorageFootprintSummary = {
  * zero it cannot back up.
  */
 export function useStorageFootprint(): StorageFootprintSummary | null {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { userDB, storeDB } = useAppState();
 	// One engine hosts multiple scopes: a same-site store switch changes
 	// `activeScopeId` without changing the engine's identity, so the probe
@@ -44,72 +32,15 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 	React.useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const footprint = await measureAppStorage();
-			if (footprint === null || cancelled) return;
-
-			let activeScopeDbName: string | null = null;
-			try {
-				const scope = await engine.whenActive();
-				activeScopeDbName = scope.database.name;
-			} catch {
-				// No active scope (engine disposed mid-probe, or the store was
-				// removed) — classify without one rather than attributing every
-				// byte to the store the engine happened to boot on.
-			}
-
-			const knownSiteHashes = new Set<string>();
-			try {
-				const sites = await readSiteApiUrls(userDB);
-				for (const site of sites) {
-					if (!site.wp_api_url) continue;
-					try {
-						knownSiteHashes.add(siteHashFor(site.wp_api_url));
-					} catch (error) {
-						// A site row without a usable url cannot own scope data — its bytes
-						// land in "other stores"; record which site so the bucket is explicable.
-						healthLogger.warn('Storage footprint could not hash a site url', {
-							context: {
-								siteId: site.uuid,
-								error: getErrorMessage(error),
-							},
-						});
-					}
-				}
-			} catch (error) {
-				// Unknown sites collapse "signed-out stores" into "other stores" —
-				// wrong bucket, never a hidden byte — but the misclassification must
-				// be visible in the log pipeline.
-				healthLogger.warn(
-					'Storage footprint could not read the sites list; buckets may be misattributed',
-					{
-						context: { error: getErrorMessage(error) },
-					}
-				);
-			}
-
-			const breakdown = classifyStorageEntries(footprint.entries, {
-				activeScopeDbName,
-				storeDbName: storeDB?.name ?? null,
-				userDbName: userDB?.name ?? null,
-				knownSiteHashes,
-			});
-			if (!cancelled) {
-				setMeasurement({
-					scopeId: activeScopeId,
-					summary: {
-						breakdown,
-						cachedImagesBytes: footprint.imageCacheBytes,
-						browserEstimateBytes: footprint.estimateBytes,
-						totalBytes: breakdown.measuredTotalBytes + (footprint.imageCacheBytes ?? 0),
-						unattributedBytes: breakdown.unknownBytes,
-					},
-				});
+			const summary = await measureStorageFootprint(runtime.engine, userDB, storeDB?.name ?? null);
+			if (summary !== null && !cancelled) {
+				setMeasurement({ scopeId: activeScopeId, summary });
 			}
 		})();
 		return () => {
 			cancelled = true;
 		};
-	}, [engine, activeScopeId, userDB, storeDB]);
+	}, [runtime.engine, activeScopeId, userDB, storeDB]);
 
 	return measurement?.scopeId === activeScopeId ? measurement.summary : null;
 }

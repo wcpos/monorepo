@@ -80,12 +80,6 @@ jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
 
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => {
-		throw new Error('legacy storeDB read');
-	},
-}));
-
 const baseOrderSnapshot = {
 	uuid: 'order-uuid',
 	id: 99,

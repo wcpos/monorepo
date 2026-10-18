@@ -1,8 +1,13 @@
+import type { UserDatabase } from '@wcpos/database';
+import type { StorageFootprint } from '@wcpos/database/measure-storage-types';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+
+import { measureStorageFootprint } from '../src/reads/storage-footprint';
 import {
 	classifyStorageEntries,
 	collectionFromEntryName,
 	type StorageContext,
-} from './storage-footprint-logic';
+} from '../src/reads/storage-footprint';
 
 const ACTIVE_SCOPE = 'pos_v2_abcdefabcdef_s578_c12';
 const CONTEXT: StorageContext = {
@@ -124,5 +129,105 @@ describe('classifyStorageEntries', () => {
 		// No active scope key — the entry is still a known site's scope, so it
 		// counts as another store rather than vanishing.
 		expect(breakdown.otherStoresBytes).toBe(100);
+	});
+});
+
+const mockMeasureAppStorage = jest.fn<Promise<StorageFootprint | null>, []>();
+const mockSiteHashFor = jest.fn((site: string) =>
+	site.includes('/wp-json') ? 'aaaaaaaaaaaa' : 'bbbbbbbbbbbb'
+);
+const mockSitesExec = jest.fn();
+
+const activeScope = () => ({ database: { name: 'pos_v6_aaaaaaaaaaaa_s1_c1' } });
+const mockEngine = {
+	active: jest.fn(activeScope),
+	ready: Promise.resolve(),
+	whenActive: jest.fn(async () => activeScope()),
+};
+const mockUserDB = {
+	name: 'wcposusers_v6',
+	sites: { find: () => ({ exec: mockSitesExec }) },
+};
+const mockStoreDB = { name: 'store_v6_active' };
+
+jest.mock('@wcpos/database', () => ({
+	measureAppStorage: () => mockMeasureAppStorage(),
+}));
+jest.mock('@wcpos/sync-core', () => ({
+	...jest.requireActual('@wcpos/sync-core'),
+	siteHashFor: (site: string) => mockSiteHashFor(site),
+}));
+
+describe('measureStorageFootprint', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSitesExec.mockResolvedValue([
+			{
+				uuid: 'site-a',
+				url: 'https://shop.example.test',
+				wp_api_url: 'https://shop.example.test/wp-json/',
+			},
+		]);
+	});
+	it('classifies scopes using the same wp_api_url identity as the engine', async () => {
+		mockMeasureAppStorage.mockResolvedValue({
+			entries: [
+				{
+					name: 'rxdb-pos_v6_aaaaaaaaaaaa_s2_c1-orders-0',
+					bytes: 25,
+				},
+			],
+			estimateBytes: null,
+			estimateDetails: null,
+			imageCacheBytes: null,
+			opaqueCacheEntries: 0,
+		});
+
+		const summary = await measureStorageFootprint(
+			mockEngine as unknown as RxdbSyncEngine,
+			mockUserDB as unknown as UserDatabase,
+			mockStoreDB.name
+		);
+
+		expect(mockSiteHashFor).toHaveBeenCalledWith('https://shop.example.test/wp-json/');
+		expect(summary?.breakdown.otherStoresBytes).toBe(25);
+		expect(summary?.breakdown.orphanedBytes).toBe(0);
+	});
+
+	it('keeps the headline and unattributed bytes tied to measured storage', async () => {
+		mockMeasureAppStorage.mockResolvedValue({
+			entries: [
+				{ name: 'unrecognized-file', bytes: 2 * 1024 * 1024 },
+				{ name: 'rxdb-pos_v6_aaaaaaaaaaaa_s1_c1-orders-0', bytes: 16 * 1024 * 1024 },
+			],
+			estimateBytes: 2_900 * 1024 * 1024,
+			estimateDetails: { caches: 2_800 * 1024 * 1024 },
+			imageCacheBytes: 4 * 1024 * 1024,
+			opaqueCacheEntries: 1,
+		});
+
+		const summary = await measureStorageFootprint(
+			mockEngine as unknown as RxdbSyncEngine,
+			mockUserDB as unknown as UserDatabase,
+			mockStoreDB.name
+		);
+
+		expect(summary).toMatchObject({
+			totalBytes: 22 * 1024 * 1024,
+			cachedImagesBytes: 4 * 1024 * 1024,
+			browserEstimateBytes: 2_900 * 1024 * 1024,
+			unattributedBytes: 2 * 1024 * 1024,
+		});
+	});
+
+	it('returns null when the platform cannot measure storage', async () => {
+		mockMeasureAppStorage.mockResolvedValue(null);
+		expect(
+			await measureStorageFootprint(
+				mockEngine as unknown as RxdbSyncEngine,
+				mockUserDB as unknown as UserDatabase,
+				mockStoreDB.name
+			)
+		).toBeNull();
 	});
 });

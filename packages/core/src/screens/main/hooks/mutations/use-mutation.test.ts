@@ -63,10 +63,6 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: () => '2026-07-14T00:00:00',
 }));
 
-jest.mock('../use-collection', () => ({
-	useCollection: () => ({ collectionLabel: 'Order' }),
-}));
-
 /**
  * A faithful RxDocument stand-in for the create path.
  *

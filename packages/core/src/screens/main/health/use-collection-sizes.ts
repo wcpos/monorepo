@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { readCollectionSampleSizes, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { type CollectionKey, estimateCollectionBytes } from './database-logic';
@@ -23,7 +23,7 @@ export function useCollectionSizes(
 	counts: Partial<Record<CollectionKey, number>>,
 	keys: readonly CollectionKey[]
 ): CollectionSizes {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [sizes, setSizes] = React.useState<CollectionSizes>({});
 
 	// The counts snapshot the last estimate ran against — string key keeps the
@@ -45,14 +45,6 @@ export function useCollectionSizes(
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			void (async () => {
-				let scope: ReturnType<typeof engine.active>;
-				try {
-					scope = engine.active();
-				} catch {
-					return; // engine disposed mid-debounce — nothing to sample
-				}
-				const database = scope?.database as { collections: Record<string, unknown> } | undefined;
-				if (!database) return;
 				const next: CollectionSizes = {};
 				for (const key of keysRef.current) {
 					// Failures isolate per collection: one bad sample nulls ITS cell
@@ -60,20 +52,12 @@ export function useCollectionSizes(
 					// would keep stale sizes on screen after a reset.
 					try {
 						const count = countsRef.current[key] ?? 0;
-						const collection = database.collections[key] as
-							| {
-									find(query: { limit: number }): {
-										exec(): Promise<{ toJSON(): unknown }[]>;
-									};
-							  }
-							| undefined;
-						if (!collection || count === 0) {
-							next[key] = null;
-							continue;
-						}
-						const docs = await collection.find({ limit: SAMPLE_LIMIT }).exec();
-						const lengths = docs.map((doc) => JSON.stringify(doc.toJSON()).length);
-						next[key] = estimateCollectionBytes(count, lengths);
+						const lengths =
+							count === 0
+								? null
+								: await readCollectionSampleSizes(runtime.engine, key, SAMPLE_LIMIT);
+
+						next[key] = lengths === null ? null : estimateCollectionBytes(count, lengths);
 					} catch (error) {
 						next[key] = null;
 						healthLogger.warn('Collection size sampling failed; its cell shows no data', {
@@ -91,7 +75,7 @@ export function useCollectionSizes(
 			cancelled = true;
 			clearTimeout(timer);
 		};
-	}, [engine, countsKey]);
+	}, [runtime.engine, countsKey]);
 
 	return sizes;
 }

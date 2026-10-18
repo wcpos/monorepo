@@ -131,6 +131,7 @@ export { observeDescribedQueueRows, type DescribedQueueRow } from './reads/descr
 
 export {
 	observeCollectionCounts,
+	readCollectionSampleSizes,
 	emptyCollectionCounts,
 	type EngineCollectionCounts,
 } from './reads/collection-counts';
@@ -177,3 +178,12 @@ export {
 export { searchCatalogByBarcode, readProductByWooId } from './reads/barcode-search';
 export { isVariationRecord } from './records/engine-record';
 export { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+
+export {
+	measureStorageFootprint,
+	classifyStorageEntries,
+	collectionFromEntryName,
+	type StorageBreakdown,
+	type StorageContext,
+	type StorageFootprintSummary,
+} from './reads/storage-footprint';

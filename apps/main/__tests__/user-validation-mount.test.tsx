@@ -77,9 +77,6 @@ jest.mock('@wcpos/core/screens/main/hooks/barcodes/scan-hub-context', () => ({
 }));
 jest.mock('@wcpos/core/screens/main/update-required', () => ({ UpdateRequired: () => null }));
 jest.mock('@wcpos/core/screens/main/upgrade-required', () => ({ UpgradeRequired: () => null }));
-jest.mock('@wcpos/core/screens/main/hooks/use-collection', () => ({
-	useCollection: () => ({ collection: {} }),
-}));
 jest.mock('@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client', () => ({
 	createRefreshHttpClient: jest.fn(),
 }));
@@ -100,6 +97,7 @@ jest.mock('@wcpos/printer', () => ({
 	RasterizeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 jest.mock('@wcpos/query', () => ({
+	useFollowedCollection: () => ({}),
 	QueryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	// Field-hook passthrough: reads the plain fixture field synchronously.
 	useDocField: (source: Record<string, unknown>, select: (value: unknown) => unknown) =>

@@ -28,11 +28,15 @@ import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/pa
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
-import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
-import { QueryProvider, readStorePaymentsContract, useDocField } from '@wcpos/query';
+import {
+	QueryProvider,
+	readStorePaymentsContract,
+	useDocField,
+	useFollowedCollection,
+} from '@wcpos/query';
 import { credentialsTokenOwner } from '@wcpos/query/user-db';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
@@ -423,9 +427,9 @@ function MetricsPersistenceBridge() {
 }
 
 export default function AppLayout() {
-	const { site, wpCredentials } = useStoreSession();
+	const { site, wpCredentials, storeDB } = useStoreSession();
 	const wpAPIURL = useDocField(site, (value) => value.wp_api_url) as string;
-	const { collection: logCollection } = useCollection('logs');
+	const logCollection = useFollowedCollection(storeDB, 'logs');
 	useUserValidation({ site, wpUser: wpCredentials });
 
 	// The logger holds its collection outside React, so release the outgoing store on unmount.
