@@ -63,7 +63,12 @@ it('resolves credentials without wrapping them and follows removal', async () =>
 it('re-emits pending on every source binding, then resolves genuinely empty lists', async () => {
 	const user = await db.users.insert({ uuid: 'user' });
 	const site = await db.sites.insert({ uuid: 'site' });
-	for (const read$ of [observeUserSites(user), observeSiteCredentials(site)]) {
+	const credentials = await db.wp_credentials.insert({ uuid: 'cashier' });
+	for (const read$ of [
+		observeUserSites(user),
+		observeSiteCredentials(site),
+		observeCredentialStores(credentials),
+	]) {
 		const binding$ = new BehaviorSubject(read$);
 		const values: unknown[] = [];
 		subscription = binding$
@@ -87,16 +92,16 @@ it('observes late store inserts and clears the previous credentials on switch', 
 	subscription = binding$
 		.pipe(switchMap(observeCredentialStores))
 		.subscribe((value) => values.push(value));
-	expect(values.slice(0, 2)).toEqual([PENDING_USER_DB_READ, []]);
-	// Wait for the real empty query answer before inserting, not only the reset [].
-	await waitFor(() => expect(values).toEqual([PENDING_USER_DB_READ, [], []]));
+	expect(values).toEqual([PENDING_USER_DB_READ]);
+	await waitFor(() => expect(values).toEqual([PENDING_USER_DB_READ, []]));
 	const store = await db.stores.insert({ localID: 'late', id: 1, name: 'Late store' });
 	await waitFor(() => expect(values.at(-1)).toHaveLength(1));
 	expect((values.at(-1) as unknown[])[0]).toBe(store);
 	expect(values.filter((value) => value === PENDING_USER_DB_READ)).toHaveLength(1);
 	const switchIndex = values.length;
 	binding$.next(b);
-	expect(values.slice(switchIndex, switchIndex + 2)).toEqual([PENDING_USER_DB_READ, []]);
+	expect(values.slice(switchIndex)).toEqual([PENDING_USER_DB_READ]);
+	await waitFor(() => expect(values.slice(switchIndex)).toEqual([PENDING_USER_DB_READ, []]));
 	await store.incrementalPatch({ name: 'Superseded' });
 	const other = await db.stores.insert({ localID: 'other', id: 2 });
 	await waitFor(() => expect(values.at(-1)).toHaveLength(1));

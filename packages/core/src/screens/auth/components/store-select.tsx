@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { distinctUntilChanged, filter, map, tap } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { distinctUntilChanged, map, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { EmptyState } from '@wcpos/components/empty-state';
@@ -23,6 +23,12 @@ import { useUserValidation } from '../../../hooks/use-user-validation';
 import { useRegister } from '../../../services/register/use-register';
 
 const storeLogger = getLogger(['wcpos', 'auth', 'stores']);
+
+// Survive Suspense retries without rebuilding the read; each cashier has their own resource.
+const resourcesByCredentials = new WeakMap<
+	WPCredentialsDocument,
+	ObservableResource<ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ, ReadonlyStoreRecord[]>
+>();
 
 /** `numeric` so "Store 2" precedes "Store 10"; `base` so case never decides order. */
 const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -70,13 +76,16 @@ export function StoreSelect({
 	const register = useRegister();
 	const { isValid, isLoading: isValidating } = useUserValidation({ site, wpUser });
 
-	const stores$ = React.useMemo(
-		() =>
+	let resource = resourcesByCredentials.get(wpUser);
+	if (!resource) {
+		resource = new ObservableResource(
 			observeCredentialStores(wpUser).pipe(
-				filter((value): value is ReadonlyStoreRecord[] => value !== PENDING_USER_DB_READ),
-				map(sortStores),
-				distinctUntilChanged(storeListsEqual),
+				map((value) => (value === PENDING_USER_DB_READ ? value : sortStores(value))),
+				distinctUntilChanged((a, b) =>
+					a === PENDING_USER_DB_READ || b === PENDING_USER_DB_READ ? a === b : storeListsEqual(a, b)
+				),
 				tap((resolved) => {
+					if (resolved === PENDING_USER_DB_READ) return;
 					storeLogger.debug('[stores] StoreSelect stores resolved', {
 						context: {
 							wpUserUuid: wpUser.uuid,
@@ -87,10 +96,14 @@ export function StoreSelect({
 					});
 				})
 			),
-		[wpUser]
-	);
+			(
+				value: ReadonlyStoreRecord[] | typeof PENDING_USER_DB_READ
+			): value is ReadonlyStoreRecord[] => value !== PENDING_USER_DB_READ
+		);
+		resourcesByCredentials.set(wpUser, resource);
+	}
 
-	const offeredStores = useObservableState(stores$, []);
+	const offeredStores = useObservableSuspense(resource);
 	const preselectedStore = resolvePreselectedStore(
 		offeredStores,
 		register?.sites[site.uuid!]?.store_id

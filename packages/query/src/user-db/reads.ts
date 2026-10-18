@@ -42,7 +42,7 @@ export function observeSiteCredentials(
 }
 
 /**
- * Pending first; [] then clears the previous cashier's stores on rebind.
+ * Pending first on each binding, then only database answers (including empty lists).
  * A live find($in), unlike populate$/findByIds, observes late store inserts.
  * Sorting and display-field deduplication belong to the picker in core.
  */
@@ -67,5 +67,5 @@ export function observeCredentialStores(
 				}).$;
 			})
 		);
-	}).pipe(startWith([] as ReadonlyStoreRecord[]), startWith(PENDING_USER_DB_READ));
+	}).pipe(startWith(PENDING_USER_DB_READ));
 }
