@@ -6,6 +6,32 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { engineCollection } from '../records/engine-collection';
 
+export async function fetchFreshRecords(
+	engine: RxdbSyncEngine,
+	requests: readonly { id: string; collection: 'products' | 'variations'; wooIds: number[] }[]
+): Promise<void> {
+	const handles = [];
+	try {
+		for (const request of requests) {
+			if (request.wooIds.length === 0) continue;
+			handles.push(
+				engine.require({
+					id: request.id,
+					collection: request.collection,
+					kind: 'targeted-records',
+					remoteIds: request.wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+					forceRefresh: true,
+				})
+			);
+		}
+		await Promise.all(handles.map((handle) => handle.ready));
+	} finally {
+		for (const handle of handles) {
+			handle.release();
+		}
+	}
+}
+
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
 
 const stockLogger = getLogger(['wcpos', 'stock-adjustment']);

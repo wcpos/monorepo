@@ -1,11 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { renderHook } from '@testing-library/react';
-
 import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { useBarcodeSearch } from './use-barcode-search';
+import { readProductByWooId, searchCatalogByBarcode } from '../src/reads/barcode-search';
 
 type Payload = Record<string, unknown>;
 
@@ -38,27 +34,24 @@ function doc(id: string, payload: Payload, name: 'products' | 'variations' = 'pr
 	return d;
 }
 
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({
-		engine: {
-			active: () => ({
-				barcodeSelectors: scopeSelectors,
-				database: {
-					collections: {
-						products: { find: () => ({ exec: async () => productDocs }) },
-						variations: { find: () => ({ exec: async () => variationDocs }) },
-					},
+const findProduct = jest.fn();
+const engine = {
+	active: () => ({
+		barcodeSelectors: scopeSelectors,
+		database: {
+			collections: {
+				products: {
+					find: () => ({ exec: async () => productDocs }),
+					findOne: findProduct,
 				},
-			}),
+				variations: { find: () => ({ exec: async () => variationDocs }) },
+			},
 		},
 	}),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
-}));
+} as unknown as RxdbSyncEngine;
 
 function search(code: string, symbology?: string) {
-	const { result } = renderHook(() => useBarcodeSearch());
-	return result.current.barcodeSearch(code, symbology);
+	return searchCatalogByBarcode(engine, code, symbology);
 }
 
 beforeEach(() => {
@@ -236,5 +229,20 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		// the unrelated product whose SKU happens to equal the scanned digits.
 		const results = (await search('0012345678905')) as unknown as FakeDoc[];
 		expect(results.map((r) => r.id)).toEqual(['barcode-equiv']);
+	});
+});
+
+describe('active-scope reads', () => {
+	it('returns no records without an active scope', async () => {
+		const inactive = { active: () => null } as unknown as RxdbSyncEngine;
+		expect(await searchCatalogByBarcode(inactive, 'LOCAL-1')).toEqual([]);
+		expect(await readProductByWooId(inactive, 41)).toBeNull();
+	});
+
+	it('reads the parent by remote id from the current scope', async () => {
+		const parent = doc('parent', { id: 41 });
+		findProduct.mockReturnValue({ exec: async () => parent });
+		expect(await readProductByWooId(engine, 41)).toBe(parent);
+		expect(findProduct).toHaveBeenCalledWith({ selector: { remoteId: '41' } });
 	});
 });
