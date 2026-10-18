@@ -1,13 +1,16 @@
 import {
 	clockCheck,
 	closuresCheck,
+	duplicateSales,
 	duplicatesCheck,
 	gapsCheck,
-	groupDuplicatesByTill,
+	isLeadingClosureGap,
+	isUnstampedTill,
 	orderChecks,
+	orderNumberList,
 	registerChecks,
 	registerState,
-	shortTill,
+	shortId,
 	splitSkew,
 	sumMissing,
 	unknownSessionSales,
@@ -48,25 +51,32 @@ describe('gapsCheck', () => {
 			{ till: 'a', after: 2, before: 4, missing: 1 },
 		]);
 		expect(check.failing).toBe(true);
+		expect(check.notable).toBe(true);
 		expect(check.missing).toBe(5);
 		expect(check.tills).toBe(2);
 		expect(check.rows.map((gap) => `${gap.till}:${gap.after}`)).toEqual(['a:2', 'a:10', 'b:1']);
 	});
 
 	it('passes with no gaps', () => {
-		expect(gapsCheck([])).toEqual({ kind: 'gaps', failing: false, missing: 0, tills: 0, rows: [] });
+		expect(gapsCheck([])).toEqual({
+			kind: 'gaps',
+			failing: false,
+			notable: false,
+			missing: 0,
+			tills: 0,
+			rows: [],
+		});
 	});
 });
 
-describe('groupDuplicatesByTill', () => {
-	it('puts a till’s counters together, tills and counters ascending', () => {
-		const groups = groupDuplicatesByTill([
+describe('duplicatesCheck', () => {
+	it('sorts rows by till then counter, so a till’s rows are adjacent', () => {
+		const check = duplicatesCheck([
 			duplicate('b', 1, [21, 22]),
 			duplicate('a', 3, [13, 14]),
 			duplicate('a', 1, [11, 12]),
 		]);
-		expect(groups.map((group) => group.till)).toEqual(['a', 'b']);
-		expect(groups[0].duplicates.map((row) => row.counter)).toEqual([1, 3]);
+		expect(check.rows.map((row) => `${row.till}:${row.counter}`)).toEqual(['a:1', 'a:3', 'b:1']);
 	});
 
 	it('counts the tills that restarted, not the repeated counters', () => {
@@ -76,7 +86,25 @@ describe('groupDuplicatesByTill', () => {
 			duplicate('b', 1, [5, 6]),
 		]);
 		expect(check.failing).toBe(true);
-		expect(check.groups).toHaveLength(2);
+		expect(check.notable).toBe(true);
+		expect(check.tills).toBe(2);
+		expect(check.rows).toHaveLength(3);
+	});
+
+	it('passes, not notable, with no duplicates', () => {
+		expect(duplicatesCheck([])).toEqual({
+			kind: 'duplicates',
+			failing: false,
+			notable: false,
+			tills: 0,
+			rows: [],
+		});
+	});
+
+	it('counts sales from the server total when sent, else from the capped sample', () => {
+		const ids = Array.from({ length: 20 }, (_, i) => i + 1);
+		expect(duplicateSales({ ...duplicate('a', 1, ids), orders: 25 })).toBe(25);
+		expect(duplicateSales(duplicate('a', 1, [1, 2]))).toBe(2);
 	});
 });
 
@@ -91,6 +119,21 @@ describe('clock', () => {
 		expect(clockCheck([skew(1, 'behind')]).failing).toBe(false);
 		expect(clockCheck([skew(1, 'behind'), skew(2, 'ahead')]).failing).toBe(true);
 	});
+
+	it('is notable when it fails or when sales arrived late, and not otherwise', () => {
+		expect(clockCheck([]).notable).toBe(false);
+		expect(clockCheck([skew(1, 'behind')]).notable).toBe(true);
+		expect(clockCheck([skew(1, 'ahead')]).notable).toBe(true);
+	});
+
+	it('takes its counts from skew_counts when sent, else from the sample', () => {
+		const sample = [skew(1, 'ahead'), skew(2, 'behind')];
+		expect(clockCheck(sample, { ahead: 31, behind: 12 })).toMatchObject({
+			aheadCount: 31,
+			behindCount: 12,
+		});
+		expect(clockCheck(sample)).toMatchObject({ aheadCount: 1, behindCount: 1 });
+	});
 });
 
 describe('closuresCheck', () => {
@@ -98,8 +141,11 @@ describe('closuresCheck', () => {
 		expect(closuresCheck(clean)).toBeNull();
 	});
 
-	it('passes when the lists are present and empty', () => {
-		expect(closuresCheck({ ...clean, closure_gaps: [] })?.failing).toBe(false);
+	it('passes, not notable, when the lists are present and empty', () => {
+		expect(closuresCheck({ ...clean, closure_gaps: [] })).toMatchObject({
+			failing: false,
+			notable: false,
+		});
 	});
 
 	it('fails on any non-empty list and sums skipped closure numbers', () => {
@@ -111,12 +157,30 @@ describe('closuresCheck', () => {
 			],
 		});
 		expect(check?.failing).toBe(true);
+		expect(check?.notable).toBe(true);
 		expect(check?.missing).toBe(3);
 		expect(check?.conflicts).toEqual([]);
 		expect(
 			closuresCheck({ ...clean, closure_total_mismatches: [{ id: 'c', number: 4, findings: {} }] })
 				?.failing
 		).toBe(true);
+	});
+
+	it('sorts closure gaps ascending, putting the leading gap the server appends last first', () => {
+		const check = closuresCheck({
+			...clean,
+			closure_gaps: [
+				{ after: 9, before: 11, missing: 1 },
+				{ after: 2, before: 5, missing: 2 },
+				{ after: 0, before: 2, missing: 1 },
+			],
+		});
+		expect(check?.gaps.map((gap) => gap.after)).toEqual([0, 2, 9]);
+	});
+
+	it('marks the gap before the first closure on record as the leading gap', () => {
+		expect(isLeadingClosureGap({ after: 0, before: 4, missing: 3 })).toBe(true);
+		expect(isLeadingClosureGap({ after: 2, before: 4, missing: 1 })).toBe(false);
 	});
 });
 
@@ -149,7 +213,7 @@ describe('check order', () => {
 });
 
 describe('registerState', () => {
-	it('is clean when every check passes and nothing is worth a line', () => {
+	it('is clean when nothing is notable', () => {
 		expect(registerState(clean)).toEqual({ kind: 'clean' });
 		expect(
 			registerState({
@@ -161,7 +225,7 @@ describe('registerState', () => {
 		).toEqual({ kind: 'clean' });
 	});
 
-	it('keeps the per-check rows when late offline sales are worth a line', () => {
+	it('keeps the per-check rows when late offline sales are notable', () => {
 		const state = registerState({ ...clean, skew: [skew(1, 'behind')] });
 		expect(state.kind).toBe('checks');
 	});
@@ -178,11 +242,13 @@ describe('registerState', () => {
 		]);
 	});
 
-	it('shows no checks for a register without sales unless one fails', () => {
+	it('lists only failing checks for a register without sales, which may be none', () => {
 		const empty = { ...clean, orders: 0, first_counter: null, last_counter: null };
-		expect(registerState({ ...empty, closure_gaps: [] })).toEqual({ kind: 'empty', checks: [] });
+		expect(registerState({ ...empty, closure_gaps: [] })).toEqual({ kind: 'checks', checks: [] });
 		const state = registerState({ ...empty, closure_gaps: [{ after: 1, before: 3, missing: 1 }] });
-		expect(state.kind === 'empty' && state.checks.map((check) => check.kind)).toEqual(['closures']);
+		expect(state.kind === 'checks' && state.checks.map((check) => check.kind)).toEqual([
+			'closures',
+		]);
 	});
 });
 
@@ -197,7 +263,17 @@ describe('helpers', () => {
 		).toBe(3);
 	});
 
-	it('shortens a till id to its first eight characters', () => {
-		expect(shortTill('3c9a1f2e-0000-4000-8000-000000000000')).toBe('3c9a1f2e');
+	it('shortens an id to its first eight characters', () => {
+		expect(shortId('3c9a1f2e-0000-4000-8000-000000000000')).toBe('3c9a1f2e');
+	});
+
+	it('treats a till equal to the register id as a sale without a till stamp', () => {
+		expect(isUnstampedTill('reg-1', 'reg-1')).toBe(true);
+		expect(isUnstampedTill('3c9a1f2e-0000', 'reg-1')).toBe(false);
+	});
+
+	it('leaves deleted orders out of an order list', () => {
+		expect(orderNumberList(['1001', '', '1003'])).toBe('1001, 1003');
+		expect(orderNumberList(['', ''])).toBe('');
 	});
 });

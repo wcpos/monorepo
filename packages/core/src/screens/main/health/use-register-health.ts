@@ -21,7 +21,16 @@ export type RegisterHealth = {
 		first_counter: number | null;
 		last_counter: number | null;
 		gaps: { till: string; after: number; before: number; missing: number }[];
-		duplicates: { till: string; counter: number; order_ids: number[]; order_numbers: string[] }[];
+		duplicates: {
+			till: string;
+			counter: number;
+			/** The true count of sales on this counter; absent on an older plugin. */
+			orders?: number;
+			order_ids: number[];
+			/** `''` for a deleted order. */
+			order_numbers: string[];
+		}[];
+		/** Sample, capped per direction; `skew_counts` carries the totals when present. */
 		skew: {
 			order_id: number;
 			order_number: string;
@@ -30,6 +39,8 @@ export type RegisterHealth = {
 			skew_seconds: number;
 			direction: 'ahead' | 'behind';
 		}[];
+		/** Absent on an older plugin, which caps `skew` as a whole. */
+		skew_counts?: { ahead: number; behind: number };
 		/** Merged in from the closure store; absent on a plugin that predates it. */
 		closure_gaps?: { after: number; before: number; missing: number }[];
 		closure_conflicts?: { id: string; number: number; printed_number: number }[];

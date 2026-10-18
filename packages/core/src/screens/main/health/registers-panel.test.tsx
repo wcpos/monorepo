@@ -171,7 +171,7 @@ it('renders each finding using tills, counters, order numbers, and the shared sk
 	);
 	open('duplicates');
 	expect(screen.getByTestId('health-register-duplicate').textContent).toBe(
-		'Till aaaaaaaa… — #44 on 2 salesorders 1023, 1031'
+		'Till aaaaaaaa… — 2 sales numbered #44orders 1023, 1031'
 	);
 	open('clock');
 	expect(screen.getByTestId('health-register-skew').textContent).toBe(
@@ -291,27 +291,79 @@ it('names each till that restarted its counter once the duplicates check is open
 	open('duplicates');
 	const rows = screen.getAllByTestId('health-register-duplicate');
 	expect(rows.map((row) => row.textContent)).toEqual([
-		'Till aaaaaaaa… — #1 on 2 salesorders 1011, 1012',
-		'Till bbbbbbbb… — #1 on 3 salesorders 1021, 1022, 1023',
+		'Till aaaaaaaa… — 2 sales numbered #1orders 1011, 1012',
+		'Till bbbbbbbb… — 3 sales numbered #1orders 1021, 1022, 1023',
 	]);
 });
 
-it('says "or more" when a finding holds exactly the server sample cap, and pluralises one sale', () => {
+it('counts a repeated number from the server total when sent, and pluralises one sale', () => {
 	const ids = Array.from({ length: 20 }, (_, i) => 100 + i);
 	withRegisters({
 		...clean,
 		orders: 1,
 		duplicates: [
-			{ till: TILL_A, counter: 1, order_ids: ids, order_numbers: ids.map(String) },
-			{ till: TILL_B, counter: 2, order_ids: [7], order_numbers: ['1007'] },
+			// The server caps order ids at 20; `orders` is the true count.
+			{ till: TILL_A, counter: 1, orders: 25, order_ids: ids, order_numbers: ids.map(String) },
+			// An older plugin sends no `orders`: the sample is the count.
+			{ till: TILL_B, counter: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
 		],
 	});
 	render(<RegistersPanel />);
 	expect(register().textContent).toContain('1 sale · counters');
 	open('duplicates');
 	const rows = screen.getAllByTestId('health-register-duplicate');
-	expect(rows[0].textContent).toContain('Till aaaaaaaa… — #1 on 20 or more sales');
-	expect(rows[1].textContent).toContain('Till bbbbbbbb… — #2 on 1 sale');
+	expect(rows[0].textContent).toContain('Till aaaaaaaa… — 25 sales numbered #1');
+	expect(rows[1].textContent).toContain('Till bbbbbbbb… — 2 sales numbered #2');
+});
+
+it('says No till recorded when the server fell back to the register id as the till', () => {
+	withRegisters({
+		...clean,
+		gaps: [{ till: 'till-1', after: 3, before: 5, missing: 1 }],
+		duplicates: [
+			{ till: 'till-1', counter: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
+		],
+	});
+	render(<RegistersPanel />);
+	open('gaps');
+	open('duplicates');
+	expect(screen.getByTestId('health-register-gap').textContent).toBe(
+		'No till recorded — 1 skipped between #3 and #5'
+	);
+	expect(screen.getByTestId('health-register-duplicate').textContent).toBe(
+		'No till recorded — 2 sales numbered #2orders 1007, 1008'
+	);
+});
+
+it('leaves deleted orders out of order lists and names them on skew rows', () => {
+	withRegisters({
+		...clean,
+		duplicates: [{ till: TILL_A, counter: 2, order_ids: [7, 8], order_numbers: ['', '1008'] }],
+		skew: [{ ...aheadSkew, order_number: '' }],
+	});
+	render(<RegistersPanel />);
+	open('duplicates');
+	open('clock');
+	expect(screen.getByTestId('health-register-duplicate').textContent).toBe(
+		'Till aaaaaaaa… — 2 sales numbered #2orders 1008'
+	);
+	expect(screen.getByTestId('health-register-skew').textContent).toContain(
+		'Deleted order 41: device'
+	);
+});
+
+it('takes clock counts from skew_counts when the server sends them', () => {
+	withRegisters({ ...clean, skew: [aheadSkew], skew_counts: { ahead: 31, behind: 0 } });
+	const { unmount } = render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-clock').textContent).toContain(
+		'31 sales stamped by a clock running ahead'
+	);
+	unmount();
+	withRegisters({ ...clean, skew: [behindSkew], skew_counts: { ahead: 0, behind: 12 } });
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-clock').textContent).toContain(
+		'12 offline sales synced later than they were made. Nothing to do.'
+	);
 });
 
 it('sums missing numbers across gaps and counts the tills they are on', () => {
@@ -369,19 +421,33 @@ it('omits the closures check when the plugin sends no closure lists', () => {
 it('fails the closures check from whichever closure list is non-empty', () => {
 	withRegisters({
 		...clean,
-		closure_gaps: [{ after: 2, before: 5, missing: 2 }],
+		// Newest-first, with the leading gap appended last, as the server pages them.
+		closure_gaps: [
+			{ after: 2, before: 5, missing: 2 },
+			{ after: 0, before: 2, missing: 1 },
+		],
 		closure_conflicts: [{ id: 'c-7', number: 7, printed_number: 8 }],
 	});
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-closures');
 	expect(check.textContent).toContain(
-		'2 closure numbers skipped · 1 closure printed with a different number'
+		'3 closure numbers skipped · 1 closure printed with a different number'
 	);
 	open('closures');
 	expect(screen.getAllByTestId('health-register-closure').map((row) => row.textContent)).toEqual([
+		'Closure #1 is missing',
 		'2 skipped between closure #2 and #5',
 		'Closure #7 was printed as #8',
 	]);
+});
+
+it('names the run of missing first closures when several are missing', () => {
+	withRegisters({ ...clean, closure_gaps: [{ after: 0, before: 4, missing: 3 }] });
+	render(<RegistersPanel />);
+	open('closures');
+	expect(screen.getByTestId('health-register-closure').textContent).toBe(
+		'Closures #1–#3 are missing'
+	);
 });
 
 it('notes a truncated report under the header', () => {
@@ -419,6 +485,23 @@ it('renders unregistered tills with their count and example order numbers', () =
 	expect(screen.getByTestId('health-unregistered').textContent).toContain(
 		'12345678… — 3 sales, e.g. orders 1001, 1002'
 	);
+});
+
+it('pluralises an unregistered till and leaves deleted orders out', () => {
+	state.data = {
+		...state.data!,
+		unregistered: [
+			{ register_id: 'aaaaaaaa-one', orders: 1, order_ids: [1], order_numbers: ['1001'] },
+			{ register_id: 'bbbbbbbb-gone', orders: 2, order_ids: [2, 3], order_numbers: ['', ''] },
+			{ register_id: 'cccccccc-mix', orders: 2, order_ids: [4, 5], order_numbers: ['', '1005'] },
+		],
+	};
+	render(<RegistersPanel />);
+	expect(screen.getAllByTestId('health-unregistered-row').map((row) => row.textContent)).toEqual([
+		'aaaaaaaa… — 1 sale, e.g. order 1001',
+		'bbbbbbbb… — 2 sales',
+		'cccccccc… — 2 sales, e.g. orders 1005',
+	]);
 });
 
 it('summarises sales naming an unknown register session in one line', () => {

@@ -11,16 +11,27 @@ import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { Section } from './components/section';
 import {
+	duplicateSales,
+	isLeadingClosureGap,
+	isUnstampedTill,
+	orderNumberList,
 	registerState,
-	SERVER_SAMPLE_LIMIT,
-	shortTill,
+	shortId,
 	unknownSessionSales,
 } from './registers-logic';
 import { useRegisterHealth } from './use-register-health';
 
-import type { RegisterCheck, RegisterReport, RegisterSkew } from './registers-logic';
+import type { CheckKind, RegisterCheck, RegisterReport, RegisterSkew } from './registers-logic';
 
 type T = ReturnType<typeof useT>;
+
+/** The one title a check shows when it passes. */
+const PASS_TITLE: Record<CheckKind, string> = {
+	gaps: 'health.registers.gaps_pass',
+	duplicates: 'health.registers.duplicates_pass',
+	clock: 'health.registers.clock_pass',
+	closures: 'health.registers.closures_pass',
+};
 
 /**
  * "2026-09-11 00:42 +02:00" from an ISO stamp; the device offset stays visible so a
@@ -85,8 +96,9 @@ function CheckRow({
 function skewRow(t: T, skew: RegisterSkew) {
 	return (
 		<Text key={skew.order_id} testID="health-register-skew" className="text-sm">
-			{t('health.registers.skew', {
+			{t(skew.order_number === '' ? 'health.registers.skew_deleted' : 'health.registers.skew', {
 				order: skew.order_number,
+				id: skew.order_id,
 				device: formatStampedTime(skew.sale_time),
 				received: `${formatStampedTime(skew.received_gmt)} UTC`,
 				magnitude: formatSkewMagnitude(skew.skew_seconds),
@@ -97,16 +109,29 @@ function skewRow(t: T, skew: RegisterSkew) {
 	);
 }
 
-function CheckView({ check }: { check: RegisterCheck }) {
+function CheckView({ check, registerId }: { check: RegisterCheck; registerId: string }) {
 	const t = useT();
 	const testID = `health-register-check-${check.kind}`;
+	if (!check.failing) {
+		// Only the clock has something to show when it passes: sales received late.
+		const behind = check.kind === 'clock' ? check.behind : [];
+		return (
+			<CheckRow
+				attention={false}
+				testID={testID}
+				title={t(PASS_TITLE[check.kind])}
+				sub={
+					check.kind === 'clock' && behind.length > 0
+						? t('health.registers.clock_behind', { count: check.behindCount })
+						: undefined
+				}
+			>
+				{behind.length > 0 ? behind.map((skew) => skewRow(t, skew)) : null}
+			</CheckRow>
+		);
+	}
 	switch (check.kind) {
 		case 'gaps':
-			if (!check.failing) {
-				return (
-					<CheckRow attention={false} testID={testID} title={t('health.registers.gaps_pass')} />
-				);
-			}
 			return (
 				<CheckRow
 					attention
@@ -123,90 +148,61 @@ function CheckView({ check }: { check: RegisterCheck }) {
 							testID="health-register-gap"
 							className="text-sm"
 						>
-							{t('health.registers.gap_row', { ...gap, till: shortTill(gap.till) })}
+							{isUnstampedTill(gap.till, registerId)
+								? t('health.registers.gap_row_no_till', gap)
+								: t('health.registers.gap_row', { ...gap, till: shortId(gap.till) })}
 						</Text>
 					))}
 				</CheckRow>
 			);
 		case 'duplicates':
-			if (!check.failing) {
-				return (
-					<CheckRow
-						attention={false}
-						testID={testID}
-						title={t('health.registers.duplicates_pass')}
-					/>
-				);
-			}
 			return (
 				<CheckRow
 					attention
 					testID={testID}
-					title={t('health.registers.duplicates_title', { count: check.groups.length })}
+					title={t('health.registers.duplicates_title', { count: check.tills })}
 					sub={t('health.registers.duplicates_sub')}
 				>
-					{check.groups.flatMap((group) =>
-						group.duplicates.map((duplicate, index) => (
+					{check.rows.map((duplicate, index) => {
+						const orders = orderNumberList(duplicate.order_numbers);
+						const values = {
+							till: shortId(duplicate.till),
+							count: duplicateSales(duplicate),
+							counter: duplicate.counter,
+						};
+						return (
 							<VStack
-								key={`${group.till}:${duplicate.counter}:${index}`}
+								key={`${duplicate.till}:${duplicate.counter}:${index}`}
 								testID="health-register-duplicate"
 								className="gap-0.5"
 							>
 								<Text className="text-sm">
-									{t(
-										duplicate.order_ids.length >= SERVER_SAMPLE_LIMIT
-											? 'health.registers.duplicate_row_many'
-											: 'health.registers.duplicate_row',
-										{
-											till: shortTill(group.till),
-											count: duplicate.order_ids.length,
-											counter: duplicate.counter,
-										}
-									)}
+									{isUnstampedTill(duplicate.till, registerId)
+										? t('health.registers.duplicate_row_no_till', values)
+										: t('health.registers.duplicate_row', values)}
 								</Text>
-								<Text className="text-muted-foreground text-xs">
-									{t('health.registers.duplicate_orders', {
-										orders: duplicate.order_numbers.join(', '),
-									})}
-								</Text>
+								{orders !== '' ? (
+									<Text className="text-muted-foreground text-xs">
+										{t('health.registers.duplicate_orders', { orders })}
+									</Text>
+								) : null}
 							</VStack>
-						))
-					)}
+						);
+					})}
 				</CheckRow>
 			);
 		case 'clock':
-			if (check.failing) {
-				return (
-					<CheckRow
-						attention
-						testID={testID}
-						title={t('health.registers.clock_title', { count: check.ahead.length })}
-						sub={t('health.registers.clock_sub')}
-					>
-						{check.ahead.map((skew) => skewRow(t, skew))}
-					</CheckRow>
-				);
-			}
 			return (
 				<CheckRow
-					attention={false}
+					attention
 					testID={testID}
-					title={t('health.registers.clock_pass')}
-					sub={
-						check.behind.length > 0
-							? t('health.registers.clock_behind', { count: check.behind.length })
-							: undefined
-					}
+					title={t('health.registers.clock_title', { count: check.aheadCount })}
+					sub={t('health.registers.clock_sub')}
 				>
-					{check.behind.length > 0 ? check.behind.map((skew) => skewRow(t, skew)) : null}
+					{check.ahead.map((skew) => skewRow(t, skew))}
 				</CheckRow>
 			);
 		case 'closures': {
-			if (!check.failing) {
-				return (
-					<CheckRow attention={false} testID={testID} title={t('health.registers.closures_pass')} />
-				);
-			}
 			const parts = [
 				check.gaps.length > 0 ? t('health.registers.closure_gaps', { count: check.missing }) : null,
 				check.conflicts.length > 0
@@ -229,7 +225,12 @@ function CheckView({ check }: { check: RegisterCheck }) {
 							testID="health-register-closure"
 							className="text-sm"
 						>
-							{t('health.registers.closure_gap_row', gap)}
+							{isLeadingClosureGap(gap)
+								? t('health.registers.closure_gap_leading', {
+										count: gap.missing,
+										last: gap.before - 1,
+									})
+								: t('health.registers.closure_gap_row', gap)}
 						</Text>
 					))}
 					{check.conflicts.map((conflict) => (
@@ -265,7 +266,7 @@ function RegisterBlock({ register, days }: { register: RegisterReport; days: num
 			<HStack className="flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
 				<HStack className="items-baseline gap-2">
 					<Text className="font-medium">{register.name}</Text>
-					<Text className="text-muted-foreground text-xs">{register.id.slice(0, 8)}</Text>
+					<Text className="text-muted-foreground text-xs">{shortId(register.id)}</Text>
 				</HStack>
 				<Text className="text-muted-foreground text-xs">
 					{register.orders === 0
@@ -289,7 +290,9 @@ function RegisterBlock({ register, days }: { register: RegisterReport; days: num
 					}
 				/>
 			) : (
-				state.checks.map((check) => <CheckView key={check.kind} check={check} />)
+				state.checks.map((check) => (
+					<CheckView key={check.kind} check={check} registerId={register.id} />
+				))
 			)}
 		</VStack>
 	);
@@ -338,15 +341,17 @@ export function RegistersPanel() {
 					<Text className="text-muted-foreground text-xs">
 						{t('health.registers.unregistered_sub')}
 					</Text>
-					{data.unregistered.map((till) => (
-						<Text key={till.register_id} className="text-sm">
-							{t('health.registers.unregistered_row', {
-								id: till.register_id.slice(0, 8),
-								n: till.orders,
-								orders: till.order_numbers.join(', '),
-							})}
-						</Text>
-					))}
+					{data.unregistered.map((till) => {
+						const orders = orderNumberList(till.order_numbers);
+						const values = { id: shortId(till.register_id), count: till.orders, orders };
+						return (
+							<Text key={till.register_id} testID="health-unregistered-row" className="text-sm">
+								{orders !== ''
+									? t('health.registers.unregistered_sales', values)
+									: t('health.registers.unregistered_count', values)}
+							</Text>
+						);
+					})}
 				</VStack>
 			) : null}
 			{unknownSales > 0 ? (
