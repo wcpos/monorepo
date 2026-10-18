@@ -1256,11 +1256,10 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.addState :: 2',
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.stores.bulkInsert :: 1',
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.users.insert :: 1',
-	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: userDB.wp_credentials.upsert :: 1',
 	'contexts/app-state/hydration-steps.ts :: record mutator ::  :: wpCredentialsDoc.patch :: 1',
 	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"contexts/app-state/hydration-steps.ts :: storage import ::  :: from '@wcpos/database' :: 2",
 ];
-export const SEAM_RETIRED_FLOOR = 338;
+export const SEAM_RETIRED_FLOOR = 337;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'be6c26782775d8ae5b8c934d2cfbac917090b7c1f9087c3708b80f30b3cf8a82';
+	'c5d053a5578683e0174b888880bb8e99e286156909829280b94b9cda0ebda3d5';
