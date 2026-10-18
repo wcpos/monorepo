@@ -1,4 +1,4 @@
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import {
 	observeCashMovements,
@@ -90,4 +90,23 @@ it('answers a missing print closure even when the store has a live reset stream'
 	await expect(
 		readClosure({ collections: {}, reset$: new Subject() }, { id: 'missing' })
 	).resolves.toBeNull();
+});
+
+// A reset before the first answer must move the lookup to the replacement, not resolve null.
+it('readClosure waits for an answered query of the collection that is current', async () => {
+	const reset$ = new Subject<never>();
+	const pending = new Subject<unknown>();
+	const original = { findOne: jest.fn(() => ({ $: pending })) };
+	const storeDB = { collections: { closures: original }, reset$ };
+	const answer = readClosure(storeDB, { id: 'closure' });
+	const replacement = {
+		name: 'closures',
+		database: storeDB,
+		findOne: jest.fn(() => ({ $: of({ id: 'closure', from: 'replacement' }) })),
+	};
+	storeDB.collections.closures = replacement as unknown as typeof original;
+	reset$.next(replacement as never);
+	await expect(answer).resolves.toMatchObject({ id: 'closure', from: 'replacement' });
+	expect(original.findOne).toHaveBeenCalledWith('closure');
+	expect(replacement.findOne).toHaveBeenCalledWith('closure');
 });

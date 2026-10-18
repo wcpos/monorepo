@@ -7,7 +7,6 @@ import {
 	map,
 	type Observable,
 	of,
-	skip,
 	startWith,
 	Subject,
 	switchMap,
@@ -96,6 +95,24 @@ export type ReadonlyClosureDocument = Readonly<ClosureRow> &
 export type ClosureIdentity =
 	{ id: string; serverClosureId?: string } | { serverClosureId: string; id?: string };
 
+function closureQuery(
+	closures: { findOne: (q: unknown) => { $: Observable<unknown> } },
+	identity: ClosureIdentity
+) {
+	return closures.findOne(
+		'serverClosureId' in identity
+			? {
+					selector: {
+						$or: [
+							{ id: identity.id ?? identity.serverClosureId },
+							{ server_closure_id: identity.serverClosureId ?? identity.id },
+						],
+					},
+				}
+			: identity.id
+	).$ as Observable<ReadonlyClosureDocument | null>;
+}
+
 /** Absent → null. Reports may know the local UUID, the server identity, or both. */
 export function observeClosure(
 	storeDB: RegisterStoreDatabase,
@@ -103,30 +120,25 @@ export function observeClosure(
 ): Observable<ReadonlyClosureDocument | null> {
 	return observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
 		switchMap((closures) =>
-			closures
-				? closures
-						.findOne(
-							'serverClosureId' in identity
-								? {
-										selector: {
-											$or: [
-												{ id: identity.id ?? identity.serverClosureId },
-												{ server_closure_id: identity.serverClosureId ?? identity.id },
-											],
-										},
-									}
-								: identity.id
-						)
-						.$.pipe(startWith(null))
-				: of(null)
+			closures ? closureQuery(closures, identity).pipe(startWith(null)) : of(null)
 		)
 	);
 }
 
-/** Fresh one-shot answer for print callbacks; skip the read's initial unavailable emission. */
+/**
+ * Fresh one-shot answer for print callbacks: the first ANSWERED query of the collection that
+ * is current when it answers. A reset landing before the first answer moves the lookup to the
+ * replacement (switchMap drops the superseded query), so a loading emission is never mistaken
+ * for "no such closure" (CodeRabbit, #2700).
+ */
 export function readClosure(storeDB: RegisterStoreDatabase, identity: ClosureIdentity) {
 	if (!storeDB?.collections.closures) return Promise.resolve(null);
-	return firstValueFrom(observeClosure(storeDB, identity).pipe(skip(1)), { defaultValue: null });
+	return firstValueFrom(
+		observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
+			switchMap((closures) => (closures ? closureQuery(closures, identity) : of(null)))
+		),
+		{ defaultValue: null }
+	);
 }
 
 /** Absent → null (unavailable), not [] (loaded empty); the Reports list is unscoped. */
