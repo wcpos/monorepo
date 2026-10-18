@@ -133,7 +133,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('../../hooks/mutations/use-mutation', () => ({
 	useMutation: (props: unknown) => {
 		mockUseMutationProps(props);
-		return { patch: patchCustomer };
+		return { patch: patchCustomer, patchRecord: patchCustomer };
 	},
 }));
 jest.mock('../../hooks/use-customer-name-format', () => ({

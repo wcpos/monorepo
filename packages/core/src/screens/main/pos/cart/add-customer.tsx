@@ -26,7 +26,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
-import { useMutation } from '../../hooks/mutations/use-mutation';
+import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 import { usePanelSide } from '../contexts/overlay-side';
@@ -41,7 +41,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
  */
 function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
+	const { createCustomer } = useCartCustomerRecord();
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();
@@ -69,7 +69,7 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				// The create is queued, not awaited, so a store refusal arrives later through the
 				// engine; what can reject here (an enqueue failure, a scope change) create() has
 				// already reported, so it is not reported twice. The form stays open.
-				const savedDoc = await create({ data }).catch(() => undefined);
+				const savedDoc = await createCustomer(data);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its
 					// payload. Snapshot it rather than reading fields off the record:
@@ -139,7 +139,7 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				setLoading(false);
 			}
 		},
-		[create, currentOrderRecord, format, setCartCustomer, onClose, runtime, storeDB, t]
+		[createCustomer, currentOrderRecord, format, setCartCustomer, onClose, runtime, storeDB, t]
 	);
 
 	return (

@@ -17,8 +17,8 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
+import { useRecordField } from '@wcpos/query';
+import { isGuestCustomer } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -28,27 +28,12 @@ import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-
 import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
-import { useMutation } from '../../hooks/mutations/use-mutation';
+import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
-type QueryManager = ReturnType<typeof useQueryRuntime>;
-
-async function findCustomerByWooId(
-	runtime: QueryManager,
-	wooCustomerId: number
-): Promise<EngineRecord<'customers'> | null> {
-	const scope = await runtime.engine.whenActive();
-	const collection = scope.database.collections.customers;
-	if (!collection) return null;
-	const document = await collection
-		.findOne({ selector: { remoteId: remoteIdOrNull(wooCustomerId) } })
-		.exec();
-	return document;
-}
-
 /**
  *
  */
@@ -75,8 +60,7 @@ export function EditCartCustomerForm() {
 		[taxIdsProxy]
 	);
 	const setCartCustomer = useSetCartCustomer();
-	const { patch } = useMutation({ collectionName: 'customers', showSuccessToast: false });
-	const runtime = useQueryRuntime();
+	const { saveCustomerAddresses } = useCartCustomerRecord();
 	const { close: closeDialog } = useDialog();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
@@ -117,8 +101,8 @@ export function EditCartCustomerForm() {
 		if (!(await handleSaveToOrder(data))) return;
 		setLoading(true);
 		try {
-			const customer = await findCustomerByWooId(runtime, wooCustomerId);
-			if (!customer) {
+			const result = await saveCustomerAddresses(wooCustomerId, data);
+			if (result.status === 'not-found') {
 				cartLogger.error('Customer record was not found', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -129,16 +113,8 @@ export function EditCartCustomerForm() {
 				});
 				return;
 			}
-			const savedDoc = await patch({
-				document: customer,
-				data: {
-					billing: data.billing,
-					shipping: data.shipping,
-					tax_ids: data.tax_ids ?? [],
-				},
-			});
-			if (savedDoc) {
-				const saved = customer.getLatest().payload;
+			if (result.status === 'saved') {
+				const saved = result.customer.getLatest().payload;
 				cartLogger.success(t('common.saved', { name: format(saved) }), {
 					showToast: true,
 					context: {
