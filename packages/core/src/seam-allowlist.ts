@@ -1170,7 +1170,24 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: record collection back-reference :: useReceiptEmailQueueCollection :: swap.collection :: 1',
 	"screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts :: storage token :: useReceiptEmailQueueCollection :: storeDB?.collections :: 1',
+	// ADR 0033 per-screen (e1): the user-database subpath, read-only user records, site and store writes in @wcpos/query/user-db.
+	"hooks/use-version-check.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/settings/general.tsx :: storage import ::  :: from '@wcpos/database/collections/schemas/stores' :: 1",
+	"services/novu/subscriber.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'utils/merge-stores.ts :: raw query construction :: mergeStoresWithResponse :: userDB.stores.findOne :: 1',
+	'utils/merge-stores.ts :: record mutator :: mergeServerOwnedStoreFields :: storeDocument.getLatest().incrementalModify :: 1',
+	'utils/merge-stores.ts :: record mutator :: mergeServerOwnedStoreFields :: storeDocument.incrementalPatch :: 1',
+	'utils/merge-stores.ts :: record mutator :: mergeStoresWithResponse :: userDB.stores.bulkInsert :: 1',
+	'utils/merge-stores.ts :: record mutator :: mergeStoresWithResponse :: userDB.stores.bulkRemove :: 1',
+	'utils/merge-stores.ts :: record mutator :: mergeStoresWithResponse :: wpUser.incrementalPatch :: 1',
+	"utils/merge-stores.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"utils/merge-stores.ts :: storage import ::  :: from '@wcpos/database/collections/schemas/stores' :: 1",
+	'utils/site-writes.ts :: raw query construction :: upsertSiteData :: collection.findOne :: 1',
+	'utils/site-writes.ts :: record mutator :: linkCredentialsToSite :: latest.incrementalModify :: 1',
+	'utils/site-writes.ts :: record mutator :: upsertSiteData :: collection.incrementalUpsert :: 1',
+	'utils/site-writes.ts :: record mutator :: upsertSiteData>merge :: doc.getLatest().incrementalModify :: 1',
+	"utils/site-writes.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 255;
+export const SEAM_RETIRED_FLOOR = 271;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'8974e4f9e1e7b6d6bc3248ac5ea8394b956c8c897f22206e0d2db2338a4f3d79';
+	'b9afa2ca7cacfa17eff52457e5f30a71610e90655e00dac7dc6d4316671fc63f';

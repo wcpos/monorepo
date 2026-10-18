@@ -15,7 +15,11 @@ import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 import '@wcpos/database/plugins';
 import { userCollections } from '@wcpos/database/collections';
 
-import { linkCredentialsToSite, stripLocalOnlySiteFields, upsertSiteData } from './site-writes';
+import {
+	linkCredentialsToSite,
+	stripLocalOnlySiteFields,
+	upsertSiteData,
+} from '../../src/user-db/sites';
 
 jest.mock('uuid', () => ({
 	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,
@@ -35,7 +39,7 @@ const restResponse = (overrides: Record<string, unknown> = {}) => ({
 	...overrides,
 });
 
-let db: RxDatabase;
+let db: RxDatabase<import('@wcpos/database').UserDatabase['collections']>;
 
 const sites = () => db.collections.sites as never as import('@wcpos/database').SiteCollection;
 const parse = (json: Record<string, unknown>) =>
@@ -88,7 +92,7 @@ describe('upsertSiteData with a raw embedded payload', () => {
 	});
 
 	it('inserts despite unknown server fields, keeping known ones like locale', async () => {
-		const doc = await upsertSiteData(sites(), embeddedPayload());
+		const doc = await upsertSiteData(db, embeddedPayload());
 
 		expect(doc.uuid).toBe(SITE_UUID);
 		expect(doc.locale).toBe('en_US');
@@ -96,11 +100,11 @@ describe('upsertSiteData with a raw embedded payload', () => {
 	});
 
 	it('merges into an existing document despite unknown server fields', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		await linkCredentialsToSite(site!, 'cred-1');
 
-		const doc = await upsertSiteData(sites(), embeddedPayload({ name: 'Renamed' }));
+		const doc = await upsertSiteData(db, embeddedPayload({ name: 'Renamed' }));
 
 		expect(doc.name).toBe('Renamed');
 		expect(doc.locale).toBe('en_US');
@@ -111,7 +115,7 @@ describe('upsertSiteData with a raw embedded payload', () => {
 
 	it('does not clobber a stored locale with the parser-synthesized empty string', async () => {
 		// Embedded boot stores the real locale…
-		await upsertSiteData(sites(), embeddedPayload());
+		await upsertSiteData(db, embeddedPayload());
 		expect((await sites().findOne(SITE_UUID).exec())!.locale).toBe('en_US');
 
 		// …then the standalone discovery flow re-connects the same site. The REST
@@ -121,7 +125,7 @@ describe('upsertSiteData with a raw embedded payload', () => {
 		const trailingDiscovery = parse(restResponse({ wp_version: '6.9' }));
 		expect(trailingDiscovery).toHaveProperty('locale', '');
 
-		await upsertSiteData(sites(), trailingDiscovery);
+		await upsertSiteData(db, trailingDiscovery);
 
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.locale).toBe('en_US');
@@ -129,19 +133,19 @@ describe('upsertSiteData with a raw embedded payload', () => {
 	});
 
 	it('updates the stored locale when the server sends a real one', async () => {
-		await upsertSiteData(sites(), embeddedPayload());
+		await upsertSiteData(db, embeddedPayload());
 
-		await upsertSiteData(sites(), embeddedPayload({ locale: 'de_DE' }));
+		await upsertSiteData(db, embeddedPayload({ locale: 'de_DE' }));
 
 		expect((await sites().findOne(SITE_UUID).exec())!.locale).toBe('de_DE');
 	});
 
 	it('never writes local-only fields even when the payload carries them', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		await linkCredentialsToSite(site!, 'cred-1');
 
-		const doc = await upsertSiteData(sites(), embeddedPayload({ wp_credentials: [] }));
+		const doc = await upsertSiteData(db, embeddedPayload({ wp_credentials: [] }));
 
 		expect(doc.wp_credentials).toEqual(['cred-1']);
 	});
@@ -149,7 +153,7 @@ describe('upsertSiteData with a raw embedded payload', () => {
 
 describe('upsertSiteData', () => {
 	it('creates the site document when it does not exist', async () => {
-		const doc = await upsertSiteData(sites(), parse(restResponse()));
+		const doc = await upsertSiteData(db, parse(restResponse()));
 
 		expect(doc.uuid).toBe(SITE_UUID);
 		expect(doc.name).toBe('Pro WCPOS');
@@ -157,7 +161,7 @@ describe('upsertSiteData', () => {
 
 	it('preserves a credential linked between the connect read and the connect write', async () => {
 		// 1. Connect saves the site.
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 
 		// 2. The connect flow's trailing discovery-details refresh parses its
 		//    payload — the snapshot at this point has no credentials.
@@ -168,7 +172,7 @@ describe('upsertSiteData', () => {
 		await linkCredentialsToSite(site!, 'cred-1');
 
 		// 4. The trailing connect write lands last.
-		await upsertSiteData(sites(), trailingPayload);
+		await upsertSiteData(db, trailingPayload);
 
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.wp_credentials).toEqual(['cred-1']);
@@ -176,13 +180,13 @@ describe('upsertSiteData', () => {
 	});
 
 	it('preserves the credential when the connect write and the login write are concurrent', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		const trailingPayload = parse(restResponse({ wp_version: '6.9' }));
 
 		await Promise.all([
 			linkCredentialsToSite(site!, 'cred-1'),
-			upsertSiteData(sites(), trailingPayload),
+			upsertSiteData(db, trailingPayload),
 		]);
 
 		const final = await sites().findOne(SITE_UUID).exec();
@@ -191,12 +195,12 @@ describe('upsertSiteData', () => {
 	});
 
 	it('revives a site the user removed and re-connected', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		await site!.getLatest().remove();
 		expect(await sites().findOne(SITE_UUID).exec()).toBeNull();
 
-		const revived = await upsertSiteData(sites(), parse(restResponse({ name: 'Pro WCPOS' })));
+		const revived = await upsertSiteData(db, parse(restResponse({ name: 'Pro WCPOS' })));
 
 		expect(revived.deleted).toBe(false);
 		const final = await sites().findOne(SITE_UUID).exec();
@@ -205,7 +209,7 @@ describe('upsertSiteData', () => {
 	});
 
 	it('merges into the newest revision instead of replaying a stale snapshot', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 
 		// Handle captured before any later write — this is what the connect
 		// screen holds on to for the lifetime of the render.
@@ -213,7 +217,7 @@ describe('upsertSiteData', () => {
 		await linkCredentialsToSite(staleSite!, 'cred-1');
 		await linkCredentialsToSite(staleSite!, 'cred-2');
 
-		await upsertSiteData(sites(), parse(restResponse({ name: 'Renamed' })));
+		await upsertSiteData(db, parse(restResponse({ name: 'Renamed' })));
 
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.wp_credentials).toEqual(['cred-1', 'cred-2']);
@@ -223,7 +227,7 @@ describe('upsertSiteData', () => {
 
 describe('linkCredentialsToSite', () => {
 	it('appends the credential uuid', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
 		await expect(linkCredentialsToSite(site!, 'cred-1')).resolves.toBe(true);
@@ -233,7 +237,7 @@ describe('linkCredentialsToSite', () => {
 	});
 
 	it('keeps both links when two logins land in the same tick', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
 		await Promise.all([
@@ -246,7 +250,7 @@ describe('linkCredentialsToSite', () => {
 	});
 
 	it('does not duplicate the uuid when the same login is processed twice', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
 		const results = await Promise.all([
@@ -265,7 +269,7 @@ describe('linkCredentialsToSite', () => {
 		// queue, which chains modifiers instead of hitting RxDB's 409 retry path.
 		// This one lands a competing write underneath the queue so the append has
 		// to survive an actual conflict — the semantics the whole fix rests on.
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
 		const collection = sites() as never as {
@@ -308,7 +312,7 @@ describe('linkCredentialsToSite', () => {
 	});
 
 	it('refuses to link against a removed site instead of writing a tombstone', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		await site!.getLatest().remove();
 
@@ -316,7 +320,7 @@ describe('linkCredentialsToSite', () => {
 	});
 
 	it('refuses to link when the site is removed during a revision-conflict retry', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
 		const collection = sites() as never as {
@@ -357,7 +361,7 @@ describe('linkCredentialsToSite', () => {
 	});
 
 	it('reports false and skips the write when the credential is already linked', async () => {
-		await upsertSiteData(sites(), parse(restResponse()));
+		await upsertSiteData(db, parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 		await linkCredentialsToSite(site!, 'cred-1');
 
@@ -365,5 +369,11 @@ describe('linkCredentialsToSite', () => {
 
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.wp_credentials).toEqual(['cred-1']);
+	});
+});
+
+it('rejects an absent user database', async () => {
+	await expect(upsertSiteData(undefined, restResponse())).rejects.toMatchObject({
+		name: 'UserDatabaseUnavailableError',
 	});
 });

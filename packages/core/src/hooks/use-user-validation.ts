@@ -16,9 +16,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
+import { mergeStoresWithResponse } from '@wcpos/query/user-db';
 
 import { useAppState } from '../contexts/app-state';
-import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 

@@ -45,7 +45,7 @@ import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-res
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useVersionCheck } from '../../../hooks/use-version-check';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
 	user: UserDocument;
@@ -224,7 +224,8 @@ function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument 
  * Content inside an accordion item — needs Suspense boundary above it
  */
 function AccordionSiteContent({ site }: { site: SiteDocument }) {
-	const { wcposVersionPass } = useVersionCheck({ site });
+	const { compatibility } = useAppInfo({ site });
+	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 	const t = useT();
 
 	useSiteInfo({ site });

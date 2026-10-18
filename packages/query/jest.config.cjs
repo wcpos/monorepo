@@ -28,7 +28,9 @@ module.exports = {
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(tsx?|ts?)$'],
 	verbose: true,
 	testEnvironment: 'jsdom',
+	globals: { __DEV__: true },
 	moduleNameMapper: {
+		'^expo-crypto$': '<rootDir>/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/utils/src/logger$': '<rootDir>/tests/__mocks__/logger.ts',
 		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',
 		'^@wcpos/utils/logger$': '<rootDir>/tests/__mocks__/logger.ts',

@@ -1,4 +1,8 @@
-import type { SiteDocument, StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+import type {
+	ReadonlySiteRecord,
+	ReadonlyStoreRecord,
+	ReadonlyWpCredentialsRecord,
+} from '@wcpos/query/user-db';
 import { http } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -45,9 +49,9 @@ export interface NovuSubscriberMetadata {
  * @returns The subscriber ID string
  */
 export function generateSubscriberId(
-	site: SiteDocument,
-	store: StoreDocument,
-	wpCredentials: WPCredentialsDocument
+	site: Pick<ReadonlySiteRecord, 'url'>,
+	store: Pick<ReadonlyStoreRecord, 'id' | 'localID'>,
+	wpCredentials: Pick<ReadonlyWpCredentialsRecord, 'uuid'>
 ): string {
 	// Extract domain from site URL (remove protocol)
 	const domain = extractDomain(site.url || '');

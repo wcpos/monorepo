@@ -3,6 +3,7 @@ import * as React from 'react';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
+import { upsertSiteData } from '@wcpos/query/user-db';
 
 import { useAppState } from '../../../contexts/app-state';
 import {
@@ -11,7 +12,6 @@ import {
 } from '../../../contexts/app-state/hydration-steps';
 import { useT } from '../../../contexts/translations';
 import { asciiHost } from '../../../lib/url';
-import { upsertSiteData } from '../../../utils/site-writes';
 import { useApiDiscovery } from './use-api-discovery';
 import { useUrlDiscovery } from './use-url-discovery';
 
@@ -205,7 +205,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				 * locally-owned `wp_credentials` link array. Writing that back erased any
 				 * credential linked while discovery was still in flight (#902).
 				 */
-				const siteDoc = await upsertSiteData(userDB.sites, parsedData);
+				const siteDoc = await upsertSiteData(userDB, parsedData);
 
 				// Ensure site is in user's sites array (may be missing if new or previously removed)
 				const currentSites: string[] = user.getLatest().sites ?? [];
@@ -264,7 +264,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				throw new Error(t('auth.failed_to_save_site_data'));
 			}
 		},
-		[user, userDB.sites, t]
+		[user, userDB, t]
 	);
 
 	/**

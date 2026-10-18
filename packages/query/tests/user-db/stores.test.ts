@@ -3,7 +3,7 @@ import {
 	mergeServerOwnedStoreFields,
 	mergeStoresWithResponse,
 	normalizeStorePayload,
-} from './merge-stores';
+} from '../../src/user-db/stores';
 
 // Mock expo-crypto
 jest.mock('expo-crypto', () => ({
@@ -597,4 +597,18 @@ describe('getServerOwnedStorePatch', () => {
 
 		expect(patch).toEqual({ calc_taxes: 'yes' });
 	});
+});
+
+it('pins the SHA-256 localID and its credential/site/user key order', async () => {
+	const { digestStringAsync } = jest.requireMock('expo-crypto');
+	digestStringAsync.mockImplementationOnce(jest.requireActual('expo-crypto').digestStringAsync);
+	const userDB = makeUserDB();
+	const ids = await mergeStoresWithResponse({
+		userDB: userDB as any,
+		wpUser: makeWpUser(),
+		remoteStores: [{ id: 1 }],
+		user: { uuid: 'user-uuid' },
+		siteID: 'site-1',
+	});
+	expect(ids).toEqual(['3fddccef3b']);
 });
