@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { setExtraData } from '@wcpos/query/user-db';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -21,7 +22,7 @@ function isMissing(value: unknown): boolean {
  */
 export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
-	const { extraData } = useStoreSession();
+	const { extraData, storeDB } = useStoreSession();
 	const { engine } = useQueryRuntime();
 
 	React.useEffect(() => {
@@ -32,7 +33,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/taxes/classes')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						void extraData.set('taxClasses', () => response.data);
+						void setExtraData(storeDB, 'taxClasses', response.data);
 					}
 				})
 				.catch(() => undefined);
@@ -41,7 +42,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/shipping_methods')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						void extraData.set('shippingMethods', () => response.data);
+						void setExtraData(storeDB, 'shippingMethods', response.data);
 					}
 				})
 				.catch(() => undefined);
@@ -50,7 +51,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/data/order_statuses')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						void extraData.set('orderStatuses', () => response.data);
+						void setExtraData(storeDB, 'orderStatuses', response.data);
 					}
 				})
 				.catch(() => undefined);
@@ -67,13 +68,13 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/payment-methods', { quietErrors: true })
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						return extraData.set('paymentMethods', () => response.data);
+						return setExtraData(storeDB, 'paymentMethods', response.data);
 					}
 					return undefined;
 				})
 				.catch((error: { response?: { status?: number } }) => {
 					if (generation === refreshGeneration && error?.response?.status === 404) {
-						return extraData.set('paymentMethods', () => null);
+						return setExtraData(storeDB, 'paymentMethods', null);
 					}
 					return undefined;
 				})
@@ -102,7 +103,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 			refreshGeneration += 1;
 			unsubscribeEvents();
 		};
-	}, [engine, extraData, http]);
+	}, [engine, extraData, storeDB, http]);
 
 	return <ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>;
 }

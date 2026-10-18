@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
+import { hydrateUserSession } from '@wcpos/query/user-db';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -21,8 +22,12 @@ jest.mock('./use-hydration-suspense', () => ({
 	}),
 }));
 
-jest.mock('./hydration-steps', () => ({
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
 	hydrateUserSession: jest.fn(),
+}));
+
+jest.mock('./hydration-steps', () => ({
 	switchUserSessionStore: jest.fn(),
 }));
 
@@ -30,8 +35,8 @@ jest.mock('@wcpos/utils/platform', () => ({
 	Platform: { isWeb: false },
 }));
 
-// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
-import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
+// eslint-disable-next-line import/first
+import { switchUserSessionStore } from './hydration-steps';
 // The real store-session module (not mocked): IncompleteStoreSessionError is what the producers discriminate on.
 // eslint-disable-next-line import/first
 import { IncompleteStoreSessionError } from './store-session';
@@ -57,16 +62,17 @@ const pointer = { siteID: 'site-1', wpCredentialsID: 'creds-1', storeID: 'store-
 
 /** The always-present half of the hydrated context, with the persisted `current` pointer. */
 function sessionBase(current: typeof pointer | null = pointer) {
+	const appState = {
+		// RxState.get is synchronous; an async mock here hid a `.catch()` on a
+		// plain object that threw before the report (Codex review). It keeps
+		// returning the pointer after `set`, which is what a slow store looks
+		// like to the re-run effect — the recovery must not report it twice.
+		get: jest.fn(() => current),
+		set: jest.fn(async () => undefined),
+	};
 	return {
-		userDB: {},
-		appState: {
-			// RxState.get is synchronous; an async mock here hid a `.catch()` on a
-			// plain object that threw before the report (Codex review). It keeps
-			// returning the pointer after `set`, which is what a slow store looks
-			// like to the re-run effect — the recovery must not report it twice.
-			get: jest.fn(() => current),
-			set: jest.fn(async () => undefined),
-		},
+		userDB: { states: { v2: appState } },
+		appState,
 		translationsState: {},
 		user: { localID: 'user-1' },
 	};

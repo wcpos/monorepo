@@ -306,8 +306,8 @@ importers:
         specifier: 1.12.2
         version: 1.12.2(@expo/metro-config@58.0.14(expo@58.0.14)(typescript@5.9.3))(metro-cache@0.87.1)(metro-transform-worker@0.87.1)(metro@0.87.1)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(tailwindcss@4.3.3)
       victory-native:
-        specifier: ^41.26.0
-        version: 41.26.0(10d79b7e3a548f47e9a2651f6296befb)
+        specifier: ^42.0.1
+        version: 42.0.1(10d79b7e3a548f47e9a2651f6296befb)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -771,8 +771,8 @@ importers:
         specifier: 29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.2)(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@25.9.3))(typescript@5.9.3)
       victory-native:
-        specifier: ^41.26.0
-        version: 41.26.0(10d79b7e3a548f47e9a2651f6296befb)
+        specifier: ^42.0.1
+        version: 42.0.1(10d79b7e3a548f47e9a2651f6296befb)
 
   packages/database:
     dependencies:
@@ -1047,7 +1047,7 @@ importers:
         version: 4.4.0
       expo-crypto:
         specifier: ~58.0.6
-        version: 58.0.6(expo@58.0.8)
+        version: 58.0.7(expo@58.0.14)
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
@@ -9708,10 +9708,10 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  victory-native@41.26.0:
-    resolution: {integrity: sha512-NCRPQKdK99cIREXvtefEnGlOf29gd3RBMb5qVQ49+weY+mG6UHbBu4Wru7TObDyZo0NgywPWZP4dno9K8bz+Cg==}
+  victory-native@42.0.1:
+    resolution: {integrity: sha512-W3dNBMeRtZ8AQGBkV1PrYYKLFSstTy6uulmlJJFch4hvPX/R1xH1VJXzZopK6GGbcq/ejcr8WwntWwhqTo0lzA==}
     peerDependencies:
-      '@shopify/react-native-skia': '>=1.2.3 <3.0.0'
+      '@shopify/react-native-skia': '>=2.6.0 <3.0.0'
       react: 19.3.0
       react-native: 0.88.0
       react-native-gesture-handler: ~3.3.0
@@ -19970,7 +19970,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  victory-native@41.26.0(10d79b7e3a548f47e9a2651f6296befb):
+  victory-native@42.0.1(10d79b7e3a548f47e9a2651f6296befb):
     dependencies:
       '@shopify/react-native-skia': 2.14.0(patch_hash=2c5095abf729b4658886df5b494b4c62ae9b047de93b7229b71624a143b3cbe4)(react-native-reanimated@4.7.1(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       d3-scale: 4.0.2

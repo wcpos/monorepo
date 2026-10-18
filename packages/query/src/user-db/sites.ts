@@ -1,8 +1,9 @@
-import type { SiteCollection, SiteDocument, UserDatabase, UserDocument } from '@wcpos/database';
+import type { SiteDocument, UserDatabase, UserDocument } from '@wcpos/database';
 import { asciiHost } from '@wcpos/utils/ascii-host';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
+import { mergeIntoDocument, pruneToSchemaProperties } from '../records/merge-into-document';
 
 import type { ReadonlySiteRecord, ReadonlyUserRecord } from './records';
 
@@ -30,43 +31,6 @@ export function stripLocalOnlySiteFields<T extends SiteData>(data: T): T {
 }
 
 /**
- * Return a copy of `data` containing only properties the collection schema knows.
- *
- * The sites schema is `additionalProperties: false`, and the embedded boot path
- * hands the server's `initialProps.site` to `upsertSiteData` verbatim — it never
- * goes through `parseRestResponse`, which prunes for every other ingest path. A
- * server that starts sending one extra field (e.g. `locale`, 2026-08) therefore
- * turns every dev boot into an RxDB VD2 validation error. Pruning here makes the
- * write boundary tolerate any future server-side addition.
- *
- * `parseRestResponse` itself is not usable for this write: it fills every absent
- * schema property with a default, and `upsertSiteData` is a merge — defaults
- * would clobber locally-stored values (the #902 class again).
- */
-export function pruneUnknownSiteFields<T extends SiteData>(
-	collection: SiteCollection,
-	data: T
-): SiteData {
-	const knownProperties = collection.schema.jsonSchema.properties;
-	const copy: SiteData = {};
-	for (const key of Object.keys(data)) {
-		if (Object.prototype.hasOwnProperty.call(knownProperties, key) && !key.startsWith('_')) {
-			copy[key] = data[key];
-		}
-	}
-	return copy;
-}
-
-/**
- * Merge server-owned site data into the sites collection without clobbering
- * locally-owned fields.
- *
- * Writes go through `incrementalModify` so the merge is re-applied against the
- * newest document state on a revision conflict — a plain `incrementalPatch()`
- * (or `collection.upsert()`, which is a full-document overwrite) replays a
- * snapshot that was computed before the conflicting write landed.
- */
-/**
  * Fields where the empty string is never real data, only `parseRestResponse`'s
  * synthesized default for a property the response did not carry. The standalone
  * discovery flow parses the REST index — which does not return `locale` — so a
@@ -75,13 +39,25 @@ export function pruneUnknownSiteFields<T extends SiteData>(
  */
 const OMIT_EMPTY_SITE_FIELDS = ['locale'] as const;
 
+/**
+ * Merge server-owned site data into the sites collection without clobbering locally-owned
+ * fields (`mergeIntoDocument` owns the RxDB write semantics).
+ *
+ * The sites schema is `additionalProperties: false`, and the embedded boot path hands the
+ * server's `initialProps.site` here verbatim, never through `parseRestResponse`, so unknown
+ * keys are pruned (a server field added later, e.g. `locale` 2026-08, would otherwise turn
+ * every boot into a VD2 error). `parseRestResponse` is no use for that: it fills every absent
+ * property with a default, which a merge would write over local values (#902). Reviving a
+ * removed site's tombstone from the patch is safe: removal took its linked credentials with
+ * it (`populate` preRemove), so there is no link array left to preserve.
+ */
 export async function upsertSiteData(
 	userDB: UserDatabase | null | undefined,
 	siteData: SiteData
 ): Promise<SiteDocument> {
 	if (!userDB) throw new UserDatabaseUnavailableError();
 	const collection = userDB.sites;
-	const patch = pruneUnknownSiteFields(collection, stripLocalOnlySiteFields(siteData));
+	const patch = pruneToSchemaProperties(collection, stripLocalOnlySiteFields(siteData));
 	for (const field of OMIT_EMPTY_SITE_FIELDS) {
 		if (patch[field] === '') {
 			delete patch[field];
@@ -93,24 +69,12 @@ export async function upsertSiteData(
 		throw new Error('Cannot save site data without a uuid');
 	}
 
-	const merge = async (doc: SiteDocument) => {
-		await doc.getLatest().incrementalModify((current) => ({ ...current, ...patch }));
-		return doc.getLatest();
-	};
-
-	const existing = await collection.findOne(primary).exec();
-	if (existing) {
-		return merge(existing);
-	}
-
-	/**
-	 * No live document. Either the site has never been saved, or it is a tombstone
-	 * from a site the user removed — removal takes the linked credential documents
-	 * with it (`populate` preRemove), so there is no link array left to preserve and
-	 * a create-or-revive write is safe. `incrementalUpsert` covers both and queues
-	 * per primary key, so two connects for the same new site cannot both insert.
-	 */
-	return collection.incrementalUpsert(patch as never);
+	return mergeIntoDocument(
+		collection,
+		primary,
+		(current) => ({ ...current, ...patch }),
+		() => patch
+	);
 }
 
 /**

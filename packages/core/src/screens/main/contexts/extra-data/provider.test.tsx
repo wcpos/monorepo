@@ -43,6 +43,13 @@ let mockExtraData = {
 	get: (key: string) => mockExtraDataValues[key],
 	set: mockExtraDataSet,
 };
+const mockStoreDB = {
+	states: {
+		get data_v2() {
+			return mockExtraData;
+		},
+	},
+};
 const mockUseRestHttpClient = jest.fn(() => mockHttp);
 
 function emit(engine: ReturnType<typeof createMockEngine>, event: EngineEvent) {
@@ -57,6 +64,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		extraData: mockExtraData,
+		storeDB: mockStoreDB,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });

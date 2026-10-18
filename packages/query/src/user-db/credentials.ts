@@ -4,6 +4,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
+import { mergeIntoDocument } from '../records/merge-into-document';
 import { mergeStoresWithResponse } from './stores';
 import { linkCredentialsToSite } from './sites';
 
@@ -80,8 +81,7 @@ export async function saveLoginCredentials(
 /**
  * Merge the embedded boot's credential payload over the stored credential.
  * The payload never carries the locally-owned `stores` links, `last_access` or
- * `date_*` fields, and `collection.upsert()` is a full-document write that would
- * reset them to defaults (the #902 class, as `upsertSiteData`).
+ * `date_*` fields, so it is merged, never written wholesale (`mergeIntoDocument`).
  */
 export async function upsertEmbeddedCredentials(
 	userDB: UserDatabase | null | undefined,
@@ -92,17 +92,17 @@ export async function upsertEmbeddedCredentials(
 	if (!patch.uuid) throw new Error('Cannot save credentials without a uuid');
 	// `stores` holds local store ids the step links afterwards (as LOCAL_ONLY_SITE_FIELDS).
 	delete patch.stores;
-	const existing = await userDB.wp_credentials.findOne(patch.uuid).exec();
-	if (existing) {
-		await existing.getLatest().incrementalModify((current) => {
+	return mergeIntoDocument(
+		userDB.wp_credentials,
+		patch.uuid,
+		(current) => {
 			const next = { ...current, ...patch };
 			// Absent capabilities = unknown = fail open; drop stale ones (use-user-validation rule).
 			if (!('capabilities' in patch)) delete (next as { capabilities?: string[] }).capabilities;
 			return next;
-		});
-		return existing.getLatest();
-	}
-	return userDB.wp_credentials.incrementalUpsert(patch as never);
+		},
+		() => patch
+	);
 }
 
 export async function removeCredentials(

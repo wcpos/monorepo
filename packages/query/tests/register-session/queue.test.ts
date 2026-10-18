@@ -450,12 +450,35 @@ it('a void whose reversal insert fails rolls its claim back and leaves nothing i
 		reason: 'Milk',
 		actor: 7,
 	});
-	jest.spyOn(db.cash_movements, 'incrementalUpsert').mockRejectedValueOnce(new Error('disk'));
+	jest.spyOn(db.cash_movements, 'insert').mockRejectedValueOnce(new Error('disk'));
 	await expect(voidMovement(db, target.id, 7)).rejects.toThrow('disk');
 	expect(target.getLatest().voided_by).toBeNull();
 	expect(reversalsInFlight.size).toBe(0);
 	// The next tap starts clean and creates the reversal.
 	const reversal = await voidMovement(db, target.id, 7);
+	expect(target.getLatest().voided_by).toBe(reversal.id);
+	expect(reversalsInFlight.size).toBe(0);
+});
+it('a void whose reversal another tap inserted first returns that row and keeps the claim', async () => {
+	const row = await open();
+	const target = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	const movements = db.cash_movements;
+	const insert = movements.insert.bind(movements);
+	let theirs: Awaited<ReturnType<typeof insert>> | undefined;
+	// The other tap's insert lands between this tap's lookup and its own insert.
+	jest.spyOn(movements, 'insert').mockImplementationOnce(async (json) => {
+		theirs = await insert({ ...json, reason: 'their tap' });
+		return insert(json);
+	});
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(reversal.id).toBe(theirs!.id);
+	expect(reversal.reason).toBe('their tap');
 	expect(target.getLatest().voided_by).toBe(reversal.id);
 	expect(reversalsInFlight.size).toBe(0);
 });
