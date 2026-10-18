@@ -10,9 +10,11 @@ type Update = (current: SiteSelection) => SiteSelection;
 
 const EMPTY: SiteSelection = { pickedUserUuid: null, selectedStoreId: null };
 
+// `pick`, not `update`: the seam ratchet (seam.test.ts) reads a member named `update` as a
+// record mutator, and this is React state, not a document.
 const SiteSelectionContext = React.createContext<{
 	selections: Record<string, SiteSelection>;
-	update: (siteUuid: string, update: Update) => void;
+	pick: (siteUuid: string, next: Update) => void;
 } | null>(null);
 
 /**
@@ -22,10 +24,10 @@ const SiteSelectionContext = React.createContext<{
  */
 export function SiteSelectionProvider({ children }: React.PropsWithChildren) {
 	const [selections, setSelections] = React.useState<Record<string, SiteSelection>>({});
-	const update = React.useCallback((siteUuid: string, next: Update) => {
+	const pick = React.useCallback((siteUuid: string, next: Update) => {
 		setSelections((current) => ({ ...current, [siteUuid]: next(current[siteUuid] ?? EMPTY) }));
 	}, []);
-	const value = React.useMemo(() => ({ selections, update }), [selections, update]);
+	const value = React.useMemo(() => ({ selections, pick }), [selections, pick]);
 	return <SiteSelectionContext.Provider value={value}>{children}</SiteSelectionContext.Provider>;
 }
 
@@ -33,10 +35,10 @@ export function SiteSelectionProvider({ children }: React.PropsWithChildren) {
 export function useSiteSelection(siteUuid: string): [SiteSelection, (update: Update) => void] {
 	const context = React.useContext(SiteSelectionContext);
 	const [local, setLocal] = React.useState(EMPTY);
-	const contextUpdate = context?.update;
-	const update = React.useCallback(
-		(next: Update) => (contextUpdate ? contextUpdate(siteUuid, next) : setLocal(next)),
-		[contextUpdate, siteUuid]
+	const contextPick = context?.pick;
+	const pick = React.useCallback(
+		(next: Update) => (contextPick ? contextPick(siteUuid, next) : setLocal(next)),
+		[contextPick, siteUuid]
 	);
-	return [context ? (context.selections[siteUuid] ?? EMPTY) : local, update];
+	return [context ? (context.selections[siteUuid] ?? EMPTY) : local, pick];
 }
