@@ -22,7 +22,7 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductDocument = import('@wcpos/query').ProductPayload;
 
 /**
  *

@@ -3,7 +3,7 @@ import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
 import { type ConditionRule, type ConditionSnapshot, evaluateConditions } from './evaluate';
 import { netLineQuantity, type StockFields } from '../hooks/stock-guard';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 type Read = (kind: 'product' | 'variation', id: number) => Promise<unknown>;
 
 // Product lines (not misc, not retired), each net of the stock it already took (`_reduced_stock`,

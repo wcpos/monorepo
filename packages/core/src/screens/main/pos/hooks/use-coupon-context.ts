@@ -11,7 +11,7 @@ import {
 } from './engine-coupon-data';
 import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
 type QueryRuntime = ReturnType<typeof useQueryRuntime>;
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type CouponLine = import('@wcpos/query').OrderCouponLine;
 
 function isDiscountType(value: unknown): value is CouponInput['discount_type'] {
 	return value === 'percent' || value === 'fixed_cart' || value === 'fixed_product';

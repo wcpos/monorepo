@@ -15,7 +15,7 @@ import type {
 	ActionNext,
 } from '../../../../extensions/actions';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 /** The category the hook it replaced logged under; the logs screen filters by prefix. */
 const STOCK_LOG_CATEGORY = ['wcpos', 'pos', 'cart', 'stock'] as const;
 type StockArgs = Omit<

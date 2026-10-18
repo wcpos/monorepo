@@ -12,7 +12,7 @@ import { ensureNumberArray } from './ensure-number-array';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCartTableReadOnly } from './read-only';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;

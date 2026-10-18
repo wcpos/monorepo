@@ -23,8 +23,8 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+type ProductDocument = import('@wcpos/query').ProductPayload;
+type ProductVariationDocument = import('@wcpos/query').VariationPayload;
 interface MetaData {
 	key?: string;
 	value?: string;

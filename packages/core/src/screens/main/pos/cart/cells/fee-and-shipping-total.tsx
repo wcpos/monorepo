@@ -8,8 +8,8 @@ import { useDocField } from '@wcpos/query';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
+type ShippingLine = import('@wcpos/query').OrderShippingLine;
 interface Props {
 	uuid: string;
 	item: FeeLine | ShippingLine;

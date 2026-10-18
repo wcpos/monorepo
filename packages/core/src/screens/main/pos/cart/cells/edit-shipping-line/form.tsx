@@ -50,7 +50,7 @@ const formSchema = z.object({
 
 interface Props {
 	uuid: string;
-	item: NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+	item: import('@wcpos/query').OrderShippingLine;
 }
 
 /**
@@ -93,9 +93,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 				amount: data.amount,
 				tax_status: data.tax_status,
 				prices_include_tax: data.prices_include_tax,
-				meta_data: data.meta_data as NonNullable<
-					import('@wcpos/database').OrderDocument['shipping_lines']
-				>[number]['meta_data'],
+				meta_data: data.meta_data as import('@wcpos/query').OrderShippingLine['meta_data'],
 			});
 			closeDialog();
 		},

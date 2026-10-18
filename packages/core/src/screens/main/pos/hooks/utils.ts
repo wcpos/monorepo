@@ -76,9 +76,9 @@ export function detectNewCartLines(prev: CartLineRow[], next: CartLineRow[]): st
 	}, []);
 }
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 type LineItemImage = LineItem['image'];
-type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;
+type OrderMetaData = import('@wcpos/query').OrderMetaData;
 
 /**
  * Adds missing POS identity entries, rebinding the register only for an empty cart.
@@ -172,7 +172,7 @@ export const findByProductVariationID = (
  * @NOTE - we have to be careful here because if a property is undefined or null, it will be ingnored when
  * we send the data to the server.
  */
-type CustomerJSON = import('@wcpos/database').CustomerDocument;
+type CustomerJSON = import('@wcpos/query').CustomerPayload;
 export const transformCustomerJSONToOrderJSON = (
 	customer: CustomerJSON,
 	defaultCountry: string
@@ -220,7 +220,7 @@ export const transformCustomerJSONToOrderJSON = (
 /**
  * Convert a product to the format expected by OrderDocument['line_items']
  */
-type Product = import('@wcpos/database').ProductDocument;
+type Product = import('@wcpos/query').ProductPayload;
 export const convertProductToLineItemWithoutTax = (
 	product: Product,
 	metaDataKeys?: string[]
@@ -275,7 +275,7 @@ export const convertProductToLineItemWithoutTax = (
 /**
  * Convert a variation to the format expected by OrderDocument['line_items']
  */
-type Variation = import('@wcpos/database').ProductVariationDocument;
+type Variation = import('@wcpos/query').VariationPayload;
 type MetaData = NonNullable<LineItem['meta_data']>;
 export const convertVariationToLineItemWithoutTax = (
 	variation: Variation,

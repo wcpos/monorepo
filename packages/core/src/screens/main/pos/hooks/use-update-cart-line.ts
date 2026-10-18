@@ -22,7 +22,7 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 import type { OrderMutationContext } from './order-mutation-queue';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];

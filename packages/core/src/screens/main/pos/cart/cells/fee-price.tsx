@@ -13,7 +13,7 @@ import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-
 import { useNumberFormat } from '../../../hooks/use-number-format';
 import { useCartTableReadOnly } from './read-only';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
 interface Props {
 	uuid: string;
 	item: FeeLine;

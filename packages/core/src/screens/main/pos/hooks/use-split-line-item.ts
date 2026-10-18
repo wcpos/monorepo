@@ -17,7 +17,7 @@ import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'line-item']);
 

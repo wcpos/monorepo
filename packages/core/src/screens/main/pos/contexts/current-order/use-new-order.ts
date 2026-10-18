@@ -58,7 +58,7 @@ export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) =>
 		const customer =
 			'getLatest' in defaultCustomer ? defaultCustomer.toMutableJSON().payload : defaultCustomer;
 		const baseData = transformCustomerJSONToOrderJSON(
-			customer as import('@wcpos/database').CustomerDocument,
+			customer as import('@wcpos/query').CustomerPayload,
 			country as string
 		);
 		const data: Record<string, unknown> = { ...baseData };

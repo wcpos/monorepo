@@ -18,7 +18,7 @@ import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rej
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { readOnlyLineKey, useCartTableReadOnly } from './read-only';
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;

@@ -19,10 +19,10 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
 type Line = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type LineItem =
-	| NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+	| import('@wcpos/query').OrderLineItem
+	| import('@wcpos/query').OrderFeeLine
+	| import('@wcpos/query').OrderShippingLine
+	| import('@wcpos/query').OrderCouponLine;
 
 /**
  *

@@ -12,7 +12,7 @@ import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useSplitLineItem } from '../../hooks/use-split-line-item';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;

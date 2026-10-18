@@ -13,7 +13,7 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
 
 interface FeeData {
 	name: string;

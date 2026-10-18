@@ -9,7 +9,7 @@ import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCartTableReadOnly } from './read-only';
 
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type ShippingLine = import('@wcpos/query').OrderShippingLine;
 interface Props {
 	uuid: string;
 	item: ShippingLine;
