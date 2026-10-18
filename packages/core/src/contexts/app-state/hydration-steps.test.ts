@@ -431,6 +431,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 			};
 			return credentialDoc;
 		});
+		const credentialLookup = documentLookup(credentialDoc);
 		const site = { uuid: 'site-1' };
 		const context = {
 			appState: { get: jest.fn(async () => null), set: jest.fn() },
@@ -441,7 +442,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 					incrementalUpsert: jest.fn(async () => site),
 				},
-				wp_credentials: { ...documentLookup(credentialDoc), upsert, incrementalUpsert: upsert },
+				wp_credentials: { ...credentialLookup, upsert, incrementalUpsert: upsert },
 				stores: {
 					...documentLookup(null),
 					bulkInsert: jest.fn(async () => {
@@ -458,6 +459,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
 
 		await expect(step.execute(context)).rejects.toThrow('store insert failed');
+		expect(credentialLookup.findOne).toHaveBeenCalledWith('credentials-1');
 		expect(upsert).not.toHaveBeenCalled();
 		expect(stored).toEqual({ ...original, display_name: 'New Name' });
 	});
