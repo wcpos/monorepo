@@ -11,11 +11,16 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { type ActiveTemplate, observeTemplatePrinterOverrides } from '@wcpos/query';
+import {
+	type ActiveTemplate,
+	deletePrinterProfile,
+	observeTemplatePrinterOverrides,
+	setDefaultPrinterProfile,
+	setTemplatePrinterOverride,
+} from '@wcpos/query';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
-import type { PrinterProfileDocument } from '@wcpos/database';
 
 import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
@@ -101,21 +106,8 @@ export function PrintingSettings() {
 	);
 
 	const handleRoutingChange = React.useCallback(
-		async (templateId: string, printerId: string) => {
-			const collection = storeDB.collections.template_printer_overrides;
-
-			if (printerId === AUTO_VALUE) {
-				const existing = await collection.findOne(templateId).exec();
-				if (existing) {
-					await existing.remove();
-				}
-			} else {
-				await collection.upsert({
-					template_id: templateId,
-					printer_profile_id: printerId,
-				});
-			}
-		},
+		(templateId: string, printerId: string) =>
+			setTemplatePrinterOverride(storeDB, templateId, printerId === AUTO_VALUE ? null : printerId),
 		[storeDB]
 	);
 
@@ -129,28 +121,11 @@ export function PrintingSettings() {
 		if (!pendingDelete) return;
 		const id = pendingDelete.id;
 		setPendingDelete(undefined);
-		const doc = await storeDB.collections.printer_profiles.findOne(id).exec();
-		if (doc && !doc.isBuiltIn) {
-			await doc.remove();
-		}
+		await deletePrinterProfile(storeDB, id);
 	}, [storeDB, pendingDelete]);
 
 	const handleSetDefault = React.useCallback(
-		async (id: string) => {
-			const allDocs = (await storeDB.collections.printer_profiles
-				.find()
-				.exec()) as PrinterProfileDocument[];
-			if (!allDocs.some((doc) => doc.id === id)) {
-				return;
-			}
-			for (const doc of allDocs) {
-				if (doc.id === id && !doc.isDefault) {
-					await doc.patch({ isDefault: true });
-				} else if (doc.id !== id && doc.isDefault) {
-					await doc.patch({ isDefault: false });
-				}
-			}
-		},
+		(id: string) => setDefaultPrinterProfile(storeDB, id),
 		[storeDB]
 	);
 

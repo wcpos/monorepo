@@ -14,9 +14,9 @@ import {
 } from '@wcpos/printer';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
+import { savePrinterProfile } from '@wcpos/query';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
-import { persistPrinterProfile } from '../persist-printer-profile';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { laneAcknowledgesPrint } from '../../printing/utils';
@@ -380,11 +380,10 @@ export function usePrinterDialogForm({
 
 	const persistProfile = React.useCallback(
 		(data: PrinterFormValues) =>
-			persistPrinterProfile(
-				storeDB,
-				{ ...data, ...buildPrinterProfileFields(data, { printer, prefill }) },
-				printer?.id
-			),
+			savePrinterProfile(storeDB, buildPrinterProfileFields(data, { printer, prefill }), {
+				id: printer?.id,
+				reuseByAddress: true,
+			}).then(({ id }) => id),
 		[storeDB, printer, prefill]
 	);
 
