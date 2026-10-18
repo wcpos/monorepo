@@ -37,7 +37,7 @@ export function AreaPage({
 }) {
 	const insets = useSafeAreaInsets();
 	const heading = (
-		<View className="gap-0.5 px-5 pt-4.5 pb-3.5">
+		<View className="gap-0.5 px-4 pt-4 pb-3">
 			<Text role="heading" aria-level={1} className="text-xl font-semibold">
 				{title}
 			</Text>
@@ -61,7 +61,7 @@ export function AreaPage({
 				<View className={`min-h-0 flex-1 ${PAGE_PADDING}`}>
 					<Card className="mx-auto min-h-0 w-full max-w-4xl flex-1 overflow-hidden">
 						{heading}
-						<View className="border-border border-t-hairline min-h-0 flex-1 p-5">{body}</View>
+						<View className="border-border border-t-hairline min-h-0 flex-1 p-4">{body}</View>
 					</Card>
 				</View>
 			</View>
@@ -78,7 +78,7 @@ export function AreaPage({
 			<View className={`mx-auto w-full max-w-4xl ${PAGE_PADDING}`}>
 				<Card className="overflow-hidden">
 					{heading}
-					<View className="border-border border-t-hairline p-5">{body}</View>
+					<View className="border-border border-t-hairline p-4">{body}</View>
 				</Card>
 			</View>
 		</ScrollView>

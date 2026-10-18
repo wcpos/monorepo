@@ -317,8 +317,8 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
   | Container | Gutter | Today |
   |---|---|---|
-  | The page: `PageBar` left edge, a pane's body, the phone's screen edge | 16 (`md:` body may double to 32) | `pl-4`, `px-4 md:px-8` |
-  | A panel column: the area nav rail, a side panel's body, a card's body | 12 | nav rail `p-3` |
+  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4` |
+  | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
   | A dense strip: the icon rail, the front drawer's items, a chip row, a bar's own controls | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 |
   | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
 
