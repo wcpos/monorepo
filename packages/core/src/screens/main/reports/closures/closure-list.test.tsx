@@ -11,6 +11,11 @@ import { deriveSettled } from '../../../../services/register-session/settled-fig
 import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
 
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({
 		testID,

@@ -5,6 +5,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useSiteInfo } from './use-site-info';
 
+jest.mock('@wcpos/query/user-db', () => jest.requireActual('../../../query/src/user-db/sites'));
+
 const mockGet = jest.fn();
 const mockIncrementalPatch = jest.fn();
 const mockError = jest.fn();
@@ -14,6 +16,7 @@ const mockSite = {
 	wp_api_url: 'https://store.example.test/wp-json/',
 	url: 'https://store.example.test',
 	incrementalPatch: mockIncrementalPatch,
+	getLatest: () => ({ deleted: false }),
 };
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
@@ -161,4 +164,15 @@ describe('useSiteInfo', () => {
 		});
 		expect(mockGet).toHaveBeenCalledTimes(callsAfterRetry);
 	});
+});
+
+it('reports a site removed while its info request was in flight', async () => {
+	mockGet.mockResolvedValue({ status: 200, data: { wcpos_version: 'new' } });
+	const latest = jest.spyOn(mockSite, 'getLatest').mockReturnValue({ deleted: true });
+	mockError.mockClear();
+	const { result } = renderHook(() => useSiteInfo({ site: mockSite as never }));
+	await waitFor(() => expect(result.current.isLoading).toBe(false));
+	expect(result.current.error).toBe('Cannot update a removed site');
+	expect(mockError).toHaveBeenCalled();
+	latest.mockRestore();
 });

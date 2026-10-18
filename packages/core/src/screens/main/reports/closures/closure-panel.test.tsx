@@ -12,6 +12,11 @@ import { ClosurePanel } from './closure-panel';
 import { mergeAvailablePrinterProfiles } from '../../settings/printer/available-printer-profiles';
 
 // Keep routing real without loading printer transports/encoders in jsdom.
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
 jest.mock('@wcpos/printer', () => ({
 	...jest.requireActual('@wcpos/printer/resolve-printer'),
 	...jest.requireActual('@wcpos/printer/detect-mismatch'),

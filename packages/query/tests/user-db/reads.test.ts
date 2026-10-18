@@ -8,10 +8,17 @@ import '@wcpos/database/plugins';
 import { userCollections } from '@wcpos/database/collections';
 
 import {
+	credentialsTokenOwner,
+	migrateSiteApiUrl,
 	observeCredentialStores,
 	observeSiteCredentials,
+	observeStoreByRemoteId,
 	observeUserSites,
 	PENDING_USER_DB_READ,
+	readSiteApiUrls,
+	recordCashierProfile,
+	recordSiteInfo,
+	SiteRemovedError,
 } from '../../src/user-db';
 
 jest.mock('uuid', () => ({ v4: () => `uuid-${Math.random().toString(36).slice(2)}` }));
@@ -115,4 +122,77 @@ it('observes late store inserts and clears the previous credentials on switch', 
 					(value as { localID: string }[]).every((row) => row.localID !== 'late')
 			)
 	).toBe(true);
+});
+
+// These catch lost fields, undefined patches, stale token bindings and remote-id lookup drift.
+it('records site info without erasing omitted license or search keys', async () => {
+	const site = await db.sites.insert({
+		uuid: 'site',
+		wcpos_version: 'old',
+		search_meta_keys: { products: ['sku'] },
+	});
+	await recordSiteInfo(site, { search_meta_keys: {} });
+	expect(site.getLatest().wcpos_version).toBe('old');
+	await recordSiteInfo(site, { wcpos_version: 'new' });
+	expect(site.getLatest().wp_version).toBe('');
+	expect(site.getLatest().search_meta_keys).toEqual({ products: ['sku'] });
+	await recordSiteInfo(site, { wcpos_version: 'new', license: null, search_meta_keys: null });
+	expect(site.getLatest().license).toEqual({});
+	expect(site.getLatest().search_meta_keys).toEqual({});
+	await site.getLatest().remove();
+	await expect(recordSiteInfo(site, { wcpos_version: 'new' })).rejects.toBeInstanceOf(
+		SiteRemovedError
+	);
+});
+
+it('records cashier fields and clears omitted capabilities when merging stores', async () => {
+	const credentials = await db.wp_credentials.insert({
+		uuid: 'cashier',
+		capabilities: ['edit_products'],
+	});
+	await recordCashierProfile(
+		db,
+		credentials,
+		{ display_name: 'Cashier', role: 'cashier', stores: [] },
+		{ userUuid: 'user', siteUuid: 'site' }
+	);
+	expect(credentials.getLatest().display_name).toBe('Cashier');
+	expect(credentials.getLatest().roles).toEqual(['cashier']);
+	expect(credentials.getLatest().toJSON()).not.toHaveProperty('capabilities');
+	await recordCashierProfile(
+		db,
+		credentials,
+		{ roles: ['', 'manager', 1], capabilities: ['read', '', 'read'] },
+		{ userUuid: 'user', siteUuid: 'site' }
+	);
+	expect(credentials.getLatest().roles).toEqual(['manager']);
+	expect(credentials.getLatest().capabilities).toEqual(['read']);
+});
+
+it('keeps token methods bound to the live credentials document', async () => {
+	const credentials = await db.wp_credentials.insert({
+		uuid: 'cashier',
+		id: 7,
+		refresh_token: 'refresh',
+	});
+	const { incrementalPatch, getLatest, id, refresh_token } = credentialsTokenOwner(credentials);
+	expect({ id, refresh_token }).toEqual({ id: 7, refresh_token: 'refresh' });
+	await incrementalPatch({ access_token: 'new', expires_at: 123 });
+	expect(getLatest().access_token).toBe('new');
+	await credentials.incrementalPatch({ refresh_token: 'rotated' });
+	expect(getLatest().refresh_token).toBe('rotated');
+});
+
+it('migrates the API base and reads site URLs and stores by remote id', async () => {
+	const site = await db.sites.insert({ uuid: 'site', wp_api_url: 'https://example.com/wp-json/' });
+	await migrateSiteApiUrl(site, 'https://example.com/wp-json/wcpos/v2');
+	expect(site.getLatest().wcpos_api_url).toBe('https://example.com/wp-json/wcpos/v2');
+	expect(await readSiteApiUrls(db)).toEqual([
+		{ uuid: 'site', wp_api_url: 'https://example.com/wp-json/' },
+	]);
+	const values: unknown[] = [];
+	subscription = observeStoreByRemoteId(db, 7).subscribe((value) => values.push(value));
+	await waitFor(() => expect(values).toEqual([undefined]));
+	const store = await db.stores.insert({ localID: 'local', id: 7 });
+	await waitFor(() => expect(values.at(-1)).toBe(store));
 });

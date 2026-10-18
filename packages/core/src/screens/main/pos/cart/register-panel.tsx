@@ -11,8 +11,8 @@ import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
-import type { WPCredentialsDocument } from '@wcpos/database';
 
+import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -23,9 +23,7 @@ import { useSessionReport } from '../../../../services/register-session/use-sess
 
 function Opener({ id }: { id?: number | null }) {
 	const { site } = useStoreSession();
-	const credentials = useObservableSuspense(
-		site.populateResource('wp_credentials')
-	) as WPCredentialsDocument[];
+	const credentials = useObservableSuspense(credentialsListResource(site));
 	const t = useT();
 	return (
 		<Text>
