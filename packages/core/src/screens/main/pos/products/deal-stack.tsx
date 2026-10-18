@@ -791,6 +791,11 @@ const VISIBLE: ViewStyle = { overflow: 'visible' };
  * around it (`frame`, reaching up to the stage's top) clips them at its bottom instead, so no row
  * below shows over the footer. A grid scrolled away from its top keeps its own edge: rows above
  * it would show over the crumb. Both styles are empty at rest.
+ *
+ * The web too: there a scroller made `overflow: visible` stops scrolling and its offset goes to
+ * 0, which at its top is the offset it had, and only for the flight. Left clipped, a first-row
+ * tile walking home lost a crumb-high band off its top for the last frames of the gather, the
+ * root's tile stepped aside under it (web film, 2026-10-18: Clothing, rec1 f010).
  */
 export function useAirspace(scroll: SharedValue<number>): {
 	frame?: ViewStyle;
@@ -804,8 +809,7 @@ export function useAirspace(scroll: SharedValue<number>): {
 			if (top !== was) scheduleOnRN(setAtTop, top);
 		}
 	);
-	// Native only: a web scroller made `overflow: visible` stops being one and loses its offset.
-	if (Platform.OS === 'web' || landed || !atTop || !grid) return NO_AIR;
+	if (landed || !atTop || !grid) return NO_AIR;
 	return {
 		// `box-none`: the frame reaches over the crumb row, whose presses must still land on it.
 		frame: {

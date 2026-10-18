@@ -1056,7 +1056,7 @@ it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt 
 
 // The scroller clipped the copy of a tile from the products' first row where it overlapped the
 // level's crumb row: its name was cut away for the whole walk (Pixel, 2026-10-06, 1c/1d).
-it('lets the tiles in the air out over the crumb, native only, while the grid is at its top', () => {
+it('lets the tiles in the air out over the crumb while the grid is at its top', () => {
 	mockOS = 'android';
 	const scroll = { value: 0 };
 	const air = () => JSON.parse(screen.getByTestId('air').textContent!);
@@ -1091,12 +1091,20 @@ it('lets the tiles in the air out over the crumb, native only, while the grid is
 	expect(air().scroller).toEqual({ overflow: 'visible' });
 });
 
-it('the web keeps its scroller: overflow visible would end the scrolling', () => {
+// The web's scroller clipped a first-row tile walking home: a crumb-high band off the top of its
+// card for the gather's last frames, the root's tile stepped aside under it (web, 2026-10-18).
+it('the web lets the tiles in the air out too, at its top, and gives the scroller back on landing', () => {
 	const scroll = { value: 0 };
+	const air = () => JSON.parse(screen.getByTestId('air').textContent!);
 	const { rerender } = render(<Stage detail={null} scroll={scroll} />);
 	rerender(<Stage detail="Hoodie" scroll={scroll} />);
 	layOut();
-	expect(JSON.parse(screen.getByTestId('air').textContent!)).toEqual({});
+	expect(air().scroller).toEqual({ overflow: 'visible' });
+	act(() => jest.advanceTimersByTime(1000));
+	expect(air()).toEqual({});
+	// On the way home from the top, the gather is in the air again.
+	rerender(<Stage detail={null} scroll={scroll} />);
+	expect(air().scroller).toEqual({ overflow: 'visible' });
 });
 
 // A clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted
