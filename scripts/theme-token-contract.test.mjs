@@ -301,6 +301,8 @@ for (const name of themeNames) {
 	for (const [text, ground] of [
 		['warn-text', 'card'],
 		['warn-text', 'background'],
+		['destructive', 'card'],
+		['destructive', 'background'],
 		['destructive-foreground', 'destructive'],
 		['action-foreground', 'action'],
 		['warning-foreground', 'warn'],
