@@ -26,12 +26,12 @@ interface TaxRateTableProps {
 }
 
 /**
- * `ListRow selected`'s current-row mark (primary bar, muted wash). It bleeds to the panel's
- * edge: the row takes back the body's 16 gutter as a negative margin and pads it in again, less
- * the bar's 2, so its cells stay on the same columns as the unmarked rows, whose inset hairlines
- * stay as they are.
+ * The panel's gutter, not the row's state: a marked row (`selected`, the shared current-row
+ * mark) bleeds to the panel's edge by taking the body's 16 back as a negative margin and padding
+ * it in again, less the bar's 2, so its cells stay on the unmarked rows' columns, whose inset
+ * hairlines stay as they are.
  */
-const MARKED = 'border-l-primary bg-muted -mx-4 border-l-2 pl-3.5 pr-4';
+const BLEED = '-mx-4 pr-4 pl-3.5';
 
 /**
  * Fixed widths sized by what each column holds (codes 56, lists 120, rate 72, priority 64), so
@@ -92,7 +92,7 @@ export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 							testID={`tax-rate-row-${rate.id}`}
 							// Only a marked row is `selected`: `false` would reserve the bar's room on every row.
 							selected={marked || undefined}
-							className={marked ? '-mx-4 pr-4 pl-3.5' : 'px-0'}
+							className={marked ? BLEED : 'px-0'}
 							trailing={
 								<Text className="font-semibold tabular-nums">{percent(rate.rate ?? '0')}</Text>
 							}
@@ -147,8 +147,9 @@ export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 							key={rate.id}
 							index={index}
 							testID={`tax-rate-row-${rate.id}`}
-							className={marked ? `gap-3 ${MARKED}` : 'gap-3'}
-							aria-selected={marked || undefined}
+							// Only a marked row is `selected`: `false` would reserve the bar's room on every row.
+							selected={marked || undefined}
+							className={marked ? `gap-3 ${BLEED}` : 'gap-3'}
 						>
 							<TableCell className={`px-0 ${COLUMNS.country}`}>{location(rate.country)}</TableCell>
 							<TableCell className={`px-0 ${COLUMNS.state}`}>{location(rate.state)}</TableCell>

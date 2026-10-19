@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Slot } from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
 
+import { currentRowMark } from '../lib/current-row';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 import { PulseTableRow } from './pulse-row';
@@ -41,16 +42,29 @@ function TableFooter({ className, ...props }: TablePrimitive.FooterProps) {
 	);
 }
 
+type CurrentRowProps = {
+	index?: number;
+	/**
+	 * The current-row mark, as `ListRow selected` draws it (`currentRowMark`): `true` the primary
+	 * bar and `bg-muted`, announced as selected; `false` the bar's room kept transparent; unset
+	 * no bar.
+	 */
+	selected?: boolean;
+};
+
 function PressableTableRow({
 	className,
 	index: _index = 0,
+	selected,
 	...props
-}: TablePrimitive.RowProps & { index?: number }) {
+}: TablePrimitive.RowProps & CurrentRowProps) {
 	return (
 		<TablePrimitive.Row
 			role="row"
+			aria-selected={selected}
 			className={cn(
 				'web:transition-colors web:hover:bg-muted web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				currentRowMark(selected),
 				className
 			)}
 			{...props}
@@ -62,16 +76,20 @@ function TableRow({
 	asChild,
 	className,
 	index: _index = 0,
+	selected,
 	...props
-}: SlottableViewProps & { index?: number }) {
+}: SlottableViewProps & CurrentRowProps) {
 	const Component = asChild ? Slot : View;
 
 	return (
 		<Component
 			role="row"
+			// RN maps it onto the selected state a native screen reader announces.
+			aria-selected={selected}
 			// A static row: header and plain rows take no hover; the pressable row does.
 			className={cn(
 				'web:transition-colors web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				currentRowMark(selected),
 				className
 			)}
 			{...props}

@@ -114,7 +114,7 @@ describe.each([false, true])('phone: %s', (phone) => {
 		act(() => jest.advanceTimersByTime(1000));
 		expect(mockPush).toHaveBeenCalledWith({
 			pathname: '/(app)/(modals)/tax-rates',
-			params: { applies: '1', country: 'GB' },
+			params: { applies: '1', country: 'GB', state: '', city: '', postcode: '' },
 		});
 		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
 	});

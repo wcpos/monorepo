@@ -105,27 +105,38 @@ it('the settings link closes the panel, then goes to Settings › Tax', () => {
 	expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 });
 
-it('View all hands the panel the matched rates and the country, closing first', () => {
-	render(<DisplayCurrentTaxRates {...props()} />);
+it('View all hands the panel the address to match, closing first', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({
+				taxBasedOn: 'shipping',
+				hasOrder: true,
+				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
+				rates: [rate({ country: 'US', state: 'OR' })],
+			})}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
 	expect(mockClose).toHaveBeenCalledWith(false);
 	expect(mockPush).toHaveBeenCalledWith({
 		pathname: '/(app)/(modals)/tax-rates',
-		params: { applies: '1,2', country: 'GB' },
+		params: { applies: '1', country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
 	});
 });
 
-it('View all with nothing matched still says it came from here: an empty list', () => {
+it('View all from an order with no address opens the plain panel: nothing to match', () => {
 	render(
 		<DisplayCurrentTaxRates
-			{...props({ location: { country: '', state: '', city: '', postcode: '' }, rates: [] })}
+			{...props({
+				taxBasedOn: 'billing',
+				hasOrder: true,
+				location: { country: '', state: '', city: '', postcode: '' },
+				rates: [],
+			})}
 		/>
 	);
 	fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
-	expect(mockPush).toHaveBeenCalledWith({
-		pathname: '/(app)/(modals)/tax-rates',
-		params: { applies: '', country: '' },
-	});
+	expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
 });
 
 it("reads the order's address on an order, with its postal line", () => {

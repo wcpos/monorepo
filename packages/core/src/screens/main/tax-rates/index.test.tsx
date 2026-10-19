@@ -173,18 +173,57 @@ describe('tax-rates query-state wiring', () => {
 		expectGroupingPreserved();
 	});
 
-	it('marks and counts the rates the "Tax based on" panel says apply, and none without it', () => {
+	it('matches the sent address against the current rates, and marks nothing without one', async () => {
 		const { rerender } = render(<Modal />);
 		expect(mockFooter).toHaveBeenLastCalledWith(expect.objectContaining({ applies: null }));
 		expect(mockRateTable).toHaveBeenLastCalledWith(expect.objectContaining({ appliesTo: null }));
 
-		// Rate 9 is not in the store's list (deleted since): it is not counted.
-		mockParams = { applies: '1,3,9', country: 'GB' };
+		const local = [
+			{ id: 1, name: 'Oregon', class: 'standard', country: 'US', state: 'OR' },
+			{
+				id: 2,
+				name: 'Metro',
+				class: 'standard',
+				country: 'US',
+				state: 'OR',
+				postcodes: ['972*'],
+				priority: 2,
+			},
+			{ id: 3, name: 'California', class: 'reduced-rate', country: 'US', state: 'CA' },
+		];
+		mockParams = { applies: '1', country: 'US', state: 'OR', city: 'Portland', postcode: '97201' };
+		await act(async () =>
+			mockHandle.set({ result: { hits: local.map((payload) => ({ record: { payload } })) } })
+		);
 		rerender(<Modal />);
 		expect(mockFooter).toHaveBeenLastCalledWith(
-			expect.objectContaining({ applies: { n: 2, country: 'GB' } })
+			expect.objectContaining({ applies: { n: 2, country: 'US' } })
 		);
-		expect(mockRateTable.mock.calls.at(-2)?.[0]).toMatchObject({ appliesTo: new Set([1, 3, 9]) });
+		expect(mockRateTable.mock.calls.at(-2)?.[0]).toMatchObject({ appliesTo: new Set([1, 2]) });
+
+		// A sync that drops the postcode rate re-evaluates the marks and the count.
+		await act(async () =>
+			mockHandle.set({
+				result: { hits: [local[0], local[2]].map((payload) => ({ record: { payload } })) },
+			})
+		);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 1, country: 'US' } })
+		);
+	});
+
+	it('says none apply when the sent address matches nothing', () => {
+		mockHandle = fakeQueryHandle({
+			result: {
+				hits: [{ record: { payload: { id: 1, name: 'VAT', class: 'standard', country: 'GB' } } }],
+			},
+			total: 1,
+		});
+		mockParams = { applies: '1', country: 'IS', state: '', city: '', postcode: '101' };
+		render(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 0, country: 'IS' } })
+		);
 	});
 
 	it('draws the rates the acquired handle answers with', () => {

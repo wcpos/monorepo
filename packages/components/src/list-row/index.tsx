@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, type PressableProps, View } from 'react-native';
 
+import { currentRowMark } from '../lib/current-row';
 import { usePointer } from '../lib/device';
 import { cn } from '../lib/utils';
 
@@ -73,8 +74,9 @@ export function ListRow({
 				sizes[size],
 				'active:bg-muted',
 				pointer === 'fine' && 'web:hover:bg-muted',
-				selectable && 'border-l-2 pl-2.5',
-				selectable && (selected ? 'border-l-primary bg-muted' : 'border-l-transparent'),
+				currentRowMark(selected),
+				// The bar's 2 comes out of the row's 12, so the content stays on the same line.
+				selectable && 'pl-2.5',
 				disabled && 'opacity-50',
 				className
 			)}

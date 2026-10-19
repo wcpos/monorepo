@@ -1,4 +1,6 @@
-import type { TaxRateData } from '../contexts/tax-rates';
+import { filterTaxRates } from '../contexts/tax-rates/tax-rates.helpers';
+
+import type { TaxLocation, TaxRateData } from '../contexts/tax-rates';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -64,20 +66,37 @@ export function rateCount(count: number, vouched: number | null, t: Translate): 
 			t('tax_rates.count', { count, n: count.toLocaleString() });
 }
 
+type AddressParams = Partial<Record<'applies' | keyof TaxLocation, string | string[]>>;
+
 /**
- * The `applies` route param the "Tax based on" panel sends: the ids of the rates its address
- * matched, comma-joined. Absent means the panel was opened from somewhere else (Settings): no
- * marks, the plain count. Present, even empty, means it came from the panel, where an empty list
- * is an answer ("none apply"), not a missing one.
+ * The address the "Tax based on" panel sends on View all (`applies=1` plus its four fields).
+ * No `applies` means the panel was opened from somewhere else (Settings, or an order with no
+ * address): no marks, the plain count.
  */
-export function parseApplies(param: string | string[] | undefined): ReadonlySet<number> | null {
-	const raw = Array.isArray(param) ? param[0] : param;
-	if (raw === undefined) return null;
+export function parseAppliesAddress(params: AddressParams): TaxLocation | null {
+	const read = (key: keyof AddressParams) => {
+		const value = params[key];
+		return (Array.isArray(value) ? value[0] : value) ?? '';
+	};
+	if (!read('applies')) return null;
+	return {
+		country: read('country'),
+		state: read('state'),
+		city: read('city'),
+		postcode: read('postcode'),
+	};
+}
+
+/**
+ * The ids of the store's current rates that address matches, by the same matcher the cart and
+ * the "Tax based on" panel use, so the marks and the count follow a sync.
+ */
+export function matchedRateIds(rates: TaxRateData[], address: TaxLocation): ReadonlySet<number> {
+	const { country, state, postcode, city } = address;
 	return new Set(
-		raw
-			.split(',')
-			.map((id) => Number(id.trim()))
-			.filter((id) => Number.isInteger(id) && id > 0)
+		filterTaxRates(rates, country, state, postcode, city)
+			.map((rate) => rate.id)
+			.filter((id): id is number => typeof id === 'number')
 	);
 }
 

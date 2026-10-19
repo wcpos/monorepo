@@ -17,12 +17,12 @@ jest.mock('@wcpos/components/table', () => {
 			children,
 			testID,
 			className,
-			'aria-selected': selected,
+			selected,
 		}: {
 			children?: React.ReactNode;
 			testID?: string;
 			className?: string;
-			'aria-selected'?: boolean;
+			selected?: boolean;
 		}) {
 			return (
 				<div data-testid={testID ?? role} data-classes={className} aria-selected={selected}>
@@ -144,10 +144,8 @@ it.each([false, true])(
 		expect(marked.getAttribute('aria-selected')).toBe('true');
 		expect(plain.getAttribute('aria-selected')).toBeNull();
 		if (!phone) {
-			// The ListRow mark's classes, bled to the panel edge with the gutter padded back.
-			expect(marked.dataset.classes).toEqual(
-				expect.stringContaining('border-l-primary bg-muted -mx-4 border-l-2 pl-3.5 pr-4')
-			);
+			// The shared row draws the mark from `selected`; the panel adds only its gutter bleed.
+			expect(marked.dataset.classes).toBe('gap-3 -mx-4 pr-4 pl-3.5');
 			expect(plain.dataset.classes).toBe('gap-3');
 		}
 	}

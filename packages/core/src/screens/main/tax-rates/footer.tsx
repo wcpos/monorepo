@@ -1,6 +1,8 @@
 import * as React from 'react';
 
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 
 import { appliesCount, rateCount } from './rate-rows';
@@ -43,10 +45,14 @@ export function TaxRatesFooter({ count, handle, shown, applies }: TaxRatesFooter
 	// answered, and `total` is null when nothing vouches for one.
 	const vouched = ready ? total : null;
 	const t = useT();
+	const isPhone = useIsPhone();
 
 	return (
-		<HStack className="gap-1">
-			<Text className="text-muted-foreground text-sm">
+		// Off a phone the footer is a row: this slot takes its free room and wraps the label inside
+		// it, so a long count never pushes the sync button out or Close (`shrink-0`) over. A phone
+		// stacks the footer, where `basis-0` would collapse the slot to nothing in Yoga's column.
+		<HStack className={cn('min-w-0 gap-1', !isPhone && 'shrink grow basis-0')}>
+			<Text className="text-muted-foreground min-w-0 shrink text-sm">
 				{[
 					rateCount(count, vouched, t),
 					applies ? appliesCount(applies.n, applies.country, t) : null,

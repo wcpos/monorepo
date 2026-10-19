@@ -2,7 +2,8 @@ import {
 	appliesCount,
 	isApplied,
 	locationField,
-	parseApplies,
+	matchedRateIds,
+	parseAppliesAddress,
 	phoneLocation,
 	phoneTags,
 	rateCount,
@@ -93,18 +94,39 @@ describe('rateCount', () => {
 	});
 });
 
-describe('parseApplies', () => {
-	it('reads no param as opened from elsewhere: no marks', () => {
-		expect(parseApplies(undefined)).toBeNull();
+describe('parseAppliesAddress', () => {
+	it('reads no applies as opened from elsewhere: no marks', () => {
+		expect(parseAppliesAddress({})).toBeNull();
+		expect(parseAppliesAddress({ country: 'GB' })).toBeNull();
 	});
 
-	it("reads an empty list as the panel's answer that nothing matched", () => {
-		expect(parseApplies('')).toEqual(new Set());
+	it('reads the four fields, empty where the panel sent none', () => {
+		expect(parseAppliesAddress({ applies: '1', country: 'US', postcode: ['97201', 'x'] })).toEqual({
+			country: 'US',
+			state: '',
+			city: '',
+			postcode: '97201',
+		});
+	});
+});
+
+describe('matchedRateIds', () => {
+	const portland = { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' };
+
+	it('matches the current rates with the shared matcher, a postcode pattern included', () => {
+		const rates = [
+			rate({ id: 1, country: 'US', state: 'OR' }),
+			rate({ id: 2, country: 'US', state: 'OR', postcodes: ['972*'], priority: 2 }),
+			rate({ id: 3, country: 'US', state: 'CA' }),
+			rate({ id: 4, country: 'GB' }),
+		];
+		expect(matchedRateIds(rates, portland)).toEqual(new Set([1, 2]));
 	});
 
-	it('keeps the ids and drops anything that is not one', () => {
-		expect(parseApplies('3,12, 7,,x,-1,2.5')).toEqual(new Set([3, 12, 7]));
-		expect(parseApplies(['4,5', '9'])).toEqual(new Set([4, 5]));
+	it('matches nothing for an address the store has no rate for', () => {
+		expect(matchedRateIds([rate({ country: 'GB' })], { ...portland, country: 'IS' })).toEqual(
+			new Set()
+		);
 	});
 });
 

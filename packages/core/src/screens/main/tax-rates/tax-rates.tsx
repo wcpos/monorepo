@@ -29,7 +29,7 @@ import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
-import { isApplied, parseApplies } from './rate-rows';
+import { isApplied, matchedRateIds, parseAppliesAddress } from './rate-rows';
 import { TaxRateTable } from './rate-table';
 import { useT } from '../../../contexts/translations';
 import {
@@ -84,15 +84,32 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as TaxClass[] | undefined;
 	const [value, setValue] = React.useState(get(taxClasses, [0, 'slug'], ''));
 	const t = useT();
-	// Sent by the "Tax based on" panel's View all: the rates its address matched, and its country.
-	const params = useLocalSearchParams<{ applies?: string; country?: string }>();
-	const appliesTo = React.useMemo(() => parseApplies(params.applies), [params.applies]);
-	const applies = appliesTo
-		? {
-				n: rates.filter((rate) => isApplied(appliesTo, rate)).length,
-				country: typeof params.country === 'string' ? params.country : '',
-			}
-		: null;
+	// Sent by the "Tax based on" panel's View all: the address tax is based on. The marks are
+	// matched here against the CURRENT rates, so a sync or a clear-and-refresh re-evaluates them.
+	const params = useLocalSearchParams<{
+		applies?: string;
+		country?: string;
+		state?: string;
+		city?: string;
+		postcode?: string;
+	}>();
+	// Keyed on the fields, not on the params object's identity.
+	const { applies: sent, country, state, city, postcode } = params;
+	const address = React.useMemo(
+		() => parseAppliesAddress({ applies: sent, country, state, city, postcode }),
+		[sent, country, state, city, postcode]
+	);
+	const appliesTo = React.useMemo(
+		() => (address ? matchedRateIds(rates, address) : null),
+		[rates, address]
+	);
+	const applies =
+		address && appliesTo
+			? {
+					n: rates.filter((rate) => isApplied(appliesTo, rate)).length,
+					country: address.country,
+				}
+			: null;
 
 	/**
 	 *
@@ -168,7 +185,7 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
 				<DialogFooter className="justify-between">
 					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} applies={applies} />
-					<DialogClose>{t('common.close')}</DialogClose>
+					<DialogClose className="shrink-0">{t('common.close')}</DialogClose>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

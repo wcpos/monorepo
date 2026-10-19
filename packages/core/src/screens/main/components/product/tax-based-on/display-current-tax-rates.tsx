@@ -86,12 +86,22 @@ function TaxDerivation({
 		onOpenChange(false);
 		router.push(href);
 	};
-	// The panel's route sits outside the tax and order providers, so the rates this address
-	// matched travel with the push; the panel marks them and counts them in its footer.
-	const viewAll: Href = {
-		pathname: '/(app)/(modals)/tax-rates',
-		params: { applies: rates.map((rate) => String(rate.id)).join(','), country: location.country },
-	};
+	// The panel's route sits outside the tax and order providers, so the ADDRESS travels with the
+	// push and the panel matches its own current rates against it (a sync there re-evaluates the
+	// marks). An order with no address has nothing to match: the plain panel.
+	const viewAll: Href =
+		failure === 'address'
+			? '/(app)/(modals)/tax-rates'
+			: {
+					pathname: '/(app)/(modals)/tax-rates',
+					params: {
+						applies: '1',
+						country: location.country,
+						state: location.state,
+						city: location.city,
+						postcode: location.postcode,
+					},
+				};
 
 	const why = (reason: RateWhy) => {
 		switch (reason.field) {
