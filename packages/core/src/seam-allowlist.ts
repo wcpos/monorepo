@@ -1630,10 +1630,18 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/hooks/read-stock-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
 	'screens/main/pos/hooks/read-stock-document.ts :: raw query construction :: readStockDocument :: collection.findOne :: 1',
 	'screens/main/pos/hooks/read-stock-document.ts :: storage token :: readStockDocument :: collection.storageInstance :: 1',
+	// ADR 0033 per-screen (g10): the cart customer is read through a named read and written through a command.
+	'screens/main/pos/cart/add-customer.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/pos/cart/add-customer.tsx :: resident helper write :: AddCustomerFormBody :: useMutation :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: raw query construction :: findCustomerByWooId :: collection .findOne :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: storage token :: findCustomerByWooId :: scope.database.collections :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: record mutator :: EditCartCustomerForm :: patch :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: resident helper write :: EditCartCustomerForm :: useMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 686;
+export const SEAM_RETIRED_FLOOR = 693;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'93b484a53e12d3d12a8473aed972292417a28039ba8cb4e31e315f1f9838ffdf';
+	'356c429b727666d117e08d5e21d91b5143364ac26a0560752be45651b851a525';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
