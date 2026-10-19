@@ -12,11 +12,11 @@ import { clearOrderSaving, markOrderSaveRejected } from './checkout-mode';
  * store's existing dead letters would lose their hold until the next queue change.
  */
 export function useRejectedOrderSavesSync(storeId: number | string | undefined): void {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	// Synchronise the checkout hold with the external, durable RxDB dead-letter query.
 	React.useEffect(() => {
 		let previous = new Set<string>();
-		const subscription = observeQueueRows(engine, {
+		const subscription = observeQueueRows(runtime.engine, {
 			statuses: TERMINAL_QUEUE_STATUSES,
 			collectionName: 'orders',
 		}).subscribe((rows) => {
@@ -33,5 +33,5 @@ export function useRejectedOrderSavesSync(storeId: number | string | undefined):
 			previous = current;
 		});
 		return () => subscription.unsubscribe();
-	}, [engine, storeId]);
+	}, [runtime.engine, storeId]);
 }

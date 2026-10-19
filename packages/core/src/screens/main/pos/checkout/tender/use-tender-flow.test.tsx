@@ -301,9 +301,12 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('../../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ blockIfDegraded: mockBlockIfDegraded }),
 }));
+jest.mock('@wcpos/query/record-readers', () => ({
+	...jest.requireActual('@wcpos/query/record-readers'),
+	readResidentOrder: async () => order,
+}));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
-	findEngineResident: async () => order,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({

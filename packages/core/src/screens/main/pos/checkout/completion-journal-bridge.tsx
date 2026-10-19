@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
+import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
@@ -20,7 +21,6 @@ import {
 	getTerminalPaymentsServiceStartVersion,
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
-import { findEngineResident } from '../../hooks/mutations/use-local-mutation';
 import { useSaleContext } from './hooks/use-sale-context';
 import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
@@ -87,14 +87,13 @@ export function SaleCompletionBridge(): null {
 		 */
 		type LegacyLookup = { kind: 'resolved'; database: string | null } | { kind: 'unknown' };
 		const activeLegacyDatabase = async (): Promise<LegacyLookup> => {
-			const engine = manager.engine;
-			if (!engine) return { kind: 'resolved', database: null };
+			if (!manager.engine) return { kind: 'resolved', database: null };
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
 				const active =
-					engine.active() ??
+					manager.engine.active() ??
 					(await Promise.race([
-						engine.whenActive(),
+						manager.engine.whenActive(),
 						new Promise<'timed-out'>((resolve) => {
 							timer = setTimeout(() => resolve('timed-out'), LEGACY_DRAIN_REPORT_WAIT_MS);
 						}),
@@ -135,12 +134,7 @@ export function SaleCompletionBridge(): null {
 				if (result === 'timed-out') warnUnreported();
 				return { database, unknown: result === 'timed-out' };
 			})());
-		const findOrder = async (uuid: string) =>
-			(await findEngineResident(
-				manager,
-				'orders',
-				uuid
-			)) as unknown as EngineRecord<'orders'> | null;
+		const findOrder = async (uuid: string) => await readResidentOrder(manager, uuid);
 		const replay = async () => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {

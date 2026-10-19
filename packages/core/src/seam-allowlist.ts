@@ -1737,10 +1737,14 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/components/payment-webview.tsx :: require plane outside a named read :: PaymentWebview :: runtime.engine.require :: 1',
 	'screens/main/pos/checkout/hooks/reconcile-completed-order.ts :: require plane outside a named read :: refreshOrderRecord :: runtime.engine.require :: 1',
 	'screens/main/pos/checkout/hooks/use-checkout-session.ts :: require plane outside a named read :: useCheckoutSession :: runtime.engine.require :: 1',
+	// ADR 0033 per-screen (j2): the checkout's resident reads are named reads; the generic resident door closes.
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: engine handle aliased :: SaleCompletionBridge>activeLegacyDatabase :: engine = manager.engine :: 1',
+	"screens/main/pos/checkout/hooks/use-checkout-save.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	'screens/main/pos/checkout/use-rejected-order-saves.ts :: engine handle aliased :: useRejectedOrderSavesSync :: { engine } = useQueryRuntime() :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 780;
+export const SEAM_RETIRED_FLOOR = 783;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'a5a1ec95b5f9c776223d2cb2fad7ead61d997d71301e63f874ffa7b4c765592c';
+	'bf91f97ed6cd634fed4a4047c119c3e89110e1f6c1afd9502b1cd0b8950bfe38';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1779,7 +1783,18 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/contexts/use-push-document.ts :: generic resident door :: enqueueDocumentWrite :: findEngineResident :: 1',
 	'screens/main/contexts/use-push-document.ts :: generic resident door :: usePushDocument :: findEngineResident :: 1',
+	// ADR 0033 per-screen (j2): the checkout's resident reads are named reads; the generic resident door closes.
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door :: SaleCompletionBridge>findOrder :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door :: useCheckoutSave :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 2',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 3',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 4',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 5',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 10;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 20;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'a244d299bcabd4c339ec9394287b328f233a277af0bb5cd54e673fffb2f48428';
+	'ddc3cabf214f8a98dfb904d17c928f7655a365feadcae10dcb72eef9ba73bf60';

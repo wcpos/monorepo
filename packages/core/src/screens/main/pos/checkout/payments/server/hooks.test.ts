@@ -42,9 +42,12 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../../../../contexts/app-state', () => ({ useStoreSession: () => mockSession }));
 jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+jest.mock('@wcpos/query/record-readers', () => ({
+	refreshOrderRecord: jest.requireActual('@wcpos/query/record-readers').refreshOrderRecord,
+	readResidentOrder: (...args: unknown[]) => mockFind(...args),
+}));
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
-	findEngineResident: (...args: unknown[]) => mockFind(...args),
 }));
 jest.mock('../../checkout-mode', () => ({
 	subscribeCheckoutMode: () => () => {},
@@ -115,7 +118,7 @@ it.each(['0.00', '4.00'])(
 			row,
 		});
 		await act(() => jest.advanceTimersByTimeAsync(0));
-		expect(mockFind).toHaveBeenCalledWith(mockManager, 'orders', 'order');
+		expect(mockFind).toHaveBeenCalledWith(mockManager, 'order');
 		const changes = mockPatch.mock.calls[0][0].changes;
 		expect(changes.status).toBe('completed');
 		expect(changes.meta_data[0]).toEqual({ key: 'other', value: 7 });

@@ -84,9 +84,12 @@ jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: 
 jest.mock('../../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
+jest.mock('@wcpos/query/record-readers', () => ({
+	refreshOrderRecord: jest.requireActual('@wcpos/query/record-readers').refreshOrderRecord,
+	readResidentOrder: async () => mockResident,
+}));
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
-	findEngineResident: async () => mockResident,
 }));
 afterEach(() => {
 	stopTerminalPaymentsService();
