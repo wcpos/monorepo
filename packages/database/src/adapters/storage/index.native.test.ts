@@ -65,8 +65,8 @@ describe('native SQLite storage seam', () => {
 		const config = await settings();
 		expect(config.storeAttachmentsAsBase64String).toBe(true);
 		expect(config.sqliteBasics.journalMode).toBe('WAL');
-		await expect(config.sqliteBasics.open('wcposusers_v8')).resolves.toBe(mockDb);
-		expect(mockOpen).toHaveBeenCalledWith('wcposusers_v8', undefined, 'document-dir/wcpos-sqlite');
+		await expect(config.sqliteBasics.open('wcposusers_v9')).resolves.toBe(mockDb);
+		expect(mockOpen).toHaveBeenCalledWith('wcposusers_v9', undefined, 'document-dir/wcpos-sqlite');
 		expect(mockEvents).toEqual([
 			'open',
 			'PRAGMA journal_mode = WAL',
@@ -79,7 +79,7 @@ describe('native SQLite storage seam', () => {
 	it('rejects a database that did not enter WAL', async () => {
 		mockDb.getFirstAsync.mockResolvedValueOnce({ journal_mode: 'delete' });
 		const config = await settings();
-		await expect(config.sqliteBasics.open('wcposusers_v8')).rejects.toThrow(/WAL/);
+		await expect(config.sqliteBasics.open('wcposusers_v9')).rejects.toThrow(/WAL/);
 		expect(mockDb.execAsync).not.toHaveBeenCalledWith('PRAGMA synchronous = NORMAL');
 	});
 

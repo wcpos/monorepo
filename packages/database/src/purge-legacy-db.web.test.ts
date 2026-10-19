@@ -5,6 +5,9 @@ const indexedDbNames = [
 	'wcposusers_v7',
 	'store_v7_shop',
 	'fast_store_v7_shop',
+	'wcposusers_v8',
+	'store_v8_shop',
+	'fast_store_v8_shop',
 	'unrelated',
 ];
 const opfsNames = [
@@ -14,6 +17,9 @@ const opfsNames = [
 	'rxdb-wcposusers_v7-sites-0',
 	'rxdb-store_v7_shop-products-0',
 	'rxdb-fast_store_v7_shop-orders-0',
+	'rxdb-wcposusers_v8-sites-0',
+	'rxdb-store_v8_shop-products-0',
+	'rxdb-fast_store_v8_shop-orders-0',
 	'unrelated',
 ];
 
@@ -102,18 +108,24 @@ describe('purgeLegacyDatabases web', () => {
 
 		await expect(purgeLegacyDatabases()).resolves.toEqual({
 			success: true,
-			message: 'Successfully purged 6 legacy database entries',
-			databasesDeleted: 6,
+			message: 'Successfully purged 12 legacy database entries',
+			databasesDeleted: 12,
 		});
 		expect(mockDeleteDatabase.mock.calls.map(([name]) => name)).toEqual([
 			'wcposusers_v4',
 			'store_v4_shop',
 			'fast_store_v5_shop',
+			'wcposusers_v7',
+			'store_v7_shop',
+			'fast_store_v7_shop',
 		]);
 		expect(mockRemoveEntry.mock.calls).toEqual([
 			['rxdb-wcposusers_v4-sites-0', { recursive: true }],
 			['rxdb-store_v4_shop-products-0', { recursive: true }],
 			['rxdb-fast_store_v5_shop-orders-0', { recursive: true }],
+			['rxdb-wcposusers_v7-sites-0', { recursive: true }],
+			['rxdb-store_v7_shop-products-0', { recursive: true }],
+			['rxdb-fast_store_v7_shop-orders-0', { recursive: true }],
 		]);
 	});
 });

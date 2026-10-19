@@ -6,20 +6,23 @@ import {
 import { DATABASE_GENERATION as NATIVE_DATABASE_GENERATION } from './database-generation.native';
 
 jest.mock('./database-generation', () => ({
-	DATABASE_GENERATION: 'v8',
+	DATABASE_GENERATION: 'v9',
 }));
 
 describe('native database generation', () => {
-	it('uses v8 names for a fresh native database boot', () => {
-		expect(NATIVE_DATABASE_GENERATION).toBe('v8');
-		expect(getUserDatabaseName()).toBe('wcposusers_v8');
-		expect(getStoreDatabaseName('abc123')).toBe('store_v8_abc123');
+	it('uses v9 names for a fresh native database boot', () => {
+		expect(NATIVE_DATABASE_GENERATION).toBe('v9');
+		expect(getUserDatabaseName()).toBe('wcposusers_v9');
+		expect(getStoreDatabaseName('abc123')).toBe('store_v9_abc123');
 	});
 
 	it.each([
 		'wcposusers_v6',
 		'store_v6_abc123',
 		'fast_store_v6_abc123',
+		'wcposusers_v8',
+		'store_v8_abc123',
+		'fast_store_v8_abc123',
 		'wcposusers_v7',
 		'store_v7_abc123',
 		'fast_store_v7_abc123',
@@ -28,7 +31,7 @@ describe('native database generation', () => {
 	});
 });
 
-it.each(['wcposusers_v8', 'store_v8_abc123', 'fast_store_v8_abc123'])(
+it.each(['wcposusers_v9', 'store_v9_abc123', 'fast_store_v9_abc123'])(
 	'preserves current native %s',
 	(name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(false);

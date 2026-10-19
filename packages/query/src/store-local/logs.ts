@@ -21,8 +21,9 @@ export function observeLogVolume(storeDB: StoreLocalDatabase, dayStartMs: number
 					level: { $in: ['info', 'warn', 'error'] },
 				},
 			}).$;
+			// Volume uses creation time; error attention includes collapsed repeats today.
 			const errors$ = logsCollection.count({
-				selector: { level: { $eq: 'error' }, timestamp: { $gte: dayStartMs } },
+				selector: { level: { $eq: 'error' }, lastSeen: { $gte: dayStartMs } },
 			}).$;
 			return combineLatest([events$, errors$]).pipe(
 				map(([eventsToday, errorsToday]) => ({ eventsToday, errorsToday }))

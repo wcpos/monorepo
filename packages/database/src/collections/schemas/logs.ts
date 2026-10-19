@@ -88,6 +88,8 @@ export const logsLiteral = {
 		lastSeen: {
 			type: 'integer',
 			minimum: 0,
+			maximum: 100000000000000,
+			multipleOf: 1,
 		},
 		actor: {
 			type: 'object',
@@ -112,5 +114,10 @@ export const logsLiteral = {
 			type: ['string', 'null'],
 		},
 	},
-	indexes: [['timestamp'], ['level', 'timestamp'], ['category', 'timestamp']],
+	indexes: [
+		['timestamp'],
+		['level', 'timestamp'],
+		['category', 'timestamp'],
+		['level', 'lastSeen'],
+	],
 } as const;

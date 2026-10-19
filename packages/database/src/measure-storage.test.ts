@@ -25,8 +25,8 @@ jest.mock('expo-file-system', () => ({
 
 it('counts the SQLite root as live and both retired roots as legacy, including nested bytes', async () => {
 	contents['wcpos-sqlite'] = [
-		new MockFile('wcposusers_v8', 100),
-		new MockFile('wcposusers_v8-wal', 23),
+		new MockFile('wcposusers_v9', 100),
+		new MockFile('wcposusers_v9-wal', 23),
 	];
 	contents['.expo-opfs'] = [
 		new MockDirectory('rxdb-pos_v5_shop-orders-0'),
