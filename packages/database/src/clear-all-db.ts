@@ -4,6 +4,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { NATIVE_SQLITE_ROOT } from './adapters/storage/sqlite-root';
+import { clearTillAnchor } from './till-anchor';
 
 const dbLogger = getLogger(['wcpos', 'db', 'clear']);
 const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
@@ -24,6 +25,8 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 			root.delete();
 			deletedCount++;
 		}
+		// No anchor may outlive the database it vouched for.
+		clearTillAnchor();
 
 		const message =
 			deletedCount > 0

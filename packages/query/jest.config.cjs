@@ -38,6 +38,8 @@ module.exports = {
 		'^@wcpos/hooks/use-http-client/parse-wp-error$': '<rootDir>/tests/__mocks__/http.ts',
 		'^@wcpos/database$': '<rootDir>/tests/helpers/db.ts',
 		'^@wcpos/database/plugins/reset-collection$': '<rootDir>/tests/__mocks__/reset-collection.ts',
+		// The web anchor, against jsdom's localStorage (the native one needs expo-file-system).
+		'^@wcpos/database/till-anchor$': '<rootDir>/../database/src/till-anchor.web.ts',
 		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 	},
 };

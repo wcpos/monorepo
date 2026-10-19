@@ -1,4 +1,5 @@
 import { createUserDB } from '@wcpos/database/create-db';
+import { getLogger } from '@wcpos/utils/logger';
 
 import {
 	applyEmbeddedBootPayload,
@@ -358,7 +359,10 @@ describe('openUserDatabase', () => {
 				order.push('open');
 				return userDB as never;
 			});
-			const result = await openUserDatabase();
+			localStorage.setItem('wcpos.tillId', 'register-1');
+			const result = await openUserDatabase().finally(() =>
+				localStorage.removeItem('wcpos.tillId')
+			);
 			expect(order).toEqual([
 				'open',
 				'v2',
@@ -384,69 +388,115 @@ describe('openUserDatabase', () => {
 		await expect(openUserDatabase()).rejects.toThrow('Failed to create user database');
 	});
 
-	// The re-mint is the one hydration step a real merchant must never hit: it runs
-	// only behind the new-till flag, and the flag is disarmed after it succeeds.
-	describe('the new-till flag', () => {
-		const NEW_TILL_ON_NEXT_LOAD_KEY = 'wcpos.newTillOnNextLoad';
-		const openWithRegister = async () => {
-			const data = {
-				id: 'register-1',
-				name: 'Register 0001',
-				sites: { site: { sale_counter: 3 } },
-			};
+	// The re-mint is the one hydration step a real merchant must never hit: it runs only
+	// when the database's till id and the anchor kept outside it disagree.
+	describe('the till anchor', () => {
+		const TILL_ANCHOR_KEY = 'wcpos.tillId';
+		const logger = () => getLogger(['wcpos', 'app', 'hydration']);
+		const register = () => ({
+			id: 'register-1',
+			name: 'Register 0001',
+			sites: { site: { sale_counter: 3 } },
+		});
+		const openWith = async (data: ReturnType<typeof register> | null) => {
+			let stored = data;
 			const doc = {
-				toJSON: () => ({ data }),
-				incrementalModify: jest.fn(async (modify: (current: typeof data) => typeof data) => ({
-					toJSON: () => ({ data: modify(data) }),
-				})),
+				toJSON: () => ({ data: stored }),
+				incrementalModify: jest.fn(async (modify: (current: typeof data) => typeof data) => {
+					stored = modify(stored);
+					return { toJSON: () => ({ data: stored }) };
+				}),
 			};
 			const userDB = {
 				addState: jest.fn(async () => ({ get: jest.fn() })),
 				users: { findOne: () => ({ exec: async () => ({ uuid: 'global-user' }) }) },
-				getLocal: async () => doc,
-			};
-			jest.mocked(createUserDB).mockResolvedValueOnce(userDB as never);
-			await openUserDatabase();
-			return doc;
-		};
-		afterEach(() => {
-			localStorage.removeItem(NEW_TILL_ON_NEXT_LOAD_KEY);
-		});
-
-		it('leaves the register document alone when it is not armed', async () => {
-			const doc = await openWithRegister();
-			expect(doc.incrementalModify).not.toHaveBeenCalled();
-		});
-
-		it('re-mints the till once when armed, then disarms', async () => {
-			localStorage.setItem(NEW_TILL_ON_NEXT_LOAD_KEY, '1');
-			const doc = await openWithRegister();
-			expect(doc.incrementalModify).toHaveBeenCalledTimes(1);
-			const reminted = doc.incrementalModify.mock.calls[0][0]({
-				id: 'register-1',
-				name: 'Register 0001',
-				sites: { site: { sale_counter: 3 } },
-			});
-			expect(reminted.id).not.toBe('register-1');
-			expect(reminted.sites.site.sale_counter).toBe(0);
-			expect(localStorage.getItem(NEW_TILL_ON_NEXT_LOAD_KEY)).toBeNull();
-		});
-
-		it('stays armed when the re-mint fails, so the next load retries', async () => {
-			localStorage.setItem(NEW_TILL_ON_NEXT_LOAD_KEY, '1');
-			const userDB = {
-				addState: jest.fn(async () => ({ get: jest.fn() })),
-				users: { findOne: () => ({ exec: async () => ({ uuid: 'global-user' }) }) },
-				getLocal: async () => ({
-					toJSON: () => ({ data: { id: 'register-1', sites: {} } }),
-					incrementalModify: async () => {
-						throw new Error('storage closed');
-					},
+				getLocal: async () => (stored ? doc : null),
+				insertLocal: jest.fn(async (_id: string, inserted: typeof data) => {
+					stored = inserted;
 				}),
 			};
 			jest.mocked(createUserDB).mockResolvedValueOnce(userDB as never);
-			await expect(openUserDatabase()).rejects.toThrow('storage closed');
-			expect(localStorage.getItem(NEW_TILL_ON_NEXT_LOAD_KEY)).toBe('1');
+			await openUserDatabase();
+			return { doc, userDB, stored: () => stored };
+		};
+		afterEach(() => {
+			jest.restoreAllMocks();
+			localStorage.removeItem(TILL_ANCHOR_KEY);
+		});
+
+		it('leaves a register that matches its anchor alone', async () => {
+			localStorage.setItem(TILL_ANCHOR_KEY, 'register-1');
+			const setItem = jest.spyOn(Storage.prototype, 'setItem');
+			const { doc } = await openWith(register());
+			expect(doc.incrementalModify).not.toHaveBeenCalled();
+			expect(setItem).not.toHaveBeenCalled();
+			expect(logger().info).not.toHaveBeenCalled();
+		});
+
+		it.each([null, 'stale-anchor'])(
+			'anchors a register minted this boot without re-minting it (anchor %s)',
+			async (anchor) => {
+				if (anchor) localStorage.setItem(TILL_ANCHOR_KEY, anchor);
+				const { doc, userDB, stored } = await openWith(null);
+				expect(userDB.insertLocal).toHaveBeenCalledTimes(1);
+				expect(doc.incrementalModify).not.toHaveBeenCalled();
+				expect(localStorage.getItem(TILL_ANCHOR_KEY)).toBe(stored()?.id);
+				expect(logger().info).not.toHaveBeenCalled();
+			}
+		);
+
+		it.each([
+			['absent', null],
+			['another till', 'register-other'],
+		])('re-mints a register whose anchor is %s, then anchors the fresh id', async (_, anchor) => {
+			if (anchor) localStorage.setItem(TILL_ANCHOR_KEY, anchor);
+			const { doc, stored } = await openWith(register());
+			expect(doc.incrementalModify).toHaveBeenCalledTimes(1);
+			const fresh = stored();
+			expect(fresh?.id).not.toBe('register-1');
+			expect(fresh?.sites.site.sale_counter).toBe(0);
+			expect(localStorage.getItem(TILL_ANCHOR_KEY)).toBe(fresh?.id);
+			expect(logger().info).toHaveBeenCalledTimes(1);
+			expect(logger().info).toHaveBeenCalledWith(
+				'Till re-minted: the local database came from another installation',
+				{ context: { previous: 'register-1', next: fresh?.id, anchor } }
+			);
+		});
+
+		it('leaves a suspected clone alone when the anchor cannot be written', async () => {
+			jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+				throw new DOMException('quota exceeded', 'QuotaExceededError');
+			});
+			const { doc } = await openWith(register());
+			expect(doc.incrementalModify).not.toHaveBeenCalled();
+			expect(logger().info).not.toHaveBeenCalled();
+			expect(logger().warn).toHaveBeenCalledWith(
+				'Till anchor cannot be written; clone detection is off on this device',
+				{ context: { anchor: null, till: 'register-1' } }
+			);
+		});
+
+		it('probes the anchor with the old id, then anchors the fresh one', async () => {
+			const setItem = jest.spyOn(Storage.prototype, 'setItem');
+			const { doc, stored } = await openWith(register());
+			expect(doc.incrementalModify).toHaveBeenCalledTimes(1);
+			expect(setItem.mock.calls).toEqual([
+				[TILL_ANCHOR_KEY, 'register-1'],
+				[TILL_ANCHOR_KEY, stored()?.id],
+			]);
+			expect(localStorage.getItem(TILL_ANCHOR_KEY)).toBe(stored()?.id);
+			expect(logger().warn).not.toHaveBeenCalled();
+		});
+
+		it("touches nothing when the anchor cannot be read ('unknown')", async () => {
+			jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+				throw new DOMException('denied', 'SecurityError');
+			});
+			const setItem = jest.spyOn(Storage.prototype, 'setItem');
+			const { doc } = await openWith(register());
+			expect(doc.incrementalModify).not.toHaveBeenCalled();
+			expect(setItem).not.toHaveBeenCalled();
+			expect(logger().info).not.toHaveBeenCalled();
 		});
 	});
 });

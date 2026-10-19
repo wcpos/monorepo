@@ -14,7 +14,7 @@ import {
 	isWcposPluginCompatible,
 	MINIMUM_WCPOS_PLUGIN_VERSION,
 } from '@wcpos/core/utils/wcpos-plugin-version';
-import { NEW_TILL_ON_NEXT_LOAD_KEY } from '@wcpos/query/register-session/new-till-flag';
+import { TILL_ANCHOR_KEY } from '@wcpos/database/till-anchor-key';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -1108,13 +1108,15 @@ export async function hydrateAuthenticatedPage(
 			await page.goto('/', { waitUntil: 'commit' });
 
 			// Restore OPFS and localStorage while JS is blocked (no worker running).
-			// The snapshot carries the login's register document (till id + sale
-			// counters), so every test restoring it is a clone of one till and would
-			// stamp the same till and counter #1 on its sales — Store health on the dev
-			// stores then lists one "duplicate counter" row per CI run. Arming the
-			// new-till flag makes hydration re-mint the till before the test sells.
+			// Every test is a copy of the login's database, register document (till id +
+			// sale counters) included, so each would stamp the same till and counter #1 on
+			// its sales and Store health on the dev stores would list one "duplicate
+			// counter" row per CI run. The till anchor is left out of the restore: without
+			// it the copy is recognised as a clone and re-mints itself as a new till
+			// before it sells.
 			await restoreOPFS(page, state.opfs);
-			await restoreLocalStorage(page, { ...state.localStorage, [NEW_TILL_ON_NEXT_LOAD_KEY]: '1' });
+			const { [TILL_ANCHOR_KEY]: _clonedTill, ...localStorageWithoutTill } = state.localStorage;
+			await restoreLocalStorage(page, localStorageWithoutTill);
 
 			// Unblock JS and reload so the app picks up the restored OPFS state
 			await page.unroute('**/*', blockScriptRequests);

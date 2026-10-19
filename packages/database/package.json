@@ -12,6 +12,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./till-anchor-key": "./src/till-anchor-key.ts",
     "./*": "./src/*"
   },
   "files": [
