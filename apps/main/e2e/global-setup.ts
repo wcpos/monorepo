@@ -15,7 +15,7 @@ import {
 	installThinCatalogueRoutes,
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { restoreLocalStorageAsClone } from './indexeddb-helpers';
+import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
@@ -182,6 +182,15 @@ async function reuseValidAuthState(
 	}
 	// Old snapshots without storeIds cannot satisfy the caller; treat as absent.
 	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) {
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
+	// Its register was never anchored, so every restore would adopt the old till
+	// instead of re-minting its own.
+	if (!hasTillAnchor(state.localStorage as Record<string, string>)) {
+		console.log(
+			`[global-setup] ${stateName}: cached auth state predates the till anchor; logging in again`
+		);
 		fs.rmSync(statePath, { force: true });
 		return null;
 	}

@@ -128,6 +128,11 @@ export async function restoreLocalStorage(page: Page, data: Record<string, strin
 	}, data);
 }
 
+/** Whether a saved snapshot carries a till anchor; one captured before the anchor existed does not. */
+export function hasTillAnchor(localStorage: Record<string, string>): boolean {
+	return TILL_ANCHOR_KEY in localStorage;
+}
+
 /**
  * Restore a saved snapshot's localStorage into a page that boots as its own till. A
  * restored snapshot is a copy of the login's database; without its till anchor the copy
