@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { type EngineRecord } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout } from '../checkout-mode';
+import { getCheckoutModeSnapshot, leaveCheckout, selectReceipt } from '../checkout-mode';
 import { returnToTill } from '../till-route';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
@@ -19,20 +19,36 @@ export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
 	receiptHost: 'stage' | 'modal' = 'stage'
 ): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<void> {
+	const complete = useCompleteOrderFlowForOrder(receiptHost);
+	return React.useCallback((outcome, queue) => complete(order, outcome, queue), [complete, order]);
+}
+
+/** Cart commands finish their captured order, even if the cashier has switched tabs. */
+export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 'stage') {
 	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
-	const { setCurrentOrderID } = useCurrentOrderActions();
+	const { setCurrentOrderID, getCurrentOrderID } = useCurrentOrderActions();
 
 	return React.useCallback(
-		async (outcome: SaleOutcome, queue?: OrderMutationContext) => {
+		async (order: EngineRecord<'orders'>, outcome: SaleOutcome, queue?: OrderMutationContext) => {
 			const result = await completeSale(
 				ctx,
 				order,
 				outcome,
 				receiptHost === 'stage'
-					? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
+					? {
+							host: 'stage',
+							autoShowReceipt: !!uiSettings.autoShowReceipt,
+							canSelectReceipt: () => {
+								const { selectedReceiptOrder } = getCheckoutModeSnapshot();
+								return (
+									getCurrentOrderID() === order.uuid &&
+									(selectedReceiptOrder === null || selectedReceiptOrder === order.uuid)
+								);
+							},
+						}
 					: { host: 'modal' },
 				queue
 			);
@@ -40,6 +56,11 @@ export function useCompleteOrderFlow(
 			if (result !== 'completed' && result !== 'sent') return;
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
+			if (getCurrentOrderID() !== order.uuid) {
+				if (getCheckoutModeSnapshot().selectedReceiptOrder === order.uuid) selectReceipt(null);
+				leaveCheckout(order.uuid);
+				return;
+			}
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
@@ -61,6 +82,14 @@ export function useCompleteOrderFlow(
 				if (screenSize === 'sm') returnToTill(router, true, 'products');
 			}
 		},
-		[ctx, receiptHost, order, router, screenSize, setCurrentOrderID, uiSettings.autoShowReceipt]
+		[
+			ctx,
+			receiptHost,
+			router,
+			screenSize,
+			setCurrentOrderID,
+			getCurrentOrderID,
+			uiSettings.autoShowReceipt,
+		]
 	);
 }

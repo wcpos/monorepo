@@ -5,7 +5,7 @@ import {
 	dispatchAction,
 	isActionRefusal,
 } from '../../../../extensions/actions';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueOrderMutation, type OrderMutationContext } from './order-mutation-queue';
 
 import type { RecalculateResult } from './coupon-recalculate';
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -27,7 +27,11 @@ export interface CouponLineWriter {
 	ctx: ActionContext;
 	actor: ActionActor;
 	recalculate: (lineItems: LineItem[], couponLines: CouponLine[]) => Promise<RecalculateResult>;
-	localPatch: (input: { document: CurrentOrderRecord; data: Plain }) => Promise<unknown>;
+	localPatch: (input: {
+		document: CurrentOrderRecord;
+		data: Plain;
+		queue: OrderMutationContext;
+	}) => Promise<unknown>;
 }
 
 /** The cart a coupon decision is made against: a hook takes it from the very order it validated. */
@@ -47,7 +51,8 @@ async function writeCouponLines(
 	writer: CouponLineWriter,
 	order: CurrentOrderRecord,
 	before: string,
-	couponLines: CouponLine[]
+	couponLines: CouponLine[],
+	queue: OrderMutationContext
 ) {
 	const latest = order.getLatest();
 	const result = await writer.recalculate(latest.payload.line_items ?? [], couponLines);
@@ -57,8 +62,10 @@ async function writeCouponLines(
 	if (cartSnapshot(order) !== before) throw new CartChangedError();
 	const patched = await writer.localPatch({
 		document: order,
+		queue,
 		data: { coupon_lines: result.couponLines, line_items: result.lineItems },
 	});
+	if (isActionRefusal(patched)) return patched;
 	return patched ? { patched, couponLines: result.couponLines } : false;
 }
 
@@ -102,7 +109,7 @@ export function applyCouponLine(
 					couponLines: couponLines as Plain[],
 				},
 			},
-			bottom: () => writeCouponLines(writer, target, before, [...couponLines, couponLine]),
+			bottom: () => writeCouponLines(writer, target, before, [...couponLines, couponLine], queue),
 		}) as Promise<ActionRefusal | CouponWriteResult | false>;
 	});
 }
@@ -142,7 +149,7 @@ export function removeCouponLine(
 					couponLines: couponLines as Plain[],
 				},
 			},
-			bottom: () => writeCouponLines(writer, target, before, remaining),
+			bottom: () => writeCouponLines(writer, target, before, remaining, queue),
 		}) as Promise<ActionRefusal | CouponWriteResult | false>;
 	});
 }

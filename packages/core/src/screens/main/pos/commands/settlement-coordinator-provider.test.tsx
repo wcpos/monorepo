@@ -1,15 +1,19 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import * as orderMath from '@wcpos/order-math';
 import { createCartConfig } from '@wcpos/order-math';
 
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { useBoundaryCommit } from './use-boundary-commit';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
+import { commitAtBoundary } from './boundary-commit';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
@@ -35,11 +39,39 @@ const subscribe = (source: Subject<any>) => (fn: any) => {
 };
 const engine = {
 	events: subscribe(events),
+	active: () => ({ database: databases.value }),
+	db$: (fn: any) => subscribe(databases)(fn),
+	ready: Promise.resolve(),
 	status: () => statuses.value,
 	statusChanges: subscribe(statuses),
 };
 const manager = { engine };
+const stockChanges = { products: new Subject(), variations: new Subject() };
+const databases = new BehaviorSubject({
+	collections: {
+		products: { $: stockChanges.products },
+		variations: { $: stockChanges.variations },
+	},
+});
 const writes: Record<string, unknown>[] = [];
+const sessionChanges = new Subject();
+let sessionOpen = true;
+const saleContext = { storeDB: {} };
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	observeOpenSessionPresence: () => sessionChanges,
+}));
+jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => saleContext }));
+jest.mock('./boundary-commit', () => ({
+	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
+		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };
+		const patch = { ...orderMath.settlementPatch(result), status: 'completed' };
+		await write(() => patch);
+	}),
+}));
+jest.mock('../checkout/hooks/use-complete-order-flow', () => ({
+	useCompleteOrderFlowForOrder: () => jest.fn(),
+}));
 const report = jest.fn();
 let currentConfig = config;
 const readConfig = () => currentConfig;
@@ -58,6 +90,7 @@ jest.mock('@wcpos/query', () => ({
 	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
+	observeCatalogChanges: jest.requireActual('@wcpos/query').observeCatalogChanges,
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
 }));
@@ -65,7 +98,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 }, extraData }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registerId: 'register' }),
+	useRegisterBinding: jest.fn(() => ({ registerId: 'register', status: 'bound' })),
 }));
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: (...args: unknown[]) => {
@@ -79,6 +112,7 @@ jest.mock('../hooks/use-cart-config', () => ({
 }));
 jest.mock('../contexts/order-money-divergence', () => ({
 	useServerOwnsMoneyReader: () => ownsMoney,
+	useStoreContractReader: () => () => null,
 }));
 jest.mock('../contexts/order-engine-warnings', () => ({ useReportEngineWarnings: () => report }));
 jest.mock('./plain-patch', () => ({
@@ -114,6 +148,7 @@ const flush = async () => {
 beforeEach(() => {
 	paymentMethods.next(null);
 	currentConfig = config;
+	sessionOpen = true;
 	ownsMoney.mockReset().mockReturnValue(false);
 	beforeResolve.mockReset().mockResolvedValue(undefined);
 	writes.length = 0;
@@ -155,29 +190,23 @@ it('binds, rebinds on scope/reset, waits for rates, reports once and tears down'
 	expect(orders.observed).toBe(false);
 });
 
-it.each(['0.30', '0.40'])(
-	'defers a partial order crossing net paid %s, without writing money',
-	async (amount) => {
-		// prettier-ignore
-		const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [
+it.each(['0.30', '0.40'])('commits a partial order crossing net paid %s', async (amount) => {
+	// prettier-ignore
+	const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [
 			{ id: 'leg', status: 'captured', amount, refunded_amount: '0.10' },
 		] } }];
-		orders.next({
-			ready: true,
-			hits: [
-				{ record: record({ status: 'pos-partial', meta_data, line_items: [{ total: '0.20' }] }) },
-			],
-		});
-		const view = render(<SettlementCoordinatorProvider />);
-		await flush();
-		expect(writes).toEqual([]);
-		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
-			'settlement.boundary-deferred',
-			expect.anything()
-		);
-		view.unmount();
-	}
-);
+	orders.next({
+		ready: true,
+		hits: [
+			{ record: record({ status: 'pos-partial', meta_data, line_items: [{ total: '0.20' }] }) },
+		],
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(writes).toEqual([expect.objectContaining({ status: 'completed', total: '0.2' })]);
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	view.unmount();
+});
 
 const references = new BehaviorSubject({ ready: false, generation: '0:0' });
 const context = {
@@ -212,14 +241,10 @@ it.each(['valid', 'missing', 'boundary'])(
 		expect(writes).toHaveLength(0);
 		act(() => references.next({ ready: true, generation: '0:0' }));
 		await flush();
-		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
+		expect(writes).toHaveLength(kind !== 'missing' ? 1 : 0);
 		if (kind === 'valid')
 			expect(writes[0]).toEqual(expect.objectContaining({ total: '9', discount_total: '1' }));
-		if (kind === 'boundary')
-			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
-				'settlement.boundary-deferred',
-				expect.anything()
-			);
+		if (kind === 'boundary') expect(commitAtBoundary).toHaveBeenCalledTimes(1);
 		if (kind === 'missing')
 			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 				'Cart settlement failed',
@@ -232,8 +257,8 @@ it.each(['valid', 'missing', 'boundary'])(
 		expect(report).toHaveBeenCalledTimes(1);
 		act(() => orders.next({ ready: true, hits: [{ record: a }] }));
 		await flush();
-		expect(writes).toHaveLength(kind === 'valid' ? 1 : 0);
-		expect(getLogger(['test']).warn).toHaveBeenCalledTimes(kind === 'valid' ? 0 : 1);
+		expect(writes).toHaveLength(kind !== 'missing' ? 1 : 0);
+		expect(getLogger(['test']).warn).toHaveBeenCalledTimes(kind === 'missing' ? 1 : 0);
 		view.unmount();
 		expect(references.observed).toBe(false);
 	}
@@ -493,6 +518,99 @@ it.each(['divergence', 'command', 'replay-owner', 'replay-edit'] as const)(
 	}
 );
 
+it('retries a deferred boundary when a session opens, then excludes the completed order', async () => {
+	sessionOpen = false;
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: {
+					schema: 1,
+					payments: [{ id: 'leg', status: 'captured', amount: '4', refunded_amount: '0' }],
+				},
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	expect(writes).toEqual([]);
+	act(() => {
+		sessionOpen = true;
+		sessionChanges.next({});
+	});
+	await flush();
+	expect(a.payload.status).toBe('completed');
+	expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+	act(() => {
+		sessionChanges.next({});
+		orders.next({ ready: true, hits: [{ record: a }] });
+	});
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+	view.unmount();
+	expect(sessionChanges.observed).toBe(false);
+});
+
+it('leaves a coupon edit to the continuation and completes once at the redistributed $5', async () => {
+	context.coupons = new Map([
+		['summer', { code: 'summer', discount_type: 'fixed_cart', amount: '5' }],
+	]);
+	references.next({ ready: true, generation: '0:0' });
+	const a = record({
+		status: 'pos-partial',
+		total: '15',
+		line_items: [1, 2].map((product_id) => ({
+			product_id,
+			quantity: 1,
+			subtotal: '10',
+			total: '7.5',
+		})),
+		coupon_lines: [{ code: 'summer' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: {
+					schema: 1,
+					payments: [{ id: 'leg', status: 'captured', amount: '8', refunded_amount: '0' }],
+				},
+			},
+		],
+	});
+	const intent = { line_items: a.payload.line_items!.slice(0, 1) };
+	const commandCommit = jest.fn();
+	await enqueueOrderMutation(a.uuid, (queue) =>
+		settleCartWrite(
+			{ document: a as CurrentOrderRecord, data: intent, queue },
+			{
+				configForOrder: readConfig,
+				serverOwnsMoney: () => false,
+				commitAtBoundary: commandCommit,
+				localPatch: async ({ changes }) => {
+					const patch = changes(a.payload);
+					expect(patch).toEqual(intent);
+					Object.assign(a.payload, patch);
+					return a;
+				},
+			}
+		)
+	);
+	expect(commandCommit).not.toHaveBeenCalled();
+	expect(a.payload.total).toBe('15');
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(a.payload).toMatchObject({ status: 'completed', total: '5' });
+	act(() => orders.next({ ready: true, hits: [{ record: a }] }));
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	expect(writes).toHaveLength(1);
+	view.unmount();
+});
+
 it('wakes a hint-only open order when the store contract resolves to 1.3', async () => {
 	orders.next({
 		ready: true,
@@ -507,4 +625,213 @@ it('wakes a hint-only open order when the store contract resolves to 1.3', async
 	await flush();
 	expect(writes).toHaveLength(1);
 	view.unmount();
+});
+
+it('marks coordinator boundary work as system rather than cashier initiated', async () => {
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledWith(
+		expect.objectContaining({ source: 'system' }),
+		expect.anything()
+	);
+	view.unmount();
+});
+
+it.each([
+	['products', 'pos_cart.only_n_available', false],
+	['variations', 'pos_products.out_of_stock', true],
+	['products', 'pos_checkout.order_changed_retry', false],
+] as const)(
+	'reconsiders %s stock refusals (%s), but not closed orders',
+	async (collection, reasonKey, coupon) => {
+		context.coupons = new Map([
+			['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+		]);
+		references.next({ ready: true, generation: '0:0' });
+		const a = record({
+			status: 'pos-partial',
+			line_items: [{ product_id: 1, quantity: 1, subtotal: '4', total: '4' }],
+			coupon_lines: coupon ? [{ code: 'summer' }] : [],
+			meta_data: [
+				{
+					key: '_wcpos_payments',
+					value: {
+						schema: 1,
+						payments: [{ id: 'leg', status: 'captured', amount: '4' }],
+					},
+				},
+			],
+		});
+		jest.mocked(commitAtBoundary).mockResolvedValueOnce({ deny: { reasonKey } });
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			expect(writes).toEqual([]);
+			expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+			// The catalog now has enough stock; no order/config/session emission accompanies it.
+			act(() => stockChanges[collection].next({}));
+			await flush();
+			const closed = reasonKey === 'pos_checkout.order_changed_retry';
+			expect(a.payload.status).toBe(closed ? 'pos-partial' : 'completed');
+			expect(commitAtBoundary).toHaveBeenCalledTimes(closed ? 1 : 2);
+			act(() => stockChanges[collection].next({}));
+			await flush();
+			expect(commitAtBoundary).toHaveBeenCalledTimes(closed ? 1 : 2);
+		} finally {
+			view.unmount();
+		}
+		expect(stockChanges[collection].observed).toBe(false);
+		expect(databases.observed).toBe(false);
+	}
+);
+
+it.each([true, false])(
+	'settles offline authorization=%s after a tax reduction',
+	async (recorded_offline) => {
+		const rates = [{ id: 1, rate: '20', class: 'standard', shipping: true, priority: 1 }];
+		currentConfig = createCartConfig({ ...config, calcTaxes: true, rates, allRates: rates });
+		const a = record({
+			status: 'pos-partial',
+			total: '12',
+			line_items: [],
+			shipping_lines: [{ method_id: 'flat_rate', total: '10' }],
+			meta_data: orderMath.withLedger(
+				[],
+				[{ ...row, status: 'authorized', recorded_offline, amount: '11' }]
+			),
+		});
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			expect(commitAtBoundary).not.toHaveBeenCalled();
+			const reduced = [{ ...rates[0], rate: '10' }];
+			currentConfig = createCartConfig({
+				...config,
+				calcTaxes: true,
+				rates: reduced,
+				allRates: reduced,
+			});
+			mockInputs = { ...mockInputs, rates: reduced };
+			view.rerender(<SettlementCoordinatorProvider />);
+			await flush();
+			expect(a.payload.status).toBe(recorded_offline ? 'completed' : 'pos-partial');
+			expect(a.payload.total).toBe(recorded_offline ? '11' : '12');
+			expect(commitAtBoundary).toHaveBeenCalledTimes(recorded_offline ? 1 : 0);
+		} finally {
+			view.unmount();
+		}
+	}
+);
+
+it('maps an unknown binding to none in both cart and coordinator boundary commits', async () => {
+	const binding = useRegisterBinding();
+	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
+	try {
+		await flush();
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			hook.result.current(
+				a as CurrentOrderRecord,
+				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+				queue
+			)
+		);
+		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls)
+			expect(ctx.bindingStatus).toBe('none');
+	} finally {
+		view.unmount();
+		hook.unmount();
+		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
+});
+
+it('passes the coupon reference validity check through to the boundary writer', async () => {
+	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+	context.coupons = new Map([
+		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+	]);
+	references.next({ ready: true, generation: 'before' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ product_id: 1, quantity: 1, total: '10', subtotal: '10' }],
+		coupon_lines: [{ code: 'summer' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '9' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		const { allowed } = jest.mocked(commitAtBoundary).mock.calls[0][1];
+		expect(allowed).toEqual(expect.any(Function));
+		expect(allowed!(a.payload)).toBe(true);
+		act(() => references.next({ ready: false, generation: 'after' }));
+		expect(allowed!(a.payload)).toBe(false);
+	} finally {
+		view.unmount();
+	}
+});
+
+it('keeps both in-flight boundary binding readers current across a render', async () => {
+	const binding = useRegisterBinding();
+	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: orderMath.withLedger([], [{ ...row, status: 'captured', amount: '4' }]),
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
+	try {
+		await flush();
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			hook.result.current(
+				a as CurrentOrderRecord,
+				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+				queue
+			)
+		);
+		const readers = jest.mocked(commitAtBoundary).mock.calls.map(([ctx]) => ctx.readBindingStatus);
+		expect(readers).toHaveLength(2);
+		for (const read of readers) expect(read?.()).toBe('none');
+		jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'choose' });
+		view.rerender(<SettlementCoordinatorProvider />);
+		hook.rerender();
+		for (const read of readers) expect(read?.()).toBe('choose');
+	} finally {
+		view.unmount();
+		hook.unmount();
+		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
 });

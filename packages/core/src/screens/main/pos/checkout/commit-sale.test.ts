@@ -305,3 +305,23 @@ it('a missing tender guard refuses actions.guard_missing', async () => {
 		expect(write).not.toHaveBeenCalled();
 	});
 });
+
+it('reuses a held slot for a retained-captures completion without taking another tender', async () => {
+	await enqueueOrderMutation(order.uuid, async (queue) => {
+		const result = await commitSale(
+			ctx,
+			{ ...request, methodId: null, amounts: { kind: 'retained-captures' } },
+			write,
+			{ queue }
+		);
+		expect(result).toMatchObject({ queue });
+		expect(write.mock.calls[0][1]).toBe(queue);
+		expect(write.mock.calls[0][0]).toMatchObject({
+			mode: 'zero-balance',
+			completing: true,
+			amountMinor: 0,
+			tenderedMinor: 0,
+			balanceMinor: 0,
+		});
+	});
+}, 1000);

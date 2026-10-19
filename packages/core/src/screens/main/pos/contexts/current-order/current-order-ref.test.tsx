@@ -123,3 +123,17 @@ describe('CurrentOrderProvider getCurrentOrderRecord', () => {
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('record-b');
 	});
 });
+
+it('retains the selected ID after query removal, but tracks an explicit switch', () => {
+	const view = render(
+		<App
+			marker="present"
+			handle={openOrdersHandle([{ id: 'order-a', record: orderRecord('order-a') }])}
+		/>
+	);
+	view.rerender(<App marker="removed" handle={openOrdersHandle([])} />);
+	expect(actions!.getCurrentOrderRecord().uuid).toBe('new-order');
+	expect(actions!.getCurrentOrderID()).toBe('order-a');
+	act(() => actions!.setCurrentOrderID('order-b'));
+	expect(actions!.getCurrentOrderID()).toBe('order-b');
+});

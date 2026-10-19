@@ -286,7 +286,9 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 	}
 }
 export type Presentation =
-	{ host: 'stage'; autoShowReceipt: boolean } | { host: 'modal' } | { host: 'background' };
+	| { host: 'stage'; autoShowReceipt: boolean; canSelectReceipt?: () => boolean }
+	| { host: 'modal' }
+	| { host: 'background' };
 
 /**
  * The sale leaves the till unpaid: the pane shows the sent moment in place of Paid, the
@@ -302,7 +304,10 @@ async function finishSent(
 	presentation: Presentation
 ): Promise<'sent' | 'not-completed'> {
 	if (outcome.order.status === 'pos-open') return 'not-completed';
-	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
+	if (presentation.host === 'stage' && presentation.autoShowReceipt) {
+		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });
+		else enterReceipt(order.uuid);
+	}
 	const latest = order.getLatest().payload;
 	if (latest.id) await refreshOrderRecord(ctx.runtime, latest.id).catch(() => undefined);
 	getLogger(['wcpos', 'pos', 'checkout']).info(`Sale ${order.uuid} sent to the customer`, {
@@ -390,7 +395,10 @@ async function finishSale(
 	}
 	// Enter BEFORE refresh: the paid order has left pos-open and otherwise the cashier sees an empty cart.
 	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
-	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
+	if (presentation.host === 'stage' && presentation.autoShowReceipt) {
+		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });
+		else enterReceipt(order.uuid);
+	}
 	await reportProvenanceGap({
 		...ctx,
 		order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },

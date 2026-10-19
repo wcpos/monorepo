@@ -129,7 +129,7 @@ export const useSplitLineItem = () => {
 							];
 							// Reported here, after the chain, so a refused split logs nothing.
 							reportEngineWarnings(warnings, { orderId: order.uuid, site: 'splitLineItem' });
-							return localPatch({ document: order, data: { line_items } });
+							return localPatch({ document: order, queue, data: { line_items } });
 						},
 					});
 				},

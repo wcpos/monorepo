@@ -327,3 +327,7 @@ describe('useRemoveLineItem', () => {
 afterEach(() => expectSettledWrites(mockLocalPatch));
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

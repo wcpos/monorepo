@@ -4,29 +4,31 @@ import { useObservableEagerState } from 'observable-hooks';
 import { BehaviorSubject, skip } from 'rxjs';
 
 import {
-	derive,
 	type EngineWarning,
-	getNetPaymentTotal,
-	readLedger,
 	settleAggregate,
 	settleCart,
 	settlementPatch,
 	snapshotFromOrderJSON,
-	toMinor,
 } from '@wcpos/order-math';
 import {
+	observeCatalogChanges,
 	observeCoverage,
 	readStorePaymentsContract,
 	useDocField,
 	useQueryRuntime,
 } from '@wcpos/query';
+import { observeOpenSessionPresence } from '@wcpos/query/register-session';
 import { getLogger } from '@wcpos/utils/logger';
+import type { EngineRecord } from '@wcpos/query';
 import { useCoverageGeneration } from '@wcpos/query/query-state';
 
 import { couponReferences } from './coupon-continuation';
 import { readCouponContext } from '../hooks/use-coupon-context';
 import { plainPatch } from './plain-patch';
-import { settleCartWrite } from './settle-cart-write';
+import { commitAtBoundary } from './boundary-commit';
+import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
+import { useSaleContext } from '../checkout/hooks/use-sale-context';
+import { completeSale } from '../checkout/sale-completion';
 import {
 	createSettlementCoordinator,
 	type RatesReady,
@@ -57,7 +59,12 @@ export function SettlementCoordinatorProvider() {
 	const { wpCredentials, store, extraData } = useStoreSession();
 	const cashier = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeId = useDocField(store, (value) => value.id) as number | undefined;
-	const { registerId } = useRegisterBinding();
+	const { registerId, status: bindingStatus } = useRegisterBinding();
+	const bindingRef = React.useRef({ status: bindingStatus, registerId });
+	React.useLayoutEffect(() => {
+		bindingRef.current = { status: bindingStatus, registerId };
+	}, [bindingStatus, registerId]);
+	const saleContext = useSaleContext();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
 	const read = useCartConfigReader();
@@ -83,6 +90,9 @@ export function SettlementCoordinatorProvider() {
 		const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(null);
 		const coordinator = createSettlementCoordinator({
 			inputs$,
+			completionChanges$: registerId
+				? observeOpenSessionPresence(saleContext.storeDB, { registerId })
+				: undefined,
 			openOrders$,
 			ratesReady$,
 			references$: couponReferences(manager.engine),
@@ -97,53 +107,64 @@ export function SettlementCoordinatorProvider() {
 			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			now: Date.now,
 			observe,
-			settle: async (uuid, document, allowed, coupons) => {
+			settle: async (uuid, document, allowed, coupons, queue) => {
 				let warnings: readonly EngineWarning[] = [];
-				let boundary = false;
+				let boundary: BoundaryResult | undefined;
 				let failure: Extract<ReturnType<typeof settleCart>, { ok: false }>['error'] | undefined;
-				await settleCartWrite(
-					{ document, data: {} },
-					{
-						configForOrder: read,
-						serverOwnsMoney,
-						storeContract: () => readStorePaymentsContract(extraData),
-						localPatch: ({ document: latest, changes }) =>
-							plainPatch(manager, 'orders', {
-								document: latest,
-								changes: (payload) => {
-									if (!allowed(payload as OrderPayload)) return {};
-									const config = read(payload as OrderPayload);
-									const snapshot = snapshotFromOrderJSON(payload);
-									const result = coupons
-										? settleCart(snapshot, config, { coupons })
-										: settleAggregate(snapshot, config);
-									warnings = result.warnings;
-									if ('error' in result) {
-										failure = result.error;
-										return {};
-									}
-									const rows = readLedger((payload as OrderPayload).meta_data);
-									const paid = derive(payload.total as string, rows, [], { dp: config.dp }).paid;
-									const netPaid = getNetPaymentTotal(
-										paid,
-										rows
-											.filter((row) => ['authorized', 'captured'].includes(row.status))
-											.map((row) => ({ amount: row.refunded_amount }))
-									);
-									boundary =
-										payload.status === 'pos-partial' &&
-										result.changed &&
-										toMinor(settlementPatch(result).total, config.dp) <=
-											toMinor(netPaid, config.dp);
-									return boundary || !result.changed
-										? {}
-										: coupons
-											? settlementPatch(result)
-											: changes(payload);
-								},
-							}),
+				const write = (changes: Parameters<typeof plainPatch>[2]['changes']) =>
+					plainPatch(manager, 'orders', { document, changes });
+				await write((payload) => {
+					boundary = undefined;
+					if (!allowed(payload as OrderPayload)) return {};
+					const config = read(payload as OrderPayload);
+					const snapshot = snapshotFromOrderJSON(payload);
+					const result = coupons
+						? settleCart(snapshot, config, { coupons })
+						: settleAggregate(snapshot, config);
+					warnings = result.warnings;
+					if ('error' in result) {
+						failure = result.error;
+						return {};
 					}
-				);
+					if (
+						crossesPaidBalanceBoundary({ payload: payload as OrderPayload, result, dp: config.dp })
+					) {
+						boundary = result;
+						return {};
+					}
+					return result.changed ? settlementPatch(result) : {};
+				});
+				let outcome;
+				if (boundary)
+					outcome = await commitAtBoundary(
+						{
+							...saleContext,
+							source: 'system',
+							configForOrder: read,
+							serverOwnsMoney,
+							storeContract: () => readStorePaymentsContract(extraData),
+							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+							readBindingStatus: () =>
+								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
+							readRegisterId: () => bindingRef.current.registerId,
+							complete: (order, slot) =>
+								completeSale(
+									saleContext,
+									order,
+									{ source: 'zero-balance' },
+									{ host: 'background' },
+									slot
+								),
+						},
+						{
+							order: document as EngineRecord<'orders'>,
+							result: boundary,
+							queue,
+							write,
+							coupons,
+							allowed,
+						}
+					);
 				report(warnings, { orderId: uuid, site: 'settlement-coordinator' });
 				if (failure)
 					logger.warn('Cart settlement failed', {
@@ -157,7 +178,7 @@ export function SettlementCoordinatorProvider() {
 						},
 						context: failure,
 					});
-				if (boundary) observe({ type: 'settlement.boundary-deferred', uuid, at: Date.now() });
+				return outcome;
 			},
 		});
 		// Both live database rebind causes are announced before db$ (engine scope/reset contract).
@@ -179,12 +200,16 @@ export function SettlementCoordinatorProvider() {
 			?.get$('paymentMethods')
 			.pipe(skip(1))
 			.subscribe(() => inputs$.next(inputs$.value));
+		const stock = observeCatalogChanges(manager.engine).subscribe(() =>
+			inputs$.next(inputs$.value)
+		);
 		const offCheckout = subscribeCheckoutMode(() => openOrders$.next(openOrders$.value));
 		return () => {
 			coordinator.stop();
 			offEvents();
 			offCheckout();
 			contract?.unsubscribe();
+			stock.unsubscribe();
 			rates.unsubscribe();
 			orders.unsubscribe();
 		};
@@ -198,6 +223,9 @@ export function SettlementCoordinatorProvider() {
 		inputs$,
 		ratesReady$,
 		coverage$,
+		saleContext,
+		bindingStatus,
+		registerId,
 		extraData,
 	]);
 	return null;

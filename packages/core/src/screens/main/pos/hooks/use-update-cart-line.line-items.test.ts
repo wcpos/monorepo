@@ -587,3 +587,7 @@ describe('useUpdateCartLine — line_items', () => {
 		);
 	});
 });
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

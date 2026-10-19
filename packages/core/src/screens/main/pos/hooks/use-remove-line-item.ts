@@ -69,7 +69,7 @@ export const useRemoveLineItem = () => {
 						// Replace the line if a later write brought it back, else append the restore.
 						if (itemIndex >= 0) updatedLines[itemIndex] = line;
 						else updatedLines.push(line);
-						return localPatch({ document: order, data: { [type]: updatedLines } });
+						return localPatch({ document: order, queue, data: { [type]: updatedLines } });
 					},
 				});
 			};
@@ -126,7 +126,7 @@ export const useRemoveLineItem = () => {
 								}
 							})
 							.filter((item) => item !== null);
-						return localPatch({ document: order, data: { [type]: updatedLines } });
+						return localPatch({ document: order, queue, data: { [type]: updatedLines } });
 					},
 				});
 			};

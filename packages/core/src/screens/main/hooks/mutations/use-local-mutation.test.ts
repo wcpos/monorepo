@@ -75,6 +75,7 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	readResidentMoneyEpoch: () => 0,
 	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	// The write-direction projections are the code under test here (parity with the
@@ -390,6 +391,7 @@ describe('cart changes at the resident modifier', () => {
 			const stored = {
 				uuid: 'order-uuid',
 				payload: {
+					status: 'pos-open',
 					line_items: [{ subtotal: '10', total: '10' }],
 					total: '99',
 					meta_data: [],
@@ -429,6 +431,9 @@ describe('cart changes at the resident modifier', () => {
 								}),
 							} as never)
 						: result.current.cart.localPatch({
+								queue: {
+									dispatchToken: {},
+								} as import('../../pos/hooks/order-mutation-queue').OrderMutationContext,
 								document: document as never,
 								data: { billing: { country: 'NZ' } },
 							});
@@ -601,6 +606,10 @@ it('keeps the provider latch immediate without invoking the mutation path', asyn
 	});
 	expect(mockFindOneExec).not.toHaveBeenCalled();
 });
+
+jest.mock('../../pos/commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));
 
 it.each(['ordinary', 'superseded', 'scope'] as const)(
 	'preserves the %s adapter failure policy',

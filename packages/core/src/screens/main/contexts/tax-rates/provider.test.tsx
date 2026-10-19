@@ -641,6 +641,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 it('settles a queued command with new rates after its caller unmounts', async () => {
 	const order = makeOrder();
+	order.patchPayload({ status: 'pos-open' });
 	const rate = { ...allRates[0], rate: '10', shipping: true };
 	activeResult = { hits: [{ record: { payload: rate } }] };
 	let write!: ReturnType<typeof useCartWrite>['localPatch'];
@@ -662,8 +663,12 @@ it('settles a queued command with new rates after its caller unmounts', async ()
 		release = resolve;
 	});
 	void enqueueOrderMutation(order.uuid, () => blocker);
-	const queued = enqueueOrderMutation(order.uuid, async () =>
-		write({ document: order, data: { shipping_lines: [{ total: '10', method_id: 'flat_rate' }] } })
+	const queued = enqueueOrderMutation(order.uuid, async (queue) =>
+		write({
+			document: order,
+			queue,
+			data: { shipping_lines: [{ total: '10', method_id: 'flat_rate' }] },
+		})
 	);
 	rerender(tree(false));
 	act(() =>
@@ -675,3 +680,7 @@ it('settles a queued command with new rates after its caller unmounts', async ()
 	});
 	expect(order.payload).toMatchObject({ total: '12', total_tax: '2', shipping_tax: '2' });
 });
+
+jest.mock('../../pos/commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

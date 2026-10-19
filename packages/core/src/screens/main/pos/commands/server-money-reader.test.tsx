@@ -16,6 +16,7 @@ jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({}) }))
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: jest.fn() }),
 }));
+jest.mock('./use-boundary-commit', () => ({ useBoundaryCommit: () => jest.fn() }));
 jest.mock('../hooks/use-cart-config', () => ({
 	useCartConfigReader: () => () => config,
 }));
@@ -75,6 +76,7 @@ it.each([0, '1'])(
 const hintedOrder = {
 	uuid: 'hinted',
 	payload: {
+		status: 'pos-open',
 		line_items: [{ product_id: 1, subtotal: '10', total: '10' }],
 		total: '99',
 		meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }],

@@ -67,7 +67,7 @@ function start(
 	const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(records);
 	const ratesReady$ = new BehaviorSubject({ ready, generation: 0 });
 	const settle = jest.fn<
-		Promise<void>,
+		Promise<unknown>,
 		[string, CurrentOrderRecord, (payload: OrderPayload) => boolean]
 	>(async () => {});
 	const serverOwnsMoney = jest.fn<boolean, [string]>(ownership);
@@ -359,7 +359,13 @@ it('#952 settles a quick-discount-only cart on bind without declaring reference 
 	await flush();
 	expect(h.references$.observed).toBe(false);
 	expect(h.readCoupons).toHaveBeenCalledWith(a.payload);
-	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+	expect(h.settle).toHaveBeenCalledWith(
+		'a',
+		a,
+		expect.any(Function),
+		emptyContext,
+		expect.objectContaining({ dispatchToken: expect.any(Object) })
+	);
 });
 
 it.each([undefined, [], [{ code: null }]])(
@@ -479,7 +485,13 @@ it('#952 a quick discount mixed with a catalog coupon still waits for reference 
 	expect(h.references$.observed).toBe(true);
 	expect(h.settle).not.toHaveBeenCalled();
 	await emit(h.references$, { ready: true, generation: '0:0' });
-	expect(h.settle).toHaveBeenCalledWith('a', a, expect.any(Function), emptyContext);
+	expect(h.settle).toHaveBeenCalledWith(
+		'a',
+		a,
+		expect.any(Function),
+		emptyContext,
+		expect.objectContaining({ dispatchToken: expect.any(Object) })
+	);
 });
 
 it('#952/#963 server ownership stops coupon reads and subsequent settlement passes', async () => {
@@ -520,3 +532,85 @@ it.each([false, true])('ignores the pre-1.3 hint after reopen (coupons=%s)', asy
 	await emit(h.references$, { ready: true, generation: '1' });
 	expect(h.settle).toHaveBeenCalledTimes(1);
 });
+
+it.each([false, true])(
+	're-drains a stock refusal after an in-flight catalog event (still short=%s)',
+	async (stillShort) => {
+		const h = start([couponOrder()], false);
+		let release!: () => void;
+		const refusal = { deny: { reasonKey: 'pos_products.out_of_stock' } };
+		h.settle.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return refusal;
+		});
+		h.settle.mockImplementation(async () => {
+			if (stillShort) return refusal;
+		});
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		expect(h.settle).toHaveBeenCalledTimes(1);
+		// A stock write emits the same inputs while replay is awaiting its guards.
+		await emit(h.inputs$, h.inputs$.value);
+		expect(h.settle).toHaveBeenCalledTimes(1);
+		release();
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+	}
+);
+
+it.each([false, true])(
+	're-drains a final stock supersession only for new inputs (%s)',
+	async (emitted) => {
+		const h = start([couponOrder()], false);
+		let release!: () => void;
+		const superseded = { superseded: true, reason: 'pos_products.out_of_stock' };
+		h.settle.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return superseded;
+		});
+		h.settle.mockResolvedValue(superseded);
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		if (emitted) await emit(h.inputs$, h.inputs$.value);
+		release();
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 2 : 1);
+		await emit(h.inputs$, h.inputs$.value);
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 3 : 2);
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 3 : 2);
+	}
+);
+
+it('re-drains catalog-generation supersession after an in-flight emission', async () => {
+	const h = start([couponOrder()], false);
+	h.settle.mockImplementationOnce(async () => {
+		await emit(h.inputs$, h.inputs$.value);
+		return { superseded: true, reason: 'catalog_changed' };
+	});
+	await emit(h.references$, { ready: true, generation: '0' });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	await flush();
+	expect(h.settle).toHaveBeenCalledTimes(2);
+});
+
+it.each(['register_changed', 'session_changed'])(
+	're-drains %s after an in-flight emission',
+	async (reason) => {
+		const h = start([couponOrder()], false);
+		h.settle.mockImplementationOnce(async () => {
+			await emit(h.inputs$, h.inputs$.value);
+			return { superseded: true, reason };
+		});
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+	}
+);

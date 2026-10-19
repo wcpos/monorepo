@@ -240,7 +240,7 @@ it('settles the target post-edit address, not the rendered order, without repric
 			taxIds: null,
 		});
 	});
-	const after = { ...target.payload, billing: { country: 'NZ' }, shipping: undefined };
+	const after = { status: 'pos-open', ...target.payload, billing: { country: 'NZ' } };
 	expect(configForOrder).toHaveBeenCalledWith(after);
 	expect(localPatch).toHaveBeenCalledTimes(1);
 	const { data } = localPatch.mock.calls[0][0];
@@ -255,3 +255,7 @@ it('settles the target post-edit address, not the rendered order, without repric
 	);
 	expect(data).not.toHaveProperty('line_items');
 });
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

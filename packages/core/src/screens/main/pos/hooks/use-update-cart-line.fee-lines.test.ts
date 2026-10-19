@@ -293,3 +293,7 @@ describe('useUpdateCartLine — fee_lines', () => {
 		);
 	});
 });
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

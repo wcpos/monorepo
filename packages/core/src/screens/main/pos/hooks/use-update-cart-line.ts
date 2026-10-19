@@ -14,6 +14,7 @@ import {
 	type ActionContext,
 	type ActionRefusal,
 	dispatchAction,
+	isActionRefusal,
 } from '../../../../extensions/actions';
 import { useCartWrite } from '../commands/use-cart-write';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
@@ -98,7 +99,8 @@ export const useUpdateCartLine = () => {
 			record: CurrentOrderRecord,
 			type: EditableLineType,
 			uuid: string,
-			changes: Record<string, unknown>
+			changes: Record<string, unknown>,
+			queue: OrderMutationContext
 		) => {
 			const order = record.getLatest();
 			const json = order.toMutableJSON().payload;
@@ -140,8 +142,8 @@ export const useUpdateCartLine = () => {
 			});
 			reportEngineWarnings(warnings, { orderId: order.uuid, site: lineInfo[type].site });
 			if (!updated || !updatedLines) return;
-			const result = await localPatch({ document: order, data: { [type]: updatedLines } });
-			if (result && type === 'line_items' && previous) {
+			const result = await localPatch({ document: order, queue, data: { [type]: updatedLines } });
+			if (result && !isActionRefusal(result) && type === 'line_items' && previous) {
 				const line = previous as LineItem;
 				lineInfo[type].logger.info('Cart line item updated', {
 					context: {
@@ -207,7 +209,7 @@ export const useUpdateCartLine = () => {
 								: { skipStockGuard: options.skipStockGuard },
 					},
 				},
-				bottom: (e) => write(target, type, uuid, { ...e.payload.changes }),
+				bottom: (e) => write(target, type, uuid, { ...e.payload.changes }, queue),
 			});
 			return result as Awaited<ReturnType<typeof localPatch>> | undefined | ActionRefusal;
 		},

@@ -317,3 +317,58 @@ it('passes cart lines for inherited shipping tax with an inclusive amount', asyn
 });
 
 afterEach(() => expectSettledWrites(mockPatch));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));
+
+it('refuses an increase queued behind completion and returns refusal to the hook caller', async () => {
+	mockOrder.payload.status = 'pos-partial';
+	mockOrder.payload.total = '20';
+	mockOrder.payload.line_items = [product(2)];
+	mockOrder.payload.fee_lines = [];
+	mockOrder.payload.shipping_lines = [];
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [{ id: 'leg', status: 'captured', amount: '10', refunded_amount: '0' }],
+			},
+		},
+	];
+	jest
+		.spyOn(jest.requireMock('../commands/use-boundary-commit'), 'useBoundaryCommit')
+		.mockReturnValueOnce(async () => {
+			Object.assign(mockOrder.payload, { status: 'completed', total: '10' });
+		});
+	const { result } = renderHook(() => useWriter());
+	await act(async () => {
+		const reduction = result.current.updateCartLine('line_items', 'line', { quantity: 1 });
+		const increase = result.current.updateCartLine('line_items', 'line', { quantity: 3 });
+		await reduction;
+		expect(await increase).toBe(false);
+	});
+	expect(mockOrder.payload).toMatchObject({
+		status: 'completed',
+		total: '10',
+		line_items: [{ quantity: 1 }],
+	});
+	expect(mockPatch).toHaveBeenCalledTimes(1);
+	mockPatch.mockClear(); // Boundary writes intentionally carry intent only.
+});
+
+it('presents a closed-order write refusal without recording the requested line update', async () => {
+	mockOrder.payload.status = 'completed';
+	const { result } = renderHook(() => useWriter());
+	await act(async () => {
+		expect(await result.current.updateCartLine('line_items', 'line', { quantity: 3 })).toBe(false);
+	});
+	expect(mockWarn).toHaveBeenCalledWith(
+		'warn',
+		'pos_checkout.order_changed_retry',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(mockPatch).not.toHaveBeenCalled();
+});

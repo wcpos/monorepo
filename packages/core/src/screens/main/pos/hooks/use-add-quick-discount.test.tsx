@@ -54,6 +54,7 @@ const getCouponContext = jest.fn();
 const whenSettled = jest.fn(async () => true);
 const demandDeclared = jest.fn();
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useRecordField: (record: { payload: unknown }, select: (r: { payload: unknown }) => unknown) =>
 		select(record),
 }));
@@ -85,6 +86,17 @@ beforeEach(() => {
 		couponLines: coupons,
 	}));
 });
+it('returns the closed-order refusal instead of quick-discount success', async () => {
+	currentOrderRecord.getLatest.mockImplementation(() => ({
+		payload: { ...currentOrderRecord.payload, status: 'completed' },
+	}));
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: 'pos_checkout.order_changed_retry' });
+	expect(localPatch).not.toHaveBeenCalled();
+});
+
 it.each(['percent', 'fixed_cart'] as const)(
 	'persists %s intent and UUID with both recalculated arrays',
 	async (discount_type) => {
@@ -265,3 +277,7 @@ it('a refusal the hook already presented is not echoed into the field', async ()
 afterEach(() => expectSettledWrites(localPatch));
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));
