@@ -24,9 +24,12 @@ test load stays off the box that runs the business. The plan is
 The memory caps fit inside the VM, and the CPU caps oversubscribe it on
 purpose; `compose.yaml` has the arithmetic.
 
-No script creates the `:8443` serve entry. After `uninstall.sh` (which removes
-it) or on a new machine, recreate it with exactly this, and never with
-`tailscale funnel`, which would publish the store to the internet:
+`reset.sh` checks the `:8443` serve entry every night and re-asserts it with
+`sudo -n` when another `tailscale serve --https=8443` has replaced it
+(2026-10-17: the house planner did, and every E2E shard got a 404). After
+`uninstall.sh` (which removes it) or on a new machine, create it once with
+exactly this command, never with `tailscale funnel`, which would publish the
+store to the internet:
 
     tailscale serve --bg --https=8443 http://127.0.0.1:18443
 

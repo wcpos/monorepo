@@ -36,3 +36,18 @@ if [ -d "$E2E_STORE_HOME/plugins/woocommerce-pos-pro" ]; then
 fi
 wp cache flush >/dev/null
 log "reset: done"
+
+# Re-assert the tailnet mapping: on 2026-10-17 another `tailscale serve
+# --https=8443` (the house planner) silently replaced it and every E2E shard
+# got a 404 on /wp-json. Idempotent; never fails the reset.
+serve_target="http://127.0.0.1:$E2E_STORE_LOCAL_PORT"
+serve_key="${E2E_STORE_URL#https://}"
+serve_now="$(tailscale serve status --json 2>/dev/null |
+	jq -r --arg k "$serve_key" '.Web[$k].Handlers["/"].Proxy // "none"' 2>/dev/null || echo unknown)"
+if [ "$serve_now" = "$serve_target" ]; then
+	log "reset: serve ok, $serve_key -> $serve_target"
+elif sudo -n tailscale serve --bg --https=8443 "$serve_target" >/dev/null 2>&1; then
+	log "reset: serve RESTORED, $serve_key was $serve_now, now $serve_target"
+else
+	log "reset: serve WRONG, $serve_key is $serve_now (want $serve_target), re-assert failed"
+fi
