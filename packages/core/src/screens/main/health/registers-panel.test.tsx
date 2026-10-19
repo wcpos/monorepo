@@ -388,8 +388,12 @@ it('counts a repeated number exactly from the server total, and as a lower bound
 	open('duplicates');
 	const rows = screen.getAllByTestId('health-register-duplicate');
 	expect(rows[0].textContent).toContain('Till aaaaaaaa… — 25 sales numbered #1');
+	// 25 sales but 20 ids: the list is a sample and says so.
+	expect(rows[0].textContent).toContain('e.g. orders 100, 101');
 	expect(rows[1].textContent).toContain('Till bbbbbbbb… — at least 20 sales numbered #2');
+	expect(rows[1].textContent).toContain('e.g. orders');
 	expect(rows[2].textContent).toContain('No till recorded — at least 2 sales numbered #3');
+	expect(rows[2].textContent).toContain('e.g. orders');
 });
 
 it('says No till recorded when the server fell back to the register id as the till', () => {
@@ -612,7 +616,7 @@ it('notes a truncated report under the header, scoping every count below it', ()
 	state.data = { ...state.data!, truncated: true };
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-registers-truncated').textContent).toBe(
-		'Only the newest sales were checked; older sales in the window were skipped. Every count below is for the sales that were checked.'
+		'Only the newest sales were checked; older sales in the window were skipped. Every sale count below is for the sales that were checked; closures are always checked in full.'
 	);
 	// The register's own summary says it counts the sales checked, not the whole window.
 	expect(register().textContent).toContain('5 sales checked · counters 41–45');

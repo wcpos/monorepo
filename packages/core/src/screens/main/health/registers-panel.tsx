@@ -261,7 +261,13 @@ function CheckView({
 								<Text className="text-sm">{t(key, values)}</Text>
 								{orders !== '' ? (
 									<Text className="text-muted-foreground text-xs">
-										{t('health.registers.duplicate_orders', { orders })}
+										{t(
+											// The ids are a capped sample whenever the true count is unknown or larger.
+											!exact || duplicateSales(duplicate) > duplicate.order_ids.length
+												? 'health.registers.duplicate_orders_sample'
+												: 'health.registers.duplicate_orders',
+											{ orders }
+										)}
 									</Text>
 								) : null}
 							</VStack>
