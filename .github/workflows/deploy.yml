@@ -55,17 +55,11 @@ on:
 #   `cold-start` coalesce — a newer main run cancels an OLDER run's
 #   verification, so a merge burst verifies only the artifact that is live.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
-# newer SHA. There is deliberately NO cross-run store serialization except
-# lane next's: all lane-next web E2E runs share dev-next, so they queue in the
-# one `deploy-next-store` group and only one runs at a time (#2382 review), and
-# each also waits in the dev-next queue it shares with native E2E (see the
-# comment above e2e).
-# GitHub keeps at most one pending run per group; a third arrival replaces
-# the pending one.
-# skip_e2e dispatches never touch the store; production-target dispatches still run E2E there, so they queue.
+# newer SHA. There is deliberately NO cross-run store serialization except the
+# dev-next queue — see the comment above e2e.
 concurrency:
-  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-next-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true

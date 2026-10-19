@@ -256,6 +256,27 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('every job lists each job whose needs context it reads', () => {
+	// A needs.<job> reference to an unlisted job evaluates to '' without any
+	// error: main-ledger read needs.deploy.result that way, so a cancelled
+	// deploy could never count as superseded.
+	const dir = path.join(ROOT, '.github', 'workflows');
+	const files = readdirSync(dir).filter((file) => /\.ya?ml$/.test(file));
+	assert.ok(files.length > 0);
+	for (const file of files) {
+		for (const [jobName, job] of Object.entries(readWorkflow(file).jobs ?? {})) {
+			const { needs, ...rest } = job;
+			const listed = [needs ?? []].flat();
+			for (const [, referenced] of JSON.stringify(rest).matchAll(/needs\.([\w-]+)\./g)) {
+				assert.ok(
+					listed.includes(referenced),
+					`${file}: ${jobName} reads needs.${referenced} without listing it in needs`
+				);
+			}
+		}
+	}
+});
+
 test('the main verification ledger maintains one issue and ignores superseded runs', () => {
 	const ledger = readWorkflow('deploy.yml').jobs['main-ledger'];
 	assert.match(ledger.if, /github\.event_name == 'push'/);
@@ -277,16 +298,6 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	// The job has no checkout, so gh must be told the repo explicitly.
 	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
 	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
-	// Every needs.<job> the step reads must be a listed need, or it reads as ''.
-	for (const value of Object.values(ledger.steps[0].env)) {
-		for (const [, job] of String(value).matchAll(/needs\.([\w-]+)\./g)) {
-			assert.ok(
-				[ledger.needs].flat().includes(job),
-				`main-ledger reads needs.${job} without needing it`
-			);
-		}
-	}
-
 	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
@@ -1897,7 +1908,7 @@ test('the dev-next queue never uses concurrency groups or serialises web shards'
 	assert.match(deploy.jobs.e2e.concurrency.group, /github\.run_id/);
 	for (const workflow of [deploy, readWorkflow('e2e-native.yml')]) {
 		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
-			if (concurrency) assert.doesNotMatch(concurrency.group, /dev-next|devnext|queue/i);
+			if (concurrency) assert.doesNotMatch(concurrency.group, /dev-next|devnext|next-store|queue/i);
 		}
 	}
 });
@@ -2015,16 +2026,6 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
-	assert.ok(
-		workflow.concurrency.group.startsWith(
-			"${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-next-store' || "
-		)
-	);
-	assert.ok(
-		workflow.concurrency['cancel-in-progress'].startsWith(
-			"${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && "
-		)
-	);
 
 	// GitHub evaluates workflow concurrency and REST pagination; locally this
 	// test pins the declarative contract while hosted Actions exercises it.
