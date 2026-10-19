@@ -39,6 +39,7 @@ import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import {
 	enterReceiptBeforeCompletion,
 	getOrderSaveState,
+	type PendingReceipt,
 	subscribeCheckoutMode,
 } from '../../checkout-mode';
 
@@ -128,11 +129,12 @@ export function useTerminalPaymentsService(): void {
 						total: String(payload.total ?? '0'),
 						payment_method: summary.payment_method ?? '',
 					};
-					// Before the status write, as the mirror below: it takes the order off the till. A
-					// failed write leaves the leg to retry from checkout, so the receipt is undone.
-					const undoReceipt = settlesSale(payment, result, dp())
+					// Entered before the status write, as the mirror below: it takes the order off the
+					// till. Selected once the write lands; a failed write leaves the leg to retry from
+					// checkout, so the entry is undone.
+					const receipt = settlesSale(payment, result, dp())
 						? enterReceiptBeforeCompletion(orderUuid)
-						: undefined;
+						: null;
 					let written: unknown;
 					try {
 						written = await latest.current.recordLedger(resident, {
@@ -142,17 +144,19 @@ export function useTerminalPaymentsService(): void {
 							status: summary.status,
 						});
 					} catch (error) {
-						undoReceipt?.();
+						receipt?.undo();
 						throw error;
 					}
 					if (!written) {
-						undoReceipt?.();
+						receipt?.undo();
 						throw new Error('Offline payment could not be saved');
 					}
+					receipt?.settle();
 					return result;
 				}),
 			mirror: async (orderUuid, { payment, order }) => {
 				let mirrored = false;
+				let receipt: PendingReceipt | null = null;
 				try {
 					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
@@ -161,8 +165,9 @@ export function useTerminalPaymentsService(): void {
 						resident.payload) as EngineRecord<'orders'>['payload'];
 					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
-					// Before the status write: a completing status takes the order off the till.
-					if (settlesSale(payment, order, dp())) enterReceiptBeforeCompletion(orderUuid);
+					// Entered before the status write (a completing status takes the order off the
+					// till), selected once it lands, undone if it fails.
+					if (settlesSale(payment, order, dp())) receipt = enterReceiptBeforeCompletion(orderUuid);
 					await mirrorServerOrder(manager, orderUuid, {
 						// Only the summary fields that are order fields: `paid` and `balance` are
 						// derived from the ledger on read, and an unknown key fails the schema.
@@ -177,6 +182,7 @@ export function useTerminalPaymentsService(): void {
 						meta_data,
 					});
 					mirrored = true;
+					receipt?.settle();
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
 						const patched = await latest.current.stampCompletion(
 							resident,
@@ -186,7 +192,10 @@ export function useTerminalPaymentsService(): void {
 					}
 				} catch (error) {
 					// The leg preserves a known capture even when its local mirror fails.
-					if (!mirrored) throw error;
+					if (!mirrored) {
+						receipt?.undo();
+						throw error;
+					}
 					logger.error('Checkout failed', {
 						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 						showToast: true,

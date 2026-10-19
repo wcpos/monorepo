@@ -518,7 +518,11 @@ describe('a server capture of the order in checkout', () => {
 		payment_method: 'device',
 		payment_method_title: 'Reader',
 	});
-	async function mirrorCapture(status: string, paymentStatus: 'captured' | 'failed' = 'captured') {
+	async function mirrorCapture(
+		status: string,
+		paymentStatus: 'captured' | 'failed' = 'captured',
+		duringWrite?: () => void
+	) {
 		const start = jest.spyOn(
 			await import('../../../../../../services/terminal-payments'),
 			'startTerminalPaymentsService'
@@ -530,6 +534,7 @@ describe('a server capture of the order in checkout', () => {
 		let atWrite: CheckoutModeSnapshot | null = null;
 		mockMirror.mockImplementationOnce(async () => {
 			atWrite = getCheckoutModeSnapshot();
+			duringWrite?.();
 		});
 		try {
 			await start.mock.calls[0][0].mirror('completed-order', {
@@ -542,7 +547,7 @@ describe('a server capture of the order in checkout', () => {
 			mockResident.payload.meta_data = original;
 		}
 		expect(mockMirror).toHaveBeenCalledTimes(1);
-		return atWrite! as CheckoutModeSnapshot;
+		return { atWrite: atWrite! as CheckoutModeSnapshot, after: getCheckoutModeSnapshot() };
 	}
 	let unwatch: (() => void) | undefined;
 	// Earlier background completions in this file leave their receipts in the module store.
@@ -553,27 +558,75 @@ describe('a server capture of the order in checkout', () => {
 		resetCheckoutMode();
 	});
 
+	// Entered before the write, never selected before it lands: a selected receipt mounts its
+	// stage, which renders (and can auto-print) the order before the payment row is in it.
 	it.each([
 		[true, 'completed-order'],
 		[false, null],
 	])(
-		'enters its receipt before the status write (autoShowReceipt %s, selected %s)',
+		'enters its receipt before the status write and selects it after (autoShowReceipt %s, selected %s)',
 		async (autoShowReceipt, selected) => {
 			enterCheckout('completed-order');
 			unwatch = watchTender('completed-order', autoShowReceipt);
-			const atWrite = await mirrorCapture('completed');
+			const { atWrite, after } = await mirrorCapture('completed');
 			expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
 			expect(atWrite.checkoutOrders.has('completed-order')).toBe(false);
-			expect(atWrite.selectedReceiptOrder).toBe(selected);
+			expect(atWrite.selectedReceiptOrder).toBeNull();
+			expect(after.receiptOrders.has('completed-order')).toBe(true);
+			expect(after.selectedReceiptOrder).toBe(selected);
 		}
 	);
+
+	// The write unmounts the column, whose cleanup clears the watch: the decision to select
+	// was taken when the receipt was entered.
+	it('selects after the write even though the column unmounted during it', async () => {
+		enterCheckout('completed-order');
+		unwatch = watchTender('completed-order', true);
+		const { after } = await mirrorCapture('completed', 'captured', () => unwatch?.());
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+	});
+
+	it('undoes the entry when the mirror write rejects', async () => {
+		enterCheckout('completed-order');
+		unwatch = watchTender('completed-order', true);
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const original = mockResident.payload.meta_data;
+		mockResident.payload.meta_data = [];
+		const hook = renderHook(() => useTerminalPaymentsService());
+		let atWrite: CheckoutModeSnapshot | null = null;
+		mockMirror.mockImplementationOnce(async () => {
+			atWrite = getCheckoutModeSnapshot();
+			throw new Error('disk full');
+		});
+		try {
+			await expect(
+				start.mock.calls[0][0].mirror('completed-order', {
+					payment: { ...mockRow, status: 'captured' },
+					order: order('completed'),
+				})
+			).rejects.toThrow('disk full');
+			expect((atWrite! as CheckoutModeSnapshot).receiptOrders.has('completed-order')).toBe(true);
+			const after = getCheckoutModeSnapshot();
+			expect(after.receiptOrders.has('completed-order')).toBe(false);
+			expect(after.checkoutOrders.has('completed-order')).toBe(true);
+			expect(after.selectedReceiptOrder).toBeNull();
+		} finally {
+			hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+	});
 
 	// Another tab, or the phone's sheet (which never registers): the background completion
 	// enters the receipt unselected afterwards, as before.
 	it('leaves an order nobody is watching to the background completion', async () => {
 		enterCheckout('completed-order');
 		unwatch = watchTender('other-order', true);
-		const atWrite = await mirrorCapture('completed');
+		const { atWrite, after } = await mirrorCapture('completed');
+		expect(after.selectedReceiptOrder).toBeNull();
 		expect(atWrite.receiptOrders.size).toBe(0);
 		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
 		expect(atWrite.selectedReceiptOrder).toBeNull();
@@ -585,7 +638,8 @@ describe('a server capture of the order in checkout', () => {
 	] as const)('enters no receipt for %s', async (_name, status, paymentStatus) => {
 		enterCheckout('completed-order');
 		unwatch = watchTender('completed-order', true);
-		const atWrite = await mirrorCapture(status, paymentStatus);
+		const { atWrite, after } = await mirrorCapture(status, paymentStatus);
+		expect(after.receiptOrders.size).toBe(0);
 		expect(atWrite.receiptOrders.size).toBe(0);
 		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
 		expect(atWrite.selectedReceiptOrder).toBeNull();
@@ -615,8 +669,10 @@ describe('a server capture of the order in checkout', () => {
 				await expect(
 					start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow)
 				).rejects.toThrow();
-				// The receipt was entered before the write, then undone.
-				expect((atWrite! as CheckoutModeSnapshot).receiptOrders.has('completed-order')).toBe(true);
+				// The receipt was entered (unselected) before the write, then undone.
+				const snapshot = atWrite! as CheckoutModeSnapshot;
+				expect(snapshot.receiptOrders.has('completed-order')).toBe(true);
+				expect(snapshot.selectedReceiptOrder).toBe('earlier-sale');
 				const after = getCheckoutModeSnapshot();
 				expect(after.receiptOrders.has('completed-order')).toBe(false);
 				expect(after.checkoutOrders.has('completed-order')).toBe(true);
@@ -630,7 +686,7 @@ describe('a server capture of the order in checkout', () => {
 		}
 	);
 
-	it('enters the receipt before an offline authorization writes its completing status', async () => {
+	it('enters the receipt before an offline authorization writes its completing status, selects it after', async () => {
 		const start = jest.spyOn(
 			await import('../../../../../../services/terminal-payments'),
 			'startTerminalPaymentsService'
@@ -652,7 +708,8 @@ describe('a server capture of the order in checkout', () => {
 			);
 			const snapshot = atWrite! as CheckoutModeSnapshot;
 			expect(snapshot.receiptOrders.has('completed-order')).toBe(true);
-			expect(snapshot.selectedReceiptOrder).toBe('completed-order');
+			expect(snapshot.selectedReceiptOrder).toBeNull();
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('completed-order');
 		} finally {
 			hook.unmount();
 			start.mockRestore();
@@ -663,17 +720,18 @@ describe('a server capture of the order in checkout', () => {
 	it('enters no receipt for a part payment', async () => {
 		enterCheckout('completed-order');
 		unwatch = watchTender('completed-order', true);
-		const atWrite = await mirrorCapture('pos-partial');
+		const { atWrite, after } = await mirrorCapture('pos-partial');
 		expect(atWrite.receiptOrders.size).toBe(0);
-		expect(atWrite.selectedReceiptOrder).toBeNull();
+		expect(after.receiptOrders.size).toBe(0);
+		expect(after.selectedReceiptOrder).toBeNull();
 	});
 
 	// After a reload, resolveStage restores the column from the live ledger row alone: the
 	// order is on screen and watched without ever joining checkoutOrders.
 	it('enters and selects the receipt of a checkout restored from its ledger', async () => {
 		unwatch = watchTender('completed-order', true);
-		const atWrite = await mirrorCapture('completed');
+		const { atWrite, after } = await mirrorCapture('completed');
 		expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
-		expect(atWrite.selectedReceiptOrder).toBe('completed-order');
+		expect(after.selectedReceiptOrder).toBe('completed-order');
 	});
 });
