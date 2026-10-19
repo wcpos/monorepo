@@ -75,13 +75,18 @@ export async function commitAtBoundary(
 			// Once checkout takes over, this pass cannot resume completion without provenance.
 			let aggregateOnly = false;
 			const revalidate = async () => {
-				const [unmet] = await countConditionsInSlot(
-					slot.order ?? order,
-					ctx.actionCtx,
-					conditionRules(ctx.actionCtx.store.preventOverselling)
-				);
-				validatedGeneration = readCatalogGeneration(ctx.runtime.engine);
-				return (conditionReason = unmet?.reasonKey);
+				// A snapshot is valid only if the catalog stayed still throughout its read.
+				for (let attempt = 0; attempt < 2; attempt++) {
+					validatedGeneration = readCatalogGeneration(ctx.runtime.engine);
+					const [unmet] = await countConditionsInSlot(
+						slot.order ?? order,
+						ctx.actionCtx,
+						conditionRules(ctx.actionCtx.store.preventOverselling)
+					);
+					if (validatedGeneration === readCatalogGeneration(ctx.runtime.engine))
+						return (conditionReason = unmet?.reasonKey);
+				}
+				return (conditionReason = 'catalog_changed');
 			};
 			let refusal: ActionRefusal | undefined;
 			let overpaid: { orderId: string; total: string; netPaid: number } | undefined;

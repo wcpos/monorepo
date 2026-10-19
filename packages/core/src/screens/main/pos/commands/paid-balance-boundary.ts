@@ -30,10 +30,11 @@ export function crossesPaidBalanceBoundary({
 	result: BoundaryResult;
 	dp: number;
 }): boolean {
-	// Contract 1.3 reopen work will also evaluate current-epoch intent changes at an unchanged total.
+	// Checkout may have received the aggregate without completion; covered partials still need it.
+	const netPaid = toMinor(netPaidForBoundary(payload, dp), dp);
 	return (
 		payload.status === 'pos-partial' &&
-		result.changed &&
-		toMinor(settlementPatch(result).total, dp) <= toMinor(netPaidForBoundary(payload, dp), dp)
+		(result.changed || toMinor(payload.total, dp) <= netPaid) &&
+		toMinor(settlementPatch(result).total, dp) <= netPaid
 	);
 }

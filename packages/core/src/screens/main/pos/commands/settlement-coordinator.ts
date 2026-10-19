@@ -57,7 +57,9 @@ function closed(
 		(record as { isNew?: boolean }).isNew ||
 		hasLiveSettlementLeg(payload.meta_data) ||
 		activeAwaitingCustomer(payload.meta_data) ||
-		(netPaid > 0 && toMinor(payload.total, dp) <= toMinor(netPaid, dp)) ||
+		(payload.status !== 'pos-partial' &&
+			netPaid > 0 &&
+			toMinor(payload.total, dp) <= toMinor(netPaid, dp)) ||
 		['rejected', 'conflicted', 'needs-revision'].includes(
 			deps.orderSaveState(record.uuid)?.kind ?? ''
 		) ||
@@ -130,10 +132,15 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				  'reason' in outcome
 				? outcome.reason
 				: undefined;
-		// Do not lose a catalog emission consumed while a coupon replay awaited its guards.
+		// Do not lose catalog or checkout-exit emissions consumed while a pass awaited its guards.
 		if (
 			typeof reason === 'string' &&
-			['pos_cart.only_n_available', 'pos_products.out_of_stock', 'catalog_changed'].includes(reason)
+			[
+				'pos_cart.only_n_available',
+				'pos_products.out_of_stock',
+				'catalog_changed',
+				'in_checkout',
+			].includes(reason)
 		) {
 			seen.delete(args[0]);
 			// Retry only for new inputs; persistent shortages must not spin.

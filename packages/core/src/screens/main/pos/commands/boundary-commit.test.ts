@@ -458,9 +458,12 @@ it('supersedes coupon completion when references change during the guard window'
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 });
 
-it.each(['product', 'variation'] as const)(
-	'supersedes when %s stock runs out during the guards',
-	async (kind) => {
+it.each(['product', 'variation', 'read-once', 'read-twice'] as const)(
+	'supersedes when %s stock runs out during the guards or snapshot read',
+	async (scenario) => {
+		const kind = scenario === 'variation' ? 'variation' : 'product';
+		let guarded = false;
+		let readsAfterGuard = 0;
 		const order = orderFor();
 		order.payload.line_items![0] = {
 			...order.payload.line_items![0],
@@ -475,13 +478,26 @@ it.each(['product', 'variation'] as const)(
 			readPaymentMethod: () => null,
 			preventOverselling: true,
 			priceDecimals: 2,
-			readCatalog: async (type) => ({
-				manage_stock: true,
-				stock_quantity: type === kind && !available ? 0 : 2,
-				stock_status: type === kind && !available ? 'outofstock' : 'instock',
-			}),
+			readCatalog: async (type) => {
+				const snapshot = {
+					manage_stock: true,
+					stock_quantity: type === kind && !available ? 0 : 2,
+					stock_status: type === kind && !available ? 'outofstock' : 'instock',
+				};
+				if (
+					guarded &&
+					++readsAfterGuard >= 2 &&
+					scenario.startsWith('read') &&
+					(available || scenario === 'read-twice')
+				) {
+					available = false;
+					catalog.next({}); // The pending read still returns its pre-change snapshot.
+				}
+				return snapshot;
+			},
 			resolveSession: async () => {
-				available = false;
+				guarded = true;
+				available = scenario.startsWith('read');
 				return { registerId: 'register', sessionId: 'session' };
 			},
 		});
@@ -503,13 +519,14 @@ it.each(['product', 'variation'] as const)(
 				}
 			)
 		);
-		expect(outcome).toEqual({ superseded: true, reason: 'pos_products.out_of_stock' });
+		const reason = scenario === 'read-twice' ? 'catalog_changed' : 'pos_products.out_of_stock';
+		expect(outcome).toEqual({ superseded: true, reason });
 		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 		expect(complete).not.toHaveBeenCalled();
 		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 			'settlement.boundary-superseded',
 			expect.objectContaining({
-				context: expect.objectContaining({ reason: 'pos_products.out_of_stock' }),
+				context: expect.objectContaining({ reason }),
 			})
 		);
 	}
@@ -760,15 +777,22 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 	}
 });
 
-it.each(['catalog', 'checkout', 'coupon-checkout', 'checkout-exit'])(
-	'fences a %s change during resident resolution',
+it.each([
+	'catalog',
+	'checkout',
+	'coupon-checkout',
+	'checkout-exit',
+	'checkout-return',
+	'coupon-checkout-return',
+])(
+	'fences a %s change during resident resolution and completes covered partials after checkout exits',
 	async (change) => {
 		const order = orderFor();
 		const before = order.payload.meta_data;
 		const complete = jest.fn();
 		let checkout = false;
 		const openOrders$ = new BehaviorSubject([order]);
-		if (change === 'coupon-checkout') order.payload.coupon_lines = [{ code: 'sale' }];
+		if (change.startsWith('coupon-checkout')) order.payload.coupon_lines = [{ code: 'sale' }];
 		if (change === 'checkout-exit')
 			resolveSession.mockImplementationOnce(async () => {
 				checkout = true;
@@ -809,7 +833,7 @@ it.each(['catalog', 'checkout', 'coupon-checkout', 'checkout-exit'])(
 							write: async (changes) => {
 								await Promise.resolve(); // applyLocalPatch awaits resolveEngineResident before the modifier.
 								if (change === 'catalog') catalog.next({});
-								else {
+								else if (!outcomes.length) {
 									checkout = change !== 'checkout-exit';
 									openOrders$.next([order]);
 								}
@@ -832,6 +856,16 @@ it.each(['catalog', 'checkout', 'coupon-checkout', 'checkout-exit'])(
 			expect(order.payload.meta_data).toEqual(before);
 			expect(complete).not.toHaveBeenCalled();
 			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+			if (change.endsWith('checkout-return')) {
+				checkout = false;
+				openOrders$.next([order]); // The provider forwards checkout-mode emissions here.
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				expect(order.payload).toMatchObject({ status: 'completed', total: '4' });
+				expect(complete).toHaveBeenCalledTimes(1);
+				openOrders$.next([order]);
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				expect(complete).toHaveBeenCalledTimes(1);
+			}
 		} finally {
 			coordinator.stop();
 		}
