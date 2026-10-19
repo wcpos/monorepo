@@ -1,48 +1,21 @@
 import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { POS_META_KEYS, remoteIdOrNull } from '@wcpos/sync-core';
+import {
+	ORDER_REFRESH_TIMEOUT_MS,
+	refreshOrderRecord as readFreshOrderRecord,
+} from '@wcpos/query/record-readers';
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { stockAdjustment } from '../../../hooks/use-stock-adjustment';
 
-// Bound the post-payment wait so a stalled refresh cannot strand checkout.
-const ORDER_REFRESH_TIMEOUT_MS = 10_000;
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 
-/**
- * Pull the store's copy of one order and wait for it, bounded.
- *
- * Used after a payment the store accepted: whatever the till holds locally is behind,
- * and the store's copy is the one with the money on it.
- */
 export function refreshOrderRecord(
 	runtime: QueryRuntime,
 	orderId: number
 ): Promise<'refreshed' | 'timed-out' | 'failed'> {
-	// Deliberately not `async`: an engine that cannot even take the request throws
-	// from here, synchronously, to whoever asked for the refresh. Only the WAIT for
-	// readiness is the caller's to absorb.
-	const handle = runtime.engine.require({
-		id: `checkout:order-refresh:${orderId}`,
-		collection: 'orders',
-		kind: 'targeted-records',
-		remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-		forceRefresh: true,
-	});
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	return Promise.race([
-		handle.ready.then((result): 'refreshed' | 'failed' =>
-			result.action === 'fetched' && result.appliedRecordIds?.includes(String(orderId))
-				? 'refreshed'
-				: 'failed'
-		),
-		new Promise<'timed-out'>((resolve) => {
-			timer = setTimeout(() => resolve('timed-out'), ORDER_REFRESH_TIMEOUT_MS);
-		}),
-	]).finally(() => {
-		if (timer) clearTimeout(timer);
-		handle.release();
-	});
+	return readFreshOrderRecord(runtime.engine, orderId);
 }
 
 export async function reconcileCompletedOrder(

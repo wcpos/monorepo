@@ -1733,10 +1733,14 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/products/tiles/product-grid.tsx :: storage import ::  :: from 'rxdb' :: 1",
 	"screens/main/pos/products/tiles/variation-tile.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/pos/products/ui-settings-form.tsx :: raw query construction :: BrowseByField :: row.count :: 1',
+	// ADR 0033 per-screen (j1): the checkout's forced refreshes are named reads.
+	'screens/main/pos/checkout/components/payment-webview.tsx :: require plane outside a named read :: PaymentWebview :: runtime.engine.require :: 1',
+	'screens/main/pos/checkout/hooks/reconcile-completed-order.ts :: require plane outside a named read :: refreshOrderRecord :: runtime.engine.require :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-session.ts :: require plane outside a named read :: useCheckoutSession :: runtime.engine.require :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 777;
+export const SEAM_RETIRED_FLOOR = 780;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'9c66c41c9e00027922b3a8ba93ab9e3a3c5cc99dc1d1b35260daea2c66b6a02d';
+	'a5a1ec95b5f9c776223d2cb2fad7ead61d997d71301e63f874ffa7b4c765592c';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

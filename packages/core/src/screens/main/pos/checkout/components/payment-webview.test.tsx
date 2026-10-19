@@ -520,7 +520,10 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 	});
 	afterEach(() => {
@@ -1337,7 +1340,10 @@ describe('PaymentWebview settled order status', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('applied');
 	});
 
@@ -1923,7 +1929,10 @@ describe('PaymentWebview frame-status signal', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 	});
 
 	it('reports the frame as loading on mount, then ready on the load event', async () => {
@@ -2968,7 +2977,10 @@ describe('PaymentWebview session expiry', () => {
 			line_items: [],
 		};
 		mockGet.mockResolvedValue({ data: [serverOrder] });
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 		autoShowReceipt = false;
 		renderFrame();
