@@ -20,6 +20,7 @@ import {
 	observeRegisterSessions,
 	observeSessionAccounting,
 	openSession,
+	readMovement,
 	recordMovement,
 	RegisterSessionRequiredError,
 	requireOpenSession,
@@ -484,6 +485,9 @@ export function useRegisterSession() {
 			},
 			voidMovement: async (id: string) => {
 				await requireOpenSession(storeDB, binding.registerId, true);
+				// The reversal row carries amount 0 for the server; the audit event records the
+				// amount actually reversed, which is the target's.
+				const target = await readMovement(storeDB, id);
 				const row = await voidMovement(storeDB, id, wpCredentials.id ?? 0);
 				recordRegisterFact({
 					kind: 'movement-voided',
@@ -492,7 +496,8 @@ export function useRegisterSession() {
 					registerId: binding.registerId,
 					movementId: row.id,
 					movementType: row.type,
-					amount: row.amount,
+					voidedType: target?.type,
+					amount: target?.amount ?? row.amount,
 					voids: id,
 				});
 				return row;

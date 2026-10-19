@@ -48,7 +48,8 @@ export type RegisterFact =
 				'counted' | 'variance'
 			>)
 	| (Human & Movement & { kind: 'movement-recorded' })
-	| (Human & Movement & { kind: 'movement-voided'; voids: string })
+	| (Human &
+			Movement & { kind: 'movement-voided'; voids: string; voidedType?: CashMovementRow['type'] })
 	| (Human & { kind: 'movement-retry-requested'; movementId: string })
 	| (Human & { kind: 'approval-granted'; approvedBy: number | null })
 	| (Human & { kind: 'variance-over-threshold'; variance: string; threshold: string | undefined })
@@ -161,9 +162,11 @@ export function recordRegisterFact(fact: RegisterFact): void {
 				amount: fact.amount,
 			});
 		case 'movement-voided':
+			// `amount` is the amount reversed (the target's); the reversal row itself carries 0.
 			return emit('Register cash movement voided', 'register.movement-voided', {
 				movementId: fact.movementId,
 				movementType: fact.movementType,
+				voidedType: fact.voidedType,
 				amount: fact.amount,
 				voids: fact.voids,
 			});

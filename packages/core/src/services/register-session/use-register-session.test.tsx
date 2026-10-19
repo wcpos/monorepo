@@ -48,6 +48,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 	backToSelling: jest.fn(),
 	closeSession: jest.fn(),
 	recordMovement: jest.fn(),
+	readMovement: jest.fn(),
 	voidMovement: jest.fn(),
 	retryMovement: jest.fn(),
 	requireOpenSession: jest.fn(),
@@ -432,10 +433,13 @@ it.each(['paid_in', 'paid_out'] as const)(
 	}
 );
 
-it('logs a void with the reversal id and the current cashier', async () => {
+it('logs a void with the reversal id, the current cashier and the amount reversed', async () => {
+	// The reversal row carries amount 0 (the server refuses anything else); the audit event
+	// must still record the target's amount.
+	jest.mocked(actions.readMovement).mockResolvedValue(movement as never);
 	jest
 		.mocked(actions.voidMovement)
-		.mockResolvedValue({ ...movement, id: 'reversal', type: 'void' } as never);
+		.mockResolvedValue({ ...movement, id: 'reversal', type: 'void', amount: '0' } as never);
 	const result = await settled();
 	await result.current.actions.voidMovement('movement');
 	expect(logger.info).toHaveBeenCalledWith(
@@ -448,6 +452,7 @@ it('logs a void with the reversal id and the current cashier', async () => {
 				sessionId: 'session',
 				registerId: 'register',
 				movementType: 'void',
+				voidedType: 'paid_in',
 				amount: '20',
 			}),
 		})

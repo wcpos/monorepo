@@ -190,6 +190,11 @@ export function recordMovement(
 		...pending,
 	});
 }
+/** The movement row by id, or null: the hook reads the void target's own figures for its audit event. */
+export function readMovement(storeDB: RegisterStoreDatabase, movementId: string) {
+	return registerCollections(storeDB).cash_movements.findOne(movementId).exec();
+}
+
 export async function voidMovement(
 	storeDB: RegisterStoreDatabase,
 	movementId: string,
