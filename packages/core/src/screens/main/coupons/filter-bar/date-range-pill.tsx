@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import { endOfDay, isSameDay, isToday, isYesterday, startOfDay } from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { isSameDay } from 'date-fns/isSameDay';
+import { isToday } from 'date-fns/isToday';
+import { isYesterday } from 'date-fns/isYesterday';
+import { startOfDay } from 'date-fns/startOfDay';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { DateRange } from '@wcpos/components/calendar';

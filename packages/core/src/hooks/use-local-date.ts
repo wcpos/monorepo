@@ -1,8 +1,10 @@
 import * as React from 'react';
 
 import { utc } from '@date-fns/utc';
-import { format, parseISO } from 'date-fns';
-import * as Locales from 'date-fns/locale';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
+
+import { useDateFnsLocale } from '@wcpos/utils/date-fns-locale';
 
 import { useLocale } from './use-locale';
 
@@ -33,7 +35,7 @@ export const useLocalDate = () => {
 	 * Passing the Locale instance to date-fns functions converts date strings to the local date format
 	 * eg: Locale.es converts January 1 to 1 de enero
 	 */
-	const locale = shortCode in Locales ? Locales[shortCode as keyof typeof Locales] : undefined;
+	const locale = useDateFnsLocale(shortCode);
 
 	/**
 	 * Wrapper for date-fns format function. Stable identity per locale — these

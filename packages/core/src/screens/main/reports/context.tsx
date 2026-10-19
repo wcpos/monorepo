@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
 import { useObservableSuspense } from 'observable-hooks';
 
 import type { EngineRecord } from '@wcpos/query';

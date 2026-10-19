@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { endOfDay, startOfDay } from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
 
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
