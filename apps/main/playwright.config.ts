@@ -56,7 +56,8 @@ function configuredStoreUrl(envValue: string | undefined): string {
  * coverage says so, and one that does not (cold-start; a local pro-only run) pays
  * nothing for it. The risk this reopens — a lane silently losing free coverage,
  * which is how dev-free vanished for weeks — is closed where it belongs, by a
- * contract test asserting deploy.yml names BOTH stores for every lane.
+ * contract test pinning deploy.yml's store per lane: main names both, next names
+ * pro only (owner ruling 2026-10-19), so an empty free store there is deliberate.
  */
 export const FREE_STORE_URL = configuredStoreUrl(process.env.E2E_STORE_URL_FREE);
 export const PRO_STORE_URL =

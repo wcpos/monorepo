@@ -307,7 +307,7 @@ jobs:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
           E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # Must match the e2e matrix's shard count.
           E2E_SHARED_SETUP_SHARDS: ${{ (needs.changes.outputs.only_specs != '' || github.event_name == 'schedule' || inputs.quarantine_only) && '1' || '6' }}
           E2E_LANE: ${{ needs.changes.outputs.lane }}
@@ -493,7 +493,7 @@ jobs:
         continue-on-error: true
         env:
           E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -537,9 +537,13 @@ jobs:
           CI: true
           # Lane → store. Owner ruling (2026-08-18): main may test against
           # dev-free and dev-pro and NOTHING else; next has exactly one site,
-          # dev-next, which runs the next branch of both plugins and therefore
-          # serves both variants (the free matrix gets its licence masked by
-          # stubStoreVersionForE2E, as it already does on every lane).
+          # dev-next. Owner ruling (2026-10-19): lane next runs the PRO matrix
+          # only, on dev-next; lane main runs free on dev-free and pro on
+          # dev-pro. dev-next is one site, and both variants on six shards
+          # saturated its php-fpm pool (run 39248125270). Free is
+          # polished on dev-free once the work reaches main. The free matrix
+          # is opt-in by naming a store (playwright.config.ts), so the EMPTY
+          # E2E_STORE_URL_FREE on lane next below is the switch, not a gap.
           #
           # The lane itself is resolved once, in the `changes` job (which is
           # also where `inputs.lane` wins for a manual dispatch). An unresolved
@@ -555,7 +559,7 @@ jobs:
           # 2026-08-18 timeouts that deferred it came from the app never issuing
           # the awaited server requests against dev-free's 18-product catalogue;
           # the catalogue has since been rebuilt to match dev-pro's scale.
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
@@ -576,7 +580,7 @@ jobs:
         continue-on-error: true
         env:
           E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
