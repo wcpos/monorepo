@@ -555,6 +555,30 @@ it.each(['right', 'center'] as const)(
 		}
 	}
 );
+it.each([true, false])(
+	'19. the footer stacks on a phone and is a row otherwise (phone=%s)',
+	(phone) => {
+		render(
+			<DeviceScope phone={phone}>
+				<Dialog open>
+					<DialogContent inline side="right">
+						<DialogFooter testID="footer" />
+					</DialogContent>
+				</Dialog>
+			</DeviceScope>
+		);
+		const footer = screen.getByTestId('footer');
+		if (phone) {
+			expect(footer).toHaveClass('flex-col-reverse');
+			expect(footer).not.toHaveClass('flex-row');
+		} else {
+			expect(footer).toHaveClass('flex-row', 'items-center', 'justify-end');
+			expect(footer).not.toHaveClass('flex-col-reverse');
+		}
+		expect(footer.className).not.toMatch(/\bsm:/);
+		expect(footer).toHaveClass('gap-2', 'px-4', 'border-t', 'pt-4', 'max-w-full');
+	}
+);
 it('9. titles receive their themed typography through the text context', () => {
 	render(
 		<Dialog open>

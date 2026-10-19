@@ -57,7 +57,9 @@ jest.mock('../components/sync-button', () => ({
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) =>
-		values ? `${key}:${values.shown}/${values.total}` : key,
+		values?.total !== undefined
+			? `${key}:${values.synced}/${values.total}`
+			: `${key}:${values?.count}`,
 }));
 
 function QueryStateProbe() {
@@ -107,10 +109,10 @@ function currentState(): QueryStateOf<'tax-rates'> {
 describe('TaxRatesFooter handle fields', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('shows the plain showing-of total and syncs through the handle', () => {
+	it('says how many of the vouched total are synced while behind, and syncs through the handle', () => {
 		renderFooter();
 
-		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
+		expect(screen.getByText('tax_rates.count_synced:3/5')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
@@ -129,17 +131,23 @@ describe('TaxRatesFooter handle fields', () => {
 		const handle = handleWithTotal({ ready: false });
 		renderFooter(handle);
 
-		expect(screen.getByText('common.showing_n:3/undefined')).toBeTruthy();
-		expect(screen.queryByText('common.showing_of:3/5')).toBeNull();
+		expect(screen.getByText('tax_rates.count:3')).toBeTruthy();
+		expect(screen.queryByText('tax_rates.count_synced:3/5')).toBeNull();
 
 		act(() => handle.set({ ready: true }));
-		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
+		expect(screen.getByText('tax_rates.count_synced:3/5')).toBeTruthy();
 	});
 
 	it('prints no denominator when the handle has no total to vouch for', () => {
 		renderFooter(handleWithTotal({ total: null }));
 
-		expect(screen.getByText('common.showing_n:3/undefined')).toBeTruthy();
+		expect(screen.getByText('tax_rates.count:3')).toBeTruthy();
+	});
+
+	it('is a plain count once the device holds every vouched rate', () => {
+		renderFooter(handleWithTotal({ total: 3 }));
+
+		expect(screen.getByText('tax_rates.count:3')).toBeTruthy();
 	});
 
 	it('keeps the drawn handle’s total while the live one loads, and syncs the live one', () => {
@@ -150,7 +158,7 @@ describe('TaxRatesFooter handle fields', () => {
 		live.sync = liveSync;
 		renderFooter(live, handleWithTotal());
 
-		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
+		expect(screen.getByText('tax_rates.count_synced:3/5')).toBeTruthy();
 		expect(screen.getByTestId('sync-active').textContent).toBe('true');
 		fireEvent.click(screen.getByTestId('sync'));
 		expect(liveSync).toHaveBeenCalledTimes(1);
@@ -162,7 +170,7 @@ describe('TaxRatesFooter handle fields', () => {
 		fireEvent.click(screen.getByTestId('activate-query'));
 		expect(currentState()).toMatchObject({ search: 'not-a-screen-feature', limit: 20 });
 
-		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
+		expect(screen.getByText('tax_rates.count_synced:3/5')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(currentState()).toEqual({
 			search: '',

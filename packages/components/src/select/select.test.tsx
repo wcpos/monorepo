@@ -106,3 +106,19 @@ it('renders nothing for a closed inline sheet', () => {
 	const { container } = render(<C.SelectContent inline />);
 	expect(container).toBeEmptyDOMElement();
 });
+it('gives an OptionSelect trigger and each option a stable testID', () => {
+	render(
+		<C.OptionSelect
+			triggerTestID="class-select"
+			placeholder="Class"
+			value="standard"
+			options={[
+				{ value: 'standard', label: 'Standard' },
+				{ value: 'reduced-rate', label: 'Reduced rate' },
+			]}
+		/>
+	);
+	expect(screen.getByTestId('class-select')).toBeTruthy();
+	expect(screen.getByTestId('class-select-option-standard')).toBeTruthy();
+	expect(screen.getByTestId('class-select-option-reduced-rate')).toBeTruthy();
+});

@@ -15,7 +15,14 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import {
+	ScrollableTabsList,
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
@@ -89,6 +96,20 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 		}));
 	}, [rates, taxClasses]);
 
+	const isPhone = useIsPhone();
+	const triggers = grouped.map((group) => (
+		<TabsTrigger
+			key={group.slug}
+			value={group.slug}
+			label={`${group.name} ${group.rates.length}`}
+			className="gap-1"
+		>
+			<Text>{group.name}</Text>
+			{/* The count is its own Text, outside the class name, and stays quiet on the active tab. */}
+			<Text className="text-muted-foreground font-normal tabular-nums">{group.rates.length}</Text>
+		</TabsTrigger>
+	));
+
 	/**
 	 *
 	 */
@@ -107,17 +128,23 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						onValueChange={setValue}
 						orientation="horizontal"
 					>
-						<ScrollableTabsList
-							className="mx-4 flex-row"
-							previousLabel={t('common.previous_tab')}
-							nextLabel={t('common.next_tab')}
-						>
-							{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
-								<TabsTrigger key={group.slug} value={group.slug}>
-									<Text>{group.name}</Text>
-								</TabsTrigger>
-							))}
-						</ScrollableTabsList>
+						{isPhone ? (
+							// A phone folds the strip into a Select; `label` is what its options read.
+							<View className="mx-4">
+								<TabsList asSelect testID="tax-rates-class-select">
+									{triggers}
+								</TabsList>
+							</View>
+						) : (
+							// Scroll arrows for a store with more classes than the panel is wide.
+							<ScrollableTabsList
+								className="mx-4 flex-row"
+								previousLabel={t('common.previous_tab')}
+								nextLabel={t('common.next_tab')}
+							>
+								{triggers}
+							</ScrollableTabsList>
+						)}
 						{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 							<TabsContent key={group.slug} value={group.slug} className="min-h-0 flex-1">
 								<DialogBody>
@@ -126,9 +153,10 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 							</TabsContent>
 						))}
 					</Tabs>
-					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 				</View>
-				<DialogFooter>
+				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
+				<DialogFooter className="justify-between">
+					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 					<DialogClose>{t('common.close')}</DialogClose>
 				</DialogFooter>
 			</DialogContent>

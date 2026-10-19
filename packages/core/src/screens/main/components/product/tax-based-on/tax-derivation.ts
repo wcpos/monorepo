@@ -3,6 +3,7 @@ import { decode } from 'html-entities';
 import { calculateTaxesForValue } from '@wcpos/order-math/internal';
 import type { CartConfig } from '@wcpos/order-math';
 
+import { roundPercent } from '../../../hooks/round-percent';
 import {
 	normalizePostcode,
 	postcodePatternMatches,
@@ -38,11 +39,6 @@ export function rateWhy(rate: TaxRateData, location: TaxLocation): RateWhy {
 	if ((rate.cities ?? []).length > 0) return { field: 'city' };
 	if (rate.state) return { field: 'state' };
 	return rate.country ? { field: 'country', country: rate.country } : { field: 'anywhere' };
-}
-
-/** Rounded to the four places WooCommerce stores a rate in; trailing zeros fall away. */
-export function roundPercent(value: number): number {
-	return Math.round(value * 10000) / 10000;
 }
 
 /**

@@ -15,6 +15,8 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
+
 import { TaxRates } from './tax-rates';
 
 type FakeHandle = import('@wcpos/query').QueryHandle & {
@@ -76,7 +78,9 @@ jest.mock('@wcpos/components/error-boundary', () => {
 });
 jest.mock('../contexts/extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('./footer', () => ({ TaxRatesFooter: () => <div data-testid="tax-rates-footer" /> }));
+jest.mock('./footer', () => ({
+	TaxRatesFooter: () => <div data-testid="tax-rates-footer" />,
+}));
 jest.mock('./rate-table', () => ({ TaxRateTable: () => <div data-testid="tax-rate-table" /> }));
 
 function passthrough({ children }: { children?: React.ReactNode }) {
@@ -119,10 +123,13 @@ beforeEach(() => {
 
 describe('the tax rates modal', () => {
 	it('mounts on the first answer, having acquired and retained the rates handle once', async () => {
+		// Pin the layout so it does not depend on jsdom's window: the anchored panel's scrolling strip.
 		render(
-			<React.Suspense fallback={<div data-testid="modal-fallback" />}>
-				<TaxRates />
-			</React.Suspense>
+			<DeviceScope phone={false}>
+				<React.Suspense fallback={<div data-testid="modal-fallback" />}>
+					<TaxRates />
+				</React.Suspense>
+			</DeviceScope>
 		);
 		await settle();
 
