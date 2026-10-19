@@ -2,11 +2,10 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
-import { removeTemporaryOrder } from '@wcpos/query/temporary-order';
+import { birthOrder, documentRecordId, findBirthState } from '@wcpos/query/mutations';
 
 import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
@@ -20,54 +19,18 @@ import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { resolveDayTimezone } from '../../../../hooks/use-store-day';
-import {
-	documentRecordId,
-	findEngineResident,
-	insertEngineResident,
-	patchEngineResident,
-} from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type LineItem = NonNullable<EngineRecord<'orders'>['payload']['line_items']>[number];
+type FeeLine = NonNullable<EngineRecord<'orders'>['payload']['fee_lines']>[number];
+type ShippingLine = NonNullable<EngineRecord<'orders'>['payload']['shipping_lines']>[number];
+type CouponLine = NonNullable<EngineRecord<'orders'>['payload']['coupon_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
-type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>>;
-
-/**
- * The skeleton resident is inserted BEFORE its create is enqueued, so a resident
- * on its own is not proof that the server was ever told about the order. Three
- * signals say it was:
- *
- * - the enqueue marks the record dirty and appends to `local.pendingMutationIds`
- *   (write-intents' dirty-mark) — a create is queued but not yet pushed;
- * - the create ack stamps the server id into `remoteId` (the orders facet's
- *   `remoteIdField`, from the pushed document's `id`) — the server has it;
- * - `sync.revision` only moves for hosts that answer with a
- *   `{ document, currentRevision }` envelope. wc/v3 returns a BARE order, so
- *   `currentRevision` is null and an acked Woo order keeps `revision: ''` for
- *   life — revision alone would read every synced order as an orphan and create
- *   it a second time.
- *
- * With none of them the resident is an orphan from a failed (or interrupted)
- * enqueue, and queueing updates against it would 404 forever.
- */
-function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
-	const record = resident as unknown as {
-		sync?: { revision?: unknown };
-		remoteId?: unknown;
-	};
-	if (hasPendingLocalWork(resident)) return true;
-	if (record.remoteId !== null && record.remoteId !== undefined) return true;
-	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
-}
-
 /**
  * Provides the queued mutation used to add a cart line to the current order.
  *
@@ -151,36 +114,31 @@ export const useAddItemToOrder = () => {
 			order: CurrentOrderRecord,
 			type: CartLineType,
 			data: CartLine,
-			options?: { orphanedSkeleton?: EngineResident | null }
+			options?: { orphanedSkeleton?: EngineRecord<'orders'> | null }
 		) => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('New order is missing its uuid');
 			const orphanedSkeleton = options?.orphanedSkeleton ?? null;
-			let resident: EngineResident;
+			let payload: Record<string, unknown>;
 			if (orphanedSkeleton) {
 				const priorPayload = (orphanedSkeleton.toMutableJSON().payload ?? {}) as Record<
 					string,
 					unknown
 				>;
-				resident = await patchEngineResident({
-					manager: runtime,
-					collection: 'orders',
-					recordId,
-					changes: settleIntent(orphanedSkeleton as unknown as CurrentOrderRecord, {
-						[type]: buildCartLines(
-							recordId,
-							(priorPayload[type] as CartLine[] | undefined) ?? [],
-							type,
-							data
-						),
-						meta_data: ensurePosOrderIdentityMeta(
-							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
-							identity,
-							true
-						),
-					}),
+				payload = settleIntent(orphanedSkeleton, {
+					[type]: buildCartLines(
+						recordId,
+						(priorPayload[type] as CartLine[] | undefined) ?? [],
+						type,
+						data
+					),
+					meta_data: ensurePosOrderIdentityMeta(
+						priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
+						identity,
+						true
+					),
 				});
 			} else {
 				const orderData = order.toMutableJSON().payload;
@@ -194,44 +152,13 @@ export const useAddItemToOrder = () => {
 					date_created_gmt,
 					[type]: [data],
 				};
-				resident = await insertEngineResident({
-					manager: runtime,
-					collection: 'orders',
-					recordId,
-					payload: settleIntent(order, orderJSON),
-				});
+				payload = settleIntent(order, orderJSON);
 			}
-			const payload = resident.toMutableJSON().payload as Record<string, unknown>;
-			// A guest sale has no email, stored locally as ''. wc/v3 rejects '' with
-			// rest_invalid_email (400), which dead-letters the CREATE and strands the
-			// order (every later update 404s). Absent means "no email" — same strip as
-			// use-push-document's pay path.
-			const billing = payload.billing as Record<string, unknown> | undefined;
-			if (billing?.email === '') delete billing.email;
-			try {
-				await runtime.engine.write({
-					collection: 'orders',
-					operation: 'create',
-					recordId,
-					payload,
-				});
-			} catch (error) {
-				// The resident is inserted before the create is enqueued. Left behind,
-				// it looks to the next add like an order the server already knows about,
-				// so that add queues an update which 404s forever. Only roll back the
-				// resident inserted here — an orphan reused above keeps its lines for
-				// the next retry.
-				if (!orphanedSkeleton) {
-					try {
-						await resident.remove();
-					} catch {
-						// The create failure is the error worth surfacing.
-					}
-				}
-				throw error;
-			}
-			const savedOrder = resident as unknown as EngineRecord<'orders'>;
-			await removeTemporaryOrder(recordId);
+			const savedOrder = await birthOrder(runtime, {
+				recordId,
+				payload,
+				orphan: orphanedSkeleton,
+			});
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
@@ -253,12 +180,12 @@ export const useAddItemToOrder = () => {
 				const temporaryOrder = order.getLatest();
 				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
-				let orphanedSkeleton: EngineResident | null = null;
+				let orphanedSkeleton: EngineRecord<'orders'> | null = null;
 				if (isNew && !context.order) {
-					const resident = await findEngineResident(runtime, 'orders', recordId);
-					if (resident) {
-						latest = resident as unknown as EngineRecord<'orders'>;
-						if (hasQueuedOrAcknowledgedCreate(resident)) {
+					const birth = await findBirthState(runtime, recordId);
+					if (birth !== 'none') {
+						latest = birth.born ?? birth.orphan;
+						if (birth.born) {
 							context.order = latest;
 							isNew = false;
 							// The line is going into a resident the cart is NOT showing — it is
@@ -270,7 +197,7 @@ export const useAddItemToOrder = () => {
 							// A skeleton whose create never made it to the queue: stay on the
 							// create path so it is retried against this resident, instead of
 							// patching an order the server has never seen.
-							orphanedSkeleton = resident;
+							orphanedSkeleton = birth.orphan;
 						}
 					}
 				}
