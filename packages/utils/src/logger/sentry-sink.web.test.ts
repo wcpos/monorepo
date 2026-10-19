@@ -152,15 +152,25 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.init).not.toHaveBeenCalled();
 	});
 
-	it('closes after an in-flight load when consent is withdrawn', async () => {
+	it('never initializes when consent is withdrawn during the load', async () => {
 		captureLoggedError({ message: 'Before consent' });
 		setTelemetryConsent('allowed');
 		setTelemetryConsent('denied');
 		await settleSentryLoad();
-		expect(Sentry.close).toHaveBeenCalledTimes(1);
+		expect(Sentry.init).not.toHaveBeenCalled();
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
 		expect(Sentry.setUser).not.toHaveBeenCalled();
 		expect(localStorageData.has('wcpos_install_id')).toBe(false);
+	});
+
+	it('initializes when consent returns after a withdrawn load', async () => {
+		setTelemetryConsent('allowed');
+		setTelemetryConsent('denied');
+		await settleSentryLoad();
+		expect(Sentry.init).not.toHaveBeenCalled();
+		setTelemetryConsent('allowed');
+		await settleSentryLoad();
+		expect(Sentry.init).toHaveBeenCalledTimes(1);
 	});
 
 	it('discards captures held during a load when consent is cleared before it settles', async () => {

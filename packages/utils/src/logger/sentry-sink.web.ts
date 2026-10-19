@@ -129,6 +129,8 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			.then((m) => {
 				sdk = m;
 				loading = null;
+				// Consent withdrawn during the load means the SDK is never initialised.
+				if (telemetryConsent !== 'allowed') return;
 				sdk.init({
 					dsn: SENTRY_DSN,
 					release: `wcpos-app@${AppInfo.version}`,
@@ -140,10 +142,6 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 					beforeSend: prepareEvent,
 					ignoreErrors: [/ResizeObserver loop/],
 				});
-				if (telemetryConsent !== 'allowed') {
-					void sdk.close();
-					return;
-				}
 				const installId = getInstallId();
 				if (installId) sdk.setUser({ id: installId });
 				isInitialized = true;
