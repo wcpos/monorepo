@@ -38,6 +38,8 @@ export type RegisterHealth = {
 			received_gmt: string;
 			skew_seconds: number;
 			direction: 'ahead' | 'behind';
+			/** The sale's till, or the register id for an unstamped sale; absent on an older plugin. */
+			till?: string;
 		}[];
 		/** Absent on an older plugin, which caps `skew` as a whole. */
 		skew_counts?: { ahead: number; behind: number };

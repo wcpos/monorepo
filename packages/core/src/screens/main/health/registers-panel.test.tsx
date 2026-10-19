@@ -504,11 +504,50 @@ it('fails the clock check on a clock running ahead and lists only the ahead sale
 	expect(check.textContent).toContain('1 sale stamped by a clock running ahead');
 	// With skew_counts the count is exact.
 	expect(check.textContent).not.toContain('At least');
-	expect(check.textContent).toContain('Set the date and time on the device.');
+	expect(check.textContent).toContain('Set the date and time on the till named below.');
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
 		'Order 1041: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',
 	]);
+	// Every ahead sale is listed, so there is no "Showing n of N" line.
+	expect(screen.queryByTestId('health-register-skew-sample-note')).toBeNull();
+});
+
+it('names the till on a skew row when the plugin sends it', () => {
+	withRegisters({
+		...clean,
+		skew: [
+			{ ...aheadSkew, till: TILL_A },
+			// The register id is the server's fallback for a sale without a till stamp.
+			{ ...aheadSkew, order_id: 42, order_number: '1042', till: 'till-1' },
+			// An older plugin sends no till.
+			{ ...aheadSkew, order_id: 43, order_number: '1043' },
+		],
+		skew_counts: { ahead: 3, behind: 0 },
+	});
+	render(<RegistersPanel />);
+	open('clock');
+	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
+		'Till aaaaaaaa… — Order 1041: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',
+		'No till recorded — Order 1042: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',
+		'Order 1043: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',
+	]);
+});
+
+it('says how many of a capped direction the expanded list shows', () => {
+	withRegisters({ ...clean, skew: [aheadSkew], skew_counts: { ahead: 31, behind: 0 } });
+	const { unmount } = render(<RegistersPanel />);
+	open('clock');
+	expect(screen.getByTestId('health-register-skew-sample-note').textContent).toBe(
+		'Showing 1 of 31 sales'
+	);
+	unmount();
+	withRegisters({ ...clean, skew: [behindSkew], skew_counts: { ahead: 0, behind: 12 } });
+	render(<RegistersPanel />);
+	open('clock');
+	expect(screen.getByTestId('health-register-skew-sample-note').textContent).toBe(
+		'Showing 1 of 12 sales'
+	);
 });
 
 it('passes the clock check on behind-only sales without claiming the clocks agree', () => {

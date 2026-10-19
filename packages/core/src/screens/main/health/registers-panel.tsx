@@ -125,19 +125,53 @@ function CheckRow({
 	);
 }
 
-function skewRow(t: T, skew: RegisterSkew) {
+function skewRow(t: T, skew: RegisterSkew, registerId: string) {
+	const row = t(
+		skew.order_number === '' ? 'health.registers.skew_deleted' : 'health.registers.skew',
+		{
+			order: skew.order_number,
+			id: skew.order_id,
+			device: formatStampedTime(skew.sale_time),
+			received: `${formatStampedTime(skew.received_gmt)} UTC`,
+			magnitude: formatSkewMagnitude(skew.skew_seconds),
+			direction:
+				skew.direction === 'behind' ? t('health.registers.behind') : t('health.registers.ahead'),
+		}
+	);
+	// An older plugin sends no till, so the row names none.
+	let text = row;
+	if (skew.till !== undefined) {
+		text = isUnstampedTill(skew.till, registerId)
+			? t('health.registers.skew_no_till', { row })
+			: t('health.registers.skew_with_till', { till: shortId(skew.till), row });
+	}
 	return (
 		<Text key={skew.order_id} testID="health-register-skew" className="text-sm">
-			{t(skew.order_number === '' ? 'health.registers.skew_deleted' : 'health.registers.skew', {
-				order: skew.order_number,
-				id: skew.order_id,
-				device: formatStampedTime(skew.sale_time),
-				received: `${formatStampedTime(skew.received_gmt)} UTC`,
-				magnitude: formatSkewMagnitude(skew.skew_seconds),
-				direction:
-					skew.direction === 'behind' ? t('health.registers.behind') : t('health.registers.ahead'),
-			})}
+			{text}
 		</Text>
+	);
+}
+
+/**
+ * One direction's skew rows. With `skew_counts` the server caps each direction, so when the
+ * total is larger than the rows sent, the list says how many it shows.
+ */
+function skewRows(
+	t: T,
+	rows: readonly RegisterSkew[],
+	total: number,
+	counted: boolean,
+	registerId: string
+) {
+	return (
+		<>
+			{rows.map((skew) => skewRow(t, skew, registerId))}
+			{counted && total > rows.length ? (
+				<Text testID="health-register-skew-sample-note" className="text-muted-foreground text-xs">
+					{t('health.registers.skew_sample_note', { count: total, shown: rows.length })}
+				</Text>
+			) : null}
+		</>
 	);
 }
 
@@ -166,7 +200,7 @@ function CheckView({
 				title={t('health.registers.clock_sampled')}
 				sub={t('health.registers.clock_sampled_sub')}
 			>
-				{check.behind.map((skew) => skewRow(t, skew))}
+				{check.behind.map((skew) => skewRow(t, skew, registerId))}
 			</CheckRow>
 		);
 	}
@@ -188,7 +222,9 @@ function CheckView({
 		}
 		return (
 			<CheckRow attention={false} testID={testID} title={t(title)} sub={sub}>
-				{behind.length > 0 ? behind.map((skew) => skewRow(t, skew)) : null}
+				{check.kind === 'clock' && behind.length > 0
+					? skewRows(t, behind, check.behindCount, check.counted, registerId)
+					: null}
 			</CheckRow>
 		);
 	}
@@ -288,7 +324,7 @@ function CheckView({
 					}
 					sub={t('health.registers.clock_sub')}
 				>
-					{check.ahead.map((skew) => skewRow(t, skew))}
+					{skewRows(t, check.ahead, check.aheadCount, check.counted, registerId)}
 				</CheckRow>
 			);
 		case 'closures': {
