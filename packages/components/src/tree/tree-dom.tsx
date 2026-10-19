@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 
+import { retryableLazy } from '../lib/retryable-lazy';
+
 import type { JsonViewProps } from '@uiw/react-json-view';
 import type { DOMProps } from 'expo/dom';
 
-const JsonView = React.lazy(() => import('@uiw/react-json-view'));
+const JsonView = retryableLazy(() => import('@uiw/react-json-view'));
 
 interface TreeDOMProps<T extends object> extends JsonViewProps<T> {
 	dom?: DOMProps;

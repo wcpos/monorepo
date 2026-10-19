@@ -40,6 +40,7 @@
     "./lib/motion": "./src/lib/motion.ts",
     "./lib/overlay": "./src/lib/overlay.tsx",
     "./lib/portal-container": "./src/lib/portal-container.ts",
+    "./lib/retryable-lazy": "./src/lib/retryable-lazy.ts",
     "./lib/scale": "./src/lib/scale.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",

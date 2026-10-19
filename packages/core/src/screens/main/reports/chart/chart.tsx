@@ -6,6 +6,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { loadCharts } from '@wcpos/components/charts/lazy';
 import type { ChartBounds, PointsArray } from '@wcpos/components/charts/charts-impl';
+import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
@@ -26,7 +27,7 @@ function findClosestPointIndex(points: PointsArray, touchX: number): number {
 }
 
 let charts: Awaited<ReturnType<typeof loadCharts>>;
-const LazyChart = React.lazy(async () => {
+const LazyChart = retryableLazy(async () => {
 	charts = await loadCharts();
 	return { default: Chart };
 });

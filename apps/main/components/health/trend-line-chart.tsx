@@ -11,6 +11,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { loadCharts } from '@wcpos/components/charts/lazy';
 import type { CartesianActionsHandle } from '@wcpos/components/charts/charts-impl';
+import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
 import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
 
 import { TrendFrame, type TrendPoint } from './trend-frame';
@@ -196,7 +197,7 @@ function TrendLineChartImpl({
 }
 
 let charts: Awaited<ReturnType<typeof loadCharts>>;
-const LazyChart = React.lazy(async () => {
+const LazyChart = retryableLazy(async () => {
 	charts = await loadCharts();
 	return { default: TrendLineChartImpl };
 });
