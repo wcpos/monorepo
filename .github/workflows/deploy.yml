@@ -56,13 +56,15 @@ on:
 #   verification, so a merge burst verifies only the artifact that is live.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
 # newer SHA. There is deliberately NO cross-run store serialization except
-# lane next's: all lane-next E2E runs share the mini store, so they queue in
-# the one `deploy-mini-store` group instead of overlapping (#2382 review).
+# lane next's: all lane-next web E2E runs share dev-next, so they queue in the
+# one `deploy-next-store` group and only one runs at a time (#2382 review), and
+# each also waits in the dev-next queue it shares with native E2E (see the
+# comment above e2e).
 # GitHub keeps at most one pending run per group; a third arrival replaces
 # the pending one.
 # skip_e2e dispatches never touch the store; production-target dispatches still run E2E there, so they queue.
 concurrency:
-  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-next-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
 
 env:
@@ -251,12 +253,16 @@ jobs:
     needs: [changes, deploy]
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
     runs-on: ubuntu-latest
+    # The queue step lists runs.
     permissions:
       contents: read
-    # The nightly-reset wait can hold lane next up to 95 min; main keeps 30.
-    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}
+      actions: read
+    # The queue may wait up to 4 h on next; main keeps 30.
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 290 || 30 }}
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
+      queue: ${{ steps.queue.outcome }}
+      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
     steps:
       - name: 🔑 Check for the auth-state key
         id: key
@@ -278,19 +284,16 @@ jobs:
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install chromium --only-shell
 
-      # Keep setup and its shards clear of the mini store's nightly snapshot restore.
-      - name: 🌙 Wait out the mini store's nightly reset
+      # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait here,
+      # before the first dev-next request, until no other web or native run
+      # holds it. The shards refuse to start if this did not succeed.
+      - name: 🚦 Queue for dev-next
+        id: queue
         if: needs.changes.outputs.lane == 'next'
-        timeout-minutes: 100
-        run: node scripts/wait-mini-store-reset.mjs
-
-      - name: 🔌 Join the tailnet
-        if: needs.changes.outputs.lane == 'next'
-        uses: tailscale/github-action@6cae46e2d796f265265cfcf628b72a32b4d7cade # v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+        timeout-minutes: 250
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
 
       # globalSetup runs before tests load, so a grep matching nothing runs only
       # the setup. If it fails, the shards set up by themselves, as before.
@@ -304,14 +307,12 @@ jobs:
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
-          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # Must match the e2e matrix's shard count.
           E2E_SHARED_SETUP_SHARDS: ${{ (needs.changes.outputs.only_specs != '' || github.event_name == 'schedule' || inputs.quarantine_only) && '1' || '6' }}
           E2E_LANE: ${{ needs.changes.outputs.lane }}
-          # The tailnet store is a local address to Chrome (apps/main/e2e/local-network.ts).
-          E2E_ALLOW_LOCAL_NETWORK: ${{ needs.changes.outputs.lane == 'next' && '1' || '' }}
-          E2E_CASHIER_PASS: ${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_CASHIER_PASS || secrets.E2E_CASHIER_PASS }}
+          E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
 
       - name: 🔐 Encrypt the shared auth state
         if: steps.key.outputs.present == 'true'
@@ -344,9 +345,16 @@ jobs:
   # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
   # spec flakes under concurrency, fix THAT spec's isolation; do not
   # reintroduce a cross-run mutex here.
-  # Lane next uses the mini store (plan C, front desk ruling 2026-10-05):
-  # dev-next on the production VPS could not carry six shards. Native E2E
-  # still queues for dev-next in e2e-native.yml.
+  # Exception, dev-next only (Front desk ruling B, 2026-10-01): six web shards
+  # and two native dispatches together saturated its six php-fpm workers
+  # (1,898 499s, every device failed at the connect screen). Next-lane runs
+  # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
+  # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
+  # scheduled runs reach dev-next — PRs to next skip this suite — so the
+  # queue cannot starve a merge gate. The main lane is not queued.
+  # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
+  # stores, no fourth). Six shards logging in at once saturated it on
+  # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
   # PRs targeting `next` skip the web E2E suite (owner ruling 2026-09-03):
   # the dev lane is where performance and behaviour are explored by hand on
   # dev-next, and the store cannot serve several PR runs at once (six php-fpm
@@ -358,7 +366,7 @@ jobs:
     needs: [changes, deploy, e2e-setup]
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -391,6 +399,19 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           echo "::error::No E2E lane for this run (event=$EVENT_NAME base_ref=${BASE_REF:-<none>} ref_name=$REF_NAME). Web E2E runs only for main or next: retarget the PR at a trunk, or dispatch with the 'lane' input set. Refusing to guess a store."
+          exit 1
+
+      # A next-lane shard may touch dev-next only after e2e-setup's queue step
+      # admitted this run (cancelled or timed out reads as not admitted).
+      - name: 🚦 Refuse dev-next without the queue
+        if: needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
+        env:
+          QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
+          QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SETUP_RESULT: ${{ needs.e2e-setup.result }}
+        run: |
+          echo "::error::The dev-next queue did not admit this run (queue=${QUEUE_OUTCOME:-<none>}, e2e-setup=$SETUP_RESULT). Refusing to load dev-next alongside another E2E run. Queue attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
           exit 1
 
       - name: 🏗 Setup repository
@@ -465,20 +486,6 @@ jobs:
           echo "❌ Deployment health check failed after 30 attempts"
           exit 1
 
-      # A shard-only rerun ("Re-run failed jobs") skips e2e-setup, so each shard waits too.
-      - name: 🌙 Wait out the mini store's nightly reset
-        if: needs.changes.outputs.lane == 'next'
-        timeout-minutes: 80
-        run: node scripts/wait-mini-store-reset.mjs --shard
-
-      - name: 🔌 Join the tailnet
-        if: needs.changes.outputs.lane == 'next'
-        uses: tailscale/github-action@6cae46e2d796f265265cfcf628b72a32b4d7cade # v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
       # Saturated stores produce failures that look exactly like broken diffs.
       # Measure BEFORE the tests so the annotation is already on the run when
       # someone reads the reds (2026-08-19: a saturated dev-pro sent a whole
@@ -486,8 +493,8 @@ jobs:
       - name: 🌡 Probe store health (pre-flight)
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -530,9 +537,10 @@ jobs:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
           # Lane → store. Owner ruling (2026-08-18): main may test against
-          # dev-free and dev-pro and NOTHING else; next uses the mini store
-          # (plan C, 2026-10-05), serving both variants (the free matrix gets
-          # its licence masked by stubStoreVersionForE2E on every lane).
+          # dev-free and dev-pro and NOTHING else; next has exactly one site,
+          # dev-next, which runs the next branch of both plugins and therefore
+          # serves both variants (the free matrix gets its licence masked by
+          # stubStoreVersionForE2E, as it already does on every lane).
           #
           # The lane itself is resolved once, in the `changes` job (which is
           # also where `inputs.lane` wins for a manual dispatch). An unresolved
@@ -543,12 +551,12 @@ jobs:
           # the whole main lane silently gated 1.9.x against the 1.10 store
           # while dev-free coverage was switched off entirely. The config now
           # fails the job rather than guessing, so an unset value is loud.
-          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
           # Naming a free store is what enables the free matrix (#1277). The
           # 2026-08-18 timeouts that deferred it came from the app never issuing
           # the awaited server requests against dev-free's 18-product catalogue;
           # the catalogue has since been rebuilt to match dev-pro's scale.
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
@@ -557,11 +565,9 @@ jobs:
           E2E_LANE: ${{ needs.changes.outputs.lane }}
           # `only` runs just the tests in e2e/quarantine.json (#2284); empty keeps them fixme'd.
           E2E_QUARANTINE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'only' || '' }}
-          # The tailnet store is a local address to Chrome (apps/main/e2e/local-network.ts).
-          E2E_ALLOW_LOCAL_NETWORK: ${{ needs.changes.outputs.lane == 'next' && '1' || '' }}
-          E2E_CASHIER_PASS: ${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_CASHIER_PASS || secrets.E2E_CASHIER_PASS }}
-          E2E_PRODUCT_WRITER_USER: ${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_USER || secrets.E2E_PRODUCT_WRITER_USER }}
-          E2E_PRODUCT_WRITER_PASS: ${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_PASS || secrets.E2E_PRODUCT_WRITER_PASS }}
+          E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
+          E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
+          E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
 
       # Same probe again on failure: a store that was healthy at the start can
       # be saturated by the time the run fails, and that distinction is the
@@ -570,8 +576,8 @@ jobs:
         if: failure()
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
-          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -756,7 +762,9 @@ jobs:
   # neither e2e nor cold-start being cancelled touches the ledger.
   main-ledger:
     name: 📕 main verification ledger
-    needs: [e2e-gate, e2e, cold-start]
+    # `deploy` too: DEPLOY_RESULT below reads needs.deploy, which is empty
+    # unless the job is listed here.
+    needs: [deploy, e2e-gate, e2e, cold-start]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       issues: write

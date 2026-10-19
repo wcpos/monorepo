@@ -1,7 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-import { LOCAL_NETWORK_PERMISSIONS } from './e2e/local-network';
-
 process.env.E2E_RUN_ID ??= process.env.GITHUB_RUN_ID ?? `local-${process.pid}`;
 
 /**
@@ -145,8 +143,6 @@ export default defineConfig<WcposTestOptions>({
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
 		video: 'retain-on-failure',
-		// Mini-store runs only: a tailnet store from a public origin (e2e/local-network.ts).
-		permissions: LOCAL_NETWORK_PERMISSIONS,
 	},
 
 	projects: [

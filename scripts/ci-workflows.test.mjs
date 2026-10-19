@@ -34,13 +34,17 @@ function evaluateGuard(expression, { event_name, ref_name, quarantine_only, targ
 		'inputs.target': target,
 	};
 	const rewritten = expression
-		.replace(/github\.event_name|github\.ref_name|inputs\.quarantine_only|inputs\.target/g, (reference) =>
-			JSON.stringify(values[reference])
+		.replace(
+			/github\.event_name|github\.ref_name|inputs\.quarantine_only|inputs\.target/g,
+			(reference) => JSON.stringify(values[reference])
 		)
 		.replace(/==|!=/g, (operator) => (operator === '==' ? '===' : '!=='));
 	const withoutStrings = rewritten.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '');
 	const identifiers = withoutStrings.match(/[A-Za-z_$][\w$]*/g) ?? [];
-	assert.deepEqual(identifiers.filter((identifier) => !['true', 'false', 'null'].includes(identifier)), []);
+	assert.deepEqual(
+		identifiers.filter((identifier) => !['true', 'false', 'null'].includes(identifier)),
+		[]
+	);
 	return new Function(`return (${rewritten});`)();
 }
 
@@ -273,6 +277,15 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	// The job has no checkout, so gh must be told the repo explicitly.
 	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
 	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
+	// Every needs.<job> the step reads must be a listed need, or it reads as ''.
+	for (const value of Object.values(ledger.steps[0].env)) {
+		for (const [, job] of String(value).matchAll(/needs\.([\w-]+)\./g)) {
+			assert.ok(
+				[ledger.needs].flat().includes(job),
+				`main-ledger reads needs.${job} without needing it`
+			);
+		}
+	}
 
 	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
 		writeFileSync(trace, '');
@@ -518,8 +531,16 @@ test('release workflows require green main with an explicit typed override', () 
 test('a main-branch web bundle is gated on its worker RXDB_VERSION against its lane', () => {
 	const publish = readWorkflow('publish-web-bundle.yml');
 	const steps = publish.jobs.publish.steps.map(({ name }) => name);
-	const stage = findStep(publish, 'publish', '📌 Stage the worker/lane gate from the workflow revision');
-	const gate = findStep(publish, 'publish', "🧬 Gate the worker's RXDB_VERSION against its bundle lane");
+	const stage = findStep(
+		publish,
+		'publish',
+		'📌 Stage the worker/lane gate from the workflow revision'
+	);
+	const gate = findStep(
+		publish,
+		'publish',
+		"🧬 Gate the worker's RXDB_VERSION against its bundle lane"
+	);
 	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch == 'main'/);
 	// Staged from THIS workflow revision: an older monorepo_ref has no gate script.
 	assert.ok(steps.indexOf(stage.name) < steps.indexOf('📥 Check out monorepo'));
@@ -1477,7 +1498,13 @@ test('native budget refusal skips build work and devices and passes the gate', (
 	const queue = findStep(workflow, 'build', QUEUE_STEP_NAME);
 	assert.equal(queue.env.REFUSED, '${{ steps.refuse.outputs.refused }}');
 	const skipped = spawnSync(process.execPath, [path.join(ROOT, 'scripts/wait-devnext-free.mjs')], {
-		env: { ...process.env, REFUSED: 'true', GH_TOKEN: '', GITHUB_RUN_ID: '', GITHUB_REPOSITORY: '' },
+		env: {
+			...process.env,
+			REFUSED: 'true',
+			GH_TOKEN: '',
+			GITHUB_RUN_ID: '',
+			GITHUB_REPOSITORY: '',
+		},
 		encoding: 'utf8',
 	});
 	assert.equal(skipped.status, 0, skipped.stdout + skipped.stderr);
@@ -1522,9 +1549,8 @@ test('the web E2E test step stops before the job limit so the reports still uplo
 	const job = readWorkflow('deploy.yml').jobs.e2e;
 	const step = job.steps.find(({ name }) => name?.startsWith('🧪 Run E2E tests'));
 	assert.equal(typeof step['timeout-minutes'], 'number');
-	assert.equal(job['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}");
-	assert.ok(step['timeout-minutes'] < 60);
-	assert.ok(step['timeout-minutes'] + 80 <= 140);
+	assert.equal(job['timeout-minutes'], 60);
+	assert.ok(step['timeout-minutes'] < job['timeout-minutes']);
 });
 
 test('the shared-store queue stays removed', () => {
@@ -1573,37 +1599,50 @@ test('both lanes run six E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
 });
 
-test('lane next runs web E2E on the mini store over the tailnet', () => {
+test('lane next runs web E2E on dev-next for both variants, with no tailnet or mini store', () => {
+	// Owner ruling 2026-10-19: three dev stores and no fourth. The Mac mini
+	// store (ops/e2e-store, reached over Tailscale) is gone.
 	const workflow = readWorkflow('deploy.yml');
+	const text = readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8');
+	assert.doesNotMatch(
+		text,
+		/claudes-mac-mini|tailscale|TS_OAUTH|E2E_MINI_|E2E_ALLOW_LOCAL_NETWORK|wait-mini-store-reset/i
+	);
 	assert.equal(workflow.jobs['e2e-web-mini'], undefined);
+	assert.equal(existsSync(path.join(ROOT, 'scripts', 'wait-mini-store-reset.mjs')), false);
+	assert.equal(existsSync(path.join(ROOT, 'ops', 'e2e-store')), false);
+	assert.equal(existsSync(path.join(ROOT, 'apps', 'main', 'e2e', 'local-network.ts')), false);
+
+	const lane = 'needs.changes.outputs.lane';
+	let storeSteps = 0;
 	for (const jobName of ['e2e-setup', 'e2e']) {
-		const { steps } = workflow.jobs[jobName];
-		const tailnetSteps = steps.filter((step) => step.uses?.startsWith('tailscale/github-action@'));
-		assert.equal(tailnetSteps.length, 1, jobName);
-		const [tailnet] = tailnetSteps;
-		assert.match(tailnet.uses, /^tailscale\/github-action@[a-f0-9]{40}$/);
-		assert.equal(tailnet.if, "needs.changes.outputs.lane == 'next'");
-		assert.deepEqual(tailnet.with, {
-			'oauth-client-id': '${{ secrets.TS_OAUTH_CLIENT_ID }}',
-			'oauth-secret': '${{ secrets.TS_OAUTH_SECRET }}',
-			tags: 'tag:ci',
-		});
-		for (const [index, step] of steps.entries()) {
-			if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(tailnet) < index);
+		for (const step of workflow.jobs[jobName].steps) {
+			assert.ok(!step.uses?.startsWith('tailscale/'), `${jobName}: ${step.name}`);
+			if (step.env?.E2E_STORE_URL_PRO === undefined) continue;
+			storeSteps += 1;
+			assert.equal(
+				step.env.E2E_STORE_URL_PRO,
+				`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`,
+				`${jobName}: ${step.name}`
+			);
+			assert.equal(
+				step.env.E2E_STORE_URL_FREE,
+				`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`,
+				`${jobName}: ${step.name}`
+			);
 		}
 	}
+	// e2e-setup's login, the pre-flight probe, the test run and the post-failure probe.
+	assert.equal(storeSteps, 4);
+
+	// One credential set on every lane: the dev stores share it.
 	const setup = workflow.jobs['e2e-setup'].steps.find((step) => step.id === 'setup');
 	const run = workflow.jobs.e2e.steps.find((step) => step.id === 'e2e-tests');
 	for (const step of [setup, run]) {
-		assert.equal(step.env.E2E_ALLOW_LOCAL_NETWORK,
-			"${{ needs.changes.outputs.lane == 'next' && '1' || '' }}");
-		assert.equal(step.env.E2E_CASHIER_PASS,
-			"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_CASHIER_PASS || secrets.E2E_CASHIER_PASS }}");
+		assert.equal(step.env.E2E_CASHIER_PASS, '${{ secrets.E2E_CASHIER_PASS }}');
 	}
-	assert.equal(run.env.E2E_PRODUCT_WRITER_USER,
-		"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_USER || secrets.E2E_PRODUCT_WRITER_USER }}");
-	assert.equal(run.env.E2E_PRODUCT_WRITER_PASS,
-		"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_PASS || secrets.E2E_PRODUCT_WRITER_PASS }}");
+	assert.equal(run.env.E2E_PRODUCT_WRITER_USER, '${{ secrets.E2E_PRODUCT_WRITER_USER }}');
+	assert.equal(run.env.E2E_PRODUCT_WRITER_PASS, '${{ secrets.E2E_PRODUCT_WRITER_PASS }}');
 });
 
 test('cold-start verifies the deployed main artifact and participates in the gate', () => {
@@ -1689,11 +1728,17 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	assert.ok(setup, 'deploy.yml lost the e2e-setup job');
 	assert.equal(setup.strategy, undefined, 'e2e-setup must run once, not as a matrix');
 	assert.ok([jobs.e2e.needs].flat().includes('e2e-setup'), 'e2e no longer waits for e2e-setup');
-	assert.ok(jobs.e2e.if.slice(4, -3).startsWith("!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && "));
+	assert.ok(
+		jobs.e2e.if
+			.slice(4, -3)
+			.startsWith(
+				"!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && "
+			)
+	);
 	const run = setup.steps.find(({ id }) => id === 'setup');
 	assert.equal(run['timeout-minutes'], 20);
 	assert.ok(run['timeout-minutes'] < 30);
-	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
+	assert.match(setup['timeout-minutes'], /\|\| 30 \}\}$/);
 	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
 	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
@@ -1724,49 +1769,86 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	}
 });
 
-test('web E2E no longer queues for dev-next', () => {
+test('lane-next web setup waits in the dev-next queue before every store request', () => {
+	// Ruling B (2026-10-01), restored 2026-10-19 when lane next came back to
+	// dev-next: web and native E2E share one queue for the store.
 	const workflow = readWorkflow('deploy.yml');
-	for (const job of Object.values(workflow.jobs)) {
-		for (const step of job.steps ?? []) {
-			assert.notEqual(step.name, QUEUE_STEP_NAME);
-			assert.ok(!step.name?.includes('Refuse dev-next'));
-			assert.doesNotMatch(step.run ?? '', /wait-devnext-free/);
-		}
-	}
 	const setup = workflow.jobs['e2e-setup'];
-	assert.equal(setup.outputs.queue, undefined);
-	assert.equal(setup.outputs.queue_attempt, undefined);
-	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
-	assert.equal(setup.permissions.actions, undefined);
+	const queue = findStep(workflow, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.id, 'queue');
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
+	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
+	assert.equal(typeof queue['timeout-minutes'], 'number');
+	const queueIndex = setup.steps.indexOf(queue);
+	assert.ok(queueIndex < setup.steps.findIndex(({ id }) => id === 'setup'));
+	for (const [index, step] of setup.steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(queueIndex < index);
+	}
+	assert.equal(setup.permissions.actions, 'read');
+	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
+	assert.equal(
+		setup.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}"
+	);
+	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
+	assert.ok(queue['timeout-minutes'] < 290);
 });
 
-test('lane-next runs queue for the mini store and wait out its nightly reset', () => {
-	const setup = readWorkflow('deploy.yml').jobs['e2e-setup'];
-	const index = setup.steps.findIndex(
-		({ name }) => name === "🌙 Wait out the mini store's nightly reset"
+test('lane-next web shards refuse dev-next without queue admission as their second step', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const steps = workflow.jobs.e2e.steps;
+	const refuse = findStep(workflow, 'e2e', '🚦 Refuse dev-next without the queue');
+	assert.equal(steps.indexOf(refuse), 1);
+	assert.equal(
+		refuse.if,
+		"needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))"
 	);
-	assert.ok(index >= 0, 'e2e-setup is missing the nightly-reset wait');
-	assert.equal(setup.steps[index].if, "needs.changes.outputs.lane == 'next'");
-	assert.equal(setup.steps[index].run, 'node scripts/wait-mini-store-reset.mjs');
-	assert.equal(setup.steps[index + 1].name, '🔌 Join the tailnet');
-	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
-
-	const shards = readWorkflow('deploy.yml').jobs.e2e;
-	const shardIndex = shards.steps.findIndex(
-		({ name }) => name === "🌙 Wait out the mini store's nightly reset"
-	);
-	assert.ok(shardIndex >= 0, 'e2e is missing the nightly-reset wait');
-	assert.equal(shards.steps[shardIndex].if, "needs.changes.outputs.lane == 'next'");
-	assert.equal(shards.steps[shardIndex].run, 'node scripts/wait-mini-store-reset.mjs --shard');
-	assert.equal(shards.steps[shardIndex + 1].name, '🔌 Join the tailnet');
-	assert.equal(shards['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}");
+	assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.e2e-setup.outputs.queue_attempt }}');
+	assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
+	assert.match(refuse.run, /Re-run all jobs/);
+	assert.match(refuse.run, /exit 1/);
+	for (const [index, step] of steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(refuse) < index);
+	}
+	// The shards themselves never poll: one queue step per run holds the store.
+	for (const step of steps) assert.doesNotMatch(step.run ?? '', /wait-devnext-free/);
 });
 
-test('only native E2E queues for dev-next', () => {
+for (const [runAttempt, queueAttempt, expected] of [
+	[1, '1', false],
+	[2, '1', true],
+	[2, '2', false],
+]) {
+	test(`deploy.yml queue admission for attempt ${runAttempt} with admitted attempt ${queueAttempt}`, () => {
+		const refuse = findStep(
+			readWorkflow('deploy.yml'),
+			'e2e',
+			'🚦 Refuse dev-next without the queue'
+		);
+		const expression = refuse.if
+			.replace(/needs\.changes\.outputs\.lane/g, "'next'")
+			.replace(/needs\.e2e-setup\.outputs\.queue_attempt/g, JSON.stringify(queueAttempt))
+			.replace(/needs\.e2e-setup\.outputs\.queue/g, "'success'")
+			.replace(/format\('\{0\}', github\.run_attempt\)/g, JSON.stringify(String(runAttempt)));
+		assert.equal(evaluateGuard(expression, {}), expected);
+	});
+}
+
+test('the main lane is not queued for dev-next', () => {
+	const deploy = readWorkflow('deploy.yml');
+	const queue = findStep(deploy, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.doesNotMatch(queue.if, /\|\|/);
 	const native = readWorkflow('e2e-native.yml');
-	assert.equal(findStep(native, 'build', QUEUE_STEP_NAME).if,
-		"env.E2E_STORE_URL == 'https://dev-next.wcpos.com'");
-	assert.match(native.env.E2E_STORE_URL, /github\.base_ref == 'main'.*github\.ref_name == 'main'.*inputs\.ref == 'main'\)\) && 'https:\/\/dev-pro\.wcpos\.com'/);
+	assert.equal(
+		findStep(native, 'build', QUEUE_STEP_NAME).if,
+		"env.E2E_STORE_URL == 'https://dev-next.wcpos.com'"
+	);
+	assert.match(
+		native.env.E2E_STORE_URL,
+		/github\.base_ref == 'main'.*github\.ref_name == 'main'.*inputs\.ref == 'main'\)\) && 'https:\/\/dev-pro\.wcpos\.com'/
+	);
 });
 
 test('e2e-native.yml queues immediately before seeding the store', () => {
@@ -1777,11 +1859,15 @@ test('e2e-native.yml queues immediately before seeding the store', () => {
 	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
 	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
 	assert.equal(typeof queue['timeout-minutes'], 'number');
-	assert.equal(build.steps.indexOf(queue) + 1,
-		build.steps.indexOf(findStep(workflow, 'build', '🌱 Seed test store')));
+	assert.equal(
+		build.steps.indexOf(queue) + 1,
+		build.steps.indexOf(findStep(workflow, 'build', '🌱 Seed test store'))
+	);
 	assert.equal(build.permissions.actions, 'read');
-	assert.equal(build.outputs.queue_attempt,
-		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}");
+	assert.equal(
+		build.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}"
+	);
 });
 
 for (const jobName of ['android', 'ios']) {
@@ -1789,8 +1875,10 @@ for (const jobName of ['android', 'ios']) {
 		const workflow = readWorkflow('e2e-native.yml');
 		const refuse = findStep(workflow, jobName, '🚦 Refuse dev-next without the queue');
 		assert.equal(workflow.jobs[jobName].steps.indexOf(refuse), 0);
-		assert.equal(refuse.if,
-			`${findStep(workflow, 'build', QUEUE_STEP_NAME).if} && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)`);
+		assert.equal(
+			refuse.if,
+			`${findStep(workflow, 'build', QUEUE_STEP_NAME).if} && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)`
+		);
 		assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.build.outputs.queue_attempt }}');
 		assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
 		assert.match(refuse.run, /Re-run all jobs/);
@@ -1815,7 +1903,7 @@ test('the dev-next queue never uses concurrency groups or serialises web shards'
 });
 
 test('no cancelling concurrency group spans the web and native workflows', () => {
-	for (const filename of ['deploy.yml', 'e2e-native.yml']) {
+	for (const filename of QUEUE_WORKFLOWS) {
 		const workflow = readWorkflow(filename);
 		const prefix = filename === 'deploy.yml' ? 'deploy-' : 'native-';
 		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
@@ -1825,14 +1913,24 @@ test('no cancelling concurrency group spans the web and native workflows', () =>
 				? [...group.matchAll(/'((?:deploy|native)[-\w{}]*)'/g)].map((match) => match[1])
 				: [group];
 			assert.ok(literals.length > 0, `${filename}: no group-name literal in ${group}`);
-			assert.ok(literals.every((literal) => literal.startsWith(prefix)), `${filename}: ${group}`);
+			assert.ok(
+				literals.every((literal) => literal.startsWith(prefix)),
+				`${filename}: ${group}`
+			);
 		}
 	}
 });
 
-test('the queue step name and workflow list name only native E2E', () => {
-	assert.deepEqual(QUEUE_WORKFLOWS, ['e2e-native.yml']);
-	assert.equal(findStep(readWorkflow('e2e-native.yml'), 'build', QUEUE_STEP_NAME).name, QUEUE_STEP_NAME);
+test('both workflows share the queue step name and workflow list', () => {
+	assert.deepEqual(QUEUE_WORKFLOWS, ['deploy.yml', 'e2e-native.yml']);
+	assert.equal(
+		findStep(readWorkflow('deploy.yml'), 'e2e-setup', QUEUE_STEP_NAME).name,
+		QUEUE_STEP_NAME
+	);
+	assert.equal(
+		findStep(readWorkflow('e2e-native.yml'), 'build', QUEUE_STEP_NAME).name,
+		QUEUE_STEP_NAME
+	);
 });
 
 test('shards stagger their first store request by 30s in CI', () => {
@@ -1919,7 +2017,7 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 	assert.ok(
 		workflow.concurrency.group.startsWith(
-			"${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || "
+			"${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-next-store' || "
 		)
 	);
 	assert.ok(
@@ -2118,8 +2216,8 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
-	// may use dev-free + dev-pro and nothing else; next originally had only dev-next.
-	// Lane next moved to the mini store (2026-10-05).
+	// may use dev-free + dev-pro and nothing else; next has only dev-next, which
+	// serves both variants (owner ruling 2026-10-19: no fourth store).
 	// Pin the EXACT expressions, arm order included — hostname-presence checks
 	// would pass with the lanes swapped, silently gating each lane against the
 	// other's store (greptile catch on #1289). A third arm, EMPTY, is what a
@@ -2127,11 +2225,11 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	const lane = 'needs.changes.outputs.lane';
 	assert.equal(
 		runStep.env.E2E_STORE_URL_PRO,
-		`\${{ ${lane} == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
+		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		`\${{ ${lane} == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
+		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
 	);
 });
 
@@ -2149,12 +2247,61 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 	const refuse = workflow.jobs.changes.steps[0];
 	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off next or not preview');
 	for (const [caseName, values, expected] of [
-		['wrong target', { event_name: 'workflow_dispatch', ref_name: 'next', quarantine_only: true, target: 'production' }, true],
-		['wrong ref', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: true, target: 'preview' }, true],
-		['both wrong', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: true, target: 'production' }, true],
-		['allowed', { event_name: 'workflow_dispatch', ref_name: 'next', quarantine_only: true, target: 'preview' }, false],
-		['not quarantine', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: false, target: 'production' }, false],
-		['schedule', { event_name: 'schedule', ref_name: 'main', quarantine_only: null, target: null }, false],
+		[
+			'wrong target',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'next',
+				quarantine_only: true,
+				target: 'production',
+			},
+			true,
+		],
+		[
+			'wrong ref',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: true,
+				target: 'preview',
+			},
+			true,
+		],
+		[
+			'both wrong',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: true,
+				target: 'production',
+			},
+			true,
+		],
+		[
+			'allowed',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'next',
+				quarantine_only: true,
+				target: 'preview',
+			},
+			false,
+		],
+		[
+			'not quarantine',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: false,
+				target: 'production',
+			},
+			false,
+		],
+		[
+			'schedule',
+			{ event_name: 'schedule', ref_name: 'main', quarantine_only: null, target: null },
+			false,
+		],
 		['push', { event_name: 'push', ref_name: 'main', quarantine_only: null, target: null }, false],
 	]) {
 		assert.equal(evaluateGuard(refuse.if, values), expected, caseName);
