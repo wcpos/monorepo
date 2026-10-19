@@ -40,12 +40,15 @@ log "reset: done"
 # Re-assert the tailnet mapping: on 2026-10-17 another `tailscale serve
 # --https=8443` (the house planner) silently replaced it and every E2E shard
 # got a 404 on /wp-json. Idempotent; never fails the reset.
+# Funnel or an extra path handler is reported, not repaired.
 serve_target="http://127.0.0.1:$E2E_STORE_LOCAL_PORT"
 serve_key="${E2E_STORE_URL#https://}"
 serve_now="$(tailscale serve status --json 2>/dev/null |
-	jq -r --arg k "$serve_key" '.Web[$k].Handlers["/"].Proxy // "none"' 2>/dev/null || echo unknown)"
+	jq -r --arg k "$serve_key" 'if .AllowFunnel[$k] == true then "funnel" elif (.Web[$k].Handlers != null and (.Web[$k].Handlers | keys) != ["/"]) then "shadowed" else .Web[$k].Handlers["/"].Proxy // "none" end' 2>/dev/null || echo unknown)"
 if [ "$serve_now" = "$serve_target" ]; then
 	log "reset: serve ok, $serve_key -> $serve_target"
+elif [ "$serve_now" = funnel ] || [ "$serve_now" = shadowed ]; then
+	log "reset: serve WRONG, $serve_key is $serve_now, left for a human (re-assert would not clear it)"
 elif sudo -n tailscale serve --bg --https=8443 "$serve_target" >/dev/null 2>&1; then
 	log "reset: serve RESTORED, $serve_key was $serve_now, now $serve_target"
 else
