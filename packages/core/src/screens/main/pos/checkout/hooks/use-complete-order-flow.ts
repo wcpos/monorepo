@@ -38,7 +38,11 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 				order,
 				outcome,
 				receiptHost === 'stage'
-					? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
+					? {
+							host: 'stage',
+							autoShowReceipt: !!uiSettings.autoShowReceipt,
+							canSelectReceipt: () => getCurrentOrderID() === order.uuid,
+						}
 					: { host: 'modal' },
 				queue
 			);

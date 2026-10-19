@@ -1,6 +1,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 
 import {
+	hasLiveSettlementLeg,
 	serverOwnsMoney,
 	settleAggregate,
 	settlementPatch,
@@ -72,7 +73,9 @@ export function settleCartWrite<T>(
 			const config = deps.configForOrder(after);
 			// Coupon continuation owns redistribution and its paid-balance boundary.
 			const result =
-				owned || after.coupon_lines?.some((line) => line.code != null)
+				owned ||
+				hasLiveSettlementLeg(after.meta_data) ||
+				after.coupon_lines?.some((line) => line.code != null)
 					? undefined
 					: settleAggregate(snapshotFromOrderJSON(after), config);
 			boundary =

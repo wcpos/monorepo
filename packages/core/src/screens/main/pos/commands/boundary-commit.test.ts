@@ -88,7 +88,7 @@ function orderFor(total = '4') {
 					key: '_wcpos_payments',
 					value: {
 						schema: 1,
-						payments: [{ id: 'leg', status: 'authorized', amount: '5', refunded_amount: '1' }],
+						payments: [{ id: 'leg', status: 'captured', amount: '5', refunded_amount: '1' }],
 					},
 				},
 			],
@@ -570,5 +570,76 @@ it.each(['none', 'choose'] as const)(
 			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		} else expect(order.payload.status).toBe('completed');
 		expect(complete).toHaveBeenCalledTimes(resolved === 'choose' ? 0 : 1);
+	}
+);
+
+it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
+	'keeps in-flight authorizations out of completion (%s)',
+	async (scenario) => {
+		const order = orderFor('8');
+		const offline = scenario.endsWith('offline');
+		const [payment] = readLedger(order.payload.meta_data);
+		const authorize = () => {
+			order.payload.meta_data = withLedger(
+				[],
+				[{ ...payment, status: 'authorized', recorded_offline: offline }]
+			);
+		};
+		const complete = jest.fn();
+		const commit = (
+			result: Parameters<typeof commitAtBoundary>[1]['result'],
+			queue: Parameters<typeof commitAtBoundary>[1]['queue']
+		) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					result,
+					queue,
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			);
+		const data = { line_items: [{ total: '4', subtotal: '4' }] };
+		if (scenario.startsWith('cart')) {
+			authorize();
+			const dispatch = jest.fn((_order, result, queue) => commit(result, queue));
+			await enqueueOrderMutation(order.uuid, (queue) =>
+				settleCartWrite(
+					{ document: order, data, queue },
+					{
+						configForOrder: () => config,
+						serverOwnsMoney: () => false,
+						localPatch: async ({ changes }) => {
+							Object.assign(order.payload, changes(order.payload));
+							return order;
+						},
+						commitAtBoundary: dispatch,
+					}
+				)
+			);
+			expect(dispatch).toHaveBeenCalledTimes(offline ? 1 : 0);
+		} else {
+			Object.assign(order.payload, data);
+			resolveSession.mockImplementationOnce(async () => {
+				authorize();
+				return { registerId: 'register', sessionId: 'session' };
+			});
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+				commit(settleAggregate(snapshotFromOrderJSON(order.payload), config), queue)
+			);
+			expect(outcome).toBe(offline ? undefined : 'superseded');
+		}
+		expect(order.payload).toMatchObject({
+			...data,
+			total: offline ? '4' : '10',
+			status: offline ? 'completed' : 'pos-partial',
+		});
+		expect(complete).toHaveBeenCalledTimes(offline ? 1 : 0);
 	}
 );

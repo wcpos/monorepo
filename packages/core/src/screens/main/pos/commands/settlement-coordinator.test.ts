@@ -67,7 +67,7 @@ function start(
 	const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(records);
 	const ratesReady$ = new BehaviorSubject({ ready, generation: 0 });
 	const settle = jest.fn<
-		Promise<void>,
+		Promise<unknown>,
 		[string, CurrentOrderRecord, (payload: OrderPayload) => boolean]
 	>(async () => {});
 	const serverOwnsMoney = jest.fn<boolean, [string]>(ownership);
@@ -532,3 +532,32 @@ it.each([false, true])('ignores the pre-1.3 hint after reopen (coupons=%s)', asy
 	await emit(h.references$, { ready: true, generation: '1' });
 	expect(h.settle).toHaveBeenCalledTimes(1);
 });
+
+it.each([false, true])(
+	're-drains a stock refusal after an in-flight catalog event (still short=%s)',
+	async (stillShort) => {
+		const h = start([couponOrder()], false);
+		let release!: () => void;
+		const refusal = { deny: { reasonKey: 'pos_products.out_of_stock' } };
+		h.settle.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return refusal;
+		});
+		h.settle.mockImplementation(async () => {
+			if (stillShort) return refusal;
+		});
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		expect(h.settle).toHaveBeenCalledTimes(1);
+		// A stock write emits the same inputs while replay is awaiting its guards.
+		await emit(h.inputs$, h.inputs$.value);
+		expect(h.settle).toHaveBeenCalledTimes(1);
+		release();
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+	}
+);

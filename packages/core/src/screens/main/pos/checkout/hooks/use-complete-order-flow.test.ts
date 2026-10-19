@@ -368,3 +368,36 @@ it.each(['stage', 'modal'] as const)(
 		}
 	}
 );
+
+it.each([false, true])(
+	'selects the receipt only if A is still current (switched=%s)',
+	async (switched) => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
+		mockAutoShowReceipt = true;
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		await act(async () => {
+			// Hold A's queue so selection changes after completion starts but before receipt entry.
+			let release!: () => void;
+			const held = enqueueOrderMutation(
+				'uuid-42',
+				() =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					})
+			);
+			await Promise.resolve();
+			const finishing = result.current({ source: 'gateway-contract', status: 'completed' });
+			if (switched) mockSelectedOrder = 'B';
+			release();
+			await held;
+			await finishing;
+		});
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(switched ? null : 'uuid-42');
+		expect(mockSelectedOrder).toBe(switched ? 'B' : 'uuid-42');
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+	}
+);

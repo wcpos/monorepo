@@ -1,6 +1,7 @@
 import {
 	type CartConfig,
 	type CouponContext,
+	hasLiveSettlementLeg,
 	serverOwnsMoney,
 	settleAggregate,
 	settleCart,
@@ -89,7 +90,7 @@ export async function commitAtBoundary(
 						};
 						return null;
 					}
-					if (unmet) return null;
+					if (unmet || hasLiveSettlementLeg(payload.meta_data)) return null;
 					if (allowed && !allowed(payload)) return null;
 					if (
 						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||

@@ -73,6 +73,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let rates: RatesReady = { ready: false, generation: 0 };
 	let epoch = 0;
 	let completionGeneration = 0;
+	let inputGeneration = 0;
 	let stopped = false;
 	let running = false;
 	let dirty = false;
@@ -111,13 +112,20 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 		]);
 	};
 	const settle = async (...args: Parameters<Deps['settle']>) => {
+		const generation = inputGeneration;
 		const outcome = await deps.settle(...args);
-		// Catalog refusals remain eligible; only an input emission schedules the next pass.
+		// Do not lose a catalog emission consumed while a coupon replay awaited its guards.
 		if (
 			isActionRefusal(outcome) &&
 			['pos_cart.only_n_available', 'pos_products.out_of_stock'].includes(outcome.deny.reasonKey)
-		)
+		) {
 			seen.delete(args[0]);
+			// Retry only for new inputs; persistent shortages must not spin.
+			if (generation !== inputGeneration) {
+				dirty = true;
+				void drain();
+			}
+		}
 	};
 	async function replay(record: CurrentOrderRecord, key: string, pass: number) {
 		const uuid = record.uuid;
@@ -196,6 +204,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	}
 	const subscription = combineLatest([deps.inputs$, deps.openOrders$, deps.ratesReady$]).subscribe(
 		([nextInputs, nextRecords, nextRates]) => {
+			inputGeneration++;
 			inputs = nextInputs;
 			rates = nextRates;
 			if (!rates.ready) seen.clear();

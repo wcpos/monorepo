@@ -2300,7 +2300,10 @@ jest.mock('../hooks/use-sale-context', () => ({
 jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 
 jest.mock('../../contexts/current-order/context', () => ({
-	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+	useCurrentOrderActions: () => ({
+		setCurrentOrderID: mockSetCurrentOrderID,
+		getCurrentOrderID: () => 'uuid-42',
+	}),
 }));
 
 // Journal storage is exercised against RxDB in the owner/journal suites.
