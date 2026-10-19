@@ -1,11 +1,24 @@
 import { map, type Observable, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
-import { OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
+import { OPEN_CART_ORDER_STATUS, type RxdbSyncEngine } from '@wcpos/sync-engine';
 import { identityColumnFilter, NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { engineCollection } from './records/engine-collection';
 import { resolveLegacyField } from './engine-adapter/collection-map';
+import { observeEngineDatabases } from './engine-query';
+import { observeCollectionActive } from './engine-status';
+import {
+	acquireQueryHandle,
+	createDemand,
+	createQueryHandle,
+	type QueryHandle,
+} from './query-handle';
+import { compileQuery } from './query-state/query-state-translator';
+import { demandPlanFor } from './query-state/query-handles';
 
+import type { QueryResult } from './query-result';
+import type { EngineRecord } from './records/engine-record';
 import type { EngineDocument } from './engine-adapter/collection-map';
 import type { MangoQuerySelector, MangoQuerySortPart } from 'rxdb';
 
@@ -73,4 +86,75 @@ export function openCartRecordIds$(
 					)
 				)
 		: of(new Set<string>());
+}
+
+type OpenOrdersResult = QueryResult;
+
+const OPEN_ORDERS_COMPILED = OPEN_ORDER_STATUSES.map((status) => ({
+	status,
+	compiled: compileQuery(
+		'orders',
+		{
+			search: '',
+			filters: { status },
+			// Unsupported wire sort preserves unbounded demand; residents are sorted by storage.
+			sort: { field: 'date_completed_gmt', direction: 'asc' },
+		},
+		{ id: `pos:open-orders:${status}` }
+	),
+}));
+
+// Demand ids are the handle's own: two owners of one key share one declaration.
+let nextHandleId = 0;
+
+export type OpenOrdersScope = { cashierId: number; storeId?: number; registerId?: string | null };
+
+/**
+ * This till's open orders as a handle: one `collection.find(...).$` over the STORAGE-scoped
+ * selector (#2242), rebound on every database the engine publishes (a scope move, a same-site
+ * replacement), and one standing demand per open status while owned.
+ */
+export function acquireOpenOrdersQueryHandle(
+	engine: RxdbSyncEngine,
+	key: string,
+	{ cashierId, storeId, registerId }: OpenOrdersScope
+): QueryHandle<OpenOrdersResult> {
+	return acquireQueryHandle(engine, key, (registry) => {
+		const id = `pos:open-orders:qh${nextHandleId++}`;
+		return createQueryHandle(
+			engine,
+			{
+				key,
+				result$: (target) =>
+					observeEngineDatabases(target).pipe(
+						switchMap((database) => {
+							const collection = engineCollection(database, 'orders');
+							return collection
+								? collection.find({
+										selector: openOrdersSelector(cashierId, storeId, registerId),
+										sort: OPEN_ORDERS_SORT,
+									}).$
+								: of([] as EngineRecord<'orders'>[]);
+						}),
+						map((records): OpenOrdersResult => ({
+							count: records.length,
+							hits: records.map((record) => ({
+								id: String(record.uuid),
+								record,
+							})) as unknown as OpenOrdersResult['hits'],
+						}))
+					),
+				demands: OPEN_ORDERS_COMPILED.map(({ status, compiled }) =>
+					createDemand(engine, `${id}:${status}`, demandPlanFor(compiled))
+				),
+				activeCollections: ['orders'],
+				censusScoped: false,
+				// The tabs read rows, never a total: no census, no coverage verdict.
+				projectsTotal: false,
+				observeActive: observeCollectionActive,
+			},
+			{ count: 0, hits: [] },
+			registry
+		);
+	});
 }

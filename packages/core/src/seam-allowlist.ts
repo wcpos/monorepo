@@ -1642,10 +1642,16 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/cart/buttons/edit-order-meta/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/cart/buttons/edit-order-meta/form.tsx :: resident helper write :: EditOrderMetaForm :: useLocalMutation :: 1',
 	'screens/main/pos/hooks/order-mutation-queue.ts :: record collection back-reference :: isClosed :: (record as unknown as { collection?: { closed?: boolean } }).collection :: 1',
+	// ADR 0033 per-screen (g12): the open-orders query handle is owned by @wcpos/query.
+	'screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: engine handle aliased :: useOpenOrdersHandle :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: raw query construction :: acquireOpenOrdersQueryHandle :: collection.find({ selector: openOrdersSelector(cashierId, storeId, registerId), sort: OPEN_ORDERS_SORT, }) :: 1',
+	"screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/pos/contexts/order-money-divergence/index.tsx :: engine handle aliased :: OrderMoneyDivergenceProvider :: { engine } = useQueryRuntime() :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 696;
+export const SEAM_RETIRED_FLOOR = 701;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'444716a2cf53cc5ce93aa4d6ed11742d49131a750f671373239d83305fb8bb56';
+	'1e55c112d3179a2437defea26fa95e6b703fbcb9b6d3f45d1f6f327dcc40f51a';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

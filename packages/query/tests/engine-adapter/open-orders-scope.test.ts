@@ -1,11 +1,15 @@
 /** @jest-environment node */
 import { createRxDatabase } from 'rxdb';
+import { firstValueFrom } from 'rxjs';
 
 import { NO_STORE, POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { OPEN_ORDERS_SORT, openOrdersSelector } from '../../src/open-orders-scope';
-import { engineOrder } from '../../src/testing';
+import { acquireOpenOrdersQueryHandle, type OpenOrdersScope } from '../../src';
+import { queryHandleAnswers$ } from '../../src/query-handle';
+import { canonicalQueryKey } from '../../src/query-state';
+import { createFakeEngine, engineOrder } from '../../src/testing';
 import { sqlitePlan } from '../helpers/sqlite-plan';
 import { storages } from '../helpers/storages';
 
@@ -73,6 +77,71 @@ describe.each(storages)('%s open-orders scope', (name, storage) => {
 	});
 	afterEach(async () => {
 		await database.close();
+	});
+	it('shares a retained identity key and keeps cashier, store and register keys separate', async () => {
+		const engine = createFakeEngine(database);
+		const acquire = (scope: OpenOrdersScope) =>
+			acquireOpenOrdersQueryHandle(
+				engine,
+				canonicalQueryKey([
+					'open-orders',
+					'scope',
+					scope.cashierId,
+					scope.storeId,
+					scope.registerId,
+				]),
+				scope
+			);
+		const scope = { cashierId: 7, storeId: 2, registerId: 'register-a' };
+		const first = acquire(scope);
+		const release = first.retain();
+		try {
+			expect(acquire({ ...scope })).toBe(first);
+			const handles = [
+				first,
+				acquire({ ...scope, cashierId: 8 }),
+				acquire({ ...scope, storeId: 9 }),
+				acquire({ ...scope, registerId: 'register-b' }),
+			];
+			expect(new Set(handles).size).toBe(4);
+			expect(new Set(handles.map((handle) => handle.key)).size).toBe(4);
+		} finally {
+			release();
+			await Promise.resolve();
+		}
+	});
+	it('reads scoped creation-ordered rows and declares each open status without a wire limit', async () => {
+		const engine = createFakeEngine(database);
+		const find = jest.spyOn(database.orders, 'find');
+		const handle = acquireOpenOrdersQueryHandle(engine, 'open-orders:7:2', {
+			cashierId: 7,
+			storeId: 2,
+		});
+		const release = handle.retain();
+		try {
+			const result = await firstValueFrom(queryHandleAnswers$(handle));
+			expect(result.hits.map((hit) => hit.id)).toEqual(['early', 'tied', 'late', 'numeric-meta']);
+			expect(find).toHaveBeenCalledWith({
+				selector: {
+					status: { $in: ['pos-open', 'pos-partial', 'pending'] },
+					posUserId: '7',
+					posStoreId: '2',
+				},
+				sort: [{ dateCreatedGmt: 'asc' }, { uuid: 'asc' }],
+			});
+			expect(engine.requireCalls).toEqual(
+				['pos-open', 'pos-partial', 'pending'].map((status) => ({
+					id: expect.stringMatching(new RegExp(`^pos:open-orders:qh\\d+:${status}:orders-browse$`)),
+					collection: 'orders',
+					kind: 'orders-browse',
+					status,
+				}))
+			);
+		} finally {
+			release();
+			await Promise.resolve();
+			find.mockRestore();
+		}
 	});
 	it('requires a matching register entry when bound', async () => {
 		await database.orders.bulkInsert(
