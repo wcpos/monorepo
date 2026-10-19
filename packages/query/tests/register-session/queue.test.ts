@@ -408,6 +408,30 @@ it.each(['acknowledgement', 'refresh'])('keeps withheld local cash fields on %s'
 		sync_status: 'synced',
 	});
 });
+it('reports a numeric server amount as a local write failure, not a delivery retry', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const movement = await recordMovement(db, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Bread money',
+		actor: 7,
+	});
+	http.post.mockResolvedValueOnce({
+		data: { ...serverMovementRow(movement.toJSON()), amount: 42 },
+	});
+	await drain();
+	const calls = [...logger.debug.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls];
+	expect(calls).toHaveLength(1);
+	expect(calls[0][1]?.context).toMatchObject({ endpoint: 'movements', movementId: movement.id });
+	expect(calls[0][1]?.context).not.toHaveProperty('type');
+	expect(logger.info).not.toHaveBeenCalledWith(
+		'Register cash movement accepted',
+		expect.anything()
+	);
+	expect(movement.getLatest().amount).toBe('20');
+});
 it.each(['acknowledgement', 'refresh'])(
 	'keeps local counted_float when null on %s',
 	async (path) => {
