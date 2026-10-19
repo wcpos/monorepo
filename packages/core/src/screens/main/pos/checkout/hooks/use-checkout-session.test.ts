@@ -45,6 +45,8 @@ jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('@wcpos/query', () => ({
+	resolveStockOwnerId: (_engine: unknown, productId: number, variationId: number) =>
+		mockResolveStockOwnerId(productId, variationId),
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	// pushFailureCode tests these with instanceof and reads `status`.
@@ -72,10 +74,6 @@ jest.mock('../../contexts/current-order/context', () => ({
 		getCurrentOrderRecord: () => order,
 		getCurrentOrderID: () => 'uuid-42',
 	}),
-}));
-jest.mock('../../hooks/read-stock-document', () => ({
-	resolveStockOwnerId: (_runtime: unknown, productId: number, variationId: number) =>
-		mockResolveStockOwnerId(productId, variationId),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({

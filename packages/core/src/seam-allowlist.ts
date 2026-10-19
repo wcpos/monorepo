@@ -1619,10 +1619,21 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/hooks/utils.ts :: storage import ::  :: from '@wcpos/database' :: 3",
 	"screens/main/pos/hooks/utils.ts :: storage import ::  :: from '@wcpos/database' :: 4",
 	"screens/main/pos/hooks/utils.ts :: storage import ::  :: from '@wcpos/database' :: 5",
+	// ADR 0033 per-screen (g9): the cart's stock, catalog and coupon-context reads are named reads.
+	"screens/main/pos/conditions/use-cart-conditions.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/conditions/use-cart-conditions.ts :: raw query construction :: useCartConditions :: products.find({ selector: inIds(items.map((line) => line.product_id)) }) :: 1',
+	'screens/main/pos/conditions/use-cart-conditions.ts :: raw query construction :: useCartConditions :: variations.find({ selector: inIds(items.map((line) => line.variation_id)) }) :: 1',
+	"screens/main/pos/hooks/engine-coupon-data.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/hooks/engine-coupon-data.ts :: raw query construction :: readEngineCategories :: collection.find() :: 1',
+	'screens/main/pos/hooks/engine-coupon-data.ts :: raw query construction :: readEngineCoupons :: collection.find() :: 1',
+	'screens/main/pos/hooks/engine-coupon-data.ts :: raw query construction :: readEngineProductRecordsByWooId :: collection.find({ selector: { remoteKey: { $in: remoteIds } } }) :: 1',
+	"screens/main/pos/hooks/read-stock-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/hooks/read-stock-document.ts :: raw query construction :: readStockDocument :: collection.findOne :: 1',
+	'screens/main/pos/hooks/read-stock-document.ts :: storage token :: readStockDocument :: collection.storageInstance :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 676;
+export const SEAM_RETIRED_FLOOR = 686;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'87dae0b5d11d653e891a3c0438a996e0a6115aa9e58963454fdd07adf8ac17e3';
+	'93b484a53e12d3d12a8473aed972292417a28039ba8cb4e31e315f1f9838ffdf';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

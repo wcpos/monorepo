@@ -14,6 +14,7 @@ const mockIncrementalPatch = jest.fn();
 jest.mock('@wcpos/query', () => {
 	const runtime = { engine: { active: () => undefined } };
 	return {
+		readStockPayload: jest.fn(),
 		useQueryRuntime: () => runtime,
 		useDocField: (_doc: unknown, pick: (value: Record<string, unknown>) => unknown) =>
 			pick({ register_sessions: true, prevent_overselling: false }),
@@ -53,7 +54,6 @@ jest.mock('@wcpos/query/register-session', () => ({
 		return session?.id ?? null;
 	},
 }));
-jest.mock('./read-stock-document', () => ({ readStockDocument: jest.fn() }));
 jest.mock('../../hooks/use-payment-methods', () => {
 	// One map, as the real hook memoises it: the context's memo keys on it.
 	const byId = new Map([['pos_cash', { id: 'pos_cash', title: 'Cash' }]]);

@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { readStockPayload, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { findOpenSession, readBoundRegister } from '@wcpos/query/register-session';
 
-import { readStockDocument } from './read-stock-document';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -50,8 +49,8 @@ export function useActionContext(): {
 				},
 				t,
 				readCatalog: async (kind, id) =>
-					(await readStockDocument(
-						runtime,
+					(await readStockPayload(
+						runtime.engine,
 						kind === 'product' ? 'products' : 'variations',
 						id
 					)) as Record<string, unknown> | null,

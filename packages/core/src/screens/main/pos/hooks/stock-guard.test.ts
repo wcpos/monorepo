@@ -1,46 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { useQueryRuntime } from '@wcpos/query';
-import { catalogDocumentId, remoteIdOrNull } from '@wcpos/sync-core';
-
-import { readStockDocument, resolveStockOwnerId } from './read-stock-document';
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
-
-const mockFindOneExec = jest.fn();
-const mockFindDocumentsById = jest.fn();
-
-jest.mock('observable-hooks', () => ({ useObservableEagerState: () => true }));
-jest.mock('@wcpos/query', () => ({
-	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({
-		engine: {
-			active: () => ({
-				database: {
-					collections: {
-						products: {
-							findOne: () => ({ exec: mockFindOneExec }),
-							storageInstance: { findDocumentsById: mockFindDocumentsById },
-						},
-						variations: {
-							findOne: () => ({ exec: mockFindOneExec }),
-							storageInstance: { findDocumentsById: mockFindDocumentsById },
-						},
-					},
-				},
-			}),
-		},
-	}),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
-	resolveLegacyField: () => ({ enginePath: 'remoteId' }),
-}));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: { prevent_overselling$: {} } }),
-}));
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string) => key,
-}));
 
 describe('evaluateStockForCartChange', () => {
 	const managedProduct = {
@@ -220,47 +181,4 @@ describe('aggregateExistingCartQuantity', () => {
 			).toBe(expected);
 		}
 	);
-});
-
-describe('readStockDocument and resolveStockOwnerId', () => {
-	const runtime = useQueryRuntime();
-	beforeEach(() => {
-		jest.clearAllMocks();
-		mockFindOneExec.mockResolvedValue(null);
-		mockFindDocumentsById.mockResolvedValue([]);
-	});
-
-	it.each([
-		[true, 11],
-		['parent', 10],
-		[null, 11],
-	] as const)(
-		'resolves variation stock ownership for manage_stock=%s',
-		async (manageStock, ownerId) => {
-			mockFindDocumentsById.mockResolvedValue(
-				manageStock === null ? [] : [{ payload: { manage_stock: manageStock } }]
-			);
-			await expect(resolveStockOwnerId(runtime, 10, 11)).resolves.toBe(ownerId);
-		}
-	);
-	it('a simple product owns its own stock without a read', async () => {
-		await expect(resolveStockOwnerId(runtime, 10)).resolves.toBe(10);
-		expect(mockFindDocumentsById).not.toHaveBeenCalled();
-	});
-	it('reads a soft-deleted product tombstone by its catalog id', async () => {
-		mockFindDocumentsById.mockResolvedValue([
-			{ payload: { id: 1, name: 'Deleted', manage_stock: true, stock_quantity: 0 } },
-		]);
-		await expect(readStockDocument(runtime, 'products', 1)).resolves.toMatchObject({
-			name: 'Deleted',
-			stock_quantity: 0,
-		});
-		expect(mockFindDocumentsById).toHaveBeenCalledWith(
-			[catalogDocumentId('product', remoteIdOrNull(1)!)],
-			true
-		);
-	});
-	it('returns null when neither a live record nor a tombstone exists', async () => {
-		await expect(readStockDocument(runtime, 'variations', 11)).resolves.toBeNull();
-	});
 });
