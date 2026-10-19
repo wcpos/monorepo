@@ -17,6 +17,8 @@ import {
 	startCounting,
 	voidMovement,
 } from '../../src/register-session/session-store';
+import { adoptMovementRow, adoptSessionRow } from '../../src/register-session/queue';
+import { deriveDrawerTerms, deriveExpected } from '../../src/register-session/expected';
 
 let db: StoreDatabase;
 beforeEach(async () => {
@@ -166,4 +168,48 @@ it('records the approved count without changing the transition or losing the ses
 	await expect(
 		recordApproval(db, 'missing', { approvedBy: 42, approvedCounted: {} })
 	).rejects.toBeInstanceOf(Error);
+});
+
+it('inserts an unseen session with null counted_float', async () => {
+	await adoptSessionRow(db.register_sessions, {
+		id: 'blind-session',
+		register_id: 'other-till',
+		status: 'open',
+		opened_at_gmt: '2026-09-16T08:00:00Z',
+		counted_float: null,
+		sync_status: 'synced',
+		sync_attempts: 0,
+	});
+	const session = (await db.register_sessions.findOne('blind-session').exec())!.toJSON();
+	expect(session.counted_float).toBeNull();
+});
+
+it('inserts unseen blind rows and derives zero without inventing withheld values', async () => {
+	await adoptSessionRow(db.register_sessions, {
+		id: 'blind-session',
+		register_id: 'other-till',
+		status: 'open',
+		opened_at_gmt: '2026-09-16T08:00:00Z',
+		sync_status: 'synced',
+		sync_attempts: 0,
+	});
+	await adoptMovementRow(db.cash_movements, {
+		id: 'blind-movement',
+		session_id: 'blind-session',
+		type: 'paid_in',
+		created_at_gmt: '2026-09-16T09:00:00Z',
+		actor: 7,
+	});
+	const session = (await db.register_sessions.findOne('blind-session').exec())!.toJSON();
+	const movement = (await db.cash_movements.findOne('blind-movement').exec())!.toJSON();
+	expect(session).not.toHaveProperty('counted_float');
+	expect(movement).not.toHaveProperty('amount');
+	expect(movement).not.toHaveProperty('reason');
+	const data = { session, movements: [movement], ledgerRowsBySession: [] };
+	expect(deriveExpected(data)).toEqual({ cash: '0.0000' });
+	expect(deriveDrawerTerms(data)).toMatchObject({
+		float: '0.0000',
+		paidIn: [{ amount: '0.0000' }],
+		expected: '0.0000',
+	});
 });
