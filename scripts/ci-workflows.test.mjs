@@ -1628,9 +1628,10 @@ test('both lanes run six E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
 });
 
-test('lane next runs web E2E on dev-next for both variants, with no tailnet or mini store', () => {
+test('lane next runs web E2E on dev-next for the pro variant only, with no tailnet or mini store', () => {
 	// Owner ruling 2026-10-19: three dev stores and no fourth. The Mac mini
-	// store (ops/e2e-store, reached over Tailscale) is gone.
+	// store (ops/e2e-store, reached over Tailscale) is gone. Same day: lane next
+	// runs pro only on dev-next; free runs on dev-free once work reaches main.
 	const workflow = readWorkflow('deploy.yml');
 	const text = readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8');
 	assert.doesNotMatch(
@@ -1656,7 +1657,7 @@ test('lane next runs web E2E on dev-next for both variants, with no tailnet or m
 			);
 			assert.equal(
 				step.env.E2E_STORE_URL_FREE,
-				`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`,
+				`\${{ ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`,
 				`${jobName}: ${step.name}`
 			);
 		}
@@ -2295,15 +2296,19 @@ test('order-math coverage includes an unimported source module', () => {
 	}
 });
 
-test('deploy.yml names BOTH lane stores for the E2E job', () => {
+test('deploy.yml names both stores on lane main and only the pro store on lane next', () => {
 	// The free matrix is opt-in: playwright.config enables it only when a free
 	// store is named (it cannot ask which projects `--project=` selected —
 	// FullConfig.projects is the full configured list either way). That keeps a
 	// pro-only run, like nightly cold-start, from demanding a store it never
 	// opens — but it also means a lane that forgets E2E_STORE_URL_FREE loses its
 	// free coverage in silence. That is exactly how dev-free coverage vanished
-	// for weeks. This pin is where that risk is closed.
-	const runStep = readWorkflow('deploy.yml').jobs.e2e.steps.find(
+	// for weeks. This pin is where that risk is closed: lane main names both
+	// stores; lane next names pro only (owner ruling 2026-10-19 — both variants
+	// on six shards saturated dev-next, run 39248125270). The empty free store on
+	// lane next is the explicit switch, pinned here, not an accident.
+	const workflow = readWorkflow('deploy.yml');
+	const runStep = workflow.jobs.e2e.steps.find(
 		(step) => step.env && 'E2E_STORE_URL_PRO' in step.env
 	);
 
@@ -2318,8 +2323,8 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
-	// may use dev-free + dev-pro and nothing else; next has only dev-next, which
-	// serves both variants (owner ruling 2026-10-19: no fourth store).
+	// may use dev-free + dev-pro and nothing else; next has only dev-next (owner
+	// ruling 2026-10-19: no fourth store) and runs only the pro matrix there.
 	// Pin the EXACT expressions, arm order included — hostname-presence checks
 	// would pass with the lanes swapped, silently gating each lane against the
 	// other's store (greptile catch on #1289). A third arm, EMPTY, is what a
@@ -2331,8 +2336,21 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
+		`\${{ ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
 	);
+
+	// The shared-setup login and both store probes must name the SAME free store
+	// as the run step, or setup would bootstrap (and the probes would load) a
+	// store the shards never test — or skip one they do.
+	const setup = workflow.jobs['e2e-setup'].steps.find((step) => step.id === 'setup');
+	const probes = workflow.jobs.e2e.steps.filter((step) =>
+		/Probe store health/.test(step.name ?? '')
+	);
+	assert.equal(probes.length, 2);
+	for (const step of [setup, ...probes]) {
+		assert.equal(step.env.E2E_STORE_URL_FREE, runStep.env.E2E_STORE_URL_FREE, step.name);
+		assert.equal(step.env.E2E_STORE_URL_PRO, runStep.env.E2E_STORE_URL_PRO, step.name);
+	}
 });
 
 test('the E2E test step tells playwright.config its lane (next retries once)', () => {
