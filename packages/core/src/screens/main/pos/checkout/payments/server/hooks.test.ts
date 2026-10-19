@@ -53,8 +53,8 @@ jest.mock('../../checkout-mode', () => ({
 	subscribeCheckoutMode: () => () => {},
 	getOrderSaveState: () => null,
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
-	// No order here is in checkout, so the real call would be a no-op too.
-	enterReceiptBeforeCompletion: () => ({ settle: () => {}, undo: () => {} }),
+	// No tender is watched here, so the real call would be a no-op too.
+	receiptEntryAfterWrite: () => () => {},
 }));
 // The hooks only inspect ledger identity/status, not monetary row fields.
 const row = {

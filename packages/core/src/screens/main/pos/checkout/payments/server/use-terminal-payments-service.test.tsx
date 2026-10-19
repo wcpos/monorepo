@@ -17,7 +17,6 @@ import {
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
 	selectReceipt,
-	setTenderMethod,
 	watchTender,
 } from '../../checkout-mode';
 
@@ -507,8 +506,9 @@ it('preserves both offline payment rows when two legs race on one order', async 
 	}
 });
 
-// A completing status drops the order from the till's open orders, which unmounts the tender
-// that would select its receipt; the receipt must be entered before that write lands.
+// A settling status drops the order from the till's open orders, which unmounts the tender
+// whose subscriber used to select its receipt: the service enters and selects it once the
+// write has landed, never before (a selected receipt renders, and can print, what is resident).
 describe('a server capture of the order in checkout', () => {
 	const order = (status: string) => ({
 		status,
@@ -518,35 +518,62 @@ describe('a server capture of the order in checkout', () => {
 		payment_method: 'device',
 		payment_method_title: 'Reader',
 	});
-	async function mirrorCapture(
-		status: string,
-		paymentStatus: 'captured' | 'failed' = 'captured',
-		duringWrite?: () => void
+	type Write = 'mirror' | 'offline';
+	/** Runs one settling write; `duringWrite` acts while it is pending, `fail` makes it fail. */
+	async function settle(
+		write: Write,
+		{
+			status = 'completed',
+			paymentStatus = 'captured',
+			duringWrite,
+			fail,
+		}: {
+			status?: string;
+			paymentStatus?: 'captured' | 'failed';
+			duringWrite?: (hook: { unmount: () => void }) => void;
+			fail?: 'rejects' | 'returns nothing';
+		} = {}
 	) {
 		const start = jest.spyOn(
 			await import('../../../../../../services/terminal-payments'),
 			'startTerminalPaymentsService'
 		);
 		const original = mockResident.payload.meta_data;
-		// No recoverable offline row: only this test's mirror reaches the status write.
-		mockResident.payload.meta_data = [];
+		// No recoverable offline row: only this test's write reaches the store.
+		mockResident.payload.meta_data = write === 'offline' ? withLedger([], []) : [];
 		const hook = renderHook(() => useTerminalPaymentsService());
+		let unmounted = false;
+		const host = {
+			unmount: () => {
+				unmounted = true;
+				hook.unmount();
+			},
+		};
 		let atWrite: CheckoutModeSnapshot | null = null;
-		mockMirror.mockImplementationOnce(async () => {
+		const onWrite = async () => {
 			atWrite = getCheckoutModeSnapshot();
-			duringWrite?.();
-		});
+			duringWrite?.(host);
+			if (fail === 'rejects') throw new Error('disk full');
+			return fail === 'returns nothing' ? undefined : {};
+		};
+		if (write === 'mirror') mockMirror.mockImplementationOnce(async () => void (await onWrite()));
+		else mockPatch.mockImplementationOnce(onWrite as never);
+		const options = start.mock.calls[0][0];
 		try {
-			await start.mock.calls[0][0].mirror('completed-order', {
-				payment: { ...mockRow, status: paymentStatus },
-				order: order(status),
-			});
+			const run =
+				write === 'mirror'
+					? options.mirror('completed-order', {
+							payment: { ...mockRow, status: paymentStatus },
+							order: order(status),
+						})
+					: options.patchAndEnqueue!('completed-order', mockRow);
+			if (fail) await expect(run).rejects.toThrow();
+			else await run;
 		} finally {
-			hook.unmount();
+			if (!unmounted) hook.unmount();
 			start.mockRestore();
 			mockResident.payload.meta_data = original;
 		}
-		expect(mockMirror).toHaveBeenCalledTimes(1);
 		return { atWrite: atWrite! as CheckoutModeSnapshot, after: getCheckoutModeSnapshot() };
 	}
 	let unwatch: (() => void) | undefined;
@@ -557,254 +584,92 @@ describe('a server capture of the order in checkout', () => {
 		unwatch = undefined;
 		resetCheckoutMode();
 	});
+	const watch = (uuid: string, autoShowReceipt = true) => {
+		enterCheckout('completed-order');
+		unwatch = watchTender(uuid, autoShowReceipt);
+	};
 
-	// Entered before the write, never selected before it lands: a selected receipt mounts its
-	// stage, which renders (and can auto-print) the order before the payment row is in it.
-	it.each([
-		[true, 'completed-order'],
-		[false, null],
-	])(
-		'enters its receipt before the status write and selects it after (autoShowReceipt %s, selected %s)',
-		async (autoShowReceipt, selected) => {
-			enterCheckout('completed-order');
-			unwatch = watchTender('completed-order', autoShowReceipt);
-			const { atWrite, after } = await mirrorCapture('completed');
-			expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
-			expect(atWrite.checkoutOrders.has('completed-order')).toBe(false);
-			expect(atWrite.selectedReceiptOrder).toBeNull();
+	it.each(['mirror', 'offline'] as const)(
+		'%s: nothing is entered at the write; the receipt is entered and selected after it',
+		async (write) => {
+			watch('completed-order');
+			const { atWrite, after } = await settle(write);
+			expect(atWrite.receiptOrders.size).toBe(0);
+			expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
 			expect(after.receiptOrders.has('completed-order')).toBe(true);
-			expect(after.selectedReceiptOrder).toBe(selected);
+			expect(after.checkoutOrders.has('completed-order')).toBe(false);
+			expect(after.selectedReceiptOrder).toBe('completed-order');
 		}
 	);
 
-	// The write unmounts the column, whose cleanup clears the watch: the decision to select
-	// was taken when the receipt was entered.
+	// The write unmounts the column, whose cleanup clears the watch: the decision was taken
+	// before the write.
 	it('selects after the write even though the column unmounted during it', async () => {
-		enterCheckout('completed-order');
-		unwatch = watchTender('completed-order', true);
-		const { after } = await mirrorCapture('completed', 'captured', () => unwatch?.());
+		watch('completed-order');
+		const { after } = await settle('mirror', { duringWrite: () => unwatch?.() });
 		expect(after.selectedReceiptOrder).toBe('completed-order');
-	});
-
-	it('undoes the entry when the mirror write rejects', async () => {
-		enterCheckout('completed-order');
-		unwatch = watchTender('completed-order', true);
-		const start = jest.spyOn(
-			await import('../../../../../../services/terminal-payments'),
-			'startTerminalPaymentsService'
-		);
-		const original = mockResident.payload.meta_data;
-		mockResident.payload.meta_data = [];
-		const hook = renderHook(() => useTerminalPaymentsService());
-		let atWrite: CheckoutModeSnapshot | null = null;
-		mockMirror.mockImplementationOnce(async () => {
-			atWrite = getCheckoutModeSnapshot();
-			throw new Error('disk full');
-		});
-		try {
-			await expect(
-				start.mock.calls[0][0].mirror('completed-order', {
-					payment: { ...mockRow, status: 'captured' },
-					order: order('completed'),
-				})
-			).rejects.toThrow('disk full');
-			expect((atWrite! as CheckoutModeSnapshot).receiptOrders.has('completed-order')).toBe(true);
-			const after = getCheckoutModeSnapshot();
-			expect(after.receiptOrders.has('completed-order')).toBe(false);
-			expect(after.checkoutOrders.has('completed-order')).toBe(true);
-			expect(after.selectedReceiptOrder).toBeNull();
-		} finally {
-			hook.unmount();
-			start.mockRestore();
-			mockResident.payload.meta_data = original;
-		}
-	});
-
-	// Another tab, or the phone's sheet (which never registers): the background completion
-	// enters the receipt unselected afterwards, as before.
-	it('leaves an order nobody is watching to the background completion', async () => {
-		enterCheckout('completed-order');
-		unwatch = watchTender('other-order', true);
-		const { atWrite, after } = await mirrorCapture('completed');
-		expect(after.selectedReceiptOrder).toBeNull();
-		expect(atWrite.receiptOrders.size).toBe(0);
-		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
-		expect(atWrite.selectedReceiptOrder).toBeNull();
-	});
-
-	it.each([
-		['a captured payment on a cancelled order', 'cancelled', 'captured'],
-		['a failed payment on a completed order', 'completed', 'failed'],
-	] as const)('enters no receipt for %s', async (_name, status, paymentStatus) => {
-		enterCheckout('completed-order');
-		unwatch = watchTender('completed-order', true);
-		const { atWrite, after } = await mirrorCapture(status, paymentStatus);
-		expect(after.receiptOrders.size).toBe(0);
-		expect(atWrite.receiptOrders.size).toBe(0);
-		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
-		expect(atWrite.selectedReceiptOrder).toBeNull();
-	});
-
-	it.each(['rejects', 'returns nothing'] as const)(
-		'puts checkout back when the offline completing write %s',
-		async (failure) => {
-			const start = jest.spyOn(
-				await import('../../../../../../services/terminal-payments'),
-				'startTerminalPaymentsService'
-			);
-			const original = mockResident.payload.meta_data;
-			mockResident.payload.meta_data = withLedger([], []);
-			const hook = renderHook(() => useTerminalPaymentsService());
-			enterCheckout('completed-order');
-			setTenderMethod('completed-order', 'card');
-			selectReceipt('earlier-sale');
-			unwatch = watchTender('completed-order', true);
-			let atWrite: CheckoutModeSnapshot | null = null;
-			mockPatch.mockImplementationOnce(async () => {
-				atWrite = getCheckoutModeSnapshot();
-				if (failure === 'rejects') throw new Error('disk full');
-				return undefined;
-			});
-			try {
-				await expect(
-					start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow)
-				).rejects.toThrow();
-				// The receipt was entered (unselected) before the write, then undone.
-				const snapshot = atWrite! as CheckoutModeSnapshot;
-				expect(snapshot.receiptOrders.has('completed-order')).toBe(true);
-				expect(snapshot.selectedReceiptOrder).toBe('earlier-sale');
-				const after = getCheckoutModeSnapshot();
-				expect(after.receiptOrders.has('completed-order')).toBe(false);
-				expect(after.checkoutOrders.has('completed-order')).toBe(true);
-				expect(after.tenderMethods.get('completed-order')).toBe('card');
-				expect(after.selectedReceiptOrder).toBe('earlier-sale');
-			} finally {
-				hook.unmount();
-				start.mockRestore();
-				mockResident.payload.meta_data = original;
-			}
-		}
-	);
-
-	// The cashier can act while the write is pending: what they chose stays when it fails.
-	it('keeps a selection and method the cashier chose while the offline write was pending', async () => {
-		const start = jest.spyOn(
-			await import('../../../../../../services/terminal-payments'),
-			'startTerminalPaymentsService'
-		);
-		const original = mockResident.payload.meta_data;
-		mockResident.payload.meta_data = withLedger([], []);
-		const hook = renderHook(() => useTerminalPaymentsService());
-		enterCheckout('completed-order');
-		setTenderMethod('completed-order', 'card');
-		unwatch = watchTender('completed-order', true);
-		mockPatch.mockImplementationOnce(async () => {
-			selectReceipt('other-sale');
-			setTenderMethod('completed-order', 'cash');
-			throw new Error('disk full');
-		});
-		try {
-			await expect(
-				start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow)
-			).rejects.toThrow('disk full');
-			const after = getCheckoutModeSnapshot();
-			expect(after.selectedReceiptOrder).toBe('other-sale');
-			expect(after.tenderMethods.get('completed-order')).toBe('cash');
-			expect(after.receiptOrders.has('completed-order')).toBe(false);
-			expect(after.checkoutOrders.has('completed-order')).toBe(true);
-		} finally {
-			hook.unmount();
-			start.mockRestore();
-			mockResident.payload.meta_data = original;
-		}
-	});
-
-	// A store switch stops the service and resets checkout mode for the new store; the old
-	// store's pending receipt must neither select nor restore anything there.
-	it.each(['succeeds', 'fails'] as const)(
-		'drops the pending receipt when a store switch stops the service before the write %s',
-		async (outcome) => {
-			const start = jest.spyOn(
-				await import('../../../../../../services/terminal-payments'),
-				'startTerminalPaymentsService'
-			);
-			const original = mockResident.payload.meta_data;
-			mockResident.payload.meta_data = withLedger([], []);
-			const hook = renderHook(() => useTerminalPaymentsService());
-			let unmounted = false;
-			enterCheckout('completed-order');
-			setTenderMethod('completed-order', 'card');
-			unwatch = watchTender('completed-order', true);
-			mockPatch.mockImplementationOnce(async () => {
-				hook.unmount();
-				unmounted = true;
-				resetCheckoutMode();
-				if (outcome === 'fails') throw new Error('disk full');
-				return {};
-			});
-			try {
-				const write = start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow);
-				if (outcome === 'fails') await expect(write).rejects.toThrow('disk full');
-				else await write;
-				const after = getCheckoutModeSnapshot();
-				expect(after.selectedReceiptOrder).toBeNull();
-				expect(after.receiptOrders.size).toBe(0);
-				expect(after.checkoutOrders.size).toBe(0);
-				expect(after.tenderMethods.size).toBe(0);
-			} finally {
-				if (!unmounted) hook.unmount();
-				start.mockRestore();
-				mockResident.payload.meta_data = original;
-			}
-		}
-	);
-
-	it('enters the receipt before an offline authorization writes its completing status, selects it after', async () => {
-		const start = jest.spyOn(
-			await import('../../../../../../services/terminal-payments'),
-			'startTerminalPaymentsService'
-		);
-		const original = mockResident.payload.meta_data;
-		mockResident.payload.meta_data = withLedger([], []);
-		const hook = renderHook(() => useTerminalPaymentsService());
-		enterCheckout('completed-order');
-		unwatch = watchTender('completed-order', true);
-		let atWrite: CheckoutModeSnapshot | null = null;
-		mockPatch.mockImplementationOnce(async ({ data }) => {
-			if (data.status) atWrite = getCheckoutModeSnapshot();
-			return {};
-		});
-		try {
-			await start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow);
-			expect(mockPatch).toHaveBeenCalledWith(
-				expect.objectContaining({ data: expect.objectContaining({ status: 'completed' }) })
-			);
-			const snapshot = atWrite! as CheckoutModeSnapshot;
-			expect(snapshot.receiptOrders.has('completed-order')).toBe(true);
-			expect(snapshot.selectedReceiptOrder).toBeNull();
-			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('completed-order');
-		} finally {
-			hook.unmount();
-			start.mockRestore();
-			mockResident.payload.meta_data = original;
-		}
-	});
-
-	it('enters no receipt for a part payment', async () => {
-		enterCheckout('completed-order');
-		unwatch = watchTender('completed-order', true);
-		const { atWrite, after } = await mirrorCapture('pos-partial');
-		expect(atWrite.receiptOrders.size).toBe(0);
-		expect(after.receiptOrders.size).toBe(0);
-		expect(after.selectedReceiptOrder).toBeNull();
 	});
 
 	// After a reload, resolveStage restores the column from the live ledger row alone: the
 	// order is on screen and watched without ever joining checkoutOrders.
-	it('enters and selects the receipt of a checkout restored from its ledger', async () => {
+	it('selects the receipt of a checkout restored from its ledger', async () => {
 		unwatch = watchTender('completed-order', true);
-		const { atWrite, after } = await mirrorCapture('completed');
-		expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
+		const { after } = await settle('mirror');
 		expect(after.selectedReceiptOrder).toBe('completed-order');
+	});
+
+	// Each of these is left to the background completion, which enters the receipt unselected.
+	it.each([
+		['receipts do not show automatically', () => watch('completed-order', false), {}],
+		['the cashier is on another order', () => watch('other-order'), {}],
+		[
+			'the cashier selected another receipt during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => selectReceipt('other-sale') },
+		],
+		[
+			'a store switch stopped the service during the write',
+			() => watch('completed-order'),
+			{
+				duringWrite: (hook: { unmount: () => void }) => {
+					hook.unmount();
+					resetCheckoutMode();
+				},
+			},
+		],
+		['the write rejects', () => watch('completed-order'), { fail: 'rejects' as const }],
+		['the payment failed', () => watch('completed-order'), { paymentStatus: 'failed' as const }],
+		['the order was cancelled', () => watch('completed-order'), { status: 'cancelled' }],
+		['the payment leaves a balance', () => watch('completed-order'), { status: 'pos-partial' }],
+	])('enters nothing when %s', async (_name, arrange, options) => {
+		arrange();
+		const before = getCheckoutModeSnapshot().selectedReceiptOrder;
+		const { after } = await settle('mirror', options);
+		expect(after.receiptOrders.has('completed-order')).toBe(false);
+		expect(after.selectedReceiptOrder).not.toBe('completed-order');
+		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
+	});
+
+	it.each(['rejects', 'returns nothing'] as const)(
+		'offline: enters nothing when the write %s, and checkout stays',
+		async (fail) => {
+			watch('completed-order');
+			const { after } = await settle('offline', { fail });
+			expect(after.receiptOrders.size).toBe(0);
+			expect(after.checkoutOrders.has('completed-order')).toBe(true);
+			expect(after.selectedReceiptOrder).toBeNull();
+		}
+	);
+
+	it('offline: enters nothing when a store switch stopped the service during the write', async () => {
+		watch('completed-order');
+		const { after } = await settle('offline', {
+			duringWrite: (hook) => {
+				hook.unmount();
+				resetCheckoutMode();
+			},
+		});
+		expect(after.receiptOrders.size).toBe(0);
+		expect(after.selectedReceiptOrder).toBeNull();
 	});
 });

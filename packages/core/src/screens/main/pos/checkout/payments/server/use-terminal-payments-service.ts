@@ -37,9 +37,8 @@ import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import {
-	enterReceiptBeforeCompletion,
 	getOrderSaveState,
-	type PendingReceipt,
+	receiptEntryAfterWrite,
 	subscribeCheckoutMode,
 } from '../../checkout-mode';
 
@@ -129,36 +128,23 @@ export function useTerminalPaymentsService(): void {
 						total: String(payload.total ?? '0'),
 						payment_method: summary.payment_method ?? '',
 					};
-					// Entered before the status write, as the mirror below: it takes the order off the
-					// till. Selected once the write lands; a failed write leaves the leg to retry from
-					// checkout, so the entry is undone.
-					const receipt = settlesSale(payment, result, dp())
-						? enterReceiptBeforeCompletion(orderUuid)
+					// This write takes the order off the till, as the mirror's below does.
+					const enterReceiptAfter = settlesSale(payment, result, dp())
+						? receiptEntryAfterWrite(orderUuid)
 						: null;
-					let written: unknown;
-					try {
-						written = await latest.current.recordLedger(resident, {
-							meta_data: isCompletingStatus(summary.status)
-								? await completionMetaFor(latest.current.ctx, meta_data, {})
-								: meta_data,
-							status: summary.status,
-						});
-					} catch (error) {
-						// A store switch stopped this service and reset checkout mode meanwhile: the
-						// old store's receipt must not reach the new store's state.
-						if (!stopped) receipt?.undo();
-						throw error;
-					}
-					if (!written) {
-						if (!stopped) receipt?.undo();
-						throw new Error('Offline payment could not be saved');
-					}
-					if (!stopped) receipt?.settle();
+					const written = await latest.current.recordLedger(resident, {
+						meta_data: isCompletingStatus(summary.status)
+							? await completionMetaFor(latest.current.ctx, meta_data, {})
+							: meta_data,
+						status: summary.status,
+					});
+					if (!written) throw new Error('Offline payment could not be saved');
+					// A store switch stopped this service and reset checkout mode meanwhile.
+					if (!stopped) enterReceiptAfter?.();
 					return result;
 				}),
 			mirror: async (orderUuid, { payment, order }) => {
 				let mirrored = false;
-				let receipt: PendingReceipt | null = null;
 				try {
 					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
@@ -167,9 +153,11 @@ export function useTerminalPaymentsService(): void {
 						resident.payload) as EngineRecord<'orders'>['payload'];
 					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
-					// Entered before the status write (a completing status takes the order off the
-					// till), selected once it lands, undone if it fails.
-					if (settlesSale(payment, order, dp())) receipt = enterReceiptBeforeCompletion(orderUuid);
+					// A settling status takes the order off the till and unmounts the tender that used
+					// to select its receipt; the service selects it once the write has landed.
+					const enterReceiptAfter = settlesSale(payment, order, dp())
+						? receiptEntryAfterWrite(orderUuid)
+						: null;
 					await mirrorServerOrder(manager, orderUuid, {
 						// Only the summary fields that are order fields: `paid` and `balance` are
 						// derived from the ledger on read, and an unknown key fails the schema.
@@ -184,7 +172,7 @@ export function useTerminalPaymentsService(): void {
 						meta_data,
 					});
 					mirrored = true;
-					if (!stopped) receipt?.settle();
+					if (!stopped) enterReceiptAfter?.();
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
 						const patched = await latest.current.stampCompletion(
 							resident,
@@ -194,10 +182,7 @@ export function useTerminalPaymentsService(): void {
 					}
 				} catch (error) {
 					// The leg preserves a known capture even when its local mirror fails.
-					if (!mirrored) {
-						if (!stopped) receipt?.undo();
-						throw error;
-					}
+					if (!mirrored) throw error;
 					logger.error('Checkout failed', {
 						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 						showToast: true,

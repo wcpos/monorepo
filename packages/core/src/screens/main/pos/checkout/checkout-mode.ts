@@ -146,9 +146,9 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 	});
 }
 /**
- * The order whose tender is on screen in the wide-screen checkout column, and whether its
- * receipt shows itself (`autoShowReceipt`). Registered by the mounted tender flow, so code
- * above the screens can tell a watched sale from one completing in the background.
+ * The order whose tender is on screen, and whether its receipt shows itself (`autoShowReceipt`).
+ * Registered by the mounted tender flow, so code above the screens can tell a sale the
+ * cashier is watching from one completing in the background.
  */
 let watchedTender: { uuid: string; autoShowReceipt: boolean } | null = null;
 export function watchTender(uuid: string, autoShowReceipt: boolean) {
@@ -159,61 +159,19 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
 	};
 }
 /**
- * A payment that settles the sale is about to write a completing status onto the order in
- * the checkout column. That status drops it from the till's open orders and unmounts the
- * column's tender, the one place that would select the receipt; so enter the receipt first,
- * as the cash path does (sale-completion), and select it once the write lands. An order nobody is
- * watching (another tab, or the phone's sheet, which is a route of its own and stays
- * mounted) is left to the background completion, as before. The watched tender is the
- * authority, not `checkoutOrders`: a checkout restored from a live ledger row after a reload
- * is on screen (resolveStage) without ever joining that set.
- *
- * The entry is unselected: a selected receipt mounts its stage, which renders (and can
- * auto-print) the resident order before the payment row and status have landed. Whether to
- * select is decided now, while the tender is still registered (its cleanup clears the watch
- * once the write unmounts the column). The caller then calls `settle()` once the write has
- * succeeded, or `undo()` when it fails and leaves the leg to retry from checkout: each part
- * `enterReceipt` changed goes back through the primitive that owns it, unless the cashier
- * changed it while the write was pending (theirs stays). The selection is never restored:
- * the entry did not change it, and `finishReceipt` clears it only if it is this receipt.
+ * Called just before a status write that settles the sale; the returned function is called
+ * once the write has succeeded. That write drops the order from the till's open orders and
+ * unmounts the tender whose settlement subscriber was the only caller of `selectReceipt`
+ * (its cleanup also clears the watch), so the decision is taken now and acted on after:
+ * the receipt is entered and selected when the cashier was watching this order's tender,
+ * receipts show automatically, and no other receipt was selected in between. Otherwise
+ * nothing happens here and the background completion enters it unselected, as before.
  */
-export interface PendingReceipt {
-	settle(): void;
-	undo(): void;
-}
-const NO_PENDING_RECEIPT: PendingReceipt = { settle: () => {}, undo: () => {} };
-export function enterReceiptBeforeCompletion(uuid: string): PendingReceipt {
-	if (watchedTender?.uuid !== uuid || snapshot.receiptOrders.has(uuid)) return NO_PENDING_RECEIPT;
-	const select = watchedTender.autoShowReceipt;
-	const before = snapshot;
-	enterReceipt(uuid, { select: false });
-	const entered = snapshot;
-	return {
-		settle: () => {
-			if (select) selectReceipt(uuid);
-		},
-		undo: () => {
-			const now = snapshot;
-			// Back to what the entry found, unless the cashier changed it since the entry.
-			const restore = <T>(field: (mode: CheckoutModeSnapshot) => ReadonlyMap<string, T>) =>
-				(field(now).get(uuid) === field(entered).get(uuid) ? field(before) : field(now)).get(
-					uuid
-				) ?? null;
-			finishReceipt(uuid);
-			setLinesPaidBy(
-				uuid,
-				restore((mode) => mode.linesPaidBy)
-			);
-			setTenderPlan(
-				uuid,
-				restore((mode) => mode.tenderPlans)
-			);
-			setTenderMethod(
-				uuid,
-				restore((mode) => mode.tenderMethods)
-			);
-			if (before.checkoutOrders.has(uuid) || now.checkoutOrders.has(uuid)) enterCheckout(uuid);
-		},
+export function receiptEntryAfterWrite(uuid: string): () => void {
+	const select = watchedTender?.uuid === uuid && watchedTender.autoShowReceipt;
+	const selection = snapshot.selectedReceiptOrder;
+	return () => {
+		if (select && snapshot.selectedReceiptOrder === selection) enterReceipt(uuid);
 	};
 }
 export function finishReceipt(uuid: string) {

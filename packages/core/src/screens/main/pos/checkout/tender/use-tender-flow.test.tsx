@@ -1612,7 +1612,7 @@ describe('server tender', () => {
 			}
 			expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
 			// A tender still watching when the completing status arrives has its receipt entered
-			// before the write and selected once it lands (enterReceiptBeforeCompletion); one gone
+			// and selected by the service once the write lands (receiptEntryAfterWrite); one gone
 			// before the response is left to the background completion.
 			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
 				when === 'before-response' ? null : 'order-1'
