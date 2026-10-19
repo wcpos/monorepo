@@ -8,7 +8,7 @@ import {
 	useEngineRecord,
 	useEngineRecordByWooId,
 	useEngineRecordsByWooId,
-} from './use-engine-document';
+} from '../../src/record-readers/use-engine-document';
 
 import type { RxDocument } from 'rxdb';
 
@@ -42,8 +42,8 @@ const engine = {
 	},
 };
 
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
+jest.mock('../../src/provider', () => ({
+	...jest.requireActual('../../src/provider'),
 	useQueryRuntime: () => ({ engine }),
 }));
 

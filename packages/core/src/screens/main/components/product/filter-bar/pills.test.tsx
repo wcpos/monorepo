@@ -121,7 +121,7 @@ jest.mock('../../../hooks/use-stock-status-label', () => ({
 		],
 	}),
 }));
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: () => ({ value: [] }),
 }));
 jest.mock('../brand-select', () => ({ BrandSearch: () => null }));

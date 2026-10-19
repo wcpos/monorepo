@@ -12,7 +12,7 @@ jest.mock('@wcpos/query', () => ({
 		select({ showOutOfStock: true, sortBy: 'name', sortDirection: 'asc' }),
 }));
 jest.mock('../../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
-jest.mock('../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: (_field: string, ids: number[]) =>
 		ids.map((id) => ({ payload: { name: id === 1 ? 'Drinks' : 'Food' } })),
 }));

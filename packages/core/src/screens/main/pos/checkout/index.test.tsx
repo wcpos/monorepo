@@ -21,7 +21,7 @@ jest.mock('expo-router', () => ({
 	},
 }));
 jest.mock('./checkout', () => ({ Checkout: () => <div data-testid="modal" /> }));
-jest.mock('../../hooks/use-engine-document', () => ({ useEngineRecord: () => null }));
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => null }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
 }));

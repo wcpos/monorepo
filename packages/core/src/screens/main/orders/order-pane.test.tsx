@@ -23,7 +23,7 @@ const mockOrder = {
 };
 let mockResource = new ObservableResource(new BehaviorSubject(mockOrder));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-jest.mock('../hooks/use-engine-document', () => ({ useEngineRecord: () => mockResource }));
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => mockResource }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (r: unknown, select: (r: unknown) => unknown) => (r ? select(r) : null),
 }));

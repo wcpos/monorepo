@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Suspense } from '@wcpos/components/suspense';
+import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../../contexts/translations';
 import { BrandsPill } from './brands-pill';
@@ -11,7 +12,6 @@ import { FeaturedPill } from './featured-pill';
 import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
-import { useEngineRecordByWooId } from '../../../hooks/use-engine-document';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 /**

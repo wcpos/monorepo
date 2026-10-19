@@ -31,6 +31,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -45,7 +46,6 @@ import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { useEngineRecordByWooId } from '../../hooks/use-engine-document';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 

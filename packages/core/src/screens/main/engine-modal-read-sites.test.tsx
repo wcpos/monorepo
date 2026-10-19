@@ -20,7 +20,7 @@ jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRouteParams,
 }));
 
-jest.mock('./hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecord: (collection: unknown, uuid: unknown) => mockUseEngineRecord(collection, uuid),
 }));
 

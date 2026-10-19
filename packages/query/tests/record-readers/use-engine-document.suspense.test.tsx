@@ -26,7 +26,7 @@ import {
 	useEngineRecord,
 	useEngineRecordByWooId,
 	useEngineRecordsByWooId,
-} from './use-engine-document';
+} from '../../src/record-readers/use-engine-document';
 
 type FakeRecord = { uuid: string; remoteId: string | null; scope: string };
 
@@ -60,8 +60,8 @@ const engine = {
 	db$: () => () => undefined,
 };
 
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
+jest.mock('../../src/provider', () => ({
+	...jest.requireActual('../../src/provider'),
 	useQueryRuntime: () => ({ engine }),
 }));
 

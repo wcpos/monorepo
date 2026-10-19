@@ -1427,10 +1427,18 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/use-variation-parent-refresh.ts :: raw query construction :: parentOfAcknowledgedVariation :: variations?.findOne :: 1',
 	'screens/main/hooks/use-variation-parent-refresh.ts :: record collection back-reference :: useVariationParentRefresh :: event.collection :: 1',
 	'screens/main/hooks/use-variation-parent-refresh.ts :: require plane outside a named read :: useVariationParentRefresh>refresh :: engine.require :: 1',
+	// ADR 0033 per-screen (f10): the single-record readers are owned by @wcpos/query/record-readers.
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecord :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecordByWooId :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecordsByWooId :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/hooks/use-engine-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecord :: collection.findOne :: 1',
+	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordByWooId :: collection.findOne :: 1',
+	"screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordsByWooId :: collection .find({ selector: { [collectionName === 'refunds' ? 'remoteId' : 'remoteKey']: { $in: stableRemoteIds }, }, }) :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 495;
+export const SEAM_RETIRED_FLOOR = 502;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'dddc57286b07ab2a465291bba5f35ae7643b212f98ef5a959864914f2b34850d';
+	'cecc34de0db169565b57a496aedd0eea5e66f3c3f41b75c82a32745e105b392a';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

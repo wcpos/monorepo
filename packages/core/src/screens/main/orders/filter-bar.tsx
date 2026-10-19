@@ -8,6 +8,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
+import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../contexts/translations';
 import { useStoreDay } from '../../../hooks/use-store-day';
@@ -21,7 +22,6 @@ import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { PaymentMethodPill } from '../components/order/filter-bar/payment-method-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
-import { useEngineRecordByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 import { storeListResource } from '../hooks/store-list-resource';
 

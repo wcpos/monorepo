@@ -21,7 +21,7 @@ jest.mock('../../../hooks/use-store-day', () => ({
 		rangeToFilter: (range: unknown) => range,
 	}),
 }));
-jest.mock('../hooks/use-engine-document', () => ({ useEngineRecordByWooId: jest.fn() }));
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecordByWooId: jest.fn() }));
 jest.mock('../hooks/use-guest-customer', () => ({ useGuestCustomer: jest.fn() }));
 jest.mock('../hooks/store-list-resource', () => ({ storeListResource: jest.fn() }));
 jest.mock('./force-refresh-filter-customer', () => ({ forceRefreshFilterCustomer: jest.fn() }));
