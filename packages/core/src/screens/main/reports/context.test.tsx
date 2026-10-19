@@ -24,15 +24,19 @@ import type { QueryHandle } from '../../../query';
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 
 let mockZone = 'UTC';
-let mockLocalParents: { uuid?: string }[] = [];
+let mockLocalParents: { uuid?: string; id?: unknown }[] = [];
 const mockRuntime = { engine: {}, locale: 'en' };
 // The provider reads the viewed store's precision through useDocField; the app-state mock's
 // store is a plain object, so the field is read directly.
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useQueryRuntime: () => mockRuntime,
-	observeEngineQuery: () =>
-		of({ hits: mockLocalParents.map((payload) => ({ record: { uuid: payload.uuid, payload } })) }),
+	observeLocalRecordsById: (_engine: unknown, _name: string, ids: readonly number[]) =>
+		of(
+			mockLocalParents
+				.filter((payload) => typeof payload.id === 'number' && ids.includes(payload.id))
+				.map((payload) => ({ uuid: payload.uuid, payload }))
+		),
 	useDocField: (doc: Record<string, unknown> | undefined, pick: (row: never) => unknown) =>
 		doc ? pick(doc as never) : undefined,
 }));

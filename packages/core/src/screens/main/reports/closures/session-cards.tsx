@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { defer, from, mergeMap } from 'rxjs';
 
-import type { ClosureRow } from '@wcpos/database';
+import type { ClosureRow } from '@wcpos/query/register-session';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';

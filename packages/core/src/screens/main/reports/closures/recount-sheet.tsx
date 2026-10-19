@@ -5,11 +5,10 @@ import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
-import type { ClosureRow } from '@wcpos/database';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
-import { mintUuid } from '@wcpos/query/register-session';
+import { type ClosureRow, mintUuid } from '@wcpos/query/register-session';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';

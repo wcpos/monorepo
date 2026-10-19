@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
-import type { ClosureRow } from '@wcpos/database';
+import type { ClosureRow } from '@wcpos/query/register-session';
 
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { useT } from '../../../../contexts/translations';
