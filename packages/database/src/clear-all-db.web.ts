@@ -1,6 +1,7 @@
 import { terminateStorageWorker } from './adapters/storage/index.web';
 import { SQLITE_POOL_DIRECTORY } from './adapters/storage/sqlite-pool';
 import { closeRegisteredDatabases } from './plugins/rx-database-registry';
+import { clearTillAnchor } from './till-anchor.web';
 import {
 	APP_DATABASE_PREFIXES,
 	containsScopeDatabaseName,
@@ -78,6 +79,8 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 		deleteIndexedDbDatabases(),
 		deleteOpfsDatabases(),
 	]);
+	// No anchor may outlive the database it vouched for.
+	clearTillAnchor();
 
 	if (typeof caches !== 'undefined') {
 		try {

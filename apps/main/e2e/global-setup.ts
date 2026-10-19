@@ -15,7 +15,7 @@ import {
 	installThinCatalogueRoutes,
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { restoreLocalStorage } from './indexeddb-helpers';
+import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
@@ -185,6 +185,15 @@ async function reuseValidAuthState(
 		fs.rmSync(statePath, { force: true });
 		return null;
 	}
+	// Its register was never anchored, so every restore would adopt the old till
+	// instead of re-minting its own.
+	if (!hasTillAnchor(state.localStorage as Record<string, string>)) {
+		console.log(
+			`[global-setup] ${stateName}: cached auth state predates the till anchor; logging in again`
+		);
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
 	if (trust) {
 		console.log(`[global-setup] Reusing ${stateName} state from this run's shared setup`);
 		return state.storeIds as string[];
@@ -214,7 +223,7 @@ async function reuseValidAuthState(
 		await page.route('**/*', blockScriptRequests);
 		await page.goto(baseURL, { waitUntil: 'commit' });
 		await restoreOPFS(page, state.opfs as never);
-		await restoreLocalStorage(page, state.localStorage as never);
+		await restoreLocalStorageAsClone(page, state.localStorage as Record<string, string>);
 		await page.unroute('**/*', blockScriptRequests);
 		await page.reload({ waitUntil: 'commit' });
 		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });

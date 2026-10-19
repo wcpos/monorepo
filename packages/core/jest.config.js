@@ -91,6 +91,9 @@ module.exports = {
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',
+		// Same reason as app-info: the till anchor's default variant is the native
+		// marker file (expo-file-system, ESM); the register document imports it.
+		'^@wcpos/database/till-anchor$': '<rootDir>/../database/src/till-anchor.web',
 		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 		'^@wcpos/hooks/(.*)$': '<rootDir>/../hooks/src/$1',
 	},

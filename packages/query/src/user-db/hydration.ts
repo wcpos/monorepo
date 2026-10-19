@@ -2,8 +2,7 @@ import type { UserDatabase } from '@wcpos/database';
 import { createUserDB } from '@wcpos/database/create-db';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { ensureRegister, remintRegister } from '../register-session';
-import { disarmNewTillOnNextLoad, newTillOnNextLoadArmed } from '../register-session/new-till-flag';
+import { settleRegister } from '../register-session';
 import { upsertEmbeddedCredentials } from './credentials';
 import { upsertSiteData } from './sites';
 import {
@@ -36,14 +35,7 @@ export async function openUserDatabase(): Promise<{
 		user = await userDB.users.insert({ first_name: 'Global', last_name: 'User' });
 	}
 
-	await ensureRegister(userDB);
-	// A restored copy of another installation's database is a cloned till; the copy
-	// becomes its own till before anything sells (see new-till-flag.ts). One page per
-	// context boots armed; two tabs booting armed at once would each re-mint.
-	if (newTillOnNextLoadArmed()) {
-		await remintRegister(userDB);
-		disarmNewTillOnNextLoad();
-	}
+	await settleRegister(userDB);
 	return { userDB, sessionPointer, translationsCache, user };
 }
 

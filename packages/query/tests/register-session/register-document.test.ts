@@ -3,6 +3,7 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import type { UserDatabase } from '@wcpos/database';
+import { getLogger } from '@wcpos/utils/logger';
 
 import {
 	adoptCounters,
@@ -17,8 +18,10 @@ import {
 	readBoundRegister,
 	readCounters,
 	readRegister,
+	settleRegister,
 	unbindRegister,
 } from '../../src/register-session';
+import { markAnchored, remintRegister } from '../../src/register-session/register-document';
 
 jest.mock('uuid', () => ({ v4: () => 'ABCDEF00-0000-4000-8000-00000000ABCD' }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -87,7 +90,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 it('caches the register identity and mints v4 with random bytes when randomUUID is absent', async () => {
-	const { getRegisterId } = await import('../../src/register-session');
+	const { getRegisterId } = await import('../../src/register-session/register-document');
 	jest.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(undefined as never);
 	const register = await ensureRegister(db);
 	expect(register.id).toMatch(
@@ -277,7 +280,7 @@ it('readCounters refuses payloads that cannot serve as a floor', () => {
 });
 
 it('re-mints a cloned till: new id, counters back at zero, store bindings and floors kept', async () => {
-	const { remintRegister } = await import('../../src/register-session');
+	const { remintRegister } = await import('../../src/register-session/register-document');
 	const cloned = await ensureRegister(db);
 	await bindRegister(db, 'site', { id: 'server-register', name: 'Front' }, 1);
 	await adoptCounters(db, 'site', 'server-register', {
@@ -332,8 +335,176 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 });
 
 it('re-minting without a document is a plain mint', async () => {
-	const { remintRegister } = await import('../../src/register-session');
+	const { remintRegister } = await import('../../src/register-session/register-document');
 	const minted = await remintRegister(db);
 	expect(await readRegister(db)).toEqual(minted);
 	expect(minted.sites).toEqual({});
+});
+
+it('markAnchored sets the flag and a re-mint keeps it', async () => {
+	await ensureRegister(db);
+	expect((await readRegister(db))?.anchored).toBeUndefined();
+	expect((await markAnchored(db)).anchored).toBe(true);
+	expect(getRegisterSnapshot()?.anchored).toBe(true);
+	expect((await remintRegister(db)).anchored).toBe(true);
+	expect((await readRegister(db))?.anchored).toBe(true);
+});
+
+describe('settleRegister: the till anchor', () => {
+	const ANCHOR = 'wcpos.tillId';
+	const UNWRITABLE = 'Till anchor cannot be written; clone detection is off on this device';
+	const REMINTED = 'Till re-minted: the local database came from another installation';
+	const logger = () => getLogger(['wcpos', 'app', 'hydration']);
+	const nextUuids = (...ids: string[]) => {
+		const spy = jest.spyOn(globalThis.crypto, 'randomUUID');
+		for (const id of ids) spy.mockReturnValueOnce(id as never);
+	};
+	const anchoredTill = async () => {
+		nextUuids('aaaaaaaa-0000-4000-8000-00000000000a');
+		await ensureRegister(db);
+		await nextSaleCounter(db, 'site');
+		return markAnchored(db);
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		localStorage.removeItem(ANCHOR);
+	});
+	afterEach(() => {
+		jest.restoreAllMocks();
+		localStorage.removeItem(ANCHOR);
+	});
+
+	it('anchors a till minted this boot', async () => {
+		const till = await settleRegister(db);
+		expect(localStorage.getItem(ANCHOR)).toBe(till.id);
+		expect((await readRegister(db))?.anchored).toBe(true);
+		expect(logger().info).not.toHaveBeenCalled();
+	});
+
+	it('leaves an anchored till whose anchor matches alone', async () => {
+		const till = await anchoredTill();
+		localStorage.setItem(ANCHOR, till.id);
+		const setItem = jest.spyOn(Storage.prototype, 'setItem');
+		expect(await settleRegister(db)).toEqual(till);
+		expect(setItem).not.toHaveBeenCalled();
+		expect(logger().info).not.toHaveBeenCalled();
+	});
+
+	it('marks a matching till that lacks the flag', async () => {
+		const till = await ensureRegister(db);
+		localStorage.setItem(ANCHOR, till.id);
+		const settled = await settleRegister(db);
+		expect(settled).toMatchObject({ id: till.id, anchored: true });
+		expect(logger().info).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['no anchor', null],
+		['a stale foreign anchor', 'other-till'],
+	])('adopts a till from before the anchor (%s), without re-minting', async (_, anchor) => {
+		const till = await ensureRegister(db);
+		await nextSaleCounter(db, 'site');
+		if (anchor) localStorage.setItem(ANCHOR, anchor);
+		const settled = await settleRegister(db);
+		expect(settled).toMatchObject({ id: till.id, anchored: true });
+		expect(settled.sites.site.sale_counter).toBe(1);
+		expect(localStorage.getItem(ANCHOR)).toBe(till.id);
+		expect(logger().info).toHaveBeenCalledWith('Till anchored', {
+			context: { till: till.id, previous: anchor },
+		});
+	});
+
+	it.each([
+		['absent', null],
+		['another till', 'other-till'],
+	])('re-mints an anchored till whose anchor is %s', async (_, anchor) => {
+		const till = await anchoredTill();
+		if (anchor) localStorage.setItem(ANCHOR, anchor);
+		nextUuids('bbbbbbbb-0000-4000-8000-00000000000b');
+		const fresh = await settleRegister(db);
+		expect(fresh.id).toBe('bbbbbbbb-0000-4000-8000-00000000000b');
+		expect(fresh).toMatchObject({ anchored: true, sites: { site: { sale_counter: 0 } } });
+		expect(await readRegister(db)).toEqual(fresh);
+		expect(localStorage.getItem(ANCHOR)).toBe(fresh.id);
+		expect(logger().info).toHaveBeenCalledWith(REMINTED, {
+			context: { previous: till.id, next: fresh.id, anchor },
+		});
+	});
+
+	it.each([true, false])(
+		'keeps the till as it is when the anchor cannot be written (anchored=%s)',
+		async (anchored) => {
+			const till = anchored ? await anchoredTill() : await ensureRegister(db);
+			jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+				throw new DOMException('quota exceeded', 'QuotaExceededError');
+			});
+			expect(await settleRegister(db)).toEqual(till);
+			expect(await readRegister(db)).toEqual(till);
+			expect(logger().info).toHaveBeenCalledTimes(1);
+			expect(logger().info).toHaveBeenCalledWith(UNWRITABLE, {
+				context: { anchor: null, till: till.id },
+			});
+		}
+	);
+
+	it('touches nothing when the anchor cannot be read', async () => {
+		const till = await anchoredTill();
+		jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new DOMException('denied', 'SecurityError');
+		});
+		const setItem = jest.spyOn(Storage.prototype, 'setItem');
+		expect(await settleRegister(db)).toEqual(till);
+		expect(setItem).not.toHaveBeenCalled();
+	});
+
+	it('does not re-mint a till another tab already re-minted, and anchors that id', async () => {
+		await anchoredTill();
+		const getLocal = db.getLocal.bind(db);
+		let reads = 0;
+		jest.spyOn(db, 'getLocal').mockImplementation((async (id: string) => {
+			const doc = await getLocal(id);
+			// The other tab's re-mint lands between this tab's read and its own re-mint.
+			if (++reads === 2 && doc) {
+				await doc.incrementalModify((data) => ({
+					...data,
+					id: 'eeeeeeee-0000-4000-8000-00000000000e',
+				}));
+			}
+			return doc;
+		}) as never);
+		nextUuids('bbbbbbbb-0000-4000-8000-00000000000b');
+		const settled = await settleRegister(db);
+		expect(settled.id).toBe('eeeeeeee-0000-4000-8000-00000000000e');
+		expect(settled.sites.site.sale_counter).toBe(1);
+		expect(localStorage.getItem(ANCHOR)).toBe('eeeeeeee-0000-4000-8000-00000000000e');
+		expect(logger().info).not.toHaveBeenCalledWith(REMINTED, expect.anything());
+	});
+
+	it('a re-mint that fails after the anchor write is retried on the next boot, never accepted', async () => {
+		const till = await anchoredTill();
+		const getLocal = db.getLocal.bind(db);
+		let reads = 0;
+		jest.spyOn(db, 'getLocal').mockImplementation((async (id: string) => {
+			const doc = await getLocal(id);
+			if (++reads === 1 || !doc) return doc;
+			return new Proxy(doc, {
+				get: (target, key, receiver) =>
+					key === 'incrementalModify'
+						? async () => {
+								throw new Error('storage closed');
+							}
+						: Reflect.get(target, key, receiver),
+			});
+		}) as never);
+		nextUuids('cccccccc-0000-4000-8000-00000000000c');
+		await expect(settleRegister(db)).rejects.toThrow('storage closed');
+		expect(localStorage.getItem(ANCHOR)).toBe('cccccccc-0000-4000-8000-00000000000c');
+		jest.mocked(db.getLocal).mockRestore();
+		expect(await readRegister(db)).toEqual(till);
+
+		nextUuids('dddddddd-0000-4000-8000-00000000000d');
+		const fresh = await settleRegister(db);
+		expect(fresh.id).toBe('dddddddd-0000-4000-8000-00000000000d');
+		expect(localStorage.getItem(ANCHOR)).toBe(fresh.id);
+	});
 });

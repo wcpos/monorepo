@@ -68,6 +68,22 @@ describe('clearAllDB web', () => {
 		);
 	});
 
+	it('drops the till anchor with the databases, and keeps it when the clear fails', async () => {
+		const removeItem = jest.fn();
+		(globalThis as { window?: unknown }).window = { localStorage: { removeItem } };
+		try {
+			const { clearAllDB } = await import('./clear-all-db.web');
+			const { TILL_ANCHOR_KEY } = await import('./till-anchor-key');
+			mockCloseDatabases.mockRejectedValueOnce(new Error('close failed'));
+			await expect(clearAllDB()).rejects.toThrow('close failed');
+			expect(removeItem).not.toHaveBeenCalled();
+			await clearAllDB();
+			expect(removeItem).toHaveBeenCalledWith(TILL_ANCHOR_KEY);
+		} finally {
+			delete (globalThis as { window?: unknown }).window;
+		}
+	});
+
 	it('does not terminate or delete if closing a database fails', async () => {
 		mockCloseDatabases.mockRejectedValueOnce(new Error('close failed'));
 		const { clearAllDB } = await import('./clear-all-db.web');

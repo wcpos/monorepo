@@ -2,15 +2,24 @@ import { map } from 'rxjs';
 
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import type { ClosureRow, UserDatabase } from '@wcpos/database';
+import { readTillAnchor, writeTillAnchor } from '@wcpos/database/till-anchor';
 import { AppInfo } from '@wcpos/utils/app-info';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { DeepReadonly } from 'rxdb';
+
+const registerLogger = getLogger(['wcpos', 'app', 'hydration']);
 
 export interface RegisterDocument {
 	id: string;
 	name: string;
 	platform: 'ios' | 'android' | 'web' | 'electron';
 	created_at: string;
+	/**
+	 * Set once the till id has been written to the anchor outside the database. A
+	 * document without it predates the anchor and is adopted, never re-minted.
+	 */
+	anchored?: boolean;
 	sites: Record<
 		string,
 		{
@@ -59,7 +68,9 @@ export async function readRegister(userDB: UserDatabase): Promise<RegisterDocume
 }
 
 /** The till's own identity: what a mint and a re-mint both draw fresh. */
-function mintTillIdentity(): Pick<RegisterDocument, 'id' | 'name' | 'created_at'> {
+type TillIdentity = Pick<RegisterDocument, 'id' | 'name' | 'created_at'>;
+
+function mintTillIdentity(): TillIdentity {
 	const id = mintUuid().toLowerCase();
 	return {
 		id,
@@ -68,11 +79,15 @@ function mintTillIdentity(): Pick<RegisterDocument, 'id' | 'name' | 'created_at'
 	};
 }
 
-export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+/** Read the register, or mint it; `minted` says which happened. */
+async function readOrMintRegister(
+	userDB: UserDatabase,
+	identity?: TillIdentity
+): Promise<{ register: RegisterDocument; minted: boolean }> {
 	const existing = await readRegister(userDB);
-	if (existing) return existing;
+	if (existing) return { register: existing, minted: false };
 	const data: RegisterDocument = {
-		...mintTillIdentity(),
+		...(identity ?? mintTillIdentity()),
 		platform: AppInfo.platform,
 		sites: {},
 	};
@@ -80,12 +95,16 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
 		await userDB.insertLocal('register', data);
 		currentRegisterId = data.id;
 		currentRegister = data;
-		return data;
+		return { register: data, minted: true };
 	} catch (error) {
 		const winner = await readRegister(userDB);
-		if (winner) return winner;
+		if (winner) return { register: winner, minted: false };
 		throw error;
 	}
+}
+
+export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+	return (await readOrMintRegister(userDB)).register;
 }
 
 /**
@@ -97,12 +116,27 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
  * is the source till's closure in flight, not this one's. Without a document this is
  * a plain mint.
  */
-export async function remintRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+export async function remintRegister(
+	userDB: UserDatabase,
+	identity: TillIdentity = mintTillIdentity(),
+	expectedId?: string
+): Promise<RegisterDocument> {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
-	if (!doc) return ensureRegister(userDB);
-	const updated = await doc.incrementalModify((data) => ({
+	if (!doc) return (await readOrMintRegister(userDB, identity)).register;
+	const updated = await doc.incrementalModify((data) =>
+		// Compare-and-set: a till that is no longer `expectedId` was re-minted by another tab.
+		expectedId !== undefined && data.id !== expectedId ? data : reminted(data, identity)
+	);
+	const register = updated.toJSON(true).data;
+	currentRegisterId = register.id;
+	currentRegister = register;
+	return register;
+}
+
+function reminted(data: RegisterDocument, identity: TillIdentity): RegisterDocument {
+	return {
 		...data,
-		...mintTillIdentity(),
+		...identity,
 		sites: Object.fromEntries(
 			Object.entries(data.sites).map(([site, bucket]) => [
 				site,
@@ -124,11 +158,75 @@ export async function remintRegister(userDB: UserDatabase): Promise<RegisterDocu
 				},
 			])
 		),
-	}));
+	};
+}
+
+/** Record that this till's id is held by the anchor outside the database. */
+export async function markAnchored(userDB: UserDatabase): Promise<RegisterDocument> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => ({ ...data, anchored: true }));
 	const register = updated.toJSON(true).data;
 	currentRegisterId = register.id;
 	currentRegister = register;
 	return register;
+}
+
+const UNWRITABLE_ANCHOR = 'Till anchor cannot be written; clone detection is off on this device';
+
+/**
+ * Settle the till's identity at hydration: read or mint the register, then compare its
+ * id with the anchor kept outside the database (`@wcpos/database/till-anchor`). A
+ * database copied from another installation carries that installation's till, and
+ * becomes its own till before anything sells.
+ *
+ * - Anchor unreadable: nothing; an unreadable anchor must never cost a till its identity.
+ * - Minted this boot: anchor it.
+ * - Never anchored (it predates the anchor, or is a copy of a database that did; such a
+ *   copy is accepted once): adopt it as this installation's till.
+ * - Anchored, and the anchor matches: nothing.
+ * - Anchored, and the anchor is absent or another till's: a clone, re-minted.
+ *
+ * A device that cannot persist its anchor keeps its till as it is; that is a degraded
+ * state, not a merchant action, so it logs info.
+ */
+export async function settleRegister(userDB: UserDatabase): Promise<RegisterDocument> {
+	const { register, minted } = await readOrMintRegister(userDB);
+	const anchor = readTillAnchor();
+	if (anchor === 'unknown') return register;
+	if (anchor === register.id) return register.anchored ? register : markAnchored(userDB);
+	if (minted || !register.anchored) {
+		// Marked only once the anchor holds it, so a failed write is retried as an
+		// adoption on a later boot instead of mistaken for a clone.
+		if (!writeTillAnchor(register.id)) {
+			registerLogger.info(UNWRITABLE_ANCHOR, { context: { anchor, till: register.id } });
+			return register;
+		}
+		const anchored = await markAnchored(userDB);
+		if (!minted) {
+			registerLogger.info('Till anchored', { context: { till: register.id, previous: anchor } });
+		}
+		return anchored;
+	}
+	// Anchor first: a crash or a failed re-mint after this write leaves the fresh id
+	// beside the cloned database, which the next boot reads as a mismatch and re-mints
+	// again, so a failure costs one till id and never hides a clone.
+	const identity = mintTillIdentity();
+	if (!writeTillAnchor(identity.id)) {
+		registerLogger.info(UNWRITABLE_ANCHOR, { context: { anchor, till: register.id } });
+		return register;
+	}
+	const fresh = await remintRegister(userDB, identity, register.id);
+	if (fresh.id !== identity.id) {
+		// Another tab re-minted this database first: its id stands, and this write, the
+		// later one, anchors it.
+		writeTillAnchor(fresh.id);
+		return fresh;
+	}
+	registerLogger.info('Till re-minted: the local database came from another installation', {
+		context: { previous: register.id, next: fresh.id, anchor },
+	});
+	return fresh;
 }
 
 export function observeRegister$(userDB: UserDatabase) {
