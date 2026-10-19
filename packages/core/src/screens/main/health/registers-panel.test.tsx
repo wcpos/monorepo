@@ -270,10 +270,28 @@ it('does not say All checks passed for a clean register on a truncated report', 
 	);
 	expect(register().textContent).not.toContain('All checks passed');
 	expect(register().textContent).not.toContain('in order');
+	expect(register().textContent).toContain('5 sales checked · counters 41–45');
+});
+
+it('claims only the sale checks on a clean register when the plugin sent no closure lists', () => {
+	withRegisters(clean);
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-clean').textContent).toBe(
+		'All sale checks passedNumbers 41–45 in order'
+	);
+});
+
+it('claims only the sale checks for the newest sales on a truncated report without closure lists', () => {
+	state.data = { ...state.data!, truncated: true };
+	withRegisters(clean);
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-clean').textContent).toBe(
+		'Sale checks passed for the newest salesOlder sales in the window were not checked.'
+	);
 });
 
 it('omits the in-order sub on a clean register without counters', () => {
-	withRegisters({ ...clean, first_counter: null, last_counter: null });
+	withRegisters({ ...clean, first_counter: null, last_counter: null, closure_gaps: [] });
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-register-clean').textContent).toBe('All checks passed');
 });
@@ -590,12 +608,15 @@ it('names the run of missing first closures when several are missing', () => {
 	);
 });
 
-it('notes a truncated report under the header', () => {
+it('notes a truncated report under the header, scoping every count below it', () => {
 	state.data = { ...state.data!, truncated: true };
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-registers-truncated').textContent).toBe(
-		'Only the newest sales were checked; older sales in the window were skipped.'
+		'Only the newest sales were checked; older sales in the window were skipped. Every count below is for the sales that were checked.'
 	);
+	// The register's own summary says it counts the sales checked, not the whole window.
+	expect(register().textContent).toContain('5 sales checked · counters 41–45');
+	expect(register().textContent).not.toContain('5 sales · counters');
 });
 
 it('omits the truncated note on a complete report', () => {

@@ -287,8 +287,9 @@ describe('check order', () => {
 });
 
 describe('registerState', () => {
-	it('is clean when nothing is notable', () => {
-		expect(registerState(clean)).toEqual({ kind: 'clean' });
+	it('is clean when nothing is notable, saying whether the closures were checked', () => {
+		// An older plugin sent no closure lists: the clean row must not claim the closure audit.
+		expect(registerState(clean)).toEqual({ kind: 'clean', closuresChecked: false });
 		expect(
 			registerState({
 				...clean,
@@ -296,7 +297,11 @@ describe('registerState', () => {
 				closure_conflicts: [],
 				closure_total_mismatches: [],
 			})
-		).toEqual({ kind: 'clean' });
+		).toEqual({ kind: 'clean', closuresChecked: true });
+		expect(registerState({ ...clean, closure_conflicts: [] })).toEqual({
+			kind: 'clean',
+			closuresChecked: true,
+		});
 	});
 
 	it('keeps the per-check rows when late offline sales are notable', () => {

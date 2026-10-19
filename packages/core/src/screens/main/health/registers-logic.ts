@@ -65,8 +65,11 @@ export type RegisterCheck = GapsCheck | DuplicatesCheck | ClockCheck | ClosuresC
  * What one register's block shows: one "All checks passed" row when nothing is notable,
  * otherwise the ordered checks. A register without sales in the window lists only its
  * failing checks (closures are not windowed, so they can still fail), which may be none.
+ * `closuresChecked` is false when the plugin sent no closure lists, so a clean row must not
+ * claim the closure audit passed.
  */
-export type RegisterState = { kind: 'clean' } | { kind: 'checks'; checks: RegisterCheck[] };
+export type RegisterState =
+	{ kind: 'clean'; closuresChecked: boolean } | { kind: 'checks'; checks: RegisterCheck[] };
 
 function byTill(a: { till: string }, b: { till: string }): number {
 	return a.till < b.till ? -1 : a.till > b.till ? 1 : 0;
@@ -215,7 +218,8 @@ export function registerState(register: RegisterReport): RegisterState {
 	if (register.orders === 0) {
 		return { kind: 'checks', checks: checks.filter((check) => check.failing) };
 	}
-	return checks.every((check) => !check.notable) ? { kind: 'clean' } : { kind: 'checks', checks };
+	if (checks.some((check) => check.notable)) return { kind: 'checks', checks };
+	return { kind: 'clean', closuresChecked: checks.some((check) => check.kind === 'closures') };
 }
 
 /**

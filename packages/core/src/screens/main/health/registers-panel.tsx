@@ -49,6 +49,19 @@ function passTitleKey(kind: CheckKind, truncated: boolean): string {
 }
 
 /**
+ * The one row a clean register shows. Without closure lists (an older plugin) only the sale
+ * checks ran; on a truncated report they ran on the newest sales only.
+ */
+function cleanTitleKey(closuresChecked: boolean, truncated: boolean): string {
+	if (truncated) {
+		return closuresChecked
+			? 'health.registers.checks_passed_sampled'
+			: 'health.registers.sales_checks_passed_sampled';
+	}
+	return closuresChecked ? 'health.registers.all_passed' : 'health.registers.sales_checks_passed';
+}
+
+/**
  * "2026-09-11 00:42 +02:00" from an ISO stamp; the device offset stays visible so a
  * finding reads against the UTC received time without mental arithmetic.
  */
@@ -352,29 +365,26 @@ function RegisterBlock({
 						? truncated
 							? t('health.registers.no_sales_sampled')
 							: t('health.registers.no_sales', { days })
-						: t('health.registers.sales_counters', {
-								count: register.orders,
-								first: first ?? '—',
-								last: last ?? '—',
-							})}
+						: t(
+								// A truncated report counted only the sales it checked, not the window.
+								truncated
+									? 'health.registers.sales_counters_sampled'
+									: 'health.registers.sales_counters',
+								{ count: register.orders, first: first ?? '—', last: last ?? '—' }
+							)}
 				</Text>
 			</HStack>
-			{state.kind === 'clean' && truncated ? (
+			{state.kind === 'clean' ? (
 				<CheckRow
 					attention={false}
 					testID="health-register-clean"
-					title={t('health.registers.checks_passed_sampled')}
-					sub={t('health.registers.checks_passed_sampled_sub')}
-				/>
-			) : state.kind === 'clean' ? (
-				<CheckRow
-					attention={false}
-					testID="health-register-clean"
-					title={t('health.registers.all_passed')}
+					title={t(cleanTitleKey(state.closuresChecked, truncated))}
 					sub={
-						first !== null && last !== null
-							? t('health.registers.in_order', { first, last })
-							: undefined
+						truncated
+							? t('health.registers.checks_passed_sampled_sub')
+							: first !== null && last !== null
+								? t('health.registers.in_order', { first, last })
+								: undefined
 					}
 				/>
 			) : (
