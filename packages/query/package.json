@@ -13,6 +13,7 @@
 		"./register-session": "./src/register-session/index.ts",
 		"./temporary-order": "./src/temporary-order/index.ts",
 		"./record-readers": "./src/record-readers/index.ts",
+		"./local-data-reset": "./src/local-data-reset/index.ts",
 		"./query-state": "./src/query-state/index.ts",
 		"./store-local": "./src/store-local/index.ts",
 		"./mutations": "./src/mutations/index.ts",
