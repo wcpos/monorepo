@@ -561,3 +561,29 @@ it.each([false, true])(
 		expect(h.settle).toHaveBeenCalledTimes(2);
 	}
 );
+
+it.each([false, true])(
+	're-drains a final stock supersession only for new inputs (%s)',
+	async (emitted) => {
+		const h = start([couponOrder()], false);
+		let release!: () => void;
+		const superseded = { superseded: true, reason: 'pos_products.out_of_stock' };
+		h.settle.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return superseded;
+		});
+		h.settle.mockResolvedValue(superseded);
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		if (emitted) await emit(h.inputs$, h.inputs$.value);
+		release();
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 2 : 1);
+		await emit(h.inputs$, h.inputs$.value);
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 3 : 2);
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(emitted ? 3 : 2);
+	}
+);

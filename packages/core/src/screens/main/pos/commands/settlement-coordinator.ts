@@ -3,13 +3,14 @@ import { combineLatest, type Observable, Subscription } from 'rxjs';
 import {
 	activeAwaitingCustomer,
 	type CouponContext,
-	derive,
 	hasLiveSettlementLeg,
 	readLedger,
 	serverOwnsMoney,
+	toMinor,
 } from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
+import { netPaidForBoundary } from './paid-balance-boundary';
 import { type CouponReferences, replayContentKey } from './coupon-continuation';
 import { isActionRefusal } from '../../../../extensions/actions';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
@@ -44,13 +45,13 @@ interface Deps {
 }
 
 function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, dp: number) {
-	const payment = derive(payload.total, readLedger(payload.meta_data), [], { dp });
+	const netPaid = netPaidForBoundary(payload, dp);
 	return Boolean(
 		!OPEN_ORDER_STATUSES.some((status) => status === payload.status) ||
 		(record as { isNew?: boolean }).isNew ||
 		hasLiveSettlementLeg(payload.meta_data) ||
 		activeAwaitingCustomer(payload.meta_data) ||
-		(Number(payment.paid) > 0 && Number(payment.balance) <= 0) ||
+		(netPaid > 0 && toMinor(payload.total, dp) <= toMinor(netPaid, dp)) ||
 		['rejected', 'conflicted', 'needs-revision'].includes(
 			deps.orderSaveState(record.uuid)?.kind ?? ''
 		) ||
@@ -114,10 +115,19 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	const settle = async (...args: Parameters<Deps['settle']>) => {
 		const generation = inputGeneration;
 		const outcome = await deps.settle(...args);
+		const reason = isActionRefusal(outcome)
+			? outcome.deny.reasonKey
+			: outcome &&
+				  typeof outcome === 'object' &&
+				  'superseded' in outcome &&
+				  outcome.superseded === true &&
+				  'reason' in outcome
+				? outcome.reason
+				: undefined;
 		// Do not lose a catalog emission consumed while a coupon replay awaited its guards.
 		if (
-			isActionRefusal(outcome) &&
-			['pos_cart.only_n_available', 'pos_products.out_of_stock'].includes(outcome.deny.reasonKey)
+			typeof reason === 'string' &&
+			['pos_cart.only_n_available', 'pos_products.out_of_stock'].includes(reason)
 		) {
 			seen.delete(args[0]);
 			// Retry only for new inputs; persistent shortages must not spin.

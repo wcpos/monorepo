@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { type EngineRecord } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout } from '../checkout-mode';
+import { getCheckoutModeSnapshot, leaveCheckout, selectReceipt } from '../checkout-mode';
 import { returnToTill } from '../till-route';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
@@ -51,6 +51,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
 			if (getCurrentOrderID() !== order.uuid) {
+				if (getCheckoutModeSnapshot().selectedReceiptOrder === order.uuid) selectReceipt(null);
 				leaveCheckout(order.uuid);
 				return;
 			}

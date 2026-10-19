@@ -495,7 +495,7 @@ it.each(['product', 'variation'] as const)(
 				}
 			)
 		);
-		expect(outcome).toBe('superseded');
+		expect(outcome).toEqual({ superseded: true, reason: 'pos_products.out_of_stock' });
 		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 		expect(complete).not.toHaveBeenCalled();
 		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
@@ -643,3 +643,111 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 		expect(complete).toHaveBeenCalledTimes(offline ? 1 : 0);
 	}
 );
+
+it.each(['stock', 'predicate', 'unchanged'])(
+	'fences completion after provenance allocation (%s)',
+	async (change) => {
+		const order = orderFor();
+		order.payload.line_items![0].product_id = 1;
+		order.payload.line_items![0].quantity = 1;
+		let available = true;
+		let allowed = true;
+		ctx.actionCtx = createActionContext({
+			log,
+			t: (key) => key,
+			readPaymentMethod: () => null,
+			preventOverselling: true,
+			priceDecimals: 2,
+			resolveSession,
+			readCatalog: async () => ({
+				manage_stock: true,
+				stock_quantity: available ? 2 : 0,
+				stock_status: available ? 'instock' : 'outofstock',
+			}),
+		});
+		const { nextSaleCounter } = jest.requireMock('@wcpos/query/register-session');
+		nextSaleCounter.mockImplementationOnce(async () => {
+			available = change !== 'stock';
+			allowed = change !== 'predicate';
+			return 7;
+		});
+		const complete = jest.fn();
+		const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					allowed: () => allowed,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			)
+		);
+		expect(order.payload).toMatchObject(
+			change === 'unchanged'
+				? { status: 'completed', total: '4' }
+				: { status: 'pos-partial', total: '10' }
+		);
+		expect(complete).toHaveBeenCalledTimes(change === 'unchanged' ? 1 : 0);
+		if (change === 'stock')
+			expect(outcome).toEqual({ superseded: true, reason: 'pos_products.out_of_stock' });
+		// No counter-release API exists and the resident resolver cannot await allocation.
+		expect(nextSaleCounter).toHaveBeenCalledTimes(1);
+	}
+);
+
+it('completes a refunded partial sale through the coordinator using net paid', async () => {
+	const order = orderFor();
+	order.payload.meta_data = withLedger(
+		[],
+		[{ ...readLedger(order.payload.meta_data)[0], amount: '10', refunded_amount: '6' }]
+	);
+	const complete = jest.fn();
+	const coordinator = createSettlementCoordinator({
+		inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
+		openOrders$: of([order]),
+		ratesReady$: of({ ready: true, generation: 0 }),
+		references$: of({ ready: true, generation: '0' }),
+		readCoupons: async () => ({
+			coupons: new Map(),
+			productCategories: new Map(),
+			categoryParents: new Map(),
+		}),
+		serverOwnsMoney: () => false,
+		orderSaveState: () => null,
+		inCheckout: () => false,
+		now: Date.now,
+		observe: jest.fn(),
+		settle: (_uuid, _record, allowed, _coupons, queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					allowed,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			),
+	});
+	try {
+		await enqueueOrderMutation(order.uuid, async () => {});
+		expect(order.payload).toMatchObject({ status: 'completed', total: '4' });
+		expect(complete).toHaveBeenCalledTimes(1);
+	} finally {
+		coordinator.stop();
+	}
+});

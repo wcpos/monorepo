@@ -12,6 +12,7 @@ export async function writeZeroBalanceCompletion(
 		order,
 		sessionId,
 		changes = () => ({}),
+		revalidate,
 		queue,
 		complete,
 		write,
@@ -19,6 +20,7 @@ export async function writeZeroBalanceCompletion(
 		order: EngineRecord<'orders'>;
 		sessionId: string | null;
 		changes?: (current: EngineRecord<'orders'>['payload']) => Record<string, unknown> | null;
+		revalidate?: () => Promise<string | undefined>;
 		write: (changes: PayloadChanges) => Promise<unknown>;
 		queue: OrderMutationContext;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
@@ -27,10 +29,17 @@ export async function writeZeroBalanceCompletion(
 	const latest = order.getLatest().payload;
 	// Reject an obsolete boundary before allocating irreversible sale provenance.
 	if (changes(latest) === null) return 'superseded';
+	const preflightReason = await revalidate?.();
+	if (preflightReason) return { superseded: true as const, reason: preflightReason };
 	const stamped = await completionMetaFor(ctx, latest.meta_data, { sessionId });
 	const additions = stamped.filter(
 		(entry) => !latest.meta_data?.some(({ key }) => key === entry.key)
 	);
+	// Counter allocation has no release API; the resident resolver is synchronous and replayable.
+	// A late supersession can leave a counter gap. Re-read stock AFTER allocation, then keep
+	// synchronous payload validity in the resolver; never await provenance after this fence.
+	const reason = await revalidate?.();
+	if (reason) return { superseded: true as const, reason };
 	let superseded = false;
 	const written = await write((current) => {
 		const patch = changes(current);

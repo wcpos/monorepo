@@ -69,17 +69,22 @@ export async function commitAtBoundary(
 		},
 		async ({ sessionId }, slot) => {
 			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing: true });
-			const [unmet] = await countConditionsInSlot(
-				slot.order ?? order,
-				ctx.actionCtx,
-				conditionRules(ctx.actionCtx.store.preventOverselling)
-			);
+			let conditionReason: string | undefined;
+			const revalidate = async () => {
+				const [unmet] = await countConditionsInSlot(
+					slot.order ?? order,
+					ctx.actionCtx,
+					conditionRules(ctx.actionCtx.store.preventOverselling)
+				);
+				return (conditionReason = unmet?.reasonKey);
+			};
 			let refusal: ActionRefusal | undefined;
 			let overpaid: { orderId: string; total: string; netPaid: number } | undefined;
 			const completion = await writeZeroBalanceCompletion(ctx, {
 				order,
 				sessionId,
 				write,
+				revalidate,
 				queue: slot,
 				complete: ctx.complete,
 				changes: (payload) => {
@@ -90,7 +95,7 @@ export async function commitAtBoundary(
 						};
 						return null;
 					}
-					if (unmet || hasLiveSettlementLeg(payload.meta_data)) return null;
+					if (hasLiveSettlementLeg(payload.meta_data)) return null;
 					if (allowed && !allowed(payload)) return null;
 					if (
 						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
@@ -114,10 +119,10 @@ export async function commitAtBoundary(
 					return patch;
 				},
 			});
-			if (completion === 'superseded') {
+			if (completion) {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {
-					context: { orderId: order.uuid, ...(unmet && { reason: unmet.reasonKey }) },
+					context: { orderId: order.uuid, ...(conditionReason && { reason: conditionReason }) },
 				});
 			} else if (overpaid) logger.warn('settlement.boundary-overpaid', { context: overpaid });
 			return refusal ?? completion;

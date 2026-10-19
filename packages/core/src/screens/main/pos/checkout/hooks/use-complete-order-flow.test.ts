@@ -401,3 +401,21 @@ it.each([false, true])(
 		expect(mockReplace).not.toHaveBeenCalled();
 	}
 );
+
+it('deselects A when the cashier switches after its receipt was selected', async () => {
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockAutoShowReceipt = true;
+	mockRequire.mockImplementationOnce(() => {
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		mockSelectedOrder = 'B';
+		return { ready: Promise.resolve(), release: jest.fn() };
+	});
+	const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+	await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+	expect(mockSelectedOrder).toBe('B');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+	expect(mockReplace).not.toHaveBeenCalled();
+});
