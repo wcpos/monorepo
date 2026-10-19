@@ -144,14 +144,16 @@ export function useTerminalPaymentsService(): void {
 							status: summary.status,
 						});
 					} catch (error) {
-						receipt?.undo();
+						// A store switch stopped this service and reset checkout mode meanwhile: the
+						// old store's receipt must not reach the new store's state.
+						if (!stopped) receipt?.undo();
 						throw error;
 					}
 					if (!written) {
-						receipt?.undo();
+						if (!stopped) receipt?.undo();
 						throw new Error('Offline payment could not be saved');
 					}
-					receipt?.settle();
+					if (!stopped) receipt?.settle();
 					return result;
 				}),
 			mirror: async (orderUuid, { payment, order }) => {
@@ -182,7 +184,7 @@ export function useTerminalPaymentsService(): void {
 						meta_data,
 					});
 					mirrored = true;
-					receipt?.settle();
+					if (!stopped) receipt?.settle();
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
 						const patched = await latest.current.stampCompletion(
 							resident,
@@ -193,7 +195,7 @@ export function useTerminalPaymentsService(): void {
 				} catch (error) {
 					// The leg preserves a known capture even when its local mirror fails.
 					if (!mirrored) {
-						receipt?.undo();
+						if (!stopped) receipt?.undo();
 						throw error;
 					}
 					logger.error('Checkout failed', {

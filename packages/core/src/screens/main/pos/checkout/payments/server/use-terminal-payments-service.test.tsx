@@ -686,6 +686,79 @@ describe('a server capture of the order in checkout', () => {
 		}
 	);
 
+	// The cashier can act while the write is pending: what they chose stays when it fails.
+	it('keeps a selection and method the cashier chose while the offline write was pending', async () => {
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const original = mockResident.payload.meta_data;
+		mockResident.payload.meta_data = withLedger([], []);
+		const hook = renderHook(() => useTerminalPaymentsService());
+		enterCheckout('completed-order');
+		setTenderMethod('completed-order', 'card');
+		unwatch = watchTender('completed-order', true);
+		mockPatch.mockImplementationOnce(async () => {
+			selectReceipt('other-sale');
+			setTenderMethod('completed-order', 'cash');
+			throw new Error('disk full');
+		});
+		try {
+			await expect(
+				start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow)
+			).rejects.toThrow('disk full');
+			const after = getCheckoutModeSnapshot();
+			expect(after.selectedReceiptOrder).toBe('other-sale');
+			expect(after.tenderMethods.get('completed-order')).toBe('cash');
+			expect(after.receiptOrders.has('completed-order')).toBe(false);
+			expect(after.checkoutOrders.has('completed-order')).toBe(true);
+		} finally {
+			hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+	});
+
+	// A store switch stops the service and resets checkout mode for the new store; the old
+	// store's pending receipt must neither select nor restore anything there.
+	it.each(['succeeds', 'fails'] as const)(
+		'drops the pending receipt when a store switch stops the service before the write %s',
+		async (outcome) => {
+			const start = jest.spyOn(
+				await import('../../../../../../services/terminal-payments'),
+				'startTerminalPaymentsService'
+			);
+			const original = mockResident.payload.meta_data;
+			mockResident.payload.meta_data = withLedger([], []);
+			const hook = renderHook(() => useTerminalPaymentsService());
+			let unmounted = false;
+			enterCheckout('completed-order');
+			setTenderMethod('completed-order', 'card');
+			unwatch = watchTender('completed-order', true);
+			mockPatch.mockImplementationOnce(async () => {
+				hook.unmount();
+				unmounted = true;
+				resetCheckoutMode();
+				if (outcome === 'fails') throw new Error('disk full');
+				return {};
+			});
+			try {
+				const write = start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow);
+				if (outcome === 'fails') await expect(write).rejects.toThrow('disk full');
+				else await write;
+				const after = getCheckoutModeSnapshot();
+				expect(after.selectedReceiptOrder).toBeNull();
+				expect(after.receiptOrders.size).toBe(0);
+				expect(after.checkoutOrders.size).toBe(0);
+				expect(after.tenderMethods.size).toBe(0);
+			} finally {
+				if (!unmounted) hook.unmount();
+				start.mockRestore();
+				mockResident.payload.meta_data = original;
+			}
+		}
+	);
+
 	it('enters the receipt before an offline authorization writes its completing status, selects it after', async () => {
 		const start = jest.spyOn(
 			await import('../../../../../../services/terminal-payments'),

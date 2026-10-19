@@ -173,7 +173,9 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
  * select is decided now, while the tender is still registered (its cleanup clears the watch
  * once the write unmounts the column). The caller then calls `settle()` once the write has
  * succeeded, or `undo()` when it fails and leaves the leg to retry from checkout: each part
- * `enterReceipt` changed goes back through the primitive that owns it.
+ * `enterReceipt` changed goes back through the primitive that owns it, unless the cashier
+ * changed it while the write was pending (theirs stays). The selection is never restored:
+ * the entry did not change it, and `finishReceipt` clears it only if it is this receipt.
  */
 export interface PendingReceipt {
 	settle(): void;
@@ -185,17 +187,32 @@ export function enterReceiptBeforeCompletion(uuid: string): PendingReceipt {
 	const select = watchedTender.autoShowReceipt;
 	const before = snapshot;
 	enterReceipt(uuid, { select: false });
+	const entered = snapshot;
 	return {
 		settle: () => {
 			if (select) selectReceipt(uuid);
 		},
 		undo: () => {
+			const now = snapshot;
+			// Back to what the entry found, unless the cashier changed it since the entry.
+			const restore = <T>(field: (mode: CheckoutModeSnapshot) => ReadonlyMap<string, T>) =>
+				(field(now).get(uuid) === field(entered).get(uuid) ? field(before) : field(now)).get(
+					uuid
+				) ?? null;
 			finishReceipt(uuid);
-			setLinesPaidBy(uuid, before.linesPaidBy.get(uuid) ?? null);
-			setTenderPlan(uuid, before.tenderPlans.get(uuid) ?? null);
-			setTenderMethod(uuid, before.tenderMethods.get(uuid) ?? null);
-			if (before.checkoutOrders.has(uuid)) enterCheckout(uuid);
-			selectReceipt(before.selectedReceiptOrder);
+			setLinesPaidBy(
+				uuid,
+				restore((mode) => mode.linesPaidBy)
+			);
+			setTenderPlan(
+				uuid,
+				restore((mode) => mode.tenderPlans)
+			);
+			setTenderMethod(
+				uuid,
+				restore((mode) => mode.tenderMethods)
+			);
+			if (before.checkoutOrders.has(uuid) || now.checkoutOrders.has(uuid)) enterCheckout(uuid);
 		},
 	};
 }
