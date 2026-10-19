@@ -286,6 +286,45 @@ it('says No sales and lists no checks for a register without sales in the window
 	expect(screen.queryByTestId('health-register-clean')).toBeNull();
 });
 
+it('says No sales only among the newest sales checked on a truncated report', () => {
+	state.data = { ...state.data!, truncated: true };
+	withRegisters({ ...clean, orders: 0, first_counter: null, last_counter: null });
+	render(<RegistersPanel />);
+	expect(register().textContent).toContain('No sales among the newest sales checked');
+	expect(register().textContent).not.toContain('No sales in the last');
+});
+
+it('scopes the sale checks’ pass titles to the newest sales on a truncated report', () => {
+	state.data = { ...state.data!, truncated: true };
+	// A failing duplicate puts the register in per-check view.
+	withRegisters({
+		...clean,
+		duplicates: findings.duplicates,
+		skew_counts: { ahead: 0, behind: 0 },
+		closure_gaps: [],
+	});
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-gaps').textContent).toBe(
+		'No skipped numbers among the newest sales'
+	);
+	expect(screen.getByTestId('health-register-check-clock').textContent).toBe(
+		'Till clocks agree with your server for the newest sales'
+	);
+	// Closures are checked across all history, so their pass title stays exact.
+	expect(screen.getByTestId('health-register-check-closures').textContent).toBe(
+		'Closures numbered in orderCovers every closure, not only the last 30 days.'
+	);
+});
+
+it('scopes the duplicates pass title to the newest sales on a truncated report', () => {
+	state.data = { ...state.data!, truncated: true };
+	withRegisters({ ...clean, gaps: [{ till: TILL_A, after: 1, before: 3, missing: 1 }] });
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-duplicates').textContent).toBe(
+		'No number used twice among the newest sales'
+	);
+});
+
 it('names each till that restarted its counter once the duplicates check is opened', () => {
 	withRegisters({
 		...clean,
@@ -441,6 +480,8 @@ it('fails the clock check on a clock running ahead and lists only the ahead sale
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-clock');
 	expect(check.textContent).toContain('1 sale stamped by a clock running ahead');
+	// With skew_counts the count is exact.
+	expect(check.textContent).not.toContain('At least');
 	expect(check.textContent).toContain('Set the date and time on the device.');
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
@@ -499,7 +540,7 @@ it('fails an older plugin’s sample on an ahead row, with the amber running-ahe
 	render(<RegistersPanel />);
 	expect(checkIds()[0]).toBe('health-register-check-clock');
 	const check = screen.getByTestId('health-register-check-clock');
-	expect(check.textContent).toContain('1 sale stamped by a clock running ahead');
+	expect(check.textContent).toContain('At least 1 sale stamped by a clock running ahead');
 	expect(check.querySelector('[data-icon="triangleExclamation"]')).not.toBeNull();
 	expect(check.querySelector('[data-icon="circleInfo"]')).toBeNull();
 	open('clock');

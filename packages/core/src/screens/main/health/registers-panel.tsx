@@ -34,6 +34,20 @@ const PASS_TITLE: Record<CheckKind, string> = {
 	closures: 'health.registers.closures_pass',
 };
 
+/** The same, scoped to the newest sales: a truncated report checked only those. */
+const PASS_TITLE_SAMPLED: Record<CheckKind, string> = {
+	gaps: 'health.registers.gaps_pass_sampled',
+	duplicates: 'health.registers.duplicates_pass_sampled',
+	clock: 'health.registers.clock_pass_sampled',
+	// Closures are not windowed or truncated: the server checks every one.
+	closures: 'health.registers.closures_pass',
+};
+
+/** A passing check's title; on a truncated report the sale checks claim only the newest sales. */
+function passTitleKey(kind: CheckKind, truncated: boolean): string {
+	return (truncated ? PASS_TITLE_SAMPLED : PASS_TITLE)[kind];
+}
+
 /**
  * "2026-09-11 00:42 +02:00" from an ISO stamp; the device offset stays visible so a
  * finding reads against the UTC received time without mental arithmetic.
@@ -118,10 +132,12 @@ function CheckView({
 	check,
 	registerId,
 	days,
+	truncated,
 }: {
 	check: RegisterCheck;
 	registerId: string;
 	days: number;
+	truncated: boolean;
 }) {
 	const t = useT();
 	const testID = `health-register-check-${check.kind}`;
@@ -146,7 +162,10 @@ function CheckView({
 		// is usually an offline one, but the payload cannot rule out a clock running behind,
 		// so that row does not claim the clocks agree.
 		const behind = check.kind === 'clock' ? check.behind : [];
-		const title = behind.length > 0 ? 'health.registers.clock_pass_behind' : PASS_TITLE[check.kind];
+		const title =
+			behind.length > 0
+				? 'health.registers.clock_pass_behind'
+				: passTitleKey(check.kind, truncated);
 		let sub: string | undefined;
 		if (check.kind === 'clock' && behind.length > 0) {
 			sub = t('health.registers.clock_behind', { count: check.behindCount });
@@ -242,7 +261,12 @@ function CheckView({
 				<CheckRow
 					attention
 					testID={testID}
-					title={t('health.registers.clock_title', { count: check.aheadCount })}
+					title={
+						// Without skew_counts the ahead rows are from a capped sample: a lower bound.
+						check.counted
+							? t('health.registers.clock_title', { count: check.aheadCount })
+							: t('health.registers.clock_title_atleast', { count: check.aheadCount })
+					}
 					sub={t('health.registers.clock_sub')}
 				>
 					{check.ahead.map((skew) => skewRow(t, skew))}
@@ -325,7 +349,9 @@ function RegisterBlock({
 				</HStack>
 				<Text className="text-muted-foreground text-xs">
 					{register.orders === 0
-						? t('health.registers.no_sales', { days })
+						? truncated
+							? t('health.registers.no_sales_sampled')
+							: t('health.registers.no_sales', { days })
 						: t('health.registers.sales_counters', {
 								count: register.orders,
 								first: first ?? '—',
@@ -353,7 +379,13 @@ function RegisterBlock({
 				/>
 			) : (
 				state.checks.map((check) => (
-					<CheckView key={check.kind} check={check} registerId={register.id} days={days} />
+					<CheckView
+						key={check.kind}
+						check={check}
+						registerId={register.id}
+						days={days}
+						truncated={truncated}
+					/>
 				))
 			)}
 		</VStack>
