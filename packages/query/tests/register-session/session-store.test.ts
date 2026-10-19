@@ -72,10 +72,30 @@ it('void inserts a write-once reversal and marks its target', async () => {
 	]);
 	expect(concurrent.id).toBe(reversal.id);
 	const repeated = await voidMovement(db, row.id, 7);
-	expect(reversal).toMatchObject({ type: 'void', voids: row.id, sync_status: 'pending' });
+	expect(reversal).toMatchObject({
+		type: 'void',
+		amount: '0',
+		reason: '',
+		voids: row.id,
+		sync_status: 'pending',
+	});
 	expect(repeated.id).toBe(reversal.id);
 	expect(await db.cash_movements.count().exec()).toBe(2);
 	expect(row.getLatest().voided_by).toBe(reversal.id);
+});
+
+it('voids a paid-in with a zero-amount reversal and no reason', async () => {
+	const session = await openSession(db, input);
+	const target = await recordMovement(db, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '7',
+		reason: 'Float',
+		actor: 7,
+	});
+	const reversal = await voidMovement(db, target.id, 7);
+	expect(reversal).toMatchObject({ type: 'void', amount: '0', reason: '', voids: target.id });
+	expect(target.getLatest().voided_by).toBe(reversal.id);
 });
 
 it('gates counting and missing sessions, and retains the server baseline before money actions', async () => {

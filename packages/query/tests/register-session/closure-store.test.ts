@@ -144,7 +144,9 @@ it('freezes the count figures and breakdowns; retries reuse one number and one p
 		perpetual_sales_total: '80.0000',
 		perpetual_refunds_total: '10.0000',
 		unsynced_count: 6,
-		unsynced_total: '109.0000',
+		// A reversal carries amount '0', so the unsynced total no longer counts the voided
+		// paid-in twice (its own 7 plus the reversal's 7); the voided row still counts once.
+		unsynced_total: '102.0000',
 		first_sale_counter: 8,
 		last_sale_counter: 8,
 		sync_status: 'pending',

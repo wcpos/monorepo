@@ -47,6 +47,7 @@ export {
 	requireOpenSession,
 	retryMovement,
 	startCounting,
+	readMovement,
 	voidMovement,
 	writeClosure,
 	setClosureReceiptSnapshot,

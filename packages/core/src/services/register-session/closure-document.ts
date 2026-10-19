@@ -144,8 +144,12 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 					'counted',
 					'variance',
 				]),
-				movements: ((breakdowns.movements ?? []) as Values[]).map((m) => ({
+				movements: ((breakdowns.movements ?? []) as Values[]).map((m, _, movements) => ({
 					...money(m, ['amount']),
+					// A reversal carries amount '0'; show the amount it reversed, read from its target row.
+					...(m.type === 'void' && movements.some((t) => t.voided_by === m.id)
+						? money({ amount: movements.find((t) => t.voided_by === m.id)?.amount }, ['amount'])
+						: {}),
 					created_at: formatClosureDate((m.created_at_gmt ?? m.created_at) as string, context),
 					type_label: context.i18n[String(m.type)] ?? m.type,
 					voided: !!m.voided_by,

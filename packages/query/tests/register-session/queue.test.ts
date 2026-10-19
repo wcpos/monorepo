@@ -473,6 +473,33 @@ it('adopts a server movement row in the local shape: `actor` is `created_by`, no
 	expect(movement.getLatest().toJSON()).toMatchObject({ sync_status: 'synced', created_by: 7 });
 	expect(movement.getLatest().toJSON()).not.toHaveProperty('actor');
 });
+it('posts a paid-in reversal with zero amount and no reason', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const target = await recordMovement(db, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	await target.incrementalPatch({ sync_status: 'synced' });
+	const reversal = await voidMovement(db, target.id, 7);
+	http.post.mockResolvedValueOnce({ data: serverMovementRow(reversal.toJSON()) });
+	await drain();
+	expect(http.post).toHaveBeenCalledTimes(1);
+	expect(http.post).toHaveBeenCalledWith(
+		'movements',
+		expect.objectContaining({
+			id: reversal.id,
+			type: 'void',
+			amount: '0',
+			reason: '',
+			voids: target.id,
+		})
+	);
+	expect(reversal.getLatest().sync_status).toBe('synced');
+});
 it('a refresh keeps a reversal claim the server has not acknowledged, and the cashier', async () => {
 	const row = await open();
 	const target = await recordMovement(db, {
