@@ -414,6 +414,53 @@ it.each([
 	expect(screen.getByTestId('card-readers-connect').getAttribute('data-variant')).toBe(variant);
 });
 
+describe('a provider whose driver cannot run on this platform', () => {
+	const stripeMethod: PaymentMethodDescriptor = {
+		...deviceMethod,
+		id: 'stripe',
+		title: 'Stripe Terminal',
+		capture: { ...deviceMethod.capture, provider: 'stripe-web-test' },
+	};
+	function stripeDriver(availability: ReturnType<PaymentDriver['availability']>): PaymentDriver {
+		return {
+			provider: 'stripe-web-test',
+			capabilities: { discovery: 'harness', cancel: 'on_device', refund: false },
+			availability: () => availability,
+			collect: () => Promise.reject(new Error('not in this test')),
+			status$: {
+				get: () => ({ connection: 'disconnected', reader: null }),
+				subscribe: () => () => {},
+			},
+		};
+	}
+
+	it('is not offered: Connect scans the one provider that can run, with no picker', async () => {
+		registerDriver(stripeDriver({ available: false, reason: 'web' }));
+		mockMethods = [deviceMethod, stripeMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('card-readers-connect'));
+		});
+		expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+		expect(screen.getByTestId(`reader-row-${deviceMethod.id}-connect-sim-approve`)).toBeTruthy();
+		expect(screen.queryByTestId('reader-row-stripe')).toBeNull();
+	});
+
+	it('is offered where it can run: two providers open the picker', async () => {
+		registerDriver(stripeDriver({ available: true }));
+		mockMethods = [deviceMethod, stripeMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('card-readers-connect'));
+		});
+		expect(screen.getByTestId('card-readers-provider-sheet')).toBeTruthy();
+		expect(screen.getByTestId('card-readers-connect-stripe')).toBeTruthy();
+		expect(screen.getByTestId(`card-readers-connect-${deviceMethod.id}`)).toBeTruthy();
+	});
+});
+
 it('cancels provider selection without opening a reader connection', async () => {
 	const driver = sdkUiDriver(null);
 	registerDriver(driver);

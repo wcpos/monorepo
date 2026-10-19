@@ -36,12 +36,13 @@ import { useDriverChanges } from '../../pos/checkout/tender/use-driver-status';
 
 /** Device-mode methods this build can drive: a row's worth of reader maintenance each. */
 function deviceMethods(methods: readonly PaymentMethodDescriptor[]) {
-	return methods.filter(
-		(method) =>
-			method.pos_enabled &&
-			method.capture.mode === 'device' &&
-			getDriver(method.capture.provider) !== undefined
-	);
+	return methods.filter((method) => {
+		if (!method.pos_enabled || method.capture.mode !== 'device') return false;
+		const availability = getDriver(method.capture.provider)?.availability();
+		if (!availability) return false;
+		// A driver that can never run on this platform (a web stub) is not a provider to offer.
+		return availability.available || availability.reason !== 'web';
+	});
 }
 
 /**
