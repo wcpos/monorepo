@@ -14,7 +14,7 @@ const USER_DATABASE_NAME = `wcposusers_${DATABASE_GENERATION}`;
 const STORE_DATABASE_PREFIX = `store_${DATABASE_GENERATION}_`;
 const FAST_STORE_DATABASE_PREFIX = `fast_store_${DATABASE_GENERATION}_`;
 
-const legacyEngineGenerations = ['v6', 'v7'].filter(
+const legacyEngineGenerations = ['v6', 'v7', 'v8'].filter(
 	(generation) => generation !== String(DATABASE_GENERATION)
 );
 

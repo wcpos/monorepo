@@ -1,4 +1,4 @@
-jest.mock('./database-generation', () => ({ DATABASE_GENERATION: 'v8' }));
+jest.mock('./database-generation', () => ({ DATABASE_GENERATION: 'v9' }));
 
 const mockDeleteDirectory = jest.fn();
 
@@ -19,6 +19,7 @@ const sqliteEntries = [
 	'store_v5_shop.db',
 	'store_v7_shop.db',
 	'store_v8_shop.db',
+	'store_v9_shop.db',
 	'some-other-library.db',
 ].map((name) => ({ name, delete: jest.fn() }));
 
@@ -30,6 +31,7 @@ const opfsEntries = [
 	'rxdb-store_v7_shop-products-0',
 	'rxdb-fast_store_v7_shop-orders-0',
 	'rxdb-wcposusers_v8-sites-0',
+	'rxdb-wcposusers_v9-sites-0',
 	'rxdb-pos_v5_shop-orders-0',
 	'unrelated',
 ].map((name) => ({ name, delete: jest.fn() }));
@@ -87,10 +89,10 @@ describe('purgeLegacyDatabases native', () => {
 	it('removes the retired OPFS root whole and only legacy files from shared SQLite', async () => {
 		const { purgeLegacyDatabases } = await import('./purge-legacy-db');
 
-		// Three old SQLite databases plus eight rxdb entries in the retired root.
+		// Four old SQLite databases plus nine rxdb entries in the retired root.
 		await expect(purgeLegacyDatabases()).resolves.toMatchObject({
 			success: true,
-			databasesDeleted: 11,
+			databasesDeleted: 13,
 		});
 		expect(mockDeleteDirectory.mock.calls).toEqual([['document-dir/.expo-opfs']]);
 		expect(
@@ -101,6 +103,7 @@ describe('purgeLegacyDatabases native', () => {
 			'wcposusers_v4.db-shm',
 			'fast_store_v5_shop.db',
 			'store_v7_shop.db',
+			'store_v8_shop.db',
 		]);
 	});
 

@@ -49,7 +49,7 @@ describe('useUnreadErrorCount', () => {
 		expect(mockCount).toHaveBeenCalledWith({
 			selector: {
 				level: { $eq: 'error' },
-				timestamp: { $gt: watermark },
+				lastSeen: { $gt: watermark },
 			},
 		});
 	});

@@ -22,6 +22,7 @@ beforeEach(async () => {
 		{
 			logId: 'old',
 			timestamp: 100,
+			lastSeen: 100,
 			level: 'error',
 			category: 'wcpos.sync',
 			operationType: 'sync.record',
@@ -29,6 +30,7 @@ beforeEach(async () => {
 		{
 			logId: 'new',
 			timestamp: 300,
+			lastSeen: 300,
 			level: 'error',
 			category: 'wcpos.payments',
 			operationType: 'sync.record',
@@ -133,4 +135,19 @@ it('persists the read watermark and excludes errors at or before it', async () =
 	expect(await firstValueFrom(reads.observeUnreadErrorCount(db))).toBe(1);
 	await reads.markLogsRead(db, 300);
 	expect(await firstValueFrom(reads.observeUnreadErrorCount(db))).toBe(0);
+});
+
+it('counts an error first seen yesterday but repeated today without adding day volume', async () => {
+	const dayStart = new Date().setHours(0, 0, 0, 0);
+	await db.logs.insert({
+		logId: 'yesterday-repeat',
+		level: 'error',
+		timestamp: dayStart - 1,
+		lastSeen: dayStart,
+		count: 2,
+	});
+	expect(await firstValueFrom(reads.observeLogVolume(db, dayStart))).toEqual({
+		eventsToday: 0,
+		errorsToday: 1,
+	});
 });

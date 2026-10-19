@@ -40,7 +40,8 @@ export function observeUnreadErrorCount(storeDB: StoreLocalDatabase) {
 								.count({
 									selector: {
 										level: { $eq: 'error' },
-										timestamp: { $gt: lastViewedAt },
+										// a collapsed repeat moves only count/lastSeen
+										lastSeen: { $gt: lastViewedAt },
 									},
 								})
 								.$.pipe(

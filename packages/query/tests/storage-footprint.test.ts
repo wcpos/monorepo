@@ -12,8 +12,8 @@ import {
 const ACTIVE_SCOPE = 'pos_v2_abcdefabcdef_s578_c12';
 const CONTEXT: StorageContext = {
 	activeScopeDbName: ACTIVE_SCOPE,
-	storeDbName: 'store_v7_local1',
-	userDbName: 'wcposusers_v7',
+	storeDbName: 'store_v8_local1',
+	userDbName: 'wcposusers_v8',
 	knownSiteHashes: new Set(['abcdefabcdef', 'feedfeedfeed']),
 };
 
@@ -31,7 +31,7 @@ describe('collectionFromEntryName', () => {
 		);
 		// '/' round-trips through the on-disk '__' encoding.
 		expect(
-			collectionFromEntryName('rxdb-store_v7_local1-products__categories-0', 'store_v7_local1')
+			collectionFromEntryName('rxdb-store_v8_local1-products__categories-0', 'store_v8_local1')
 		).toBe('products/categories');
 		// Hyphenated collections keep their full name.
 		expect(
@@ -40,8 +40,8 @@ describe('collectionFromEntryName', () => {
 	});
 
 	it('rejects other databases, including prefix-sharing ones', () => {
-		expect(collectionFromEntryName('rxdb-store_v7_local12-orders-0', 'store_v7_local1')).toBeNull();
-		expect(collectionFromEntryName('not-rxdb', 'store_v7_local1')).toBeNull();
+		expect(collectionFromEntryName('rxdb-store_v8_local12-orders-0', 'store_v8_local1')).toBeNull();
+		expect(collectionFromEntryName('not-rxdb', 'store_v8_local1')).toBeNull();
 	});
 });
 
@@ -56,8 +56,8 @@ describe('classifyStorageEntries', () => {
 				entry(`rxdb-${ACTIVE_SCOPE}-recordMutations-0`, 3),
 				entry(`rxdb-${ACTIVE_SCOPE}-_rxdb_internal-0`, 1),
 				// The store and user databases hold local bookkeeping:
-				entry('rxdb-store_v7_local1-logs-0', 30),
-				entry('rxdb-wcposusers_v7-sites-0', 2),
+				entry('rxdb-store_v8_local1-logs-0', 30),
+				entry('rxdb-wcposusers_v8-sites-0', 2),
 			],
 			CONTEXT
 		);
@@ -106,7 +106,7 @@ describe('classifyStorageEntries', () => {
 
 	it('sends current-generation store dbs of other stores to the other-stores bucket', () => {
 		const breakdown = classifyStorageEntries(
-			[entry('rxdb-store_v7_otherstore-orders-0', 80)],
+			[entry('rxdb-store_v8_otherstore-orders-0', 80)],
 			CONTEXT
 		);
 		expect(breakdown.otherStoresBytes).toBe(80);

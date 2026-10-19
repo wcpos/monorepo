@@ -1,13 +1,16 @@
+import { checkSchema } from 'rxdb/plugins/dev-mode';
+
 import { storeCollections } from '../index';
 import { logsLiteral } from './logs';
 
 describe('logs schema', () => {
-	it('is version 3 with the category+timestamp index', () => {
+	it('is version 3 with category+timestamp and level+lastSeen indexes', () => {
 		expect(logsLiteral.version).toBe(3);
 		expect(logsLiteral.indexes).toEqual([
 			['timestamp'],
 			['level', 'timestamp'],
 			['category', 'timestamp'],
+			['level', 'lastSeen'],
 		]);
 	});
 
@@ -27,6 +30,13 @@ describe('logs schema', () => {
 	});
 
 	it('constrains indexed fields as RxDB requires', () => {
+		expect(() => checkSchema(logsLiteral)).not.toThrow();
+		expect(logsLiteral.properties.lastSeen).toMatchObject({
+			type: 'integer',
+			minimum: 0,
+			maximum: 100000000000000,
+			multipleOf: 1,
+		});
 		expect(logsLiteral.properties.level.maxLength).toBe(16);
 		expect(logsLiteral.properties.category.maxLength).toBe(64);
 		expect(logsLiteral.properties.timestamp).toMatchObject({
