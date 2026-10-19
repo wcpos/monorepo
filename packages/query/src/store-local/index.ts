@@ -20,3 +20,4 @@ export {
 } from './remembered-readers';
 export { StoreDatabaseUnavailableError } from '../commands/printer-profiles';
 export type { StoreLocalDatabase } from '../reads/store-local';
+export { syncTemplates, takeDeferredTemplatesSync } from './templates-sync';

@@ -18,6 +18,8 @@ const ALLOWED: Record<string, string> = {
 		'full document by design: with preserveLocalState false, a complete NotificationRow replaces local read/seen state on purpose',
 	'commands/template-printer-overrides.ts :: setTemplatePrinterOverride :: collection.upsert':
 		'full document: both of the schema\u2019s two properties set',
+	'store-local/templates-sync.ts :: syncTemplates :: collection.bulkUpsert':
+		'full documents: each row is the server\u2019s complete template (parsed per row through parseRestResponse); templates have no local-only fields, and the closure prune removes rows the server no longer serves',
 };
 
 function sourceFiles(directory: string): string[] {
