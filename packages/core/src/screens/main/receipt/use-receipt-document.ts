@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { recordReceiptPrint } from '@wcpos/query/mutations';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
@@ -199,19 +200,7 @@ export function useReceiptDocument({
 				const count = (local?.receiptPrintCount ?? 0) + 1;
 				// Server and local counts are not reconciled: each counts what that party saw.
 				commit = async () => {
-					await order.incrementalModify((data) => {
-						const local = data.local as typeof data.local & { receiptPrintCount?: number };
-						if ((local?.receiptPrintCount ?? 0) >= count) return data;
-						return {
-							...data,
-							local: {
-								...local,
-								dirty: local?.dirty ?? false,
-								pendingMutationIds: local?.pendingMutationIds ?? [],
-								receiptPrintCount: count,
-							},
-						};
-					});
+					await recordReceiptPrint(order, count);
 				};
 				return count;
 			});
