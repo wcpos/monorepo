@@ -408,6 +408,28 @@ it.each(['acknowledgement', 'refresh'])('keeps withheld local cash fields on %s'
 		sync_status: 'synced',
 	});
 });
+it.each(['acknowledgement', 'refresh'])(
+	'keeps local counted_float when null on %s',
+	async (path) => {
+		const row = await open();
+		const sessionRow: Record<string, unknown> = {
+			...serverListRow(row.toJSON()),
+			counted_float: null,
+		};
+		if (path === 'acknowledgement') {
+			delete sessionRow.created_at_gmt;
+			http.post.mockResolvedValue({ data: sessionRow });
+			await drain();
+		} else {
+			await row.incrementalPatch({ sync_status: 'synced' });
+			http.get.mockResolvedValueOnce({ data: [sessionRow] }).mockResolvedValueOnce({
+				data: { ...sessionRow, movements: [] },
+			});
+			await refreshSessions({ registerId: 'register', http, storeDB: db });
+		}
+		expect(row.getLatest().toJSON()).toMatchObject({ counted_float: '100', sync_status: 'synced' });
+	}
+);
 it('adopts a server movement row in the local shape: `actor` is `created_by`, nothing else', async () => {
 	const row = await open();
 	const movement = await recordMovement(db, {

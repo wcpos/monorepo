@@ -170,6 +170,20 @@ it('records the approved count without changing the transition or losing the ses
 	).rejects.toBeInstanceOf(Error);
 });
 
+it('inserts an unseen session with null counted_float', async () => {
+	await adoptSessionRow(db.register_sessions, {
+		id: 'blind-session',
+		register_id: 'other-till',
+		status: 'open',
+		opened_at_gmt: '2026-09-16T08:00:00Z',
+		counted_float: null,
+		sync_status: 'synced',
+		sync_attempts: 0,
+	});
+	const session = (await db.register_sessions.findOne('blind-session').exec())!.toJSON();
+	expect(session.counted_float).toBeNull();
+});
+
 it('inserts unseen blind rows and derives zero without inventing withheld values', async () => {
 	await adoptSessionRow(db.register_sessions, {
 		id: 'blind-session',

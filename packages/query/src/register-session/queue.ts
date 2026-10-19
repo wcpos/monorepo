@@ -190,9 +190,12 @@ async function acknowledge(
 	await doc.incrementalModify((local) => {
 		const outstanding =
 			local.pending_status && (sentAt === undefined || local.status_at !== sentAt);
+		const incoming = { ...server };
+		if (local.counted_float != null && incoming.counted_float === null)
+			delete incoming.counted_float;
 		return {
 			...local,
-			...server,
+			...incoming,
 			...synced,
 			server_status: server.status,
 			status: outstanding ? local.status : server.status,
@@ -631,7 +634,12 @@ export async function adoptSessionRow(
 	await mergeIntoDocument(
 		sessions,
 		row.id,
-		(current) => (current.sync_status === 'pending' ? current : { ...current, ...adopted }),
+		(current) => {
+			const incoming = { ...adopted };
+			if (current.counted_float != null && incoming.counted_float === null)
+				delete incoming.counted_float;
+			return current.sync_status === 'pending' ? current : { ...current, ...incoming };
+		},
 		() => adopted
 	);
 }
