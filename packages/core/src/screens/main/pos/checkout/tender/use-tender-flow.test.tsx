@@ -1612,8 +1612,11 @@ describe('server tender', () => {
 				await act(async () => recorded());
 			}
 			expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
+			// A tender still watching when the completing status arrives selects its receipt
+			// before the write (enterReceiptBeforeCompletion); one gone before the response is
+			// left to the background completion.
 			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
-				when === 'receipt-entry' ? 'order-1' : null
+				when === 'before-response' ? null : 'order-1'
 			);
 			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 			expect(mockRequire).toHaveBeenCalledTimes(1);
@@ -1629,7 +1632,9 @@ describe('server tender', () => {
 				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
 			).toHaveLength(1);
 			if (when === 'receipt-entry') {
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				// Selected by enterReceiptBeforeCompletion before the write; the tender's subscriber,
+				// unmounted by that entry, never selects, and a re-opened flow must not either.
+				expect(selectReceipt).not.toHaveBeenCalled();
 				host.unmount();
 				act(() => {
 					checkoutMode.finishReceipt('order-1');
@@ -1640,12 +1645,12 @@ describe('server tender', () => {
 				const reopened = renderHook(() => useTenderFlow(order));
 				await act(async () => {});
 				expect(reopened.result.current.terminalLeg).toBeNull();
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				expect(selectReceipt).not.toHaveBeenCalled();
 				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 				act(() => reopened.result.current.pickMethod('terminal'));
 				await act(async () => reopened.result.current.takeTender());
 				expect(mockManualPost).toHaveBeenCalledTimes(2);
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				expect(selectReceipt).not.toHaveBeenCalled();
 				reopened.unmount();
 			}
 			selectReceipt.mockRestore();
