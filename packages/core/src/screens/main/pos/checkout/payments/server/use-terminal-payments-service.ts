@@ -30,7 +30,11 @@ import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
 import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
-import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
+import {
+	enterReceiptBeforeCompletion,
+	getOrderSaveState,
+	subscribeCheckoutMode,
+} from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -122,6 +126,8 @@ export function useTerminalPaymentsService(): void {
 						resident.payload) as EngineRecord<'orders'>['payload'];
 					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
+					// Before the status write: a completing status takes the order off the till.
+					if (order && isCompletingStatus(order.status)) enterReceiptBeforeCompletion(orderUuid);
 					await mirrorServerOrder(manager, orderUuid, {
 						// Only the summary fields that are order fields: `paid` and `balance` are
 						// derived from the ledger on read, and an unknown key fails the schema.

@@ -145,6 +145,30 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 		selectedReceiptOrder: select ? uuid : snapshot.selectedReceiptOrder,
 	});
 }
+/**
+ * The order whose tender is on screen, and whether its receipt shows itself (`autoShowReceipt`).
+ * Registered by the mounted tender flow, so code above the screens can tell a watched sale
+ * from one completing in the background.
+ */
+let watchedTender: { uuid: string; autoShowReceipt: boolean } | null = null;
+export function watchTender(uuid: string, autoShowReceipt: boolean) {
+	const entry = { uuid, autoShowReceipt };
+	watchedTender = entry;
+	return () => {
+		if (watchedTender === entry) watchedTender = null;
+	};
+}
+/**
+ * A server capture is about to write a completing status onto an order in checkout. That
+ * status drops it from the till's open orders and unmounts its tender, the one place that
+ * would select the receipt; so enter the receipt first, as the cash path does
+ * (sale-completion), selected only when the cashier is watching it and receipts show.
+ */
+export function enterReceiptBeforeCompletion(uuid: string) {
+	if (!snapshot.checkoutOrders.has(uuid)) return;
+	const watched = watchedTender?.uuid === uuid ? watchedTender : null;
+	enterReceipt(uuid, { select: watched?.autoShowReceipt === true });
+}
 export function finishReceipt(uuid: string) {
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);

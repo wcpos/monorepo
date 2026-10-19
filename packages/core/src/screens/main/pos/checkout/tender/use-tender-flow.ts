@@ -62,6 +62,7 @@ import {
 	setTenderMethod,
 	setTenderPlan,
 	useTenderMethod,
+	watchTender,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
@@ -1275,6 +1276,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		tiles,
 		reducerDispatch,
 	]);
+
+	// A server capture enters this order's receipt before its status unmounts this flow.
+	React.useEffect(
+		() => watchTender(order.uuid, !!uiSettings.autoShowReceipt),
+		[order.uuid, uiSettings.autoShowReceipt]
+	);
 
 	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
 	React.useEffect(() => {

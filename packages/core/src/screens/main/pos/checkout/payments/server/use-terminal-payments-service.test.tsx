@@ -11,6 +11,13 @@ import {
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
 import { row } from '../device/fixtures.test-utils';
+import {
+	type CheckoutModeSnapshot,
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	resetCheckoutMode,
+	watchTender,
+} from '../../checkout-mode';
 
 const mockStore = { id: 1, price_num_decimals: 2 };
 const mockSite = {};
@@ -496,4 +503,81 @@ it('preserves both offline payment rows when two legs race on one order', async 
 		mockPatch.mockImplementation(async () => ({}));
 		mockResident.payload = original;
 	}
+});
+
+// A completing status drops the order from the till's open orders, which unmounts the tender
+// that would select its receipt; the receipt must be entered before that write lands.
+describe('a server capture of the order in checkout', () => {
+	const order = (status: string) => ({
+		status,
+		total: '10.00',
+		paid: '10.00',
+		balance: '0.00',
+		payment_method: 'device',
+		payment_method_title: 'Reader',
+	});
+	async function mirrorCapture(status: string) {
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const original = mockResident.payload.meta_data;
+		// No recoverable offline row: only this test's mirror reaches the status write.
+		mockResident.payload.meta_data = [];
+		const hook = renderHook(() => useTerminalPaymentsService());
+		let atWrite: CheckoutModeSnapshot | null = null;
+		mockMirror.mockImplementationOnce(async () => {
+			atWrite = getCheckoutModeSnapshot();
+		});
+		try {
+			await start.mock.calls[0][0].mirror('completed-order', {
+				payment: { ...mockRow, status: 'captured' },
+				order: order(status),
+			});
+		} finally {
+			hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+		expect(mockMirror).toHaveBeenCalledTimes(1);
+		return atWrite! as CheckoutModeSnapshot;
+	}
+	let unwatch: (() => void) | undefined;
+	afterEach(() => {
+		unwatch?.();
+		unwatch = undefined;
+		resetCheckoutMode();
+	});
+
+	it.each([
+		[true, 'completed-order'],
+		[false, null],
+	])(
+		'enters its receipt before the status write (autoShowReceipt %s, selected %s)',
+		async (autoShowReceipt, selected) => {
+			enterCheckout('completed-order');
+			unwatch = watchTender('completed-order', autoShowReceipt);
+			const atWrite = await mirrorCapture('completed');
+			expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
+			expect(atWrite.checkoutOrders.has('completed-order')).toBe(false);
+			expect(atWrite.selectedReceiptOrder).toBe(selected);
+		}
+	);
+
+	it('does not select the receipt while the cashier is on another order', async () => {
+		enterCheckout('completed-order');
+		unwatch = watchTender('other-order', true);
+		const atWrite = await mirrorCapture('completed');
+		expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
+		expect(atWrite.selectedReceiptOrder).toBeNull();
+	});
+
+	it('leaves a part-paid order in checkout', async () => {
+		enterCheckout('completed-order');
+		unwatch = watchTender('completed-order', true);
+		const atWrite = await mirrorCapture('pos-partial');
+		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
+		expect(atWrite.receiptOrders.size).toBe(0);
+		expect(atWrite.selectedReceiptOrder).toBeNull();
+	});
 });
