@@ -1398,10 +1398,19 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: patchEngineResident :: 1',
 	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (f7): the customer link bridge reads named reads and stamps through a command.
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: orders.find({ selector: { uuid: { $in: orderUuids } } }) :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: record collection back-reference :: NewCustomerLinkBridge :: event.collection :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: record collection back-reference :: NewCustomerLinkBridge :: event.collection :: 2',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: resident helper write :: NewCustomerLinkBridge :: useLocalMutation :: 1',
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: runtime.engine.db$ :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 469;
+export const SEAM_RETIRED_FLOOR = 477;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'86dd9d221a3357bc9213f441eb3acee60d7f77ae76b1d9fe9c814e80d247aa26';
+	'5af0f85cb64638a61c32697fef6b7cfe2a2451f3212cc7c978d75506b1909d0b';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1432,7 +1441,11 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	// ADR 0033 per-screen (f5): order birth is a command in @wcpos/query/mutations.
 	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door :: useAddItemToOrder>run :: findEngineResident :: 1',
+	// ADR 0033 per-screen (f7): the customer link bridge reads named reads and stamps through a command.
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 4;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 7;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'50d74cecd3af6dcfc1293f634f76198c0f1198bb3b4e53b292f4a9f3cd7d9f2f';
+	'0448a89f88735b0cdc56343147ab39848896a2ba558880b831d22c079baeea84';
