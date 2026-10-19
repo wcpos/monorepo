@@ -360,6 +360,9 @@ it('names each till that restarted its counter once the duplicates check is open
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-duplicates');
 	expect(check.textContent).toContain('Counter restarted on 2 tills');
+	expect(check.textContent).toContain(
+		'The same receipt number is on more than one sale. Nothing is lost.'
+	);
 	expect(check.querySelector('[data-icon="triangleExclamation"]')).not.toBeNull();
 	expect(screen.queryAllByTestId('health-register-duplicate')).toHaveLength(0);
 	open('duplicates');
@@ -468,7 +471,7 @@ it('takes clock counts from skew_counts when the server sends them', () => {
 	withRegisters({ ...clean, skew: [behindSkew], skew_counts: { ahead: 0, behind: 12 } });
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-register-check-clock').textContent).toContain(
-		"12 sales were received later than their till's time"
+		"12 sales were received later than their tills' time, usually offline sales synced later."
 	);
 });
 
@@ -484,6 +487,9 @@ it('sums missing numbers across gaps and counts the tills they are on', () => {
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-register-check-gaps').textContent).toContain(
 		'5 skipped numbers on 2 tills'
+	);
+	expect(screen.getByTestId('health-register-check-gaps').textContent).toContain(
+		'A number was taken but the sale never completed. Nothing is lost.'
 	);
 	open('gaps');
 	expect(screen.getAllByTestId('health-register-gap').map((row) => row.textContent)).toEqual([
@@ -556,7 +562,7 @@ it('passes the clock check on behind-only sales without claiming the clocks agre
 	const check = screen.getByTestId('health-register-check-clock');
 	// A late sale is usually offline, but the payload cannot rule out a clock running behind.
 	expect(check.textContent).toBe(
-		"No till clock runs ahead1 sale was received later than its till's time, usually an offline sale synced later. If that till was online, check its clock."
+		"No till clock runs ahead1 sale was received later than its till's time, usually an offline sale synced later."
 	);
 	expect(check.querySelector('[data-icon="circleCheck"]')).not.toBeNull();
 	open('clock');
@@ -632,7 +638,7 @@ it('fails the closures check from whichever closure list is non-empty', () => {
 		'3 closure numbers skipped · 1 closure printed with a different number'
 	);
 	expect(check.textContent).toContain(
-		'Closures are never renumbered, and this check covers every closure, not only the last 30 days.'
+		'Closures are never renumbered. This check covers every closure, not only the last 30 days.'
 	);
 	open('closures');
 	expect(screen.getAllByTestId('health-register-closure').map((row) => row.textContent)).toEqual([
@@ -653,6 +659,7 @@ it('names the run of missing first closures when several are missing', () => {
 
 it('notes a truncated report under the header, scoping every count below it', () => {
 	state.data = { ...state.data!, truncated: true };
+	withRegisters({ ...findings, closure_gaps: [] });
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-registers-truncated').textContent).toBe(
 		'Only the newest sales were checked; older sales in the window were skipped. Every sale count below is for the sales that were checked; closures are always checked in full.'
@@ -660,6 +667,14 @@ it('notes a truncated report under the header, scoping every count below it', ()
 	// The register's own summary says it counts the sales checked, not the whole window.
 	expect(register().textContent).toContain('5 sales checked · counters 41–45');
 	expect(register().textContent).not.toContain('5 sales · counters');
+});
+
+it('leaves the closures clause out of the truncation note when the plugin sends no closure lists', () => {
+	state.data = { ...state.data!, truncated: true };
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-registers-truncated').textContent).toBe(
+		'Only the newest sales were checked; older sales in the window were skipped. Every count below is for the sales that were checked.'
+	);
 });
 
 it('omits the truncated note on a complete report', () => {
@@ -684,7 +699,7 @@ it('renders unregistered tills with their count and example order numbers', () =
 		"Sales from tills this store hasn't registered"
 	);
 	expect(screen.getByTestId('health-unregistered').textContent).toContain(
-		'Register the till under POS settings › Registers in WP Admin.'
+		'Nothing is lost. Register the till under POS settings › Registers.'
 	);
 	expect(screen.getByTestId('health-unregistered').textContent).toContain(
 		'12345678… — 3 sales, e.g. orders 1001, 1002'

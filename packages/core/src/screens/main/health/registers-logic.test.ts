@@ -1,6 +1,7 @@
 import {
 	clockCheck,
 	closuresCheck,
+	closuresSupported,
 	duplicateSales,
 	duplicatesCheck,
 	gapsCheck,
@@ -336,6 +337,17 @@ describe('registerState', () => {
 		expect(state.kind === 'checks' && state.checks.map((check) => check.kind)).toEqual([
 			'closures',
 		]);
+	});
+});
+
+describe('closuresSupported', () => {
+	it('is true when any register carries any closure list, even an empty one', () => {
+		expect(closuresSupported([clean, { ...clean, id: 'reg-2', closure_conflicts: [] }])).toBe(true);
+	});
+
+	it('is false when no register carries a closure list, or there are no registers', () => {
+		expect(closuresSupported([clean, { ...clean, id: 'reg-2' }])).toBe(false);
+		expect(closuresSupported([])).toBe(false);
 	});
 });
 

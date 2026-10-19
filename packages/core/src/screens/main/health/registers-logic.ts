@@ -172,10 +172,27 @@ export function clockCheck(
 	};
 }
 
+/** The plugin sent at least one of the three closure lists for this register. */
+function hasClosureLists(register: RegisterReport): boolean {
+	return (
+		register.closure_gaps !== undefined ||
+		register.closure_conflicts !== undefined ||
+		register.closure_total_mismatches !== undefined
+	);
+}
+
+/**
+ * Whether the plugin audits closures at all: some register in the report carries a closure
+ * list. When none does, nothing on the panel may claim closures were checked.
+ */
+export function closuresSupported(registers: readonly RegisterReport[]): boolean {
+	return registers.some(hasClosureLists);
+}
+
 /** Null when the plugin predates closure numbering and sent none of the three lists. */
 export function closuresCheck(register: RegisterReport): ClosuresCheck | null {
+	if (!hasClosureLists(register)) return null;
 	const { closure_gaps, closure_conflicts, closure_total_mismatches } = register;
-	if (!closure_gaps && !closure_conflicts && !closure_total_mismatches) return null;
 	const gaps = [...(closure_gaps ?? [])].sort((a, b) => a.after - b.after);
 	const conflicts = closure_conflicts ?? [];
 	const mismatches = closure_total_mismatches ?? [];

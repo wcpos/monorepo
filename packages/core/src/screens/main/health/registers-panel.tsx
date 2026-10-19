@@ -11,6 +11,7 @@ import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { Section } from './components/section';
 import {
+	closuresSupported,
 	duplicateSales,
 	isExactDuplicateCount,
 	isLeadingClosureGap,
@@ -467,7 +468,12 @@ export function RegistersPanel() {
 		>
 			{data?.truncated ? (
 				<Text testID="health-registers-truncated" className="text-muted-foreground text-xs">
-					{t('health.registers.truncated')}
+					{t(
+						// The "closures are checked in full" clause holds only if the plugin audits them.
+						closuresSupported(data.registers)
+							? 'health.registers.truncated'
+							: 'health.registers.truncated_sales_only'
+					)}
 				</Text>
 			) : null}
 			{loading ? (
