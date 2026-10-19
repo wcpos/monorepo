@@ -112,7 +112,7 @@ verify_lane_live() {
 		fi
 	done <<< "$expected"
 	if ! printf '%s' "$hashed" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS"; then
-		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. Re-run this command to retry." >&2
+		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. $(cdn_refresh_advice "as ${tag}")" >&2
 		return 1
 	fi
 	while read -r sha path; do
@@ -120,7 +120,7 @@ verify_lane_live() {
 	done <<< "$unhashed"
 	if ! printf '%s' "$unhashed" | verify_cdn_paths "$lane" "$CDN_UNHASHED_DEADLINE_SECONDS" ||
 		! wait_for_cdn "$lane" "${tag#v}" "$CDN_VERIFY_SECONDS" "${paths[@]}"; then
-		echo "FAIL: @${lane} does not serve ${tag}'s metadata.json/index.html/workers after the purge; re-run this command to purge and verify again" >&2
+		echo "FAIL: @${lane} does not serve ${tag}'s metadata.json/index.html/workers after the purge. $(cdn_refresh_advice "as ${tag}")" >&2
 		return 1
 	fi
 	echo "LIVE: @${lane} serves ${tag}: ${n} hashed files and ${m} unhashed files verified by content"
