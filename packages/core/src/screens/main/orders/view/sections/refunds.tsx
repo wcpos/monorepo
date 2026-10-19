@@ -8,11 +8,11 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { refundValue } from '@wcpos/order-math';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import { useQuerySnapshot } from '@wcpos/query/query-state';
 
 import { Section } from './_section';
 import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
-import { useQuerySnapshot } from '../../../../../query/query-handles';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 import { WCRefund } from '../use-order-refunds';

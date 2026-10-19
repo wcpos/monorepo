@@ -41,8 +41,8 @@ jest.mock('@wcpos/components/combobox', () => ({
 }));
 jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../query', () => {
-	const handles = jest.requireActual<typeof import('../../../../query/query-handles')>(
-		'../../../../query/query-handles'
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	);
 	const { createQueryHandle } = jest.requireActual<typeof import('@wcpos/query')>('@wcpos/query');
 	return {

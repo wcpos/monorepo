@@ -1,17 +1,3 @@
-import {
-	collectionMap,
-	engineCollectionNameFor,
-	type EngineDocument,
-	type FieldMapEntry,
-	type LegacyCollectionName,
-	readEnginePath,
-	resolveLegacyField,
-	sortAliasFor,
-	sortTiebreakFor,
-	wooOrderbyFor,
-} from '@wcpos/query/collection-map';
-import { variationAttributesMatch } from '@wcpos/query';
-import type { CompiledQueryRead, CompiledSortPart } from '@wcpos/query';
 import type {
 	EngineRequirement,
 	OrderBrowseDimensions,
@@ -25,8 +11,22 @@ import {
 	wooMetaCarrier,
 } from '@wcpos/sync-core';
 
-import { parseRemoteId } from '../utils/parse-remote-id';
+import {
+	collectionMap,
+	engineCollectionNameFor,
+	type EngineDocument,
+	type FieldMapEntry,
+	type LegacyCollectionName,
+	readEnginePath,
+	resolveLegacyField,
+	sortAliasFor,
+	sortTiebreakFor,
+	wooOrderbyFor,
+} from '../collection-map';
+import { variationAttributesMatch } from '../engine-adapter/translate-selector';
+import { parseRemoteId } from './parse-remote-id';
 
+import type { CompiledQueryRead, CompiledSortPart } from '../engine-adapter/execute-query';
 import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 
 type Operator =

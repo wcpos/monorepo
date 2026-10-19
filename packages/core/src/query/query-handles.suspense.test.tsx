@@ -26,11 +26,11 @@ import { QueryProvider } from '@wcpos/query';
 import { createEngineDatabase, createFakeEngine, engineProduct } from '@wcpos/query/testing';
 import type { FakeEngine } from '@wcpos/query/testing';
 import type { QueryHandle } from '@wcpos/query';
+import { useCollectionQueryHandle, useQuerySnapshot } from '@wcpos/query/query-state';
+import type { QueryStateOf } from '@wcpos/query/query-state';
 
-import { useCollectionQueryHandle, useQuerySnapshot } from './query-handles';
 import { createStoreDatabase } from '../../../query/tests/helpers/db';
 
-import type { QueryStateOf } from './query-state-types';
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 Object.assign(globalThis, { TextDecoder, TextEncoder });

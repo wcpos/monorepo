@@ -1,10 +1,12 @@
 import * as React from 'react';
 
 import { type EngineQueryDescriptor, useQueryRuntime, useSearchFields } from '@wcpos/query';
-
-import { acquireEngineQueryHandle, canonicalQueryKey } from './query-handles';
-import { compileQuery } from './query-state-translator';
-import { useScopeKey } from './scope-key';
+import {
+	acquireEngineQueryHandle,
+	canonicalQueryKey,
+	compileQuery,
+	useScopeKey,
+} from '@wcpos/query/query-state';
 
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type CompiledQuery = ReturnType<typeof compileQuery>;

@@ -24,14 +24,13 @@ import {
 	useQueryRuntime,
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
 import {
 	acquireDemandQueryHandle,
 	acquireEmptyQueryHandle,
 	canonicalQueryKey,
-} from './query-handles';
-import { compileQuery } from './query-state-translator';
-import { useCoverageGeneration } from './scope-key';
+	compileQuery,
+	useCoverageGeneration,
+} from '@wcpos/query/query-state';
 
 /** How long the coupon replay waits for its reference pull before giving up on it. */
 const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;

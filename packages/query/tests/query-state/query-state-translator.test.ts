@@ -11,9 +11,14 @@ import {
 	normalizeQuerySortField,
 	requirementsForCompiledQuery,
 	translateLogsQueryState,
-} from './query-state-translator';
+} from '../../src/query-state/query-state-translator';
 
-import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
+import type {
+	CollectionKey,
+	FiltersOf,
+	QueryStateOf,
+	SortFieldOf,
+} from '../../src/query-state/query-state-types';
 import type { RxJsonSchema } from 'rxdb';
 
 type ExhaustiveFilterMap = {

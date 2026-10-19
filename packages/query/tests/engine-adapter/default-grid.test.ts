@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
-import { compileQuery } from '../../../core/src/query/query-state-translator';
+import { compileQuery } from '../../src/query-state/query-state-translator';
 import { executeAdapterQuery } from '../../src/engine-adapter/execute-query';
 import { engineProduct, engineVariation } from '../../src/testing';
 import { sqlitePlan } from '../helpers/sqlite-plan';

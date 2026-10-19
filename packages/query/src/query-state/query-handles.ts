@@ -24,28 +24,30 @@ import {
 	take,
 } from 'rxjs';
 
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RemoteId } from '@wcpos/sync-core';
+
 import {
 	acquireQueryHandle,
 	createDemand,
 	createQueryHandle,
 	type Demand,
 	type DemandPlan,
-	engineCollectionNameFor,
-	type EngineQueryDescriptor,
-	observeCollectionActive,
-	observeEngineDatabases,
-	observeEngineQuery,
 	type QueryHandle,
 	type QueryHandleSpec,
-	type QueryResult,
 	type QuerySnapshot,
-	useLocalQuery$,
-	useQueryRuntime,
-	useSearchFields,
-} from '@wcpos/query';
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-import type { RemoteId } from '@wcpos/sync-core';
-
+} from '../query-handle';
+import { engineCollectionNameFor } from '../engine-adapter/collection-map';
+import {
+	type EngineQueryDescriptor,
+	observeEngineDatabases,
+	observeEngineQuery,
+} from '../engine-query';
+import { observeCollectionActive } from '../engine-status';
+import { type QueryResult } from '../query-result';
+import { useLocalQuery$ } from '../use-local-query';
+import { useQueryRuntime } from '../provider';
+import { useSearchFields } from '../use-search-fields';
 import {
 	compileQuery,
 	requirementsForCompiledQuery,

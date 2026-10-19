@@ -47,8 +47,7 @@ jest.mock('../../../../../query', () => ({
 	useGuardedExtendLimit: () => () => {},
 	// The REAL reader, field selection included: the root footer names `['total']`, and this
 	// suite drives the fake handle's `total` and `result` through it.
-	useQueryHandleFields: jest.requireActual('../../../../../query/query-handles')
-		.useQueryHandleFields,
+	useQueryHandleFields: jest.requireActual('@wcpos/query/query-state').useQueryHandleFields,
 }));
 // The footer takes its denominator as a value, in the same commit as the count. Every render's
 // pair is logged, so a test can see what each commit would have painted, not only where the DOM

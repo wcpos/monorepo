@@ -3,6 +3,7 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 
 import { useDocField } from '@wcpos/query';
+import type { FiltersOf } from '@wcpos/query/query-state';
 
 import { useIsPersisted, usePersistedState } from '../../../../../contexts/persisted-state';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
@@ -13,7 +14,6 @@ import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 
 import type { Measurable } from '../deal-stack';
 import type { QueryStateActions, QueryStateOf } from '../../../../../query';
-import type { FiltersOf } from '../../../../../query/query-state-types';
 import type { QuickFilter } from '../filter-bar/filter-bar-layout';
 import type { BrowseTerms } from './use-browse-terms';
 

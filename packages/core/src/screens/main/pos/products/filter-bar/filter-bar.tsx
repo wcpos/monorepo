@@ -24,6 +24,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useDocField } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
+import type { FiltersOf } from '@wcpos/query/query-state';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
@@ -40,8 +41,6 @@ import {
 import { isQuickFilterActive, quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
 import { clearConditions, isPlaceCondition, type LevelPlace } from '../browse/level-place';
 import { getPOSProductSort } from '../pos-product-sort';
-
-import type { FiltersOf } from '../../../../../query/query-state-types';
 
 function QuickChip({ quickFilter, touched }: { quickFilter: QuickFilter; touched: () => void }) {
 	const state = useQueryState<'products'>();

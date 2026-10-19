@@ -1435,10 +1435,33 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecord :: collection.findOne :: 1',
 	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordByWooId :: collection.findOne :: 1',
 	"screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordsByWooId :: collection .find({ selector: { [collectionName === 'refunds' ? 'remoteId' : 'remoteKey']: { $in: stableRemoteIds }, }, }) :: 1",
+	// ADR 0033 per-screen (f11): the query handles, the translator and the scope key are owned by @wcpos/query/query-state.
+	'query/query-handles.ts :: engine handle aliased :: useCollectionQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/query-handles.ts :: engine handle aliased :: useLogsQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/query-handles.ts :: engine handle aliased :: useProductsQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	"query/query-handles.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'query/query-handles.ts :: raw change stream :: recheckedRead$ :: collection.eventBulks$ :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireDemandQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireEngineQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: demandPlanFor :: compiled.collection :: 1',
+	"query/query-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'query/query-handles.ts :: storage token :: acquireEngineQueryHandle :: database?.collections :: 1',
+	"query/query-state-translator.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"query/query-state-translator.ts :: query escape hatch ::  :: from '@wcpos/query/collection-map' :: 1",
+	'query/scope-key.ts :: engine handle aliased :: useScopeKey :: { engine } = useQueryRuntime() :: 1',
+	'query/terms-handles.ts :: engine handle aliased :: useAllTermsHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/terms-handles.ts :: engine handle aliased :: useProductsCarryingTermsHandle :: { engine } = useQueryRuntime() :: 1',
+	"query/terms-handles.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'query/terms-handles.ts :: record collection back-reference :: readFromActiveScope :: result.hits[0]?.record.collection :: 1',
+	'query/terms-handles.ts :: record collection back-reference :: useAllTermsHandle :: refreshFor.collection :: 1',
+	'query/terms-handles.ts :: record collection back-reference :: useProductsCarryingTermsHandle :: query.collection :: 1',
+	"query/terms-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 502;
+export const SEAM_RETIRED_FLOOR = 524;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'cecc34de0db169565b57a496aedd0eea5e66f3c3f41b75c82a32745e105b392a';
+	'1ee94079c086dbb679fcf112d6e21bfbc68e1c5d3b65ba81840ae1142b4fb5a0';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

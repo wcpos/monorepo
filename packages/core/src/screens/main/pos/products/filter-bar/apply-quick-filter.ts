@@ -1,4 +1,5 @@
-import type { FiltersOf, QueryStateOf } from '../../../../../query/query-state-types';
+import type { FiltersOf, QueryStateOf } from '@wcpos/query/query-state';
+
 import type { QuickFilter } from './filter-bar-layout';
 
 export function quickFilterToQueryPatch(quickFilter: QuickFilter): {
