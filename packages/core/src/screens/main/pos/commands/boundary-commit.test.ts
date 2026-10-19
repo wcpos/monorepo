@@ -30,6 +30,7 @@ import type { CartConfigInputs } from './cart-config-for-order';
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
 	requireOpenSession: async () => 'session',
+	findOpenSession: jest.fn(async () => ({ getLatest: () => mockSession })),
 	readRegister: async () => ({ sites: { site: { register_id: 'register' } } }),
 	nextSaleCounter: jest.fn(async () => 7),
 }));
@@ -41,9 +42,23 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let ctx: SaleContext;
 const log = jest.fn();
 const resolveSession = jest.fn();
+let mockSession = {
+	id: 'session',
+	register_id: 'register',
+	status: 'open',
+	sync_status: 'synced',
+	deleted: false,
+};
 const catalog = new Subject();
 beforeEach(async () => {
 	jest.clearAllMocks();
+	mockSession = {
+		id: 'session',
+		register_id: 'register',
+		status: 'open',
+		sync_status: 'synced',
+		deleted: false,
+	};
 	resolveSession.mockResolvedValue({ registerId: 'register', sessionId: 'session' });
 	ctx = {
 		actionCtx: createActionContext({
@@ -869,5 +884,53 @@ it.each([
 		} finally {
 			coordinator.stop();
 		}
+	}
+);
+
+// Mutating either identity after the last async check must not stamp a completed sale.
+it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged'])(
+	'fences guarded provenance at the resident modifier: %s',
+	async (change) => {
+		const order = orderFor();
+		let registerId = 'register';
+		const complete = jest.fn();
+		const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					readBindingStatus: () => 'bound',
+					...{ readRegisterId: () => registerId },
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: async (changes) => {
+						if (change === 'register_changed') registerId = 'other';
+						if (change === 'session_changed') mockSession.status = 'closed';
+						if (change === 'session_replaced') mockSession.id = 'replacement';
+						return ctx.localPatch({ document: order, changes });
+					},
+				}
+			)
+		);
+		const unchanged = change === 'unchanged';
+		expect(outcome).toEqual(
+			unchanged
+				? undefined
+				: {
+						superseded: true,
+						reason: change === 'register_changed' ? change : 'session_changed',
+					}
+		);
+		expect(order.payload).toMatchObject({
+			status: unchanged ? 'completed' : 'pos-partial',
+			total: unchanged ? '4' : '10',
+		});
+		expect(complete).toHaveBeenCalledTimes(unchanged ? 1 : 0);
 	}
 );

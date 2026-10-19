@@ -140,6 +140,8 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				'pos_products.out_of_stock',
 				'catalog_changed',
 				'in_checkout',
+				'register_changed',
+				'session_changed',
 			].includes(reason)
 		) {
 			seen.delete(args[0]);

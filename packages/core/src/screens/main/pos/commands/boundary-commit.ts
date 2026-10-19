@@ -11,6 +11,7 @@ import {
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { type EngineRecord, observeCatalogChanges, readCatalogGeneration } from '@wcpos/query';
+import { findOpenSession, RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
 import { CHOOSE_REGISTER_REASON } from '../checkout/tender/tender-guards';
@@ -38,6 +39,7 @@ export async function commitAtBoundary(
 	ctx: SaleContext & {
 		bindingStatus: SaleCommitRequest['bindingStatus'];
 		readBindingStatus?: () => SaleCommitRequest['bindingStatus'];
+		readRegisterId?: () => string | null;
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
@@ -68,13 +70,21 @@ export async function commitAtBoundary(
 			bindingStatus: ctx.bindingStatus,
 			amounts: { kind: 'retained-captures' },
 		},
-		async ({ sessionId }, slot) => {
+		async ({ registerId, sessionId }, slot) => {
 			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing: true });
 			let conditionReason: string | undefined;
+			let session: Awaited<ReturnType<typeof findOpenSession>> | undefined;
 			let validatedGeneration: number | undefined;
 			// Once checkout takes over, this pass cannot resume completion without provenance.
 			let aggregateOnly = false;
 			const revalidate = async () => {
+				try {
+					session = await findOpenSession(ctx.storeDB, registerId, ctx.sessionsOn);
+				} catch (error) {
+					if (error instanceof RegisterSessionRequiredError)
+						return (conditionReason = 'session_changed');
+					throw error;
+				}
 				// A snapshot is valid only if the catalog stayed still throughout its read.
 				for (let attempt = 0; attempt < 2; attempt++) {
 					validatedGeneration = readCatalogGeneration(ctx.runtime.engine);
@@ -111,6 +121,25 @@ export async function commitAtBoundary(
 						refusal = {
 							deny: { reasonKey: CHOOSE_REGISTER_REASON, detail: { event: TENDER_COMMIT_EVENT } },
 						};
+						return null;
+					}
+					if (ctx.readRegisterId && ctx.readRegisterId() !== registerId) {
+						conditionReason = 'register_changed';
+						return null;
+					}
+					// The guard's session document stays live across awaits and resident resolution.
+					const liveSession = session?.getLatest();
+					if (
+						session !== undefined &&
+						ctx.sessionsOn &&
+						(!liveSession ||
+							liveSession.deleted ||
+							liveSession.id !== sessionId ||
+							liveSession.register_id !== registerId ||
+							liveSession.status !== 'open' ||
+							liveSession.sync_status === 'failed')
+					) {
+						conditionReason = 'session_changed';
 						return null;
 					}
 					if (hasLiveSettlementLeg(payload.meta_data)) return null;

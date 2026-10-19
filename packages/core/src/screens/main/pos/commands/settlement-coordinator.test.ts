@@ -599,3 +599,18 @@ it('re-drains catalog-generation supersession after an in-flight emission', asyn
 	await flush();
 	expect(h.settle).toHaveBeenCalledTimes(2);
 });
+
+it.each(['register_changed', 'session_changed'])(
+	're-drains %s after an in-flight emission',
+	async (reason) => {
+		const h = start([couponOrder()], false);
+		h.settle.mockImplementationOnce(async () => {
+			await emit(h.inputs$, h.inputs$.value);
+			return { superseded: true, reason };
+		});
+		await emit(h.references$, { ready: true, generation: '0' });
+		await emit(h.ratesReady$, { ready: true, generation: 0 });
+		await flush();
+		expect(h.settle).toHaveBeenCalledTimes(2);
+	}
+);

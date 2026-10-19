@@ -60,10 +60,10 @@ export function SettlementCoordinatorProvider() {
 	const cashier = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeId = useDocField(store, (value) => value.id) as number | undefined;
 	const { registerId, status: bindingStatus } = useRegisterBinding();
-	const bindingRef = React.useRef(bindingStatus);
+	const bindingRef = React.useRef({ status: bindingStatus, registerId });
 	React.useLayoutEffect(() => {
-		bindingRef.current = bindingStatus;
-	}, [bindingStatus]);
+		bindingRef.current = { status: bindingStatus, registerId };
+	}, [bindingStatus, registerId]);
 	const saleContext = useSaleContext();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
@@ -145,7 +145,8 @@ export function SettlementCoordinatorProvider() {
 							storeContract: () => readStorePaymentsContract(extraData),
 							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							readBindingStatus: () =>
-								bindingRef.current === 'unknown' ? 'none' : bindingRef.current,
+								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
+							readRegisterId: () => bindingRef.current.registerId,
 							complete: (order, slot) =>
 								completeSale(
 									saleContext,
