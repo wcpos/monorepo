@@ -72,7 +72,8 @@ jest.mock('@wcpos/components/button', () => ({
 	},
 }));
 // The tablet period rows are MenuRows; the stand-in keeps the role, the testID and the
-// className on ONE element, which is what the live spec reads. The group stays real.
+// locked dimming on ONE element, as the real row does (opacity-45, LEDGER line 9), which is
+// what the live spec reads. The group stays real.
 jest.mock('@wcpos/components/menu-row', () => ({
 	...jest.requireActual('@wcpos/components/menu-row'),
 	MenuRow: ({
@@ -80,7 +81,7 @@ jest.mock('@wcpos/components/menu-row', () => ({
 		trailing,
 		onPress,
 		testID,
-		className,
+		locked,
 		choice,
 		selected,
 	}: {
@@ -88,7 +89,7 @@ jest.mock('@wcpos/components/menu-row', () => ({
 		trailing?: React.ReactNode;
 		onPress?: () => void;
 		testID?: string;
-		className?: string;
+		locked?: boolean;
 		choice?: boolean;
 		selected?: boolean;
 	}) => (
@@ -96,7 +97,8 @@ jest.mock('@wcpos/components/menu-row', () => ({
 			role={choice ? 'radio' : 'button'}
 			aria-checked={choice ? selected : undefined}
 			data-testid={testID}
-			className={className}
+			data-locked={locked ? 'true' : undefined}
+			className={locked ? 'opacity-45' : undefined}
 			onClick={onPress}
 		>
 			{label}
@@ -409,7 +411,7 @@ it.each([
 	['reports-period-lastWeek', 'Earlier closures', 'sm'],
 	['reports-period-thisMonth', 'Earlier closures', 'sm'],
 	['reports-period-lastMonth', 'Earlier closures', 'sm'],
-	// Tablet rows are MenuRows: the dimming must sit on the element that carries the
+	// Tablet rows are locked MenuRows: the dimming must sit on the element that carries the
 	// testID and the radio role, not on a wrapper (reports-closures.spec.ts:650 reads it there).
 	['reports-period-yesterday', 'Earlier closures', 'md'],
 	['reports-period-lastMonth', 'Earlier closures', 'md'],
@@ -417,8 +419,14 @@ it.each([
 	mockScreenSize = size;
 	draw();
 	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
-	expect(screen.getByTestId(id).className).toContain('opacity-50');
-	expect(screen.getByTestId('reports-period-today').className).not.toContain('opacity-50');
+	// Phone rows are Buttons dimmed with opacity-50; tablet rows are locked MenuRows (opacity-45).
+	const dim = size === 'sm' ? 'opacity-50' : 'opacity-45';
+	expect(screen.getByTestId(id).className).toContain(dim);
+	expect(screen.getByTestId('reports-period-today').className).not.toContain(dim);
+	if (size !== 'sm') {
+		expect(screen.getByTestId(id).getAttribute('data-locked')).toBe('true');
+		expect(screen.getByTestId('reports-period-today').getAttribute('data-locked')).toBeNull();
+	}
 	fireEvent.click(screen.getByTestId(id));
 	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
 	expect(screen.getByTestId(id).textContent).not.toContain('Locked');

@@ -653,7 +653,14 @@ for (const viewport of viewports) {
 			}, testInfo) => {
 				await openClosures(page);
 				await page.getByTestId('reports-period').click();
-				await expect(page.getByTestId('reports-period-today')).not.toHaveClass(/opacity-50/);
+				// Phone rows are Buttons dimmed by class; tablet rows are locked MenuRows, so read
+				// the resolved opacity (MenuRow LEDGER line 9: the same 0.45 as a disabled row).
+				const tablet = viewport.name === 'tablet';
+				if (tablet) {
+					await expect(page.getByTestId('reports-period-today')).toHaveCSS('opacity', '1');
+				} else {
+					await expect(page.getByTestId('reports-period-today')).not.toHaveClass(/opacity-50/);
+				}
 				for (const [period, scopeName] of [
 					['yesterday', en['reports.earlier_closures']],
 					['thisWeek', en['reports.earlier_closures']],
@@ -662,7 +669,11 @@ for (const viewport of viewports) {
 					['lastMonth', en['reports.earlier_closures']],
 				]) {
 					const option = page.getByTestId(`reports-period-${period}`);
-					await expect(option).toHaveClass(/opacity-50/);
+					if (tablet) {
+						await expect(option).toHaveCSS('opacity', '0.45');
+					} else {
+						await expect(option).toHaveClass(/opacity-50/);
+					}
 					await option.click();
 					await expect(page.getByTestId('reports-lock-hint')).toBeVisible();
 					await expect(page.getByTestId('reports-lock-hint')).toHaveText(

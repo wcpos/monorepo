@@ -231,16 +231,15 @@ export function DateButton({
 									)}
 								</Button>
 							) : (
-								// The dimming sits on the row itself, as on phone: the row keeps its role
-								// and stays pressable so a press can show the Pro hint, and the radiogroup
-								// keeps each radio as a direct child.
+								// A Free range is a locked MenuRow: dimmed on the row itself, still pressable
+								// so a press can show the Pro hint, each radio a direct child of the group.
 								<MenuRow
 									key={key}
 									testID={`reports-period-${key}`}
 									choice
 									selected={selected === key}
 									label={labels[key as keyof typeof labels]}
-									className={!license?.isPro && key !== 'today' ? 'opacity-50' : undefined}
+									locked={!license?.isPro && key !== 'today'}
 									onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
 									trailing={
 										!license?.isPro &&

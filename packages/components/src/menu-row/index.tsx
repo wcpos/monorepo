@@ -23,6 +23,11 @@ export type MenuRowProps = Omit<PressableProps, 'children'> & {
 	description?: React.ReactNode;
 	trailing?: React.ReactNode;
 	variant?: 'default' | 'destructive';
+	/**
+	 * Dimmed like `disabled` but still pressable, for an option the caller gates (a Free
+	 * range whose press shows the Pro hint). The lock icon is the caller's `trailing`.
+	 */
+	locked?: boolean;
 	/** Layout only; the row owns its surface and type. */
 	className?: string;
 };
@@ -40,6 +45,7 @@ export function MenuRow({
 	description,
 	trailing,
 	variant = 'default',
+	locked = false,
 	className,
 	disabled,
 	onPress,
@@ -91,7 +97,8 @@ export function MenuRow({
 						: 'web:focus:bg-muted active:bg-muted',
 					pointer === 'fine' &&
 						(destructive ? 'web:hover:bg-destructive/10' : 'web:hover:bg-muted'),
-					disabled && 'web:pointer-events-none opacity-45',
+					(disabled || locked) && 'opacity-45',
+					disabled && 'web:pointer-events-none',
 					className
 				)}
 			>
