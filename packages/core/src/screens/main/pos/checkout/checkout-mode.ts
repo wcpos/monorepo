@@ -146,9 +146,9 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 	});
 }
 /**
- * The order whose tender is on screen, and whether its receipt shows itself (`autoShowReceipt`).
- * Registered by the mounted tender flow, so code above the screens can tell a watched sale
- * from one completing in the background.
+ * The order whose tender is on screen in the wide-screen checkout column, and whether its
+ * receipt shows itself (`autoShowReceipt`). Registered by the mounted tender flow, so code
+ * above the screens can tell a watched sale from one completing in the background.
  */
 let watchedTender: { uuid: string; autoShowReceipt: boolean } | null = null;
 export function watchTender(uuid: string, autoShowReceipt: boolean) {
@@ -159,15 +159,16 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
 	};
 }
 /**
- * A server capture is about to write a completing status onto an order in checkout. That
- * status drops it from the till's open orders and unmounts its tender, the one place that
- * would select the receipt; so enter the receipt first, as the cash path does
- * (sale-completion), selected only when the cashier is watching it and receipts show.
+ * A payment that settles the sale is about to write a completing status onto the order in
+ * the checkout column. That status drops it from the till's open orders and unmounts the
+ * column's tender, the one place that would select the receipt; so enter the receipt first,
+ * as the cash path does (sale-completion), selected when receipts show. An order nobody is
+ * watching (another tab, or the phone's sheet, which is a route of its own and stays
+ * mounted) is left to the background completion, as before.
  */
 export function enterReceiptBeforeCompletion(uuid: string) {
-	if (!snapshot.checkoutOrders.has(uuid)) return;
-	const watched = watchedTender?.uuid === uuid ? watchedTender : null;
-	enterReceipt(uuid, { select: watched?.autoShowReceipt === true });
+	if (watchedTender?.uuid !== uuid || !snapshot.checkoutOrders.has(uuid)) return;
+	enterReceipt(uuid, { select: watchedTender.autoShowReceipt });
 }
 export function finishReceipt(uuid: string) {
 	setLinesPaidBy(uuid, null);

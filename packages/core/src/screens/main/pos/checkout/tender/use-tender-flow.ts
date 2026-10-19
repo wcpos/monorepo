@@ -1277,10 +1277,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		reducerDispatch,
 	]);
 
-	// A server capture enters this order's receipt before its status unmounts this flow.
-	React.useEffect(
-		() => watchTender(order.uuid, !!uiSettings.autoShowReceipt),
-		[order.uuid, uiSettings.autoShowReceipt]
+	// A settling capture enters this order's receipt before its status unmounts the column.
+	// Layout, not passive: a capture can land between this commit and passive effects. The
+	// phone's sheet (the same `sm` split as Pay) is a route keyed by uuid and stays mounted.
+	React.useLayoutEffect(
+		() => (screenSize === 'sm' ? undefined : watchTender(order.uuid, !!uiSettings.autoShowReceipt)),
+		[order.uuid, uiSettings.autoShowReceipt, screenSize]
 	);
 
 	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
