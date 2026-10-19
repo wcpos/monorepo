@@ -1,5 +1,7 @@
 export {
 	encodeThermalTemplate,
+	getBarcodeLibrary,
+	loadBarcodeLibrary,
 	parseXml,
 	renderEscpos,
 	renderHtml,

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { filter } from 'rxjs';
-import { format as formatDate } from 'date-fns';
+import { format as formatDate } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';

@@ -3,7 +3,8 @@ import { ScrollView, View } from 'react-native';
 
 import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 import { useObservableState } from 'observable-hooks';
 
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';

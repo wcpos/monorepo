@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, DateRange } from '@wcpos/components/calendar';

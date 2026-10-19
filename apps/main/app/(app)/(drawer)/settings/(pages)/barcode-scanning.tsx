@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { BarcodeScanning, SettingsPage } from '@wcpos/core/screens/main/settings';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.BarcodeScanningSettingsPage);
 
 export default function BarcodeScanningSettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage title={t('settings.barcode_scanning')} testID="screen-settings-barcode-scanning">
-			<BarcodeScanning />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

@@ -1,16 +1,14 @@
 import * as React from 'react';
 
-import {
-	addDays,
-	differenceInCalendarDays,
-	endOfMonth,
-	format,
-	isSameDay,
-	isSameMonth,
-	startOfMonth,
-	subDays,
-	subMonths,
-} from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
+import { endOfMonth } from 'date-fns/endOfMonth';
+import { format } from 'date-fns/format';
+import { isSameDay } from 'date-fns/isSameDay';
+import { isSameMonth } from 'date-fns/isSameMonth';
+import { startOfMonth } from 'date-fns/startOfMonth';
+import { subDays } from 'date-fns/subDays';
+import { subMonths } from 'date-fns/subMonths';
 import { useObservableState } from 'observable-hooks';
 import { startWith } from 'rxjs';
 

@@ -15,7 +15,7 @@
 import * as React from 'react';
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 
 import { QueryStateProvider } from '../../../../query';
 import {

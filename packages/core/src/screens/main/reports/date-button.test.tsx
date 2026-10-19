@@ -162,7 +162,7 @@ const nativeCalendar = jest.fn();
 jest.mock('@wcpos/components/calendar', () => ({
 	Calendar: (props: unknown) => {
 		calendar(props);
-		const RealCalendar = jest.requireActual('@wcpos/components/calendar').Calendar;
+		const RealCalendar = jest.requireActual('@wcpos/components/calendar/calendar-impl').Calendar;
 		return <RealCalendar {...(props as React.ComponentProps<typeof RealCalendar>)} />;
 	},
 }));

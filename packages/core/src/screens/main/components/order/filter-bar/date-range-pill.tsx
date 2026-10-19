@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { isSameDay, isToday, isYesterday } from 'date-fns';
+import { isSameDay } from 'date-fns/isSameDay';
+import { isToday } from 'date-fns/isToday';
+import { isYesterday } from 'date-fns/isYesterday';
 
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';

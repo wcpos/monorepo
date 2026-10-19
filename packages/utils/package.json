@@ -45,6 +45,7 @@
 		"expo-application": "~58.1.2",
 		"expo-constants": "~58.0.12",
 		"expo-file-system": "~58.0.9",
+		"react": "*",
 		"react-native": "*"
 	},
 	"peerDependenciesMeta": {
@@ -61,6 +62,7 @@
 	"dependencies": {
 		"@sentry/browser": "10.75.0",
 		"@sentry/react-native": "~8.28.0",
+		"date-fns": "^4.4.0",
 		"react-native-logs": "^5.6.0"
 	},
 	"devDependencies": {

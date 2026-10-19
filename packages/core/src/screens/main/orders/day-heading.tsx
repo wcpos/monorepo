@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
