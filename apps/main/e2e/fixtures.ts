@@ -635,6 +635,92 @@ export async function waitForStoreQuiescence(
 	}
 }
 
+const ENGINE_LEDGER_PREFIX = 'WCPOS_E2E_ENGINE ';
+
+/** The engine's `cadence.start`, as the E2E ledger (`lib/e2e-engine-ledger.ts`) prints it. */
+function isCadenceStartLine(text: string): boolean {
+	if (!text.startsWith(ENGINE_LEDGER_PREFIX)) return false;
+	try {
+		return JSON.parse(text.slice(ENGINE_LEDGER_PREFIX.length)).type === 'cadence.start';
+	} catch {
+		return false;
+	}
+}
+
+const cadenceStarts = new WeakMap<Page, Promise<void>>();
+
+/**
+ * Arm a per-page record of the engine's first `cadence.start`. Call before the app boots:
+ * the line prints once, usually before a spec gets the page, and the app keeps no global
+ * a spec could query for it afterwards.
+ */
+function recordCadenceStart(page: Page): void {
+	cadenceStarts.set(
+		page,
+		new Promise<void>((resolve) => {
+			const onConsole = (message: { text(): string }) => {
+				if (!isCadenceStartLine(message.text())) return;
+				page.off('console', onConsole);
+				resolve();
+			};
+			page.on('console', onConsole);
+		})
+	);
+}
+
+/**
+ * Wait until the sync engine has drained its startup pulls and started change-signal
+ * polling (`cadence.start`). Resolves at once when that already happened on this page.
+ *
+ * The require plane serves one request at a time and never preempts, so an interaction
+ * measured before this point measures the queued startup sync, not the interaction.
+ * Needs a bundle built with `EXPO_PUBLIC_WCPOS_E2E=1`; without it the ledger is silent.
+ */
+export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise<void> {
+	// A production bundle (the main-push E2E target, or a local `build:web`) carries no
+	// ledger, so no line can come: fall back to network silence, the pre-ledger settle
+	// check, and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
+	const ledgerOn = await page
+		.evaluate(
+			() => (globalThis as { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger === true
+		)
+		.catch(() => false);
+	if (!ledgerOn) {
+		console.log(
+			'WCPOS_E2E cadence.start unavailable: no engine ledger in this bundle, waiting for network silence instead'
+		);
+		expect(
+			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: Math.min(timeout, 30_000) }),
+			'store traffic did not settle before the measured interaction'
+		).toBe(true);
+		return;
+	}
+	const started =
+		cadenceStarts.get(page) ??
+		page
+			.waitForEvent('console', { predicate: (m) => isCadenceStartLine(m.text()), timeout })
+			.then(() => undefined);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			started,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() =>
+						reject(
+							new Error(
+								`no ${ENGINE_LEDGER_PREFIX}cadence.start within ${timeout} ms: the startup sync is still draining, or the bundle lacks EXPO_PUBLIC_WCPOS_E2E=1`
+							)
+						),
+					timeout
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 /**
  * The store row `authenticateWithStore` presses on the connect screen's picker:
  * the requested WooCommerce store, or the first offered when none is named.
@@ -1092,6 +1178,8 @@ export async function hydrateAuthenticatedPage(
 	options: HydrateAuthenticatedPageOptions = {}
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
+	// Before anything boots, so a spec can wait on a cadence.start that already printed.
+	recordCadenceStart(page);
 	const variant = getStoreVariant(testInfo);
 	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
@@ -1205,6 +1293,8 @@ export async function hydrateAuthenticatedPage(
 
 			// Unblock JS before re-authenticating
 			await page.unroute('**/*', blockScriptRequests).catch(() => {});
+			// Re-arm: a cadence.start from the abandoned restored boot is not this session's.
+			recordCadenceStart(page);
 			await authenticateWithStore(page, testInfo, {
 				waitForCatalogue,
 				credentials: cashierAuth ?? undefined,

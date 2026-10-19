@@ -15,7 +15,7 @@
  */
 import { expect } from '@playwright/test';
 
-import { authenticatedTest as test, wcposRestRoute } from './fixtures';
+import { authenticatedTest as test, waitForCadenceStart, wcposRestRoute } from './fixtures';
 
 const TERM = 'banana berry';
 const SERVER_ROWS = 240;
@@ -127,6 +127,8 @@ test.describe('Product search walk politeness', () => {
 
 		const searchInput = page.getByTestId('search-products').first();
 		await expect(searchInput).toBeVisible({ timeout: 30_000 });
+		// Type after the startup pulls drain: the serial require plane queues a search behind them.
+		await waitForCadenceStart(page);
 		await searchInput.fill(TERM);
 		await page.waitForTimeout(OBSERVE_MS);
 		phase = 'cleared';

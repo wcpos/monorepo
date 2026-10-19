@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-import { ensureRegisterOpen, openOrderSheet } from './fixtures';
+import { ensureRegisterOpen, openOrderSheet, waitForCadenceStart } from './fixtures';
 import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
@@ -47,6 +47,8 @@ test.describe('POS Cart', () => {
 	test('should add a product to the cart and show checkout button', async ({
 		posPage: page,
 	}, testInfo) => {
+		// The budget is for the add, not the sync: measure after the startup writes drain.
+		await waitForCadenceStart(page);
 		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
 		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
