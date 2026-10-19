@@ -1,6 +1,7 @@
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
+	demandRecordsByWooId,
 	refreshCollection,
 	refreshOrderRecord,
 	refreshOrderRefunds,
@@ -309,5 +310,57 @@ describe('refreshStockRecords', () => {
 			})
 		).resolves.toBeUndefined();
 		expect(require).not.toHaveBeenCalled();
+	});
+});
+
+describe('demandRecordsByWooId', () => {
+	it.each(['fetched', 'released'] as const)(
+		'preserves %s readiness and caller-owned release',
+		async (action) => {
+			const release = jest.fn();
+			const require = jest.fn(() => ({ ready: Promise.resolve({ action }), release }));
+			const handle = demandRecordsByWooId({ require } as unknown as RxdbSyncEngine, {
+				id: 'referenced',
+				collection: 'customers',
+				wooIds: [5, 7, 0, -1, Number.NaN],
+			});
+			expect(require).toHaveBeenCalledWith({
+				id: 'referenced',
+				collection: 'customers',
+				kind: 'targeted-records',
+				remoteIds: ['5', '7'],
+			});
+			await expect(handle.ready).resolves.toBe(action === 'released' ? 'released' : 'settled');
+			expect(release).not.toHaveBeenCalled();
+			handle.release();
+			expect(release).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it('returns a settled no-op for an empty request', async () => {
+		const require = jest.fn();
+		const handle = demandRecordsByWooId({ require } as unknown as RxdbSyncEngine, {
+			id: 'empty',
+			collection: 'customers',
+			wooIds: [],
+		});
+		await expect(handle.ready).resolves.toBe('settled');
+		handle.release();
+		expect(require).not.toHaveBeenCalled();
+	});
+
+	it('forwards rejection without releasing the caller-owned demand', async () => {
+		const error = new Error('pull failed');
+		const release = jest.fn();
+		const require = jest.fn(() => ({ ready: Promise.reject(error), release }));
+		const handle = demandRecordsByWooId({ require } as unknown as RxdbSyncEngine, {
+			id: 'failed',
+			collection: 'customers',
+			wooIds: [5],
+		});
+		await expect(handle.ready).rejects.toBe(error);
+		expect(release).not.toHaveBeenCalled();
+		handle.release();
+		expect(release).toHaveBeenCalledTimes(1);
 	});
 });

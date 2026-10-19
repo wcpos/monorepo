@@ -1753,10 +1753,21 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 3',
 	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
 	"screens/main/contexts/ui-settings/utils.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (l2): the remaining engine demands, the storage-health read and the search-select handle are owned by @wcpos/query.
+	'query/coupon-reference-demand.ts :: engine handle aliased :: useReferenceDemandHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/search-select.ts :: engine handle aliased :: useSearchSelect :: { engine } = useQueryRuntime() :: 1',
+	"query/search-select.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/extra-data/provider.tsx :: engine handle aliased :: ExtraDataProvider :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-census-totals.ts :: engine handle aliased :: useCensusTotals :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-collection-reset.ts :: collection reset outside the reset command :: useCollectionReset :: runtime.engine.scope.resetCollection :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: engine handle aliased :: useReferencedCustomerDemand :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: require plane outside a named read :: useReferencedCustomerDemand :: engine.require :: 1',
+	"screens/main/hooks/use-storage-health.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	'screens/main/hooks/use-unsent-changes.ts :: engine handle aliased :: useUnsentChangesRecorder :: { engine } = useQueryRuntime() :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 793;
+export const SEAM_RETIRED_FLOOR = 803;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'0070f55a814f0dd3f2dd44e9aaa036462d8ea92c6aae2700af0457bca892f48e';
+	'1c9f9733678c069689817c90217be6fae81926266388ccdc362f48850a64d039';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

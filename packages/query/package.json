@@ -15,6 +15,7 @@
 		"./record-readers": "./src/record-readers/index.ts",
 		"./local-data-reset": "./src/local-data-reset/index.ts",
 		"./query-state": "./src/query-state/index.ts",
+		"./storage-health": "./src/storage-health.ts",
 		"./store-local": "./src/store-local/index.ts",
 		"./mutations": "./src/mutations/index.ts",
 		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",

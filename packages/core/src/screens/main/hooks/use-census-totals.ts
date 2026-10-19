@@ -8,13 +8,13 @@ const EMPTY_CENSUS_TOTALS = Object.fromEntries(
 ) as CensusTotals;
 
 export function useCensusTotals(): CensusTotals {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [totals, setTotals] = React.useState<CensusTotals>(EMPTY_CENSUS_TOTALS);
 
 	React.useEffect(() => {
 		// The engine census is an external subscription and must follow the active engine lifecycle.
-		return engine.censusChanges(setTotals);
-	}, [engine]);
+		return runtime.engine.censusChanges(setTotals);
+	}, [runtime.engine]);
 
 	return totals;
 }

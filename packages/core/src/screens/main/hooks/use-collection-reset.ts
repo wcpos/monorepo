@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, resetCollectionsAndRefill, useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import type { LegacyCollectionName } from '@wcpos/query';
@@ -14,53 +14,23 @@ const ENGINE_COLLECTIONS = Object.fromEntries(
 	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [row.legacyName, name])
 ) as Partial<Record<CollectionKey, SyncCollectionName>>;
 
-export interface CollectionResetResult {
-	collectionName: CollectionKey;
-	outcome: 'reset' | 'needs-confirmation';
-}
-
 /** Engine-owned reset funnel. A pending mutation queue is never destroyed implicitly: the
- * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
+ * engine's `needs-confirmation` outcome is warned about without refilling. */
 export const useCollectionReset = (key: CollectionKey) => {
 	const runtime = useQueryRuntime();
-	const collectionNames = React.useMemo<CollectionKey[]>(
-		() => (key === 'products' ? ['variations', 'products'] : [key]),
-		[key]
-	);
-
-	const resetOne = React.useCallback(
-		async (collectionName: CollectionKey): Promise<CollectionResetResult> => {
-			const engineName = ENGINE_COLLECTIONS[collectionName];
-			if (!engineName) throw new Error(`Collection "${collectionName}" cannot be engine-reset`);
-			const outcome = await runtime.engine.scope.resetCollection(engineName);
-			return { collectionName, outcome };
-		},
-		[runtime]
-	);
-
-	const clear = React.useCallback(async (): Promise<CollectionResetResult[]> => {
-		const results: CollectionResetResult[] = [];
-		for (const collectionName of collectionNames) {
-			const result = await resetOne(collectionName);
-			results.push(result);
-			if (result.outcome === 'needs-confirmation') break;
-		}
-		return results;
-	}, [collectionNames, resetOne]);
-
 	const clearAndSync = React.useCallback(async (): Promise<void> => {
 		logger.debug('clearAndSync: starting', { context: { key } });
-		const results = await clear();
-		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
-		if (pendingConfirmation) {
+		const engineName = ENGINE_COLLECTIONS[key];
+		if (!engineName) throw new Error(`Collection "${key}" cannot be engine-reset`);
+		const outcome = await resetCollectionsAndRefill(runtime.engine, engineName);
+		if (outcome === 'needs-confirmation') {
 			logger.warn('clearAndSync: reset needs confirmation', {
-				context: { collectionName: pendingConfirmation.collectionName },
+				context: { collectionName: key },
 			});
 			return;
 		}
-		await runResetRefill(runtime.engine, collectionNames);
 		logger.debug('clearAndSync: complete', { context: { key } });
-	}, [clear, collectionNames, key, runtime.engine]);
+	}, [key, runtime.engine]);
 
-	return { clear, clearAndSync };
+	return { clearAndSync };
 };
