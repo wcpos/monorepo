@@ -4,8 +4,7 @@ import { Platform, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useCSSVariable } from 'uniwind';
 
-import { loadCharts } from '@wcpos/components/charts/lazy';
-import type { ChartBounds, PointsArray } from '@wcpos/components/charts/charts-impl';
+import { type ChartBounds, loadCharts, type PointsArray } from '@wcpos/components/charts/lazy';
 import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';

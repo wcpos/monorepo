@@ -9,8 +9,7 @@ import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';
 
-import { loadCharts } from '@wcpos/components/charts/lazy';
-import type { CartesianActionsHandle } from '@wcpos/components/charts/charts-impl';
+import { type CartesianActionsHandle, loadCharts } from '@wcpos/components/charts/lazy';
 import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
 import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
 
