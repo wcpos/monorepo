@@ -649,6 +649,9 @@ export function storePickLocator(page: Page, storeId?: number | string): Locator
 		: page.locator('[data-testid^="store-option-"]').first();
 }
 
+/** Connect presses before authenticateWithStore gives up on a store that keeps timing out. */
+const CONNECT_ATTEMPTS = 3;
+
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
@@ -710,13 +713,25 @@ export async function authenticateWithStore(
 
 	const connectButton = page.getByTestId('connect-store-button');
 	await expect(connectButton).toBeEnabled({ timeout: 10_000 });
-	await connectButton.click();
-	console.log('[auth] Connect button clicked');
 
-	// Wait for the store to be discovered
-	await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-		timeout: 60_000,
-	});
+	// Wait for the store to be discovered. The app gives up on a slow store by design
+	// (10 s URL check + 15 s site probe, #1155) and says so in connect-error-message;
+	// under six shards dev-next sometimes misses that window, so press Connect again
+	// rather than wait out 60 s for a label that can no longer come.
+	const loggedInUsers = page.getByTestId('logged-in-users-label');
+	const connectError = page.getByTestId('connect-error-message');
+	for (let attempt = 1; ; attempt++) {
+		await connectButton.click();
+		console.log(`[auth] Connect button clicked (attempt ${attempt}/${CONNECT_ATTEMPTS})`);
+		await expect(connectError).toBeHidden({ timeout: 10_000 });
+		await expect(loggedInUsers.or(connectError).first()).toBeVisible({ timeout: 60_000 });
+		if (await loggedInUsers.isVisible()) break;
+		const message = await connectError.textContent();
+		console.log(`[auth] connect-error-message on attempt ${attempt}: ${message}`);
+		if (attempt >= CONNECT_ATTEMPTS) {
+			throw new Error(`Store connect failed after ${attempt} attempts: ${message}`);
+		}
+	}
 	console.log('[auth] logged-in-users-label visible');
 
 	// Click the + button to trigger OAuth
