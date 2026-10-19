@@ -59,8 +59,7 @@ import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
 import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
-import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
-import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
+import { useOrderFieldsWrite } from '../../../commands/use-order-fields-write';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
@@ -95,7 +94,7 @@ export function EditOrderMetaForm({
 	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }) {
 	const t = useT();
-	const { localPatch } = useLocalMutation();
+	const { writeOrderFields } = useOrderFieldsWrite();
 	const { close: closeDialog } = useDialog();
 	const pushDocument = usePushDocument();
 	const { setCurrentOrderID } = useCurrentOrderActions();
@@ -133,12 +132,7 @@ export function EditOrderMetaForm({
 			return false;
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
-		const written = !!(await enqueueOrderMutation(order.uuid, () =>
-			localPatch({
-				document: order,
-				changes: () => patch,
-			})
-		));
+		const written = await writeOrderFields(order, () => patch);
 		if (written && close) closeDialog();
 		return written;
 	}
@@ -164,12 +158,7 @@ export function EditOrderMetaForm({
 		setLoading(true);
 		let patched = false;
 		try {
-			if (
-				!(await enqueueOrderMutation(order.uuid, () =>
-					localPatch({ document: order, changes: patch })
-				))
-			)
-				return;
+			if (!(await writeOrderFields(order, patch))) return;
 			patched = true;
 			await pushDocument(order);
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
@@ -182,15 +171,10 @@ export function EditOrderMetaForm({
 			}
 		} catch (error) {
 			if (patched) {
-				const reverted = await enqueueOrderMutation(order.uuid, () =>
-					localPatch({
-						document: order,
-						changes: () => ({
-							status: previous.status,
-							meta_data: previous.meta_data ?? [],
-						}),
-					})
-				);
+				const reverted = await writeOrderFields(order, () => ({
+					status: previous.status,
+					meta_data: previous.meta_data ?? [],
+				}));
 				// The failed send may still land: a timed-out outcome is unknown and a queued
 				// mutation is retried. Open orders only reach the server on an explicit push,
 				// so the revert is pushed too — the last write wins and the server ends up

@@ -103,6 +103,8 @@ const order: Record<string, unknown> & {
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	isRecordClosed: jest.requireActual('../../../../../../query/src/records/engine-record')
+		.isRecordClosed,
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({}),
 }));

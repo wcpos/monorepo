@@ -110,3 +110,8 @@ export function isVariationRecord(
 ): record is EngineRecord<'variations'> {
 	return record.collection.name === 'variations';
 }
+
+/** Also accepts temporary-database documents, which share the collection lifecycle. */
+export function isRecordClosed(record: object): boolean {
+	return (record as { collection?: { closed?: boolean } }).collection?.closed === true;
+}

@@ -1638,10 +1638,14 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/cart/edit-cart-customer.tsx :: record mutator :: EditCartCustomerForm :: patch :: 1',
 	'screens/main/pos/cart/edit-cart-customer.tsx :: resident helper write ::  :: useMutation :: 1',
 	'screens/main/pos/cart/edit-cart-customer.tsx :: resident helper write :: EditCartCustomerForm :: useMutation :: 1',
+	// ADR 0033 per-screen (g11): the order-meta form writes through a command; the queue asks query whether a record is closed.
+	'screens/main/pos/cart/buttons/edit-order-meta/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/cart/buttons/edit-order-meta/form.tsx :: resident helper write :: EditOrderMetaForm :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/order-mutation-queue.ts :: record collection back-reference :: isClosed :: (record as unknown as { collection?: { closed?: boolean } }).collection :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 693;
+export const SEAM_RETIRED_FLOOR = 696;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'356c429b727666d117e08d5e21d91b5143364ac26a0560752be45651b851a525';
+	'444716a2cf53cc5ce93aa4d6ed11742d49131a750f671373239d83305fb8bb56';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

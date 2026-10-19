@@ -178,7 +178,7 @@ export {
 	watchVariationParentRefresh,
 } from './reads/refresh-demands';
 export { searchCatalogByBarcode, readProductByWooId } from './reads/barcode-search';
-export { isVariationRecord } from './records/engine-record';
+export { isRecordClosed, isVariationRecord } from './records/engine-record';
 export { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
 export {
