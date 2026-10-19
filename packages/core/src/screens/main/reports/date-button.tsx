@@ -231,24 +231,23 @@ export function DateButton({
 									)}
 								</Button>
 							) : (
-								<View
+								// A Free range is a locked MenuRow: dimmed on the row itself, still pressable
+								// so a press can show the Pro hint, each radio a direct child of the group.
+								<MenuRow
 									key={key}
-									className={!license?.isPro && key !== 'today' ? 'opacity-50' : undefined}
-								>
-									<MenuRow
-										testID={`reports-period-${key}`}
-										choice
-										selected={selected === key}
-										label={labels[key as keyof typeof labels]}
-										onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
-										trailing={
-											!license?.isPro &&
-											key !== 'today' && (
-												<Icon name="lock" size="sm" className="text-muted-foreground" />
-											)
-										}
-									/>
-								</View>
+									testID={`reports-period-${key}`}
+									choice
+									selected={selected === key}
+									label={labels[key as keyof typeof labels]}
+									locked={!license?.isPro && key !== 'today'}
+									onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+									trailing={
+										!license?.isPro &&
+										key !== 'today' && (
+											<Icon name="lock" size="sm" className="text-muted-foreground" />
+										)
+									}
+								/>
 							)
 						)}
 					</PeriodGroup>

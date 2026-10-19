@@ -87,6 +87,17 @@ it('presses when enabled and blocks a disabled press', () => {
 	expect(screen.getByRole('button').dataset.classes).toContain('opacity-45');
 });
 
+it('a locked row is dimmed and still presses', () => {
+	const onPress = jest.fn();
+	render(<MenuRow choice label="Yesterday" locked onPress={onPress} />);
+	const row = screen.getByRole('radio', { name: 'Yesterday' });
+	expect(row.dataset.classes).toContain('opacity-45');
+	expect(row.dataset.classes).not.toContain('pointer-events-none');
+	expect(row).not.toHaveAttribute('aria-disabled', 'true');
+	fireEvent.click(row);
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
 it('paints destructive words and icons red, with a destructive hover and press wash', () => {
 	render(<MenuRow label="Forget" variant="destructive" leading={<Icon name="trash" />} />);
 	const row = screen.getByRole('button');
