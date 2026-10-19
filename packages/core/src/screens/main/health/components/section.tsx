@@ -1,32 +1,38 @@
 import * as React from 'react';
 
+import { HStack } from '@wcpos/components/hstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 /**
  * Line-separated Store health section: hairline on top, plain title, muted
- * sub — never a boxed card.
+ * sub — never a boxed card. An `action` sits at the right of the header row.
  */
 export function Section({
 	title,
 	sub,
+	action,
 	first = false,
 	children,
 	testID,
 }: {
 	title: string;
 	sub?: string;
+	action?: React.ReactNode;
 	first?: boolean;
 	children: React.ReactNode;
 	testID?: string;
 }) {
 	return (
 		<VStack testID={testID} className={cn('gap-3', first ? '' : 'border-border border-t pt-4')}>
-			<VStack className="gap-0.5">
-				<Text className="font-semibold">{title}</Text>
-				{sub ? <Text className="text-muted-foreground text-xs">{sub}</Text> : null}
-			</VStack>
+			<HStack className="items-start justify-between gap-3">
+				<VStack className="flex-1 gap-0.5">
+					<Text className="font-semibold">{title}</Text>
+					{sub ? <Text className="text-muted-foreground text-xs">{sub}</Text> : null}
+				</VStack>
+				{action}
+			</HStack>
 			{children}
 		</VStack>
 	);
