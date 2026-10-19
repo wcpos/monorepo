@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 import { extractFeeLineData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
 
 /**
  * Custom hook to retrieve and process fee line data.

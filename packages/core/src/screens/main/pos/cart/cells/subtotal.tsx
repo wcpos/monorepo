@@ -8,7 +8,7 @@ import { useDocField } from '@wcpos/query';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;

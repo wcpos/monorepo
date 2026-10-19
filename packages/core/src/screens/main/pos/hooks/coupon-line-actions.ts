@@ -10,7 +10,7 @@ import { enqueueOrderMutation, type OrderMutationContext } from './order-mutatio
 import type { RecalculateResult } from './coupon-recalculate';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 type CouponLine = NonNullable<OrderDocument['coupon_lines']>[number];
 type Plain = Record<string, unknown>;

@@ -1,6 +1,7 @@
 export type { ReadonlyEngineRecord } from './records/readonly-engine-record';
 export { QueryProvider, useQueryRuntime } from './provider';
 export type { EngineRecord, EngineRecordCollectionName } from './records/engine-record';
+export type * from './records/order-lines';
 export { engineCollection, type EngineCollection } from './records/engine-collection';
 export { useDocField, useRecordField } from './records/use-record-field';
 export {

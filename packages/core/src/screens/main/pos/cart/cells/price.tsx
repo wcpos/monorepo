@@ -13,7 +13,7 @@ import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
 import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;

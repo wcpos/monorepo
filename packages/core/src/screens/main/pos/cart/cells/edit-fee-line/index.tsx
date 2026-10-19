@@ -10,7 +10,7 @@ import { useT } from '../../../../../../contexts/translations';
 
 interface Props {
 	uuid: string;
-	item: NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+	item: import('@wcpos/query').OrderFeeLine;
 	onClose?: () => void;
 }
 

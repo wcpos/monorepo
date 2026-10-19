@@ -54,7 +54,7 @@ export const useAddCustomer = () => {
 				: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email || `#${data.id}`;
 
 			const { customer_id, billing, shipping, tax_ids } = transformCustomerJSONToOrderJSON(
-				data as unknown as import('@wcpos/database').CustomerDocument,
+				data as unknown as import('@wcpos/query').CustomerPayload,
 				country as string
 			);
 			const result = await setCartCustomer(currentOrderRecord, {

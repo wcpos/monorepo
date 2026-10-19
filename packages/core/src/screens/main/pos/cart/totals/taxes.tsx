@@ -12,7 +12,7 @@ import { useTaxInclOrExcl } from '../../../hooks/use-tax-incl-or-excl';
 
 interface Props {
 	totalTax: string;
-	taxLines: import('@wcpos/database').OrderDocument['tax_lines'];
+	taxLines: import('@wcpos/query').OrderTaxLines;
 }
 
 /**

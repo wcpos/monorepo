@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-type TemporaryOrderDocument = import('@wcpos/database').TemporaryOrderDocument;
+type TemporaryOrderDocument = import('@wcpos/query/temporary-order').TemporaryOrderRecord;
 type EngineOrderRecord = import('@wcpos/query').EngineRecord<'orders'>;
 type CurrentOrderRxDocument = EngineOrderRecord | TemporaryOrderDocument;
 

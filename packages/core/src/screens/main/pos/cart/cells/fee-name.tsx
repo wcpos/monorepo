@@ -11,7 +11,7 @@ import { EditableField } from '../../../components/editable-field';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCartTableReadOnly } from './read-only';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
 interface Props {
 	uuid: string;
 	item: FeeLine;

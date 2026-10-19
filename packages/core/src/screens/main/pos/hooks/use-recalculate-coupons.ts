@@ -10,8 +10,8 @@ import {
 import { useCartConfig } from './use-cart-config';
 import { useCouponContext } from './use-coupon-context';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
+type CouponLine = import('@wcpos/query').OrderCouponLine;
 
 /**
  * Hook that wraps the pure recalculateCoupons() function with engine lookups

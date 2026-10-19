@@ -75,9 +75,9 @@ const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined>
  */
 const PRICE_COLUMN_MIN_WIDTH = 300;
 type CartTableFeatures = typeof cartTableFeatures;
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
+type FeeLine = import('@wcpos/query').OrderFeeLine;
+type ShippingLine = import('@wcpos/query').OrderShippingLine;
 /**
  * CartTableLine wraps a CartLine (LineItem | FeeLine | ShippingLine) with display metadata.
  */

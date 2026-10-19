@@ -51,7 +51,7 @@ const formSchema = z.object({
 
 interface Props {
 	uuid: string;
-	item: NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+	item: import('@wcpos/query').OrderFeeLine;
 }
 
 export function EditFeeLineForm({ uuid, item }: Props) {
@@ -101,9 +101,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 				// This dialog renders <MetaDataForm/> and seeds it from the line, but used to
 				// drop the result on save — the cashier's meta edits went nowhere. The sibling
 				// shipping form has always submitted it.
-				meta_data: data.meta_data as NonNullable<
-					import('@wcpos/database').OrderDocument['fee_lines']
-				>[number]['meta_data'],
+				meta_data: data.meta_data as import('@wcpos/query').OrderFeeLine['meta_data'],
 			});
 			closeDialog();
 		},

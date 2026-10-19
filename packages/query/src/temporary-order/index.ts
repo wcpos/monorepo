@@ -9,6 +9,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { protectOrderMeta } from '../mutations/protected-order-meta';
 
+export type TemporaryOrderRecord = TemporaryOrderDocument;
+
 const temporaryOrderLogger = getLogger(['wcpos', 'pos', 'temporary-order']);
 
 /**

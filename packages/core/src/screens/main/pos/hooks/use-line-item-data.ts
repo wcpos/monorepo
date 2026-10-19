@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 import { extractLineItemData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 
 /**
  * Custom hook to handle LineItem data.

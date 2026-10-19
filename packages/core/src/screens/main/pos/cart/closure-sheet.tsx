@@ -16,7 +16,7 @@ import {
 import { EASE_BEAT, STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import type { ClosureDocument } from '@wcpos/database';
+import type { ReadonlyClosureDocument } from '@wcpos/query/register-session';
 
 import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
@@ -30,7 +30,7 @@ import { usePanelSide } from '../contexts/overlay-side';
 import { countVariance, varianceText } from './register-count.helpers';
 
 export type ClosureCount = {
-	closure: ClosureDocument;
+	closure: ReadonlyClosureDocument;
 	counted: string;
 	expected: string;
 	blind: boolean;

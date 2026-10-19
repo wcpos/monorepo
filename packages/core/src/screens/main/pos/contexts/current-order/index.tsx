@@ -14,7 +14,6 @@ import {
 import { useNewOrder } from './use-new-order';
 
 import type { DefaultCustomerResource } from './use-new-order';
-import type { RxCollection } from 'rxdb';
 
 export { useOpenOrdersHandle } from './use-open-orders-handle';
 export {
@@ -33,7 +32,7 @@ export {
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 	/** Owned by `(pos)/_layout.tsx`, above this boundary — see `useOpenOrdersHandle`. */
-	handle: QueryHandle<QueryResult<RxCollection>>;
+	handle: QueryHandle<QueryResult>;
 	/** Whose open orders `handle` holds; see `CurrentOrderContextProps.openOrdersScope`. */
 	scope: string;
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
