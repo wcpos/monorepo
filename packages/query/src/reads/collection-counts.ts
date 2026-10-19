@@ -6,6 +6,9 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from '@wcpos/sync-engine';
+
+import { engineCollection } from '../records/engine-collection';
+
 export type EngineCollectionCounts = Record<string, number>;
 type CountCollection = { count(): { $: Observable<number> } };
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
@@ -39,4 +42,22 @@ export function observeCollectionCounts(
 			);
 		})
 	);
+}
+
+/** Serialized lengths for the health screen's approximate collection size. */
+export async function readCollectionSampleSizes(
+	engine: RxdbSyncEngine,
+	name: SyncCollectionName,
+	limit: number
+): Promise<number[] | null> {
+	let scope: ReturnType<RxdbSyncEngine['active']>;
+	try {
+		scope = engine.active();
+	} catch {
+		return null; // engine disposed mid-debounce — nothing to sample
+	}
+	const collection = engineCollection(scope?.database, name);
+	if (!collection) return null;
+	const docs = await collection.find({ limit }).exec();
+	return docs.map((doc) => JSON.stringify(doc.toJSON()).length);
 }

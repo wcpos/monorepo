@@ -6,6 +6,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
+import { readResidentRecord } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -33,7 +34,7 @@ export const FIX_ROUTES: Record<string, (uuid: string) => Href> = {
  * `collection/id` — the record always stays identifiable.
  */
 function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	// Keyed by the stuck record's identity: a stale resolution simply stops
 	// matching instead of needing a synchronous reset in the effect.
 	const [resolved, setResolved] = React.useState<{ key: string; label: string } | null>(null);
@@ -47,12 +48,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 		let cancelled = false;
 		void (async () => {
 			try {
-				const scope = engine.active() as {
-					database?: { collections?: Record<string, unknown> };
-				} | null;
-				const collection = scope?.database?.collections?.[rowKey] as
-					{ findOne(id: string): { exec(): Promise<Record<string, unknown> | null> } } | undefined;
-				const doc = await collection?.findOne(stuck.recordId).exec();
+				const doc = await readResidentRecord(runtime.engine, rowKey, stuck.recordId);
 				if (cancelled || !doc) return;
 				const source = doc as { number?: unknown; payload?: Record<string, unknown> };
 				const payload = source.payload ?? {};
@@ -88,7 +84,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 		return () => {
 			cancelled = true;
 		};
-	}, [engine, stuck]);
+	}, [runtime.engine, stuck]);
 
 	return resolved !== null && stuck !== undefined && resolved.key === stuck.key
 		? resolved.label
