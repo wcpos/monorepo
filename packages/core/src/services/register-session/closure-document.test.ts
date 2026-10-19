@@ -84,6 +84,26 @@ const context = {
 			: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(v)),
 	i18n: { paid_out: 'Paid out', over: 'Over', short: 'Short', exact: 'Exact' },
 };
+it('displays a reversal amount from its voided target, not the reversal', () => {
+	const doc = buildClosureDocument(
+		{
+			...row,
+			breakdowns: {
+				...row.breakdowns,
+				movements: [
+					{ id: 'target', type: 'paid_in', amount: '7', voided_by: 'reversal' },
+					{ id: 'reversal', type: 'void', amount: '0', reason: '', voids: 'target' },
+				],
+			},
+		},
+		context
+	);
+	expect(doc.closure.breakdowns.movements[1]).toMatchObject({
+		id: 'reversal',
+		type: 'void',
+		amount_display: '$7.00',
+	});
+});
 // Revert: pass local maps/ISO dates directly to Mustache, omit money companions, or mutate recorded data.
 it('maps a local snapshot into the server closure envelope and display companions', () => {
 	const before = JSON.stringify(row);
