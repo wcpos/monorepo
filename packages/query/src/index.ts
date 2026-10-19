@@ -107,7 +107,7 @@ export {
 	observePaymentMethodHistory,
 	type ObservedPaymentMethod,
 } from './reads/payment-method-history';
-export { observeCatalogChanges } from './reads/catalog-changes';
+export { observeCatalogChanges, readCatalogGeneration } from './reads/catalog-changes';
 export { observeProductMetaKeys } from './reads/product-meta-keys';
 export { observeUnsentWorkCount } from './reads/unsent-work-count';
 export { hasQueuedDelete } from './reads/queued-delete';

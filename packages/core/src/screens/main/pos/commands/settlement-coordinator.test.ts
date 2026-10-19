@@ -587,3 +587,15 @@ it.each([false, true])(
 		expect(h.settle).toHaveBeenCalledTimes(emitted ? 3 : 2);
 	}
 );
+
+it('re-drains catalog-generation supersession after an in-flight emission', async () => {
+	const h = start([couponOrder()], false);
+	h.settle.mockImplementationOnce(async () => {
+		await emit(h.inputs$, h.inputs$.value);
+		return { superseded: true, reason: 'catalog_changed' };
+	});
+	await emit(h.references$, { ready: true, generation: '0' });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	await flush();
+	expect(h.settle).toHaveBeenCalledTimes(2);
+});

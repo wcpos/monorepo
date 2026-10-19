@@ -10,7 +10,7 @@ import {
 	toMinor,
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, observeCatalogChanges, readCatalogGeneration } from '@wcpos/query';
 import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
 import { CHOOSE_REGISTER_REASON } from '../checkout/tender/tender-guards';
@@ -53,12 +53,13 @@ export async function commitAtBoundary(
 	}: {
 		write: Parameters<typeof writeZeroBalanceCompletion>[1]['write'];
 		coupons?: CouponContext;
-		allowed?: (payload: OrderPayload) => boolean;
+		allowed?: (payload: OrderPayload, ignoreCheckout?: boolean) => boolean;
 		order: EngineRecord<'orders'>;
 		result: BoundaryResult;
 		queue: OrderMutationContext;
 	}
 ) {
+	const catalog = observeCatalogChanges(ctx.runtime.engine).subscribe();
 	const outcome = await commitSale(
 		ctx,
 		{
@@ -70,12 +71,16 @@ export async function commitAtBoundary(
 		async ({ sessionId }, slot) => {
 			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing: true });
 			let conditionReason: string | undefined;
+			let validatedGeneration: number | undefined;
+			// Once checkout takes over, this pass cannot resume completion without provenance.
+			let aggregateOnly = false;
 			const revalidate = async () => {
 				const [unmet] = await countConditionsInSlot(
 					slot.order ?? order,
 					ctx.actionCtx,
 					conditionRules(ctx.actionCtx.store.preventOverselling)
 				);
+				validatedGeneration = readCatalogGeneration(ctx.runtime.engine);
 				return (conditionReason = unmet?.reasonKey);
 			};
 			let refusal: ActionRefusal | undefined;
@@ -85,10 +90,18 @@ export async function commitAtBoundary(
 				sessionId,
 				write,
 				revalidate,
+				aggregateOnly: () => aggregateOnly,
 				queue: slot,
 				complete: ctx.complete,
 				changes: (payload) => {
 					overpaid = undefined;
+					if (
+						validatedGeneration !== undefined &&
+						validatedGeneration !== readCatalogGeneration(ctx.runtime.engine)
+					) {
+						conditionReason = 'catalog_changed';
+						return null;
+					}
 					if (ctx.readBindingStatus?.() === 'choose') {
 						refusal = {
 							deny: { reasonKey: CHOOSE_REGISTER_REASON, detail: { event: TENDER_COMMIT_EVENT } },
@@ -96,7 +109,10 @@ export async function commitAtBoundary(
 						return null;
 					}
 					if (hasLiveSettlementLeg(payload.meta_data)) return null;
-					if (allowed && !allowed(payload)) return null;
+					if (allowed && !allowed(payload)) {
+						if (!allowed(payload, true)) return null;
+						aggregateOnly = true;
+					}
 					if (
 						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
 						ctx.serverOwnsMoney(order.uuid)
@@ -116,6 +132,7 @@ export async function commitAtBoundary(
 					const netPaid = netPaidForBoundary(payload, config.dp);
 					if (toMinor(patch.total, config.dp) < toMinor(netPaid, config.dp))
 						overpaid = { orderId: order.uuid, total: patch.total, netPaid };
+					if (aggregateOnly) conditionReason = 'in_checkout';
 					return patch;
 				},
 			});
@@ -125,10 +142,15 @@ export async function commitAtBoundary(
 					context: { orderId: order.uuid, ...(conditionReason && { reason: conditionReason }) },
 				});
 			} else if (overpaid) logger.warn('settlement.boundary-overpaid', { context: overpaid });
-			return refusal ?? completion;
+			return (
+				refusal ??
+				(completion && conditionReason
+					? { superseded: true as const, reason: conditionReason }
+					: completion)
+			);
 		},
 		{ queue, source: ctx.source }
-	);
+	).finally(() => catalog.unsubscribe());
 	if (isActionRefusal(outcome))
 		logger.warn('settlement.boundary-deferred', {
 			context: { orderId: order.uuid, reason: outcome.deny.reasonKey },

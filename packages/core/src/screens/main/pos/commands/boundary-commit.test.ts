@@ -1,4 +1,4 @@
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
@@ -41,6 +41,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let ctx: SaleContext;
 const log = jest.fn();
 const resolveSession = jest.fn();
+const catalog = new Subject();
 beforeEach(async () => {
 	jest.clearAllMocks();
 	resolveSession.mockResolvedValue({ registerId: 'register', sessionId: 'session' });
@@ -61,6 +62,13 @@ beforeEach(async () => {
 			localDocuments: true,
 			multiInstance: false,
 		}),
+		runtime: {
+			engine: {
+				ready: Promise.resolve(),
+				active: () => ({ database: { collections: { products: { $: catalog } } } }),
+				db$: () => () => {},
+			},
+		},
 		userDB: {},
 		siteUuid: 'site',
 		storeId: 1,
@@ -751,3 +759,81 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 		coordinator.stop();
 	}
 });
+
+it.each(['catalog', 'checkout', 'coupon-checkout', 'checkout-exit'])(
+	'fences a %s change during resident resolution',
+	async (change) => {
+		const order = orderFor();
+		const before = order.payload.meta_data;
+		const complete = jest.fn();
+		let checkout = false;
+		const openOrders$ = new BehaviorSubject([order]);
+		if (change === 'coupon-checkout') order.payload.coupon_lines = [{ code: 'sale' }];
+		if (change === 'checkout-exit')
+			resolveSession.mockImplementationOnce(async () => {
+				checkout = true;
+				return { registerId: 'register', sessionId: 'session' };
+			});
+		const outcomes: unknown[] = [];
+		const coordinator = createSettlementCoordinator({
+			inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
+			openOrders$,
+			ratesReady$: of({ ready: true, generation: 0 }),
+			references$: of({ ready: true, generation: '0' }),
+			readCoupons: async () => ({
+				coupons: new Map([['sale', { code: 'sale', discount_type: 'fixed_cart', amount: '0' }]]),
+				productCategories: new Map(),
+				categoryParents: new Map(),
+			}),
+			serverOwnsMoney: () => false,
+			orderSaveState: () => null,
+			inCheckout: () => checkout,
+			now: Date.now,
+			observe: jest.fn(),
+			settle: async (_uuid, _record, allowed, coupons, queue) => {
+				outcomes.push(
+					await commitAtBoundary(
+						{
+							...ctx,
+							bindingStatus: 'bound',
+							configForOrder: () => config,
+							serverOwnsMoney: () => false,
+							complete,
+						},
+						{
+							order,
+							queue,
+							allowed,
+							coupons,
+							result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+							write: async (changes) => {
+								await Promise.resolve(); // applyLocalPatch awaits resolveEngineResident before the modifier.
+								if (change === 'catalog') catalog.next({});
+								else {
+									checkout = change !== 'checkout-exit';
+									openOrders$.next([order]);
+								}
+								return ctx.localPatch({ document: order, changes });
+							},
+						}
+					)
+				);
+			},
+		});
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(outcomes).toEqual([
+				{ superseded: true, reason: change === 'catalog' ? 'catalog_changed' : 'in_checkout' },
+			]);
+			expect(order.payload).toMatchObject({
+				status: 'pos-partial',
+				total: change === 'catalog' ? '10' : '4',
+			});
+			expect(order.payload.meta_data).toEqual(before);
+			expect(complete).not.toHaveBeenCalled();
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} finally {
+			coordinator.stop();
+		}
+	}
+);

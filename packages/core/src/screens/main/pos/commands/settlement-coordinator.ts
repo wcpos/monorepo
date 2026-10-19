@@ -36,7 +36,7 @@ interface Deps {
 	settle: (
 		uuid: string,
 		record: CurrentOrderRecord,
-		allowed: (payload: OrderPayload) => boolean,
+		allowed: (payload: OrderPayload, ignoreCheckout?: boolean) => boolean,
 		coupons: CouponContext | undefined,
 		queue: OrderMutationContext
 	) => Promise<unknown>;
@@ -44,7 +44,13 @@ interface Deps {
 	observe: (event: SettlementDiagnostic) => void;
 }
 
-function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, dp: number) {
+function closed(
+	payload: OrderPayload,
+	record: CurrentOrderRecord,
+	deps: Deps,
+	dp: number,
+	ignoreCheckout = false
+) {
 	const netPaid = netPaidForBoundary(payload, dp);
 	return Boolean(
 		!OPEN_ORDER_STATUSES.some((status) => status === payload.status) ||
@@ -55,7 +61,7 @@ function closed(payload: OrderPayload, record: CurrentOrderRecord, deps: Deps, d
 		['rejected', 'conflicted', 'needs-revision'].includes(
 			deps.orderSaveState(record.uuid)?.kind ?? ''
 		) ||
-		deps.inCheckout(record.uuid) ||
+		(!ignoreCheckout && deps.inCheckout(record.uuid)) ||
 		deps.serverOwnsMoney(record.uuid) ||
 		serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() })
 	);
@@ -87,7 +93,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 		referenceSubscription = undefined;
 		references = { ready: false, generation: '' };
 	};
-	const fingerprint = (record: CurrentOrderRecord) => {
+	const fingerprint = (record: CurrentOrderRecord, ignoreCheckout = false) => {
 		const p = record.payload;
 		return JSON.stringify([
 			needsReferences(record)
@@ -106,7 +112,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			readLedger(p.meta_data)
 				.filter(({ status }) => status === 'authorized' || status === 'captured')
 				.map(({ id, status, amount, refunded_amount }) => [id, status, amount, refunded_amount]),
-			closed(p, record, deps, inputs.settings.priceNumDecimals),
+			closed(p, record, deps, inputs.settings.priceNumDecimals, ignoreCheckout),
 			inputs,
 			rates.generation,
 			completionGeneration,
@@ -127,7 +133,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 		// Do not lose a catalog emission consumed while a coupon replay awaited its guards.
 		if (
 			typeof reason === 'string' &&
-			['pos_cart.only_n_available', 'pos_products.out_of_stock'].includes(reason)
+			['pos_cart.only_n_available', 'pos_products.out_of_stock', 'catalog_changed'].includes(reason)
 		) {
 			seen.delete(args[0]);
 			// Retry only for new inputs; persistent shortages must not spin.
@@ -148,7 +154,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			const coupons = await deps.readCoupons(record.payload);
 			await enqueueOrderMutation(uuid, async (slot) => {
 				const fresh = (slot.order ?? record).getLatest();
-				const allowed = (payload: OrderPayload) =>
+				const allowed = (payload: OrderPayload, ignoreCheckout = false) =>
 					!stopped &&
 					pass === epoch &&
 					rates.ready &&
@@ -156,9 +162,9 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					seen.get(uuid) === key &&
 					flights.get(uuid) === flight &&
 					records.some((r) => r.uuid === uuid) &&
-					fingerprint(fresh) === key &&
+					fingerprint(fresh, ignoreCheckout) === key &&
 					replayContentKey({ uuid, payload }) === content &&
-					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
+					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals, ignoreCheckout);
 				if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, coupons, slot);
 			});
 		} catch (error) {
@@ -180,6 +186,12 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 						const fresh = record.getLatest();
 						const key = fingerprint(fresh);
 						if (closed(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
+							// Preserve the in-flight fence when checkout is the only new exclusion.
+							if (
+								flights.has(uuid) &&
+								!closed(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals, true)
+							)
+								continue;
 							seen.delete(uuid);
 							flights.delete(uuid);
 							continue;
@@ -196,10 +208,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 								!stopped && pass === epoch && rates.ready && records.some((r) => r.uuid === uuid);
 							if (!current()) return;
 							seen.set(uuid, fingerprint(fresh));
-							const allowed = (payload: OrderPayload) =>
+							const allowed = (payload: OrderPayload, ignoreCheckout = false) =>
 								current() &&
 								!hasCoupons({ payload }) &&
-								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals);
+								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals, ignoreCheckout);
 							if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, undefined, slot);
 						});
 					} catch (error) {

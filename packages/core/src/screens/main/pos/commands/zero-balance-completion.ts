@@ -13,6 +13,7 @@ export async function writeZeroBalanceCompletion(
 		sessionId,
 		changes = () => ({}),
 		revalidate,
+		aggregateOnly,
 		queue,
 		complete,
 		write,
@@ -21,6 +22,7 @@ export async function writeZeroBalanceCompletion(
 		sessionId: string | null;
 		changes?: (current: EngineRecord<'orders'>['payload']) => Record<string, unknown> | null;
 		revalidate?: () => Promise<string | undefined>;
+		aggregateOnly?: () => boolean;
 		write: (changes: PayloadChanges) => Promise<unknown>;
 		queue: OrderMutationContext;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
@@ -31,7 +33,9 @@ export async function writeZeroBalanceCompletion(
 	if (changes(latest) === null) return 'superseded';
 	const preflightReason = await revalidate?.();
 	if (preflightReason) return { superseded: true as const, reason: preflightReason };
-	const stamped = await completionMetaFor(ctx, latest.meta_data, { sessionId });
+	const stamped = aggregateOnly?.()
+		? (latest.meta_data ?? [])
+		: await completionMetaFor(ctx, latest.meta_data, { sessionId });
 	const additions = stamped.filter(
 		(entry) => !latest.meta_data?.some(({ key }) => key === entry.key)
 	);
@@ -43,8 +47,8 @@ export async function writeZeroBalanceCompletion(
 	let superseded = false;
 	const written = await write((current) => {
 		const patch = changes(current);
-		superseded = patch === null;
-		if (!patch) return {};
+		superseded = patch === null || aggregateOnly?.() === true;
+		if (superseded) return patch ?? {};
 		const meta = (current.meta_data ?? []) as typeof stamped;
 		return {
 			...patch,
