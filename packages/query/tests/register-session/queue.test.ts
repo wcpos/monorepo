@@ -367,6 +367,47 @@ const serverMovementRow = (
 	voided_by: server.voided_by ?? null,
 	created_at_gmt: local.created_at_gmt,
 });
+it.each(['acknowledgement', 'refresh'])('keeps withheld local cash fields on %s', async (path) => {
+	const row = await open();
+	await row.incrementalPatch({ expected_float: '90', opening_variance: '10' });
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	const sessionRow: Record<string, unknown> = serverListRow(row.getLatest().toJSON());
+	for (const key of ['counted_float', 'expected_float', 'opening_variance']) delete sessionRow[key];
+	const movementRow = serverMovementRow(movement.toJSON());
+	delete movementRow.amount;
+	delete movementRow.reason;
+	if (path === 'acknowledgement') {
+		delete sessionRow.created_at_gmt;
+		http.post.mockImplementation(async (url) => ({
+			data: url === 'movements' ? movementRow : sessionRow,
+		}));
+		await drain();
+	} else {
+		await row.getLatest().incrementalPatch({ sync_status: 'synced' });
+		await movement.incrementalPatch({ sync_status: 'synced' });
+		http.get.mockResolvedValueOnce({ data: [sessionRow] }).mockResolvedValueOnce({
+			data: { ...sessionRow, movements: [movementRow] },
+		});
+		await refreshSessions({ registerId: 'register', http, storeDB: db });
+	}
+	expect(row.getLatest().toJSON()).toMatchObject({
+		counted_float: '100',
+		expected_float: '90',
+		opening_variance: '10',
+		sync_status: 'synced',
+	});
+	expect(movement.getLatest().toJSON()).toMatchObject({
+		amount: '5',
+		reason: 'Float',
+		sync_status: 'synced',
+	});
+});
 it('adopts a server movement row in the local shape: `actor` is `created_by`, nothing else', async () => {
 	const row = await open();
 	const movement = await recordMovement(db, {
@@ -738,8 +779,8 @@ it('does not call a local write failure after the store accepted a movement a de
 		actor: 7,
 	});
 	// The store answers, but merging its row into the local document fails: the validating
-	// storage rejects a non-string amount, which stands in for any post-response write failure.
-	http.post.mockResolvedValueOnce({ data: { ...movement.toJSON(), amount: 42 } });
+	// storage rejects a non-string timestamp, while the amount remains a valid string.
+	http.post.mockResolvedValueOnce({ data: { ...movement.toJSON(), created_at_gmt: 42 } });
 	await drain();
 	const calls = [...logger.debug.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls];
 	expect(calls).toHaveLength(1);

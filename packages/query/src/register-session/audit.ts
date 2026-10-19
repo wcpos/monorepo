@@ -19,7 +19,7 @@ type Human = Pair & { actor: { id: string; name: string } };
 type Movement = Pair & {
 	movementId: string;
 	movementType: CashMovementRow['type'];
-	amount: string;
+	amount: CashMovementRow['amount'];
 };
 type Failure = Partial<
 	Pick<ReturnType<typeof failureFacts>, 'status' | 'errorCode' | 'field' | 'message'>
@@ -32,7 +32,7 @@ type Document =
 export type RegisterFact =
 	| (Human & {
 			kind: 'session-opened';
-			amount: string;
+			amount: RegisterSessionRow['counted_float'];
 			variance: RegisterSessionRow['opening_variance'];
 	  })
 	| (Human & {
