@@ -9,7 +9,7 @@ import {
 	useQueryRuntime,
 	useRecordField,
 } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshStockRecords } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { RegisterSessionRequiredError, requireOpenSession } from '@wcpos/query/register-session';
@@ -157,29 +157,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const variationIds = [
 				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
 			];
-			const refreshes: Promise<void>[] = [];
-			for (const [collection, wooIds] of [
-				['products', productIds],
-				['variations', variationIds],
-			] as const) {
-				if (wooIds.length === 0) continue;
-				const handle = runtime.engine.require({
-					id: `checkout:stock-rejection:${collection}:${orderId}`,
-					collection,
-					kind: 'targeted-records',
-					remoteIds: wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
-				});
-				refreshes.push(
-					handle.ready
-						.then(
-							() => undefined,
-							() => undefined
-						)
-						.finally(() => handle.release())
-				);
-			}
-			void Promise.all(refreshes)
+			void refreshStockRecords(runtime.engine, { id: orderId, productIds, variationIds })
 				.then(() =>
 					Promise.all(
 						rejectedItems.map(async (item) => ({

@@ -2,8 +2,10 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
 	refreshCollection,
+	refreshOrderRecord,
 	refreshOrderRefunds,
 	refreshRecordByWooId,
+	refreshStockRecords,
 } from '../../src/record-readers';
 
 describe('refreshCollection', () => {
@@ -158,5 +160,154 @@ describe('refreshOrderRefunds', () => {
 			},
 		} as unknown as RxdbSyncEngine;
 		await expect(refreshOrderRefunds(engine, { id: 'refresh', orderId: 37 })).rejects.toBe(error);
+	});
+});
+
+describe('refreshOrderRecord', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => jest.useRealTimers());
+
+	it.each([
+		[{ action: 'fetched', appliedRecordIds: ['42'] }, 'refreshed'],
+		[{ action: 'fetched', appliedRecordIds: ['43'] }, 'failed'],
+		[{ action: 'fetched' }, 'failed'],
+		[{ action: 'serve-local', appliedRecordIds: ['42'] }, 'failed'],
+	])('classifies %j as %s and releases its forced order demand', async (result, expected) => {
+		const release = jest.fn();
+		const require = jest.fn(() => ({ ready: Promise.resolve(result), release }));
+		const pending = refreshOrderRecord({ require } as unknown as RxdbSyncEngine, 42);
+		expect(require).toHaveBeenCalledWith({
+			id: 'checkout:order-refresh:42',
+			collection: 'orders',
+			kind: 'targeted-records',
+			remoteIds: ['42'],
+			forceRefresh: true,
+		});
+		expect(release).not.toHaveBeenCalled();
+		await expect(pending).resolves.toBe(expected);
+		expect(release).toHaveBeenCalledTimes(1);
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
+	it('releases a stalled demand at ten seconds', async () => {
+		const release = jest.fn();
+		const engine = {
+			require: () => ({ ready: new Promise(() => {}), release }),
+		} as unknown as RxdbSyncEngine;
+		const pending = refreshOrderRecord(engine, 42);
+		await jest.advanceTimersByTimeAsync(9_999);
+		expect(release).not.toHaveBeenCalled();
+		await jest.advanceTimersByTimeAsync(1);
+		await expect(pending).resolves.toBe('timed-out');
+		expect(release).toHaveBeenCalledTimes(1);
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
+	it('releases and forwards readiness rejection', async () => {
+		const error = new Error('offline');
+		const release = jest.fn();
+		const engine = {
+			require: () => ({ ready: Promise.reject(error), release }),
+		} as unknown as RxdbSyncEngine;
+		await expect(refreshOrderRecord(engine, 42)).rejects.toBe(error);
+		expect(release).toHaveBeenCalledTimes(1);
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
+	it('throws synchronously when admission fails, without starting a timer', () => {
+		const error = new Error('engine disposed');
+		const engine = {
+			require: () => {
+				throw error;
+			},
+		} as unknown as RxdbSyncEngine;
+		expect(() => refreshOrderRecord(engine, 42)).toThrow(error);
+		expect(jest.getTimerCount()).toBe(0);
+	});
+});
+
+describe('refreshStockRecords', () => {
+	it('admits both collections synchronously and releases each when its own wait settles', async () => {
+		let finishProduct!: () => void;
+		let failVariation!: (error: Error) => void;
+		const products = {
+			ready: new Promise<void>((resolve) => {
+				finishProduct = resolve;
+			}),
+			release: jest.fn(),
+		};
+		const variations = {
+			ready: new Promise<void>((_resolve, reject) => {
+				failVariation = reject;
+			}),
+			release: jest.fn(),
+		};
+		const require = jest.fn().mockReturnValueOnce(products).mockReturnValueOnce(variations);
+		const pending = refreshStockRecords({ require } as unknown as RxdbSyncEngine, {
+			id: 42,
+			productIds: [10],
+			variationIds: [11],
+		});
+		expect(require.mock.calls).toEqual([
+			[
+				{
+					id: 'checkout:stock-rejection:products:42',
+					collection: 'products',
+					kind: 'targeted-records',
+					remoteIds: ['10'],
+					forceRefresh: true,
+				},
+			],
+			[
+				{
+					id: 'checkout:stock-rejection:variations:42',
+					collection: 'variations',
+					kind: 'targeted-records',
+					remoteIds: ['11'],
+					forceRefresh: true,
+				},
+			],
+		]);
+		expect(products.release).not.toHaveBeenCalled();
+		finishProduct();
+		await products.ready;
+		await Promise.resolve();
+		expect(products.release).toHaveBeenCalledTimes(1);
+		expect(variations.release).not.toHaveBeenCalled();
+		failVariation(new Error('offline'));
+		await expect(pending).resolves.toBeUndefined();
+		expect(variations.release).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(['products', 'variations'])(
+		'contains synchronous %s admission failure and releases the other handle',
+		async (failedCollection) => {
+			const release = jest.fn();
+			const require = jest.fn(({ collection }) => {
+				if (collection === failedCollection) throw new Error('admission failed');
+				return { ready: Promise.resolve(), release };
+			});
+			await expect(
+				refreshStockRecords({ require } as unknown as RxdbSyncEngine, {
+					id: 42,
+					productIds: [10],
+					variationIds: [11],
+				})
+			).resolves.toBeUndefined();
+			expect(require).toHaveBeenCalledTimes(2);
+			expect(release).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it('does not admit empty collections', async () => {
+		const require = jest.fn();
+		await expect(
+			refreshStockRecords({ require } as unknown as RxdbSyncEngine, {
+				id: 42,
+				productIds: [],
+				variationIds: [],
+			})
+		).resolves.toBeUndefined();
+		expect(require).not.toHaveBeenCalled();
 	});
 });

@@ -29,8 +29,7 @@ import {
 
 import type { SnapshotFields } from '../../../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 
 // The readers re-render for the answer; the syncing hint alone follows `active`.
 const ANSWER_ONLY: SnapshotFields = [];

@@ -46,7 +46,7 @@ function VariationsFooter({
 			collectionName="variations"
 			handle={handle}
 			total={total}
-			count={shownCount}
+			drawnCount={shownCount}
 		>
 			<Text className="text-muted-foreground text-sm" numberOfLines={1}>
 				{t('pos_products.n_variations_of', { count: parentCount ?? shownCount, name })}

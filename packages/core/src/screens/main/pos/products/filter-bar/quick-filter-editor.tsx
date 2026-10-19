@@ -187,15 +187,15 @@ function TermChips<C extends 'tags' | 'brands'>({
 }
 
 function TermValueEditor<C extends 'tags' | 'brands'>({
-	collection,
+	taxonomy,
 	ids,
 	onChange,
 }: {
-	collection: C;
+	taxonomy: C;
 	ids: number[];
 	onChange: (ids: number[]) => void;
 }) {
-	const resource = useEngineRecordsByWooId(collection, ids);
+	const resource = useEngineRecordsByWooId(taxonomy, ids);
 	const handlePick = (option: Option | undefined) => {
 		if (!option) return;
 		const id = toNumber(option.value);
@@ -210,7 +210,7 @@ function TermValueEditor<C extends 'tags' | 'brands'>({
 					onRemove={(id) => onChange(ids.filter((value) => value !== id))}
 				/>
 			</Suspense>
-			{collection === 'tags' ? (
+			{taxonomy === 'tags' ? (
 				<TagSelect onValueChange={handlePick} />
 			) : (
 				<BrandSelect onValueChange={handlePick} />
@@ -261,7 +261,7 @@ function ConditionValueEditor({
 	if (condition.field === 'tags' || condition.field === 'brands') {
 		return (
 			<TermValueEditor
-				collection={condition.field}
+				taxonomy={condition.field}
 				ids={condition.value}
 				onChange={(value) => onChange({ field: condition.field, value })}
 			/>

@@ -6,7 +6,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { WriteDeferredError, WriteOutcomeError } from '../../src/await-write-outcome';
 import { pushFailureCode } from '../../../core/src/screens/main/contexts/push-failure-code';
-import { pushRecord } from '../../src/mutations';
+import { pushRecord, readWrittenResident } from '../../src/mutations';
 
 import type { QueryManager } from '../../src/mutations/resident';
 
@@ -258,5 +258,20 @@ describe('pushRecord', () => {
 			ERROR_CODES.SESSION_EXPIRED
 		);
 		expect(pushFailureCode(new Error('Timed out waiting for mutation'), fallback)).toBe(fallback);
+	});
+});
+
+describe('readWrittenResident', () => {
+	it('returns the resident after the write outcome', async () => {
+		const resident = { uuid: 'order-uuid', payload: { id: 987 } };
+		mockFindOneExec.mockResolvedValueOnce(resident);
+		await expect(readWrittenResident(runtime, 'orders', 'order-uuid')).resolves.toBe(resident);
+	});
+
+	it('throws the write-outcome error when the resident is missing', async () => {
+		mockFindOneExec.mockResolvedValueOnce(null);
+		await expect(readWrittenResident(runtime, 'orders', 'missing')).rejects.toThrow(
+			'Engine resident "missing" is missing after its write outcome'
+		);
 	});
 });

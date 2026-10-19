@@ -154,7 +154,7 @@ export function VariationsTable({ handle, row, stockStatus }: Props) {
 				handle={handle}
 				shown={shown}
 				parent={row.original.record}
-				count={hits.length}
+				drawnCount={hits.length}
 			/>
 		</VStack>
 	);

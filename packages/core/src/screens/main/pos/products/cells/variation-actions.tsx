@@ -8,7 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { useAddVariation } from '../../hooks/use-add-variation';
 import { useT } from '../../../../../contexts/translations';
 
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+type Attributes = import('@wcpos/query').VariationPayload['attributes'];
 
 /**
  *
@@ -27,9 +27,7 @@ export function ProductVariationActions({
 	 * TODO: move this to a helper function
 	 */
 	const metaData = React.useMemo(() => {
-		const sanitizedAttributes = sanitizeVariationAttributesRead(
-			attributes
-		) as ProductVariationDocument['attributes'];
+		const sanitizedAttributes = sanitizeVariationAttributesRead(attributes) as Attributes;
 		return (sanitizedAttributes ?? []).map((attribute) => {
 			return {
 				attr_id: attribute.id ?? 0,

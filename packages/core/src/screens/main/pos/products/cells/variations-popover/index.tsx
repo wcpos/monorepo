@@ -13,8 +13,7 @@ import {
 	useQueryState,
 } from '../../../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 
 interface VariationsPopoverProps {
 	parent: EngineRecord<'products'>;

@@ -74,7 +74,7 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject([11, 12, 13, 14]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} drawnCount={2} />);
 
 		expect(screen.getByText('Showing 2 of 4')).toBeTruthy();
 
@@ -89,7 +89,7 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject<number[]>([]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} drawnCount={2} />);
 
 		expect(screen.getByText('Showing 2 of 2')).toBeTruthy();
 	});
@@ -102,7 +102,7 @@ describe('VariationTableFooter', () => {
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
 		// The handle's `total` is 2 — the stale local collection. It must not surface.
-		render(<VariationTableFooter handle={handle} parent={parent} count={0} />);
+		render(<VariationTableFooter handle={handle} parent={parent} drawnCount={0} />);
 
 		expect(screen.getByText('Showing 0 of 0')).toBeTruthy();
 	});
@@ -114,7 +114,7 @@ describe('VariationTableFooter', () => {
 		const parent = { id: 1, variations: undefined, variations$ } as never;
 		const drawn = fakeQueryHandle({ total: 9 });
 
-		render(<VariationTableFooter handle={handle} shown={drawn} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} shown={drawn} parent={parent} drawnCount={2} />);
 
 		expect(screen.getByText('Showing 2 of 9')).toBeTruthy();
 		act(() => drawn.set({ total: null }));
@@ -130,7 +130,7 @@ describe('VariationTableFooter', () => {
 		live.sync = liveSync;
 		const drawn = fakeQueryHandle({ active: false });
 
-		render(<VariationTableFooter handle={live} shown={drawn} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={live} shown={drawn} parent={parent} drawnCount={2} />);
 
 		expect(lastSyncButtonProps).toMatchObject({ active: true, sync: liveSync });
 		act(() => live.set({ active: false }));
@@ -144,7 +144,7 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject([11, 12]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} drawnCount={2} />);
 
 		expect(collectionResetKeys).toContain('variations');
 		await act(async () => lastSyncButtonProps?.clearAndSync?.());

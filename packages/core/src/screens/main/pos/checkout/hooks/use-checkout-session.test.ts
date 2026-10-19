@@ -403,6 +403,45 @@ describe('useCheckoutSession', () => {
 		await waitFor(() => expect(mockResolveStockOwnerId).toHaveBeenCalledWith(10, 0));
 	});
 
+	it('contains a second stock-refresh admission failure and releases the first handle', async () => {
+		const release = jest.fn();
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockRejectedValueOnce({
+			response: {
+				data: {
+					code: 'wcpos_insufficient_stock',
+					data: {
+						items: [{ product_id: 10, variation_id: 11, available: 0 }],
+					},
+				},
+			},
+		});
+		mockEngineRequire.mockImplementation(({ collection }) => {
+			if (collection === 'variations') throw new Error('admission failed');
+			return { ready: Promise.resolve(), release };
+		});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await expect(result.current.startCheckout()).resolves.toBeUndefined();
+			await Promise.resolve();
+		});
+
+		expect(result.current.error).toBe('insufficient_stock');
+		expect(release).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(mockResolveStockOwnerId).toHaveBeenCalledWith(10, 11));
+	});
+
 	// The store refuses the gateway before it claims the attempt, so nothing was
 	// charged: the log must send the cashier to PAYMENT301 (gateway settings),
 	// not CHECKOUT201 ("could not confirm — check for a charge").
@@ -578,7 +617,7 @@ describe('useCheckoutSession', () => {
 const mockProvenancePatch = jest.fn(
 	async (_input: {
 		document: unknown;
-		data: { meta_data: { key: string; value: unknown }[] };
+		data: { meta_data: import('@wcpos/order-math').MetaDataEntry[] };
 	}) => ({ document: order })
 );
 const mockProvenancePush = jest.fn(async (_order: unknown): Promise<void> => undefined);
@@ -749,7 +788,7 @@ jest.mock('../sale-completion', () => {
 					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
 					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
 				if (!input.online && !input.extraMeta) return;
-				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+				if (!(await ctx.stampCompletion(input.order, meta_data)))
 					throw new Error('provenance_save_failed');
 				if (input.online) await ctx.pushDocument(input.order);
 			}
@@ -795,7 +834,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
 		dp: 2,
-		localPatch: mockProvenancePatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../sale-completion').SaleContext['stampCompletion']>
+		) => mockProvenancePatch({ document: o, data: { meta_data: m } }),
 		pushDocument: mockProvenancePush,
 		stockAdjustment: mockStockAdjustment,
 	}),

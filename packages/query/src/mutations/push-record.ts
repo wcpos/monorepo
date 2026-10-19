@@ -59,6 +59,19 @@ export async function enqueueRecordWrite(runtime: QueryManager, document: AnyRxD
 	return { collectionName, recordId, receipt, resident };
 }
 
+/** Re-read the rematerialized resident after a successful write outcome. */
+export async function readWrittenResident(
+	runtime: QueryManager,
+	collectionName: WriteableCollection,
+	recordId: string
+): Promise<EngineResident> {
+	const resident = await findEngineResident(runtime, collectionName, recordId);
+	if (!resident) {
+		throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
+	}
+	return resident;
+}
+
 /**
  * Enqueue the current engine resident through the write plane. The passed legacy document is used
  * only for identity: its fields may be stale after an optimistic resident patch. Order pushes wait
@@ -87,11 +100,7 @@ export async function pushRecord(
 		await awaitWriteOutcome(runtime.engine, receipt.mutationId, {
 			timeoutMs: ORDER_WRITE_OUTCOME_TIMEOUT_MS,
 		});
-		const refreshed = await findEngineResident(runtime, collectionName, recordId);
-		if (!refreshed) {
-			throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
-		}
-		currentResident = refreshed;
+		currentResident = await readWrittenResident(runtime, collectionName, recordId);
 	}
 
 	return currentResident;

@@ -333,7 +333,7 @@ export function TermLevelGrid({
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (
 					<DealFade>
-						<HandleProductsFooter handle={handle} total={total} count={loaded} />
+						<HandleProductsFooter handle={handle} total={total} drawnCount={loaded} />
 					</DealFade>
 				)}
 			</View>
