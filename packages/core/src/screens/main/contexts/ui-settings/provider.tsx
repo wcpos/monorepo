@@ -4,6 +4,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
+import { openStoreState } from '@wcpos/query/store-local';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -36,7 +37,7 @@ export interface UISettingsContextValue {
 	};
 	getLabel: (id: string, key: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
-	patch: <T extends UISettingID>(
+	patchSettings: <T extends UISettingID>(
 		id: T,
 		data: Partial<UISettingSchema<T>>
 	) => Promise<UISettingState<T>>;
@@ -56,7 +57,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	 */
 	const reset = React.useCallback(
 		async (id: UISettingID) => {
-			const state = await storeDB.addState(`${id}_v2`);
+			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
 			await resetToInitialValues(id, state);
 		},
 		[storeDB]
@@ -65,9 +66,9 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	/**
 	 * Patch UI Settings
 	 */
-	const patch = React.useCallback(
+	const patchSettings = React.useCallback(
 		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
-			const state = await storeDB.addState(`${id}_v2`);
+			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
 			return patchState(state, data) as Promise<UISettingState<T>>;
 		},
 		[storeDB]
@@ -87,16 +88,15 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	const createUIResource = React.useCallback(
 		<T extends UISettingID>(id: T) => {
 			// Add timeout detection for potential hangs
-			const addStatePromise = storeDB.addState(`${id}_v2`);
+			const addStatePromise = openStoreState(storeDB, `${id}_v2`);
 			const timeoutId = setTimeout(() => {
 				uiLogger.warn(
 					`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`
 				);
 			}, 5000);
 
-			const observable$ = from(addStatePromise).pipe(
+			const observable$ = from(addStatePromise.finally(() => clearTimeout(timeoutId))).pipe(
 				switchMap(async (state) => {
-					clearTimeout(timeoutId);
 					try {
 						await mergeWithInitalValues(id, state as UISettingState<UISettingID>);
 						return state as UISettingState<T>;
@@ -139,9 +139,9 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			resources,
 			getLabel,
 			reset,
-			patch,
+			patchSettings,
 		}),
-		[resources, getLabel, reset, patch]
+		[resources, getLabel, reset, patchSettings]
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;

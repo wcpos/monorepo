@@ -1747,10 +1747,16 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/provenance/persist-provenance.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write :: useTenderFlow :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (l1): the UI-settings slots open through @wcpos/query/store-local.
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 1',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 2',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 3',
+	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
+	"screens/main/contexts/ui-settings/utils.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 788;
+export const SEAM_RETIRED_FLOOR = 793;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c752bbb6bb3389285015a1635fb14a02b6a49c77027d6639a55830faeaf91e6c';
+	'0070f55a814f0dd3f2dd44e9aaa036462d8ea92c6aae2700af0457bca892f48e';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

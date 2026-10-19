@@ -1,6 +1,8 @@
 import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 
+import type { StoreState } from '@wcpos/query/store-local';
+
 import initialSettings from './initial-settings.json';
 import {
 	DEFAULT_FILTER_BAR,
@@ -15,7 +17,7 @@ type InitialSettingsKey = keyof typeof initialSettings;
 export type UISettingID = InitialSettingsKey;
 
 export type UISettingSchema<T extends UISettingID> = (typeof initialSettings)[T];
-export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISettingSchema<T>>;
+export type UISettingState<T extends UISettingID> = StoreState<UISettingSchema<T>>;
 
 /**
  * Enum-valued settings, keyed by the vocabulary the UI can actually render.
