@@ -164,11 +164,25 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
  * column's tender, the one place that would select the receipt; so enter the receipt first,
  * as the cash path does (sale-completion), selected when receipts show. An order nobody is
  * watching (another tab, or the phone's sheet, which is a route of its own and stays
- * mounted) is left to the background completion, as before.
+ * mounted) is left to the background completion, as before. The watched tender is the
+ * authority, not `checkoutOrders`: a checkout restored from a live ledger row after a reload
+ * is on screen (resolveStage) without ever joining that set.
+ *
+ * Returns the undo for a write that then fails and leaves the leg to retry from checkout:
+ * each part `enterReceipt` changed goes back through the primitive that owns it.
  */
-export function enterReceiptBeforeCompletion(uuid: string) {
-	if (watchedTender?.uuid !== uuid || !snapshot.checkoutOrders.has(uuid)) return;
+export function enterReceiptBeforeCompletion(uuid: string): () => void {
+	if (watchedTender?.uuid !== uuid || snapshot.receiptOrders.has(uuid)) return () => {};
+	const before = snapshot;
 	enterReceipt(uuid, { select: watchedTender.autoShowReceipt });
+	return () => {
+		finishReceipt(uuid);
+		setLinesPaidBy(uuid, before.linesPaidBy.get(uuid) ?? null);
+		setTenderPlan(uuid, before.tenderPlans.get(uuid) ?? null);
+		setTenderMethod(uuid, before.tenderMethods.get(uuid) ?? null);
+		if (before.checkoutOrders.has(uuid)) enterCheckout(uuid);
+		selectReceipt(before.selectedReceiptOrder);
+	};
 }
 export function finishReceipt(uuid: string) {
 	setLinesPaidBy(uuid, null);

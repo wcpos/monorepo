@@ -16,6 +16,8 @@ import {
 	enterCheckout,
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
+	selectReceipt,
+	setTenderMethod,
 	watchTender,
 } from '../../checkout-mode';
 
@@ -543,6 +545,8 @@ describe('a server capture of the order in checkout', () => {
 		return atWrite! as CheckoutModeSnapshot;
 	}
 	let unwatch: (() => void) | undefined;
+	// Earlier background completions in this file leave their receipts in the module store.
+	beforeEach(() => resetCheckoutMode());
 	afterEach(() => {
 		unwatch?.();
 		unwatch = undefined;
@@ -587,6 +591,45 @@ describe('a server capture of the order in checkout', () => {
 		expect(atWrite.selectedReceiptOrder).toBeNull();
 	});
 
+	it.each(['rejects', 'returns nothing'] as const)(
+		'puts checkout back when the offline completing write %s',
+		async (failure) => {
+			const start = jest.spyOn(
+				await import('../../../../../../services/terminal-payments'),
+				'startTerminalPaymentsService'
+			);
+			const original = mockResident.payload.meta_data;
+			mockResident.payload.meta_data = withLedger([], []);
+			const hook = renderHook(() => useTerminalPaymentsService());
+			enterCheckout('completed-order');
+			setTenderMethod('completed-order', 'card');
+			selectReceipt('earlier-sale');
+			unwatch = watchTender('completed-order', true);
+			let atWrite: CheckoutModeSnapshot | null = null;
+			mockPatch.mockImplementationOnce(async () => {
+				atWrite = getCheckoutModeSnapshot();
+				if (failure === 'rejects') throw new Error('disk full');
+				return undefined;
+			});
+			try {
+				await expect(
+					start.mock.calls[0][0].patchAndEnqueue!('completed-order', mockRow)
+				).rejects.toThrow();
+				// The receipt was entered before the write, then undone.
+				expect((atWrite! as CheckoutModeSnapshot).receiptOrders.has('completed-order')).toBe(true);
+				const after = getCheckoutModeSnapshot();
+				expect(after.receiptOrders.has('completed-order')).toBe(false);
+				expect(after.checkoutOrders.has('completed-order')).toBe(true);
+				expect(after.tenderMethods.get('completed-order')).toBe('card');
+				expect(after.selectedReceiptOrder).toBe('earlier-sale');
+			} finally {
+				hook.unmount();
+				start.mockRestore();
+				mockResident.payload.meta_data = original;
+			}
+		}
+	);
+
 	it('enters the receipt before an offline authorization writes its completing status', async () => {
 		const start = jest.spyOn(
 			await import('../../../../../../services/terminal-payments'),
@@ -617,12 +660,20 @@ describe('a server capture of the order in checkout', () => {
 		}
 	});
 
-	it('leaves a part-paid order in checkout', async () => {
+	it('enters no receipt for a part payment', async () => {
 		enterCheckout('completed-order');
 		unwatch = watchTender('completed-order', true);
 		const atWrite = await mirrorCapture('pos-partial');
-		expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
 		expect(atWrite.receiptOrders.size).toBe(0);
 		expect(atWrite.selectedReceiptOrder).toBeNull();
+	});
+
+	// After a reload, resolveStage restores the column from the live ledger row alone: the
+	// order is on screen and watched without ever joining checkoutOrders.
+	it('enters and selects the receipt of a checkout restored from its ledger', async () => {
+		unwatch = watchTender('completed-order', true);
+		const atWrite = await mirrorCapture('completed');
+		expect(atWrite.receiptOrders.has('completed-order')).toBe(true);
+		expect(atWrite.selectedReceiptOrder).toBe('completed-order');
 	});
 });

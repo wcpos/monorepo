@@ -128,15 +128,27 @@ export function useTerminalPaymentsService(): void {
 						total: String(payload.total ?? '0'),
 						payment_method: summary.payment_method ?? '',
 					};
-					// Before the status write, as the mirror below: it takes the order off the till.
-					if (settlesSale(payment, result, dp())) enterReceiptBeforeCompletion(orderUuid);
-					const written = await latest.current.recordLedger(resident, {
-						meta_data: isCompletingStatus(summary.status)
-							? await completionMetaFor(latest.current.ctx, meta_data, {})
-							: meta_data,
-						status: summary.status,
-					});
-					if (!written) throw new Error('Offline payment could not be saved');
+					// Before the status write, as the mirror below: it takes the order off the till. A
+					// failed write leaves the leg to retry from checkout, so the receipt is undone.
+					const undoReceipt = settlesSale(payment, result, dp())
+						? enterReceiptBeforeCompletion(orderUuid)
+						: undefined;
+					let written: unknown;
+					try {
+						written = await latest.current.recordLedger(resident, {
+							meta_data: isCompletingStatus(summary.status)
+								? await completionMetaFor(latest.current.ctx, meta_data, {})
+								: meta_data,
+							status: summary.status,
+						});
+					} catch (error) {
+						undoReceipt?.();
+						throw error;
+					}
+					if (!written) {
+						undoReceipt?.();
+						throw new Error('Offline payment could not be saved');
+					}
 					return result;
 				}),
 			mirror: async (orderUuid, { payment, order }) => {
