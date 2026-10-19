@@ -818,7 +818,7 @@ export async function authenticateWithStore(
 	//   1. Click wp-user-button (ListItem) — selects the user, which mounts
 	//      StoreSelect below with a RadioGroup of stores + an "Open POS" button.
 	//      Single-store users have their store auto-selected; multi-store users
-	//      pick a RadioGroupItem (handled below by selecting the first option).
+	//      pick a store-option-* row (handled below by storePickLocator).
 	//   2. Click open-pos-button — this is what actually calls login() and
 	//      transitions the router out of /connect.
 	let loginSuccess = await hasReachedPos(page, 3_000);
@@ -865,7 +865,7 @@ export async function authenticateWithStore(
 		// Step 2: wait for the Open POS button to become enabled. It is gated
 		// on: stores resolved + store selected + user validation passed.
 		// Single-store users have the store auto-selected; for multi-store
-		// variants, pick the first radio option to satisfy the store gate.
+		// variants, pick the first store-option-* row to satisfy the store gate.
 		const openPosVisible = await becomesVisible(openPosButton, 10_000);
 		if (!openPosVisible) {
 			console.log(`[auth] open-pos-button not visible (attempt ${attempt}), retrying...`);
@@ -904,7 +904,7 @@ export async function authenticateWithStore(
 				console.log(
 					storeId != null
 						? `[auth] Selecting requested store ${storeId}...`
-						: '[auth] Selecting first store radio option...'
+						: '[auth] Selecting the first store-option-* row...'
 				);
 				await storeOption.click().catch(() => null);
 			} else if (storeId != null) {
@@ -919,7 +919,9 @@ export async function authenticateWithStore(
 					).join(', ')}`
 				);
 			} else {
-				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
+				console.log(
+					'[auth] open-pos-button still disabled and no store-option-* row found, waiting...'
+				);
 				await page.waitForTimeout(2_000);
 				continue;
 			}
