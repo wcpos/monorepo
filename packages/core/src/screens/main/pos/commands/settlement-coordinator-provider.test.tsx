@@ -801,3 +801,37 @@ it('passes the coupon reference validity check through to the boundary writer', 
 		view.unmount();
 	}
 });
+
+it('keeps both in-flight boundary binding readers current across a render', async () => {
+	const binding = useRegisterBinding();
+	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: orderMath.withLedger([], [{ ...row, status: 'captured', amount: '4' }]),
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
+	try {
+		await flush();
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			hook.result.current(
+				a as CurrentOrderRecord,
+				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+				queue
+			)
+		);
+		const readers = jest.mocked(commitAtBoundary).mock.calls.map(([ctx]) => ctx.readBindingStatus);
+		expect(readers).toHaveLength(2);
+		for (const read of readers) expect(read?.()).toBe('none');
+		jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'choose' });
+		view.rerender(<SettlementCoordinatorProvider />);
+		hook.rerender();
+		for (const read of readers) expect(read?.()).toBe('choose');
+	} finally {
+		view.unmount();
+		hook.unmount();
+		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
+});

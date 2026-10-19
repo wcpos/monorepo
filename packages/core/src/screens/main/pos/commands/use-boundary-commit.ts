@@ -22,6 +22,10 @@ export function useBoundaryCommit(write: ReturnType<typeof useSaleContext>['loca
 	const configForOrder = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const { status } = useRegisterBinding();
+	const bindingRef = React.useRef(status);
+	React.useLayoutEffect(() => {
+		bindingRef.current = status;
+	}, [status]);
 	const complete = useCompleteOrderFlowForOrder();
 	return React.useCallback(
 		(order: CurrentOrderRecord, result: BoundaryResult, queue: OrderMutationContext) =>
@@ -32,6 +36,7 @@ export function useBoundaryCommit(write: ReturnType<typeof useSaleContext>['loca
 					serverOwnsMoney,
 					storeContract,
 					bindingStatus: status === 'unknown' ? 'none' : status,
+					readBindingStatus: () => (bindingRef.current === 'unknown' ? 'none' : bindingRef.current),
 					complete: (target, slot) => complete(target, { source: 'zero-balance' }, slot),
 				},
 				{

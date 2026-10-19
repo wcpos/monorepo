@@ -12,7 +12,14 @@ import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
-import { isActionRefusal } from '../../../../extensions/actions';
+import { CHOOSE_REGISTER_REASON } from '../checkout/tender/tender-guards';
+import { conditionRules } from '../conditions/evaluate';
+import { countConditionsInSlot } from '../conditions/snapshot';
+import {
+	type ActionRefusal,
+	isActionRefusal,
+	TENDER_COMMIT_EVENT,
+} from '../../../../extensions/actions';
 import { commitSale, type SaleCommitRequest } from '../checkout/commit-sale';
 import { recordSaleAttempt, type SaleContext } from '../checkout/sale-completion';
 import {
@@ -29,6 +36,7 @@ const logger = getLogger(['wcpos', 'pos', 'settlement']);
 export async function commitAtBoundary(
 	ctx: SaleContext & {
 		bindingStatus: SaleCommitRequest['bindingStatus'];
+		readBindingStatus?: () => SaleCommitRequest['bindingStatus'];
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
@@ -60,6 +68,12 @@ export async function commitAtBoundary(
 		},
 		async ({ sessionId }, slot) => {
 			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing: true });
+			const [unmet] = await countConditionsInSlot(
+				slot.order ?? order,
+				ctx.actionCtx,
+				conditionRules(ctx.actionCtx.store.preventOverselling)
+			);
+			let refusal: ActionRefusal | undefined;
 			let overpaid: { orderId: string; total: string; netPaid: number } | undefined;
 			const completion = await writeZeroBalanceCompletion(ctx, {
 				order,
@@ -69,6 +83,13 @@ export async function commitAtBoundary(
 				complete: ctx.complete,
 				changes: (payload) => {
 					overpaid = undefined;
+					if (ctx.readBindingStatus?.() === 'choose') {
+						refusal = {
+							deny: { reasonKey: CHOOSE_REGISTER_REASON, detail: { event: TENDER_COMMIT_EVENT } },
+						};
+						return null;
+					}
+					if (unmet) return null;
 					if (allowed && !allowed(payload)) return null;
 					if (
 						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
@@ -94,9 +115,11 @@ export async function commitAtBoundary(
 			});
 			if (completion === 'superseded') {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
-				logger.warn('settlement.boundary-superseded', { context: { orderId: order.uuid } });
+				logger.warn('settlement.boundary-superseded', {
+					context: { orderId: order.uuid, ...(unmet && { reason: unmet.reasonKey }) },
+				});
 			} else if (overpaid) logger.warn('settlement.boundary-overpaid', { context: overpaid });
-			return completion;
+			return refusal ?? completion;
 		},
 		{ queue, source: ctx.source }
 	);

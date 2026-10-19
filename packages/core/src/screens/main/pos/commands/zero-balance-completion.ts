@@ -25,6 +25,8 @@ export async function writeZeroBalanceCompletion(
 	}
 ) {
 	const latest = order.getLatest().payload;
+	// Reject an obsolete boundary before allocating irreversible sale provenance.
+	if (changes(latest) === null) return 'superseded';
 	const stamped = await completionMetaFor(ctx, latest.meta_data, { sessionId });
 	const additions = stamped.filter(
 		(entry) => !latest.meta_data?.some(({ key }) => key === entry.key)

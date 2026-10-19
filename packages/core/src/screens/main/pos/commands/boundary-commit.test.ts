@@ -31,7 +31,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
 	requireOpenSession: async () => 'session',
 	readRegister: async () => ({ sites: { site: { register_id: 'register' } } }),
-	nextSaleCounter: async () => 7,
+	nextSaleCounter: jest.fn(async () => 7),
 }));
 jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: jest.fn(async () => {}),
@@ -449,3 +449,126 @@ it('supersedes coupon completion when references change during the guard window'
 	expect(complete).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 });
+
+it.each(['product', 'variation'] as const)(
+	'supersedes when %s stock runs out during the guards',
+	async (kind) => {
+		const order = orderFor();
+		order.payload.line_items![0] = {
+			...order.payload.line_items![0],
+			product_id: 1,
+			variation_id: kind === 'variation' ? 2 : 0,
+			quantity: 1,
+		};
+		let available = true;
+		ctx.actionCtx = createActionContext({
+			log,
+			t: (key) => key,
+			readPaymentMethod: () => null,
+			preventOverselling: true,
+			priceDecimals: 2,
+			readCatalog: async (type) => ({
+				manage_stock: true,
+				stock_quantity: type === kind && !available ? 0 : 2,
+				stock_status: type === kind && !available ? 'outofstock' : 'instock',
+			}),
+			resolveSession: async () => {
+				available = false;
+				return { registerId: 'register', sessionId: 'session' };
+			},
+		});
+		const complete = jest.fn();
+		const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			)
+		);
+		expect(outcome).toBe('superseded');
+		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
+		expect(complete).not.toHaveBeenCalled();
+		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
+			'settlement.boundary-superseded',
+			expect.objectContaining({
+				context: expect.objectContaining({ reason: 'pos_products.out_of_stock' }),
+			})
+		);
+	}
+);
+
+it.each([false, true])(
+	'allocates a sale counter only for a valid preflight (%s)',
+	async (valid) => {
+		const { nextSaleCounter } = jest.requireMock('@wcpos/query/register-session');
+		const order = orderFor();
+		const complete = jest.fn();
+		await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'bound',
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					allowed: () => valid,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			)
+		);
+		expect(nextSaleCounter).toHaveBeenCalledTimes(valid ? 1 : 0);
+		expect(complete).toHaveBeenCalledTimes(valid ? 1 : 0);
+	}
+);
+
+it.each(['none', 'choose'] as const)(
+	'rechecks unresolved binding after guards: %s',
+	async (resolved) => {
+		const order = orderFor();
+		let binding: 'none' | 'choose' = 'none';
+		resolveSession.mockImplementationOnce(async () => {
+			binding = resolved;
+			return { registerId: 'register', sessionId: 'session' };
+		});
+		const complete = jest.fn();
+		const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					bindingStatus: 'none',
+					...{ readBindingStatus: () => binding },
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					complete,
+				},
+				{
+					order,
+					queue,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					write: (changes) => ctx.localPatch({ document: order, changes }),
+				}
+			)
+		);
+		if (resolved === 'choose') {
+			expect(outcome).toMatchObject({ deny: { reasonKey: 'pos_checkout.choose_register_first' } });
+			expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} else expect(order.payload.status).toBe('completed');
+		expect(complete).toHaveBeenCalledTimes(resolved === 'choose' ? 0 : 1);
+	}
+);
