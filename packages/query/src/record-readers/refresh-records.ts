@@ -3,6 +3,32 @@ import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 import { fetchFreshRecords } from '../reads/refresh-demands';
 
+/** Demand referenced records without forcing a refresh; the caller owns the lifetime. */
+export function demandRecordsByWooId(
+	engine: RxdbSyncEngine,
+	request: {
+		id: string;
+		collection: 'products' | 'variations' | 'customers' | 'orders';
+		wooIds: readonly number[];
+	}
+): { ready: Promise<'settled' | 'released'>; release(): void } {
+	if (request.wooIds.length === 0) {
+		return { ready: Promise.resolve('settled'), release: () => undefined };
+	}
+	const handle = engine.require({
+		id: request.id,
+		collection: request.collection,
+		kind: 'targeted-records',
+		remoteIds: request.wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+	});
+	return {
+		ready: handle.ready.then((outcome) =>
+			outcome?.action === 'released' ? 'released' : 'settled'
+		),
+		release: () => handle.release(),
+	};
+}
+
 /** Own a forced collection refresh until it settles, including failure. */
 export async function refreshCollection(
 	engine: RxdbSyncEngine,

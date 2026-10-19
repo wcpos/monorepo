@@ -164,7 +164,7 @@ describe('tax-rates query-state wiring', () => {
 		});
 		expect(mockUseCollectionQueryHandle.mock.calls.at(-1)?.[0]).toBe('tax-rates');
 		expect(mockFooter).toHaveBeenCalledWith({
-			count: 3,
+			shownCount: 3,
 			handle: mockHandle,
 			shown: mockHandle,
 			applies: null,
@@ -251,7 +251,7 @@ describe('tax-rates query-state wiring', () => {
 		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
 		// The spinner and sync follow the live handle; the total, the rates beside it.
 		expect(mockFooter).toHaveBeenLastCalledWith({
-			count: 3,
+			shownCount: 3,
 			handle: next,
 			shown: previous,
 			applies: null,
@@ -262,7 +262,7 @@ describe('tax-rates query-state wiring', () => {
 		);
 		expect(lastDrawnIds()).toEqual([[1], []]);
 		expect(mockFooter).toHaveBeenLastCalledWith({
-			count: 1,
+			shownCount: 1,
 			handle: next,
 			shown: next,
 			applies: null,

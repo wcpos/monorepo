@@ -416,31 +416,6 @@ export async function markAllAsSeen(): Promise<boolean> {
 }
 
 /**
- * Get unread count (v3 API)
- */
-export async function getUnreadCount(): Promise<number> {
-	if (!novuClient) return 0;
-
-	try {
-		const { data, error } = await novuClient.notifications.count({ read: false });
-		if (error) {
-			novuLogger.error('Novu: Failed to get unread count', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: { error: error.message },
-			});
-			return 0;
-		}
-		return data?.count ?? 0;
-	} catch (error) {
-		novuLogger.error('Novu: Failed to get unread count', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
-			context: { error: getErrorMessage(error) },
-		});
-		return 0;
-	}
-}
-
-/**
  * Cleanup the Novu client
  */
 export function disconnectNovuClient(): void {

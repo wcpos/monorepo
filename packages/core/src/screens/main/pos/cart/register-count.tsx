@@ -30,12 +30,12 @@ import type { ClosureCount } from './closure-sheet';
 export function DenominationTile({
 	currencyOptions,
 	value,
-	count,
+	pieces,
 	add,
 }: {
 	currencyOptions?: CurrencyFormatOptions;
 	value: string;
-	count: number;
+	pieces: number;
 	add: (pieces: number) => void;
 }) {
 	const { format } = useCurrencyFormat(currencyOptions);
@@ -69,7 +69,7 @@ export function DenominationTile({
 				{format(Number(value))}
 			</Text>
 			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
-				{count}
+				{pieces}
 			</Text>
 		</Tile>
 	);
@@ -211,7 +211,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 									<DenominationTile
 										key={value}
 										value={value}
-										count={pieces[value] ?? 0}
+										pieces={pieces[value] ?? 0}
 										add={(n) =>
 											setPieces((previous) => ({
 												...previous,

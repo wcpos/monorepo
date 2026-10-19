@@ -95,7 +95,7 @@ it('stores the reader snapshot separately for each method, and forgets one', asy
 	expect((await preferences.get('other'))?.id).toBe('a');
 	await preferences.set('terminal', { id: 'c', label: 'Counter', transport: 'bluetooth' });
 	expect((await preferences.get('terminal'))?.id).toBe('c');
-	await preferences.remove('terminal');
+	await preferences.forget('terminal');
 	expect(await preferences.get('terminal')).toBeNull();
 	expect(mockStoreDB.addState).toHaveBeenCalledWith('terminal-readers_v2');
 });

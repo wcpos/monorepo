@@ -7,6 +7,7 @@ export { readResidentOrder, readResidentRecord } from './read-resident-record';
 export { readCustomerByWooId } from './read-customer-by-woo-id';
 export {
 	ORDER_REFRESH_TIMEOUT_MS,
+	demandRecordsByWooId,
 	refreshCollection,
 	refreshOrderRefunds,
 	refreshRecordByWooId,

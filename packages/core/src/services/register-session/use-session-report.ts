@@ -6,8 +6,11 @@ import { useObservableState } from 'observable-hooks';
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
-import type { ClosureRow } from '@wcpos/database';
-import { readClosure, type ReadonlyClosureDocument } from '@wcpos/query/register-session';
+import {
+	type ClosureRow,
+	readClosure,
+	type ReadonlyClosureDocument,
+} from '@wcpos/query/register-session';
 
 import { useStoreSession } from '../../contexts/app-state';
 import { recordRegisterFact, useRegisterActor } from './audit';

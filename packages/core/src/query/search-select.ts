@@ -1,15 +1,13 @@
 import * as React from 'react';
 
-import { type EngineQueryDescriptor, useQueryRuntime, useSearchFields } from '@wcpos/query';
+import { type LegacyCollectionName, useQueryRuntime, useSearchFields } from '@wcpos/query';
 import {
-	acquireEngineQueryHandle,
+	acquireSearchSelectHandle,
 	canonicalQueryKey,
-	compileQuery,
+	SEARCH_SELECT_COLLECTIONS,
+	type SearchSelectCollection,
 	useScopeKey,
 } from '@wcpos/query/query-state';
-
-type LegacyCollectionName = EngineQueryDescriptor['collection'];
-type CompiledQuery = ReturnType<typeof compileQuery>;
 
 /**
  * The field list is a subscription (`useSearchFields`): the identity is stable until the
@@ -20,8 +18,7 @@ function useSearchFieldsFor(collection: LegacyCollectionName): string[] | undefi
 	return useSearchFields(collection) as string[] | undefined;
 }
 
-export type SearchSelectCollection =
-	'customer' | 'category' | 'brand' | 'tag' | 'cashier' | 'coupon';
+export type { SearchSelectCollection } from '@wcpos/query/query-state';
 
 /**
  * One page of picker rows: the window a search-select opens with, and the step every
@@ -30,80 +27,6 @@ export type SearchSelectCollection =
  */
 const SEARCH_SELECT_PAGE_SIZE = 50;
 const SEARCH_SELECT_PAGE_SIZE_MAX = 100;
-
-const SEARCH_SELECT_COLLECTIONS: Record<SearchSelectCollection, LegacyCollectionName> = {
-	customer: 'customers',
-	cashier: 'customers',
-	category: 'products/categories',
-	brand: 'products/brands',
-	tag: 'products/tags',
-	coupon: 'coupons',
-};
-
-function searchSelectDescriptor(
-	collection: SearchSelectCollection,
-	search: string,
-	limit: number
-): EngineQueryDescriptor {
-	const isCustomer = collection === 'customer' || collection === 'cashier';
-	return {
-		collection: SEARCH_SELECT_COLLECTIONS[collection],
-		selector:
-			collection === 'cashier'
-				? { role: { $in: ['administrator', 'shop_manager', 'cashier'] } }
-				: {},
-		sort: [
-			{
-				[isCustomer ? 'last_name' : collection === 'coupon' ? 'code' : 'name']: 'asc',
-			},
-		],
-		limit,
-		search,
-	};
-}
-
-/** The picker's demand: the collection's sort, the cashier role filter left residual. */
-function compileSearchSelect(
-	collection: SearchSelectCollection,
-	search: string,
-	limit: number,
-	id: string
-): CompiledQuery {
-	const common = { search, filters: {}, limit } as const;
-	switch (collection) {
-		case 'customer':
-		case 'cashier':
-			return compileQuery(
-				'customers',
-				{ ...common, sort: { field: 'last_name', direction: 'asc' } },
-				{ id, residual: collection === 'cashier' }
-			);
-		case 'category':
-			return compileQuery(
-				'products/categories',
-				{ ...common, sort: { field: 'name', direction: 'asc' } },
-				{ id }
-			);
-		case 'brand':
-			return compileQuery(
-				'products/brands',
-				{ ...common, sort: { field: 'name', direction: 'asc' } },
-				{ id }
-			);
-		case 'tag':
-			return compileQuery(
-				'products/tags',
-				{ ...common, sort: { field: 'name', direction: 'asc' } },
-				{ id }
-			);
-		case 'coupon':
-			return compileQuery(
-				'coupons',
-				{ ...common, sort: { field: 'code', direction: 'asc' } },
-				{ id }
-			);
-	}
-}
 
 /**
  * A picker's search: the typed text, its debounced commit, local paging, and the query handle
@@ -147,7 +70,7 @@ export function useSearchSelect(
 			limit: (current.key === pagingKey ? current.limit : pageSize) + pageSize,
 		}));
 	}, [pageSize, pagingKey]);
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const legacy = SEARCH_SELECT_COLLECTIONS[collection];
 	const scope = useScopeKey(legacy);
 	const searchFields = useSearchFieldsFor(legacy);
@@ -171,14 +94,13 @@ export function useSearchSelect(
 			number,
 			string[] | null,
 		];
-		return acquireEngineQueryHandle(engine, key, (id) => ({
-			descriptor: {
-				...searchSelectDescriptor(collection, text, size),
-				searchFields: fields ?? undefined,
-			},
-			compiled: compileSearchSelect(collection, text, size, id),
-		}));
-	}, [collection, engine, key]);
+		return acquireSearchSelectHandle(runtime.engine, key, {
+			collection,
+			search: text,
+			limit: size,
+			searchFields: fields ?? undefined,
+		});
+	}, [collection, runtime.engine, key]);
 	// The picker that holds the search owns the read: its demand is declared while it is mounted.
 	React.useEffect(() => handle.retain(), [handle]);
 	return { handle, search, setSearch, committedSearch, limit, extendLimit };

@@ -151,11 +151,11 @@ function useReferenceDemandHandle(
 	collection: ReferenceCollection,
 	enabled: boolean
 ): { handle: QueryHandle; generation: number } {
-	const { engine } = useQueryRuntime();
-	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
+	const runtime = useQueryRuntime();
+	const generation = useCoverageGeneration(runtime.engine, engineCollectionNameFor(collection));
 	const handle = React.useMemo(
-		() => acquireReferenceDemandHandle(engine, collection, generation, enabled),
-		[collection, enabled, engine, generation]
+		() => acquireReferenceDemandHandle(runtime.engine, collection, generation, enabled),
+		[collection, enabled, runtime.engine, generation]
 	);
 	React.useEffect(() => handle.retain(), [handle]);
 	return { handle, generation };

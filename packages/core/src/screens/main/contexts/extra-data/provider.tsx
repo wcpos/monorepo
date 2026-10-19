@@ -23,7 +23,7 @@ function isMissing(value: unknown): boolean {
 export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
 	const { extraData, storeDB } = useStoreSession();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 
 	React.useEffect(() => {
 		// Store-scoped bridge from the sync engine's public event stream to persisted RxState.
@@ -95,7 +95,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		if (isMissing(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
 		fetchPaymentMethods(coldStartGeneration);
 
-		const unsubscribeEvents = engine.events((event) => {
+		const unsubscribeEvents = runtime.engine.events((event) => {
 			if (event.type === 'config-changed') fetchAll();
 		});
 
@@ -103,7 +103,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 			refreshGeneration += 1;
 			unsubscribeEvents();
 		};
-	}, [engine, extraData, storeDB, http]);
+	}, [runtime.engine, extraData, storeDB, http]);
 
 	return <ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>;
 }

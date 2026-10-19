@@ -315,7 +315,7 @@ export type RowDetailData = {
 	/** e.g. `c41a88 · 400 · 500 ms` */
 	request?: string;
 	serverCode?: string;
-	attempts?: { count: number; firstSeen: number; lastSeen: number };
+	attempts?: { times: number; firstSeen: number; lastSeen: number };
 };
 
 export function rowDetailData(row: LogRow): RowDetailData {
@@ -349,7 +349,7 @@ export function rowDetailData(row: LogRow): RowDetailData {
 	const count = Math.max(row.count ?? 1, row.attempt ?? 0);
 	if (count > 1) {
 		detail.attempts = {
-			count,
+			times: count,
 			firstSeen: row.firstSeen ?? row.timestamp,
 			lastSeen: row.lastSeen ?? row.timestamp,
 		};
@@ -485,7 +485,7 @@ export function buildLogEntryReport(row: LogRow): string {
 	if (detail.serverCode) lines.push(`Server code: ${detail.serverCode}`);
 	if (detail.attempts) {
 		lines.push(
-			`Attempts: ${detail.attempts.count} (${new Date(
+			`Attempts: ${detail.attempts.times} (${new Date(
 				detail.attempts.firstSeen
 			).toISOString()} → ${new Date(detail.attempts.lastSeen).toISOString()})`
 		);

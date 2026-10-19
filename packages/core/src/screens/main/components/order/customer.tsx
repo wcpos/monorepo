@@ -9,8 +9,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { QueryStateActions } from '../../../../query';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
+import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
 
 /**
  *
@@ -41,7 +40,7 @@ export function Customer({
 					billing,
 					shipping,
 					id: customerID,
-				} as unknown as CustomerDocument)}
+				} as unknown as CustomerData)}
 				onPress={() => actions?.setFilter('customer_id', customerID)}
 			/>
 			{show?.('billing') && (

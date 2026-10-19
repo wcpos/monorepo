@@ -15,10 +15,10 @@ import type { QueryHandle } from '../../../query';
 
 type TaxRatesFooterProps = {
 	/** The store total across classes, not one tab's rows. */
-	count: number;
+	shownCount: number;
 	/** The live handle the modal owns: the sync button acts on it and spins with it. */
 	handle: QueryHandle;
-	/** The handle whose rates are drawn, so the total describes the `count` beside it. */
+	/** The handle whose rates are drawn, so the total describes the `shownCount` beside it. */
 	shown: QueryHandle;
 	/**
 	 * Opened from the "Tax based on" panel: how many of the store's rates its address matched,
@@ -31,7 +31,7 @@ type TaxRatesFooterProps = {
  * The left slot of the panel's one bottom bar (Close is the right): the count and the sync
  * button. It renders inside the `DialogFooter`; there is no second bar.
  */
-export function TaxRatesFooter({ count, handle, shown, applies }: TaxRatesFooterProps) {
+export function TaxRatesFooter({ shownCount, handle, shown, applies }: TaxRatesFooterProps) {
 	const { clearAndSync } = useCollectionReset('taxes');
 	const { clearSearch, resetFilters } = useQueryStateActions<'tax-rates'>();
 	const resetQueryAndCollection = React.useCallback(() => {
@@ -54,7 +54,7 @@ export function TaxRatesFooter({ count, handle, shown, applies }: TaxRatesFooter
 		<HStack className={cn('min-w-0 gap-1', !isPhone && 'shrink grow basis-0')}>
 			<Text className="text-muted-foreground min-w-0 shrink text-sm">
 				{[
-					rateCount(count, vouched, t),
+					rateCount(shownCount, vouched, t),
 					applies ? appliesCount(applies.n, applies.country, t) : null,
 				]
 					.filter(Boolean)

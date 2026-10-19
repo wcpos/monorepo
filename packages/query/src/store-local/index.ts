@@ -36,3 +36,4 @@ export {
 	type ScannerProfile,
 	type ScannerConnectionType,
 } from './scanner-profiles';
+export { openStoreState, type StoreState } from './store-state';

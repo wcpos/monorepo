@@ -169,7 +169,7 @@ export function useReaderActions() {
 			} catch (error) {
 				if (driver?.status$.get().connection !== 'disconnected') throw error;
 			}
-			await rememberedReaders(storeDB).remove(method.id);
+			await rememberedReaders(storeDB).forget(method.id);
 		});
 	}, [pendingForget, run, storeDB]);
 	/** Dev-only simulated-reader controls run through the same error line as everything else. */

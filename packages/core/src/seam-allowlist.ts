@@ -1747,10 +1747,38 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/provenance/persist-provenance.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write :: useTenderFlow :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (l1): the UI-settings slots open through @wcpos/query/store-local.
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 1',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 2',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 3',
+	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
+	"screens/main/contexts/ui-settings/utils.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (l2): the remaining engine demands, the storage-health read and the search-select handle are owned by @wcpos/query.
+	'query/coupon-reference-demand.ts :: engine handle aliased :: useReferenceDemandHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/search-select.ts :: engine handle aliased :: useSearchSelect :: { engine } = useQueryRuntime() :: 1',
+	"query/search-select.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/extra-data/provider.tsx :: engine handle aliased :: ExtraDataProvider :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-census-totals.ts :: engine handle aliased :: useCensusTotals :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-collection-reset.ts :: collection reset outside the reset command :: useCollectionReset :: runtime.engine.scope.resetCollection :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: engine handle aliased :: useReferencedCustomerDemand :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: require plane outside a named read :: useReferencedCustomerDemand :: engine.require :: 1',
+	"screens/main/hooks/use-storage-health.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	'screens/main/hooks/use-unsent-changes.ts :: engine handle aliased :: useUnsentChangesRecorder :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (l3): the last storage type imports come from @wcpos/query; props and fields stop borrowing storage names.
+	"screens/main/components/order/customer.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/logs/logs-logic.ts :: raw query construction :: buildLogEntryReport :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts?.count :: 1',
+	'screens/main/pos/cart/register-count.tsx :: raw query construction :: DenominationTile :: count :: 1',
+	'screens/main/settings/card-readers/use-reader-actions.ts :: record mutator :: useReaderActions :: rememberedReaders(storeDB).remove :: 1',
+	'screens/main/tax-rates/footer.tsx :: raw query construction :: TaxRatesFooter :: count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: data?.count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: novuClient.notifications.count :: 1',
+	"services/register-session/use-session-report.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 788;
+export const SEAM_RETIRED_FLOOR = 813;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c752bbb6bb3389285015a1635fb14a02b6a49c77027d6639a55830faeaf91e6c';
+	'bb8ea7f62f5ad1276b6d5a6beb9d27aa87e883940fb3439df3c71f9bee667943';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
