@@ -26,9 +26,14 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 };
 let mockHandle: FakeHandle;
 const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
-const mockRateTable = jest.fn((_props: { rates: typeof rates }) => null);
+const mockRateTable = jest.fn(
+	(_props: { rates: typeof rates; appliesTo?: ReadonlySet<number> | null }) => null
+);
 const mockFooter = jest.fn((_props: Record<string, unknown>) => null);
 
+// The route params the "Tax based on" panel sends on View all; none here (opened from elsewhere).
+let mockParams: Record<string, string | undefined> = {};
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
@@ -105,7 +110,7 @@ jest.mock('../contexts/extra-data', () => ({
 	useExtraData: () => ({ extraData: { taxClasses$: of([]) } }),
 }));
 jest.mock('./rate-table', () => ({
-	TaxRateTable: (props: { rates: typeof rates }) => mockRateTable(props),
+	TaxRateTable: (props: Parameters<typeof mockRateTable>[0]) => mockRateTable(props),
 }));
 jest.mock('./footer', () => ({
 	TaxRatesFooter: (props: Record<string, unknown>) => mockFooter(props),
@@ -144,6 +149,7 @@ describe('tax-rates query-state wiring', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockHandle = fakeQueryHandle({ result: answeredRates(), total: 3 });
+		mockParams = {};
 	});
 	afterEach(cleanup);
 
@@ -157,9 +163,67 @@ describe('tax-rates query-state wiring', () => {
 			limit: Number.MAX_SAFE_INTEGER,
 		});
 		expect(mockUseCollectionQueryHandle.mock.calls.at(-1)?.[0]).toBe('tax-rates');
-		expect(mockFooter).toHaveBeenCalledWith({ count: 3, handle: mockHandle, shown: mockHandle });
+		expect(mockFooter).toHaveBeenCalledWith({
+			count: 3,
+			handle: mockHandle,
+			shown: mockHandle,
+			applies: null,
+		});
 		expect(mockFooter.mock.calls[0]?.[0]).not.toHaveProperty('query');
 		expectGroupingPreserved();
+	});
+
+	it('matches the sent address against the current rates, and marks nothing without one', async () => {
+		const { rerender } = render(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(expect.objectContaining({ applies: null }));
+		expect(mockRateTable).toHaveBeenLastCalledWith(expect.objectContaining({ appliesTo: null }));
+
+		const local = [
+			{ id: 1, name: 'Oregon', class: 'standard', country: 'US', state: 'OR' },
+			{
+				id: 2,
+				name: 'Metro',
+				class: 'standard',
+				country: 'US',
+				state: 'OR',
+				postcodes: ['972*'],
+				priority: 2,
+			},
+			{ id: 3, name: 'California', class: 'reduced-rate', country: 'US', state: 'CA' },
+		];
+		mockParams = { applies: '1', country: 'US', state: 'OR', city: 'Portland', postcode: '97201' };
+		await act(async () =>
+			mockHandle.set({ result: { hits: local.map((payload) => ({ record: { payload } })) } })
+		);
+		rerender(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 2, country: 'US' } })
+		);
+		expect(mockRateTable.mock.calls.at(-2)?.[0]).toMatchObject({ appliesTo: new Set([1, 2]) });
+
+		// A sync that drops the postcode rate re-evaluates the marks and the count.
+		await act(async () =>
+			mockHandle.set({
+				result: { hits: [local[0], local[2]].map((payload) => ({ record: { payload } })) },
+			})
+		);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 1, country: 'US' } })
+		);
+	});
+
+	it('says none apply when the sent address matches nothing', () => {
+		mockHandle = fakeQueryHandle({
+			result: {
+				hits: [{ record: { payload: { id: 1, name: 'VAT', class: 'standard', country: 'GB' } } }],
+			},
+			total: 1,
+		});
+		mockParams = { applies: '1', country: 'IS', state: '', city: '', postcode: '101' };
+		render(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 0, country: 'IS' } })
+		);
 	});
 
 	it('draws the rates the acquired handle answers with', () => {
@@ -186,13 +250,23 @@ describe('tax-rates query-state wiring', () => {
 		expect(screen.queryByTestId('tax-rates-fallback')).toBeNull();
 		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
 		// The spinner and sync follow the live handle; the total, the rates beside it.
-		expect(mockFooter).toHaveBeenLastCalledWith({ count: 3, handle: next, shown: previous });
+		expect(mockFooter).toHaveBeenLastCalledWith({
+			count: 3,
+			handle: next,
+			shown: previous,
+			applies: null,
+		});
 
 		await act(async () =>
 			next.set({ ready: true, result: { hits: [{ record: { payload: rates[0] } }] } })
 		);
 		expect(lastDrawnIds()).toEqual([[1], []]);
-		expect(mockFooter).toHaveBeenLastCalledWith({ count: 1, handle: next, shown: next });
+		expect(mockFooter).toHaveBeenLastCalledWith({
+			count: 1,
+			handle: next,
+			shown: next,
+			applies: null,
+		});
 	});
 
 	it('throws a failed read to its own boundary, whose reset asks the handle again', async () => {

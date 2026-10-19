@@ -74,3 +74,24 @@ it('retires the alternating row alias in both implementations', () => {
 		);
 	}
 });
+
+it('draws the current-row mark as ListRow does: bar and wash, room kept, or none', () => {
+	const { getAllByRole } = render(
+		<>
+			<TableRow selected />
+			<TableRow selected={false} />
+			<TableRow />
+			<PressableTableRow selected />
+		</>
+	);
+	const [on, off, plain, pressable] = getAllByRole('row');
+	for (const row of [on, pressable]) {
+		expect(row).toHaveClass('border-l-2', 'border-l-primary', 'bg-muted');
+		expect(row).toHaveAttribute('aria-selected', 'true');
+	}
+	expect(off).toHaveClass('border-l-2', 'border-l-transparent');
+	expect(off).not.toHaveClass('bg-muted');
+	expect(off).toHaveAttribute('aria-selected', 'false');
+	expect(plain).not.toHaveClass('border-l-2');
+	expect(plain).not.toHaveAttribute('aria-selected');
+});

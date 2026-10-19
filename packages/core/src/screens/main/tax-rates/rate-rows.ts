@@ -1,4 +1,6 @@
-import type { TaxRateData } from '../contexts/tax-rates';
+import { filterTaxRates } from '../contexts/tax-rates/tax-rates.helpers';
+
+import type { TaxLocation, TaxRateData } from '../contexts/tax-rates';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -62,4 +64,55 @@ export function rateCount(count: number, vouched: number | null, t: Translate): 
 			})
 		: // `count` picks "1 tax rate" or "6 tax rates"; `n` is what is printed, grouped.
 			t('tax_rates.count', { count, n: count.toLocaleString() });
+}
+
+type AddressParams = Partial<Record<'applies' | keyof TaxLocation, string | string[]>>;
+
+/**
+ * The address the "Tax based on" panel sends on View all (`applies=1` plus its four fields).
+ * No `applies` means the panel was opened from somewhere else (Settings, or an order with no
+ * address): no marks, the plain count.
+ */
+export function parseAppliesAddress(params: AddressParams): TaxLocation | null {
+	const read = (key: keyof AddressParams) => {
+		const value = params[key];
+		return (Array.isArray(value) ? value[0] : value) ?? '';
+	};
+	if (!read('applies')) return null;
+	return {
+		country: read('country'),
+		state: read('state'),
+		city: read('city'),
+		postcode: read('postcode'),
+	};
+}
+
+/**
+ * The ids of the store's current rates that address matches, by the same matcher the cart and
+ * the "Tax based on" panel use, so the marks and the count follow a sync.
+ */
+export function matchedRateIds(rates: TaxRateData[], address: TaxLocation): ReadonlySet<number> {
+	const { country, state, postcode, city } = address;
+	return new Set(
+		filterTaxRates(rates, country, state, postcode, city)
+			.map((rate) => rate.id)
+			.filter((id): id is number => typeof id === 'number')
+	);
+}
+
+/** Whether the address the panel was opened from matched this rate. */
+export function isApplied(appliesTo: ReadonlySet<number> | null | undefined, rate: TaxRateData) {
+	return rate.id !== undefined && rate.id !== null && (appliesTo?.has(rate.id) ?? false);
+}
+
+/** "2 apply to this address (GB)", "none apply to this address", the parenthesis only with a country. */
+export function appliesCount(n: number, country: string, t: Translate): string {
+	if (n === 0) {
+		return country
+			? t('tax_rates.count_applies_none', { country })
+			: t('tax_rates.count_applies_none_no_country');
+	}
+	return country
+		? t('tax_rates.count_applies', { count: n, n: n.toLocaleString(), country })
+		: t('tax_rates.count_applies_no_country', { count: n, n: n.toLocaleString() });
 }

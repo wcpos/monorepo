@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Derivation, DerivationStep } from '@wcpos/components/derivation';
@@ -82,10 +82,26 @@ function TaxDerivation({
 	);
 
 	// The popover (a sheet on a phone) would otherwise stay open over where we go.
-	const go = (href: '/settings/tax' | '/(app)/(modals)/tax-rates') => {
+	const go = (href: Href) => {
 		onOpenChange(false);
 		router.push(href);
 	};
+	// The panel's route sits outside the tax and order providers, so the ADDRESS travels with the
+	// push and the panel matches its own current rates against it (a sync there re-evaluates the
+	// marks). An order with no address has nothing to match: the plain panel.
+	const viewAll: Href =
+		failure === 'address'
+			? '/(app)/(modals)/tax-rates'
+			: {
+					pathname: '/(app)/(modals)/tax-rates',
+					params: {
+						applies: '1',
+						country: location.country,
+						state: location.state,
+						city: location.city,
+						postcode: location.postcode,
+					},
+				};
 
 	const why = (reason: RateWhy) => {
 		switch (reason.field) {
@@ -203,7 +219,7 @@ function TaxDerivation({
 					variant="ghost"
 					testID="tax-based-on-view-all"
 					className="w-full px-2"
-					onPress={() => go('/(app)/(modals)/tax-rates')}
+					onPress={() => go(viewAll)}
 				>
 					<View className="w-full flex-row items-center justify-between gap-2">
 						<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>

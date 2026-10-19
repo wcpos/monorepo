@@ -112,7 +112,10 @@ describe.each([false, true])('phone: %s', (phone) => {
 		expect(screen.getByTestId('tax-based-on-content')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
 		act(() => jest.advanceTimersByTime(1000));
-		expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
+		expect(mockPush).toHaveBeenCalledWith({
+			pathname: '/(app)/(modals)/tax-rates',
+			params: { applies: '1', country: 'GB', state: '', city: '', postcode: '' },
+		});
 		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
 	});
 

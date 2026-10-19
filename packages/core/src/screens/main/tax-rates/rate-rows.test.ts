@@ -1,4 +1,14 @@
-import { locationField, phoneLocation, phoneTags, rateCount, rateTags } from './rate-rows';
+import {
+	appliesCount,
+	isApplied,
+	locationField,
+	matchedRateIds,
+	parseAppliesAddress,
+	phoneLocation,
+	phoneTags,
+	rateCount,
+	rateTags,
+} from './rate-rows';
 
 import type { TaxRateData } from '../contexts/tax-rates';
 
@@ -82,4 +92,60 @@ describe('rateCount', () => {
 	it('says how many are synced while behind', () => {
 		expect(rateCount(2, 48, t)).toBe('tax_rates.count_synced {"synced":"2","total":"48"}');
 	});
+});
+
+describe('parseAppliesAddress', () => {
+	it('reads no applies as opened from elsewhere: no marks', () => {
+		expect(parseAppliesAddress({})).toBeNull();
+		expect(parseAppliesAddress({ country: 'GB' })).toBeNull();
+	});
+
+	it('reads the four fields, empty where the panel sent none', () => {
+		expect(parseAppliesAddress({ applies: '1', country: 'US', postcode: ['97201', 'x'] })).toEqual({
+			country: 'US',
+			state: '',
+			city: '',
+			postcode: '97201',
+		});
+	});
+});
+
+describe('matchedRateIds', () => {
+	const portland = { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' };
+
+	it('matches the current rates with the shared matcher, a postcode pattern included', () => {
+		const rates = [
+			rate({ id: 1, country: 'US', state: 'OR' }),
+			rate({ id: 2, country: 'US', state: 'OR', postcodes: ['972*'], priority: 2 }),
+			rate({ id: 3, country: 'US', state: 'CA' }),
+			rate({ id: 4, country: 'GB' }),
+		];
+		expect(matchedRateIds(rates, portland)).toEqual(new Set([1, 2]));
+	});
+
+	it('matches nothing for an address the store has no rate for', () => {
+		expect(matchedRateIds([rate({ country: 'GB' })], { ...portland, country: 'IS' })).toEqual(
+			new Set()
+		);
+	});
+});
+
+describe('appliesCount', () => {
+	it('counts with the country in brackets, and without them when there is none', () => {
+		expect(appliesCount(2, 'GB', t)).toBe(
+			'tax_rates.count_applies {"count":2,"n":"2","country":"GB"}'
+		);
+		expect(appliesCount(1, '', t)).toBe('tax_rates.count_applies_no_country {"count":1,"n":"1"}');
+	});
+
+	it('says none apply rather than 0', () => {
+		expect(appliesCount(0, 'IS', t)).toBe('tax_rates.count_applies_none {"country":"IS"}');
+		expect(appliesCount(0, '', t)).toBe('tax_rates.count_applies_none_no_country');
+	});
+});
+
+it('marks a rate only when the panel sent its id', () => {
+	expect(isApplied(new Set([1]), rate({ id: 1 }))).toBe(true);
+	expect(isApplied(new Set([1]), rate({ id: 2 }))).toBe(false);
+	expect(isApplied(null, rate({ id: 1 }))).toBe(false);
 });

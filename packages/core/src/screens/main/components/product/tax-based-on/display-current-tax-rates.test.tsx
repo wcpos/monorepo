@@ -105,6 +105,40 @@ it('the settings link closes the panel, then goes to Settings › Tax', () => {
 	expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 });
 
+it('View all hands the panel the address to match, closing first', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({
+				taxBasedOn: 'shipping',
+				hasOrder: true,
+				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
+				rates: [rate({ country: 'US', state: 'OR' })],
+			})}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
+	expect(mockClose).toHaveBeenCalledWith(false);
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/(app)/(modals)/tax-rates',
+		params: { applies: '1', country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
+	});
+});
+
+it('View all from an order with no address opens the plain panel: nothing to match', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({
+				taxBasedOn: 'billing',
+				hasOrder: true,
+				location: { country: '', state: '', city: '', postcode: '' },
+				rates: [],
+			})}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('tax-based-on-view-all'));
+	expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
+});
+
 it("reads the order's address on an order, with its postal line", () => {
 	render(
 		<DisplayCurrentTaxRates
