@@ -677,6 +677,24 @@ function recordCadenceStart(page: Page): void {
  * Needs a bundle built with `EXPO_PUBLIC_WCPOS_E2E=1`; without it the ledger is silent.
  */
 export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise<void> {
+	// A production bundle (the main-push E2E target, or a local `build:web`) carries no
+	// ledger, so no line can come: fall back to network silence, the pre-ledger settle
+	// check, and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
+	const ledgerOn = await page
+		.evaluate(
+			() => (globalThis as { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger === true
+		)
+		.catch(() => false);
+	if (!ledgerOn) {
+		console.log(
+			'WCPOS_E2E cadence.start unavailable: no engine ledger in this bundle, waiting for network silence instead'
+		);
+		expect(
+			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: Math.min(timeout, 30_000) }),
+			'store traffic did not settle before the measured interaction'
+		).toBe(true);
+		return;
+	}
 	const started =
 		cadenceStarts.get(page) ??
 		page
