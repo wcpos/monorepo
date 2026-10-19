@@ -4,6 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { mirrorServerOrder } from '@wcpos/query/mutations';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -16,7 +17,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
-import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
@@ -61,7 +62,7 @@ export function useRecordManualPayment(
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const storeDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
-	const { localPatch } = useLocalMutation();
+	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
 	const t = useT();
 
@@ -107,7 +108,7 @@ export function useRecordManualPayment(
 				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
 				patchAndEnqueue: async (changes) => {
-					const result = await localPatch({ document: order, data: changes });
+					const result = await recordLedger(order, changes);
 					if (!result) throw new Error('Payment could not be saved locally.');
 				},
 				fetchOrderStatus: async () => {
@@ -117,12 +118,7 @@ export function useRecordManualPayment(
 				},
 				mirror: async (changes, { accepted }) => {
 					try {
-						await patchEngineResident({
-							manager,
-							collection: 'orders',
-							recordId: order.uuid,
-							changes,
-						});
+						await mirrorServerOrder(manager, order.uuid, changes);
 						if (
 							accepted &&
 							isCompletingStatus(changes.status ?? '') &&
@@ -132,7 +128,7 @@ export function useRecordManualPayment(
 								sessionId,
 								extraMeta: input.extraMeta,
 							});
-							const patched = await localPatch({ document: order, data: { meta_data } });
+							const patched = await stampCompletion(order, meta_data);
 							if (!patched) throw new Error('provenance_save_failed');
 						}
 					} catch (error) {
@@ -221,7 +217,8 @@ export function useRecordManualPayment(
 			store,
 			storeCurrency,
 			storeDecimals,
-			localPatch,
+			recordLedger,
+			stampCompletion,
 			manager,
 			t,
 		]

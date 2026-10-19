@@ -4,9 +4,9 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { type AwaitingCustomerStamp, type DeclaredValues } from '@wcpos/order-math';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { mirrorServerOrder } from '@wcpos/query/mutations';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
-import { patchEngineResident } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { refreshOrderRecord } from '../sale-completion';
 import { cancelGatewayInvoice, submitGatewayPayment } from './submit-gateway-payment';
@@ -29,12 +29,7 @@ export function useGatewayPayment() {
 			destination,
 			mirror: async (changes: { meta_data: unknown[]; status: string }) => {
 				try {
-					await patchEngineResident({
-						manager,
-						collection: 'orders',
-						recordId: order.uuid,
-						changes,
-					});
+					await mirrorServerOrder(manager, order.uuid, changes);
 				} catch (error) {
 					// The store has already answered; only this till's copy is behind. Pull it.
 					const id = order.getLatest().payload.id;

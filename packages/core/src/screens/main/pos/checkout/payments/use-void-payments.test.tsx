@@ -26,7 +26,6 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
-	patchEngineResident: (input: unknown) => mockMirror(input),
 }));
 
 jest.mock('../../../../../contexts/app-state', () => {
@@ -224,3 +223,8 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		]);
 	});
 });
+
+jest.mock('@wcpos/query/mutations', () => ({
+	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+		mockMirror({ manager, collection: 'orders', recordId, changes }),
+}));

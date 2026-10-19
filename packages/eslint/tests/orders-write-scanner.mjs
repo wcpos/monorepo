@@ -46,6 +46,12 @@ const SOURCE_ROOTS = [
 	'packages/core/src/extensions/', // a command never writes (roadmap#428)
 ];
 
+/**
+ * A screen's /commands/ module is its bottom handler by construction (ADR 0033 item 6): it is
+ * the one place the screen may hold the resident write, so the fence does not count it.
+ */
+export const COMMAND_MODULE_ROOT = 'packages/core/src/screens/main/pos/commands/';
+
 export const BOTTOM_HANDLERS = new Set([
 	// checkout.tender.commit: shared dispatch and stamped-session check.
 	'packages/core/src/screens/main/pos/checkout/commit-sale.ts',
@@ -113,7 +119,8 @@ export function scanSource(text, path) {
 		!SOURCE_ROOTS.some((root) => path.startsWith(root)) ||
 		!/\.tsx?$/.test(path) ||
 		/\.(test|spec)\./.test(path) ||
-		BOTTOM_HANDLERS.has(path)
+		BOTTOM_HANDLERS.has(path) ||
+		path.startsWith(COMMAND_MODULE_ROOT)
 	)
 		return [];
 	const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

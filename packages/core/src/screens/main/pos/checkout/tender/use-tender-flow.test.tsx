@@ -299,7 +299,6 @@ jest.mock('../../../hooks/use-storage-health', () => ({
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
-	patchEngineResident: (input: unknown) => mockManualMirror(input),
 	findEngineResident: async () => order,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
@@ -3924,3 +3923,9 @@ describe('cash rounding (#66, #84)', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('@wcpos/query/mutations', () => ({
+	...jest.requireActual('@wcpos/query/mutations'),
+	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+		mockManualMirror({ manager, collection: 'orders', recordId, changes }),
+}));
