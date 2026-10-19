@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { format, parseISO } from 'date-fns';
-import { Calendar as RNCalendar } from 'react-native-calendars';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 import { useCSSVariable } from 'uniwind';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Calendar } from '@wcpos/components/calendar';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
@@ -94,7 +95,7 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-2">
 				<VStack>
-					<RNCalendar
+					<Calendar
 						firstDay={1}
 						onDayPress={handleDayPress}
 						markedDates={markedDates}

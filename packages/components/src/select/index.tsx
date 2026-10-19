@@ -434,6 +434,8 @@ type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange
 	matchWidth?: boolean;
 	triggerClassName?: string;
 	valueClassName?: string;
+	/** The trigger's testID; each option takes `${triggerTestID}-option-${value}`. */
+	triggerTestID?: string;
 };
 
 function OptionSelect({
@@ -445,6 +447,7 @@ function OptionSelect({
 	matchWidth,
 	triggerClassName,
 	valueClassName,
+	triggerTestID,
 	...props
 }: OptionSelectProps) {
 	const selected = options.find((option) => option.value === value);
@@ -459,7 +462,7 @@ function OptionSelect({
 			onValueChange={(option) => onChange?.(option?.value, resolveOption(options, option))}
 			{...props}
 		>
-			<SelectTrigger className={triggerClassName}>
+			<SelectTrigger testID={triggerTestID} className={triggerClassName}>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
 			<SelectContent matchWidth={matchWidth}>
@@ -470,6 +473,7 @@ function OptionSelect({
 							value={option.value}
 							label={option.label}
 							disabled={option.disabled}
+							testID={triggerTestID ? `${triggerTestID}-option-${option.value}` : undefined}
 						/>
 					))}
 				</SelectGroup>

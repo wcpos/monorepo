@@ -1,5 +1,5 @@
 import { tz } from '@date-fns/tz';
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';

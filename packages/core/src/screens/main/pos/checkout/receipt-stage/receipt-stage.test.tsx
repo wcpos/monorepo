@@ -36,7 +36,7 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../../hooks/use-engine-document', () => ({ useEngineRecord: () => mockOrder }));
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => mockOrder }));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: <T,>(value: T) => value }));
 jest.mock('../../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ printedTo: mockPrintedTo, autoPrintPending: mockAutoPrintPending }),

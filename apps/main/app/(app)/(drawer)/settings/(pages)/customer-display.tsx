@@ -1,17 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { CustomerDisplaySettings, SettingsPage } from '@wcpos/core/screens/main/settings';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.CustomerDisplaySettingsPage);
 
 export default function CustomerDisplaySettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage
-			title={t('settings.customer_display.title')}
-			testID="screen-settings-customer-display"
-		>
-			<CustomerDisplaySettings />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

@@ -6,7 +6,7 @@ import {
 	acquireEngineResource,
 	releaseEngineResource,
 	retainEngineResource,
-} from './engine-record-resource';
+} from '../../src/record-readers/engine-record-resource';
 
 /**
  * Engines are cache identities here. `active()` is the one method the cache calls: its

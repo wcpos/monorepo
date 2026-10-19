@@ -5,7 +5,14 @@ import { reconcileCompletedOrder, refreshOrderRecord } from './reconcile-complet
 
 type QueryRuntime = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
-jest.mock('@wcpos/query', () => ({}));
+// Only the stock read is real: the core shim forwards to it, and these cases assert the
+// forced requirements it declares on the runtime's engine.
+jest.mock('@wcpos/query', () => ({
+	refreshStockFor: (...args: unknown[]) =>
+		(jest.requireActual('@wcpos/query') as typeof import('@wcpos/query')).refreshStockFor(
+			...(args as Parameters<typeof import('@wcpos/query').refreshStockFor>)
+		),
+}));
 
 const reduced = {
 	product_id: 12,

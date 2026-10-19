@@ -5,28 +5,17 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { hasPendingLocalWork } from '@wcpos/sync-engine';
-
 import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
 
-jest.mock('@wcpos/sync-engine', () => ({
-	...jest.requireActual('@wcpos/sync-engine'),
-	hasPendingLocalWork: jest.fn(jest.requireActual('@wcpos/sync-engine').hasPendingLocalWork),
-}));
-
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
-const mockInsertEngineResident = jest.fn();
-const mockFindEngineResident = jest.fn();
-const mockPatchEngineResident = jest.fn();
-const mockWrite = jest.fn();
+const mockBirthOrder = jest.fn();
+const mockFindBirthState = jest.fn();
 const mockReadCatalog = jest.fn();
 let mockStockGuardEnabled = false;
-
-const mockRemoveTemporaryOrder = jest.fn();
 
 /**
  * Every line the POS creates carries `_woocommerce_pos_data` — `convertProductToLineItem`
@@ -115,15 +104,26 @@ const order: Record<string, unknown> & {
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({ engine: { write: mockWrite } }),
+	useQueryRuntime: () => ({}),
 }));
+
+jest.mock('@wcpos/query/register-session', () => ({ getCurrentBoundRegisterId: () => 'register' }));
 
 jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
 }));
 
-jest.mock('@wcpos/query/temporary-order', () => ({
-	removeTemporaryOrder: (uuid: string) => mockRemoveTemporaryOrder(uuid),
+jest.mock('@wcpos/query/mutations', () => ({
+	documentRecordId: (document: { uuid?: string }) => document.uuid ?? null,
+	birthOrder: async (_manager: unknown, input: unknown) =>
+		completeEngineRecord(await mockBirthOrder(input)),
+	findBirthState: async (...args: unknown[]) => {
+		const state = await mockFindBirthState(...args);
+		if (state === 'none') return state;
+		return state.born
+			? { born: completeEngineRecord(state.born) }
+			: { orphan: completeEngineRecord(state.orphan) };
+	},
 }));
 
 jest.mock('../../../../hooks/use-local-date', () => ({
@@ -131,13 +131,6 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	documentRecordId: (document: { uuid?: string }) => document.uuid ?? null,
-	findEngineResident: async (...args: unknown[]) =>
-		completeEngineRecord(await mockFindEngineResident(...args)),
-	insertEngineResident: async (...args: unknown[]) =>
-		completeEngineRecord(await mockInsertEngineResident(...args)),
-	patchEngineResident: async (...args: unknown[]) =>
-		completeEngineRecord(await mockPatchEngineResident(...args)),
 	useLocalMutation: () => ({
 		localPatch: jest
 			.requireActual('../../../../../jest/cart-write')
@@ -163,7 +156,7 @@ describe('useAddItemToOrder', () => {
 		resetActionHookStrikes();
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
-		mockFindEngineResident.mockResolvedValue(null);
+		mockFindBirthState.mockResolvedValue('none');
 		mockReadCatalog.mockResolvedValue({
 			manage_stock: true,
 			stock_quantity: 10,
@@ -185,19 +178,17 @@ describe('useAddItemToOrder', () => {
 			order.isNew = true;
 			const payload = { uuid: 'order-uuid', line_items: [] };
 			if (orphan)
-				mockFindEngineResident.mockResolvedValue({
-					payload,
-					toMutableJSON: () => ({ payload }),
+				mockFindBirthState.mockResolvedValue({
+					orphan: {
+						payload,
+						toMutableJSON: () => ({ payload }),
+					},
 				});
-			mockInsertEngineResident.mockImplementation(async ({ payload }) => ({
+			mockBirthOrder.mockImplementation(async ({ payload }) => ({
 				payload,
 				toMutableJSON: () => ({ payload }),
 			}));
-			mockPatchEngineResident.mockImplementation(async ({ changes }) => ({
-				payload: changes,
-				toMutableJSON: () => ({ payload: changes }),
-			}));
-			mockWrite.mockResolvedValue({ mutationId: 'birth' });
+
 			const { result } = renderHook(() => useAddItemToOrder());
 			await act(async () => {
 				await result.current.addItemToOrder('line_items', {
@@ -215,36 +206,22 @@ describe('useAddItemToOrder', () => {
 				total_tax: '2',
 				tax_lines: [expect.objectContaining({ rate_id: 1, tax_total: '2' })],
 			};
-			expect(
-				orphan
-					? mockPatchEngineResident.mock.calls[0][0].changes
-					: mockInsertEngineResident.mock.calls[0][0].payload
-			).toMatchObject(money);
-			expect(mockWrite).toHaveBeenCalledTimes(1);
-			expect(mockWrite.mock.calls[0][0]).toMatchObject({ operation: 'create', payload: money });
+			expect(mockBirthOrder.mock.calls[0][0].payload).toMatchObject(money);
 		}
 	);
 
 	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
 		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
-		const residentPayloadProxy = new Proxy({ status: 'pos-open' }, {});
 		order.isNew = true;
 		order.toJSON = () => ({ payload: { ...order.payload, billing: nestedProxy } });
 		order.toMutableJSON = () => ({
 			payload: { ...order.payload, billing: { first_name: 'Guest' } },
 		});
-		mockInsertEngineResident.mockImplementation(
-			async ({ payload }: { payload: Record<string, unknown> }) => {
-				serialize(payload);
-				return {
-					get: () => residentPayloadProxy,
-					toMutableJSON: () => ({ payload: { status: 'pos-open' } }),
-				};
-			}
-		);
-		mockWrite.mockImplementation(async ({ payload }: { payload: Record<string, unknown> }) => {
+		mockBirthOrder.mockImplementation(async ({ payload }: { payload: Record<string, unknown> }) => {
 			serialize(payload);
-			return { mutationId: 'mutation-1' };
+			return {
+				toMutableJSON: () => ({ payload: { status: 'pos-open' } }),
+			};
 		});
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -267,12 +244,11 @@ describe('useAddItemToOrder', () => {
 				meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
 			},
 		});
-		mockInsertEngineResident.mockImplementation(
+		mockBirthOrder.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				toMutableJSON: () => ({ payload }),
 			})
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
 
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
@@ -282,7 +258,7 @@ describe('useAddItemToOrder', () => {
 			} as never);
 		});
 
-		expect(mockInsertEngineResident.mock.calls[0][0].payload.meta_data).toEqual(
+		expect(mockBirthOrder.mock.calls[0][0].payload.meta_data).toEqual(
 			expect.arrayContaining([
 				{ key: '_pos_user', value: '7' },
 				{ key: '_pos_store', value: '11' },
@@ -293,7 +269,7 @@ describe('useAddItemToOrder', () => {
 		// The insert payload is the WIRE body extracted from the temp record's payload —
 		// a face regression that spreads the engine envelope instead loses the wire
 		// fields (id lives inside .payload) and smuggles envelope keys into the payload.
-		const insertPayload = mockInsertEngineResident.mock.calls[0][0].payload;
+		const insertPayload = mockBirthOrder.mock.calls[0][0].payload;
 		expect(insertPayload.id).toBe(42);
 		expect(insertPayload).not.toHaveProperty('payload');
 		expect(insertPayload).not.toHaveProperty('sync');
@@ -343,13 +319,12 @@ describe('useAddItemToOrder', () => {
 			backorders: 'no',
 			name: 'Item',
 		});
-		mockInsertEngineResident.mockImplementation(
+		mockBirthOrder.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				payload,
 				toMutableJSON: () => ({ payload }),
 			})
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
 
 		const { result: firstHook } = renderHook(() => useAddItemToOrder());
 		const { result: secondHook } = renderHook(() => useAddItemToOrder());
@@ -369,8 +344,7 @@ describe('useAddItemToOrder', () => {
 		});
 
 		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
-		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
-		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockBirthOrder).toHaveBeenCalledTimes(1);
 	});
 
 	it('reuses an existing engine order when the current order is a stale temporary order', async () => {
@@ -383,8 +357,8 @@ describe('useAddItemToOrder', () => {
 				payload: { uuid: 'order-uuid', line_items: [{ product_id: 1 }] },
 			}),
 		};
-		mockInsertEngineResident.mockResolvedValue(resident);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockBirthOrder.mockResolvedValue(resident);
+
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -394,7 +368,7 @@ describe('useAddItemToOrder', () => {
 				meta_data: [],
 			} as never);
 		});
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		await act(async () => {
 			await result.current.addItemToOrder('line_items', {
 				product_id: 2,
@@ -402,9 +376,8 @@ describe('useAddItemToOrder', () => {
 			} as never);
 		});
 
-		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
-		expect(mockWrite).toHaveBeenCalledTimes(1);
-		expect(mockWrite).toHaveBeenCalledWith(expect.objectContaining({ operation: 'create' }));
+		expect(mockBirthOrder).toHaveBeenCalledTimes(1);
+
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: resident,
@@ -432,7 +405,7 @@ describe('useAddItemToOrder', () => {
 			toMutableJSON: () => ({ payload: ackedPayload }),
 			remove: jest.fn().mockResolvedValue(undefined),
 		};
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -443,10 +416,7 @@ describe('useAddItemToOrder', () => {
 			} as never);
 		});
 
-		expect(hasPendingLocalWork).toHaveBeenCalledWith(resident);
-		expect(mockInsertEngineResident).not.toHaveBeenCalled();
-		expect(mockPatchEngineResident).not.toHaveBeenCalled();
-		expect(mockWrite).not.toHaveBeenCalled();
+		expect(mockBirthOrder).not.toHaveBeenCalled();
 		expect(resident.remove).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	});
@@ -461,8 +431,8 @@ describe('useAddItemToOrder', () => {
 				payload: { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] },
 			}),
 		};
-		mockInsertEngineResident.mockResolvedValue(resident);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockBirthOrder.mockResolvedValue(resident);
+
 		mockLocalPatch.mockResolvedValue({ document: resident });
 		// Only one unit in stock: the cart is allowed to go from empty to one item.
 		mockReadCatalog.mockResolvedValue({
@@ -482,7 +452,7 @@ describe('useAddItemToOrder', () => {
 		});
 
 		// The scanner still holds the temporary order, but the engine order now exists.
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		let secondAdd: unknown;
 		await act(async () => {
 			secondAdd = await result.current.addItemToOrder('line_items', {
@@ -497,8 +467,7 @@ describe('useAddItemToOrder', () => {
 		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 		expect(secondAdd).toBe(false);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
-		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockBirthOrder).toHaveBeenCalledTimes(1);
 	});
 
 	it('merges a repeat scan into the resident line instead of splitting it', async () => {
@@ -516,7 +485,7 @@ describe('useAddItemToOrder', () => {
 			payload: { uuid: 'order-uuid', line_items: [residentLine] },
 			toMutableJSON: () => ({ payload: { uuid: 'order-uuid', line_items: [residentLine] } }),
 		};
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -533,7 +502,7 @@ describe('useAddItemToOrder', () => {
 
 		// useAddProduct skipped its own increment path (its order still looks new),
 		// so the merge has to happen here — a second line would never merge again.
-		expect(mockInsertEngineResident).not.toHaveBeenCalled();
+		expect(mockBirthOrder).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		const patched = mockLocalPatch.mock.calls[0][0].data.line_items;
 		expect(patched).toHaveLength(1);
@@ -623,7 +592,7 @@ describe('useAddItemToOrder', () => {
 			payload: { uuid: 'order-uuid', line_items: lines },
 			toMutableJSON: () => ({ payload: { uuid: 'order-uuid', line_items: lines } }),
 		};
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -659,7 +628,7 @@ describe('useAddItemToOrder', () => {
 			payload: { uuid: 'order-uuid', line_items: lines },
 			toMutableJSON: () => ({ payload: { uuid: 'order-uuid', line_items: lines } }),
 		};
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -688,7 +657,7 @@ describe('useAddItemToOrder', () => {
 			payload: { uuid: 'order-uuid', line_items: lines },
 			toMutableJSON: () => ({ payload: { uuid: 'order-uuid', line_items: lines } }),
 		};
-		mockFindEngineResident.mockResolvedValue(resident);
+		mockFindBirthState.mockResolvedValue({ born: resident });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 
 		const { result } = renderHook(() => useAddItemToOrder());
@@ -714,14 +683,13 @@ describe('useAddItemToOrder', () => {
 			toMutableJSON: () => ({ payload: skeletonPayload }),
 			remove: jest.fn().mockResolvedValue(undefined),
 		};
-		mockFindEngineResident.mockResolvedValue(skeleton);
-		mockPatchEngineResident.mockImplementation(
-			async ({ changes }: { changes: Record<string, unknown> }) => {
+		mockFindBirthState.mockResolvedValue({ orphan: skeleton });
+		mockBirthOrder.mockImplementation(
+			async ({ payload: changes }: { payload: Record<string, unknown> }) => {
 				const payload = { ...skeletonPayload, ...changes };
 				return { payload, toMutableJSON: () => ({ payload }) };
 			}
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
 
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
@@ -734,12 +702,11 @@ describe('useAddItemToOrder', () => {
 
 		// The server has never seen this order, so an update would 404 forever.
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(mockInsertEngineResident).not.toHaveBeenCalled();
-		expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect(mockBirthOrder).toHaveBeenCalledWith(
 			expect.objectContaining({
-				collection: 'orders',
 				recordId: 'order-uuid',
-				changes: expect.objectContaining({
+				orphan: skeleton,
+				payload: expect.objectContaining({
 					line_items: [{ product_id: 1, quantity: 1 }, expect.objectContaining({ product_id: 2 })],
 					meta_data: expect.arrayContaining([
 						{ key: '_pos_user', value: '7' },
@@ -748,10 +715,7 @@ describe('useAddItemToOrder', () => {
 				}),
 			})
 		);
-		expect(mockWrite).toHaveBeenCalledTimes(1);
-		expect(mockWrite).toHaveBeenCalledWith(
-			expect.objectContaining({ operation: 'create', recordId: 'order-uuid' })
-		);
+
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 	});
 
@@ -762,27 +726,28 @@ describe('useAddItemToOrder', () => {
 			line_items: [],
 			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
 		};
-		mockFindEngineResident.mockResolvedValue({
-			local: { dirty: false, pendingMutationIds: [] },
-			sync: { revision: '', source: 'skeleton' },
-			payload: skeletonPayload,
-			toMutableJSON: () => ({ payload: skeletonPayload }),
+		mockFindBirthState.mockResolvedValue({
+			orphan: {
+				local: { dirty: false, pendingMutationIds: [] },
+				sync: { revision: '', source: 'skeleton' },
+				payload: skeletonPayload,
+				toMutableJSON: () => ({ payload: skeletonPayload }),
+			},
 		});
-		mockPatchEngineResident.mockImplementation(
-			async ({ changes }: { changes: Record<string, unknown> }) => {
+		mockBirthOrder.mockImplementation(
+			async ({ payload: changes }: { payload: Record<string, unknown> }) => {
 				const payload = { ...skeletonPayload, ...changes };
 				return { payload, toMutableJSON: () => ({ payload }) };
 			}
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
+
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
 			await result.current.addItemToOrder('line_items', { product_id: 2, quantity: 1 });
 		});
 
-		expect(mockWrite).toHaveBeenCalledWith(
+		expect(mockBirthOrder).toHaveBeenCalledWith(
 			expect.objectContaining({
-				operation: 'create',
 				payload: expect.objectContaining({
 					meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
 				}),
@@ -790,77 +755,27 @@ describe('useAddItemToOrder', () => {
 		);
 	});
 
-	it('keeps the orphaned skeleton and its lines when the retried create fails again', async () => {
+	it('does not select the order when birth fails', async () => {
 		order.isNew = true;
-		const skeletonPayload = { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] };
-		const patchedRemove = jest.fn().mockResolvedValue(undefined);
-		const skeleton = {
-			local: { dirty: false, pendingMutationIds: [] },
-			sync: { revision: '' },
-			payload: skeletonPayload,
-			toMutableJSON: () => ({ payload: skeletonPayload }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
-		mockFindEngineResident.mockResolvedValue(skeleton);
-		mockPatchEngineResident.mockImplementation(
-			async ({ changes }: { changes: Record<string, unknown> }) => {
-				const payload = { ...skeletonPayload, ...changes };
-				return { payload, toMutableJSON: () => ({ payload }), remove: patchedRemove };
-			}
-		);
-		mockWrite.mockRejectedValue(new Error('write: scope moved during enqueue'));
-
+		mockBirthOrder.mockRejectedValue(new Error('write: scope moved during enqueue'));
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
-			await expect(
-				result.current.addItemToOrder('line_items', {
-					product_id: 2,
-					quantity: 1,
-					meta_data: [],
-				} as never)
-			).rejects.toThrow('scope moved during enqueue');
+			await expect(result.current.addItemToOrder('line_items', { product_id: 1 })).rejects.toThrow(
+				'scope moved during enqueue'
+			);
 		});
-
-		// Rolling this one back would discard lines the cashier already scanned.
-		expect(skeleton.remove).not.toHaveBeenCalled();
-		expect(patchedRemove).not.toHaveBeenCalled();
-	});
-
-	it('rolls back the skeleton resident when the create fails to enqueue', async () => {
-		order.isNew = true;
-		const payload = { uuid: 'order-uuid' };
-		const remove = jest.fn().mockResolvedValue(undefined);
-		mockInsertEngineResident.mockResolvedValue({
-			payload,
-			toMutableJSON: () => ({ payload }),
-			remove,
-		});
-		mockWrite.mockRejectedValue(new Error('write: scope moved during enqueue'));
-
-		const { result } = renderHook(() => useAddItemToOrder());
-		await act(async () => {
-			await expect(
-				result.current.addItemToOrder('line_items', {
-					product_id: 1,
-					meta_data: [],
-				} as never)
-			).rejects.toThrow('scope moved during enqueue');
-		});
-
-		// Left behind, the skeleton would look to the next scan like a created order.
-		expect(remove).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	});
 
 	it('merges a repeat scan that lands while the order is still being created', async () => {
 		order.isNew = true;
-		mockInsertEngineResident.mockImplementation(
+		mockBirthOrder.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				payload,
 				toMutableJSON: () => ({ payload }),
 			})
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+
 		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
 			changes: data,
 			document: order,
@@ -892,7 +807,7 @@ describe('useAddItemToOrder', () => {
 		// The second scan queues behind the create and lands on the order the first
 		// one just made — no resident lookup involved. Its caller still held the
 		// temporary order, so the merge has to happen here too.
-		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockBirthOrder).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		const patched = mockLocalPatch.mock.calls[0][0].data.line_items;
 		expect(patched).toHaveLength(1);
@@ -917,14 +832,13 @@ describe('useAddItemToOrder', () => {
 			toMutableJSON: () => ({ payload: skeletonPayload }),
 			remove: jest.fn().mockResolvedValue(undefined),
 		};
-		mockFindEngineResident.mockResolvedValue(skeleton);
-		mockPatchEngineResident.mockImplementation(
-			async ({ changes }: { changes: Record<string, unknown> }) => {
+		mockFindBirthState.mockResolvedValue({ orphan: skeleton });
+		mockBirthOrder.mockImplementation(
+			async ({ payload: changes }: { payload: Record<string, unknown> }) => {
 				const payload = { ...skeletonPayload, ...changes };
 				return { payload, toMutableJSON: () => ({ payload }) };
 			}
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
 
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
@@ -940,12 +854,11 @@ describe('useAddItemToOrder', () => {
 
 		// The retried create carries ONE line at quantity 2 — the skeleton's own
 		// line, not a duplicate of it.
-		const retried = mockPatchEngineResident.mock.calls[0][0].changes.line_items;
+		const retried = mockBirthOrder.mock.calls[0][0].payload.line_items;
 		expect(retried).toHaveLength(1);
 		expect(retried[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
-		expect(mockWrite).toHaveBeenCalledWith(
+		expect(mockBirthOrder).toHaveBeenCalledWith(
 			expect.objectContaining({
-				operation: 'create',
 				payload: expect.objectContaining({
 					line_items: [expect.objectContaining({ quantity: 2 })],
 				}),

@@ -12,8 +12,8 @@ import { OPEN_ORDERS_SORT, openOrdersSelector } from '@wcpos/query';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import type { QueryHandle } from '@wcpos/query';
+import { useQuerySnapshot } from '@wcpos/query/query-state';
 
-import { useQuerySnapshot } from '../../../../../query/query-handles';
 import { useOpenOrdersHandle } from './use-open-orders-handle';
 
 import type { RxJsonSchema } from 'rxdb';
@@ -58,8 +58,8 @@ const engine = {
 };
 const manager = { engine };
 
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
+jest.mock('../../../../../../../query/src/provider', () => ({
+	...jest.requireActual('../../../../../../../query/src/provider'),
 	useQueryRuntime: () => manager,
 }));
 

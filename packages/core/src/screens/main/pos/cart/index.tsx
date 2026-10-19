@@ -11,11 +11,11 @@ import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
 import { Text } from '@wcpos/components/text';
+import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useRegisterSurface } from '../../../../extensions/commands/use-register-surface';
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useEngineRecord } from '../../hooks/use-engine-document';
 import { StilledCart } from './stilled-cart';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';

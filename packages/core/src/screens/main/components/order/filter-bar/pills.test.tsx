@@ -3,7 +3,8 @@
  */
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
 import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';

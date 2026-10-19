@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const source = fs.readFileSync(path.join(__dirname, 'index.tsx'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, 'calendar-impl.tsx'), 'utf8');
 
 it('uses the controls-tier skin', () => {
 	expect(source).toContain('--text-base');

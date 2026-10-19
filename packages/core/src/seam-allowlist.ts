@@ -1359,10 +1359,109 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/tender/remembered-readers.ts :: record mutator :: useRememberedReaders :: storeDB .addState :: 1',
 	"screens/main/pos/checkout/tender/remembered-readers.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 	"screens/main/pos/checkout/tender/remembered-readers.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (f4): the void command lives in @wcpos/query/mutations.
+	'screens/main/pos/cart/void-order.ts :: resident helper write ::  :: insertEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: resident helper write ::  :: patchAndEnqueueEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: resident helper write :: restoreVoidedOrder :: insertEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: resident helper write :: restoreVoidedOrder :: patchEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: resident helper write :: voidOrder>cancelOnStore :: patchAndEnqueueEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: restoreVoidedOrder :: manager.engine.write :: 1',
+	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: restoreVoidedOrder :: manager.engine.write :: 2',
+	'screens/main/pos/cart/void-order.ts :: write plane outside a command module :: voidOrder>settleRefusedDelete :: manager.engine.resolveConflict :: 1',
+	// ADR 0033 per-screen (f5): order birth is a command in @wcpos/query/mutations.
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: record mutator :: useAddItemToOrder :: resident.remove :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: insertEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: insertEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: patchEngineResident :: 1',
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 2",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 3",
+	"screens/main/pos/hooks/use-add-item-to-order.ts :: storage import ::  :: from '@wcpos/database' :: 4",
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: write plane outside a command module :: useAddItemToOrder :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (f6): the payment mirror, the offline-authorization read and the ledger command own the five payment flows' writes.
+	"screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: raw query construction :: useTerminalPaymentsService :: collection .find({ selector: { 'payload.meta_data': { $elemMatch: { key: '_wcpos_payments', 'value.payments': { $elemMatch: { capture_mode: 'device', recorded_offline: true, status: 'authorized', }, }, }, }, }, }) :: 1",
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write :: useTerminalPaymentsService :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: resident helper write :: useTerminalPaymentsService :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: storage token :: useTerminalPaymentsService :: manager.engine.db$ :: 1',
+	'screens/main/pos/checkout/payments/use-gateway-payment.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-gateway-payment.ts :: resident helper write :: useGatewayPayment :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write :: useRecordManualPayment :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-record-manual-payment.ts :: resident helper write :: useRecordManualPayment :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write ::  :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: patchEngineResident :: 1',
+	'screens/main/pos/checkout/payments/use-void-payments.ts :: resident helper write :: useVoidPayments :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (f7): the customer link bridge reads named reads and stamps through a command.
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: orders.find({ selector: { uuid: { $in: orderUuids } } }) :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: record collection back-reference :: NewCustomerLinkBridge :: event.collection :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: record collection back-reference :: NewCustomerLinkBridge :: event.collection :: 2',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: resident helper write :: NewCustomerLinkBridge :: useLocalMutation :: 1',
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: runtime.engine.db$ :: 1',
+	// ADR 0033 per-screen (f8): the templates cache sync is owned by @wcpos/query/store-local.
+	'screens/main/receipt/hooks/use-templates-sync.ts :: raw query construction :: syncTemplates :: collection .find({ selector: { type, closure_store_id: storeId ?? 0 } }) :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record collection back-reference :: useTemplatesSync :: settled.collection :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record collection back-reference :: useTemplatesSync>settle :: previous.collection :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record mutator :: syncTemplates :: collection.bulkUpsert :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: record mutator :: syncTemplates :: row.remove :: 1',
+	"screens/main/receipt/hooks/use-templates-sync.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB :: 1',
+	'screens/main/receipt/hooks/use-templates-sync.ts :: storage token :: useTemplatesSync :: runtime.localDB.collections :: 1',
+	// ADR 0033 per-screen (f9): the stock and variation-parent refresh demands are named reads in @wcpos/query.
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 1',
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 2',
+	'screens/main/hooks/use-stock-adjustment.ts :: record collection back-reference :: stockAdjustment :: request.collection :: 3',
+	'screens/main/hooks/use-stock-adjustment.ts :: require plane outside a named read :: stockAdjustment :: runtime.engine.require :: 1',
+	"screens/main/hooks/use-stock-adjustment.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/hooks/use-variation-parent-refresh.ts :: engine handle aliased :: useVariationParentRefresh :: engine = runtime.engine :: 1',
+	"screens/main/hooks/use-variation-parent-refresh.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/use-variation-parent-refresh.ts :: raw query construction :: parentOfAcknowledgedVariation :: variations?.findOne :: 1',
+	'screens/main/hooks/use-variation-parent-refresh.ts :: record collection back-reference :: useVariationParentRefresh :: event.collection :: 1',
+	'screens/main/hooks/use-variation-parent-refresh.ts :: require plane outside a named read :: useVariationParentRefresh>refresh :: engine.require :: 1',
+	// ADR 0033 per-screen (f10): the single-record readers are owned by @wcpos/query/record-readers.
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecord :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecordByWooId :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-document.ts :: engine handle aliased :: useEngineRecordsByWooId :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/hooks/use-engine-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecord :: collection.findOne :: 1',
+	'screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordByWooId :: collection.findOne :: 1',
+	"screens/main/hooks/use-engine-document.ts :: raw query construction :: useEngineRecordsByWooId :: collection .find({ selector: { [collectionName === 'refunds' ? 'remoteId' : 'remoteKey']: { $in: stableRemoteIds }, }, }) :: 1",
+	// ADR 0033 per-screen (f11): the query handles, the translator and the scope key are owned by @wcpos/query/query-state.
+	'query/query-handles.ts :: engine handle aliased :: useCollectionQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/query-handles.ts :: engine handle aliased :: useLogsQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/query-handles.ts :: engine handle aliased :: useProductsQueryHandle :: { engine } = useQueryRuntime() :: 1',
+	"query/query-handles.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'query/query-handles.ts :: raw change stream :: recheckedRead$ :: collection.eventBulks$ :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireDemandQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: acquireEngineQueryHandle :: compiled.collection :: 1',
+	'query/query-handles.ts :: record collection back-reference :: demandPlanFor :: compiled.collection :: 1',
+	"query/query-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
+	'query/query-handles.ts :: storage token :: acquireEngineQueryHandle :: database?.collections :: 1',
+	"query/query-state-translator.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"query/query-state-translator.ts :: query escape hatch ::  :: from '@wcpos/query/collection-map' :: 1",
+	'query/scope-key.ts :: engine handle aliased :: useScopeKey :: { engine } = useQueryRuntime() :: 1',
+	'query/terms-handles.ts :: engine handle aliased :: useAllTermsHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/terms-handles.ts :: engine handle aliased :: useProductsCarryingTermsHandle :: { engine } = useQueryRuntime() :: 1',
+	"query/terms-handles.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'query/terms-handles.ts :: record collection back-reference :: readFromActiveScope :: result.hits[0]?.record.collection :: 1',
+	'query/terms-handles.ts :: record collection back-reference :: useAllTermsHandle :: refreshFor.collection :: 1',
+	'query/terms-handles.ts :: record collection back-reference :: useProductsCarryingTermsHandle :: query.collection :: 1',
+	"query/terms-handles.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 433;
+export const SEAM_RETIRED_FLOOR = 524;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b6571b82243543c7f7db8b907b9d130782007ab571a740eb1107558090df8eb7';
+	'1ee94079c086dbb679fcf112d6e21bfbc68e1c5d3b65ba81840ae1142b4fb5a0';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1386,7 +1485,18 @@ export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door :: useAddItemToOrder>run :: findEngineResident :: 1',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 0;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
+	// ADR 0033 per-screen (f4): the void command lives in @wcpos/query/mutations.
+	'screens/main/pos/cart/void-order.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/cart/void-order.ts :: generic resident door :: restoreVoidedOrder :: findEngineResident :: 1',
+	// ADR 0033 per-screen (f5): order birth is a command in @wcpos/query/mutations.
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: generic resident door :: useAddItemToOrder>run :: findEngineResident :: 1',
+	// ADR 0033 per-screen (f7): the customer link bridge reads named reads and stamps through a command.
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
+];
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 7;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+	'0448a89f88735b0cdc56343147ab39848896a2ba558880b831d22c079baeea84';

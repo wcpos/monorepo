@@ -2,7 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { filter } from 'rxjs';
-import { format as formatDate, subDays } from 'date-fns';
+import { format as formatDate } from 'date-fns/format';
+import { subDays } from 'date-fns/subDays';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableState } from 'observable-hooks';
 

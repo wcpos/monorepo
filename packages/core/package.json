@@ -112,6 +112,7 @@
 		"@wcpos/order-math": "workspace:*",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
+		"@wcpos/receipt-renderer": "workspace:*",
 		"@wcpos/scanner": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",

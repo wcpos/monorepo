@@ -12,7 +12,8 @@ import {
 } from '@wcpos/order-math';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -24,11 +25,8 @@ import {
 	startTerminalPaymentsService,
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
-import {
-	findEngineResident,
-	patchEngineResident,
-	useLocalMutation,
-} from '../../../../hooks/mutations/use-local-mutation';
+import { findEngineResident } from '../../../../hooks/mutations/use-local-mutation';
+import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
@@ -41,17 +39,17 @@ export function useTerminalPaymentsService(): void {
 	const actor = ctx.actor;
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
+	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	// The service outlives a cashier change — its effect keys on store, site and
 	// manager only, so an in-flight leg is never torn down by a re-login — and the
 	// action row must name whoever is at the till when the money lands, not
 	// whoever started the service. So the actor is read live, like the rest.
-	const latest = React.useRef({ localPatch, methods, online, actor, ctx });
+	const latest = React.useRef({ recordLedger, stampCompletion, methods, online, actor, ctx });
 	React.useLayoutEffect(() => {
-		latest.current = { localPatch, methods, online, actor, ctx };
-	}, [localPatch, methods, online, actor, ctx]);
+		latest.current = { recordLedger, stampCompletion, methods, online, actor, ctx };
+	}, [recordLedger, stampCompletion, methods, online, actor, ctx]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -99,14 +97,11 @@ export function useTerminalPaymentsService(): void {
 					dp: dp(),
 				});
 				const meta_data = withLedger(meta, rows);
-				const written = await latest.current.localPatch({
-					document: resident,
-					data: {
-						meta_data: isCompletingStatus(summary.status)
-							? await completionMetaFor(latest.current.ctx, meta_data, {})
-							: meta_data,
-						status: summary.status,
-					},
+				const written = await latest.current.recordLedger(resident, {
+					meta_data: isCompletingStatus(summary.status)
+						? await completionMetaFor(latest.current.ctx, meta_data, {})
+						: meta_data,
+					status: summary.status,
 				});
 				if (!written) throw new Error('Offline payment could not be saved');
 				return {
@@ -125,32 +120,25 @@ export function useTerminalPaymentsService(): void {
 						resident.payload) as EngineRecord<'orders'>['payload'];
 					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
-					await patchEngineResident({
-						manager,
-						collection: 'orders',
-						recordId: orderUuid,
+					await mirrorServerOrder(manager, orderUuid, {
 						// Only the summary fields that are order fields: `paid` and `balance` are
 						// derived from the ledger on read, and an unknown key fails the schema.
-						changes: {
-							...(order
-								? {
-										status: order.status,
-										...(payment.capture_mode === 'device' ? { total: order.total } : {}),
-										payment_method: order.payment_method,
-										payment_method_title: order.payment_method_title,
-									}
-								: {}),
-							meta_data,
-						},
+						...(order
+							? {
+									status: order.status,
+									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
+									payment_method: order.payment_method,
+									payment_method_title: order.payment_method_title,
+								}
+							: {}),
+						meta_data,
 					});
 					mirrored = true;
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
-						const patched = await latest.current.localPatch({
-							document: resident,
-							data: {
-								meta_data: await completionMetaFor(latest.current.ctx, meta_data, {}),
-							},
-						});
+						const patched = await latest.current.stampCompletion(
+							resident,
+							await completionMetaFor(latest.current.ctx, meta_data, {})
+						);
 						if (!patched) throw new Error('provenance_save_failed');
 					}
 				} catch (error) {
@@ -187,55 +175,32 @@ export function useTerminalPaymentsService(): void {
 		});
 		// Offline-paid orders can be completed and absent from open tabs. Recover their
 		// locally queued, typed ledgers directly; no remote order-history demand is added.
-		let ledgerSubscription: { unsubscribe(): void } | undefined;
-		const stopWatching = manager.engine.db$((database) => {
-			ledgerSubscription?.unsubscribe();
-			const collection = engineCollection(database, 'orders');
-			if (stopped || !collection) return;
-			ledgerSubscription = collection
-				.find({
-					selector: {
-						'payload.meta_data': {
-							$elemMatch: {
-								key: '_wcpos_payments',
-								'value.payments': {
-									$elemMatch: {
-										capture_mode: 'device',
-										recorded_offline: true,
-										status: 'authorized',
-									},
-								},
-							},
-						},
-					},
-				})
-				.$.subscribe({
-					next: (documents) => {
-						if (stopped) return;
-						for (const document of documents)
-							for (const row of readLedger(document.payload.meta_data)) {
-								if (
-									row.capture_mode === 'device' &&
-									row.recorded_offline &&
-									row.status === 'authorized'
-								)
-									service.trackOffline({
-										dp: dp(),
-										orderUuid: document.uuid,
-										orderId: document.payload.id ?? 0,
-										orderNumber: document.payload.number ?? '',
-										row,
-									});
-							}
-						void service.flushOffline();
-					},
-					error: (error) => {
-						getLogger(['wcpos', 'payments']).error('Offline reader settlement recovery failed', {
-							code: ERROR_CODES.PAYMENT_UNEXPECTED,
-							context: { error: String(error) },
-						});
-					},
+		const ledgerSubscription = observeOfflineDeviceAuthorizations(manager.engine).subscribe({
+			next: (documents) => {
+				if (stopped) return;
+				for (const document of documents)
+					for (const row of readLedger(document.payload.meta_data)) {
+						if (
+							row.capture_mode === 'device' &&
+							row.recorded_offline &&
+							row.status === 'authorized'
+						)
+							service.trackOffline({
+								dp: dp(),
+								orderUuid: document.uuid,
+								orderId: document.payload.id ?? 0,
+								orderNumber: document.payload.number ?? '',
+								row,
+							});
+					}
+				void service.flushOffline();
+			},
+			error: (error) => {
+				getLogger(['wcpos', 'payments']).error('Offline reader settlement recovery failed', {
+					code: ERROR_CODES.PAYMENT_UNEXPECTED,
+					context: { error: String(error) },
 				});
+			},
 		});
 		const unsubscribe = subscribeCheckoutMode(() => {
 			void service.flushOffline();
@@ -243,8 +208,7 @@ export function useTerminalPaymentsService(): void {
 		return () => {
 			unsubscribe();
 			stopped = true;
-			stopWatching();
-			ledgerSubscription?.unsubscribe();
+			ledgerSubscription.unsubscribe();
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};

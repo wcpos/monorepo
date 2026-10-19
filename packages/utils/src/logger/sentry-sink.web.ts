@@ -1,5 +1,3 @@
-import * as Sentry from '@sentry/browser';
-
 import { AppInfo } from '../app-info';
 import {
 	buildCaptureOptions,
@@ -14,6 +12,8 @@ export type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
 let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
+let sdk: typeof import('@sentry/browser') | null = null;
+let loading: Promise<void> | null = null;
 const pendingCaptures = createPendingCaptures();
 
 function getInstallId(): string | undefined {
@@ -40,6 +40,10 @@ function getInstallId(): string | undefined {
 }
 
 function send(input: SentryCaptureInput): void {
+	if (!sdk) {
+		pendingCaptures.hold(input);
+		return;
+	}
 	try {
 		const error =
 			input.context !== null && typeof input.context === 'object' && 'error' in input.context
@@ -47,9 +51,9 @@ function send(input: SentryCaptureInput): void {
 				: undefined;
 		const options = buildCaptureOptions(input);
 		if (error instanceof Error) {
-			Sentry.captureException(error, options);
+			sdk.captureException(error, options);
 		} else {
-			Sentry.captureMessage(input.message, options);
+			sdk.captureMessage(input.message, options);
 		}
 	} catch {
 		// Diagnostics must never interfere with the logger.
@@ -58,9 +62,10 @@ function send(input: SentryCaptureInput): void {
 
 export function captureLoggedError(input: SentryCaptureInput): void {
 	if (!isInitialized) {
-		// Consent not known yet (boot, before the store document is read): hold
-		// it. Decided-but-uninitialised (denied, or a development build) drops it.
-		if (telemetryConsent === 'undecided') pendingCaptures.hold(input);
+		// Hold boot errors and captures waiting for the consented SDK load.
+		if (telemetryConsent === 'undecided' || (telemetryConsent === 'allowed' && loading)) {
+			pendingCaptures.hold(input);
+		}
 		return;
 	}
 	send(input);
@@ -88,7 +93,7 @@ export const PRINTER_OUTCOME_FIELDS = [
 export function capturePrinterOutcome(
 	context: Record<string, string | number | boolean | undefined>
 ): void {
-	if (!isInitialized) return;
+	if (!isInitialized || !sdk) return;
 	try {
 		const safe = Object.fromEntries(
 			PRINTER_OUTCOME_FIELDS.filter((key) => context[key] !== undefined).map((key) => [
@@ -96,7 +101,7 @@ export function capturePrinterOutcome(
 				String(context[key]),
 			])
 		);
-		Sentry.captureMessage('Printer setup outcome', {
+		sdk.captureMessage('Printer setup outcome', {
 			level: 'info',
 			tags: safe,
 			extra: { context: safe },
@@ -119,27 +124,41 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			pendingCaptures.drain();
 			return;
 		}
-		Sentry.init({
-			dsn: SENTRY_DSN,
-			release: `wcpos-app@${AppInfo.version}`,
-			environment: AppInfo.platform,
-			sendDefaultPii: false,
-			integrations: (integrations) => integrations.filter(({ name }) => name !== 'BrowserSession'),
-			sampleRate: 1,
-			beforeSend: prepareEvent,
-			ignoreErrors: [/ResizeObserver loop/],
-		});
-		const installId = getInstallId();
-		if (installId) Sentry.setUser({ id: installId });
-		isInitialized = true;
-		for (const input of pendingCaptures.drain()) send(input);
+		if (loading) return;
+		loading = import('@sentry/browser')
+			.then((m) => {
+				sdk = m;
+				loading = null;
+				// Consent withdrawn during the load means the SDK is never initialised.
+				if (telemetryConsent !== 'allowed') return;
+				sdk.init({
+					dsn: SENTRY_DSN,
+					release: `wcpos-app@${AppInfo.version}`,
+					environment: AppInfo.platform,
+					sendDefaultPii: false,
+					integrations: (integrations) =>
+						integrations.filter(({ name }) => name !== 'BrowserSession'),
+					sampleRate: 1,
+					beforeSend: prepareEvent,
+					ignoreErrors: [/ResizeObserver loop/],
+				});
+				const installId = getInstallId();
+				if (installId) sdk.setUser({ id: installId });
+				isInitialized = true;
+				for (const input of pendingCaptures.drain()) send(input);
+			})
+			.catch(() => {
+				// Keep failed loads settled: no retries, and held captures stay local.
+			});
 		return;
 	}
 
-	if (isInitialized) {
-		void Sentry.close();
+	if (sdk && isInitialized) {
+		void sdk.close();
 		isInitialized = false;
 	}
+	// Captures held for a load whose consent has since left must not reach a later consent.
+	if (loading) pendingCaptures.drain();
 	// Denied: what was held before the answer never leaves the device.
 	if (consent === 'denied') pendingCaptures.drain();
 

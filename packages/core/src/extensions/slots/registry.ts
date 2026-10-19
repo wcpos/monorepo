@@ -1,6 +1,6 @@
 import type * as React from 'react';
 
-import type { FiltersOf } from '../../query/query-state-types';
+import type { FiltersOf } from '@wcpos/query/query-state';
 
 /**
  * The contract version every descriptor is stamped with. It is a single number, not a

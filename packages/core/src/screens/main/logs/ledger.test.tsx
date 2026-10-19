@@ -55,8 +55,8 @@ const logsHandle = () =>
 		result: { hits: [{ record: { toJSON: () => row } }, { record: { toJSON: () => quietRow } }] },
 	});
 jest.mock('../../../query', () => {
-	const handles = jest.requireActual<typeof import('../../../query/query-handles')>(
-		'../../../query/query-handles'
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	);
 	return { useDrawnHandle: handles.useDrawnHandle, useQuerySnapshot: handles.useQuerySnapshot };
 });

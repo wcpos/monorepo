@@ -68,8 +68,8 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 jest.mock('../../../query', () => {
 	// The real readers: what this file pins is how the list draws the handle.
-	const handles = jest.requireActual<typeof import('../../../query/query-handles')>(
-		'../../../query/query-handles'
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	);
 	return {
 		useSearchSelect: jest.fn(),

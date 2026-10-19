@@ -13,6 +13,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Actions } from './cells/actions';
 import { Active } from './cells/active';
@@ -48,7 +49,6 @@ import {
 } from '../../../query';
 
 import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
-import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CouponRow = { record: EngineRecord<'coupons'> };
 

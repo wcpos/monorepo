@@ -13,9 +13,7 @@ import {
 } from '@wcpos/query';
 import { mintRemoteId } from '@wcpos/sync-core';
 import type { RxdbSyncEngine, WooRefundPayload } from '@wcpos/sync-engine';
-
-import { canonicalQueryKey } from '../../../../query/query-handles';
-import { useScopeKey } from '../../../../query/scope-key';
+import { canonicalQueryKey, useScopeKey } from '@wcpos/query/query-state';
 
 import type { RxCollection } from 'rxdb';
 

@@ -245,12 +245,19 @@ export function DialogBody({ className, ...props }: ScrollViewProps): React.JSX.
 		/>
 	);
 }
+/**
+ * Stacked on a phone (the primary on top: `flex-col-reverse`), a right-aligned row otherwise. The
+ * fold is the app's one layout boundary (`useIsPhone`), not `sm`, so a 640–767 window or a
+ * landscape phone stacks with the rest of its phone layout.
+ */
 export function DialogFooter({ className, ...props }: ViewProps): React.JSX.Element {
 	const { presentation } = useOverlay();
+	const phone = useIsPhone();
 	return (
 		<View
 			className={cn(
-				'flex max-w-full flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
+				'flex max-w-full gap-2 px-4',
+				phone ? 'flex-col-reverse' : 'flex-row items-center justify-end',
 				presentation !== 'center' && 'border-border border-t pt-4',
 				className
 			)}

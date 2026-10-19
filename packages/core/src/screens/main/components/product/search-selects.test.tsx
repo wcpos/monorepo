@@ -38,8 +38,8 @@ const mockUseSearchSelect = jest.fn((collection: string) => ({
 
 jest.mock('../../../../query', () => {
 	// The real readers: the lists draw the handle the way the screens do.
-	const handles = jest.requireActual<typeof import('../../../../query/query-handles')>(
-		'../../../../query/query-handles'
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	);
 	return {
 		useSearchSelect: (collection: string) => mockUseSearchSelect(collection),

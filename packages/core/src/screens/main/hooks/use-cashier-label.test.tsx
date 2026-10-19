@@ -34,8 +34,8 @@ const engine = {
 };
 const manager = { engine };
 
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
+jest.mock('../../../../../query/src/provider', () => ({
+	...jest.requireActual('../../../../../query/src/provider'),
 	useQueryRuntime: () => manager,
 }));
 

@@ -65,13 +65,25 @@ test('--check ignores translation calls inside source comments', () => {
 	assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
-test('--check sees the footer count key as a literal call', () => {
-	const footerPaths = [
-		'packages/core/src/screens/main/components/data-table/footer.tsx',
-		'packages/core/src/screens/main/tax-rates/footer.tsx',
+test('--check sees the footer count keys as literal calls', () => {
+	// The data-table footer keeps the one "Showing…" phrasing (the `N+` at-least variant was
+	// retired so every locale converges on it). The tax-rates footer prints its own count
+	// strings — the store total and synced-of-total — from `rate-rows.ts`. A plural base is
+	// reported by its base key (the checker looks the `_one`/`_other` forms up from it). The
+	// trailing quote anchors each to the whole key, so `common.showing_of_*` or
+	// `tax_rates.count_*` cannot satisfy one by prefix.
+	const footers = [
+		{
+			path: 'packages/core/src/screens/main/components/data-table/footer.tsx',
+			keys: [/common\.showing_of"/],
+		},
+		{
+			path: 'packages/core/src/screens/main/tax-rates/rate-rows.ts',
+			keys: [/tax_rates\.count_synced"/, /tax_rates\.count"/],
+		},
 	];
 
-	for (const footerPath of footerPaths) {
+	for (const { path: footerPath, keys } of footers) {
 		const root = mkdtempSync(join(tmpdir(), 'wcpos-translations-footer-'));
 
 		writeFixtureFile(
@@ -91,11 +103,7 @@ test('--check sees the footer count key as a literal call', () => {
 		const output = `${result.stdout}\n${result.stderr}`;
 
 		assert.notEqual(result.status, 0, `${footerPath}\n${output}`);
-		// Both footers render exactly one count string: the `N+` at-least variant was
-		// retired so every locale converges on one "Showing…" phrasing. The trailing
-		// quote keeps this anchored to the whole key, so a future `common.showing_of_*`
-		// cannot satisfy it by prefix.
-		assert.match(output, /common\.showing_of"/, footerPath);
+		for (const key of keys) assert.match(output, key, footerPath);
 	}
 });
 

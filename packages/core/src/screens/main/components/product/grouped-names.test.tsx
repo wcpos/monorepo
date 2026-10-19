@@ -27,8 +27,8 @@ jest.mock('../../../../query', () => ({
 	useCollectionQueryHandle: (collection: unknown, state: unknown, options: unknown) =>
 		mockUseCollectionQueryHandle(collection, state, options),
 	// The real reader: the list reads the handle's snapshot the way the screens do.
-	useQuerySnapshot: jest.requireActual<typeof import('../../../../query/query-handles')>(
-		'../../../../query/query-handles'
+	useQuerySnapshot: jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	).useQuerySnapshot,
 }));
 jest.mock('@wcpos/components/suspense', () => ({

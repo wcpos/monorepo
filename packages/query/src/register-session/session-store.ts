@@ -1,5 +1,6 @@
 import { tz } from '@date-fns/tz';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { POS_META_KEYS } from '@wcpos/sync-core';

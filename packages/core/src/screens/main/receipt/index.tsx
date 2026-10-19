@@ -1,8 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 
+import { useEngineRecord } from '@wcpos/query/record-readers';
+
 import { Receipt } from './receipt';
 import { usePanelSide } from '../pos/contexts/overlay-side';
-import { useEngineRecord } from '../hooks/use-engine-document';
 
 export function ReceiptScreen({ side = 'right' }: { side?: 'left' | 'right' }) {
 	const { orderId, document } = useLocalSearchParams<{ orderId: string; document?: string }>();

@@ -18,8 +18,10 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'@wcpos/core/screens/main/orders',
-	() => ({ OrdersScreen: () => <div data-testid="new-orders" /> }),
+	'@wcpos/core/screens/main/rest/lazy',
+	() => ({
+		loadRest: () => Promise.resolve({ OrdersScreen: () => <div data-testid="new-orders" /> }),
+	}),
 	{ virtual: true }
 );
 jest.mock('expo-router', () => ({
@@ -29,9 +31,9 @@ jest.mock('expo-router', () => ({
 	),
 }));
 // The screen guards its own body (the bar stays reachable on Free), so the route no longer wraps it.
-it('switches the index to the v2 orders screen, unwrapped', () => {
+it('switches the index to the v2 orders screen, unwrapped', async () => {
 	render(<OrdersRoute />);
-	expect(screen.getByTestId('new-orders')).toBeTruthy();
+	expect(await screen.findByTestId('new-orders')).toBeTruthy();
 	expect(screen.queryByTestId('guard-orders')).toBeNull();
 });
 it('redirects legacy detail links to the list selection', () => {

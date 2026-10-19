@@ -29,6 +29,8 @@ export const thermalPreviewSanitizeOptions = {
 		'stroke-width',
 		'data-barcode-kind',
 		'data-barcode-value',
+		'data-barcode-pending',
+		'data-barcode-error',
 	],
 } satisfies SanitizeHtmlOptions;
 

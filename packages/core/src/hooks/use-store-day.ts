@@ -1,7 +1,16 @@
 import * as React from 'react';
 
 import { tz, TZDate } from '@date-fns/tz';
-import * as dates from 'date-fns';
+import { add } from 'date-fns/add';
+import { endOfDay } from 'date-fns/endOfDay';
+import { endOfMonth } from 'date-fns/endOfMonth';
+import { endOfWeek } from 'date-fns/endOfWeek';
+import { startOfDay } from 'date-fns/startOfDay';
+import { startOfMonth } from 'date-fns/startOfMonth';
+import { startOfWeek } from 'date-fns/startOfWeek';
+import { subDays } from 'date-fns/subDays';
+import { subMonths } from 'date-fns/subMonths';
+import { subWeeks } from 'date-fns/subWeeks';
 import { useObservableState } from 'observable-hooks';
 import { filter, of } from 'rxjs';
 import get from 'lodash/get';
@@ -19,6 +28,21 @@ import { useAppState } from '../contexts/app-state';
 import { resolveStoreTimezone } from '../screens/main/receipt/utils/resolve-store-timezone';
 import { DEVICE_ZONE, inZone, zoneOptions } from './store-zone';
 import { convertLocalDateToUTCString } from './use-local-date';
+
+import type { Day } from 'date-fns';
+
+const dates = {
+	add,
+	endOfDay,
+	endOfMonth,
+	endOfWeek,
+	startOfDay,
+	startOfMonth,
+	startOfWeek,
+	subDays,
+	subMonths,
+	subWeeks,
+};
 
 type CalendarDate = { year: number; month: number; day: number };
 type DayRange = { from: Date; to: Date };
@@ -89,7 +113,7 @@ export function storeDayBounds(day: CalendarDate, zone: string): DayRange {
 	};
 }
 
-export function storeDayPresets(now: Date, zone: string, weekStartsOn: dates.Day = 1) {
+export function storeDayPresets(now: Date, zone: string, weekStartsOn: Day = 1) {
 	const options = { ...zoneOptions(zone), weekStartsOn };
 	const bounds = (from: Date, to = from): DayRange => ({
 		from: storeDayBounds(storeToday(from, zone), zone).from,

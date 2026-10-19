@@ -3,7 +3,8 @@ import { ScrollView, View } from 'react-native';
 
 import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 import { useObservableState } from 'observable-hooks';
 
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
@@ -11,6 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
@@ -42,7 +44,6 @@ import {
 import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
-import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 export type CustomersStackParamList = {
 	Customers: undefined;

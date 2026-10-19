@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
 
+import { useEngineRecord } from '@wcpos/query/record-readers';
+
 import { EditVariationModal } from './modal';
-import { useEngineRecord } from '../../../hooks/use-engine-document';
 
 export function EditVariationScreen() {
 	const { variationId } = useLocalSearchParams<{ variationId: string }>();

@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import Mustache from 'mustache';
 
 import {
 	analyzeThermalTemplate,
 	encodeThermalTemplate,
+	loadBarcodeLibrary,
 	parseXml,
 	renderEscpos,
 	renderHtml,
@@ -344,6 +345,8 @@ function opaqueBlackImageData(width: number, height: number): ImageData {
 }
 
 describe('@wcpos/receipt-renderer exports', () => {
+	beforeAll(() => loadBarcodeLibrary());
+
 	it('renders sanitized logicless HTML with Mustache data', () => {
 		const html = renderLogiclessTemplate(
 			'<main><h1>{{store.name}}</h1><img src="x" onerror="alert(1)"><script>alert(1)</script></main>',

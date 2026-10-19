@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { filter } from 'rxjs';
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import {

@@ -23,8 +23,8 @@ jest.mock('../../../../../query', () => ({
 	useAllTermsHandle: jest.fn(),
 	useProductsCarryingTermsHandle: jest.fn(),
 	// The real reader: the hook reads each handle's snapshot as the stage does.
-	useQueryHandleFields: jest.requireActual<typeof import('../../../../../query/query-handles')>(
-		'../../../../../query/query-handles'
+	useQueryHandleFields: jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
 	).useQueryHandleFields,
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: jest.fn() }));

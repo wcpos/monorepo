@@ -13,6 +13,7 @@ import { withUniwind } from 'uniwind';
 
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
+import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { OptionSelect } from '../select';
 import { TextClassContext } from '../text';
@@ -25,6 +26,11 @@ const Tabs = TabsPrimitive.Root;
 
 type TabsListProps = TabsPrimitive.ListProps & {
 	asSelect?: boolean;
+	/**
+	 * With `asSelect`, the phone Select's trigger testID (each option takes
+	 * `${testID}-option-${value}`); otherwise the list's.
+	 */
+	testID?: string;
 };
 
 type TabsTriggerProps = TabsPrimitive.TriggerProps & {
@@ -45,13 +51,24 @@ function getTabsSelectOptions(children: React.ReactNode) {
 		});
 }
 
-function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListProps) {
+/**
+ * On a phone, the tab strip is a Select; otherwise the plain list. The fold is the app's one
+ * layout boundary (`useIsPhone`), not a CSS breakpoint, so a screen that also folds there never
+ * gets its phone body under a desktop strip, and only one of the two is rendered.
+ */
+function TabsListAsSelect({
+	className,
+	children,
+	testID,
+	...props
+}: Omit<TabsListProps, 'asSelect'>) {
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
 	const options = React.useMemo(() => getTabsSelectOptions(children), [children]);
+	const isPhone = useIsPhone();
 
-	return (
-		<>
-			<StyledView className="w-full sm:hidden">
+	if (isPhone) {
+		return (
+			<StyledView className="w-full">
 				<OptionSelect
 					options={options}
 					value={value}
@@ -62,19 +79,21 @@ function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListP
 					}}
 					placeholder={options[0]?.label ?? ''}
 					triggerClassName="w-full"
+					triggerTestID={testID}
 					matchWidth
 				/>
 			</StyledView>
-			<TabsPrimitive.List
-				className={cn(
-					'border-border hidden flex-row items-end gap-1 border-b sm:inline-flex',
-					className
-				)}
-				{...props}
-			>
-				{children}
-			</TabsPrimitive.List>
-		</>
+		);
+	}
+
+	return (
+		<TabsPrimitive.List
+			className={cn('border-border flex-row items-end gap-1 border-b', className)}
+			testID={testID}
+			{...props}
+		>
+			{children}
+		</TabsPrimitive.List>
 	);
 }
 

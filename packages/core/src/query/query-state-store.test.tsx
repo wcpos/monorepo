@@ -6,11 +6,11 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
+import { compileQuery } from '@wcpos/query/query-state';
+import type { QueryStateActions, QueryStateOf } from '@wcpos/query/query-state';
+
 import { PersistedStateProvider } from '../contexts/persisted-state';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
-import { compileQuery } from './query-state-translator';
-
-import type { QueryStateActions, QueryStateOf } from './query-state-types';
 
 describe('QueryStateProvider', () => {
 	function wrapper(children: React.ReactNode) {

@@ -1,8 +1,8 @@
 import { wooOrderbyFor } from '@wcpos/query/collection-map';
+import { normalizeQuerySortField } from '@wcpos/query/query-state';
 
 import { defaultProductBrowseSort } from './default-product-browse-sort';
 import initialSettings from './initial-settings.json';
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
 describe('pos-products initial settings', () => {
 	// Paul's ruling 2026-08-19 (issue #1372): name ascending — what a cashier

@@ -4,7 +4,7 @@
 import { act, render } from '@testing-library/react';
 import cloneDeep from 'lodash/cloneDeep';
 import { Query } from 'mingo';
-import { BehaviorSubject, map, startWith, Subject } from 'rxjs';
+import { BehaviorSubject, distinctUntilChanged, map, startWith, Subject } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
 import { pendingCustomerLinks, recordCustomerLink } from '@wcpos/query/store-local';
@@ -82,16 +82,6 @@ const scope = () => ({
 					name,
 					{
 						findOne: (id: string) => ({ exec: async () => residents[name]?.get(id) ?? null }),
-						find: ({ selector }: { selector: { uuid: { $in: string[] } } }) => ({
-							$: residentChanges.pipe(
-								startWith(undefined),
-								map(() =>
-									selector.uuid.$in
-										.map((id) => residents[name]?.get(id))
-										.filter((doc): doc is Doc => Boolean(doc))
-								)
-							),
-						}),
 					},
 				])
 			),
@@ -167,9 +157,17 @@ jest.mock('@wcpos/query', () => ({
 			WRITEABLE_REMOTE_ID_FIELD,
 		};
 	})(),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
 	useQueryRuntime: () => mockRuntime,
+}));
+
+jest.mock('@wcpos/query/mutations', () => ({
+	...jest.requireActual('@wcpos/query/mutations'),
+	observeOrderLinkStates: (_engine: unknown, uuids: string[]) =>
+		residentChanges.pipe(
+			startWith(undefined),
+			map(() => uuids.map((uuid) => residents.orders?.get(uuid)?.toJSON())),
+			distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b))
+		),
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({

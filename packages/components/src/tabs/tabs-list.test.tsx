@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '../lib/device';
 import { Tabs, TabsList, TabsTrigger } from './index';
 
 const TabsContext = React.createContext({
@@ -64,10 +65,10 @@ jest.mock('../text', () => ({
 }));
 
 jest.mock('../select', () => ({
-	OptionSelect: ({ onChange, options, placeholder, value }: any) => {
+	OptionSelect: ({ onChange, options, placeholder, value, triggerTestID }: any) => {
 		const selected = options.find((option: any) => option.value === value);
 		return (
-			<div data-testid="tabs-select">
+			<div data-testid="tabs-select" data-trigger-testid={triggerTestID}>
 				<button data-testid="tabs-select-trigger">{selected?.label ?? placeholder}</button>
 				{options.map((option: any) => (
 					<button
@@ -85,29 +86,59 @@ jest.mock('../select', () => ({
 }));
 
 describe('TabsList', () => {
-	it('renders a mobile select from tab trigger labels when asSelect is enabled', () => {
-		const onValueChange = jest.fn();
-
+	const renderAsSelect = (phone: boolean, onValueChange = jest.fn()) =>
 		render(
-			<Tabs value="general" onValueChange={onValueChange}>
-				<TabsList asSelect className="w-full flex-row">
-					<TabsTrigger value="general" label="General Settings">
-						General Settings
-					</TabsTrigger>
-					<TabsTrigger value="tax" label="Tax Settings">
-						Tax Settings
-					</TabsTrigger>
-				</TabsList>
-			</Tabs>
+			<DeviceScope phone={phone}>
+				<Tabs value="general" onValueChange={onValueChange}>
+					<TabsList asSelect className="w-full flex-row">
+						<TabsTrigger value="general" label="General Settings">
+							General Settings
+						</TabsTrigger>
+						<TabsTrigger value="tax" label="Tax Settings">
+							Tax Settings
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
+			</DeviceScope>
 		);
 
+	it('renders only the select on a phone, built from the trigger labels', () => {
+		const onValueChange = jest.fn();
+		renderAsSelect(true, onValueChange);
+
 		expect(screen.getByTestId('tabs-select')).toBeInTheDocument();
-		expect(screen.getByTestId('tabs-list')).toHaveClass('hidden', 'sm:inline-flex');
+		expect(screen.queryByTestId('tabs-list')).not.toBeInTheDocument();
 		expect(screen.getByTestId('tabs-select-trigger')).toHaveTextContent('General Settings');
 		expect(screen.getByTestId('tabs-select-item-tax')).toHaveTextContent('Tax Settings');
 
 		screen.getByTestId('tabs-select-clear').click();
 		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
+	it("hands the phone Select's trigger the list's testID", () => {
+		render(
+			<DeviceScope phone>
+				<Tabs value="general" onValueChange={jest.fn()}>
+					<TabsList asSelect testID="class-select">
+						<TabsTrigger value="general" label="General">
+							General
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
+			</DeviceScope>
+		);
+		expect(screen.getByTestId('tabs-select')).toHaveAttribute(
+			'data-trigger-testid',
+			'class-select'
+		);
+	});
+
+	it('renders only the plain list off a phone, with no breakpoint classes', () => {
+		renderAsSelect(false);
+
+		expect(screen.queryByTestId('tabs-select')).not.toBeInTheDocument();
+		expect(screen.getByTestId('tabs-list')).toBeInTheDocument();
+		expect(screen.getByTestId('tabs-list').className).not.toMatch(/sm:|hidden/);
 	});
 
 	it('keeps the regular tab list when asSelect is omitted', () => {

@@ -14,26 +14,21 @@
  * same wrapper the dev app uses — because the bug lives in the interaction
  * between parse (array vs document) and silent bulkUpsert validation failures.
  */
-import { createRxDatabase, type RxDatabase } from 'rxdb';
+import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import '@wcpos/database/plugins';
-import { storeCollections, type TemplateCollection } from '@wcpos/database/collections';
+import {
+	type StoreCollections,
+	storeCollections,
+	type StoreDatabase,
+} from '@wcpos/database/collections';
 
-import { syncTemplates } from './use-templates-sync';
+import { syncTemplates } from '../../src/store-local';
 
 jest.mock('uuid', () => ({
 	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,
-}));
-
-// Only syncTemplates is under test; the hook wrapper's dependencies pull in
-// native modules (netinfo via use-rest-http-client) and the query runtime.
-jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: jest.fn(),
-}));
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: jest.fn(),
 }));
 
 jest.setTimeout(30000);
@@ -101,10 +96,10 @@ const serverPayload = [
 	})),
 ];
 
-let db: RxDatabase<{ templates: TemplateCollection }>;
+let db: StoreDatabase;
 
 beforeEach(async () => {
-	db = await createRxDatabase<{ templates: TemplateCollection }>({
+	db = await createRxDatabase<StoreCollections>({
 		name: `templates-sync-${Math.random().toString(36).slice(2)}`,
 		storage: wrappedValidateZSchemaStorage({ storage: getRxStorageMemory() }),
 		multiInstance: false,
@@ -144,7 +139,7 @@ describe('syncTemplates', () => {
 				...serverPayload.find((template) => template.id === id)!,
 				is_active: index === 0,
 			}));
-			await syncTemplates(collection, fakeHttpClient(payload));
+			await syncTemplates(db, fakeHttpClient(payload));
 
 			const docs = await query.exec();
 			expect(docs.find((doc) => doc.is_active)?.id).toBe(order[0]);
@@ -153,7 +148,7 @@ describe('syncTemplates', () => {
 	});
 
 	it('upserts every template despite undeclared server fields on validating storage', async () => {
-		await syncTemplates(db.collections.templates, fakeHttpClient(serverPayload));
+		await syncTemplates(db, fakeHttpClient(serverPayload));
 
 		// The exact read useActiveTemplates performs, including its publish/virtual filter.
 		const docs = await db.collections.templates
@@ -168,16 +163,15 @@ describe('syncTemplates', () => {
 	});
 
 	it('re-syncing the same payload is a stable upsert, not an insert conflict', async () => {
-		const collection = db.collections.templates;
-		await syncTemplates(collection, fakeHttpClient(serverPayload));
-		await syncTemplates(collection, fakeHttpClient(serverPayload));
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+		await syncTemplates(db, fakeHttpClient(serverPayload));
 
 		const docs = await db.collections.templates.find().exec();
 		expect(docs).toHaveLength(serverPayload.length);
 	});
 
 	it('ignores a non-array response body', async () => {
-		await syncTemplates(db.collections.templates, fakeHttpClient({ code: 'rest_no_route' }));
+		await syncTemplates(db, fakeHttpClient({ code: 'rest_no_route' }));
 
 		const docs = await db.collections.templates.find().exec();
 		expect(docs).toHaveLength(0);
@@ -206,10 +200,7 @@ it('syncs closure/store requests without suppressing concurrent receipt sync', a
 			})
 		),
 	};
-	await Promise.all([
-		syncTemplates(db.collections.templates, http),
-		syncTemplates(db.collections.templates, http, 'closure', 7),
-	]);
+	await Promise.all([syncTemplates(db, http), syncTemplates(db, http, 'closure', 7)]);
 	expect(http.get).toHaveBeenCalledWith('templates', {
 		params: { posts_per_page: -1, type: 'closure', store_id: 7 },
 	});
@@ -225,11 +216,11 @@ it('syncs closure/store requests without suppressing concurrent receipt sync', a
 it('keeps closure template sets separate and removes omitted assignments only in that store', async () => {
 	const collection = db.collections.templates;
 	const payload = serverPayload.map((row) => ({ ...row, type: 'closure' }));
-	await syncTemplates(collection, fakeHttpClient(payload.slice(0, 2)), 'closure', 1);
-	await syncTemplates(collection, fakeHttpClient(payload.slice(1, 3)), 'closure', 2);
+	await syncTemplates(db, fakeHttpClient(payload.slice(0, 2)), 'closure', 1);
+	await syncTemplates(db, fakeHttpClient(payload.slice(1, 3)), 'closure', 2);
 	const rows = await collection.find().exec();
 	expect(rows).toHaveLength(4);
-	await syncTemplates(collection, fakeHttpClient(payload.slice(2, 3)), 'closure', 2);
+	await syncTemplates(db, fakeHttpClient(payload.slice(2, 3)), 'closure', 2);
 	expect(
 		(await collection.find().exec()).map((row) => [row.get('closure_store_id'), row.id])
 	).toEqual(
@@ -240,14 +231,14 @@ it('keeps closure template sets separate and removes omitted assignments only in
 		])
 	);
 	expect(await collection.count().exec()).toBe(3);
-	await syncTemplates(collection, fakeHttpClient([]), 'closure', 2);
+	await syncTemplates(db, fakeHttpClient([]), 'closure', 2);
 	expect(await collection.count().exec()).toBe(2);
 });
 
 // Revert: send store_id=0 for the global scope, or change its local closure_store_id cache key.
 it('omits the global store request parameter while caching closure templates under store zero', async () => {
 	const http = fakeHttpClient([{ ...serverPayload[0], type: 'closure' }]);
-	await syncTemplates(db.collections.templates, http, 'closure', 0);
+	await syncTemplates(db, http, 'closure', 0);
 	expect(http.get).toHaveBeenCalledWith('templates', {
 		params: { posts_per_page: -1, type: 'closure' },
 	});

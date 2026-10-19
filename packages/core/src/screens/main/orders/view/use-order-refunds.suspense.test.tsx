@@ -15,10 +15,10 @@ import {
 } from '@wcpos/query/testing';
 import type { QueryHandle } from '@wcpos/query';
 import type { RequirementHandle } from '@wcpos/sync-engine';
+import { useQuerySnapshot } from '@wcpos/query/query-state';
 
 import { RefundsBoundary } from './refunds-boundary';
 import { useOrderRefunds } from './use-order-refunds';
-import { useQuerySnapshot } from '../../../../query/query-handles';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -34,9 +34,12 @@ const mockOrder = {
 	payload: { id: 23858, status: 'completed', currency_symbol: '$', refunds: [{ id: 99 }] },
 };
 
+jest.mock('../../../../../../query/src/provider', () => ({
+	...jest.requireActual('../../../../../../query/src/provider'),
+	useQueryRuntime: () => mockRuntime,
+}));
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
-	useQueryRuntime: () => mockRuntime,
 	useRecordField: (record: typeof mockOrder, select: (record: typeof mockOrder) => unknown) =>
 		select(record),
 	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
@@ -61,8 +64,8 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 // `RefundsResourceBoundary` hands it, exactly as the section does (and suspends on it).
 jest.mock('./sections/refunds', () => {
 	const { useQuerySnapshot: read } = jest.requireActual(
-		'../../../../query/query-handles'
-	) as typeof import('../../../../query/query-handles');
+		'@wcpos/query/query-state'
+	) as typeof import('@wcpos/query/query-state');
 	return {
 		RefundsFallback: ({ onRetry }: { onRetry: () => void }) => (
 			<button data-testid="refunds-fallback" onClick={onRetry} />

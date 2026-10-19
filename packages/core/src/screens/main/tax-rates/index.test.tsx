@@ -6,9 +6,9 @@ import * as React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
+
 import { TaxRatesModal } from './index';
-import { TaxRatesTabs } from './tabs';
-import { QueryStateProvider } from '../../../query';
 
 import type { QueryStateOf } from '../../../query';
 
@@ -111,6 +111,15 @@ jest.mock('./footer', () => ({
 	TaxRatesFooter: (props: Record<string, unknown>) => mockFooter(props),
 }));
 
+// Pin the layout so it does not depend on jsdom's window: the anchored panel, not the phone page.
+function Modal() {
+	return (
+		<DeviceScope phone={false}>
+			<TaxRatesModal />
+		</DeviceScope>
+	);
+}
+
 function latestState(): QueryStateOf<'tax-rates'> {
 	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
 	if (!call) throw new Error('tax-rates handle was not acquired');
@@ -139,7 +148,7 @@ describe('tax-rates query-state wiring', () => {
 	afterEach(cleanup);
 
 	it('acquires the unsearched, unfiltered Tier-0 tax-rates view and hands the footer the handle', () => {
-		render(<TaxRatesModal />);
+		render(<Modal />);
 
 		expect(latestState()).toEqual({
 			search: '',
@@ -154,7 +163,7 @@ describe('tax-rates query-state wiring', () => {
 	});
 
 	it('draws the rates the acquired handle answers with', () => {
-		render(<TaxRatesModal />);
+		render(<Modal />);
 		act(() => mockHandle.set({ result: { hits: [{ record: { payload: rates[1] } }] } }));
 
 		expect(lastDrawnIds()).toEqual([[], [2]]);
@@ -167,12 +176,12 @@ describe('tax-rates query-state wiring', () => {
 	 */
 	it('keeps the current rates and total on screen while a changed handle answers', async () => {
 		const previous = mockHandle;
-		const { rerender } = render(<TaxRatesModal />);
+		const { rerender } = render(<Modal />);
 		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
 
 		const next = fakeQueryHandle({ ready: false });
 		mockHandle = next;
-		await act(async () => rerender(<TaxRatesModal />));
+		await act(async () => rerender(<Modal />));
 		expect(mockUseCollectionQueryHandle).toHaveReturnedWith(next);
 		expect(screen.queryByTestId('tax-rates-fallback')).toBeNull();
 		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
@@ -193,7 +202,7 @@ describe('tax-rates query-state wiring', () => {
 		mockHandle = failed;
 		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 		try {
-			render(<TaxRatesModal />);
+			render(<Modal />);
 			expect(screen.getByTestId('error-reset')).toBeTruthy();
 			expect(mockRateTable).not.toHaveBeenCalled();
 
@@ -220,12 +229,12 @@ describe('tax-rates query-state wiring', () => {
 		mockHandle = failed;
 		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 		try {
-			const { rerender } = render(<TaxRatesModal />);
+			const { rerender } = render(<Modal />);
 			expect(screen.getByTestId('error-reset')).toBeTruthy();
 			expect(mockRateTable).not.toHaveBeenCalled();
 
 			mockHandle = fakeQueryHandle({ result: answeredRates(), total: 3 });
-			await act(async () => rerender(<TaxRatesModal />));
+			await act(async () => rerender(<Modal />));
 
 			expect(screen.queryByTestId('error-reset')).toBeNull();
 			expect(retry).not.toHaveBeenCalled();
@@ -233,21 +242,5 @@ describe('tax-rates query-state wiring', () => {
 		} finally {
 			consoleError.mockRestore();
 		}
-	});
-
-	it('keeps the unused tabs component on the same handle and client-side grouping path', () => {
-		render(
-			<QueryStateProvider
-				collection="tax-rates"
-				initialPageSize={Number.MAX_SAFE_INTEGER}
-				initialSort={{ field: 'id', direction: 'asc' }}
-			>
-				<TaxRatesTabs />
-			</QueryStateProvider>
-		);
-
-		expect(latestState().search).toBe('');
-		expect(mockFooter).toHaveBeenCalledWith({ count: 3, handle: mockHandle, shown: mockHandle });
-		expectGroupingPreserved();
 	});
 });
