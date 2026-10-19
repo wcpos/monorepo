@@ -233,6 +233,27 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('every job lists each job whose needs context it reads', () => {
+	// A needs.<job> reference to an unlisted job evaluates to '' without any
+	// error: main-ledger read needs.deploy.result that way, so a cancelled
+	// deploy could never count as superseded.
+	const dir = path.join(ROOT, '.github', 'workflows');
+	const files = readdirSync(dir).filter((file) => /\.ya?ml$/.test(file));
+	assert.ok(files.length > 0);
+	for (const file of files) {
+		for (const [jobName, job] of Object.entries(readWorkflow(file).jobs ?? {})) {
+			const { needs, ...rest } = job;
+			const listed = [needs ?? []].flat();
+			for (const [, referenced] of JSON.stringify(rest).matchAll(/needs\.([\w-]+)\./g)) {
+				assert.ok(
+					listed.includes(referenced),
+					`${file}: ${jobName} reads needs.${referenced} without listing it in needs`
+				);
+			}
+		}
+	}
+});
+
 test('the main verification ledger maintains one issue and ignores superseded runs', () => {
 	const ledger = readWorkflow('deploy.yml').jobs['main-ledger'];
 	assert.match(ledger.if, /github\.event_name == 'push'/);

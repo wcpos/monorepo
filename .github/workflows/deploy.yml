@@ -587,7 +587,9 @@ jobs:
   # neither e2e nor cold-start being cancelled touches the ledger.
   main-ledger:
     name: 📕 main verification ledger
-    needs: [e2e-gate, e2e, cold-start]
+    # `deploy` too: DEPLOY_RESULT below reads needs.deploy, which is empty
+    # unless the job is listed here.
+    needs: [deploy, e2e-gate, e2e, cold-start]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       issues: write
