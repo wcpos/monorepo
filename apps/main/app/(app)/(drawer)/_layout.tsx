@@ -193,7 +193,7 @@ function ThemedDrawer({
 								name="heartPulse"
 								className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 							/>
-							<LogsBadge count={unreadErrorCount} />
+							<LogsBadge unread={unreadErrorCount} />
 						</View>
 					),
 					drawerItemStyle: { marginTop: 'auto' },

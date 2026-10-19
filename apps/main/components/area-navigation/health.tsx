@@ -22,7 +22,7 @@ export function useHealthNavigationItems(unreadErrorCount: number): NavigationAr
 			href: '/health/logs',
 			label: t('common.logs'),
 			testID: 'health-nav-logs',
-			badge: <LogsBadge count={unreadErrorCount} />,
+			badge: <LogsBadge unread={unreadErrorCount} />,
 		},
 	];
 }
