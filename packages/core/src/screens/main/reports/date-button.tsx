@@ -231,24 +231,24 @@ export function DateButton({
 									)}
 								</Button>
 							) : (
-								<View
+								// The dimming sits on the row itself, as on phone: the row keeps its role
+								// and stays pressable so a press can show the Pro hint, and the radiogroup
+								// keeps each radio as a direct child.
+								<MenuRow
 									key={key}
+									testID={`reports-period-${key}`}
+									choice
+									selected={selected === key}
+									label={labels[key as keyof typeof labels]}
 									className={!license?.isPro && key !== 'today' ? 'opacity-50' : undefined}
-								>
-									<MenuRow
-										testID={`reports-period-${key}`}
-										choice
-										selected={selected === key}
-										label={labels[key as keyof typeof labels]}
-										onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
-										trailing={
-											!license?.isPro &&
-											key !== 'today' && (
-												<Icon name="lock" size="sm" className="text-muted-foreground" />
-											)
-										}
-									/>
-								</View>
+									onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
+									trailing={
+										!license?.isPro &&
+										key !== 'today' && (
+											<Icon name="lock" size="sm" className="text-muted-foreground" />
+										)
+									}
+								/>
 							)
 						)}
 					</PeriodGroup>

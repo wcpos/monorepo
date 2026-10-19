@@ -71,6 +71,39 @@ jest.mock('@wcpos/components/button', () => ({
 		);
 	},
 }));
+// The tablet period rows are MenuRows; the stand-in keeps the role, the testID and the
+// className on ONE element, which is what the live spec reads. The group stays real.
+jest.mock('@wcpos/components/menu-row', () => ({
+	...jest.requireActual('@wcpos/components/menu-row'),
+	MenuRow: ({
+		label,
+		trailing,
+		onPress,
+		testID,
+		className,
+		choice,
+		selected,
+	}: {
+		label?: React.ReactNode;
+		trailing?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		className?: string;
+		choice?: boolean;
+		selected?: boolean;
+	}) => (
+		<div
+			role={choice ? 'radio' : 'button'}
+			aria-checked={choice ? selected : undefined}
+			data-testid={testID}
+			className={className}
+			onClick={onPress}
+		>
+			{label}
+			{trailing}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/tabs', () => {
 	const C = require('react').createContext(() => {});
 	return {
@@ -371,14 +404,21 @@ it('returns to Sales from Closures and selects Yesterday in store time', () => {
 });
 // Revert: apply a locked selection before checking Pro, or give every locked edge generic copy.
 it.each([
-	['reports-period-yesterday', 'Earlier closures'],
-	['reports-period-thisWeek', 'Earlier closures'],
-	['reports-period-lastWeek', 'Earlier closures'],
-	['reports-period-thisMonth', 'Earlier closures'],
-	['reports-period-lastMonth', 'Earlier closures'],
-])('names the locked edge %s without changing scope or fetching', (id, label) => {
+	['reports-period-yesterday', 'Earlier closures', 'sm'],
+	['reports-period-thisWeek', 'Earlier closures', 'sm'],
+	['reports-period-lastWeek', 'Earlier closures', 'sm'],
+	['reports-period-thisMonth', 'Earlier closures', 'sm'],
+	['reports-period-lastMonth', 'Earlier closures', 'sm'],
+	// Tablet rows are MenuRows: the dimming must sit on the element that carries the
+	// testID and the radio role, not on a wrapper (reports-closures.spec.ts:650 reads it there).
+	['reports-period-yesterday', 'Earlier closures', 'md'],
+	['reports-period-lastMonth', 'Earlier closures', 'md'],
+])('names the locked edge %s without changing scope or fetching (%s)', (id, label, size) => {
+	mockScreenSize = size;
 	draw();
 	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
+	expect(screen.getByTestId(id).className).toContain('opacity-50');
+	expect(screen.getByTestId('reports-period-today').className).not.toContain('opacity-50');
 	fireEvent.click(screen.getByTestId(id));
 	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
 	expect(screen.getByTestId(id).textContent).not.toContain('Locked');
