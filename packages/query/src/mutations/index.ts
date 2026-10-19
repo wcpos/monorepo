@@ -32,3 +32,4 @@ export {
 	isCollectionEvent,
 } from '../reads/customer-link';
 export { recordReceiptPrint } from './record-receipt-print';
+export { resolveQueuedChange } from './resolve-queued-change';

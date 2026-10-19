@@ -1515,10 +1515,26 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 4',
 	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 5',
 	"screens/main/pos/products/use-barcode.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	// ADR 0033 per-screen (g5): the health screen's queue and database actions are commands.
+	'screens/main/health/conflicted-mutations.tsx :: engine handle aliased :: ConflictedMutationsPanel :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/conflicted-mutations.tsx :: write plane outside a command module :: ConflictedMutationsPanel>settle :: engine.resolveConflict :: 1',
+	'screens/main/health/database.tsx :: collection reset outside the reset command :: CollectionRowView>resetCollection :: engine.scope.resetCollection :: 1',
+	'screens/main/health/database.tsx :: engine handle aliased :: CollectionRowView :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/rejected-mutations.tsx :: engine handle aliased :: RejectedMutationsPanel :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/rejected-mutations.tsx :: write plane outside a command module :: RejectedMutationsPanel>settle :: engine.resolveConflict :: 1',
+	'screens/main/health/use-dead-letter-attention.ts :: engine handle aliased :: useDeadLetterStuckRecords :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-manual-sync.ts :: engine handle aliased :: useCollectionCheck :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-manual-sync.ts :: engine handle aliased :: useManualSync :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-rejected-mutations.ts :: engine handle aliased :: useRejectedMutations :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-unresolved-conflicts.ts :: engine handle aliased :: useUnresolvedConflictKeys :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/health/use-unresolved-conflicts.ts :: engine handle aliased :: useUnresolvedConflicts :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useCollectionCounts :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useEngineStatus :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-engine-monitor.ts :: engine handle aliased :: useMutationCounts :: { engine } = useQueryRuntime() :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 576;
+export const SEAM_RETIRED_FLOOR = 591;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'51d19910cf2ee914b06a76b2881b5934d8f83188313f573bfd0b485a1629ce7b';
+	'f2f84b74d606f2870e593a8afc9f8d22819b036c6e2170c0d6da4000bad7147d';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

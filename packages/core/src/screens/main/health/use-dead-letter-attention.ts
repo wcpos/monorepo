@@ -69,15 +69,15 @@ function deadLetterStuck$(engine: RxdbSyncEngine): Observable<StuckRecord[]> {
 }
 
 export function useDeadLetterStuckRecords(): StuckRecord[] {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [rows, setRows] = React.useState<StuckRecord[]>([]);
 
 	React.useEffect(() => {
 		// An external RxDB subscription bound to the engine lifecycle, the same
 		// shape `useMutationCounts` uses — no Suspense, so the banner cannot hang.
-		const subscription = deadLetterStuck$(engine).subscribe(setRows);
+		const subscription = deadLetterStuck$(runtime.engine).subscribe(setRows);
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [runtime.engine]);
 
 	return rows;
 }
