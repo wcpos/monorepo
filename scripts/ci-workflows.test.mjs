@@ -48,6 +48,24 @@ function evaluateGuard(expression, { event_name, ref_name, quarantine_only, targ
 	return new Function(`return (${rewritten});`)();
 }
 
+/**
+ * Evaluates a `${{ }}` expression for the given context. Every github./inputs.
+ * reference must be supplied, so a new reference cannot silently read as null.
+ */
+function evaluateExpression(expression, context) {
+	const body = expression.replace(/^\$\{\{\s*/, '').replace(/\s*\}\}$/, '');
+	const rewritten = body
+		.replace(/\b(?:github|inputs)\.[\w.]+/g, (reference) => {
+			assert.ok(reference in context, `no value for ${reference}`);
+			return JSON.stringify(context[reference]);
+		})
+		.replace(/\bformat\(/g, '__format(')
+		.replace(/==|!=/g, (operator) => (operator === '==' ? '===' : '!=='));
+	const format = (template, ...args) =>
+		template.replace(/\{(\d+)\}/g, (_, index) => String(args[Number(index)]));
+	return new Function('__format', `return (${rewritten});`)(format);
+}
+
 function readAction(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
 }
@@ -2050,6 +2068,89 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.ok(deployConcurrency, 'deploy must serialise on main');
 	assert.match(deployConcurrency.group, /'deploy-main-deploy'/);
 	assert.equal(deployConcurrency['cancel-in-progress'], false);
+});
+
+test('lane-next E2E runs never share or cancel a workflow concurrency group', () => {
+	// Two dispatches from `next` once shared `deploy-refs/heads/next` with
+	// cancel-in-progress, so the newer one killed the run holding the dev-next
+	// queue (Codex P1 on #2761). The queue alone must order lane-next runs.
+	const { concurrency } = readWorkflow('deploy.yml');
+	const resolve = (overrides) => {
+		const context = {
+			'github.event_name': 'workflow_dispatch',
+			'github.ref': 'refs/heads/next',
+			'github.ref_name': 'next',
+			'github.run_id': 101,
+			'github.run_attempt': '1',
+			'github.event.pull_request.number': null,
+			'inputs.skip_e2e': false,
+			'inputs.quarantine_only': false,
+			'inputs.lane': 'next',
+			...overrides,
+		};
+		return {
+			group: evaluateExpression(concurrency.group, context),
+			cancel: evaluateExpression(concurrency['cancel-in-progress'], context),
+		};
+	};
+
+	for (const [caseName, overrides] of [
+		['lane next dispatch from next', {}],
+		['auto-lane dispatch from next', { 'inputs.lane': '' }],
+		['lane next dispatch from a branch', { 'github.ref': 'refs/heads/x', 'github.ref_name': 'x' }],
+		['quarantine-only dispatch', { 'inputs.quarantine_only': true, 'inputs.lane': '' }],
+		[
+			'schedule',
+			{
+				'github.event_name': 'schedule',
+				'github.ref': 'refs/heads/main',
+				'github.ref_name': 'main',
+				'inputs.skip_e2e': null,
+				'inputs.quarantine_only': null,
+				'inputs.lane': null,
+			},
+		],
+	]) {
+		const first = resolve(overrides);
+		const second = resolve({ ...overrides, 'github.run_id': 102 });
+		assert.equal(first.group, 'deploy-next-dispatch-101', caseName);
+		assert.notEqual(first.group, second.group, caseName);
+		assert.equal(first.cancel, false, caseName);
+		assert.equal(second.cancel, false, caseName);
+	}
+
+	// Every other run keeps the pre-mini groups.
+	assert.deepEqual(resolve({ 'inputs.skip_e2e': true }), {
+		group: 'deploy-refs/heads/next',
+		cancel: true,
+	});
+	assert.deepEqual(
+		resolve({
+			'inputs.lane': 'main',
+			'github.ref': 'refs/heads/main',
+			'github.ref_name': 'main',
+		}),
+		{ group: 'deploy-main-run-101', cancel: false }
+	);
+	assert.deepEqual(
+		resolve({
+			'github.event_name': 'pull_request',
+			'github.ref': 'refs/pull/7/merge',
+			'github.ref_name': '7/merge',
+			'github.event.pull_request.number': 7,
+			'inputs.lane': null,
+		}),
+		{ group: 'deploy-pr-7-current', cancel: true }
+	);
+	assert.deepEqual(
+		resolve({
+			'github.event_name': 'push',
+			'github.ref': 'refs/heads/main',
+			'github.ref_name': 'main',
+			'inputs.lane': null,
+		}),
+		{ group: 'deploy-main-run-101', cancel: false }
+	);
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {

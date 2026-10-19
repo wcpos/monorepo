@@ -57,9 +57,14 @@ on:
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
 # newer SHA. There is deliberately NO cross-run store serialization except the
 # dev-next queue — see the comment above e2e.
+# Lane-next E2E runs (schedule, and dispatches that test on dev-next) get a
+# RUN-UNIQUE group and are never cancelled: a shared `deploy-<ref>` group with
+# cancel-in-progress would let a newer dispatch from `next` kill the run that
+# holds the dev-next queue, and a shared store group keeps only one pending
+# run, silently dropping a third. The queue alone orders them.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && format('deploy-next-dispatch-{0}', github.run_id) || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
