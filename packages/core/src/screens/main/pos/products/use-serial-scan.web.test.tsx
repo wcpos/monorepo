@@ -21,6 +21,16 @@ const mockUpsert = jest.fn();
 const mockRequestPort = jest.fn();
 const mockGetPorts = jest.fn(async (): Promise<unknown[]> => []);
 let mockProfiles: Record<string, unknown>[] = [];
+const mockStoreDB = {
+	collections: {
+		scanner_profiles: {
+			find: () => ({
+				exec: async () => mockProfiles.map((profile) => ({ toJSON: () => profile })),
+			}),
+			upsert: (...args: unknown[]) => mockUpsert(...args),
+		},
+	},
+};
 
 const minCharsObs = {};
 const prefixObs = {};
@@ -58,19 +68,11 @@ jest.mock('observable-hooks', () => ({
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
+		storeDB: mockStoreDB,
 		store: {
 			barcode_scanning_min_chars$: minCharsObs,
 			barcode_scanning_prefix$: prefixObs,
 			barcode_scanning_suffix$: suffixObs,
-		},
-	}),
-}));
-
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => ({
-		collection: {
-			find: () => ({ exec: async () => mockProfiles }),
-			upsert: (...args: unknown[]) => mockUpsert(...args),
 		},
 	}),
 }));
