@@ -635,6 +635,20 @@ export async function waitForStoreQuiescence(
 	}
 }
 
+/**
+ * The store row `authenticateWithStore` presses on the connect screen's picker:
+ * the requested WooCommerce store, or the first offered when none is named.
+ *
+ * Addressed by the store rows' own testIDs, never by radio role: the users above the
+ * stores are a radio group too (#2703), so "the first radio" is the cashier's row, and
+ * pressing it re-selects the user and clears the store choice (store-pick.unit.spec.ts).
+ */
+export function storePickLocator(page: Page, storeId?: number | string): Locator {
+	return storeId != null
+		? page.getByTestId(`store-option-${storeId}`)
+		: page.locator('[data-testid^="store-option-"]').first();
+}
+
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
@@ -804,7 +818,7 @@ export async function authenticateWithStore(
 	//   1. Click wp-user-button (ListItem) — selects the user, which mounts
 	//      StoreSelect below with a RadioGroup of stores + an "Open POS" button.
 	//      Single-store users have their store auto-selected; multi-store users
-	//      pick a RadioGroupItem (handled below by selecting the first option).
+	//      pick a store-option-* row (handled below by storePickLocator).
 	//   2. Click open-pos-button — this is what actually calls login() and
 	//      transitions the router out of /connect.
 	let loginSuccess = await hasReachedPos(page, 3_000);
@@ -851,7 +865,7 @@ export async function authenticateWithStore(
 		// Step 2: wait for the Open POS button to become enabled. It is gated
 		// on: stores resolved + store selected + user validation passed.
 		// Single-store users have the store auto-selected; for multi-store
-		// variants, pick the first radio option to satisfy the store gate.
+		// variants, pick the first store-option-* row to satisfy the store gate.
 		const openPosVisible = await becomesVisible(openPosButton, 10_000);
 		if (!openPosVisible) {
 			console.log(`[auth] open-pos-button not visible (attempt ${attempt}), retrying...`);
@@ -884,20 +898,13 @@ export async function authenticateWithStore(
 			// was a localID hash, so "first" was the only reachable choice and tax
 			// coverage was whatever the render order happened to give (see
 			// woocommerce-pos#1548).
-			const storeOption =
-				storeId != null
-					? page.getByTestId(`store-option-${storeId}`)
-					: page
-							.locator(
-								'[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]'
-							)
-							.first();
+			const storeOption = storePickLocator(page, storeId);
 			const hasOption = await becomesVisible(storeOption, storeId != null ? 10_000 : 2_000);
 			if (hasOption) {
 				console.log(
 					storeId != null
 						? `[auth] Selecting requested store ${storeId}...`
-						: '[auth] Selecting first store radio option...'
+						: '[auth] Selecting the first store-option-* row...'
 				);
 				await storeOption.click().catch(() => null);
 			} else if (storeId != null) {
@@ -912,7 +919,9 @@ export async function authenticateWithStore(
 					).join(', ')}`
 				);
 			} else {
-				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
+				console.log(
+					'[auth] open-pos-button still disabled and no store-option-* row found, waiting...'
+				);
 				await page.waitForTimeout(2_000);
 				continue;
 			}
