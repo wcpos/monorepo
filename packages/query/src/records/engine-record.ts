@@ -104,3 +104,9 @@ export type EngineRecordShape<C extends EngineRecordCollectionName> = {
 
 /** An engine record: the RxDocument itself, typed. */
 export type EngineRecord<C extends EngineRecordCollectionName> = RxDocument<EngineRecordShape<C>>;
+
+export function isVariationRecord(
+	record: EngineRecord<'products'> | EngineRecord<'variations'>
+): record is EngineRecord<'variations'> {
+	return record.collection.name === 'variations';
+}

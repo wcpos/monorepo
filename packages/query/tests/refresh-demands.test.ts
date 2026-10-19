@@ -6,7 +6,11 @@ import { act, waitFor } from '@testing-library/react';
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { refreshStockFor, watchVariationParentRefresh } from '../src/reads/refresh-demands';
+import {
+	fetchFreshRecords,
+	refreshStockFor,
+	watchVariationParentRefresh,
+} from '../src/reads/refresh-demands';
 
 const mockFindEngineResident = jest.fn();
 const mockRequire = jest.fn();
@@ -302,5 +306,67 @@ describe('refreshStockFor', () => {
 		refreshStockFor(engine, []);
 		refreshStockFor(engine, [{ product_id: 0, variation_id: 0 }]);
 		expect(mockRequire).not.toHaveBeenCalled();
+	});
+});
+
+describe('fetchFreshRecords', () => {
+	const requests = [
+		{ id: 'barcode:code:ambiguous:products', collection: 'products' as const, wooIds: [12] },
+		{ id: 'barcode:code:ambiguous:variations', collection: 'variations' as const, wooIds: [14] },
+	];
+
+	it('skips empty requests', async () => {
+		await fetchFreshRecords(engine, []);
+		await fetchFreshRecords(engine, [{ id: 'empty', collection: 'products', wooIds: [] }]);
+		expect(mockRequire).not.toHaveBeenCalled();
+	});
+
+	it('forces each request, awaits all readiness and releases on success', async () => {
+		const pending = fetchFreshRecords(engine, requests);
+		expect(mockRequire.mock.calls).toEqual([
+			[
+				{
+					id: 'barcode:code:ambiguous:products',
+					collection: 'products',
+					kind: 'targeted-records',
+					remoteIds: ['12'],
+					forceRefresh: true,
+				},
+			],
+			[
+				{
+					id: 'barcode:code:ambiguous:variations',
+					collection: 'variations',
+					kind: 'targeted-records',
+					remoteIds: ['14'],
+					forceRefresh: true,
+				},
+			],
+		]);
+		readyControls[0].resolve();
+		await Promise.resolve();
+		releases.forEach((release) => expect(release).not.toHaveBeenCalled());
+		readyControls[1].resolve();
+		await pending;
+		releases.forEach((release) => expect(release).toHaveBeenCalledTimes(1));
+	});
+
+	it('releases every handle and rethrows the original readiness failure', async () => {
+		const pending = fetchFreshRecords(engine, requests);
+		const error = new Error('storage unavailable');
+		const rejected = expect(pending).rejects.toBe(error);
+		readyControls[0].reject(error);
+		await rejected;
+		releases.forEach((release) => expect(release).toHaveBeenCalledTimes(1));
+	});
+
+	it('releases acquired handles if declaring a later request throws', async () => {
+		const error = new Error('require failed');
+		const requireHandle = mockRequire.getMockImplementation()!;
+		mockRequire.mockImplementationOnce(requireHandle).mockImplementationOnce(() => {
+			throw error;
+		});
+		await expect(fetchFreshRecords(engine, requests)).rejects.toBe(error);
+		expect(releases[0]).toHaveBeenCalledTimes(1);
 	});
 });

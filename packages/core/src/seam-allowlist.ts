@@ -1503,10 +1503,22 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/products/use-serial-scan.web.ts :: record collection back-reference :: useSerialScan :: collection :: 1',
 	'screens/main/pos/products/use-serial-scan.web.ts :: record mutator :: useSerialScan :: collection.upsert :: 1',
 	"screens/main/pos/products/use-serial-scan.web.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (g4): the barcode lookup is a named read; its fresh-record fetch is a refresh demand.
+	"screens/main/hooks/barcodes/use-barcode-search.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/hooks/barcodes/use-barcode-search.ts :: raw query construction :: useBarcodeSearch :: productCollection .findOne :: 1',
+	'screens/main/hooks/barcodes/use-barcode-search.ts :: raw query construction :: useBarcodeSearch :: productCollection.find() :: 1',
+	'screens/main/hooks/barcodes/use-barcode-search.ts :: raw query construction :: useBarcodeSearch :: variationsCollection.find() :: 1',
+	'screens/main/pos/products/use-barcode.ts :: record collection back-reference :: isVariationDocument :: document.collection :: 1',
+	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 1',
+	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 2',
+	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 3',
+	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 4',
+	'screens/main/pos/products/use-barcode.ts :: require plane outside a named read :: useBarcode>runScan :: runtime.engine.require :: 5',
+	"screens/main/pos/products/use-barcode.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 565;
+export const SEAM_RETIRED_FLOOR = 576;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'b618a7b58c49a46454832e6ccfe9d0a61c501ad9131a97b47b1269517e42b91f';
+	'51d19910cf2ee914b06a76b2881b5934d8f83188313f573bfd0b485a1629ce7b';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

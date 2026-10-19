@@ -3,11 +3,16 @@ import * as React from 'react';
 import { useSegments } from 'expo-router';
 import { useSubscription } from 'observable-hooks';
 
-import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	fetchFreshRecords,
+	isStorageWorkerFailure,
+	isVariationRecord,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import { type ScanEvent } from '@wcpos/scanner';
-import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
+import { type BarcodeResolveFetcher, resolveScan, wooIdOf } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -78,12 +83,6 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 			callerSignal?.removeEventListener('abort', abortFromCaller);
 		}
 	};
-}
-
-function isVariationDocument(
-	document: EngineRecord<'products'> | EngineRecord<'variations'>
-): document is EngineRecord<'variations'> {
-	return document.collection.name === 'variations';
 }
 
 export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
@@ -192,8 +191,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		/**
 		 * Hydration failures are reported as connection errors, but a lost storage
 		 * worker is not a connection problem and needs the reload-the-app message —
-		 * rethrow so the outer handler owns it. Note the `finally` blocks at these
-		 * call sites still release their engine handles.
+		 * rethrow so the outer handler owns it. The refresh demand releases its engine
+		 * handles in `finally` before propagating the failure.
 		 */
 		const reportHydrationFailure = (error: unknown): never | void => {
 			if (isStorageWorkerFailure(error)) {
@@ -286,40 +285,22 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 								.map((candidate) => candidate.id)
 						),
 					];
-					const handles = [];
 					try {
-						if (productIds.length > 0) {
-							handles.push(
-								runtime.engine.require({
-									id: `barcode:${barcodeStr}:ambiguous:products`,
-									collection: 'products',
-									kind: 'targeted-records',
-									remoteIds: productIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-									forceRefresh: true,
-								})
-							);
-						}
-						if (variationIds.length > 0) {
-							handles.push(
-								runtime.engine.require({
-									id: `barcode:${barcodeStr}:ambiguous:variations`,
-									collection: 'variations',
-									kind: 'targeted-records',
-									remoteIds: variationIds
-										.map(remoteIdOrNull)
-										.filter((remoteId) => remoteId !== null),
-									forceRefresh: true,
-								})
-							);
-						}
-						await Promise.all(handles.map((handle) => handle.ready));
+						await fetchFreshRecords(runtime.engine, [
+							{
+								id: `barcode:${barcodeStr}:ambiguous:products`,
+								collection: 'products',
+								wooIds: productIds,
+							},
+							{
+								id: `barcode:${barcodeStr}:ambiguous:variations`,
+								collection: 'variations',
+								wooIds: variationIds,
+							},
+						]);
 					} catch (error) {
 						reportHydrationFailure(error);
 						return;
-					} finally {
-						for (const handle of handles) {
-							handle.release();
-						}
 					}
 
 					results = await barcodeSearch(barcodeStr, event.symbology);
@@ -338,8 +319,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					resolution.ambiguous.length > 0
 						? {
 								id: visibleMatch.remoteId === null ? 0 : wooIdOf(visibleMatch.remoteId),
-								type: isVariationDocument(visibleMatch) ? 'variation' : 'product',
-								parent_id: isVariationDocument(visibleMatch)
+								type: isVariationRecord(visibleMatch) ? 'variation' : 'product',
+								parent_id: isVariationRecord(visibleMatch)
 									? visibleMatch.payload.parent_id
 									: undefined,
 							}
@@ -352,39 +333,29 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					return;
 				}
 
-				const handles = [];
 				try {
-					handles.push(
-						runtime.engine.require({
+					await fetchFreshRecords(runtime.engine, [
+						{
 							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
 							collection: match.type === 'variation' ? 'variations' : 'products',
-							kind: 'targeted-records',
-							remoteIds: [match.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-							forceRefresh: true,
-						})
-					);
+							wooIds: [match.id],
+						},
+						...(match.type === 'variation'
+							? [
+									{
+										id: `barcode:${barcodeStr}:product:${match.parent_id}`,
+										collection: 'products' as const,
+										wooIds: [match.parent_id!],
+									},
+								]
+							: []),
+					]);
 					if (match.type === 'variation') {
-						handles.push(
-							runtime.engine.require({
-								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
-								collection: 'products',
-								kind: 'targeted-records',
-								remoteIds: [match.parent_id]
-									.map(remoteIdOrNull)
-									.filter((remoteId) => remoteId !== null),
-								forceRefresh: true,
-							})
-						);
 						onlineParentRequired = true;
 					}
-					await Promise.all(handles.map((handle) => handle.ready));
 				} catch (error) {
 					reportHydrationFailure(error);
 					return;
-				} finally {
-					for (const handle of handles) {
-						handle.release();
-					}
 				}
 
 				results = await barcodeSearch(barcodeStr, event.symbology);
@@ -420,7 +391,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		}
 
 		let added: boolean;
-		if (isVariationDocument(product)) {
+		if (isVariationRecord(product)) {
 			/**
 			 * Hack: we need to get the parent product
 			 * - parent_id was added recently to the variation schema, so older variations don't have it
@@ -434,19 +405,14 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			let parent = await findProductById(parent_id);
 			if (!parent && !onlineParentRequired) {
 				try {
-					const handle = runtime.engine.require({
-						id: `barcode:${barcodeStr}:product:${parent_id}`,
-						collection: 'products',
-						kind: 'targeted-records',
-						remoteIds: [parent_id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-						forceRefresh: true,
-					});
-					try {
-						await handle.ready;
-						parent = await findProductById(parent_id);
-					} finally {
-						handle.release();
-					}
+					await fetchFreshRecords(runtime.engine, [
+						{
+							id: `barcode:${barcodeStr}:product:${parent_id}`,
+							collection: 'products',
+							wooIds: [parent_id],
+						},
+					]);
+					parent = await findProductById(parent_id);
 				} catch (error) {
 					reportHydrationFailure(error);
 					return;
