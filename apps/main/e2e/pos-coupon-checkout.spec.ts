@@ -21,10 +21,12 @@ import {
 } from '@playwright/test';
 
 import {
+	closeOrderSheet,
 	ensureRegisterOpen,
 	getStoreUrl,
 	getStoreVariant,
 	listStoreIds,
+	openOrderSheet,
 	storeRequestOptions,
 } from './fixtures';
 import {
@@ -363,6 +365,8 @@ for (const targetStoreId of storeTargets) {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});
+					// On `next` Save lives in the order sheet, not the cart (c446efb5b).
+					await openOrderSheet(page);
 					await page.getByTestId('save-to-server-button').click();
 					const saveResponse = await saved;
 					const saveEnvelope = (saveResponse.request().postDataJSON() ?? {}) as {
@@ -393,6 +397,8 @@ for (const targetStoreId of storeTargets) {
 					);
 					// The save button re-enables when the round trip (ack adoption) completes.
 					await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+					// The sheet is modal; its scrim covers the cart's remove-coupon button.
+					await closeOrderSheet(page);
 
 					// 2. Remove the coupon from the cart and wait for the discount to settle to zero.
 					const removeButton = page.getByTestId(`remove-coupon-${probeCoupon!.code}`);

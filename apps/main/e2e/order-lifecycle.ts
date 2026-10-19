@@ -90,9 +90,10 @@ async function checkoutSurface(page: Page): Promise<CheckoutSurface> {
 	return (await page.getByTestId('checkout-tender-pane').isVisible()) ? 'pane' : 'modal';
 }
 
-/** The same control on either surface. The pane's balance is the amount due until a leg is taken. */
+/** The same control on either surface: the amount put in front of the cashier, and the way out. */
 const CONTROL_IDS = {
-	pane: { amount: 'checkout-balance', close: 'checkout-close' },
+	// The pane's balance line hides itself when it equals the entry (#2529); the entry is what the cashier sees.
+	pane: { amount: 'checkout-entry', close: 'checkout-close' },
 	modal: { amount: 'checkout-amount-to-pay', close: 'cancel-checkout-button' },
 } as const;
 export function checkoutControl(page: Page, surface: CheckoutSurface, control: 'amount' | 'close') {
