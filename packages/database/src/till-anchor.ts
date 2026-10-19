@@ -1,22 +1,24 @@
 import { File, Paths } from 'expo-file-system';
 
-import { TILL_ANCHOR_KEY } from './till-anchor-key';
+import { TILL_ANCHOR_KEY, type TillAnchor } from './till-anchor-key';
 
 export { TILL_ANCHOR_KEY };
-
-export type TillAnchor = string | null | 'unknown';
+export type { TillAnchor };
 
 /**
  * The till anchor: a second copy of the till id (the `register` local document in the
  * user database) kept outside that database, so hydration can tell a database that was
- * copied from another installation. When the database's till id and the anchor
- * disagree, or the anchor is missing beside an existing register, the database came
- * from somewhere else and the till is re-minted before it sells. Known limits: the
+ * copied from another installation. When a register that was anchored finds the anchor
+ * missing or holding another id, the database came from somewhere else and the till is
+ * re-minted before it sells (`settleRegister` in @wcpos/query). Known limits: the
  * anchor travels with whatever copies it, so a copied browser profile (localStorage
  * included) or a device backup that includes the Documents directory copies the anchor
  * too, and those clones are not detected. What is detected: an OPFS or database-file
  * copy on its own, the E2E snapshot restore (which leaves the anchor out), and a
- * database restored under a different profile.
+ * database restored under a different profile. An Electron profile copy is not detected
+ * either, for the same reason as a browser profile. On iOS the marker is not written
+ * atomically, so a crash mid-write reads as absent or mismatched and costs one extra
+ * re-mint, the safe direction.
  *
  * Native has no localStorage, so the anchor is a marker file in the document directory,
  * read and written synchronously like the clear-local-data flag.

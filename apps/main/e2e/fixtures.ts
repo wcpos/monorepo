@@ -14,7 +14,6 @@ import {
 	isWcposPluginCompatible,
 	MINIMUM_WCPOS_PLUGIN_VERSION,
 } from '@wcpos/core/utils/wcpos-plugin-version';
-import { TILL_ANCHOR_KEY } from '@wcpos/database/till-anchor-key';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -32,7 +31,7 @@ import {
 	type StoreAuthorization,
 	TEARDOWN_CREDENTIAL_TIMEOUT_MS,
 } from './probe-credential';
-import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
 import { quarantineGate } from './quarantine';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
@@ -1109,14 +1108,11 @@ export async function hydrateAuthenticatedPage(
 
 			// Restore OPFS and localStorage while JS is blocked (no worker running).
 			// Every test is a copy of the login's database, register document (till id +
-			// sale counters) included, so each would stamp the same till and counter #1 on
-			// its sales and Store health on the dev stores would list one "duplicate
-			// counter" row per CI run. The till anchor is left out of the restore: without
-			// it the copy is recognised as a clone and re-mints itself as a new till
-			// before it sells.
+			// sale counters) included; restored as a clone, each re-mints its own till
+			// before it sells, or Store health on the dev stores would list one
+			// "duplicate counter" row per CI run.
 			await restoreOPFS(page, state.opfs);
-			const { [TILL_ANCHOR_KEY]: _clonedTill, ...localStorageWithoutTill } = state.localStorage;
-			await restoreLocalStorage(page, localStorageWithoutTill);
+			await restoreLocalStorageAsClone(page, state.localStorage);
 
 			// Unblock JS and reload so the app picks up the restored OPFS state
 			await page.unroute('**/*', blockScriptRequests);

@@ -5,3 +5,6 @@
  * `expo-file-system`.
  */
 export const TILL_ANCHOR_KEY = 'wcpos.tillId';
+
+/** The anchored till id; null when none is stored; 'unknown' when storage cannot be read. */
+export type TillAnchor = string | null | 'unknown';

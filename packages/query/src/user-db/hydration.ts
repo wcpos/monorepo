@@ -1,9 +1,8 @@
 import type { UserDatabase } from '@wcpos/database';
 import { createUserDB } from '@wcpos/database/create-db';
-import { readTillAnchor, writeTillAnchor } from '@wcpos/database/till-anchor';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { ensureRegister, readRegister, remintRegister } from '../register-session';
+import { settleRegister } from '../register-session';
 import { upsertEmbeddedCredentials } from './credentials';
 import { upsertSiteData } from './sites';
 import {
@@ -36,40 +35,8 @@ export async function openUserDatabase(): Promise<{
 		user = await userDB.users.insert({ first_name: 'Global', last_name: 'User' });
 	}
 
-	await settleTillIdentity(userDB);
+	await settleRegister(userDB);
 	return { userDB, sessionPointer, translationsCache, user };
-}
-
-/**
- * Compare the database's till id with the anchor kept outside it (see
- * `@wcpos/database` till-anchor.ts). A database copied from another installation
- * carries that installation's till; it becomes its own till before anything sells.
- */
-async function settleTillIdentity(userDB: UserDatabase): Promise<void> {
-	const existing = await readRegister(userDB);
-	const register = existing ?? (await ensureRegister(userDB));
-	const anchor = readTillAnchor();
-	// An unreadable anchor must never cost a till its identity.
-	if (anchor === 'unknown') return;
-	if (!existing) {
-		writeTillAnchor(register.id);
-		return;
-	}
-	if (anchor === register.id) return;
-	// Prove the anchor is writable first, or storage that reads but cannot write would
-	// re-mint the till on every boot. Only a crash between this probe and the write
-	// below leaves the cloned id anchored.
-	if (!writeTillAnchor(register.id)) {
-		appLogger.warn('Till anchor cannot be written; clone detection is off on this device', {
-			context: { anchor, till: register.id },
-		});
-		return;
-	}
-	const fresh = await remintRegister(userDB);
-	writeTillAnchor(fresh.id);
-	appLogger.info('Till re-minted: the local database came from another installation', {
-		context: { previous: register.id, next: fresh.id, anchor },
-	});
 }
 
 export async function applyEmbeddedBootPayload(

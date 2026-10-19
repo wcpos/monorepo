@@ -13,8 +13,6 @@ export {
 	unscheduleClearLocalDataOnNextLoad,
 } from './clear-local-data-flag';
 export type { ClearLocalDataFlag } from './clear-local-data-flag';
-export { TILL_ANCHOR_KEY, clearTillAnchor, readTillAnchor, writeTillAnchor } from './till-anchor';
-export type { TillAnchor } from './till-anchor';
 export { clearAllDB } from './clear-all-db';
 export { measureAppStorage } from './measure-storage';
 export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';

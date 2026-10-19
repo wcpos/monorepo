@@ -3,8 +3,6 @@ import * as path from 'path';
 
 import { chromium, expect, type FullConfig } from '@playwright/test';
 
-import { TILL_ANCHOR_KEY } from '@wcpos/database/till-anchor-key';
-
 import {
 	CATALOGUE_READY_TIMEOUT_MS,
 	LOADED_COUNT_READY,
@@ -17,7 +15,7 @@ import {
 	installThinCatalogueRoutes,
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { restoreLocalStorage } from './indexeddb-helpers';
+import { restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
@@ -216,11 +214,7 @@ async function reuseValidAuthState(
 		await page.route('**/*', blockScriptRequests);
 		await page.goto(baseURL, { waitUntil: 'commit' });
 		await restoreOPFS(page, state.opfs as never);
-		// Without the till anchor the verification boot re-mints its copy as a new till,
-		// as every test's restore does (fixtures.ts), so it never sells as the login's.
-		const { [TILL_ANCHOR_KEY]: _clonedTill, ...localStorageWithoutTill } =
-			state.localStorage as Record<string, string>;
-		await restoreLocalStorage(page, localStorageWithoutTill);
+		await restoreLocalStorageAsClone(page, state.localStorage as Record<string, string>);
 		await page.unroute('**/*', blockScriptRequests);
 		await page.reload({ waitUntil: 'commit' });
 		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });

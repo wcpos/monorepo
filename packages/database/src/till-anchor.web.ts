@@ -1,8 +1,7 @@
-import { TILL_ANCHOR_KEY } from './till-anchor-key';
+import { TILL_ANCHOR_KEY, type TillAnchor } from './till-anchor-key';
 
 export { TILL_ANCHOR_KEY };
-
-export type TillAnchor = string | null | 'unknown';
+export type { TillAnchor };
 
 /**
  * The till id as last written outside the database (see till-anchor.ts). null when
