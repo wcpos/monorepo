@@ -9,7 +9,12 @@ import type { RegisterDocument } from '@wcpos/query/register-session';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { createActionContext } from '../../../../../extensions/actions';
 import { row } from '../payments/device/fixtures.test-utils';
-import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import {
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	resetCheckoutMode,
+	selectReceipt,
+} from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const mockInfo = jest.fn();
@@ -419,3 +424,22 @@ it('deselects A when the cashier switches after its receipt was selected', async
 	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	expect(mockReplace).not.toHaveBeenCalled();
 });
+
+it.each([null, 'B', 'uuid-42'])(
+	'preserves an active receipt when A completes (receipt=%s)',
+	async (receipt) => {
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
+		mockAutoShowReceipt = true;
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		await act(async () => {
+			const finishing = result.current({ source: 'zero-balance' });
+			selectReceipt(receipt);
+			await finishing;
+		});
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(receipt ?? 'uuid-42');
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+		expect(mockSelectedOrder).toBe('uuid-42');
+	}
+);

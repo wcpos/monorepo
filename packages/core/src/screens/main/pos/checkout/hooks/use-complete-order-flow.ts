@@ -41,7 +41,13 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 					? {
 							host: 'stage',
 							autoShowReceipt: !!uiSettings.autoShowReceipt,
-							canSelectReceipt: () => getCurrentOrderID() === order.uuid,
+							canSelectReceipt: () => {
+								const { selectedReceiptOrder } = getCheckoutModeSnapshot();
+								return (
+									getCurrentOrderID() === order.uuid &&
+									(selectedReceiptOrder === null || selectedReceiptOrder === order.uuid)
+								);
+							},
 						}
 					: { host: 'modal' },
 				queue
