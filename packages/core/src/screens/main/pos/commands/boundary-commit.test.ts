@@ -26,6 +26,7 @@ import { commitAtBoundary } from './boundary-commit';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CartConfigInputs } from './cart-config-for-order';
+import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
@@ -40,6 +41,21 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 jest.mock('../checkout/provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let ctx: SaleContext;
+const write = jest.fn(
+	async ({
+		document,
+		data,
+		changes,
+	}: {
+		document: EngineRecord<'orders'>;
+		data?: object;
+		changes?: PayloadChanges;
+	}) => {
+		expect((await pendingCompletions(ctx.storeDB))[document.uuid].source).toBe('zero-balance');
+		Object.assign(document.payload, changes ? changes(document.payload) : data);
+		return document;
+	}
+);
 const log = jest.fn();
 const resolveSession = jest.fn();
 let mockSession = {
@@ -89,11 +105,6 @@ beforeEach(async () => {
 		storeId: 1,
 		dp: 2,
 		sessionsOn: true,
-		localPatch: jest.fn(async ({ document, data, changes }) => {
-			expect((await pendingCompletions(ctx.storeDB))[document.uuid].source).toBe('zero-balance');
-			Object.assign(document.payload, changes ? changes(document.payload) : data);
-			return document;
-		}),
 	} as unknown as SaleContext;
 });
 afterEach(async () => {
@@ -144,10 +155,10 @@ it.each(['4', '3'])(
 						);
 					},
 				},
-				{ order, result, queue, write: (changes) => ctx.localPatch({ document: order, changes }) }
+				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
 			);
 		});
-		expect(ctx.localPatch).toHaveBeenCalledTimes(1);
+		expect(write).toHaveBeenCalledTimes(1);
 		expect(order.payload).toMatchObject({ status: 'completed', total });
 		expect(order.payload.meta_data).toEqual(
 			expect.arrayContaining([
@@ -195,12 +206,12 @@ it.each(['session', 'register'])(
 					order,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					queue,
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
 		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
-		expect(ctx.localPatch).not.toHaveBeenCalled();
+		expect(write).not.toHaveBeenCalled();
 		expect(complete).not.toHaveBeenCalled();
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
@@ -249,7 +260,7 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 					bindingStatus: 'bound',
 					complete,
 				},
-				{ order, result, queue, write: (changes) => ctx.localPatch({ document: order, changes }) }
+				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
 			)
 		);
 		expect(outcome).toBe('superseded');
@@ -291,7 +302,7 @@ it.each([undefined, 'system'] as const)(
 					order,
 					queue,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
@@ -350,7 +361,7 @@ it.each(['amount', 'status', 'refund'])(
 							order,
 							result,
 							queue,
-							write: (changes) => ctx.localPatch({ document: order, changes }),
+							write: (changes) => write({ document: order, changes }),
 						}
 					)
 				);
@@ -417,7 +428,7 @@ it('presents a refused boundary to the cashier while retaining the cart edit', a
 								order: target as EngineRecord<'orders'>,
 								result,
 								queue: slot,
-								write: (changes) => ctx.localPatch({ document: order, changes }),
+								write: (changes) => write({ document: order, changes }),
 							}
 						),
 				}
@@ -463,7 +474,7 @@ it('supersedes coupon completion when references change during the guard window'
 					productCategories: new Map(),
 					categoryParents: new Map(),
 				},
-				write: (changes) => ctx.localPatch({ document: order, changes }),
+				write: (changes) => write({ document: order, changes }),
 			}
 		)
 	);
@@ -530,7 +541,7 @@ it.each(['product', 'variation', 'read-once', 'read-twice'] as const)(
 					order,
 					queue,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
@@ -567,7 +578,7 @@ it.each([false, true])(
 					queue,
 					allowed: () => valid,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
@@ -600,7 +611,7 @@ it.each(['none', 'choose'] as const)(
 					order,
 					queue,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
@@ -642,7 +653,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 					order,
 					result,
 					queue,
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			);
 		const data = { line_items: [{ total: '4', subtotal: '4' }] };
@@ -726,7 +737,7 @@ it.each(['stock', 'predicate', 'unchanged'])(
 					queue,
 					allowed: () => allowed,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
@@ -779,7 +790,7 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 					queue,
 					allowed,
 					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
-					write: (changes) => ctx.localPatch({ document: order, changes }),
+					write: (changes) => write({ document: order, changes }),
 				}
 			),
 	});
@@ -852,7 +863,7 @@ it.each([
 									checkout = change !== 'checkout-exit';
 									openOrders$.next([order]);
 								}
-								return ctx.localPatch({ document: order, changes });
+								return write({ document: order, changes });
 							},
 						}
 					)
@@ -913,7 +924,7 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 						if (change === 'register_changed') registerId = 'other';
 						if (change === 'session_changed') mockSession.status = 'closed';
 						if (change === 'session_replaced') mockSession.id = 'replacement';
-						return ctx.localPatch({ document: order, changes });
+						return write({ document: order, changes });
 					},
 				}
 			)

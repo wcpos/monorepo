@@ -1741,10 +1741,16 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/checkout/completion-journal-bridge.tsx :: engine handle aliased :: SaleCompletionBridge>activeLegacyDatabase :: engine = manager.engine :: 1',
 	"screens/main/pos/checkout/hooks/use-checkout-save.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
 	'screens/main/pos/checkout/use-rejected-order-saves.ts :: engine handle aliased :: useRejectedOrderSavesSync :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (j3): the checkout's ledger writes go through the order ledger command.
+	'screens/main/pos/checkout/hooks/use-sale-context.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/hooks/use-sale-context.ts :: resident helper write :: useSaleContext :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/provenance/persist-provenance.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write :: useTenderFlow :: useLocalMutation :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 783;
+export const SEAM_RETIRED_FLOOR = 788;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'bf91f97ed6cd634fed4a4047c119c3e89110e1f6c1afd9502b1cd0b8950bfe38';
+	'c752bbb6bb3389285015a1635fb14a02b6a49c77027d6639a55830faeaf91e6c';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

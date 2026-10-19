@@ -2,7 +2,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { withLedger } from '@wcpos/order-math';
+import { type MetaDataEntry, readLedger, withLedger } from '@wcpos/order-math';
 
 import { createActionContext } from '../../../../../../extensions/actions';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
@@ -63,7 +63,10 @@ const mockHttp = {
 	})),
 };
 const mockMirror = jest.fn(async (_input: unknown) => {});
-const mockPatch = jest.fn(async () => ({}));
+const mockPatch = jest.fn<
+	Promise<object | undefined>,
+	[{ document: unknown; data: { meta_data?: MetaDataEntry[]; status?: string } }]
+>(async () => ({}));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
@@ -425,7 +428,9 @@ jest.mock('../../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: mockRuntime,
 		dp: 2,
-		localPatch: mockPatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../../sale-completion').SaleContext['stampCompletion']>
+		) => mockPatch({ document: o, data: { meta_data: m } }),
 		actor: {
 			id: String(mockSession.wpCredentials.id),
 			name: mockSession.wpCredentials.display_name,
@@ -448,3 +453,47 @@ jest.mock('@wcpos/query/mutations', () => ({
 	observeOfflineDeviceAuthorizations:
 		jest.requireActual('@wcpos/query/mutations').observeOfflineDeviceAuthorizations,
 }));
+
+// Without a queue around the snapshot and write, the second leg replaces the first row.
+it('preserves both offline payment rows when two legs race on one order', async () => {
+	const original = mockResident.payload;
+	mockResident.payload = { ...original, status: 'pos-open', meta_data: [] };
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	mockPatch.mockImplementation(async ({ data }) => {
+		// Model asynchronous persistence: a precomputed patch replaces the whole ledger.
+		await Promise.resolve();
+		mockResident.payload = { ...mockResident.payload, ...data };
+		return mockResident;
+	});
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const { patchAndEnqueue } = start.mock.calls[0][0];
+		await Promise.all([
+			patchAndEnqueue!('completed-order', {
+				...mockRow,
+				id: 'first',
+				amount: '4.00',
+				status: 'captured',
+			}),
+			patchAndEnqueue!('completed-order', {
+				...mockRow,
+				id: 'second',
+				amount: '6.00',
+				status: 'captured',
+			}),
+		]);
+		expect(readLedger(mockResident.payload.meta_data)).toEqual([
+			expect.objectContaining({ id: 'first', amount: '4.00' }),
+			expect.objectContaining({ id: 'second', amount: '6.00' }),
+		]);
+		expect(mockResident.payload.status).toBe('completed');
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+		mockPatch.mockImplementation(async () => ({}));
+		mockResident.payload = original;
+	}
+});

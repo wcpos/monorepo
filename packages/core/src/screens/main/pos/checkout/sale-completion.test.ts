@@ -65,6 +65,10 @@ jest.mock('@wcpos/utils/logger', () => ({
 const payload = { id: 42, status: 'completed', meta_data: [], line_items: [] };
 const order = { uuid: 'order', getLatest: () => ({ payload }) } as never;
 const mockActionLog = jest.fn();
+const mockPatch = jest.fn<
+	ReturnType<SaleContext['stampCompletion']>,
+	[{ document: unknown; data: { meta_data: MetaDataEntry[] } }]
+>();
 const ctx = {
 	actionCtx: createActionContext({
 		log: mockActionLog,
@@ -83,7 +87,8 @@ const ctx = {
 	sessions: {},
 	runtime: {},
 	dp: 2,
-	localPatch: jest.fn(),
+	stampCompletion: (o: Parameters<SaleContext['stampCompletion']>[0], m: MetaDataEntry[]) =>
+		mockPatch({ document: o, data: { meta_data: m } }),
 	pushDocument: jest.fn(),
 	stockAdjustment: jest.fn(),
 } as unknown as SaleContext;
@@ -136,7 +141,7 @@ beforeEach(async () => {
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
 	mockStamp.mockResolvedValue([{ key: 'stamp', value: 1 }]);
-	jest.mocked(ctx.localPatch).mockResolvedValue(order);
+	jest.mocked(mockPatch).mockResolvedValue(order);
 });
 it.each([
 	['manual online prediction', manual, true],
@@ -247,9 +252,9 @@ it('online provenance stamps, patches, then awaits push', async () => {
 	);
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(mockStamp.mock.invocationCallOrder[0]).toBeLessThan(
-		jest.mocked(ctx.localPatch).mock.invocationCallOrder[0]
+		jest.mocked(mockPatch).mock.invocationCallOrder[0]
 	);
-	expect(jest.mocked(ctx.localPatch).mock.invocationCallOrder[0]).toBeLessThan(
+	expect(jest.mocked(mockPatch).mock.invocationCallOrder[0]).toBeLessThan(
 		jest.mocked(ctx.pushDocument).mock.invocationCallOrder[0]
 	);
 	expect(finished).toBe(false);
@@ -259,7 +264,7 @@ it('online provenance stamps, patches, then awaits push', async () => {
 it('offline provenance writes split only', async () => {
 	const extraMeta = [{ key: '_wcpos_split', value: 'plan' }];
 	await persistSaleProvenance(ctx, { order, sessionId: null, online: false, extraMeta });
-	expect(ctx.localPatch).toHaveBeenCalledWith({ document: order, data: { meta_data: extraMeta } });
+	expect(mockPatch).toHaveBeenCalledWith({ document: order, data: { meta_data: extraMeta } });
 	expect(mockStamp).not.toHaveBeenCalled();
 	expect(ctx.pushDocument).not.toHaveBeenCalled();
 });
@@ -270,7 +275,7 @@ it('returns metadata for the caller atomic write', async () => {
 			extraMeta: [{ key: 'stamp', value: 2 }],
 		})
 	).toEqual([{ key: 'stamp', value: 2 }]);
-	expect(ctx.localPatch).not.toHaveBeenCalled();
+	expect(mockPatch).not.toHaveBeenCalled();
 	expect(ctx.pushDocument).not.toHaveBeenCalled();
 });
 it.each([
@@ -467,19 +472,19 @@ it.each(['stamp', 'patch', 'push'] as const)(
 	async (failure) => {
 		const error = new Error('write failed');
 		if (failure === 'stamp') mockStamp.mockRejectedValueOnce(error);
-		if (failure === 'patch') jest.mocked(ctx.localPatch).mockResolvedValueOnce(undefined);
+		if (failure === 'patch') jest.mocked(mockPatch).mockResolvedValueOnce(undefined);
 		if (failure === 'push') jest.mocked(ctx.pushDocument).mockRejectedValueOnce(error);
 		await expect(persistSaleProvenance(ctx, { order, online: true })).rejects.toThrow(
 			failure === 'patch' ? 'provenance_save_failed' : 'write failed'
 		);
 		if (failure !== 'push') expect(ctx.pushDocument).not.toHaveBeenCalled();
-		if (failure === 'stamp') expect(ctx.localPatch).not.toHaveBeenCalled();
+		if (failure === 'stamp') expect(mockPatch).not.toHaveBeenCalled();
 	}
 );
 it('offline provenance without a split does not write or allocate metadata', async () => {
 	await persistSaleProvenance(ctx, { order, online: false });
 	expect(mockStamp).not.toHaveBeenCalled();
-	expect(ctx.localPatch).not.toHaveBeenCalled();
+	expect(mockPatch).not.toHaveBeenCalled();
 	expect(ctx.pushDocument).not.toHaveBeenCalled();
 });
 
@@ -728,9 +733,8 @@ describe('gateway session attribution on retry', () => {
 		};
 		const input = { order: current as never, sessionId: 'session-B', online: true, source };
 		await persistSaleProvenance(ctx, input);
-		return (
-			jest.mocked(ctx.localPatch).mock.calls.at(-1)![0].data as { meta_data: MetaDataEntry[] }
-		).meta_data;
+		return (jest.mocked(mockPatch).mock.calls.at(-1)![0].data as { meta_data: MetaDataEntry[] })
+			.meta_data;
 	};
 	it.each(['gateway-contract', 'gateway-snapshot'] as const)(
 		'%s retry in B replaces only session A',

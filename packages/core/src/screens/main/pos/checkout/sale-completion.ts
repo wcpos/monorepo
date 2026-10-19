@@ -51,7 +51,7 @@ export interface SaleContext {
 	runtime: ReturnType<typeof useQueryRuntime>;
 	dp: number;
 	actor?: { id: string; name: string };
-	localPatch: Parameters<typeof persistProvenance>[0]['localPatch'];
+	stampCompletion: Parameters<typeof persistProvenance>[0]['stampCompletion'];
 	pushDocument: Parameters<typeof persistProvenance>[0]['pushDocument'];
 	stockAdjustment?: Parameters<typeof reconcileCompletedOrder>[3];
 }
@@ -112,12 +112,10 @@ export async function persistSaleProvenance(
 	}
 	if (input.online) return persistProvenance({ ...ctx, ...input });
 	if (!input.extraMeta) return;
-	const patched = await ctx.localPatch({
-		document: input.order,
-		data: {
-			meta_data: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta),
-		},
-	});
+	const patched = await ctx.stampCompletion(
+		input.order,
+		withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta)
+	);
 	if (!patched) throw new Error('provenance_save_failed');
 }
 

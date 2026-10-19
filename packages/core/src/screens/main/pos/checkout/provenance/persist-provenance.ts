@@ -5,11 +5,11 @@ import type { EngineRecord } from '@wcpos/query';
 import { completionMeta } from './stamp-completion';
 
 import type { usePushDocument } from '../../../contexts/use-push-document';
-import type { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import type { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 
 export async function persistProvenance(input: {
 	order: EngineRecord<'orders'>;
-	localPatch: ReturnType<typeof useLocalMutation>['localPatch'];
+	stampCompletion: ReturnType<typeof useOrderLedgerWrite>['stampCompletion'];
 	pushDocument: ReturnType<typeof usePushDocument>;
 	userDB: UserDatabase;
 	siteUuid: string;
@@ -18,19 +18,19 @@ export async function persistProvenance(input: {
 	sessionId?: string | null;
 	extraMeta?: MetaDataEntry[];
 }): Promise<void> {
-	const { order, localPatch, pushDocument, userDB, siteUuid, storeId, sessionId } = input;
+	const { order, stampCompletion, pushDocument, userDB, siteUuid, storeId, sessionId } = input;
 	const meta = await completionMeta(order.getLatest().payload, {
 		userDB,
 		siteUuid,
 		storeId,
 		sessionId,
 	});
-	const patched = await localPatch({
-		document: order,
+	const patched = await stampCompletion(
+		order,
 		// Replace, not keep: these describe the sale as it is completing now, and an
 		// earlier failed attempt at the final leg may have written a different plan.
-		data: { meta_data: withMetaReplaced(meta, input.extraMeta ?? []) },
-	});
+		withMetaReplaced(meta, input.extraMeta ?? [])
+	);
 	if (!patched) throw new Error('provenance_save_failed');
 	await pushDocument(order);
 }

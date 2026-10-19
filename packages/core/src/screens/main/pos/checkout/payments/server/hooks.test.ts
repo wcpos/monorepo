@@ -297,7 +297,9 @@ jest.mock('../../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: mockManager,
 		dp: 2,
-		localPatch: mockPatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../../sale-completion').SaleContext['stampCompletion']>
+		) => mockPatch({ document: o, data: { meta_data: m } }),
 		actor: {
 			id: String(mockSession.wpCredentials.id),
 			name: mockSession.wpCredentials.display_name,

@@ -617,7 +617,7 @@ describe('useCheckoutSession', () => {
 const mockProvenancePatch = jest.fn(
 	async (_input: {
 		document: unknown;
-		data: { meta_data: { key: string; value: unknown }[] };
+		data: { meta_data: import('@wcpos/order-math').MetaDataEntry[] };
 	}) => ({ document: order })
 );
 const mockProvenancePush = jest.fn(async (_order: unknown): Promise<void> => undefined);
@@ -788,7 +788,7 @@ jest.mock('../sale-completion', () => {
 					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
 					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
 				if (!input.online && !input.extraMeta) return;
-				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+				if (!(await ctx.stampCompletion(input.order, meta_data)))
 					throw new Error('provenance_save_failed');
 				if (input.online) await ctx.pushDocument(input.order);
 			}
@@ -834,7 +834,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
 		dp: 2,
-		localPatch: mockProvenancePatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../sale-completion').SaleContext['stampCompletion']>
+		) => mockProvenancePatch({ document: o, data: { meta_data: m } }),
 		pushDocument: mockProvenancePush,
 		stockAdjustment: mockStockAdjustment,
 	}),

@@ -12,11 +12,12 @@ import {
 } from '../contexts/order-money-divergence';
 import { commitAtBoundary } from './boundary-commit';
 
+import type { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
-export function useBoundaryCommit(write: ReturnType<typeof useSaleContext>['localPatch']) {
+export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['localPatch']) {
 	const ctx = useSaleContext();
 	const storeContract = useStoreContractReader();
 	const configForOrder = useCartConfigReader();

@@ -2521,7 +2521,7 @@ jest.mock('../sale-completion', () => {
 					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
 					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
 				if (!input.online && !input.extraMeta) return;
-				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+				if (!(await ctx.stampCompletion(input.order, meta_data)))
 					throw new Error('provenance_save_failed');
 				if (input.online) {
 					mockPayload.meta_data = meta_data;
@@ -2554,7 +2554,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: mockRuntime,
 		dp: 2,
-		localPatch: mockLocalPatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../sale-completion').SaleContext['stampCompletion']>
+		) => mockLocalPatch({ document: o, data: { meta_data: m } }),
 		pushDocument: mockPushDocument,
 		actor: { id: '7', name: 'Pat' },
 		stockAdjustment: mockAdjustStock,
