@@ -28,10 +28,10 @@ export function ordersSummary(orders: ReportOrder[], totals: Totals, num_decimal
 // status, so the parts add up to the figure (the prototype's status bar).
 export function statusCounts(orders: ReportOrder[], statusMode: ReportsScope['statusMode']) {
 	const kept = orders.filter((order) => !order.refunds?.length);
-	const count = (status: string, rows = kept) =>
+	const countOf = (status: string, rows = kept) =>
 		rows.filter((order) => order.status === status).length;
 	const segments = (['completed', 'processing', 'on-hold', 'pending'] as const)
-		.map((status) => ({ status, count: count(status) }))
+		.map((status) => ({ status, count: countOf(status) }))
 		.filter(
 			({ status, count }) =>
 				['completed', 'processing'].includes(status) || (statusMode === 'all' && count > 0)
@@ -41,9 +41,9 @@ export function statusCounts(orders: ReportOrder[], statusMode: ReportsScope['st
 		refunded: orders.filter((order) => order.refunds?.length).length,
 		// What needs you is a status, refunded or not: counted over every selected order.
 		needsYou: {
-			processing: count('processing', orders),
-			onHold: count('on-hold', orders),
-			pending: count('pending', orders),
+			processing: countOf('processing', orders),
+			onHold: countOf('on-hold', orders),
+			pending: countOf('pending', orders),
 		},
 	};
 }

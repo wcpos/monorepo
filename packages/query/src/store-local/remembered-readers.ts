@@ -43,7 +43,7 @@ export function rememberedReaders(database: StoreLocalDatabase) {
 			await state.set(methodId, () => snapshot(reader));
 		},
 		/** Forget: the reader stops reconnecting at the next sale and leaves the settings list. */
-		async remove(methodId: string): Promise<void> {
+		async forget(methodId: string): Promise<void> {
 			const state = await storeDB.addState<Readers>(STATE_NAME);
 			await state.set(methodId, () => undefined as unknown as RememberedReader);
 		},

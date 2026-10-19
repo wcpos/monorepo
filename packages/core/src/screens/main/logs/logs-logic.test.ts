@@ -599,7 +599,7 @@ describe('rowDetailData', () => {
 		expect(detail.request).toBe('c41a88 · 400 · 500 ms');
 		expect(detail.serverCode).toBe('woocommerce_rest_invalid_tax_class');
 		expect(detail.attempts).toEqual({
-			count: 3,
+			times: 3,
 			firstSeen: 1_000,
 			lastSeen: 2_000,
 		});

@@ -35,7 +35,7 @@ it('round-trips readers, emits changes and prunes the removed key', async () => 
 	await firstValueFrom(observeRememberedReaders(db));
 	await preferences.set('card', reader);
 	expect(await preferences.get('card')).toEqual(reader);
-	await preferences.remove('card');
+	await preferences.forget('card');
 	expect(await preferences.get('card')).toBeNull();
 	expect(await values).toEqual([{}, { card: reader }, {}]);
 });

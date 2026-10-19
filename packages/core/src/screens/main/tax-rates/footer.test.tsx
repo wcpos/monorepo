@@ -101,7 +101,7 @@ function renderFooter(
 			initialSort={{ field: 'id', direction: 'asc' }}
 		>
 			<QueryStateProbe />
-			<TaxRatesFooter count={3} handle={handle} shown={shown} applies={applies} />
+			<TaxRatesFooter shownCount={3} handle={handle} shown={shown} applies={applies} />
 		</QueryStateProvider>
 	);
 }

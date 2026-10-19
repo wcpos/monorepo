@@ -1764,10 +1764,21 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/use-referenced-customer-demand.ts :: require plane outside a named read :: useReferencedCustomerDemand :: engine.require :: 1',
 	"screens/main/hooks/use-storage-health.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
 	'screens/main/hooks/use-unsent-changes.ts :: engine handle aliased :: useUnsentChangesRecorder :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (l3): the last storage type imports come from @wcpos/query; props and fields stop borrowing storage names.
+	"screens/main/components/order/customer.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/logs/logs-logic.ts :: raw query construction :: buildLogEntryReport :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts?.count :: 1',
+	'screens/main/pos/cart/register-count.tsx :: raw query construction :: DenominationTile :: count :: 1',
+	'screens/main/settings/card-readers/use-reader-actions.ts :: record mutator :: useReaderActions :: rememberedReaders(storeDB).remove :: 1',
+	'screens/main/tax-rates/footer.tsx :: raw query construction :: TaxRatesFooter :: count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: data?.count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: novuClient.notifications.count :: 1',
+	"services/register-session/use-session-report.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 803;
+export const SEAM_RETIRED_FLOOR = 813;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1c9f9733678c069689817c90217be6fae81926266388ccdc362f48850a64d039';
+	'bb8ea7f62f5ad1276b6d5a6beb9d27aa87e883940fb3439df3c71f9bee667943';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

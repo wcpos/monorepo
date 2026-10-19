@@ -156,7 +156,7 @@ export function RecountSheet({
 											currencyOptions={currencyOptions}
 											key={face}
 											value={face}
-											count={pieces[face] ?? 0}
+											pieces={pieces[face] ?? 0}
 											add={(n) => {
 												setPieces((previous) => ({
 													...previous,
