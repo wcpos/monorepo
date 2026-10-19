@@ -9,7 +9,7 @@ export interface ScanTraceSettings {
 
 export interface TraceSuggestion {
 	kind: 'raise-threshold' | 'lower-min-chars' | 'set-prefix';
-	patch: Record<string, number | string>;
+	settings: Record<string, number | string>;
 	value: number | string;
 }
 
@@ -64,7 +64,7 @@ export function analyzeScanTrace(keys: TraceKey[], settings: ScanTraceSettings):
 		suggestions.push({
 			kind: 'raise-threshold',
 			value,
-			patch: { barcode_scanning_avg_time_input_threshold: value },
+			settings: { barcode_scanning_avg_time_input_threshold: value },
 		});
 	}
 	if (tooShort && code.length >= 1) {
@@ -74,14 +74,14 @@ export function analyzeScanTrace(keys: TraceKey[], settings: ScanTraceSettings):
 		suggestions.push({
 			kind: 'lower-min-chars',
 			value,
-			patch: { barcode_scanning_min_chars: value },
+			settings: { barcode_scanning_min_chars: value },
 		});
 	}
 	if (detectedAsScan && leadingSymbol && settings.prefix === '') {
 		suggestions.push({
 			kind: 'set-prefix',
 			value: leadingSymbol,
-			patch: { barcode_scanning_prefix: leadingSymbol },
+			settings: { barcode_scanning_prefix: leadingSymbol },
 		});
 	}
 
