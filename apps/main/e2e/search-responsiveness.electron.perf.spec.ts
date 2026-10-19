@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { _electron, expect, test } from '@playwright/test';
 
 import { PRO_STORE_URL } from '../playwright.config';
-import { navigateToPage } from './fixtures';
+import { navigateToPage, storePickLocator } from './fixtures';
 import { expectSearchResponsive, measureSearch } from './search-responsiveness';
 
 // Point at a packaged app containing the renderer under test, never a user's profile.
@@ -39,7 +39,7 @@ test('desktop search preserves typing and reports frame smoothness', async ({}, 
 		await page.getByTestId('wp-user-button').first().click({ timeout: 30_000 });
 		const open = page.getByTestId('open-pos-button').first();
 		await expect(open).toBeVisible();
-		if (await open.isDisabled()) await page.getByRole('radio').first().click();
+		if (await open.isDisabled()) await storePickLocator(page).click();
 		await open.click();
 		await expect(page.getByTestId('search-products').filter({ visible: true })).toBeVisible({
 			timeout: 60_000,

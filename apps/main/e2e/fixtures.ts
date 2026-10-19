@@ -635,6 +635,20 @@ export async function waitForStoreQuiescence(
 	}
 }
 
+/**
+ * The store row `authenticateWithStore` presses on the connect screen's picker:
+ * the requested WooCommerce store, or the first offered when none is named.
+ *
+ * Addressed by the store rows' own testIDs, never by radio role: the users above the
+ * stores are a radio group too (#2703), so "the first radio" is the cashier's row, and
+ * pressing it re-selects the user and clears the store choice (store-pick.unit.spec.ts).
+ */
+export function storePickLocator(page: Page, storeId?: number | string): Locator {
+	return storeId != null
+		? page.getByTestId(`store-option-${storeId}`)
+		: page.locator('[data-testid^="store-option-"]').first();
+}
+
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
@@ -884,14 +898,7 @@ export async function authenticateWithStore(
 			// was a localID hash, so "first" was the only reachable choice and tax
 			// coverage was whatever the render order happened to give (see
 			// woocommerce-pos#1548).
-			const storeOption =
-				storeId != null
-					? page.getByTestId(`store-option-${storeId}`)
-					: page
-							.locator(
-								'[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]'
-							)
-							.first();
+			const storeOption = storePickLocator(page, storeId);
 			const hasOption = await becomesVisible(storeOption, storeId != null ? 10_000 : 2_000);
 			if (hasOption) {
 				console.log(
