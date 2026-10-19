@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 
+import { startCpuProfile, stopCpuProfileAndAttach } from './cpu-profile';
 import { authenticatedTest as test } from './fixtures';
 
 /**
@@ -67,6 +68,13 @@ const MAX_RETAINED_OVER_BASELINE = 1.25;
 const MAX_NODES_OVER_PLATEAU = 1.5;
 /** Total main-thread long-task time across every committed search (measured: 124 ms in 400). */
 const LONG_TASK_BUDGET_MS = 2_000;
+/**
+ * PROBE (investigation branch, not for merging): CPU-profile five cycles right after the harness
+ * collection at the end of the warm-up, so the window holds only per-keystroke search work, not
+ * cold-start warm-up or the forced GC. The profile is attached inside the loop, before any gate.
+ */
+const PROFILE_FIRST_CYCLE = WARM_UP_CYCLES + 1;
+const PROFILE_LAST_CYCLE = PROFILE_FIRST_CYCLE + 4;
 
 type Sample = {
 	label: string;
@@ -129,27 +137,61 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	let collectedBaseline: Sample | null = null;
 	/** Long-task time the harness's own warm-up collection cost; not search work, so not budgeted. */
 	let harnessLongTaskMs = 0;
-	for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
-		await input.click();
-		for (const ch of WORD) {
-			await page.keyboard.type(ch);
-			await page.waitForTimeout(KEY_GAP_MS);
+	let profiling = false;
+	let profileStart: Sample | null = null;
+	const attachProfile = async (lastCycle: number) => {
+		profiling = false;
+		const end = samples[samples.length - 1];
+		const summary = await stopCpuProfileAndAttach(cdp, testInfo, 'search-heap', {
+			cycles: `${PROFILE_FIRST_CYCLE}-${lastCycle}`,
+			longTasks: profileStart ? end.longTasks - profileStart.longTasks : null,
+			longTaskMs: profileStart ? Math.round(end.longTaskMs - profileStart.longTaskMs) : null,
+		});
+		const top = summary.topSelfTime
+			.slice(0, 10)
+			.map((r) => `${r.functionName}@${r.url}:${r.line}:${r.column}=${r.selfTimeMs}ms`)
+			.join(' ');
+		process.stdout.write(
+			`[search-heap] cpu profile cycles ${PROFILE_FIRST_CYCLE}-${lastCycle} top self: ${top}\n`
+		);
+	};
+	try {
+		for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
+			if (cycle === PROFILE_FIRST_CYCLE) {
+				profileStart = samples[samples.length - 1];
+				await startCpuProfile(cdp);
+				profiling = true;
+			}
+			await input.click();
+			for (const ch of WORD) {
+				await page.keyboard.type(ch);
+				await page.waitForTimeout(KEY_GAP_MS);
+			}
+			await page.waitForTimeout(SETTLE_MS);
+			for (let k = 0; k < WORD.length; k += 1) {
+				await page.keyboard.press('Backspace');
+				await page.waitForTimeout(KEY_GAP_MS);
+			}
+			await page.waitForTimeout(SETTLE_MS);
+			const cycleSample = await sample(`cycle-${cycle}`);
+			if (cycle === PROFILE_LAST_CYCLE) await attachProfile(cycle);
+			// Like against like: the retained-heap gate compares the end-of-run collected reading to a
+			// collected reading, never to a pre-GC sample. Taken at the end of the warm-up so the trend
+			// window that follows is never interrupted by a harness collection.
+			if (cycle === WARM_UP_CYCLES) {
+				await cdp.send('HeapProfiler.collectGarbage');
+				await page.waitForTimeout(1_000);
+				collectedBaseline = await sample('warm-up-collected');
+				harnessLongTaskMs += collectedBaseline.longTaskMs - cycleSample.longTaskMs;
+			}
 		}
-		await page.waitForTimeout(SETTLE_MS);
-		for (let k = 0; k < WORD.length; k += 1) {
-			await page.keyboard.press('Backspace');
-			await page.waitForTimeout(KEY_GAP_MS);
-		}
-		await page.waitForTimeout(SETTLE_MS);
-		const cycleSample = await sample(`cycle-${cycle}`);
-		// Like against like: the retained-heap gate compares the end-of-run collected reading to a
-		// collected reading, never to a pre-GC sample. Taken at the end of the warm-up so the trend
-		// window that follows is never interrupted by a harness collection.
-		if (cycle === WARM_UP_CYCLES) {
-			await cdp.send('HeapProfiler.collectGarbage');
-			await page.waitForTimeout(1_000);
-			collectedBaseline = await sample('warm-up-collected');
-			harnessLongTaskMs += collectedBaseline.longTaskMs - cycleSample.longTaskMs;
+	} finally {
+		// A cycle that threw mid-window still leaves its partial profile behind.
+		if (profiling) {
+			const last = samples.filter((s) => s.label.startsWith('cycle-')).length;
+			await attachProfile(last).catch((error: unknown) =>
+				process.stdout.write(`[search-heap] cpu profile not attached: ${String(error)}\n`)
+			);
 		}
 	}
 	await expect(input).toHaveValue('');
