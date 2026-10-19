@@ -12,6 +12,7 @@ import { formatSkewMagnitude } from '../logs/logs-logic';
 import { Section } from './components/section';
 import {
 	duplicateSales,
+	isExactDuplicateCount,
 	isLeadingClosureGap,
 	isUnstampedTill,
 	orderNumberList,
@@ -46,25 +47,29 @@ function formatStampedTime(iso: string): string {
 /**
  * One check: status glyph, title, optional muted sub. With `children` it is a collapsed
  * disclosure whose trigger carries the chevron; without, a plain row that is not pressable.
+ * `neutral` is a row that can neither pass nor fail (an info glyph, never the green check).
  */
 function CheckRow({
 	attention,
+	neutral = false,
 	title,
 	sub,
 	testID,
 	children,
 }: {
 	attention: boolean;
+	neutral?: boolean;
 	title: string;
 	sub?: string;
 	testID: string;
 	children?: React.ReactNode;
 }) {
-	const glyph = (
-		<Icon
-			name={attention ? 'triangleExclamation' : 'circleCheck'}
-			variant={attention ? 'warning' : 'success'}
-		/>
+	const glyph = attention ? (
+		<Icon name="triangleExclamation" variant="warning" />
+	) : neutral ? (
+		<Icon name="circleInfo" variant="muted" />
+	) : (
+		<Icon name="circleCheck" variant="success" />
 	);
 	const lines = (
 		<VStack className="flex-1 gap-0.5">
@@ -120,6 +125,22 @@ function CheckView({
 }) {
 	const t = useT();
 	const testID = `health-register-check-${check.kind}`;
+	if (check.kind === 'clock' && check.sampled && !check.failing) {
+		// An older plugin's skew is one capped sample across both directions: behind rows can
+		// hide an ahead one, so with no ahead row the check neither passes nor fails; it shows
+		// what it has. (An ahead row in the sample fails below, its count a lower bound.)
+		return (
+			<CheckRow
+				attention={false}
+				neutral
+				testID={testID}
+				title={t('health.registers.clock_sampled')}
+				sub={t('health.registers.clock_sampled_sub')}
+			>
+				{check.behind.map((skew) => skewRow(t, skew))}
+			</CheckRow>
+		);
+	}
 	if (!check.failing) {
 		// Only the clock has rows to show when it passes: sales received late. A late sale
 		// is usually an offline one, but the payload cannot rule out a clock running behind,
@@ -190,17 +211,22 @@ function CheckView({
 							count: duplicateSales(duplicate),
 							counter: duplicate.counter,
 						};
+						// Without the server's count the capped sample is only a lower bound.
+						const exact = isExactDuplicateCount(duplicate);
+						const key = isUnstampedTill(duplicate.till, registerId)
+							? exact
+								? 'health.registers.duplicate_row_no_till'
+								: 'health.registers.duplicate_row_no_till_atleast'
+							: exact
+								? 'health.registers.duplicate_row'
+								: 'health.registers.duplicate_row_atleast';
 						return (
 							<VStack
 								key={`${duplicate.till}:${duplicate.counter}:${index}`}
 								testID="health-register-duplicate"
 								className="gap-0.5"
 							>
-								<Text className="text-sm">
-									{isUnstampedTill(duplicate.till, registerId)
-										? t('health.registers.duplicate_row_no_till', values)
-										: t('health.registers.duplicate_row', values)}
-								</Text>
+								<Text className="text-sm">{t(key, values)}</Text>
 								{orders !== '' ? (
 									<Text className="text-muted-foreground text-xs">
 										{t('health.registers.duplicate_orders', { orders })}
@@ -277,7 +303,16 @@ function CheckView({
 	}
 }
 
-function RegisterBlock({ register, days }: { register: RegisterReport; days: number }) {
+function RegisterBlock({
+	register,
+	days,
+	truncated,
+}: {
+	register: RegisterReport;
+	days: number;
+	/** The server checked only the newest sales, so a clean register is clean for those only. */
+	truncated: boolean;
+}) {
 	const t = useT();
 	const state = registerState(register);
 	const { first_counter: first, last_counter: last } = register;
@@ -298,7 +333,14 @@ function RegisterBlock({ register, days }: { register: RegisterReport; days: num
 							})}
 				</Text>
 			</HStack>
-			{state.kind === 'clean' ? (
+			{state.kind === 'clean' && truncated ? (
+				<CheckRow
+					attention={false}
+					testID="health-register-clean"
+					title={t('health.registers.checks_passed_sampled')}
+					sub={t('health.registers.checks_passed_sampled_sub')}
+				/>
+			) : state.kind === 'clean' ? (
 				<CheckRow
 					attention={false}
 					testID="health-register-clean"
@@ -353,7 +395,12 @@ export function RegistersPanel() {
 				</Text>
 			) : null}
 			{data?.registers.map((register) => (
-				<RegisterBlock key={register.id} register={register} days={data.window_days} />
+				<RegisterBlock
+					key={register.id}
+					register={register}
+					days={data.window_days}
+					truncated={data.truncated}
+				/>
 			))}
 			{data && data.unregistered.length > 0 ? (
 				<VStack testID="health-unregistered" className="gap-1">

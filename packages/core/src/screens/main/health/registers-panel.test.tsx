@@ -122,8 +122,11 @@ const aheadSkew: Register['skew'][number] = {
 const findings: Register = {
 	...clean,
 	gaps: [{ till: TILL_A, after: 41, before: 43, missing: 1 }],
-	duplicates: [{ till: TILL_A, counter: 44, order_ids: [23, 31], order_numbers: ['1023', '1031'] }],
+	duplicates: [
+		{ till: TILL_A, counter: 44, orders: 2, order_ids: [23, 31], order_numbers: ['1023', '1031'] },
+	],
 	skew: [behindSkew],
+	skew_counts: { ahead: 0, behind: 1 },
 };
 
 function withRegisters(...registers: Register[]) {
@@ -184,6 +187,7 @@ it('lists failing checks first, in the order gaps, duplicates, clock, closures',
 		...clean,
 		duplicates: findings.duplicates,
 		skew: [aheadSkew],
+		skew_counts: { ahead: 1, behind: 0 },
 		closure_gaps: [],
 		closure_conflicts: [],
 		closure_total_mismatches: [],
@@ -257,6 +261,17 @@ it('shows one All checks passed row for a clean register and no check rows', () 
 	expect(screen.queryByTestId('health-register-clean-trigger')).toBeNull();
 });
 
+it('does not say All checks passed for a clean register on a truncated report', () => {
+	state.data = { ...state.data!, truncated: true };
+	withRegisters({ ...clean, closure_gaps: [] });
+	render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-clean').textContent).toBe(
+		'Checks passed for the newest salesOlder sales in the window were not checked.'
+	);
+	expect(register().textContent).not.toContain('All checks passed');
+	expect(register().textContent).not.toContain('in order');
+});
+
 it('omits the in-order sub on a clean register without counters', () => {
 	withRegisters({ ...clean, first_counter: null, last_counter: null });
 	render(<RegistersPanel />);
@@ -278,10 +293,11 @@ it('names each till that restarted its counter once the duplicates check is open
 			{
 				till: TILL_B,
 				counter: 1,
+				orders: 3,
 				order_ids: [21, 22, 23],
 				order_numbers: ['1021', '1022', '1023'],
 			},
-			{ till: TILL_A, counter: 1, order_ids: [11, 12], order_numbers: ['1011', '1012'] },
+			{ till: TILL_A, counter: 1, orders: 2, order_ids: [11, 12], order_numbers: ['1011', '1012'] },
 		],
 	});
 	render(<RegistersPanel />);
@@ -297,7 +313,7 @@ it('names each till that restarted its counter once the duplicates check is open
 	]);
 });
 
-it('counts a repeated number from the server total when sent, and pluralises one sale', () => {
+it('counts a repeated number exactly from the server total, and as a lower bound without it', () => {
 	const ids = Array.from({ length: 20 }, (_, i) => 100 + i);
 	withRegisters({
 		...clean,
@@ -305,8 +321,9 @@ it('counts a repeated number from the server total when sent, and pluralises one
 		duplicates: [
 			// The server caps order ids at 20; `orders` is the true count.
 			{ till: TILL_A, counter: 1, orders: 25, order_ids: ids, order_numbers: ids.map(String) },
-			// An older plugin sends no `orders`: the sample is the count.
-			{ till: TILL_B, counter: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
+			// An older plugin sends no `orders`: the capped sample is only a lower bound.
+			{ till: TILL_B, counter: 2, order_ids: ids, order_numbers: ids.map(String) },
+			{ till: 'till-1', counter: 3, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
 		],
 	});
 	render(<RegistersPanel />);
@@ -314,7 +331,8 @@ it('counts a repeated number from the server total when sent, and pluralises one
 	open('duplicates');
 	const rows = screen.getAllByTestId('health-register-duplicate');
 	expect(rows[0].textContent).toContain('Till aaaaaaaa… — 25 sales numbered #1');
-	expect(rows[1].textContent).toContain('Till bbbbbbbb… — 2 sales numbered #2');
+	expect(rows[1].textContent).toContain('Till bbbbbbbb… — at least 20 sales numbered #2');
+	expect(rows[2].textContent).toContain('No till recorded — at least 2 sales numbered #3');
 });
 
 it('says No till recorded when the server fell back to the register id as the till', () => {
@@ -322,7 +340,7 @@ it('says No till recorded when the server fell back to the register id as the ti
 		...clean,
 		gaps: [{ till: 'till-1', after: 3, before: 5, missing: 1 }],
 		duplicates: [
-			{ till: 'till-1', counter: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
+			{ till: 'till-1', counter: 2, orders: 2, order_ids: [7, 8], order_numbers: ['1007', '1008'] },
 		],
 	});
 	render(<RegistersPanel />);
@@ -362,8 +380,11 @@ it('counts only real tills in the title when stamped and unstamped sales both re
 it('leaves deleted orders out of order lists and names them on skew rows', () => {
 	withRegisters({
 		...clean,
-		duplicates: [{ till: TILL_A, counter: 2, order_ids: [7, 8], order_numbers: ['', '1008'] }],
+		duplicates: [
+			{ till: TILL_A, counter: 2, orders: 2, order_ids: [7, 8], order_numbers: ['', '1008'] },
+		],
 		skew: [{ ...aheadSkew, order_number: '' }],
+		skew_counts: { ahead: 1, behind: 0 },
 	});
 	render(<RegistersPanel />);
 	open('duplicates');
@@ -412,7 +433,11 @@ it('sums missing numbers across gaps and counts the tills they are on', () => {
 });
 
 it('fails the clock check on a clock running ahead and lists only the ahead sales', () => {
-	withRegisters({ ...clean, skew: [aheadSkew, behindSkew] });
+	withRegisters({
+		...clean,
+		skew: [aheadSkew, behindSkew],
+		skew_counts: { ahead: 1, behind: 1 },
+	});
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-clock');
 	expect(check.textContent).toContain('1 sale stamped by a clock running ahead');
@@ -424,7 +449,7 @@ it('fails the clock check on a clock running ahead and lists only the ahead sale
 });
 
 it('passes the clock check on behind-only sales without claiming the clocks agree', () => {
-	withRegisters({ ...clean, skew: [behindSkew] });
+	withRegisters({ ...clean, skew: [behindSkew], skew_counts: { ahead: 0, behind: 1 } });
 	render(<RegistersPanel />);
 	const check = screen.getByTestId('health-register-check-clock');
 	// A late sale is usually offline, but the payload cannot rule out a clock running behind.
@@ -436,12 +461,51 @@ it('passes the clock check on behind-only sales without claiming the clocks agre
 	expect(screen.getAllByTestId('health-register-skew')).toHaveLength(1);
 });
 
-it('says the till clocks agree only when no sale is out of step', () => {
-	withRegisters({ ...clean, gaps: [{ till: TILL_A, after: 1, before: 3, missing: 1 }] });
+it('says the till clocks agree only when no sale is out of step, with or without skew_counts', () => {
+	const gaps = [{ till: TILL_A, after: 1, before: 3, missing: 1 }];
+	withRegisters({ ...clean, gaps, skew_counts: { ahead: 0, behind: 0 } });
+	const { unmount } = render(<RegistersPanel />);
+	expect(screen.getByTestId('health-register-check-clock').textContent).toBe(
+		'Till clocks agree with your server'
+	);
+	unmount();
+	// An older plugin with nothing to sample: nothing was skewed.
+	withRegisters({ ...clean, gaps });
 	render(<RegistersPanel />);
 	expect(screen.getByTestId('health-register-check-clock').textContent).toBe(
 		'Till clocks agree with your server'
 	);
+});
+
+it('shows an older plugin’s behind-only skew sample as a neutral row', () => {
+	withRegisters({ ...clean, skew: [behindSkew] });
+	render(<RegistersPanel />);
+	const check = screen.getByTestId('health-register-check-clock');
+	expect(check.textContent).toBe(
+		"Till clocks: only a sample was checkedUpdate the POS plugin to check every sale's clock."
+	);
+	expect(check.querySelector('[data-icon="circleInfo"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="circleCheck"]')).toBeNull();
+	expect(check.querySelector('[data-icon="triangleExclamation"]')).toBeNull();
+	open('clock');
+	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
+		'Order 1040: device 2026-09-11 00:42 +02:00, received 2026-09-10 22:42 UTC — 119 min behind',
+	]);
+});
+
+it('fails an older plugin’s sample on an ahead row, with the amber running-ahead row', () => {
+	// One ahead row proves a clock is ahead however the sample was cut; its count is a lower bound.
+	withRegisters({ ...clean, skew: [behindSkew, aheadSkew] });
+	render(<RegistersPanel />);
+	expect(checkIds()[0]).toBe('health-register-check-clock');
+	const check = screen.getByTestId('health-register-check-clock');
+	expect(check.textContent).toContain('1 sale stamped by a clock running ahead');
+	expect(check.querySelector('[data-icon="triangleExclamation"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="circleInfo"]')).toBeNull();
+	open('clock');
+	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
+		'Order 1041: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',
+	]);
 });
 
 it('omits the closures check when the plugin sends no closure lists', () => {

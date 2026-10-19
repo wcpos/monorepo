@@ -4,6 +4,7 @@ import {
 	duplicateSales,
 	duplicatesCheck,
 	gapsCheck,
+	isExactDuplicateCount,
 	isLeadingClosureGap,
 	isUnstampedTill,
 	orderChecks,
@@ -40,6 +41,11 @@ function skew(order_id: number, direction: RegisterSkew['direction']): RegisterS
 }
 function duplicate(till: string, counter: number, orders: number[]) {
 	return { till, counter, order_ids: orders, order_numbers: orders.map(String) };
+}
+/** A clock check as a current plugin sends it: per-direction totals beside the sample. */
+function counted(sample: RegisterSkew[]) {
+	const { ahead, behind } = splitSkew(sample);
+	return clockCheck(sample, { ahead: ahead.length, behind: behind.length });
 }
 const kinds = (register: RegisterReport) => registerChecks(register).map((check) => check.kind);
 
@@ -135,6 +141,11 @@ describe('duplicatesCheck', () => {
 		expect(duplicateSales({ ...duplicate('a', 1, ids), orders: 25 })).toBe(25);
 		expect(duplicateSales(duplicate('a', 1, [1, 2]))).toBe(2);
 	});
+
+	it('calls the count exact only when the server sent it', () => {
+		expect(isExactDuplicateCount({ ...duplicate('a', 1, [1, 2]), orders: 2 })).toBe(true);
+		expect(isExactDuplicateCount(duplicate('a', 1, [1, 2]))).toBe(false);
+	});
 });
 
 describe('clock', () => {
@@ -145,14 +156,14 @@ describe('clock', () => {
 	});
 
 	it('fails only on a clock running ahead', () => {
-		expect(clockCheck([skew(1, 'behind')]).failing).toBe(false);
-		expect(clockCheck([skew(1, 'behind'), skew(2, 'ahead')]).failing).toBe(true);
+		expect(counted([skew(1, 'behind')]).failing).toBe(false);
+		expect(counted([skew(1, 'behind'), skew(2, 'ahead')]).failing).toBe(true);
 	});
 
 	it('is notable when it fails or when sales arrived late, and not otherwise', () => {
-		expect(clockCheck([]).notable).toBe(false);
-		expect(clockCheck([skew(1, 'behind')]).notable).toBe(true);
-		expect(clockCheck([skew(1, 'ahead')]).notable).toBe(true);
+		expect(counted([]).notable).toBe(false);
+		expect(counted([skew(1, 'behind')]).notable).toBe(true);
+		expect(counted([skew(1, 'ahead')]).notable).toBe(true);
 	});
 
 	it('takes its counts from skew_counts when sent, else from the sample', () => {
@@ -160,8 +171,41 @@ describe('clock', () => {
 		expect(clockCheck(sample, { ahead: 31, behind: 12 })).toMatchObject({
 			aheadCount: 31,
 			behindCount: 12,
+			counted: true,
 		});
-		expect(clockCheck(sample)).toMatchObject({ aheadCount: 1, behindCount: 1 });
+		expect(clockCheck(sample)).toMatchObject({ aheadCount: 1, behindCount: 1, counted: false });
+	});
+
+	describe('without skew_counts (an older plugin samples both directions together)', () => {
+		it('is a neutral, notable sample when it holds only behind rows', () => {
+			expect(clockCheck([skew(1, 'behind')])).toMatchObject({
+				sampled: true,
+				failing: false,
+				notable: true,
+			});
+		});
+
+		it('fails on an ahead row in the sample, counting the sample as a lower bound', () => {
+			expect(clockCheck([skew(1, 'behind'), skew(2, 'ahead')])).toMatchObject({
+				sampled: true,
+				failing: true,
+				notable: true,
+				aheadCount: 1,
+			});
+		});
+
+		it('passes, not notable, when there is no skew at all', () => {
+			expect(clockCheck([])).toMatchObject({
+				counted: false,
+				sampled: false,
+				failing: false,
+				notable: false,
+			});
+		});
+	});
+
+	it('is never sampled when skew_counts is sent', () => {
+		expect(counted([skew(1, 'behind')]).sampled).toBe(false);
 	});
 });
 
@@ -228,6 +272,7 @@ describe('check order', () => {
 			kinds({
 				...clean,
 				skew: [skew(1, 'ahead')],
+				skew_counts: { ahead: 1, behind: 0 },
 				duplicates: [duplicate('a', 1, [1, 2])],
 				closure_gaps: [{ after: 1, before: 3, missing: 1 }],
 			})
@@ -235,7 +280,7 @@ describe('check order', () => {
 	});
 
 	it('orderChecks does not mutate its input', () => {
-		const checks = [gapsCheck([], 'reg-1'), clockCheck([skew(1, 'ahead')])];
+		const checks = [gapsCheck([], 'reg-1'), counted([skew(1, 'ahead')])];
 		orderChecks(checks);
 		expect(checks.map((check) => check.kind)).toEqual(['gaps', 'clock']);
 	});
@@ -255,8 +300,16 @@ describe('registerState', () => {
 	});
 
 	it('keeps the per-check rows when late offline sales are notable', () => {
-		const state = registerState({ ...clean, skew: [skew(1, 'behind')] });
+		const state = registerState({
+			...clean,
+			skew: [skew(1, 'behind')],
+			skew_counts: { ahead: 0, behind: 1 },
+		});
 		expect(state.kind).toBe('checks');
+	});
+
+	it('is not clean when an older plugin sent only a skew sample', () => {
+		expect(registerState({ ...clean, skew: [skew(1, 'behind')] }).kind).toBe('checks');
 	});
 
 	it('lists every check, failing first, when one fails', () => {

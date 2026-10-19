@@ -43,6 +43,13 @@ export type ClockCheck = CheckBase & {
 	/** True totals when the server sends them; `skew` itself is a capped sample. */
 	aheadCount: number;
 	behindCount: number;
+	/** The server sent `skew_counts`, so `skew` is capped per direction and both are complete. */
+	counted: boolean;
+	/**
+	 * An older plugin capped `skew` as one sample across both directions: behind rows can
+	 * crowd out an ahead one, so neither "agree" nor "none ahead" can be claimed.
+	 */
+	sampled: boolean;
 };
 export type ClosuresCheck = CheckBase & {
 	kind: 'closures';
@@ -112,9 +119,17 @@ export function duplicatesCheck(
 	};
 }
 
-/** Sales sharing one counter: the server's true count, else the (capped) sample of ids. */
+/**
+ * Sales sharing one counter: the server's true count, else the (capped) sample of ids, which
+ * is then only a lower bound (see `isExactDuplicateCount`).
+ */
 export function duplicateSales(duplicate: RegisterDuplicate): number {
 	return duplicate.orders ?? duplicate.order_ids.length;
+}
+
+/** An older plugin sends no `orders`, so the count is a lower bound, not an exact figure. */
+export function isExactDuplicateCount(duplicate: RegisterDuplicate): boolean {
+	return duplicate.orders !== undefined;
 }
 
 export function splitSkew(skew: readonly RegisterSkew[]): {
@@ -127,21 +142,30 @@ export function splitSkew(skew: readonly RegisterSkew[]): {
 	};
 }
 
-/** Only a clock running ahead fails; a sale received late is an offline sale, notable only. */
+/**
+ * Only a clock running ahead fails, sampled or not: one ahead row proves it, and without
+ * `skew_counts` its count is a lower bound. A sale received late is usually an offline sale,
+ * notable only. Without `skew_counts` (an older plugin) a skew sample with no ahead row is
+ * neutral and notable: behind rows may have crowded an ahead one out of the sample.
+ */
 export function clockCheck(
 	skew: readonly RegisterSkew[],
 	counts?: RegisterReport['skew_counts']
 ): ClockCheck {
 	const { ahead, behind } = splitSkew(skew);
+	const counted = counts !== undefined;
+	const sampled = !counted && skew.length > 0;
 	const failing = ahead.length > 0;
 	return {
 		kind: 'clock',
 		failing,
-		notable: failing || behind.length > 0,
+		notable: failing || sampled || behind.length > 0,
 		ahead,
 		behind,
 		aheadCount: counts?.ahead ?? ahead.length,
 		behindCount: counts?.behind ?? behind.length,
+		counted,
+		sampled,
 	};
 }
 
