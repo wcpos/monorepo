@@ -143,7 +143,7 @@ function MockTableBody({
 					active={false}
 					total={handle.value.total}
 					sync={handle.sync}
-					count={999}
+					drawnCount={999}
 				/>
 			)}
 		</div>
@@ -176,7 +176,7 @@ jest.mock('../rows/variable-product-row', () => ({
 // would have painted, not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
-	ProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
+	ProductsFooter: ({ drawnCount: count, total }: { drawnCount: number; total: number | null }) => {
 		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},

@@ -8,6 +8,7 @@ import { act, render } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 
 import { EditProductForm } from './form';
+import { EditVariationForm } from '../variation/form';
 
 const mockLocalPatch = jest.fn();
 const mockDialogClose = jest.fn();
@@ -107,6 +108,9 @@ jest.mock('../../../components/product/category-select', () => ({
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
+jest.mock('../../../hooks/mutations/use-mutation', () => ({
+	useMutation: () => ({ patchRecord: jest.fn() }),
+}));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
@@ -133,6 +137,18 @@ describe('EditProductForm save', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		modalActions.clear();
+	});
+
+	it('reports a missing product before reading its payload', () => {
+		expect(() => render(<EditProductForm product={undefined!} />)).toThrow(
+			'products.product_not_found'
+		);
+	});
+
+	it('reports a missing variation before reading its payload', () => {
+		expect(() => render(<EditVariationForm variation={undefined!} />)).toThrow(
+			'Variation not found'
+		);
 	});
 
 	it('reads initial form values from the record payload', () => {

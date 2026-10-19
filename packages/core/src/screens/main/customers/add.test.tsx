@@ -72,6 +72,10 @@ jest.mock('../hooks/mutations/use-mutation', () => ({
 	},
 }));
 
+jest.mock('../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
+}));
+
 jest.mock('../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: mockFormat }),
 }));

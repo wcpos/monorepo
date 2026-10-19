@@ -43,7 +43,7 @@ import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useTaxSettings } from '../contexts/tax-rates';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCatalogueRecord } from './commands/use-catalogue-record';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
 import {
@@ -187,8 +187,7 @@ function ProductsList({
 		[actions]
 	);
 	const { calcTaxes } = useTaxSettings();
-	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
-	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
+	const { saveCatalogueChange } = useCatalogueRecord();
 
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 	const t = useT();
@@ -255,11 +254,7 @@ function ProductsList({
 					document: EngineRecord<'products'> | EngineRecord<'variations'>;
 					changes: Record<string, unknown>;
 				}) => {
-					if (document.payload.type === 'variation') {
-						void variationsPatch({ document, data: changes });
-					} else {
-						void productsPatch({ document, data: changes });
-					}
+					void saveCatalogueChange(document, changes);
 				},
 				variationRenderCell,
 				/**
@@ -271,14 +266,7 @@ function ProductsList({
 			},
 			extraData: state.filters.stock_status,
 		}),
-		[
-			expandedRef,
-			expanded$,
-			setRowExpanded,
-			productsPatch,
-			variationsPatch,
-			state.filters.stock_status,
-		]
+		[expandedRef, expanded$, setRowExpanded, saveCatalogueChange, state.filters.stock_status]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 

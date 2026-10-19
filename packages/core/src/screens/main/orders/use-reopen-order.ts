@@ -7,7 +7,7 @@ import { NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useRegister } from '../../../services/register/use-register';
 import { useStoreSession } from '../../../contexts/app-state';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { useOrderRecord } from './commands/use-order-record';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
 
 /**
@@ -17,7 +17,7 @@ import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
  */
 export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const router = useRouter();
-	const { localPatch } = useLocalMutation();
+	const { reopenOrder } = useOrderRecord();
 	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -34,11 +34,20 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		if (store.id === NO_STORE && existingStoreId === null) {
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
-		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
+		if (!(await reopenOrder(order, { status: 'pos-open', meta_data }))) return;
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		router.push({
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
 		});
-	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id, register, site.uuid]);
+	}, [
+		blockIfDegraded,
+		reopenOrder,
+		router,
+		order,
+		store.id,
+		wpCredentials.id,
+		register,
+		site.uuid,
+	]);
 }

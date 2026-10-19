@@ -28,7 +28,8 @@ import {
 	useRecordField,
 	WriteOutcomeError,
 } from '@wcpos/query';
-import { remoteIdOrNull, WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { refreshRecordByWooId } from '@wcpos/query/record-readers';
+import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -67,25 +68,20 @@ export function OrderActionsMenu({
 
 	const handleRefresh = React.useCallback(() => {
 		if (!orderID) return;
-		const handle = runtime.engine.require({
+		void refreshRecordByWooId(runtime.engine, {
 			id: `order-actions:refresh:${orderID}`,
 			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: [orderID].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		void handle.ready
-			.finally(() => handle.release())
-			.catch((error) => {
-				syncLogger.error('Failed to refresh order', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					showToast: true,
-					context: {
-						orderId: orderID,
-						error: getErrorMessage(error),
-					},
-				});
+			wooId: orderID,
+		}).catch((error) => {
+			syncLogger.error('Failed to refresh order', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				showToast: true,
+				context: {
+					orderId: orderID,
+					error: getErrorMessage(error),
+				},
 			});
+		});
 	}, [runtime, orderID]);
 
 	const handleOpen = useReopenOrder(order);

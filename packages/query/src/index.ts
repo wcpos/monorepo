@@ -79,6 +79,7 @@ export {
 	acquireOpenOrdersQueryHandle,
 	type OpenOrdersScope,
 } from './open-orders-scope';
+export { acquireOrderRefundsQueryHandle } from './order-refunds';
 
 export {
 	projectionReaderFor,

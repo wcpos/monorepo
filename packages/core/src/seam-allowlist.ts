@@ -1653,10 +1653,68 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/cart/clear-local-data.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
 	'screens/main/pos/cart/user-sheet.tsx :: engine handle aliased :: useSalesToday :: { engine, locale } = useQueryRuntime() :: 1',
 	"screens/main/pos/cart/user-sheet.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	// ADR 0033 per-screen (h1): the data table's props stop borrowing storage names.
+	'screens/main/components/data-table/footer.tsx :: raw query construction :: DataTableFooter :: count :: 1',
+	'screens/main/components/data-table/index.tsx :: engine handle aliased :: DataTableBody :: { result, syncing, engine } = props :: 1',
+	'screens/main/components/data-table/index.tsx :: raw query construction :: HandleFooter :: count :: 1',
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 2",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 3",
+	'screens/main/pos/products/footer.tsx :: raw query construction :: ProductsFooter :: count :: 1',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	"screens/main/contexts/use-push-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: enqueueDocumentWrite :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: usePushDocument :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: write plane outside a command module :: enqueueDocumentWrite :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (h3): the coupons screens write through a command and refresh through a named read.
+	'screens/main/coupons/add.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/add.tsx :: resident helper write :: AddCouponScreen :: useMutation :: 1',
+	'screens/main/coupons/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write :: EditCouponForm :: useLocalMutation :: 1',
+	"screens/main/coupons/edit/form.tsx :: storage import :: EditCouponForm :: from '@wcpos/database' :: 1",
+	'screens/main/coupons/index.tsx :: record mutator :: CouponsList :: patch :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write :: CouponsList :: useMutation :: 1',
+	// ADR 0033 per-screen (h4): the customers screens write through a command and refresh one record through a named read.
+	'screens/main/customers/add.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/customers/add.tsx :: resident helper write :: AddCustomerScreen :: useMutation :: 1',
+	'screens/main/customers/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/customers/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/customers/edit/form.tsx :: resident helper write :: EditCustomerForm :: useLocalMutation :: 1',
+	"screens/main/customers/edit/form.tsx :: storage import :: EditCustomerForm :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (h5): the products screens write through a command and refresh through the named read.
+	'screens/main/products/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/products/cells/variation-actions.tsx :: require plane outside a named read :: VariationActions :: runtime.engine.require :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write :: EditProductForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/product/form.tsx :: storage import :: EditProductForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/edit/variation/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/variation/form.tsx :: resident helper write :: EditVariationForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/variation/form.tsx :: storage import :: EditVariationForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: productsPatch :: 1',
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: variationsPatch :: 1',
+	'screens/main/products/products.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 2',
+	// ADR 0033 per-screen (h6): the orders screen's edit, reopen and refresh go through a command and the named read.
+	'screens/main/orders/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/edit/form.tsx :: resident helper write :: EditOrderForm :: useLocalMutation :: 1',
+	"screens/main/orders/edit/form.tsx :: storage import :: EditOrderForm :: from '@wcpos/database' :: 1",
+	'screens/main/orders/force-refresh-filter-customer.ts :: require plane outside a named read :: forceRefreshFilterCustomer :: manager.engine.require :: 1',
+	'screens/main/orders/order-menu.tsx :: require plane outside a named read :: OrderActionsMenu :: runtime.engine.require :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write :: useReopenOrder :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (h7): the order refunds handle is owned by @wcpos/query; the refund mutation refreshes through named reads.
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 1',
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 2',
+	'screens/main/orders/view/use-order-refunds.ts :: engine handle aliased :: useOrderRefunds :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/orders/view/use-order-refunds.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/orders/view/use-order-refunds.ts :: storage import ::  :: from 'rxdb' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 705;
+export const SEAM_RETIRED_FLOOR = 756;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c2433c2564cc40d6a8aa3909188268ec5134e92ccbfec52177cb2ef6c2c9fa79';
+	'759ff1eb535d25a5379422924ec14af8f0ae21212bbaf2da8294ef045b55ea36';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1691,7 +1749,11 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: enqueueDocumentWrite :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: usePushDocument :: findEngineResident :: 1',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 7;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 10;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'0448a89f88735b0cdc56343147ab39848896a2ba558880b831d22c079baeea84';
+	'a244d299bcabd4c339ec9394287b328f233a277af0bb5cd54e673fffb2f48428';

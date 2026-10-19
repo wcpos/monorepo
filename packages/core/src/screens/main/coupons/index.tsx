@@ -37,7 +37,7 @@ import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCouponRecord } from './commands/use-coupon-record';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
@@ -125,7 +125,7 @@ function CouponsList({
 		}),
 		[actions]
 	);
-	const { patch } = useMutation({ collectionName: 'coupons' });
+	const { saveCouponChange } = useCouponRecord();
 
 	const tableConfig = React.useMemo(
 		() => ({
@@ -137,11 +137,11 @@ function CouponsList({
 					document: EngineRecord<'coupons'>;
 					changes: Record<string, unknown>;
 				}) => {
-					void patch({ document, data: changes });
+					void saveCouponChange(document, changes);
 				},
 			},
 		}),
-		[patch]
+		[saveCouponChange]
 	);
 
 	return (

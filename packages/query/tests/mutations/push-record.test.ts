@@ -1,20 +1,14 @@
 /**
  * @jest-environment jsdom
  */
-import { act, renderHook } from '@testing-library/react';
-
-import { WriteDeferredError, WriteOutcomeError } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { pushFailureCode } from './push-failure-code';
-import { usePushDocument } from './use-push-document';
+import { WriteDeferredError, WriteOutcomeError } from '../../src/await-write-outcome';
+import { pushFailureCode } from '../../../core/src/screens/main/contexts/push-failure-code';
+import { pushRecord } from '../../src/mutations';
 
-jest.mock('@wcpos/query/temporary-order', () => ({
-	patchTemporaryOrderPayload: jest.fn(),
-	getTemporaryOrder: jest.fn(),
-	removeTemporaryOrder: jest.fn(),
-}));
+import type { QueryManager } from '../../src/mutations/resident';
 
 jest.mock('lodash/isBuffer', () => (value: unknown) => {
 	const structuredClone = (input: unknown) => {
@@ -37,9 +31,6 @@ const mockFindOneExec = jest.fn();
 const mockAwaitWriteOutcome = jest.fn();
 const mockSync = jest.fn();
 const mockEvents = jest.fn();
-const mockTranslate = jest.fn((_key: string, options?: Record<string, unknown>) =>
-	String(options?.error || options?.message || '')
-);
 
 /** The single source both `active()` and `whenActive()` read, as in the real
  * engine — a mock that let them disagree would model a state it cannot be in. */
@@ -51,29 +42,22 @@ const activeScope = () => ({
 	},
 });
 
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
-	useQueryRuntime: () => ({
-		engine: {
-			active: activeScope,
-			whenActive: async () => activeScope(),
-			write: mockWrite,
-			sync: mockSync,
-			events: mockEvents,
-		},
-	}),
+const runtime = {
+	engine: {
+		active: activeScope,
+		whenActive: async () => activeScope(),
+		write: mockWrite,
+		sync: mockSync,
+		events: mockEvents,
+	},
+} as unknown as QueryManager;
+
+jest.mock('../../src/await-write-outcome', () => ({
+	...jest.requireActual('../../src/await-write-outcome'),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
 }));
 
-jest.mock('../../../contexts/translations', () => ({
-	useT: () => mockTranslate,
-}));
-
-jest.mock('../../../hooks/use-local-date', () => ({
-	convertLocalDateToUTCString: () => '2026-03-02T00:00:00',
-}));
-
-describe('usePushDocument', () => {
+describe('pushRecord', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
@@ -104,11 +88,7 @@ describe('usePushDocument', () => {
 			getLatest: () => ({ ...doc, toJSON: () => staleJson }),
 		};
 
-		const { result } = renderHook(() => usePushDocument());
-
-		await act(async () => {
-			await result.current(doc as never);
-		});
+		await pushRecord(runtime, doc as never);
 
 		expect(mockWrite).toHaveBeenCalledWith({
 			collection: 'orders',
@@ -137,11 +117,7 @@ describe('usePushDocument', () => {
 			getLatest: () => ({ ...doc, toJSON: () => json }),
 		};
 
-		const { result } = renderHook(() => usePushDocument());
-
-		await act(async () => {
-			await result.current(doc as never);
-		});
+		await pushRecord(runtime, doc as never);
 
 		expect(mockWrite).toHaveBeenCalledWith({
 			collection: 'orders',
@@ -174,9 +150,7 @@ describe('usePushDocument', () => {
 			getLatest: () => doc,
 		};
 
-		const { result } = renderHook(() => usePushDocument());
-
-		await expect(result.current(doc as never)).resolves.toBeDefined();
+		await expect(pushRecord(runtime, doc as never)).resolves.toBeDefined();
 
 		const queuedPayload = mockWrite.mock.calls[0][0].payload;
 		expect(queuedPayload).toEqual(plainPayload);
@@ -195,11 +169,7 @@ describe('usePushDocument', () => {
 			getLatest: () => doc,
 		};
 
-		const { result } = renderHook(() => usePushDocument());
-
-		await act(async () => {
-			await result.current(doc as never);
-		});
+		await pushRecord(runtime, doc as never);
 
 		expect(mockWrite.mock.calls[0][0].payload.billing.email).toBe('shopper@example.com');
 	});
@@ -225,8 +195,7 @@ describe('usePushDocument', () => {
 			getLatest: () => doc,
 		};
 
-		const { result } = renderHook(() => usePushDocument());
-		const saved = await act(() => result.current(doc as never));
+		const saved = await pushRecord(runtime, doc as never);
 
 		expect(mockAwaitWriteOutcome).toHaveBeenCalledWith(
 			expect.objectContaining({ write: mockWrite }),
@@ -276,9 +245,7 @@ describe('usePushDocument', () => {
 				getLatest: () => doc,
 			};
 
-			const { result } = renderHook(() => usePushDocument());
-
-			await expect(result.current(doc as never)).rejects.toThrow(error.message);
+			await expect(pushRecord(runtime, doc as never)).rejects.toThrow(error.message);
 			// The caller owns the one report (log + toast); a second here doubled both.
 			expect(getLogger(['wcpos', 'sync', 'push']).error).not.toHaveBeenCalled();
 			expect(pushFailureCode(error)).toBe(code);

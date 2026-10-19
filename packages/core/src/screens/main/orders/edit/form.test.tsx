@@ -162,6 +162,7 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Customer' }),
 }));
 jest.mock('@wcpos/query/record-readers', () => ({
+	...jest.requireActual('@wcpos/query/record-readers'),
 	useEngineRecordByWooId: (_collection: string, wooId: number) => customerResources.get(wooId),
 }));
 jest.mock('../../hooks/use-guest-customer', () => ({

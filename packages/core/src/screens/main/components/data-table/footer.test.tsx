@@ -60,7 +60,7 @@ function renderFooter() {
 		>
 			<DataTableFooter
 				collectionName="coupons"
-				count={10}
+				drawnCount={10}
 				total={27}
 				active={false}
 				sync={mockSync}
@@ -114,7 +114,7 @@ describe('DataTableFooter', () => {
 			>
 				<DataTableFooter
 					collectionName="coupons"
-					count={10}
+					drawnCount={10}
 					total={null}
 					active={false}
 					sync={mockSync}
@@ -147,7 +147,7 @@ describe('DataTableFooter', () => {
 				<CouponQueryStateProbe />
 				<DataTableFooter
 					collectionName="coupons"
-					count={0}
+					drawnCount={0}
 					total={27}
 					active={false}
 					sync={mockSync}

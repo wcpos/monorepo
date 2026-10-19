@@ -54,7 +54,7 @@ const dataTableFeatures = tableFeatures({
 });
 
 type DataTableFeatures = typeof dataTableFeatures;
-type DataTableRow = QueryResult<import('rxdb').RxCollection>['hits'][number];
+type DataTableRow = QueryResult['hits'][number];
 type CellComponent = React.ElementType;
 type CellMap = Record<string, CellComponent>;
 type DataTableConfig<TData extends RowData> = Omit<
@@ -121,7 +121,7 @@ type TableProps<TSortField extends string> = {
 	TableFooterComponent?: React.ComponentType<DataTableFooterProps>;
 };
 
-type RowsHandle = QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+type RowsHandle = QueryHandle<QueryResult>;
 
 /**
  * The source is a query handle (roadmap#423): one snapshot, suspended on until the engine's
@@ -134,9 +134,9 @@ type Props<TData extends RowData, TSortField extends string> = CommonProps<TData
 /** What the body draws: the drawn snapshot's rows, and the two handles its footer reads. */
 type BodyProps<TData extends RowData, TSortField extends string> = CommonProps<TData> &
 	TableProps<TSortField> & {
-		result: QueryResult<import('rxdb').RxCollection>;
+		result: QueryResult;
 		syncing: boolean;
-		engine: { pending: boolean; exhausted: boolean | null };
+		paging: { pending: boolean; exhausted: boolean | null };
 		/** The live handle: the spinner and the sync button are the engine's now. */
 		handle: RowsHandle;
 		/** The drawn handle: the total rides with the rows it counts. */
@@ -157,13 +157,13 @@ function HandleFooter({
 	collectionName,
 	handle,
 	shown,
-	count,
+	drawnCount,
 }: {
 	Footer: React.ComponentType<DataTableFooterProps>;
 	collectionName: DataTableCollectionKey;
 	handle: RowsHandle;
 	shown: RowsHandle;
-	count: number;
+	drawnCount: number;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
@@ -173,7 +173,7 @@ function HandleFooter({
 			active={active}
 			total={total}
 			sync={handle.sync}
-			count={count}
+			drawnCount={drawnCount}
 		/>
 	);
 }
@@ -194,7 +194,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 			result={snapshot.result}
 			syncing={active}
 			// A changed query that has not answered is in flight for paging (#1221).
-			engine={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
+			paging={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
 			// Handles as data, not a component per handle: the footer (and its sync button's
 			// state) stays mounted across a query change.
 			handle={handle}
@@ -260,13 +260,13 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 		[settingsColumns, widths]
 	);
 	const t = useT();
-	const { result, syncing, engine } = props;
+	const { result, syncing, paging: queryPaging } = props;
 	const deferredResult = React.useDeferredValue(result);
 	// A deferred frame behind the answer is in flight for paging too: the guard must not judge
 	// the new answer on the old hit count (#1221).
 	const paging = {
-		pending: engine.pending || deferredResult !== result,
-		exhausted: engine.exhausted,
+		pending: queryPaging.pending || deferredResult !== result,
+		exhausted: queryPaging.exhausted,
 	};
 
 	const columns = React.useMemo(
@@ -449,7 +449,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 							collectionName={props.collectionName}
 							handle={props.handle}
 							shown={props.shown}
-							count={result.hits.length}
+							drawnCount={result.hits.length}
 						/>
 					</CaptionRowInset>
 				</TableFooter>

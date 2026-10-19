@@ -33,6 +33,8 @@ const mockEngineWrite = jest.fn(async () => ({
 	annihilated: true,
 }));
 const mockLocalPatch = jest.fn();
+const mockRelease = jest.fn();
+const mockRequire = jest.fn(() => ({ ready: Promise.resolve(), release: mockRelease }));
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
 let mockReadOnly = false;
@@ -45,7 +47,7 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
-		engine: { write: mockEngineWrite, require: jest.fn() },
+		engine: { write: mockEngineWrite, require: mockRequire },
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	awaitWriteOutcome: jest.fn(async () => undefined),
@@ -216,6 +218,18 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		expect(mockEngineWrite).toHaveBeenCalledWith(
 			expect.objectContaining({ operation: 'delete', recordId: 'order-1' })
 		);
+	});
+	it('refreshes the order through the engine and releases the demand', async () => {
+		render(<Actions {...cellProps} />);
+		await act(async () => fireEvent.click(screen.getByRole('button', { name: 'common.sync' })));
+		expect(mockRequire).toHaveBeenCalledWith({
+			id: 'order-actions:refresh:42',
+			collection: 'orders',
+			kind: 'targeted-records',
+			remoteIds: ['42'],
+			forceRefresh: true,
+		});
+		expect(mockRelease).toHaveBeenCalledTimes(1);
 	});
 
 	it('blocks re-open (an order save), delete (a void) and refund', async () => {

@@ -25,7 +25,7 @@ import {
 	useDialog,
 } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, ProductPayload } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
@@ -39,7 +39,7 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useCatalogueRecord } from '../../commands/use-catalogue-record';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
@@ -74,14 +74,14 @@ interface Props {
 export function EditProductForm({ product }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { localPatch } = useLocalMutation();
+	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
-	const productData = product.toMutableJSON().payload;
 
 	if (!product) {
 		throw new Error(t('products.product_not_found'));
 	}
+	const productData = product.toMutableJSON().payload;
 
 	/**
 	 *
@@ -118,21 +118,17 @@ export function EditProductForm({ product }: Props) {
 		async (data: z.infer<typeof schema>) => {
 			data.tax_class = taxClassToWire(data.tax_class);
 			const { categories: categoryOptions, ...rest } = data;
-			const patchData: Partial<import('@wcpos/database').ProductDocument> = {
+			const patchData: Partial<ProductPayload> = {
 				...rest,
 				categories: categoryOptions.map((opt) => ({
 					id: toNumber(opt.value),
 					name: opt.label,
 				})),
-			} as any;
+			} as Partial<ProductPayload>;
 			setLoading(true);
 			try {
-				const patched = await localPatch({
-					document: product,
-					data: patchData,
-				});
-				// localPatch swallows write errors and resolves undefined.
-				if (!patched?.document) {
+				const savedFields = await saveCatalogueFields(product, patchData);
+				if (!savedFields) {
 					throw new Error('Local patch failed');
 				}
 				const saved = product.getLatest().payload;
@@ -159,7 +155,7 @@ export function EditProductForm({ product }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, product, t]
+		[close, saveCatalogueFields, product, t]
 	);
 
 	/**

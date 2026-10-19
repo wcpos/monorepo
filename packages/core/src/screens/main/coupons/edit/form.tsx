@@ -5,14 +5,14 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { useDialog } from '@wcpos/components/dialog';
-import type { EngineRecord } from '@wcpos/query';
+import type { CouponPayload, EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
 import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCouponRecord } from '../commands/use-coupon-record';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'coupon']);
 
@@ -23,7 +23,7 @@ interface Props {
 export function EditCouponForm({ coupon }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { localPatch } = useLocalMutation();
+	const { saveCouponFields } = useCouponRecord();
 	const pushDocument = usePushDocument();
 	const { close } = useDialog();
 
@@ -38,11 +38,8 @@ export function EditCouponForm({ coupon }: Props) {
 		async (data: z.infer<typeof couponFormSchema>) => {
 			setLoading(true);
 			try {
-				const patched = await localPatch({
-					document: coupon,
-					data: data as Partial<import('@wcpos/database').CouponDocument>,
-				});
-				if (!patched?.document) {
+				const patched = await saveCouponFields(coupon, data as Partial<CouponPayload>);
+				if (!patched) {
 					throw new Error('Local patch failed');
 				}
 				const savedDoc = await pushDocument(coupon);
@@ -73,7 +70,7 @@ export function EditCouponForm({ coupon }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, coupon, pushDocument, t]
+		[close, saveCouponFields, coupon, pushDocument, t]
 	);
 
 	return <CouponForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
