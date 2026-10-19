@@ -1,10 +1,12 @@
 import React from 'react';
 import { Platform, View } from 'react-native';
 
-import { Circle, RoundedRect, Text, useFont } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useCSSVariable } from 'uniwind';
-import { CartesianChart, StackedBar } from 'victory-native';
+
+import { loadCharts } from '@wcpos/components/charts/lazy';
+import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
+import { Text } from '@wcpos/components/text';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useLocalDate } from '../../../../hooks/use-local-date';
@@ -56,11 +58,26 @@ function findClosestPointIndex(points: PointWithPosition[], touchX: number): num
 	return closestIdx;
 }
 
-export default function Chart() {
+let charts: Awaited<ReturnType<typeof loadCharts>>;
+const LazyChart = retryableLazy(async () => {
+	charts = await loadCharts();
+	return { default: Chart };
+});
+
+export default function LazyReportsChart() {
+	return (
+		<React.Suspense fallback={<Text>Loading Chart...</Text>}>
+			<LazyChart />
+		</React.Suspense>
+	);
+}
+
+function Chart() {
+	const { CartesianChart, StackedBar } = charts;
 	const { selectedOrders, dateRange } = useReportsData();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();
-	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
+	const font = charts.useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
 
 	// Theme colors
 	const [popoverColor, popoverForegroundColor, primaryColor, mutedForegroundColor, borderColor] =
@@ -232,6 +249,7 @@ function ToolTip({
 	textColor: string;
 	accentColor: string;
 }) {
+	const { Circle, RoundedRect, SkiaText } = charts;
 	const { x, totalY, taxY } = tooltip;
 
 	// Calculate the y position for the TOP of the stacked bar
@@ -275,7 +293,7 @@ function ToolTip({
 				color={bgColor}
 			/>
 			{/* Date */}
-			<Text
+			<SkiaText
 				x={tooltipX + TOOLTIP_PADDING}
 				y={tooltipY + TOOLTIP_PADDING + 12}
 				text={tooltipDate}
@@ -283,7 +301,7 @@ function ToolTip({
 				color={textColor}
 			/>
 			{/* Total */}
-			<Text
+			<SkiaText
 				x={tooltipX + TOOLTIP_PADDING}
 				y={tooltipY + TOOLTIP_PADDING + 30}
 				text={`Total: ${formatCurrency(point.total)}`}
@@ -291,7 +309,7 @@ function ToolTip({
 				color={textColor}
 			/>
 			{/* Tax */}
-			<Text
+			<SkiaText
 				x={tooltipX + TOOLTIP_PADDING}
 				y={tooltipY + TOOLTIP_PADDING + 48}
 				text={`Tax: ${formatCurrency(point.total_tax)}`}
@@ -300,7 +318,7 @@ function ToolTip({
 			/>
 			{/* Refunds (only shown when > 0) */}
 			{point.refund_total > 0 && (
-				<Text
+				<SkiaText
 					x={tooltipX + TOOLTIP_PADDING}
 					y={tooltipY + TOOLTIP_PADDING + 66}
 					text={`Refunds: -${formatCurrency(point.refund_total)}`}
@@ -309,7 +327,7 @@ function ToolTip({
 				/>
 			)}
 			{/* Order count */}
-			<Text
+			<SkiaText
 				x={tooltipX + TOOLTIP_PADDING}
 				y={tooltipY + TOOLTIP_PADDING + (point.refund_total > 0 ? 84 : 66)}
 				text={`Orders: ${point.order_count}`}

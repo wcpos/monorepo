@@ -8,6 +8,7 @@
     "./button": "./src/button/index.tsx",
     "./calendar": "./src/calendar/index.tsx",
     "./card": "./src/card/index.tsx",
+    "./charts/lazy": "./src/charts/lazy.ts",
     "./checkbox": "./src/checkbox/index.tsx",
     "./collapsible": "./src/collapsible/index.tsx",
     "./combobox": "./src/combobox/index.ts",
@@ -29,6 +30,7 @@
     "./input": "./src/input/index.tsx",
     "./keyboard-controller": "./src/keyboard-controller/index.tsx",
     "./label": "./src/label/index.tsx",
+    "./lib/retryable-lazy": "./src/lib/retryable-lazy.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",
     "./lib/utils": "./src/lib/utils.ts",
@@ -73,15 +75,18 @@
   },
   "peerDependencies": {
     "@shopify/flash-list": "^2.0.2",
+    "@shopify/react-native-skia": "2.6.2",
     "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.1",
     "expo-router": "~57.0.8",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-svg": "15.15.4",
     "react-native-webview": "13.16.1",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "victory-native": "^41.26.0"
   },
   "devDependencies": {
+    "@shopify/react-native-skia": "2.6.2",
     "@svgr/cli": "^8.1.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -90,7 +95,8 @@
     "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.3",
     "expo-router": "~57.0.13",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "victory-native": "^41.26.0"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
