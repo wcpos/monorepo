@@ -13,8 +13,22 @@ import type { TaxRateData } from '../contexts/tax-rates';
 // each head is marked so the column order can be read back.
 jest.mock('@wcpos/components/table', () => {
 	const box = (role?: string) => {
-		function Box({ children, testID }: { children?: React.ReactNode; testID?: string }) {
-			return <div data-testid={testID ?? role}>{children}</div>;
+		function Box({
+			children,
+			testID,
+			className,
+			'aria-selected': selected,
+		}: {
+			children?: React.ReactNode;
+			testID?: string;
+			className?: string;
+			'aria-selected'?: boolean;
+		}) {
+			return (
+				<div data-testid={testID ?? role} data-classes={className} aria-selected={selected}>
+					{children}
+				</div>
+			);
 		}
 		return Box;
 	};
@@ -65,10 +79,14 @@ const rates = [
 	}),
 ];
 
-const renderTable = (phone: boolean, shown: TaxRateData[] = rates) =>
+const renderTable = (
+	phone: boolean,
+	shown: TaxRateData[] = rates,
+	appliesTo: ReadonlySet<number> | null = null
+) =>
 	render(
 		<DeviceScope phone={phone}>
-			<TaxRateTable rates={shown} />
+			<TaxRateTable rates={shown} appliesTo={appliesTo} />
 		</DeviceScope>
 	);
 
@@ -115,4 +133,28 @@ it.each([false, true])('an empty class says so, with no table or rows (phone: %s
 	expect(screen.queryByTestId('tax-rates-table')).toBeNull();
 	expect(screen.queryByTestId('table-head')).toBeNull();
 	expect(screen.queryByTestId('tax-rates-list')).toBeNull();
+});
+
+it.each([false, true])(
+	'marks the rows the current address matched, and only those (phone: %s)',
+	(phone) => {
+		renderTable(phone, rates, new Set([2]));
+		const marked = screen.getByTestId('tax-rate-row-2');
+		const plain = screen.getByTestId('tax-rate-row-1');
+		expect(marked.getAttribute('aria-selected')).toBe('true');
+		expect(plain.getAttribute('aria-selected')).toBeNull();
+		if (!phone) {
+			// The ListRow mark's classes, bled to the panel edge with the gutter padded back.
+			expect(marked.dataset.classes).toEqual(
+				expect.stringContaining('border-l-primary bg-muted -mx-4 border-l-2 pl-3.5 pr-4')
+			);
+			expect(plain.dataset.classes).toBe('gap-3');
+		}
+	}
+);
+
+it.each([false, true])('marks nothing when opened from elsewhere (phone: %s)', (phone) => {
+	renderTable(phone);
+	expect(screen.getByTestId('tax-rate-row-1').getAttribute('aria-selected')).toBeNull();
+	expect(screen.getByTestId('tax-rate-row-2').getAttribute('aria-selected')).toBeNull();
 });

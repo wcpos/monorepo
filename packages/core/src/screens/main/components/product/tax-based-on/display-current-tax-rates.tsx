@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Derivation, DerivationStep } from '@wcpos/components/derivation';
@@ -82,9 +82,15 @@ function TaxDerivation({
 	);
 
 	// The popover (a sheet on a phone) would otherwise stay open over where we go.
-	const go = (href: '/settings/tax' | '/(app)/(modals)/tax-rates') => {
+	const go = (href: Href) => {
 		onOpenChange(false);
 		router.push(href);
+	};
+	// The panel's route sits outside the tax and order providers, so the rates this address
+	// matched travel with the push; the panel marks them and counts them in its footer.
+	const viewAll: Href = {
+		pathname: '/(app)/(modals)/tax-rates',
+		params: { applies: rates.map((rate) => String(rate.id)).join(','), country: location.country },
 	};
 
 	const why = (reason: RateWhy) => {
@@ -203,7 +209,7 @@ function TaxDerivation({
 					variant="ghost"
 					testID="tax-based-on-view-all"
 					className="w-full px-2"
-					onPress={() => go('/(app)/(modals)/tax-rates')}
+					onPress={() => go(viewAll)}
 				>
 					<View className="w-full flex-row items-center justify-between gap-2">
 						<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>

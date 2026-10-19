@@ -59,7 +59,9 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) =>
 		values?.total !== undefined
 			? `${key}:${values.synced}/${values.total}`
-			: `${key}:${values?.count}`,
+			: values?.country !== undefined
+				? `${key}:${values.n}/${values.country}`
+				: `${key}:${values?.count}`,
 }));
 
 function QueryStateProbe() {
@@ -87,7 +89,11 @@ function handleWithTotal(partial: Record<string, unknown> = {}) {
 }
 
 /** `handle` is the live one (spinner, sync); `shown` the drawn one (total), the same by default. */
-function renderFooter(handle: FakeHandle = handleWithTotal(), shown: FakeHandle = handle) {
+function renderFooter(
+	handle: FakeHandle = handleWithTotal(),
+	shown: FakeHandle = handle,
+	applies: { n: number; country: string } | null = null
+) {
 	return render(
 		<QueryStateProvider
 			collection="tax-rates"
@@ -95,7 +101,7 @@ function renderFooter(handle: FakeHandle = handleWithTotal(), shown: FakeHandle 
 			initialSort={{ field: 'id', direction: 'asc' }}
 		>
 			<QueryStateProbe />
-			<TaxRatesFooter count={3} handle={handle} shown={shown} />
+			<TaxRatesFooter count={3} handle={handle} shown={shown} applies={applies} />
 		</QueryStateProvider>
 	);
 }
@@ -179,5 +185,17 @@ describe('TaxRatesFooter handle fields', () => {
 			limit: 10,
 		});
 		expect(mockClearAndSync).toHaveBeenCalledTimes(1);
+	});
+
+	it('appends how many apply to the address the panel was opened from', () => {
+		renderFooter(handleWithTotal({ total: 3 }), undefined, { n: 2, country: 'GB' });
+		expect(screen.getByText('tax_rates.count:3 · tax_rates.count_applies:2/GB')).toBeTruthy();
+	});
+
+	it('says none apply rather than 0', () => {
+		renderFooter(handleWithTotal({ total: 3 }), undefined, { n: 0, country: 'IS' });
+		expect(
+			screen.getByText('tax_rates.count:3 · tax_rates.count_applies_none:undefined/IS')
+		).toBeTruthy();
 	});
 });

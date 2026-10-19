@@ -63,3 +63,37 @@ export function rateCount(count: number, vouched: number | null, t: Translate): 
 		: // `count` picks "1 tax rate" or "6 tax rates"; `n` is what is printed, grouped.
 			t('tax_rates.count', { count, n: count.toLocaleString() });
 }
+
+/**
+ * The `applies` route param the "Tax based on" panel sends: the ids of the rates its address
+ * matched, comma-joined. Absent means the panel was opened from somewhere else (Settings): no
+ * marks, the plain count. Present, even empty, means it came from the panel, where an empty list
+ * is an answer ("none apply"), not a missing one.
+ */
+export function parseApplies(param: string | string[] | undefined): ReadonlySet<number> | null {
+	const raw = Array.isArray(param) ? param[0] : param;
+	if (raw === undefined) return null;
+	return new Set(
+		raw
+			.split(',')
+			.map((id) => Number(id.trim()))
+			.filter((id) => Number.isInteger(id) && id > 0)
+	);
+}
+
+/** Whether the address the panel was opened from matched this rate. */
+export function isApplied(appliesTo: ReadonlySet<number> | null | undefined, rate: TaxRateData) {
+	return rate.id !== undefined && rate.id !== null && (appliesTo?.has(rate.id) ?? false);
+}
+
+/** "2 apply to this address (GB)", "none apply to this address", the parenthesis only with a country. */
+export function appliesCount(n: number, country: string, t: Translate): string {
+	if (n === 0) {
+		return country
+			? t('tax_rates.count_applies_none', { country })
+			: t('tax_rates.count_applies_none_no_country');
+	}
+	return country
+		? t('tax_rates.count_applies', { count: n, n: n.toLocaleString(), country })
+		: t('tax_rates.count_applies_no_country', { count: n, n: n.toLocaleString() });
+}

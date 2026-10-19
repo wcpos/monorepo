@@ -13,7 +13,7 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
-import { locationField, phoneLocation, phoneTags, rateTags } from './rate-rows';
+import { isApplied, locationField, phoneLocation, phoneTags, rateTags } from './rate-rows';
 import { useT } from '../../../contexts/translations';
 import { usePercentFormat } from '../hooks/use-percent-format';
 
@@ -21,7 +21,17 @@ import type { TaxRateData } from '../contexts/tax-rates';
 
 interface TaxRateTableProps {
 	rates: TaxRateData[];
+	/** The rates the current tax address matched, marked as the current rows; null for none. */
+	appliesTo?: ReadonlySet<number> | null;
 }
+
+/**
+ * `ListRow selected`'s current-row mark (primary bar, muted wash). It bleeds to the panel's
+ * edge: the row takes back the body's 16 gutter as a negative margin and pads it in again, less
+ * the bar's 2, so its cells stay on the same columns as the unmarked rows, whose inset hairlines
+ * stay as they are.
+ */
+const MARKED = 'border-l-primary bg-muted -mx-4 border-l-2 pl-3.5 pr-4';
 
 /**
  * Fixed widths sized by what each column holds (codes 56, lists 120, rate 72, priority 64), so
@@ -43,7 +53,7 @@ const COLUMNS = {
  * phone (`useIsPhone`, the app's one layout boundary) the rows are the management lists' phone
  * rows instead; only one of the two is ever rendered.
  */
-export function TaxRateTable({ rates }: TaxRateTableProps) {
+export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 	const t = useT();
 	const percent = usePercentFormat();
 	const isPhone = useIsPhone();
@@ -75,11 +85,14 @@ export function TaxRateTable({ rates }: TaxRateTableProps) {
 			<View testID="tax-rates-list">
 				{rates.map((rate) => {
 					const tags = phoneTags(rate, t);
+					const marked = isApplied(appliesTo, rate);
 					return (
 						<ListRow
 							key={rate.id}
 							testID={`tax-rate-row-${rate.id}`}
-							className="px-0"
+							// Only a marked row is `selected`: `false` would reserve the bar's room on every row.
+							selected={marked || undefined}
+							className={marked ? '-mx-4 pr-4 pl-3.5' : 'px-0'}
 							trailing={
 								<Text className="font-semibold tabular-nums">{percent(rate.rate ?? '0')}</Text>
 							}
@@ -128,8 +141,15 @@ export function TaxRateTable({ rates }: TaxRateTableProps) {
 			<TableBody>
 				{rates.map((rate, index) => {
 					const tags = rateTags(rate, t);
+					const marked = isApplied(appliesTo, rate);
 					return (
-						<TableRow key={rate.id} index={index} className="gap-3">
+						<TableRow
+							key={rate.id}
+							index={index}
+							testID={`tax-rate-row-${rate.id}`}
+							className={marked ? `gap-3 ${MARKED}` : 'gap-3'}
+							aria-selected={marked || undefined}
+						>
 							<TableCell className={`px-0 ${COLUMNS.country}`}>{location(rate.country)}</TableCell>
 							<TableCell className={`px-0 ${COLUMNS.state}`}>{location(rate.state)}</TableCell>
 							<TableCell className={`px-0 ${COLUMNS.postcode}`}>

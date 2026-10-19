@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useLocalSearchParams } from 'expo-router';
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 
@@ -28,6 +29,7 @@ import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
+import { isApplied, parseApplies } from './rate-rows';
 import { TaxRateTable } from './rate-table';
 import { useT } from '../../../contexts/translations';
 import {
@@ -82,6 +84,15 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as TaxClass[] | undefined;
 	const [value, setValue] = React.useState(get(taxClasses, [0, 'slug'], ''));
 	const t = useT();
+	// Sent by the "Tax based on" panel's View all: the rates its address matched, and its country.
+	const params = useLocalSearchParams<{ applies?: string; country?: string }>();
+	const appliesTo = React.useMemo(() => parseApplies(params.applies), [params.applies]);
+	const applies = appliesTo
+		? {
+				n: rates.filter((rate) => isApplied(appliesTo, rate)).length,
+				country: typeof params.country === 'string' ? params.country : '',
+			}
+		: null;
 
 	/**
 	 *
@@ -148,7 +159,7 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 							<TabsContent key={group.slug} value={group.slug} className="min-h-0 flex-1">
 								<DialogBody>
-									<TaxRateTable rates={group.rates} />
+									<TaxRateTable rates={group.rates} appliesTo={appliesTo} />
 								</DialogBody>
 							</TabsContent>
 						))}
@@ -156,7 +167,7 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 				</View>
 				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
 				<DialogFooter className="justify-between">
-					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
+					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} applies={applies} />
 					<DialogClose>{t('common.close')}</DialogClose>
 				</DialogFooter>
 			</DialogContent>

@@ -55,7 +55,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('expo-router', () => {
 	const router = { back: jest.fn() };
-	return { router, useRouter: () => router };
+	return { router, useRouter: () => router, useLocalSearchParams: () => ({}) };
 });
 jest.mock('@wcpos/components/keyboard-controller', () => ({ KeyboardAvoidingView: mockView }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));

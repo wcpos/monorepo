@@ -51,6 +51,8 @@ function mockAcquire(key: string): FakeHandle {
 	return handle;
 }
 
+// Opened from elsewhere: no route params from the "Tax based on" panel.
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
 jest.mock('../../../query', () => ({
 	...jest.requireActual('../../../query'),
 	useQueryState: () => ({}),
