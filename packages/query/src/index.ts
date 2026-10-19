@@ -79,6 +79,7 @@ export {
 	acquireOpenOrdersQueryHandle,
 	type OpenOrdersScope,
 } from './open-orders-scope';
+export { acquireOrderRefundsQueryHandle } from './order-refunds';
 
 export {
 	projectionReaderFor,
@@ -185,7 +186,11 @@ export {
 } from './reads/refresh-demands';
 export { searchCatalogByBarcode, readProductByWooId } from './reads/barcode-search';
 export { isRecordClosed, isVariationRecord } from './records/engine-record';
-export { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+export {
+	isStorageWorkerFailure,
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
 export {
 	measureStorageFootprint,
@@ -202,3 +207,5 @@ export {
 	observeCatalogByWooIds,
 } from './reads/stock-record';
 export { readCouponCatalog } from './reads/coupon-catalog';
+
+export { observeCashierSalesTotal } from './reads/cashier-sales';

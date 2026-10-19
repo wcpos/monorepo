@@ -95,7 +95,7 @@ it('stores the reader snapshot separately for each method, and forgets one', asy
 	expect((await preferences.get('other'))?.id).toBe('a');
 	await preferences.set('terminal', { id: 'c', label: 'Counter', transport: 'bluetooth' });
 	expect((await preferences.get('terminal'))?.id).toBe('c');
-	await preferences.remove('terminal');
+	await preferences.forget('terminal');
 	expect(await preferences.get('terminal')).toBeNull();
 	expect(mockStoreDB.addState).toHaveBeenCalledWith('terminal-readers_v2');
 });
@@ -301,9 +301,12 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('../../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ blockIfDegraded: mockBlockIfDegraded }),
 }));
+jest.mock('@wcpos/query/record-readers', () => ({
+	...jest.requireActual('@wcpos/query/record-readers'),
+	readResidentOrder: async () => order,
+}));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
-	findEngineResident: async () => order,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
@@ -2518,7 +2521,7 @@ jest.mock('../sale-completion', () => {
 					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
 					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
 				if (!input.online && !input.extraMeta) return;
-				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+				if (!(await ctx.stampCompletion(input.order, meta_data)))
 					throw new Error('provenance_save_failed');
 				if (input.online) {
 					mockPayload.meta_data = meta_data;
@@ -2551,7 +2554,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: mockRuntime,
 		dp: 2,
-		localPatch: mockLocalPatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../sale-completion').SaleContext['stampCompletion']>
+		) => mockLocalPatch({ document: o, data: { meta_data: m } }),
 		pushDocument: mockPushDocument,
 		actor: { id: '7', name: 'Pat' },
 		stockAdjustment: mockAdjustStock,

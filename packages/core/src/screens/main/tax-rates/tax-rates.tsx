@@ -184,7 +184,12 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 				</View>
 				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
 				<DialogFooter className="justify-between">
-					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} applies={applies} />
+					<TaxRatesFooter
+						shownCount={rates.length}
+						handle={handle}
+						shown={shown}
+						applies={applies}
+					/>
 					<DialogClose className="shrink-0">{t('common.close')}</DialogClose>
 				</DialogFooter>
 			</DialogContent>

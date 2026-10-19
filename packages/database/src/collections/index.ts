@@ -624,12 +624,15 @@ export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
 export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
 const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
 	schema: registerSessionsLiteral,
-	migrationStrategies: { 1: (oldDoc) => oldDoc },
+	migrationStrategies: { 1: (oldDoc) => oldDoc, 2: (oldDoc) => oldDoc },
 };
 export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
 export type CashMovementDocument = RxDocument<CashMovementRow>;
 export type CashMovementCollection = RxCollection<CashMovementRow>;
-const cash_movements: RxCollectionCreator<CashMovementRow> = { schema: cashMovementsLiteral };
+const cash_movements: RxCollectionCreator<CashMovementRow> = {
+	schema: cashMovementsLiteral,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
+};
 
 export type UserCollections = {
 	users: UserCollection;

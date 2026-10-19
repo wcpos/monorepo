@@ -520,7 +520,10 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 	});
 	afterEach(() => {
@@ -1337,7 +1340,10 @@ describe('PaymentWebview settled order status', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('applied');
 	});
 
@@ -1923,7 +1929,10 @@ describe('PaymentWebview frame-status signal', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 	});
 
 	it('reports the frame as loading on mount, then ready on the load event', async () => {
@@ -2228,7 +2237,7 @@ jest.mock('../sale-completion', () => {
 					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
 					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
 				if (!input.online && !input.extraMeta) return;
-				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+				if (!(await ctx.stampCompletion(input.order, meta_data)))
 					throw new Error('provenance_save_failed');
 				if (input.online) await ctx.pushDocument(input.order);
 			}
@@ -2291,7 +2300,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
 		dp: 2,
-		localPatch: mockLocalPatch,
+		stampCompletion: (
+			...[o, m]: Parameters<import('../sale-completion').SaleContext['stampCompletion']>
+		) => mockLocalPatch({ document: o, data: { meta_data: m } }),
 		pushDocument: mockPushDocument,
 		stockAdjustment: mockStockAdjustment,
 	}),
@@ -2968,7 +2979,10 @@ describe('PaymentWebview session expiry', () => {
 			line_items: [],
 		};
 		mockGet.mockResolvedValue({ data: [serverOrder] });
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+			release: jest.fn(),
+		});
 		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 		autoShowReceipt = false;
 		renderFrame();

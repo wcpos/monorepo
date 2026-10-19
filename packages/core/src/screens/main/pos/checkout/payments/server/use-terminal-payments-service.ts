@@ -13,6 +13,7 @@ import {
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { readResidentOrder } from '@wcpos/query/record-readers';
 import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -25,8 +26,8 @@ import {
 	startTerminalPaymentsService,
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
-import { findEngineResident } from '../../../../hooks/mutations/use-local-mutation';
 import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
+import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
@@ -83,37 +84,38 @@ export function useTerminalPaymentsService(): void {
 			isOnline: () => latest.current.online,
 			resolveOrderId: async (orderUuid) => {
 				if (getOrderSaveState(orderUuid)) return null;
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				const resident = await readResidentOrder(manager, orderUuid);
 				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
 			},
-			patchAndEnqueue: async (orderUuid, payment) => {
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
-				if (stopped || !resident) throw new Error('Offline payment order is not resident');
-				const payload = (resident.getLatest?.().payload ??
-					resident.payload) as EngineRecord<'orders'>['payload'];
-				const meta = cloneDeep(payload.meta_data ?? []);
-				const rows = upsertPaymentRow(readLedger(meta), payment);
-				const summary = derive(payload.total, rows, latest.current.methods, {
-					dp: dp(),
-				});
-				const meta_data = withLedger(meta, rows);
-				const written = await latest.current.recordLedger(resident, {
-					meta_data: isCompletingStatus(summary.status)
-						? await completionMetaFor(latest.current.ctx, meta_data, {})
-						: meta_data,
-					status: summary.status,
-				});
-				if (!written) throw new Error('Offline payment could not be saved');
-				return {
-					...summary,
-					total: String(payload.total ?? '0'),
-					payment_method: summary.payment_method ?? '',
-				};
-			},
+			patchAndEnqueue: (orderUuid, payment) =>
+				enqueueOrderMutation(orderUuid, async () => {
+					const resident = await readResidentOrder(manager, orderUuid);
+					if (stopped || !resident) throw new Error('Offline payment order is not resident');
+					const payload = (resident.getLatest?.().payload ??
+						resident.payload) as EngineRecord<'orders'>['payload'];
+					const meta = cloneDeep(payload.meta_data ?? []);
+					const rows = upsertPaymentRow(readLedger(meta), payment);
+					const summary = derive(payload.total, rows, latest.current.methods, {
+						dp: dp(),
+					});
+					const meta_data = withLedger(meta, rows);
+					const written = await latest.current.recordLedger(resident, {
+						meta_data: isCompletingStatus(summary.status)
+							? await completionMetaFor(latest.current.ctx, meta_data, {})
+							: meta_data,
+						status: summary.status,
+					});
+					if (!written) throw new Error('Offline payment could not be saved');
+					return {
+						...summary,
+						total: String(payload.total ?? '0'),
+						payment_method: summary.payment_method ?? '',
+					};
+				}),
 			mirror: async (orderUuid, { payment, order }) => {
 				let mirrored = false;
 				try {
-					const resident = await findEngineResident(manager, 'orders', orderUuid);
+					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
 					const payload = (resident.getLatest?.().payload ??
@@ -152,7 +154,7 @@ export function useTerminalPaymentsService(): void {
 				}
 			},
 			getBalance: async (orderUuid) => {
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				const resident = await readResidentOrder(manager, orderUuid);
 				if (!resident) throw new Error('Terminal payment order is not resident');
 				const payload = (resident.getLatest?.().payload ??
 					resident.payload) as EngineRecord<'orders'>['payload'];
@@ -162,15 +164,12 @@ export function useTerminalPaymentsService(): void {
 			},
 			getActor: () => latest.current.actor,
 			completeOrder: async (orderUuid, actor, outcome) => {
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				const resident = await readResidentOrder(manager, orderUuid);
 				if (stopped) return;
 				if (!resident) throw new Error('Terminal payment order is not resident');
-				await completeSale(
-					{ ...latest.current.ctx, actor },
-					resident as unknown as EngineRecord<'orders'>,
-					outcome,
-					{ host: 'background' }
-				);
+				await completeSale({ ...latest.current.ctx, actor }, resident, outcome, {
+					host: 'background',
+				});
 			},
 		});
 		// Offline-paid orders can be completed and absent from open tabs. Recover their

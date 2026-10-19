@@ -14,7 +14,7 @@ import {
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
-import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
+import { clearLocalDataNow, scheduleLocalDataReset } from '@wcpos/query/local-data-reset';
 import { useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 import { getLogger } from '@wcpos/utils/logger';
@@ -29,7 +29,7 @@ import { lockForRestart, useRestartLocked } from './restart-lock';
 const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
 export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => React.ReactNode }) {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const t = useT();
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */
 	const [confirmingReset, setConfirmingReset] = React.useState<UnsentChanges | null>(null);
@@ -43,7 +43,7 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 	 * whose profile is exactly the kind this action exists to repair.
 	 */
 	const handleResetPress = async () => {
-		setConfirmingReset(await countUnsentChanges(engine));
+		setConfirmingReset(await countUnsentChanges(runtime.engine));
 	};
 
 	/**
@@ -56,7 +56,7 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 		setConfirmingReset(null);
 		forgetUnsentChanges();
 
-		if (scheduleClearLocalDataOnNextLoad()) {
+		if (scheduleLocalDataReset()) {
 			if (reloadApp()) {
 				return;
 			}
@@ -84,7 +84,7 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 
 		// Clear databases to ensure clean start
 		try {
-			const result = await clearAllDB();
+			const result = await clearLocalDataNow();
 			uiLogger.info(result.message);
 		} catch (err) {
 			uiLogger.error('Failed to clear database:', {

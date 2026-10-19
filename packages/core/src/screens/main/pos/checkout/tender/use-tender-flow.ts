@@ -68,7 +68,7 @@ import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
@@ -241,7 +241,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
-	const { localPatch } = useLocalMutation();
+	const { recordLedger, writeLedgerChanges } = useOrderLedgerWrite();
 	const cartConfig = useCartConfig();
 	// A save queued offline is an order the server does not have yet (or has stale): even
 	// once connectivity is back and before the ack lands, tender must behave as offline —
@@ -748,7 +748,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					return [...fees, fee.line] as FeeLines;
 				});
 			const patchFees = async (data: ReturnType<typeof withFees>) => {
-				if (!(await localPatch({ document: target, data }))) throw new Error('rounding_fee_failed');
+				if (!(await recordLedger(target, data))) throw new Error('rounding_fee_failed');
 			};
 			await recordSaleAttempt(ctx, {
 				order,
@@ -783,7 +783,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					order,
 					sessionId,
 					queue,
-					write: (changes) => localPatch({ document: order, changes }),
+					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
 				});
@@ -1248,7 +1248,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		entryMinor,
 		cartConfig,
 		method,
-		localPatch,
+		recordLedger,
+		writeLedgerChanges,
 		order,
 		recordManualPayment,
 		gateway,

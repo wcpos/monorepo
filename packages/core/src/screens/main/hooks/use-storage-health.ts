@@ -2,14 +2,13 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import {
-	degradedStorage$,
-	isStorageDegraded,
-} from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { isStorageDegraded, observeStorageDegraded } from '@wcpos/query/storage-health';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+
+const degradedStorage$ = observeStorageDegraded();
 
 const storageBlockLogger = getLogger(['wcpos', 'pos', 'storage-block']);
 
@@ -58,8 +57,7 @@ export function isStorageBlockedError(error: unknown): error is StorageBlockedEr
  * storage call.
  */
 export function useStorageDegraded(): boolean {
-	const degraded = useObservableEagerState(degradedStorage$);
-	return degraded.length > 0;
+	return useObservableEagerState(degradedStorage$);
 }
 
 /**

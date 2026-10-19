@@ -354,30 +354,30 @@ function BrowseByField({
 }) {
 	const t = useT();
 	const counts = useBrowseCounts();
-	const rows: { value: BrowseBy; label: string; count?: string; empty?: string }[] = [
+	const rows: { value: BrowseBy; label: string; countLabel?: string; empty?: string }[] = [
 		{ value: 'all', label: t('pos_products.browse_all_products') },
 		{
 			value: 'categories',
 			label: t('pos_products.browse_categories'),
-			count: t('pos_products.n_categories', { count: counts.categories }),
+			countLabel: t('pos_products.n_categories', { count: counts.categories }),
 			empty: t('pos_products.no_categories_yet'),
 		},
 		{
 			value: 'tags',
 			label: t('pos_products.browse_tags'),
-			count: t('pos_products.n_tags', { count: counts.tags }),
+			countLabel: t('pos_products.n_tags', { count: counts.tags }),
 			empty: t('pos_products.no_tags_yet'),
 		},
 		{
 			value: 'brands',
 			label: t('pos_products.browse_brands'),
-			count: t('pos_products.n_brands', { count: counts.brands }),
+			countLabel: t('pos_products.n_brands', { count: counts.brands }),
 			empty: t('pos_products.no_brands_yet'),
 		},
 		{
 			value: 'shortcuts',
 			label: t('pos_products.browse_shortcuts'),
-			count: t('pos_products.n_quick_filters', { count: counts.shortcuts }),
+			countLabel: t('pos_products.n_quick_filters', { count: counts.shortcuts }),
 			empty: t('pos_products.no_shortcuts_yet'),
 		},
 	];
@@ -411,7 +411,7 @@ function BrowseByField({
 							leading={<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />}
 							trailing={
 								<Text className="text-muted-foreground text-xs">
-									{disabled ? row.empty : count === undefined ? '' : row.count}
+									{disabled ? row.empty : count === undefined ? '' : row.countLabel}
 								</Text>
 							}
 						>

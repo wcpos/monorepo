@@ -12,10 +12,10 @@ import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 interface VariationTableFooterProps {
 	/** The live handle the row owns: the sync button acts on it and spins with it. */
 	handle: QueryHandle;
-	/** The handle whose variations are drawn, so the total describes the `count` beside it. */
+	/** The handle whose variations are drawn, so the total describes the `drawnCount` beside it. */
 	shown?: QueryHandle;
 	parent: EngineRecord<'products'>;
-	count: number;
+	drawnCount: number;
 }
 
 /**
@@ -25,7 +25,7 @@ export function VariationTableFooter({
 	handle,
 	shown = handle,
 	parent,
-	count,
+	drawnCount,
 }: VariationTableFooterProps) {
 	const { active: loading } = useQueryHandleFields(handle, ['active']);
 	const { clearAndSync } = useCollectionReset('variations');
@@ -59,16 +59,16 @@ export function VariationTableFooter({
 	const { total: localTotal } = useQueryHandleFields(shown, ['total']);
 	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
 	const parentCount = parentVariations?.length;
-	const total = parentCount === undefined ? localTotal : Math.max(parentCount, count);
+	const total = parentCount === undefined ? localTotal : Math.max(parentCount, drawnCount);
 	const t = useT();
 
 	return (
 		<HStack space="xs" className="border-border justify-end border-b p-2">
 			<Text className="text-xs">
 				{total === null
-					? t('common.showing_n', { shown: count.toLocaleString() })
+					? t('common.showing_n', { shown: drawnCount.toLocaleString() })
 					: t('common.showing_of', {
-							shown: count.toLocaleString(),
+							shown: drawnCount.toLocaleString(),
 							total: total.toLocaleString(),
 						})}
 			</Text>

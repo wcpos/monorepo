@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { useReferencedCustomerDemand } from './use-referenced-customer-demand';
 
@@ -22,7 +22,17 @@ const hit = (payload: Result['hits'][number]['record']['payload']): Result['hits
 });
 
 const requireCustomer = jest.fn();
-const engine = { require: requireCustomer };
+let generation = 0;
+const statusListeners = new Set<() => void>();
+const makeEngine = () => ({
+	require: requireCustomer,
+	status: () => ({ collections: { customers: { coverageGeneration: generation } } }),
+	statusChanges: (notify: () => void) => {
+		statusListeners.add(notify);
+		return () => statusListeners.delete(notify);
+	},
+});
+let engine = makeEngine();
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
@@ -41,6 +51,8 @@ function resolvedHandle() {
 
 describe('useReferencedCustomerDemand', () => {
 	beforeEach(() => {
+		generation = 0;
+		engine = makeEngine();
 		requireCustomer.mockReset();
 		requireCustomer.mockImplementation(resolvedHandle);
 	});
@@ -109,6 +121,30 @@ describe('useReferencedCustomerDemand', () => {
 		unmount();
 		expect(secondHandle.release).toHaveBeenCalledTimes(1);
 	});
+
+	it.each(['customers reset', 'store switch'])(
+		'demands the visible customer ids again after a %s',
+		async (change) => {
+			const result$ = new BehaviorSubject<Result>({ hits: [hit({ customer_id: 5 })] });
+			const { rerender } = renderHook(() => useReferencedCustomerDemand(result$));
+			await act(async () => {});
+			expect(requireCustomer).toHaveBeenCalledTimes(1);
+
+			await act(async () => {
+				if (change === 'customers reset') {
+					generation += 1;
+					statusListeners.forEach((notify) => notify());
+				} else {
+					engine = makeEngine();
+				}
+				rerender();
+			});
+			expect(requireCustomer).toHaveBeenCalledTimes(2);
+			expect(requireCustomer).toHaveBeenLastCalledWith(
+				expect.objectContaining({ remoteIds: ['5'] })
+			);
+		}
+	);
 
 	it('retries customer ids after a requirement rejects', async () => {
 		const result$ = new Subject<Result>();

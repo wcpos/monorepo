@@ -251,7 +251,12 @@ function VariationRows({
 					<ProductRow record={record} />
 				</View>
 			))}
-			<VariationTableFooter handle={handle} shown={shown} parent={parent} count={hits.length} />
+			<VariationTableFooter
+				handle={handle}
+				shown={shown}
+				parent={parent}
+				drawnCount={hits.length}
+			/>
 		</View>
 	);
 }

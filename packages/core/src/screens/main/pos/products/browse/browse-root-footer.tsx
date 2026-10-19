@@ -7,7 +7,7 @@ import { HandleProductsFooter } from '../handle-footer';
 
 import type { SnapshotFields } from '../../../../../query';
 
-type Shown = { count: number; total: number | null };
+type Shown = { drawn: number; total: number | null };
 const TOTAL_FIELD: SnapshotFields = ['total'];
 
 /**
@@ -35,11 +35,11 @@ export function BrowseRootFooter({
 	const snapshot = useQueryHandleFields(handle, TOTAL_FIELD);
 	const live: Shown | undefined =
 		settled && snapshot.ready
-			? { count: snapshot.total ?? snapshot.hits.length, total: snapshot.total }
+			? { drawn: snapshot.total ?? snapshot.hits.length, total: snapshot.total }
 			: undefined;
 	// The last root numbers (React's "previous render" pattern: settles in one pass).
 	const [held, setHeld] = React.useState<Shown>();
-	if (live && (held?.count !== live.count || held.total !== live.total)) setHeld(live);
-	const shown = live ?? held ?? { count: snapshot.ready ? snapshot.hits.length : 0, total: null };
-	return <HandleProductsFooter handle={handle} total={shown.total} count={shown.count} />;
+	if (live && (held?.drawn !== live.drawn || held.total !== live.total)) setHeld(live);
+	const shown = live ?? held ?? { drawn: snapshot.ready ? snapshot.hits.length : 0, total: null };
+	return <HandleProductsFooter handle={handle} total={shown.total} drawnCount={shown.drawn} />;
 }

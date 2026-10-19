@@ -116,11 +116,11 @@ export function describeResetConfirm(unsent: UnsentChanges, t: Translate): strin
 }
 
 export function useUnsentChangesRecorder(): void {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 
 	React.useEffect(() => {
 		// An external RxDB subscription bound to the engine lifecycle, the same
 		// shape `useMutationCounts` uses.
-		return subscribeToUnsentChanges(engine);
-	}, [engine]);
+		return subscribeToUnsentChanges(runtime.engine);
+	}, [runtime.engine]);
 }

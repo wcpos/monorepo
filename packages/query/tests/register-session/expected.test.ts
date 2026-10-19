@@ -544,3 +544,24 @@ describe('drawer terms anchored to the server terms', () => {
 		expect(expected).toBe(deriveExpected(input, baselineHas).cash);
 	});
 });
+
+it.each([undefined, null])('treats withheld or null cash inputs as zero (%s)', (value) => {
+	const data = {
+		session: { id: 'blind', ...(value === null ? { counted_float: null } : {}) },
+		movements: [
+			{
+				id: 'paid-in',
+				session_id: 'blind',
+				type: 'paid_in',
+				...(value === null ? { amount: null, reason: null } : {}),
+			},
+		],
+		ledgerRowsBySession: [],
+	};
+	expect(deriveExpected(data)).toEqual({ cash: '0.0000' });
+	expect(deriveDrawerTerms(data)).toMatchObject({
+		float: '0.0000',
+		paidIn: [{ amount: '0.0000' }],
+		expected: '0.0000',
+	});
+});

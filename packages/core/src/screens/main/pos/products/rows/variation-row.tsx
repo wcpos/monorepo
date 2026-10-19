@@ -13,7 +13,7 @@ import { useT } from '../../../../../contexts/translations';
 export { ProductVariationName as VariationName } from '../cells/variation-name';
 export { StockQuantity as VariationStock } from '../cells/stock-quantity';
 
-type Attributes = import('@wcpos/database').ProductVariationDocument['attributes'];
+type Attributes = import('@wcpos/query').VariationPayload['attributes'];
 
 type Props = {
 	item: React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'variations'> }>>['item'];

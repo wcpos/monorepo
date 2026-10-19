@@ -4,7 +4,7 @@ import { useDocField, useQueryRuntime } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { usePushDocument } from '../../../contexts/use-push-document';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useActionContext } from '../../hooks/use-action-context';
 
@@ -17,7 +17,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const runtime = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const pushDocument = usePushDocument();
 	const { stockAdjustment } = useStockAdjustment();
 	const actor = React.useMemo(
@@ -39,7 +39,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			actor,
 			actionCtx,
 			actionActor,
-			localPatch,
+			stampCompletion,
 			pushDocument,
 			stockAdjustment,
 		}),
@@ -54,7 +54,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			actor,
 			actionCtx,
 			actionActor,
-			localPatch,
+			stampCompletion,
 			pushDocument,
 			stockAdjustment,
 		]

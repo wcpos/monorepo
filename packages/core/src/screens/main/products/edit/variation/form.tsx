@@ -23,7 +23,7 @@ import {
 	useDialog,
 } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, VariationPayload } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -35,7 +35,7 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { useCatalogueRecord } from '../../commands/use-catalogue-record';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
@@ -63,13 +63,13 @@ interface Props {
 export function EditVariationForm({ variation }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { localPatch } = useLocalMutation();
+	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
-	const variationData = variation.toMutableJSON().payload;
 
 	if (!variation) {
 		throw new Error('Variation not found');
 	}
+	const variationData = variation.toMutableJSON().payload;
 
 	/**
 	 *
@@ -98,12 +98,8 @@ export function EditVariationForm({ variation }: Props) {
 			data.tax_class = taxClassToWire(data.tax_class);
 			setLoading(true);
 			try {
-				const patched = await localPatch({
-					document: variation,
-					data: data as Partial<import('@wcpos/database').ProductVariationDocument>,
-				});
-				// localPatch swallows write errors and resolves undefined.
-				if (!patched?.document) {
+				const savedFields = await saveCatalogueFields(variation, data as Partial<VariationPayload>);
+				if (!savedFields) {
 					throw new Error('Local patch failed');
 				}
 				const saved = variation.getLatest().payload;
@@ -130,7 +126,7 @@ export function EditVariationForm({ variation }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, variation, t]
+		[close, saveCatalogueFields, variation, t]
 	);
 
 	/**

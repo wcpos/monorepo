@@ -3,7 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { mintRemoteId, remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshOrderRefunds, refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -120,16 +120,12 @@ export function useRefundMutation() {
 				},
 			});
 
-			let handle;
 			try {
-				handle = runtime.engine.require({
+				await refreshRecordByWooId(runtime.engine, {
 					id: `refund:order-refresh:${orderId}`,
 					collection: 'orders',
-					kind: 'targeted-records',
-					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
+					wooId: orderId,
 				});
-				await handle.ready;
 			} catch (error) {
 				// The refund POST already succeeded — money has moved. A failed local
 				// refresh must never reject the mutation: the error toast would invite
@@ -142,22 +138,15 @@ export function useRefundMutation() {
 						error: getErrorMessage(error),
 					},
 				});
-			} finally {
-				handle?.release();
 			}
 
 			for (let attempt = 0; attempt < REFUND_RECORD_REFRESH_ATTEMPTS; attempt += 1) {
-				let refundHandle;
 				try {
-					refundHandle = runtime.engine.require({
+					const result = await refreshOrderRefunds(runtime.engine, {
 						id: `refund:record-refresh:${orderId}`,
-						kind: 'refunds-by-parent',
-						collection: 'refunds',
-						parentRemoteId: mintRemoteId(orderId, 'refund parent'),
-						forceRefresh: true,
+						orderId,
 					});
-					const result = await refundHandle.ready;
-					if (result?.action !== 'released') break;
+					if (result !== 'released') break;
 					if (attempt === REFUND_RECORD_REFRESH_ATTEMPTS - 1) {
 						refundLogger.warn('Refund succeeded but the local refund record refresh was released', {
 							context: { orderId, attempts: REFUND_RECORD_REFRESH_ATTEMPTS },
@@ -169,8 +158,6 @@ export function useRefundMutation() {
 						context: { orderId, error: getErrorMessage(error) },
 					});
 					break;
-				} finally {
-					refundHandle?.release();
 				}
 			}
 

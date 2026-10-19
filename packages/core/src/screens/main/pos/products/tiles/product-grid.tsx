@@ -29,7 +29,6 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { CaptionRowInset } from '../../../components/data-table/surface';
 import { ProductsFooter } from '../footer';
 
-import type { RxCollection } from 'rxdb';
 import type { QueryStateActions, SnapshotFields } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
@@ -38,7 +37,7 @@ type ProductHit = {
 	record: EngineRecord<'products'>;
 };
 
-type ProductsResult = QueryResult<RxCollection>;
+type ProductsResult = QueryResult;
 
 /**
  * Troubleshooting probe (render-probe.ts), hosted by the grid's FIRST child. Effects run
@@ -85,13 +84,13 @@ function EmissionProbe({ handle }: { handle: QueryHandle<ProductsResult> }) {
 function GridStatusFooter({
 	handle,
 	shown,
-	count,
+	drawnCount,
 }: {
 	/** The live handle: the spinner is the engine's now, whichever query is drawn. */
 	handle: QueryHandle<ProductsResult>;
 	/** The drawn handle: the total rides with its rows ("of N" holds until the next answers). */
 	shown: QueryHandle<ProductsResult>;
-	count: number;
+	drawnCount: number;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
@@ -103,7 +102,7 @@ function GridStatusFooter({
 				active={active}
 				total={total}
 				sync={handle.sync}
-				count={count}
+				drawnCount={drawnCount}
 			/>
 		</CaptionRowInset>
 	);
@@ -269,7 +268,7 @@ export function ProductGrid({
 					</View>
 				)}
 			/>
-			<GridStatusFooter handle={handle} shown={shown} count={renderedCount} />
+			<GridStatusFooter handle={handle} shown={shown} drawnCount={renderedCount} />
 		</View>
 	);
 }

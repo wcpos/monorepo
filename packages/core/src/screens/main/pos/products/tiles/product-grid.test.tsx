@@ -104,12 +104,12 @@ jest.mock('./inline-variable-tile', () => ({
 jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		collectionName,
-		count,
+		drawnCount: count,
 		total,
 		active,
 	}: {
 		collectionName: string;
-		count: number;
+		drawnCount: number;
 		total: number | null;
 		active: boolean;
 	}) => (

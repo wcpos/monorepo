@@ -159,8 +159,14 @@ jest.mock('../contexts/tax-rates', () => ({
 	},
 	useTaxSettings: () => ({ calcTaxes: false }),
 }));
+jest.mock('../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
+}));
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ patch: jest.fn() }),
+	useMutation: () => {
+		const patch = jest.fn();
+		return { patch, patchRecord: patch };
+	},
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

@@ -5,14 +5,14 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { useDialog } from '@wcpos/components/dialog';
-import type { EngineRecord } from '@wcpos/query';
+import type { CustomerPayload, EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCustomerRecord } from '../commands/use-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
@@ -27,7 +27,7 @@ interface Props {
 export function EditCustomerForm({ customer }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { localPatch } = useLocalMutation();
+	const { saveCustomerFields } = useCustomerRecord();
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
 	const { close } = useDialog();
@@ -52,13 +52,10 @@ export function EditCustomerForm({ customer }: Props) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const patched = await localPatch({
-					document: customer,
-					data: data as Partial<import('@wcpos/database').CustomerDocument>,
-				});
+				const patched = await saveCustomerFields(customer, data as Partial<CustomerPayload>);
 				// localPatch swallows write errors and resolves undefined - pushing
 				// anyway would sync the unchanged resident and report success
-				if (!patched?.document) {
+				if (!patched) {
 					throw new Error('Local patch failed');
 				}
 				await pushDocument(customer).then((savedDoc: unknown) => {
@@ -94,7 +91,7 @@ export function EditCustomerForm({ customer }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, customer, pushDocument, t, format, close]
+		[saveCustomerFields, customer, pushDocument, t, format, close]
 	);
 
 	/**

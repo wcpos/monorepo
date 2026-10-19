@@ -15,11 +15,11 @@ type LedgerRow = {
 	refunded_amount: string;
 };
 type Movement = {
-	reason?: string;
+	reason?: string | null;
 	id: string;
 	session_id: string;
 	type: string;
-	amount: string;
+	amount?: string | null;
 	voided_by?: string | null;
 	voids?: string | null;
 };
@@ -114,7 +114,7 @@ export function deriveExpected(
 	}: {
 		session: {
 			id: string;
-			counted_float: string;
+			counted_float?: string | null;
 			server_expected?: Record<string, string> | null;
 			server_terms?: ServerTerms | null;
 			server_ledger_rows?: readonly { id?: string; status?: string }[] | null;
@@ -164,9 +164,9 @@ export function deriveExpected(
 }
 
 type BaselineHas = (id: string | number | null | undefined) => boolean;
-const sumMinor = (rows: readonly { amount: string }[]) =>
+const sumMinor = (rows: readonly { amount?: string | null }[]) =>
 	rows.reduce((total, row) => total + toMinor(row.amount, 4), 0);
-const display = (amount: string) => fromMinor(toMinor(amount, 4), 4);
+const display = (amount: string | null | undefined) => fromMinor(toMinor(amount, 4), 4);
 
 /** The terms over one view of the rows, in four-decimal minor units. */
 function localTerms(input: Parameters<typeof deriveExpected>[0]) {
@@ -296,7 +296,7 @@ export function deriveDrawerTerms(
 		if (!paidIn[at].minor) paidIn.splice(at, 1);
 	}
 	for (const row of full.paidIn.filter(({ id }) => !baselineHas(id)))
-		paidIn.push({ id: row.id, minor: toMinor(row.amount, 4), note: row.reason });
+		paidIn.push({ id: row.id, minor: toMinor(row.amount, 4), note: row.reason ?? undefined });
 	const paidOutCount = server.paid_out.count + full.paidOut.length - known.paidOut.length;
 	// With one paid-out left, it is the one new here, or else the server's only one.
 	const fresh = full.paidOut.filter(({ id }) => !baselineHas(id));

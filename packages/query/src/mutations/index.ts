@@ -33,3 +33,4 @@ export {
 } from '../reads/customer-link';
 export { recordReceiptPrint } from './record-receipt-print';
 export { resolveQueuedChange } from './resolve-queued-change';
+export { enqueueRecordWrite, pushRecord, readWrittenResident } from './push-record';

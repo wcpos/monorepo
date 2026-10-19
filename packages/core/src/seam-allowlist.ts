@@ -1648,10 +1648,137 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: raw query construction :: acquireOpenOrdersQueryHandle :: collection.find({ selector: openOrdersSelector(cashierId, storeId, registerId), sort: OPEN_ORDERS_SORT, }) :: 1',
 	"screens/main/pos/contexts/current-order/use-open-orders-handle.ts :: storage import ::  :: from 'rxdb' :: 1",
 	'screens/main/pos/contexts/order-money-divergence/index.tsx :: engine handle aliased :: OrderMoneyDivergenceProvider :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (g13): the till menu's clear-local-data and sales-today go through query.
+	'screens/main/pos/cart/clear-local-data.tsx :: engine handle aliased :: ClearLocalData :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/pos/cart/clear-local-data.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/cart/user-sheet.tsx :: engine handle aliased :: useSalesToday :: { engine, locale } = useQueryRuntime() :: 1',
+	"screens/main/pos/cart/user-sheet.tsx :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	// ADR 0033 per-screen (h1): the data table's props stop borrowing storage names.
+	'screens/main/components/data-table/footer.tsx :: raw query construction :: DataTableFooter :: count :: 1',
+	'screens/main/components/data-table/index.tsx :: engine handle aliased :: DataTableBody :: { result, syncing, engine } = props :: 1',
+	'screens/main/components/data-table/index.tsx :: raw query construction :: HandleFooter :: count :: 1',
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 2",
+	"screens/main/components/data-table/index.tsx :: storage import ::  :: from 'rxdb' :: 3",
+	'screens/main/pos/products/footer.tsx :: raw query construction :: ProductsFooter :: count :: 1',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	"screens/main/contexts/use-push-document.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: enqueueDocumentWrite :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: record collection back-reference :: usePushDocument :: latest.collection :: 1',
+	'screens/main/contexts/use-push-document.ts :: write plane outside a command module :: enqueueDocumentWrite :: runtime.engine.write :: 1',
+	// ADR 0033 per-screen (h3): the coupons screens write through a command and refresh through a named read.
+	'screens/main/coupons/add.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/add.tsx :: resident helper write :: AddCouponScreen :: useMutation :: 1',
+	'screens/main/coupons/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/coupons/edit/form.tsx :: resident helper write :: EditCouponForm :: useLocalMutation :: 1',
+	"screens/main/coupons/edit/form.tsx :: storage import :: EditCouponForm :: from '@wcpos/database' :: 1",
+	'screens/main/coupons/index.tsx :: record mutator :: CouponsList :: patch :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/coupons/index.tsx :: resident helper write :: CouponsList :: useMutation :: 1',
+	// ADR 0033 per-screen (h4): the customers screens write through a command and refresh one record through a named read.
+	'screens/main/customers/add.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/customers/add.tsx :: resident helper write :: AddCustomerScreen :: useMutation :: 1',
+	'screens/main/customers/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/customers/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/customers/edit/form.tsx :: resident helper write :: EditCustomerForm :: useLocalMutation :: 1',
+	"screens/main/customers/edit/form.tsx :: storage import :: EditCustomerForm :: from '@wcpos/database' :: 1",
+	// ADR 0033 per-screen (h5): the products screens write through a command and refresh through the named read.
+	'screens/main/products/cells/actions.tsx :: require plane outside a named read :: Actions :: runtime.engine.require :: 1',
+	'screens/main/products/cells/variation-actions.tsx :: require plane outside a named read :: VariationActions :: runtime.engine.require :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/product/form.tsx :: resident helper write :: EditProductForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/product/form.tsx :: storage import :: EditProductForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/edit/variation/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/products/edit/variation/form.tsx :: resident helper write :: EditVariationForm :: useLocalMutation :: 1',
+	"screens/main/products/edit/variation/form.tsx :: storage import :: EditVariationForm :: from '@wcpos/database' :: 1",
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: productsPatch :: 1',
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: variationsPatch :: 1',
+	'screens/main/products/products.tsx :: resident helper write ::  :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 1',
+	'screens/main/products/products.tsx :: resident helper write :: ProductsList :: useMutation :: 2',
+	// ADR 0033 per-screen (h6): the orders screen's edit, reopen and refresh go through a command and the named read.
+	'screens/main/orders/edit/form.tsx :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/edit/form.tsx :: resident helper write :: EditOrderForm :: useLocalMutation :: 1',
+	"screens/main/orders/edit/form.tsx :: storage import :: EditOrderForm :: from '@wcpos/database' :: 1",
+	'screens/main/orders/force-refresh-filter-customer.ts :: require plane outside a named read :: forceRefreshFilterCustomer :: manager.engine.require :: 1',
+	'screens/main/orders/order-menu.tsx :: require plane outside a named read :: OrderActionsMenu :: runtime.engine.require :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/orders/use-reopen-order.ts :: resident helper write :: useReopenOrder :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (h7): the order refunds handle is owned by @wcpos/query; the refund mutation refreshes through named reads.
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 1',
+	'screens/main/orders/refund/use-refund-mutation.ts :: require plane outside a named read :: useRefundMutation :: runtime.engine.require :: 2',
+	'screens/main/orders/view/use-order-refunds.ts :: engine handle aliased :: useOrderRefunds :: { engine } = useQueryRuntime() :: 1',
+	"screens/main/orders/view/use-order-refunds.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	"screens/main/orders/view/use-order-refunds.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (i1): the POS products screen's types come from @wcpos/query; its props stop borrowing storage names.
+	'screens/main/components/product/variable-product-row/variations/footer.tsx :: raw query construction :: VariationTableFooter :: count :: 1',
+	"screens/main/components/product/variation-select.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: held?.count :: 1',
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: live.count :: 1',
+	'screens/main/pos/products/browse/browse-root-footer.tsx :: raw query construction :: BrowseRootFooter :: shown.count :: 1',
+	"screens/main/pos/products/cells/variable-actions.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variation-actions.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/index.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/utils.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/cells/variations-popover/variations.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/filter-bar/quick-filter-editor.tsx :: record collection back-reference :: TermValueEditor :: collection :: 1',
+	'screens/main/pos/products/handle-footer.tsx :: raw query construction :: HandleProductsFooter :: count :: 1',
+	'screens/main/pos/products/own-footer.tsx :: raw query construction :: OwnFooter :: count :: 1',
+	'screens/main/pos/products/render-probe.ts :: raw query construction :: enqueue :: bucket.count :: 1',
+	'screens/main/pos/products/render-probe.ts :: raw query construction :: flush :: bucket.count :: 1',
+	"screens/main/pos/products/rows/variation-row.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	"screens/main/pos/products/tiles/inline-variable-tile.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/tiles/product-grid.tsx :: raw query construction :: GridStatusFooter :: count :: 1',
+	"screens/main/pos/products/tiles/product-grid.tsx :: storage import ::  :: from 'rxdb' :: 1",
+	"screens/main/pos/products/tiles/variation-tile.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/pos/products/ui-settings-form.tsx :: raw query construction :: BrowseByField :: row.count :: 1',
+	// ADR 0033 per-screen (j1): the checkout's forced refreshes are named reads.
+	'screens/main/pos/checkout/components/payment-webview.tsx :: require plane outside a named read :: PaymentWebview :: runtime.engine.require :: 1',
+	'screens/main/pos/checkout/hooks/reconcile-completed-order.ts :: require plane outside a named read :: refreshOrderRecord :: runtime.engine.require :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-session.ts :: require plane outside a named read :: useCheckoutSession :: runtime.engine.require :: 1',
+	// ADR 0033 per-screen (j2): the checkout's resident reads are named reads; the generic resident door closes.
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: engine handle aliased :: SaleCompletionBridge>activeLegacyDatabase :: engine = manager.engine :: 1',
+	"screens/main/pos/checkout/hooks/use-checkout-save.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	'screens/main/pos/checkout/use-rejected-order-saves.ts :: engine handle aliased :: useRejectedOrderSavesSync :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (j3): the checkout's ledger writes go through the order ledger command.
+	'screens/main/pos/checkout/hooks/use-sale-context.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/hooks/use-sale-context.ts :: resident helper write :: useSaleContext :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/provenance/persist-provenance.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/checkout/tender/use-tender-flow.ts :: resident helper write :: useTenderFlow :: useLocalMutation :: 1',
+	// ADR 0033 per-screen (l1): the UI-settings slots open through @wcpos/query/store-local.
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 1',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 2',
+	'screens/main/contexts/ui-settings/provider.tsx :: record mutator :: UISettingsProvider :: storeDB.addState :: 3',
+	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
+	"screens/main/contexts/ui-settings/utils.ts :: storage import ::  :: from 'rxdb' :: 1",
+	// ADR 0033 per-screen (l2): the remaining engine demands, the storage-health read and the search-select handle are owned by @wcpos/query.
+	'query/coupon-reference-demand.ts :: engine handle aliased :: useReferenceDemandHandle :: { engine } = useQueryRuntime() :: 1',
+	'query/search-select.ts :: engine handle aliased :: useSearchSelect :: { engine } = useQueryRuntime() :: 1',
+	"query/search-select.ts :: query escape hatch ::  :: from '@wcpos/query' :: 1",
+	'screens/main/contexts/extra-data/provider.tsx :: engine handle aliased :: ExtraDataProvider :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-census-totals.ts :: engine handle aliased :: useCensusTotals :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-collection-reset.ts :: collection reset outside the reset command :: useCollectionReset :: runtime.engine.scope.resetCollection :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: engine handle aliased :: useReferencedCustomerDemand :: { engine } = useQueryRuntime() :: 1',
+	'screens/main/hooks/use-referenced-customer-demand.ts :: require plane outside a named read :: useReferencedCustomerDemand :: engine.require :: 1',
+	"screens/main/hooks/use-storage-health.ts :: storage import ::  :: from '@wcpos/database/plugins/wrapped-error-handler-storage' :: 1",
+	'screens/main/hooks/use-unsent-changes.ts :: engine handle aliased :: useUnsentChangesRecorder :: { engine } = useQueryRuntime() :: 1',
+	// ADR 0033 per-screen (l3): the last storage type imports come from @wcpos/query; props and fields stop borrowing storage names.
+	"screens/main/components/order/customer.tsx :: storage import ::  :: from '@wcpos/database' :: 1",
+	'screens/main/logs/logs-logic.ts :: raw query construction :: buildLogEntryReport :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts.count :: 1',
+	'screens/main/logs/row-detail.tsx :: raw query construction :: RowDetail :: detail.attempts?.count :: 1',
+	'screens/main/pos/cart/register-count.tsx :: raw query construction :: DenominationTile :: count :: 1',
+	'screens/main/settings/card-readers/use-reader-actions.ts :: record mutator :: useReaderActions :: rememberedReaders(storeDB).remove :: 1',
+	'screens/main/tax-rates/footer.tsx :: raw query construction :: TaxRatesFooter :: count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: data?.count :: 1',
+	'services/novu/client.ts :: raw query construction :: getUnreadCount :: novuClient.notifications.count :: 1',
+	"services/register-session/use-session-report.ts :: storage import ::  :: from '@wcpos/database' :: 1",
 ];
-export const SEAM_RETIRED_FLOOR = 701;
+export const SEAM_RETIRED_FLOOR = 813;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'1e55c112d3179a2437defea26fa95e6b703fbcb9b6d3f45d1f6f327dcc40f51a';
+	'bb8ea7f62f5ad1276b6d5a6beb9d27aa87e883940fb3439df3c71f9bee667943';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
@@ -1686,7 +1813,22 @@ export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR: readonly string[] = [
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: generic resident door :: NewCustomerLinkBridge :: findEngineResident :: 2',
+	// ADR 0033 per-screen (h2): the full-payload push is a command in @wcpos/query/mutations.
+	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: enqueueDocumentWrite :: findEngineResident :: 1',
+	'screens/main/contexts/use-push-document.ts :: generic resident door :: usePushDocument :: findEngineResident :: 1',
+	// ADR 0033 per-screen (j2): the checkout's resident reads are named reads; the generic resident door closes.
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/completion-journal-bridge.tsx :: generic resident door :: SaleCompletionBridge>findOrder :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/hooks/use-checkout-save.ts :: generic resident door :: useCheckoutSave :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door ::  :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 1',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 2',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 3',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 4',
+	'screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts :: generic resident door :: useTerminalPaymentsService :: findEngineResident :: 5',
 ];
-export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 7;
+export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR = 20;
 export const SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST =
-	'0448a89f88735b0cdc56343147ab39848896a2ba558880b831d22c079baeea84';
+	'ddc3cabf214f8a98dfb904d17c928f7655a365feadcae10dcb72eef9ba73bf60';

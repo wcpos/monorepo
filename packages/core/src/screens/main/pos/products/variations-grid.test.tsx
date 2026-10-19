@@ -97,12 +97,12 @@ jest.mock('@wcpos/components/status-badge', () => ({
 jest.mock('./footer', () => ({
 	ProductsFooter: ({
 		children,
-		count,
+		drawnCount: count,
 		total,
 		active,
 		collectionName,
 	}: React.PropsWithChildren<{
-		count: number;
+		drawnCount: number;
 		total: number | null;
 		active: boolean;
 		collectionName: string;

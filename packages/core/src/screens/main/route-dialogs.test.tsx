@@ -134,6 +134,9 @@ jest.mock('./coupons/edit/form', () => ({ EditCouponForm: () => null }));
 
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('./hooks/mutations/use-mutation', () => ({ useMutation: () => ({ create: jest.fn() }) }));
+jest.mock('./hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
+}));
 jest.mock('./components/customer/customer-form', () => ({
 	CustomerForm: () => null,
 	customerFormSchema: {},

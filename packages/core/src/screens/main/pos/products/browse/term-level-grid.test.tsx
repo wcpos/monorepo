@@ -87,7 +87,13 @@ jest.mock('./term-tile', () => {
 // not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../handle-footer', () => ({
-	HandleProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
+	HandleProductsFooter: ({
+		drawnCount: count,
+		total,
+	}: {
+		drawnCount: number;
+		total: number | null;
+	}) => {
 		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},

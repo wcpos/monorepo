@@ -50,8 +50,8 @@ jest.mock('./hooks/use-sale-context', () => ({ useSaleContext: () => mockContext
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockContext.storeDB }),
 }));
-jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	findEngineResident: (...args: unknown[]) => mockFind(...args),
+jest.mock('@wcpos/query/record-readers', () => ({
+	readResidentOrder: (...args: unknown[]) => mockFind(...args),
 }));
 jest.mock('./hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: (...args: unknown[]) => mockRefresh(...args),
@@ -574,7 +574,7 @@ it('makes no second request when a replacement session starts with the cleared j
 it('stays sequential across context changes and StrictMode effect restarts, without replaying twice', async () => {
 	await record();
 	await record('other');
-	mockFind.mockImplementation(async (_manager, _collection, uuid) => resident(uuid));
+	mockFind.mockImplementation(async (_manager, uuid) => resident(uuid));
 	let release!: () => void;
 	mockRefresh.mockImplementationOnce(
 		() =>
@@ -631,7 +631,7 @@ it('does not finish a lookup that resolves after the bridge stopped', async () =
 it('retains a failed completion without an in-session retry and continues with the next order', async () => {
 	await record();
 	await record('other');
-	mockFind.mockImplementation(async (_manager, _collection, uuid) => resident(uuid));
+	mockFind.mockImplementation(async (_manager, uuid) => resident(uuid));
 	mockRefresh.mockRejectedValueOnce(new Error('finish failed'));
 	const view = render(<SaleCompletionBridge />);
 	await waitFor(async () =>

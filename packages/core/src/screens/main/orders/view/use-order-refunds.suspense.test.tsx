@@ -42,9 +42,14 @@ jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useRecordField: (record: typeof mockOrder, select: (record: typeof mockOrder) => unknown) =>
 		select(record),
+}));
+jest.mock('../../../../../../query/src/engine-query', () => ({
+	...jest.requireActual('../../../../../../query/src/engine-query'),
 	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
 }));
-const actualObserve = jest.requireActual('@wcpos/query').observeEngineQuery;
+const actualObserve = jest.requireActual(
+	'../../../../../../query/src/engine-query'
+).observeEngineQuery;
 jest.mock('react-native', () => ({
 	ScrollView: ({ children }: any) => <div data-testid="modal-scroll">{children}</div>,
 	View: ({ children }: any) => <div>{children}</div>,

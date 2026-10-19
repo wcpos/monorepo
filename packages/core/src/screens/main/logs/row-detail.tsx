@@ -186,7 +186,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	if (detail.attempts) {
 		entries.push({
 			label: t('health.logs.kv_attempts'),
-			value: `${detail.attempts.count} · ${formatDate(new Date(detail.attempts.firstSeen), 'p')} → ${formatDate(
+			value: `${detail.attempts.times} · ${formatDate(new Date(detail.attempts.firstSeen), 'p')} → ${formatDate(
 				new Date(detail.attempts.lastSeen),
 				'p'
 			)}`,
@@ -256,7 +256,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			{/* The row's occurrence count on its own: the logger folds repeats within a window
 			    into one row, so an exactly-once assertion must read this, not the row count. */}
 			<Text testID={`logs-attempts-${row.logId}`} className="hidden">
-				{detail.attempts?.count ?? 1}
+				{detail.attempts?.times ?? 1}
 			</Text>
 			{isProblem ? (
 				<View

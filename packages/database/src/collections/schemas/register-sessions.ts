@@ -7,7 +7,7 @@ export const sessionOutboxProperties = {
 } as const;
 export const registerSessionsLiteral = {
 	title: 'Register sessions',
-	version: 1,
+	version: 2,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {
@@ -19,7 +19,7 @@ export const registerSessionsLiteral = {
 		opened_at_gmt: { type: 'string' },
 		opened_by: { type: ['number', 'null'] },
 		expected_float: { type: ['string', 'null'] },
-		counted_float: { type: 'string' },
+		counted_float: { type: ['string', 'null'] },
 		opening_variance: { type: ['string', 'null'] },
 		counting_started_at_gmt: { type: ['string', 'null'] },
 		closed_at_gmt: { type: ['string', 'null'] },
@@ -116,14 +116,6 @@ export const registerSessionsLiteral = {
 		},
 		...sessionOutboxProperties,
 	},
-	required: [
-		'id',
-		'register_id',
-		'status',
-		'opened_at_gmt',
-		'counted_float',
-		'sync_status',
-		'sync_attempts',
-	],
+	required: ['id', 'register_id', 'status', 'opened_at_gmt', 'sync_status', 'sync_attempts'],
 	indexes: [['register_id', 'status'], ['sync_status']],
 } as const;

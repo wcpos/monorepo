@@ -27,7 +27,7 @@ import {
 } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type OrderPayload, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -44,7 +44,7 @@ import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useOrderRecord } from '../commands/use-order-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -75,7 +75,7 @@ const formSchema = z.object({
  */
 export function EditOrderForm({ order }: Props) {
 	const pushDocument = usePushDocument();
-	const { localPatch } = useLocalMutation();
+	const { saveOrderFields } = useOrderRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { close } = useDialog();
@@ -145,13 +145,10 @@ export function EditOrderForm({ order }: Props) {
 
 			setLoading(true);
 			try {
-				const patched = await localPatch({
-					document: order,
-					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
-				});
+				const patched = await saveOrderFields(order, data as unknown as Partial<OrderPayload>);
 				// localPatch swallows write errors and resolves undefined - pushing
 				// anyway would sync the unchanged resident and report success
-				if (!patched?.document) {
+				if (!patched) {
 					throw new Error('Local patch failed');
 				}
 				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
@@ -183,7 +180,7 @@ export function EditOrderForm({ order }: Props) {
 				setLoading(false);
 			}
 		},
-		[blockIfDegraded, close, localPatch, order, pushDocument, t]
+		[blockIfDegraded, close, saveOrderFields, order, pushDocument, t]
 	);
 
 	/**

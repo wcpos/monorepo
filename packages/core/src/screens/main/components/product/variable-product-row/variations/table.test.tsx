@@ -31,9 +31,9 @@ jest.mock('../../../data-table/column-style', () => ({ getColumnStyle: () => ({}
 jest.mock('../../../record-text-cell', () => ({ RecordTextCell: () => null }));
 let mockFooterProps: { handle?: unknown; shown?: unknown } = {};
 jest.mock('./footer', () => ({
-	VariationTableFooter: (props: { count: number; handle: unknown; shown: unknown }) => {
+	VariationTableFooter: (props: { drawnCount: number; handle: unknown; shown: unknown }) => {
 		mockFooterProps = props;
-		return <div data-testid="variations-footer-count">{props.count}</div>;
+		return <div data-testid="variations-footer-count">{props.drawnCount}</div>;
 	},
 }));
 

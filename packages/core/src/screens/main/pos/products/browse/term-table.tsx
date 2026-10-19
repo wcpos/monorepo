@@ -214,7 +214,7 @@ export function TermLevelTable({
 	const total = shown?.total ?? null;
 	// The table's footer counts the pane's own rows, never the live handle's window — through
 	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
-	const footer = React.useMemo(() => ({ total, count: loaded }), [total, loaded]);
+	const footer = React.useMemo(() => ({ total, drawnCount: loaded }), [total, loaded]);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
 	// its own rows, as the level grid does — and an end-reached while the demand is pending is
 	// armed and fired once it clears (FlashList will not fire again for the same rows):

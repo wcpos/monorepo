@@ -113,14 +113,14 @@ jest.mock('../../components/data-table', () => ({
 	DataTable: (props: {
 		tableConfig: { data: typeof hits };
 		handle: unknown;
-		TableFooterComponent: React.ComponentType<{ count: number; total: number | null }>;
+		TableFooterComponent: React.ComponentType<{ drawnCount: number; total: number | null }>;
 	}) => {
 		mockTableProps.value = props;
 		const { tableConfig, TableFooterComponent } = props;
 		return (
 			<>
 				<output data-testid="hits">{tableConfig.data.map((hit) => hit.id).join(',')}</output>
-				<TableFooterComponent count={tableConfig.data.length} total={99} />
+				<TableFooterComponent drawnCount={tableConfig.data.length} total={99} />
 			</>
 		);
 	},
@@ -141,9 +141,9 @@ jest.mock('./variations-grid', () => ({
 jest.mock('./footer', () => ({
 	ProductsFooter: ({
 		children,
-		count,
+		drawnCount: count,
 		total,
-	}: React.PropsWithChildren<{ count: number; total: number | null }>) => (
+	}: React.PropsWithChildren<{ drawnCount: number; total: number | null }>) => (
 		<footer data-testid="footer">
 			{children}
 			<output>

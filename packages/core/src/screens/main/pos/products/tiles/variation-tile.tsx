@@ -37,7 +37,7 @@ import {
 	useProductWords,
 } from './tile-words';
 
-type Attributes = import('@wcpos/database').ProductVariationDocument['attributes'];
+type Attributes = import('@wcpos/query').VariationPayload['attributes'];
 
 // The Poster cover, as the product tile's picture.
 const COVER = { contentFit: 'cover' } as const;

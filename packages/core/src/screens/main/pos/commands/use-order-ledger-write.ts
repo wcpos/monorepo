@@ -3,7 +3,7 @@ import * as React from 'react';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import type { MutationDocument } from '@wcpos/query/mutations';
 
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { type PayloadChanges, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 /** Keep the adapter's call-time register stamp and failed-write result unchanged. */
 export function useOrderLedgerWrite() {
@@ -11,7 +11,9 @@ export function useOrderLedgerWrite() {
 	const recordLedger = React.useCallback(
 		(
 			order: MutationDocument,
-			data: { meta_data: MetaDataEntry[]; status: string } | { fee_lines: object[]; total: string }
+			data:
+				| { meta_data: MetaDataEntry[]; status: string; fee_lines?: object[]; total?: string }
+				| { fee_lines: object[]; total: string }
 		) => localPatch({ document: order, data }),
 		[localPatch]
 	);
@@ -20,5 +22,11 @@ export function useOrderLedgerWrite() {
 			localPatch({ document: order, data: { meta_data } }),
 		[localPatch]
 	);
-	return { recordLedger, stampCompletion };
+	// The zero-balance completion (#2710, ADR 0033 item 4) resolves its changes inside the
+	// adapter's slot — pre-flight and every retry — so this door passes the resolver through.
+	const writeLedgerChanges = React.useCallback(
+		(order: MutationDocument, changes: PayloadChanges) => localPatch({ document: order, changes }),
+		[localPatch]
+	);
+	return { recordLedger, stampCompletion, writeLedgerChanges };
 }

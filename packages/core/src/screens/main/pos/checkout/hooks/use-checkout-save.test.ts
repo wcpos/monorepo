@@ -27,6 +27,12 @@ const mockEnqueue = jest.fn();
 const mockResident = { uuid: 'a' };
 const mockError = jest.fn();
 jest.mock('@wcpos/query', () => ({
+	noteStorageWriteDeadlinePassed: jest.requireMock(
+		'@wcpos/database/plugins/wrapped-error-handler-storage'
+	).noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS: jest.requireMock(
+		'@wcpos/database/plugins/wrapped-error-handler-storage'
+	).STORAGE_WRITE_DEADLINE_MS,
 	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
 	useQueryRuntime: () => ({ engine: {} }),
 	awaitWriteSettlement: (...args: unknown[]) => mockSettlement(...args),
@@ -35,8 +41,8 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../contexts/use-push-document', () => ({
 	enqueueDocumentWrite: (...args: unknown[]) => mockEnqueue(...args),
 }));
-jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
-	findEngineResident: async () => mockResident,
+jest.mock('@wcpos/query/mutations', () => ({
+	readWrittenResident: async () => mockResident,
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/utils/logger', () => ({

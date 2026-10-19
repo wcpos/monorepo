@@ -39,9 +39,9 @@ jest.mock('../components/product/price-with-tax', () => ({
 jest.mock('../components/product/variable-product-row/variations/filters', () => ({
 	VariationsFilterBar: () => null,
 }));
-let mockFooterProps: { handle?: unknown; shown?: unknown; count?: number } = {};
+let mockFooterProps: { handle?: unknown; shown?: unknown; drawnCount?: number } = {};
 jest.mock('../components/product/variable-product-row/variations/footer', () => ({
-	VariationTableFooter: (props: { handle: unknown; shown: unknown; count: number }) => {
+	VariationTableFooter: (props: { handle: unknown; shown: unknown; drawnCount: number }) => {
 		mockFooterProps = props;
 		return null;
 	},
@@ -218,7 +218,7 @@ it('keeps touch variations inline, seeds relational matches and follows stock fi
 	expect(mockFooterProps).toMatchObject({
 		handle: mockVariationHandle,
 		shown: mockVariationHandle,
-		count: 1,
+		drawnCount: 1,
 	});
 	meta.variationStockStatus = 'outofstock';
 	rerender(<VariableRow {...props} />);

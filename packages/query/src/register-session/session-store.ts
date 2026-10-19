@@ -319,7 +319,7 @@ export async function writeClosure({
 		tillExpected ??
 		deriveExpected({ session, movements: entries, ledgerRowsBySession: ledgerRows, refundRecords });
 	const counts = { cash: counted, ...otherTenders };
-	const sum = (values: string[]) =>
+	const sum = (values: (string | null | undefined)[]) =>
 		fromMinor(
 			values.reduce((total, value) => total + toMinor(value, 4), 0),
 			4

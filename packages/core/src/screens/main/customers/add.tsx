@@ -13,7 +13,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCustomerRecord } from './commands/use-customer-record';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
@@ -22,7 +22,7 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
  *
  */
 export function AddCustomerScreen() {
-	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
+	const { createCustomer } = useCustomerRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const router = useRouter();
@@ -44,7 +44,7 @@ export function AddCustomerScreen() {
 			setLoading(true);
 			try {
 				// create() logs and toasts its own failure; reporting it here too doubled it.
-				const savedDoc = await create({ data }).catch(() => undefined);
+				const savedDoc = await createCustomer(data);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its payload.
 					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
@@ -71,7 +71,7 @@ export function AddCustomerScreen() {
 				setLoading(false);
 			}
 		},
-		[create, format, router, t]
+		[createCustomer, format, router, t]
 	);
 
 	/**

@@ -1,19 +1,17 @@
 import {
-	noteStorageWriteDeadlinePassed,
-	STORAGE_WRITE_DEADLINE_MS,
-} from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import {
 	awaitTerminalWriteOutcome,
 	awaitWriteSettlement,
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
 	useQueryRuntime,
 	WriteOutcomeError,
 } from '@wcpos/query';
+import { readWrittenResident } from '@wcpos/query/mutations';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { enqueueDocumentWrite } from '../../../contexts/use-push-document';
-import { findEngineResident } from '../../../hooks/mutations/use-local-mutation';
 import {
 	clearOrderSaveIfMutation,
 	clearOrderSaving,
@@ -22,7 +20,7 @@ import {
 	markOrderSaveRejected,
 } from '../checkout-mode';
 
-type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>>;
+type EngineResident = Awaited<ReturnType<typeof readWrittenResident>>;
 export type CheckoutRejection = {
 	status: number | null;
 	reason: string | null;
@@ -80,9 +78,7 @@ export function useCheckoutSave() {
 				);
 				return { outcome: 'queued-offline' };
 			}
-			const resident = await findEngineResident(runtime, collectionName, recordId);
-			if (!resident)
-				throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
+			const resident = await readWrittenResident(runtime, collectionName, recordId);
 			clearOrderSaving(uuid);
 			return { outcome: 'saved', resident };
 		} catch (error) {
