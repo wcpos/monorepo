@@ -2,12 +2,12 @@ import * as React from 'react';
 
 /** React.lazy caches rejected imports forever; Expo retries a fresh chunk import. */
 
-export function retryableLazy<T extends React.ComponentType<any>>(
-	load: () => Promise<{ default: T }>
-): T {
+export function retryableLazy<P extends object>(
+	load: () => Promise<{ default: React.ComponentType<P> }>
+): React.ComponentType<P> {
 	let Lazy = create();
 
-	function create(): React.LazyExoticComponent<T> {
+	function create(): React.LazyExoticComponent<React.ComponentType<P>> {
 		return React.lazy(() =>
 			load().catch((error) => {
 				Lazy = create();
@@ -16,9 +16,9 @@ export function retryableLazy<T extends React.ComponentType<any>>(
 		);
 	}
 
-	function RetryableLazy(props: React.ComponentProps<T>) {
+	function RetryableLazy(props: P) {
 		return React.createElement(Lazy, props);
 	}
 
-	return RetryableLazy as unknown as T;
+	return RetryableLazy;
 }
