@@ -369,6 +369,57 @@ describe('tax follows the customer address', () => {
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
 	});
 
+	it('falls back to the billing address when tax is based on shipping and the shipping country is empty', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' }, shipping: {} });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('falls back to the shop base address when the billing country is empty', () => {
+		storeSubjects.tax_based_on$.next('billing');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: '', state: 'NY' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
+	it('falls back to the shop base address when both addresses lack a country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: {}, shipping: {} });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
+	it('keeps the shipping address once it has a country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'US' }, shipping: { country: 'GB' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('follows the fallback when the shipping country is cleared', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'US' }, shipping: { country: 'GB' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+
+		act(() => {
+			order.patchPayload({ shipping: { country: '' } });
+		});
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
 	it('ignores the customer address while tax is based on the shop base address', () => {
 		// baseLocation is mocked to US, so the US rate must hold regardless of billing.
 		const order = makeOrder();
