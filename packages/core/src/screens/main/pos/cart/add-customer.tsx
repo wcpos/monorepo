@@ -18,7 +18,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { useQueryRuntime } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { recordCustomerLink } from '@wcpos/query/store-local';
 
@@ -125,12 +125,20 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				}
 			} catch (error) {
 				// Only what follows a successful create reaches here (the success toast, the
-				// order patch); create() failures are reported by create() itself.
+				// order patch); create() failures are reported by create() itself, and a
+				// localPatch rethrow (a scope that moved twice) by localPatch.
+				if (isErrorReported(error)) return;
 				const errorMessage = getErrorMessage(error);
-				cartLogger.error('Failed to save customer', {
+				// The customer WAS created; only attaching it to the cart failed. "Failed to
+				// save customer" (and SYNC999's "save it again") invited a duplicate.
+				cartLogger.error('Customer created but not added to the cart', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					toast: { title: t('common.failed_to_save_customer') },
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					// CHECKOUT111's hint is about an item; the customer sentence says what to do.
+					toast: {
+						title: t('pos_cart.customer_saved_not_attached'),
+						text2: t('pos_cart.customer_saved_not_attached_hint'),
+					},
 					context: {
 						error: errorMessage,
 					},

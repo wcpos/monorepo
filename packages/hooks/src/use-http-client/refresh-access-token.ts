@@ -10,12 +10,44 @@ import { requestStateManager } from './request-state-manager';
 const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 const REFRESH_COOLDOWN_BASE_MS = 1_000;
 const REFRESH_COOLDOWN_MAX_MS = 60_000;
-let refreshFailureStreak = 0;
-let refreshRetryAtMs = 0;
+/**
+ * A transient refresh failure retries itself with backoff and the session stays
+ * valid, so it is not a merchant row until it keeps happening: three in a row is
+ * roughly 7 s of a store that will not answer, which is worth saying.
+ */
+const TRANSIENT_REFRESH_FAILURES_BEFORE_REPORT = 3;
 
-export function resetRefreshCooldown(): void {
-	refreshFailureStreak = 0;
-	refreshRetryAtMs = 0;
+/**
+ * Failure streak and backoff, PER SESSION (store + user). Module-global counters let one
+ * session's failures make another's first blip "persist", and let a refresh that
+ * settles after a store switch write its outcome into the new session. Each call
+ * captures its own session's record at the start and only ever mutates that record.
+ */
+interface RefreshSessionState {
+	failureStreak: number;
+	retryAtMs: number;
+}
+const refreshSessions = new Map<string, RefreshSessionState>();
+/** A till sees a handful of store/user sessions; this only bounds a pathological churn. */
+const MAX_TRACKED_REFRESH_SESSIONS = 32;
+
+function refreshSessionState(session: string): RefreshSessionState {
+	let state = refreshSessions.get(session);
+	if (!state) {
+		if (refreshSessions.size >= MAX_TRACKED_REFRESH_SESSIONS) {
+			const oldest = refreshSessions.keys().next().value;
+			if (oldest !== undefined) refreshSessions.delete(oldest);
+		}
+		state = { failureStreak: 0, retryAtMs: 0 };
+		refreshSessions.set(session, state);
+	}
+	return state;
+}
+
+/** Clear the backoff and streak — every session's, or only the one named. */
+export function resetRefreshCooldown(session?: string): void {
+	if (session === undefined) refreshSessions.clear();
+	else refreshSessions.delete(session);
 }
 
 export interface WPCredentialsDocument {
@@ -93,10 +125,22 @@ export async function refreshAccessToken({
 	if (requestStateManager.isAuthFailed()) {
 		return null;
 	}
+	// Persistence is measured per session: another store's or cashier's failures must
+	// not make this session's first blip read as "keeps happening".
+	// Keyed by the store's API base first: the engine's session fetcher passes no `url`
+	// while the HTTP-client path does, and the same store must get the same key from
+	// both. Two stores with the same user id must never share one streak or backoff.
+	const siteIdentity = site.wcpos_api_url || site.wp_api_url || site.url || '';
+	const session = `${siteIdentity}|${String(wpUser.id ?? '')}`;
+	const sessionState = refreshSessionState(session);
+	const resetSession = () => {
+		sessionState.failureStreak = 0;
+		sessionState.retryAtMs = 0;
+	};
 	const nowMs = Date.now();
-	if (nowMs < refreshRetryAtMs) {
+	if (nowMs < sessionState.retryAtMs) {
 		tokenLogger.debug('Skipping token refresh - cooldown active', {
-			context: { remainingCooldownMs: refreshRetryAtMs - nowMs },
+			context: { remainingCooldownMs: sessionState.retryAtMs - nowMs },
 		});
 		return null;
 	}
@@ -119,7 +163,7 @@ export async function refreshAccessToken({
 			},
 		});
 		requestStateManager.setAuthFailed(true);
-		resetRefreshCooldown();
+		resetSession();
 		return null;
 	}
 
@@ -162,7 +206,7 @@ export async function refreshAccessToken({
 
 				const { access_token, expires_at } = responseData;
 				await wpUser.incrementalPatch({ access_token, expires_at });
-				resetRefreshCooldown();
+				resetSession();
 				// One lifecycle breadcrumb per refresh CYCLE (#899): this closure runs
 				// only in the caller that actually drove the single-flight refresh
 				// (startTokenRefresh coalesces the rest), so concurrent 401s across the
@@ -180,14 +224,14 @@ export async function refreshAccessToken({
 				return access_token;
 			} catch (error) {
 				if (isTerminalRefreshFailure(error)) {
-					resetRefreshCooldown();
+					resetSession();
 				} else {
-					refreshFailureStreak += 1;
+					sessionState.failureStreak += 1;
 					const cooldownMs = Math.min(
 						REFRESH_COOLDOWN_MAX_MS,
-						REFRESH_COOLDOWN_BASE_MS * 2 ** (refreshFailureStreak - 1)
+						REFRESH_COOLDOWN_BASE_MS * 2 ** (sessionState.failureStreak - 1)
 					);
-					refreshRetryAtMs = Date.now() + cooldownMs;
+					sessionState.retryAtMs = Date.now() + cooldownMs;
 				}
 				throw error;
 			} finally {
@@ -204,13 +248,29 @@ export async function refreshAccessToken({
 		// a momentary blip would log the cashier out mid-session.
 		const terminal = isTerminalRefreshFailure(error);
 		// Level reflects the settled outcome (#899 rubric): a terminally rejected
-		// refresh token means the user must re-authenticate → error; a transient
-		// blip (5xx/network) will need attention only if it persists → warn.
-		tokenLogger[terminal ? 'error' : 'warn']('Unable to refresh session', {
-			code: terminal ? ERROR_CODES.SESSION_EXPIRED : ERROR_CODES.AUTH_UNEXPECTED,
+		// refresh token means the user must re-authenticate → error AUTH101. A
+		// transient blip (5xx/network) leaves the session valid and retries: debug,
+		// until it persists — then the code of what the store did, never "session
+		// ended" or AUTH999's "contact support".
+		const status = refreshFailureStatus(error);
+		const persisting = sessionState.failureStreak >= TRANSIENT_REFRESH_FAILURES_BEFORE_REPORT;
+		const level = terminal ? 'error' : persisting ? 'warn' : 'debug';
+		tokenLogger[level]('Unable to refresh session', {
+			code: terminal
+				? ERROR_CODES.SESSION_EXPIRED
+				: typeof status === 'number' && status >= 500
+					? ERROR_CODES.STORE_SERVER_ERROR
+					: typeof status === 'number'
+						? ERROR_CODES.AUTH_UNEXPECTED
+						: // A 2xx whose body could not be read throws this marker with no status:
+							// the store answered, malformed — not "can't be reached".
+							error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID'
+							? ERROR_CODES.STORE_RESPONSE_MALFORMED
+							: ERROR_CODES.SYNC_UNREACHABLE,
 			context: {
 				error: error instanceof Error ? error.message : String(error),
 				terminal,
+				failureStreak: sessionState.failureStreak,
 				userId: wpUser.id,
 				siteUrl: site.url,
 			},

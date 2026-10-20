@@ -10,7 +10,7 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
@@ -288,13 +288,16 @@ describe('EditOrderForm customer lookup', () => {
 		render(<EditOrderForm order={order} />);
 
 		act(() => selectCustomer('3'));
-		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.info).not.toHaveBeenCalled();
 
 		act(() => selectedCustomer$.next({ current: null }));
 
-		expect(testLogger.error).toHaveBeenCalledWith('Error fetching customer', {
-			code: 'SYNC999',
-			context: expect.objectContaining({ customerId: 3, error: 'orders.customer_not_found' }),
+		// Not yet synced is not an error, but the cashier is told why nothing happened.
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.info).toHaveBeenCalledWith('Selected customer is not on this device', {
+			showToast: true,
+			toast: { title: 'orders.customer_not_on_device', type: 'warning' },
+			context: { customerId: 3 },
 		});
 		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());
 	});
@@ -398,6 +401,21 @@ describe('EditOrderForm save', () => {
 		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 
+	it('does not report a localPatch rethrow a second time', async () => {
+		const reported = new Error('Active engine scope changed twice');
+		markErrorReported(reported);
+		mockLocalPatch.mockRejectedValue(reported);
+		render(<EditOrderForm order={order} />);
+
+		await act(async () => {
+			await modalActions.get('order-edit-save-button')!.onPress!();
+		});
+
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
+		expect(mockDialogClose).not.toHaveBeenCalled();
+	});
+
 	it('does not push or close when the local patch fails', async () => {
 		// localPatch swallows write errors and resolves undefined
 		mockLocalPatch.mockResolvedValue(undefined);
@@ -410,6 +428,9 @@ describe('EditOrderForm save', () => {
 
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockDialogClose).not.toHaveBeenCalled();
+		// localPatch already wrote its SYNC101 row and toast; no second report here.
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
 	});
 });
 

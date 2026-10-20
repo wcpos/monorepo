@@ -580,7 +580,7 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
-	test('should show red snackbar and auto-revert when the server rejects a stock edit', async ({
+	test('should show a revert snackbar and auto-revert when the server rejects a stock edit', async ({
 		posPage: page,
 		request,
 		storeAuthorization,
@@ -631,9 +631,10 @@ test.describe('Products Page (Pro)', () => {
 			// The optimistic edit lands first…
 			await expect(cell).toHaveText('9', { timeout: 15_000 });
 
-			// …then the rejection surfaces as a red snackbar and the cell auto-reverts
-			// to server truth (#1082 ruling: reactive revert).
-			await expect(page.getByTestId('toast-SYNC201').first()).toBeVisible({
+			// …then the rejection surfaces as the SYNC202 "reverted" snackbar (a
+			// warning: the change is gone, not stranded) and the cell auto-reverts to
+			// server truth (#1082 ruling: reactive revert).
+			await expect(page.getByTestId('toast-SYNC202').first()).toBeVisible({
 				timeout: 30_000,
 			});
 			await expect(cell).toHaveText('0', { timeout: 30_000 });

@@ -1775,10 +1775,15 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'services/novu/client.ts :: raw query construction :: getUnreadCount :: data?.count :: 1',
 	'services/novu/client.ts :: raw query construction :: getUnreadCount :: novuClient.notifications.count :: 1',
 	"services/register-session/use-session-report.ts :: storage import ::  :: from '@wcpos/database' :: 1",
+	// main → next sync after 1.11.4: the Logs subline and Store health stuck label name their record through recordHandle / useRecordLabel (#2676).
+	'screens/main/health/attention-panel.tsx :: record collection back-reference :: useStuckRecordLabel :: stuck.collection :: 1',
+	'screens/main/health/attention-panel.tsx :: record collection back-reference :: useStuckRecordLabel :: stuck.collection :: 2',
+	'screens/main/logs/ledger.tsx :: record collection back-reference :: Subline :: context.collection :: 1',
+	'screens/main/logs/ledger.tsx :: record collection back-reference :: Subline :: context.collection :: 2',
 ];
-export const SEAM_RETIRED_FLOOR = 813;
+export const SEAM_RETIRED_FLOOR = 817;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'bb8ea7f62f5ad1276b6d5a6beb9d27aa87e883940fb3439df3c71f9bee667943';
+	'2cc782830214253d1c8f6c10eee503741a4d1386031a502c0883bc05ecfd1c52';
 
 export const SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18: readonly string[] = [
 	'screens/main/contexts/use-push-document.ts :: generic resident door ::  :: findEngineResident :: 1',

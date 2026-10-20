@@ -16,6 +16,7 @@ const localPatch = jest.fn();
 const recalculate = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
+const mockReportedErrors = new WeakSet<object>();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
@@ -41,6 +42,8 @@ jest.mock('@wcpos/utils/logger', () => {
 			if (error instanceof Error) return error.message;
 			return String(error);
 		},
+		isErrorReported: (error: unknown) =>
+			typeof error === 'object' && error !== null && mockReportedErrors.has(error),
 	};
 });
 
@@ -346,7 +349,9 @@ describe('useAddCoupon engine reads', () => {
 		expect(localPatch).not.toHaveBeenCalled();
 		// The LOG carries the code, not the sentence. Once the copy is translated a
 		// message-valued `reason` would arrive at support in the till's language.
-		expect(getLogger([]).warn).toHaveBeenCalledWith(
+		// A store rule doing its job is lifecycle (info), not an amber warn row.
+		expect(getLogger([]).warn).not.toHaveBeenCalled();
+		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Coupon application rejected',
 			expect.objectContaining({
 				context: expect.objectContaining({
@@ -367,14 +372,31 @@ describe('useAddCoupon engine reads', () => {
 
 		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
 			success: false,
-			error: 'kaboom',
+			error: 'Failed to apply coupon. Please try again.',
 		});
-		expect(mockLoggerError).toHaveBeenCalledWith('Local mutation failed', {
+		// Translated copy for the cashier; the raw message stays in the row's context.
+		expect(mockLoggerError).toHaveBeenCalledWith('Coupon could not be applied', {
 			showToast: true,
 			code: 'CART_UPDATE_FAILED',
-			toast: { title: 'There was an error: kaboom' },
+			toast: { title: 'Failed to apply coupon. Please try again.' },
 			context: { error: 'kaboom' },
 		});
+	});
+
+	it('does not report a failure that localPatch already reported', async () => {
+		mockLoggerError.mockClear();
+		const reported = new Error('Active engine scope changed twice');
+		mockReportedErrors.add(reported);
+		engine.active.mockImplementationOnce(() => {
+			throw reported;
+		});
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'Failed to apply coupon. Please try again.',
+		});
+		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 });
 

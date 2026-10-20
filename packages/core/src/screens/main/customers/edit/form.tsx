@@ -6,11 +6,12 @@ import * as z from 'zod';
 
 import { useDialog } from '@wcpos/components/dialog';
 import type { CustomerPayload, EngineRecord } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
-import { pushFailureCode } from '../../contexts/push-failure-code';
+import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useCustomerRecord } from '../commands/use-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -53,11 +54,10 @@ export function EditCustomerForm({ customer }: Props) {
 			setLoading(true);
 			try {
 				const patched = await saveCustomerFields(customer, data as Partial<CustomerPayload>);
-				// localPatch swallows write errors and resolves undefined - pushing
-				// anyway would sync the unchanged resident and report success
-				if (!patched) {
-					throw new Error('Local patch failed');
-				}
+				// localPatch reports its own failure (row + toast) and resolves undefined.
+				// Pushing anyway would sync the unchanged resident and report success;
+				// reporting it again put a second row and toast on one failed save.
+				if (!patched) return;
 				await pushDocument(customer).then((savedDoc: unknown) => {
 					if (savedDoc) {
 						const saved = customer.getLatest().payload;
@@ -77,15 +77,14 @@ export function EditCustomerForm({ customer }: Props) {
 					}
 				});
 			} catch (error) {
-				const errorMessage = getErrorMessage(error);
-				mutationLogger.error('Failed to save customer', {
-					showToast: true,
-					code: pushFailureCode(error),
-					toast: { title: t('common.failed_to_save_customer') },
-					context: {
-						customerId: customer.getLatest().payload.id,
-						error: errorMessage,
-					},
+				// A localPatch rethrow (the scope moved twice) is already reported.
+				if (isErrorReported(error)) return;
+				// The customer push only enqueues (it does not await the store), so what
+				// fails here is the local write, not a store refusal: SYNC101, not SYNC999.
+				reportPushFailure(mutationLogger, 'Failed to save customer', error, {
+					fallback: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					title: t('common.failed_to_save_customer'),
+					context: { customerId: customer.getLatest().payload.id },
 				});
 			} finally {
 				setLoading(false);

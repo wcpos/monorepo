@@ -13,7 +13,7 @@ const formValues = {
 	shipping: { first_name: 'Ada' },
 	tax_ids: [{ type: 'vat', value: 'ES123' }],
 };
-const localPatch = jest.fn(() => Promise.resolve());
+const localPatch = jest.fn((): Promise<unknown> => Promise.resolve({ changes: {}, document: {} }));
 const patchCustomer = jest.fn(() => Promise.resolve(null));
 const mockUseMutationProps = jest.fn();
 const mockClose = jest.fn();
@@ -200,6 +200,19 @@ describe('EditCartCustomerForm', () => {
 		expect(mockUseMutationProps).toHaveBeenCalledWith(
 			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
 		);
+	});
+
+	it('stops — never claiming "Saved to the order" — when the order write failed', async () => {
+		// localPatch reports its own failure and resolves undefined.
+		localPatch.mockResolvedValueOnce(undefined);
+		customerFindOne.mockReturnValue({ exec: async () => null });
+
+		render(<EditCartCustomerForm />);
+		fireEvent.click(screen.getByTestId('pos_cart.save_to_order_customer'));
+
+		await waitFor(() => expect(localPatch).toHaveBeenCalled());
+		expect(customerFindOne).not.toHaveBeenCalled();
+		expect(mockClose).not.toHaveBeenCalled();
 	});
 
 	it('keeps save-to-order available but hides save-to-customer without edit permission', () => {

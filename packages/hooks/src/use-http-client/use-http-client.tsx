@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import axios, { AxiosHeaders, type RawAxiosHeaders } from 'axios';
+import axios, { AxiosHeaders, isAxiosError, type RawAxiosHeaders } from 'axios';
 import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
@@ -15,7 +15,7 @@ import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/util
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
-import { scheduleRequest } from './request-queue';
+import { isDroppedRequestError, scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
@@ -25,8 +25,8 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 // `protocolHeaders` (a per-site verdict relayed by callers that have a site in
 // scope — this interceptor does not, so the flag rides the request config) and
 // `quietErrors` (failure is routine and non-fatal for this request — e.g.
-// decorative image fetches — so log it as a warning instead of an error;
-// the error itself still throws and is enriched identically) and
+// decorative image fetches; every failure row here is debug now, so the flag
+// only marks that row `quiet`, and the error still throws enriched identically) and
 // `failureCode` (the registered code a failure of THIS request means when
 // the server sends no WordPress error body). The status table below the
 // parser is written for REST routes — it reads a 404 as "the WCPOS store
@@ -169,6 +169,15 @@ const processErrorHandlers = async (
 			} else if (http.isCancel(handlerError)) {
 				httpLogger.debug(`Error handler ${handler.name} substituted a CanceledError`, {
 					context: { handlerName: handler.name, status: error.response?.status },
+				});
+			} else if (axios.isAxiosError(handlerError) || (handlerError as any)?.isPreFlightBlocked) {
+				// The retry the handler made failed in transport (network, 5xx, a preflight
+				// block): that request's own failure path reports it. Forensic here.
+				httpLogger.debug(`Error handler ${handler.name} threw a request error`, {
+					context: {
+						error: handlerError instanceof Error ? handlerError.message : String(handlerError),
+						originalStatus: error.response?.status,
+					},
 				});
 			} else {
 				httpLogger.error(`Error handler ${handler.name} threw an error`, {
@@ -322,7 +331,10 @@ export const useHttpClient = (
 		const endpoint = processedConfig.url
 			? new URL(processedConfig.url, 'http://localhost').pathname
 			: 'unknown';
-		const response = await scheduleRequest(() => http.request(dispatchConfig));
+		const response = await scheduleRequest(
+			() => http.request(dispatchConfig),
+			`${method} ${endpoint}`
+		);
 		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 			httpLogger.info('HTTP request completed', {
 				context: { method, endpoint, status: response.status },
@@ -382,14 +394,22 @@ export const useHttpClient = (
 				const wpError = axiosError.response?.data
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
-				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				// A transport failure with no reply (offline, DNS, timeout, reset) is the
+				// store being unreachable, not "an unexpected error, report it".
+				const unreachable = !axiosError.response && isAxiosError(error);
+				const mappedException =
+					axiosError.response || unreachable ? undefined : mapExceptionToCode(error);
 				// A transport failure the exception mapper could not name (CLIENT999) is
 				// as generic as the status table, so the request's own code wins there too.
+				// So does "unreachable": a request outside the REST namespace (an image on
+				// another host) knows better what its failure means.
 				const isGenericFallback =
 					mappedException === undefined || mappedException.code === ERROR_CODES.UNEXPECTED_ERROR;
 				const fallbackCode = axiosError.response
 					? mapToInternalCode(null, axiosError.response.status)
-					: mappedException?.code;
+					: unreachable
+						? ERROR_CODES.SYNC_UNREACHABLE
+						: mappedException?.code;
 				const errorCode =
 					wpError?.code ??
 					(isGenericFallback ? (reqConfig.failureCode ?? fallbackCode) : fallbackCode);
@@ -400,7 +420,13 @@ export const useHttpClient = (
 					const details = parseUpdateRequiredBody(axiosError.response.data);
 					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
 				}
-				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
+				// A request the queue dropped is already reported once per burst as
+				// CLIENT131 by the queue; a row per request here would bury it in CLIENT999s.
+				if (
+					!(error as any).isPreFlightBlocked &&
+					!isDroppedRequestError(error) &&
+					databaseEpoch === getDatabaseEpoch()
+				) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
 						? new URL(reqConfig.url, 'http://localhost').pathname
@@ -414,17 +440,15 @@ export const useHttpClient = (
 						...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 						...(wpError?.triage && { triage: true }),
 					};
-					if (reqConfig.quietErrors) {
-						httpLogger.warn(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					} else {
-						httpLogger.error(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					}
+					// Forensic only. The transport cannot see how the operation ends — a
+					// queued email, a receipt built from local data and an image placeholder
+					// all recover — so the caller owns the one merchant-visible row and
+					// toast (LEVELS.md: producers that cannot see the ending must not guess).
+					httpLogger.debug(`HTTP request failed: ${method} ${endpoint}`, {
+						code: errorCode ?? ERROR_CODES.UNEXPECTED_ERROR,
+						context: { ...failureContext, ...(reqConfig.quietErrors && { quiet: true }) },
+						terminal: { outcome: 'failed' },
+					});
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing

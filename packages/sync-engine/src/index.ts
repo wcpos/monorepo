@@ -32,6 +32,13 @@ export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
 } from './transport/response-envelope';
+/** Who reports a failed request: the host marks the errors it wrote a transport
+ * row for, and the cashier log reads the same rule the lanes stamp by. */
+export {
+	isReportedRequestStatus,
+	markTransportFailure,
+	requestStatusOf,
+} from './transport-failure';
 export {
 	discardConsequence,
 	rejectionSuggestsServerRecord,

@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { of } from 'rxjs';
 
 import { scannerDeviceKey } from '@wcpos/scanner';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { InputSources } from './input-sources';
 
@@ -519,7 +520,7 @@ describe('InputSources write failures', () => {
 		['saving', 'scanner-save-button', mockSave, 'save failed', true],
 		['removing', 'scanner-profile-delete', mockRemove, 'remove failed', false],
 	])(
-		'shows an error toast when %s a scanner fails',
+		'reports one SYNC101 row and toast when %s a scanner fails',
 		async (_action, testID, write, message, needsCandidate) => {
 			write.mockRejectedValueOnce(new Error(message));
 			if (needsCandidate) {
@@ -529,11 +530,16 @@ describe('InputSources write failures', () => {
 
 			fireEvent.click(screen.getByTestId(testID));
 
+			// A local write: SYNC101's own summary and hint are the toast, never a bare
+			// "Error" over the raw RxDB message, which stays in the row.
 			await waitFor(() =>
-				expect(mockToastShow).toHaveBeenCalledWith(
-					expect.objectContaining({ type: 'error', description: message })
-				)
+				expect(getLogger([]).error).toHaveBeenCalledWith('Scanner setting could not be saved', {
+					code: 'SYNC101',
+					showToast: true,
+					context: expect.objectContaining({ error: message }),
+				})
 			);
+			expect(mockToastShow).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 		}
 	);
 

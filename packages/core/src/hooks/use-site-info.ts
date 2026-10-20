@@ -5,8 +5,10 @@ import get from 'lodash/get';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
+
+import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
 
@@ -69,7 +71,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 				if (!response || response.status < 200 || response.status >= 300) {
 					const errorMsg = `Invalid response status: ${response?.status}`;
 					appLogger.error('Failed to fetch site info: Invalid response status', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+						code: ERROR_CODES.STORE_SERVER_ERROR,
 						context: {
 							status: response?.status,
 							statusText: response?.statusText,
@@ -105,9 +107,16 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 				const errorMsg = getErrorMessage(err);
-				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+				// Offline is forensic (nothing was attempted); otherwise the code of what the
+				// store did — SYNC999's "re-enter and save" was never true of a read.
+				const code = storeRequestFailureCode(err);
+				const logLevel = isExpectedPreflightBlock(err)
+					? 'debug'
+					: ERROR_CATALOGUE[code].severity === 'error'
+						? 'error'
+						: 'warn';
 				appLogger[logLevel]('Failed to fetch site info', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code,
 					context: {
 						error: errorMsg,
 						siteUrl,

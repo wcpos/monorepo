@@ -5,7 +5,14 @@
 # shellcheck disable=SC2034 # Used by the sourcing release script/workflow.
 CDN_HASHED_DEADLINE_SECONDS=600 # Origin rate limiting lasted minutes on 2026-10-14; then ask a human.
 # shellcheck disable=SC2034 # Used by the sourcing release script/workflow.
-CDN_UNHASHED_DEADLINE_SECONDS=180 # Allow three minutes for mutable files to refresh after purging.
+# Mutable files are purged once, then only polled: jsDelivr throttles a path purged too
+# often within the hour, and each purge inside the window extends it (2026-10-18). Ten
+# minutes covers a normal refresh without a purge storm.
+CDN_UNHASHED_DEADLINE_SECONDS=600
+# Set by purge_cdn_path when jsDelivr answers a purge with "throttled": true; the reset is
+# the largest throttlingReset (seconds) seen. Read by cdn_refresh_advice.
+CDN_PURGE_THROTTLED=""
+CDN_PURGE_THROTTLE_RESET=0
 
 expected_from_dir() (
 	set -o pipefail
@@ -46,18 +53,43 @@ verify_cdn_path() {
 	return 1
 }
 
+# A throttled purge still answers 200 "finished" but purges nothing; it returns 0 (just
+# poll) and records the throttle. A body that is not JSON, or lacks the path, is "unknown".
 purge_cdn_path() {
-	local suffix="${2:+build/$2}" body code
-	body=$(mktemp) || { echo "purge @$1/${suffix} -> HTTP 000"; return 0; }
+	local suffix="${2:+build/$2}" body code entry="" throttled="" reset=0
+	body=$(mktemp) || { echo "purge @$1/${suffix} -> HTTP 000, unknown"; return 0; }
 	code=$(curl -g -sS --connect-timeout 10 --max-time 120 -o "$body" -w '%{http_code}' \
 		"https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/${suffix}") || true
+	entry=$(jq -r --arg k "/gh/${WEB_BUNDLE_REPO}@$1/${suffix}" '(.paths[$k] // first(.paths[]?)) |
+		select(type == "object") | "\(.throttled == true) \(.throttlingReset // 0 | tonumber? // 0 | floor)"' \
+		"$body" 2>/dev/null) || entry=""
 	rm -f "$body"
-	echo "purge @$1/${suffix} -> HTTP ${code:-000}"
+	read -r throttled reset <<< "$entry" || true
+	if [[ "$throttled" == true ]]; then
+		CDN_PURGE_THROTTLED=1
+		if ((reset > CDN_PURGE_THROTTLE_RESET)); then CDN_PURGE_THROTTLE_RESET=$reset; fi
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, THROTTLED (reset in ${reset}s)"
+	elif [[ "$throttled" == false ]]; then
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, accepted"
+	else
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, unknown"
+	fi
 }
 
 purge_cdn_root() { purge_cdn_path "$1" ""; }
 
-# stdin: sorted "<blob SHA> <relative path>" lines. Only retry outstanding paths.
+# $1 where the bundle is published ("on the @next branch", "as v1.11.2"). What to do when
+# the CDN has not caught up. Never "re-run now": a purge inside the throttle window extends it.
+cdn_refresh_advice() {
+	if [[ -n "$CDN_PURGE_THROTTLED" ]]; then
+		echo "The bundle IS published $1, but jsDelivr throttled the purge for these paths (purged too often within the hour). The CDN refreshes when the throttle resets in about $(((CDN_PURGE_THROTTLE_RESET + 59) / 60)) min, or when its 12-hour cache expires. Re-running or re-dispatching inside that window extends the throttle: wait for the reset, then publish once."
+	else
+		echo "The bundle IS published $1, but jsDelivr did not refresh within the deadline. Wait, then verify or re-run once."
+	fi
+}
+
+# stdin: sorted "<blob SHA> <relative path>" lines. The caller purges once beforehand; this
+# only polls by content (re-purging would extend jsDelivr's throttle). Only retry outstanding paths.
 verify_cdn_paths() {
 	local ref="$1" deadline=$((SECONDS + $2)) sha path i diagnosis remaining=0
 	local paths=() shas=() diagnoses=()
@@ -77,7 +109,6 @@ verify_cdn_paths() {
 			else
 				diagnoses[i]="$diagnosis"
 				echo "@${ref}/build/${path} -> $diagnosis"
-				purge_cdn_path "$ref" "$path"
 			fi
 			[[ "$remaining" == 0 ]] && return 0
 			((SECONDS >= deadline)) && break

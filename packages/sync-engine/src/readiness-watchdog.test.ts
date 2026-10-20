@@ -54,10 +54,19 @@ describe('armReadinessWatchdog', () => {
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'engine.ready-stalled',
-				fields: { phase: 'create-database', elapsedMs: 30, phaseElapsedMs: 25 },
+				fields: { phase: 'create-database', elapsedMs: 30, phaseElapsedMs: 25, stalls: 1 },
 			})
 		);
 		expect(unref).toHaveBeenCalledTimes(2);
+		// The repeat is numbered, so the log can tell it from the first stall.
+		now = 150;
+		callbacks[1]!();
+		expect(diagnostics).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'engine.ready-stalled',
+				fields: expect.objectContaining({ stalls: 2 }),
+			})
+		);
 	});
 
 	it('stops and reports readiness when the promise resolves', async () => {

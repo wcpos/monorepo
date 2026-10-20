@@ -3,7 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { type CouponRejection, couponValidationContext } from '@wcpos/order-math/internal';
 
 import { useCouponContext } from './use-coupon-context';
@@ -60,8 +60,10 @@ export const useAddCoupon = () => {
 			 * unsearchable, and untranslatable back. `reason` is now the stable
 			 * enum and `params` carries what the sentence interpolated.
 			 */
+			// A store rule doing its job (expired, minimum spend…), shown inline by the
+			// coupon form: lifecycle, not an amber row.
 			const rejectCoupon = (rejection: CouponRejection) => {
-				orderLogger.warn('Coupon application rejected', {
+				orderLogger.info('Coupon application rejected', {
 					context: {
 						event: 'coupon.rejected',
 						couponCode: couponCode.toLowerCase().trim(),
@@ -154,12 +156,14 @@ export const useAddCoupon = () => {
 				if (error instanceof CartChangedError) {
 					return { success: false, error: t('pos_cart.cart_changed') };
 				}
-				const message = getErrorMessage(error);
-				reportCartFailure(orderLogger, 'Local mutation failed', {
-					toastTitle: t('common.there_was_an_error', { message }),
-					error,
-				});
-				return { success: false, error: message };
+				// localPatch already reported its own rethrow (a scope that moved twice).
+				if (!isErrorReported(error)) {
+					reportCartFailure(orderLogger, 'Coupon could not be applied', {
+						toastTitle: t('pos_cart.coupon_apply_failed'),
+						error,
+					});
+				}
+				return { success: false, error: t('pos_cart.coupon_apply_failed') };
 			}
 		},
 		[

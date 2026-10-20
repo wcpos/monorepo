@@ -6,11 +6,11 @@ import {
 	ResidentWriteError,
 } from '@wcpos/query/mutations';
 import { useQueryRuntime, type WriteableCollection, WriteOutcomeError } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 
-import { documentRecordId, type MutationDocument, useLocalMutation } from './use-local-mutation';
+import { type MutationDocument, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
-import { pushFailureCode } from '../../contexts/push-failure-code';
+import { reportPushFailure } from '../../contexts/push-failure-code';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
@@ -50,34 +50,23 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 	const { localPatch } = useLocalMutation();
 
 	const handleError = React.useCallback(
-		(error: unknown, context?: Record<string, unknown>) => {
-			const message = getErrorMessage(error);
+		(error: unknown) => {
 			// A store refusal carries the store's own (already localized) sentence, e.g.
-			// "An account is already registered with your email address"; the error's
-			// message is only the machine `write-rejected for mutation "<uuid>"`. It is the
-			// explicit toast title, or the code's generic summary would replace it.
-			const rejection =
-				error instanceof WriteOutcomeError && error.serverMessage ? error : undefined;
-			const serverMessage = rejection?.serverMessage;
-			// The log message stays machine text (the store's sentence is localized and would
-			// split one Sentry issue per language); the sentence rides the toast and context.
-			const logMessage = rejection
-				? `${rejection.eventType} (${rejection.reason ?? 'no reason'})`
-				: message;
-			mutationLogger.error(logMessage, {
-				showToast: true,
-				code: pushFailureCode(error),
-				...(serverMessage ? { toast: { title: serverMessage } } : {}),
-				context: {
-					collectionName,
-					endpoint,
-					operation: 'mutation',
-					...(rejection ? { error: message, reason: rejection.reason } : {}),
-					...context,
-				},
+			// "An account is already registered with your email address", which becomes
+			// the toast title. The log message stays machine text (the store's sentence
+			// is localized and would split one Sentry issue per language).
+			const logMessage =
+				error instanceof WriteOutcomeError
+					? `${error.eventType} (${error.reason ?? 'no reason'})`
+					: `${collectionName} create failed`;
+			reportPushFailure(mutationLogger, logMessage, error, {
+				// A timed-out create is still queued and may yet land: "re-enter and
+				// save" here is how a slow store got a duplicate customer.
+				stillSendingTitle: t('common.still_sending', { title: collectionLabel }),
+				context: { collectionName, endpoint, operation: 'mutation' },
 			});
 		},
-		[collectionName, endpoint]
+		[collectionLabel, collectionName, endpoint, t]
 	);
 
 	const handleSuccess = React.useCallback(
@@ -108,11 +97,11 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 				handleSuccess(result.document as unknown as Record<string, unknown>);
 				return result.document;
 			}
-			handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
-				documentId: documentRecordId(document),
-			});
+			// localPatch already logged and toasted this failure; a second report put
+			// two rows and two toasts on one failed save.
+			return undefined;
 		},
-		[collectionLabel, handleError, handleSuccess, localPatch, t]
+		[handleSuccess, localPatch]
 	);
 
 	const create = React.useCallback(
@@ -139,6 +128,8 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 			} catch (error) {
 				handleError(error);
 				if (awaitRemoteId || error instanceof CreateScopeChangedTwiceError) {
+					// Reported above; a caller's catch must not report it again.
+					markErrorReported(error);
 					throw error;
 				}
 			}

@@ -6,7 +6,6 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -22,8 +21,7 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getLogger } from '@wcpos/utils/logger';
 import {
 	getServerOwnedStorePatch,
 	patchStoreSettings,
@@ -48,6 +46,7 @@ import { ThousandsStyleSelect } from '../components/thousands-style-select';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { reportRestoreFailure } from './restore-failure';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
@@ -200,13 +199,9 @@ function GeneralSettingsForm({
 			markSaved(['restore']);
 		} catch (error) {
 			setRestoreFailed(true);
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-			uiLogger[logLevel]('Failed to restore server settings', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: {
-					error: getErrorMessage(error),
-				},
-			});
+			// The inline line below shows the failure with its own Try again: the row
+			// carries the code of what the store answered (offline: SYNC121), no toast.
+			reportRestoreFailure(uiLogger, error, t, { toast: false });
 		} finally {
 			setLoading(false);
 		}

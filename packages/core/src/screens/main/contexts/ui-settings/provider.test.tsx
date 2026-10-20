@@ -47,8 +47,10 @@ it('keeps the hang warning for an open that is still pending', () => {
 	mockOpenStoreState.mockReturnValue(new Promise(() => {}));
 	renderHook(() => React.useContext(UISettingsContext), { wrapper: UISettingsProvider });
 	act(() => jest.advanceTimersByTime(5000));
+	// SYNC181: the outcome is not known yet, and its hint says what to do if a screen stays stuck.
 	expect(getLogger(['wcpos', 'ui', 'settings']).warn).toHaveBeenCalledWith(
-		expect.stringContaining('possible hang')
+		expect.stringContaining('is taking longer than 5 seconds'),
+		expect.objectContaining({ code: 'SYNC181' })
 	);
 });
 

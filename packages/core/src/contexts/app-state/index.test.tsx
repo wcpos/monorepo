@@ -317,7 +317,8 @@ describe('AppStateProvider with a session pointer the hydrated state cannot hono
 
 		await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('no-session:no-db'));
 		expect(logger.error).toHaveBeenCalledTimes(1);
-		expect(logger.warn).toHaveBeenCalledWith('Could not clear the incomplete session pointer', {
+		// Forensic: the AUTH131 row already reports this incident.
+		expect(logger.debug).toHaveBeenCalledWith('Could not clear the incomplete session pointer', {
 			context: { error: 'storage gone' },
 		});
 	});

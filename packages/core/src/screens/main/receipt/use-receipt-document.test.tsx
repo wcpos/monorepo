@@ -4,6 +4,8 @@ import * as React from 'react';
 import { of } from 'rxjs';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
@@ -180,6 +182,39 @@ it('does not report a failed print as printed or retry auto-print', async () => 
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(result.current.printedTo).toBeNull();
 	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+
+it('reports a failed autoprint as PRINT101, and a manual print during it on its own terms', async () => {
+	let failAutoprint!: (error: Error) => void;
+	mockPrint
+		.mockImplementationOnce(
+			() =>
+				new Promise<boolean>((_resolve, reject) => {
+					failAutoprint = reject;
+				})
+		)
+		.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+
+	// A manual Print fails while the autoprint is still in flight: PRINT201, not PRINT101.
+	await act(async () => {
+		await result.current.printAndReport();
+	});
+	expect(getLogger([]).error).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT201', showToast: true })
+	);
+
+	await act(async () => {
+		failAutoprint(new Error('ECONNREFUSED'));
+		await Promise.resolve();
+	});
+	expect(getLogger([]).warn).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT101', showToast: true })
+	);
 });
 
 it('does not auto-print again when a paid tab is revisited', async () => {

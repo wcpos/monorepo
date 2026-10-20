@@ -58,6 +58,8 @@ import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hol
 import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import { scopeBoundFailureStreak } from '../failure-streak';
+import { AUTO_REVERT_COLLECTIONS } from './auto-revert-collections';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
@@ -355,6 +357,19 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	const facetFor = deps.writeFacetFor ?? writeFacetFor;
 	let restoredScope: string | null = null;
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
+	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
+	// re-runs the drain, so the log treats one crash as an attempt and only a
+	// streak as a failure that has persisted. A tick that RAN resets it.
+	const tickFailureStreaks = scopeBoundFailureStreak(deps.manager);
+	// The drain's settlement-write failure streaks (see drainMutationQueue's
+	// settleFailures): they must outlive one drain to count anything.
+	const settleFailures = new Map<string, number>();
+	// Consecutive PUSH failures per mutation, stamped as push.error's `attempt`.
+	// Not the queue row's `attempts`: that backoff counter is bumped by a failed
+	// local acknowledgement too, which would make a first HTTP failure after two
+	// ack failures read as a third failed push. Keyed by mutationId, which is
+	// unique per scope, so no scope binding is needed.
+	const pushFailures = new Map<string, number>();
 
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
@@ -367,8 +382,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		if (deps.manager.activeScope === null) {
 			return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
 		}
+		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
+		const tickStreak = tickFailureStreaks();
+		// Catalogue dead letters this tick has not yet handed to the engine's revert
+		// (via write-rejected). Their push.rejected was only a stamped attempt, so if
+		// post-drain processing fails first, the verdict is owed here: the row is no
+		// longer pending, and no later drain would ever revisit it.
+		let verdictsOwed: Awaited<ReturnType<typeof drainMutationQueue>>['rejected'] = [];
 		try {
-			return await deps.manager.runGuarded(async (bound) => {
+			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
 				// A LIVE read, never a tick-scoped snapshot: a drain works one row at a
 				// time and the change-signal lane can publish a new carrier between
@@ -597,32 +619,45 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									if (till) tillAggregates.set(outbound.mutationId, till);
 									else tillAggregates.delete(outbound.mutationId);
 								}
-								return pushRecordMutation({
-									mutation: outbound,
-									...(outbound.collectionName === 'orders' &&
-									outbound.operation !== 'delete' &&
-									paymentsContractAtLeast(deps.paymentsContract?.(), '1.3')
-										? {
-												expectedEpoch: outbound.expectedEpoch,
-												tillAggregate: tillAggregates.get(outbound.mutationId),
-											}
-										: {}),
-									resolveEndpoint,
-									barcodeSelectors: barcodeSelectorsFor(
-										scopeBarcodeSelectors(),
-										mutation.collectionName
-									),
-									fetcher: (url, init) => {
-										// Absorb the adapter's signal — tickFetcher already merged
-										// it; forwarding would force AbortSignal.any in scopedFetch.
-										const { signal: _absorbed, ...rest } = (init ?? {}) as {
-											signal?: AbortSignal;
-										} & Record<string, unknown>;
-										return boundFetch(url, rest as never);
-									},
-									signal: tickAbort.signal,
-									observe: deps.diagnostics,
-								});
+								const attempt = (pushFailures.get(mutation.mutationId) ?? 0) + 1;
+								try {
+									const pushed = await pushRecordMutation({
+										mutation: outbound,
+										...(outbound.collectionName === 'orders' &&
+										outbound.operation !== 'delete' &&
+										paymentsContractAtLeast(deps.paymentsContract?.(), '1.3')
+											? {
+													expectedEpoch: outbound.expectedEpoch,
+													tillAggregate: tillAggregates.get(outbound.mutationId),
+												}
+											: {}),
+										resolveEndpoint,
+										barcodeSelectors: barcodeSelectorsFor(
+											scopeBarcodeSelectors(),
+											mutation.collectionName
+										),
+										fetcher: (url, init) => {
+											// Absorb the adapter's signal — tickFetcher already merged
+											// it; forwarding would force AbortSignal.any in scopedFetch.
+											const { signal: _absorbed, ...rest } = (init ?? {}) as {
+												signal?: AbortSignal;
+											} & Record<string, unknown>;
+											return boundFetch(url, rest as never);
+										},
+										signal: tickAbort.signal,
+										observe: deps.diagnostics,
+										attempt,
+									});
+									// A 409 is not the end of the sequence: the drain re-anchors and
+									// re-pushes (#1204), and that push settles the streak. Clearing
+									// here would make a repeating 409-then-503 forever attempt 1.
+									if (pushed.outcome !== 'conflict') pushFailures.delete(mutation.mutationId);
+									return pushed;
+								} catch (error) {
+									// Our own cancellation (a scope switch) is not a push failure.
+									if (!tickAbort.signal.aborted) pushFailures.set(mutation.mutationId, attempt);
+									throw error;
+								}
 							},
 							applyAck: async (mutation, pushResult, signal) => {
 								const facet = facetFor(mutation.collectionName);
@@ -750,9 +785,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									reason,
 								}),
 							observe: deps.diagnostics,
+							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
+						verdictsOwed = result.rejected.filter(({ mutation: dead }) =>
+							AUTO_REVERT_COLLECTIONS.has(dead.collectionName)
+						);
 						if (result.sessionExpired && restoredScope !== bound.scopeId) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
@@ -825,6 +864,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							if (cancelled.status === 'internal') await queue.acknowledge([cancelled.mutationId]);
 						}
 						for (const conflict of result.conflicts) {
+							// A parked conflict is a terminal verdict of its own: a later
+							// "retry with server base" starts a new push sequence.
+							pushFailures.delete(conflict.mutation.mutationId);
 							deps.emitWriteEvent({
 								type: 'write-conflict',
 								collection: conflict.mutation.collectionName,
@@ -834,6 +876,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							});
 						}
 						for (const { mutation: dead, status, reason, serverMessage } of result.rejected) {
+							// A dead letter never pushes again: its push streak goes with it.
+							pushFailures.delete(dead.mutationId);
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
 							// push, so drop it from the record's pendingMutationIds (+ dirty
 							// when empty) — the pull-apply guard frees the record and the next
@@ -882,6 +926,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									typeof rejectedPayloadId !== 'number' &&
 									!rejectionSuggestsServerRecord(reason),
 							});
+							verdictsOwed = verdictsOwed.filter((owed) => owed.mutation !== dead);
 						}
 						deps.setQueueDepth(stillPending.size);
 						report = {
@@ -912,14 +957,38 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				deps.setLastError(null);
 				return report;
 			});
+			if (tickReport.status === 'ran') tickStreak.reset();
+			return tickReport;
 		} catch (error) {
+			for (const { mutation: dead, status, reason, serverMessage } of verdictsOwed) {
+				deps.diagnostics({
+					type: 'push.rejected',
+					level: 'error',
+					collection: dead.collectionName,
+					fields: {
+						op: dead.operation,
+						recordId: dead.recordId,
+						mutationId: dead.mutationId,
+						...(status !== undefined ? { status } : {}),
+						...(reason !== undefined ? { reason } : {}),
+						...(serverMessage !== undefined ? { serverMessage } : {}),
+						revertSkipped: true,
+					},
+				});
+			}
 			if (signal?.aborted) {
 				deps.setLastError(null);
 				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			deps.setLastError(message);
-			deps.diagnostics({ type: 'queue.write.tick.error', level: 'error', message });
+			const consecutiveFailures = tickStreak.fail();
+			deps.diagnostics({
+				type: 'queue.write.tick.error',
+				level: 'error',
+				message,
+				fields: { consecutiveFailures },
+			});
 			return { lane: 'write-drain', status: 'error', error: message };
 		}
 	}

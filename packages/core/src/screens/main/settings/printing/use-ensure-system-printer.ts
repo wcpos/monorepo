@@ -13,6 +13,11 @@ const logger = getLogger(['wcpos', 'printing', 'system-printer']);
 export function useEnsureSystemPrinter(storeDB: PrinterStoreDatabase) {
 	React.useEffect(() => {
 		ensureSystemPrinterProfile(storeDB).catch((err) => {
+			// Two mounts racing the first insert: the other one already created it.
+			if ((err as { code?: unknown } | null)?.code === 'CONFLICT') {
+				logger.debug('System printer already created by a concurrent mount');
+				return;
+			}
 			logger.error('Failed to ensure system printer', {
 				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { error: getErrorMessage(err) },

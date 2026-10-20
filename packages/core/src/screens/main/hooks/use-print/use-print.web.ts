@@ -3,7 +3,9 @@ import * as React from 'react';
 import { useReactToPrint } from 'react-to-print';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+import { reportPrintFailure } from './print-failure';
+import { useT } from '../../../../contexts/translations';
 
 import type { UsePrintOptions } from './use-print.types';
 
@@ -38,15 +40,13 @@ const DEFAULT_PAGE_STYLE = `
 export const usePrint = (options: UsePrintOptions) => {
 	const { contentRef, pageStyle, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
+	const t = useT();
 
 	const print = useReactToPrint({
 		contentRef,
 		pageStyle: pageStyle || DEFAULT_PAGE_STYLE,
 		onPrintError: (errorLocation, error) => {
-			printLogger.error(`Print error in ${errorLocation}`, {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
-				context: { error },
-			});
+			reportPrintFailure(printLogger, `Print error in ${errorLocation}`, error, t);
 			onPrintError?.(errorLocation, error);
 		},
 		onBeforePrint: async () => {

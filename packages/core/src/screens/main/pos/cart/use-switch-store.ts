@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Toast } from '@wcpos/components/toast';
 import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
 import { Platform } from '@wcpos/utils/platform';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -39,10 +39,13 @@ export function useSwitchStore() {
 			Toast.show({
 				type: 'error',
 				title: t('common.store_switch_failed'),
-				description: getErrorMessage(error),
+				// The raw message rides the row below; the cashier gets what to do.
+				description: t('common.store_switch_failed_hint'),
 			});
+			// The same incident as the engine's failed scope switch: CLIENT181, so the
+			// row says what the toast says.
 			uiLogger.error('Store switch failed', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
 				context: { error },
 			});
 			return false;

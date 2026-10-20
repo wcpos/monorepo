@@ -1,7 +1,7 @@
 import 'whatwg-fetch';
 
 import { renderHook } from '@testing-library/react';
-import { CanceledError, isCancel } from 'axios';
+import { AxiosError, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
@@ -32,6 +32,7 @@ jest.mock('./http', () => ({
 }));
 
 jest.mock('./request-queue', () => ({
+	isDroppedRequestError: jest.fn(() => false),
 	scheduleRequest: jest.fn((request: () => Promise<unknown>) => request()),
 }));
 
@@ -48,11 +49,10 @@ jest.mock('./request-state-manager', () => ({
 
 /* eslint-disable import/first -- mocks must precede the code under test */
 import { http } from './http';
+import { isDroppedRequestError, scheduleRequest } from './request-queue';
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { requestStateManager } from './request-state-manager';
 import { useHttpClient, type WcposRequestConfig } from './use-http-client';
-
-import type { HttpErrorHandler } from './types';
 /* eslint-enable import/first */
 
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
@@ -155,14 +155,18 @@ describe('useHttpClient network audit logs', () => {
 			)
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				method: 'GET',
 				endpoint: '/wc/v3/products',
 				status: 503,
 			}),
+			terminal: { outcome: 'failed' },
 		});
+		// The caller owns the merchant-visible row; the transport never writes one.
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
 		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
 	});
 
@@ -182,12 +186,13 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				serverCode: 'merchant_plugin_unknown_error',
 				triage: true,
 			}),
+			terminal: { outcome: 'failed' },
 		});
 	});
 
@@ -213,8 +218,11 @@ describe('useHttpClient network audit logs', () => {
 			pluginVersion: '2.0.0',
 			status: 426,
 		});
+		const transportRow = loggerMock.__debug.mock.calls.findIndex(
+			([message]) => message === 'HTTP request failed: POST /wcpos/v2/orders'
+		);
 		expect(onUpdateRequired.mock.invocationCallOrder[0]).toBeLessThan(
-			loggerMock.__error.mock.invocationCallOrder[0]
+			loggerMock.__debug.mock.invocationCallOrder[transportRow]
 		);
 	});
 
@@ -225,7 +233,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'CLIENT999',
 			context: expect.objectContaining({
 				status: 0,
@@ -233,11 +241,31 @@ describe('useHttpClient network audit logs', () => {
 				name: 'Error',
 				message: 'network down',
 			}),
+			terminal: { outcome: 'failed' },
 		});
 		expect(loggerMock.mapExceptionToCode).toHaveBeenCalledWith(failure);
 	});
 
-	it('demotes quietErrors transport failures to warn and still rethrows', async () => {
+	it('codes a reply-less axios failure as the store being unreachable, not CLIENT999', async () => {
+		const failure = new AxiosError('Network Error', 'ERR_NETWORK');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.post('/wcpos/v1/orders/1/refunds', {})).rejects.toBe(failure);
+
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'HTTP request failed: POST /wcpos/v1/orders/1/refunds',
+			{
+				code: 'SYNC121',
+				context: expect.objectContaining({ status: 0 }),
+				terminal: { outcome: 'failed' },
+			}
+		);
+		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+	});
+
+	it('keeps quietErrors transport failures forensic and still rethrows', async () => {
 		const failure = new Error('network down');
 		(http.request as jest.Mock).mockRejectedValue(failure);
 		const { result } = renderHook(() => useHttpClient());
@@ -247,7 +275,8 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith(
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/product.jpg',
 			{
 				code: 'CLIENT999',
@@ -256,7 +285,9 @@ describe('useHttpClient network audit logs', () => {
 					endpoint: '/wp-content/uploads/product.jpg',
 					status: 0,
 					codeFallback: true,
+					quiet: true,
 				}),
+				terminal: { outcome: 'failed' },
 			}
 		);
 	});
@@ -279,14 +310,15 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith(
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/2016/03/product-300x300.jpg',
 			{
 				code: 'PRODUCT201',
 				context: expect.objectContaining({ status: 404 }),
+				terminal: { outcome: 'failed' },
 			}
 		);
-		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+		expect(loggerMock.__debug.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
 	});
 
 	it('logs a request-owned failureCode for a transport failure instead of the CLIENT999 fallback', async () => {
@@ -301,14 +333,15 @@ describe('useHttpClient network audit logs', () => {
 			})
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__warn).toHaveBeenCalledWith(
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/product.jpg',
 			{
 				code: 'PRODUCT201',
 				context: expect.objectContaining({ status: 0 }),
+				terminal: { outcome: 'failed' },
 			}
 		);
-		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+		expect(loggerMock.__debug.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
 	});
 
 	it('lets a WordPress error body outrank the request-owned failureCode', async () => {
@@ -327,7 +360,7 @@ describe('useHttpClient network audit logs', () => {
 
 		// rest_forbidden maps directly to AUTH201; asserting that exact code (rather
 		// than "not PRODUCT201") also rules out the status fallback winning.
-		expect(loggerMock.__error).toHaveBeenCalledWith(
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/product.jpg',
 			expect.objectContaining({
 				code: 'AUTH201',
@@ -381,6 +414,39 @@ describe('useHttpClient network audit logs', () => {
 			}
 		}
 	);
+
+	it('keeps a handler retry that failed in transport forensic, not a CLIENT999 row', async () => {
+		const failure = Object.assign(new Error('expired'), {
+			response: { status: 401 },
+			isRefreshTokenInvalid: true,
+		});
+		// The handler's own retry hit the network: that request's failure path owns it.
+		const retryFailure = Object.assign(new Error('Network Error'), { isAxiosError: true });
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() =>
+			useHttpClient([
+				{
+					name: 'token-refresh',
+					priority: 100,
+					intercepts: true,
+					canHandle: () => true,
+					handle: async () => {
+						throw retryFailure;
+					},
+				},
+			])
+		);
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toBe(retryFailure);
+		expect(loggerMock.__error).not.toHaveBeenCalledWith(
+			'Error handler token-refresh threw an error',
+			expect.anything()
+		);
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'Error handler token-refresh threw a request error',
+			expect.anything()
+		);
+	});
 
 	it('rejects with an intercepting handler cancellation without error-level logging', async () => {
 		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });
@@ -449,6 +515,18 @@ describe('useHttpClient network audit logs', () => {
 		await expect(result.current.get('/wc/v3/products')).rejects.toThrow('offline');
 		expect(http.request).not.toHaveBeenCalled();
 		expect(loggerMock.__error).not.toHaveBeenCalled();
+	});
+
+	it('leaves a queue-dropped request to the queue CLIENT131 row, not a CLIENT999 of its own', async () => {
+		const dropped = new Error('This job has been dropped by Bottleneck');
+		(scheduleRequest as jest.Mock).mockRejectedValueOnce(dropped);
+		(isDroppedRequestError as jest.Mock).mockReturnValueOnce(true);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.post('/wc/v3/orders', {})).rejects.toBe(dropped);
+		expect(scheduleRequest).toHaveBeenCalledWith(expect.any(Function), 'POST /wc/v3/orders');
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
 	});
 
 	it('does not persist a completion after the active store changes', async () => {

@@ -28,6 +28,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC141');
 		case 'SYNC201':
 			return t('health.logs.error_summary.SYNC201');
+		case 'SYNC202':
+			return t('health.logs.error_summary.SYNC202');
 		case 'SYNC211':
 			return t('health.logs.error_summary.SYNC211');
 		case 'SYNC301':
@@ -76,6 +78,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.PAYMENT221');
 		case 'PAYMENT301':
 			return t('health.logs.error_summary.PAYMENT301');
+		case 'PAYMENT311':
+			return t('health.logs.error_summary.PAYMENT311');
 		case 'PAYMENT401':
 			return t('health.logs.error_summary.PAYMENT401');
 		case 'PAYMENT501':
@@ -132,6 +136,10 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC411');
 		case 'SYNC221':
 			return t('health.logs.error_summary.SYNC221');
+		case 'SYNC222':
+			return t('health.logs.error_summary.SYNC222');
+		case 'SYNC231':
+			return t('health.logs.error_summary.SYNC231');
 		case 'CHECKOUT401':
 			return t('health.logs.error_summary.CHECKOUT401');
 		case 'PRODUCT411':
@@ -180,6 +188,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC171');
 		case 'SYNC181':
 			return t('health.logs.error_summary.SYNC181');
+		case 'SYNC191':
+			return t('health.logs.error_summary.SYNC191');
 		case 'CHECKOUT111':
 			return t('health.logs.error_summary.CHECKOUT111');
 		case 'PRODUCT321':
@@ -218,6 +228,10 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.REGISTER301');
 		case 'CLIENT151':
 			return t('health.logs.error_summary.CLIENT151');
+		case 'CLIENT181':
+			return t('health.logs.error_summary.CLIENT181');
+		case 'CLIENT171':
+			return t('health.logs.error_summary.CLIENT171');
 		case 'AUTH131':
 			return t('health.logs.error_summary.AUTH131');
 		case 'CLIENT161':

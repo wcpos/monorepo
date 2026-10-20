@@ -312,8 +312,9 @@ describe('useRemoveLineItem', () => {
 			await result.current.removeLineItem('missing', 'line_items');
 		});
 
-		expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Remove tapped for a line that is no longer in the cart',
 			{
 				showToast: true,

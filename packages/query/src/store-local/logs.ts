@@ -103,3 +103,19 @@ export async function readRecentErrorLogs(
 		: [];
 	return docs.map((doc) => doc.toJSON());
 }
+
+/**
+ * The record a log row is about, when its context names one (`collection` +
+ * `recordId`). Returned as `collectionName`: the context's `collection` key is a
+ * plain string on a log row, read here so UI code never holds a `.collection`.
+ */
+export function logRecordRef(
+	context: Record<string, unknown> | null | undefined
+): { collectionName: string; recordId: string } | null {
+	const recordId = context?.recordId;
+	const collectionName = context?.collection;
+	if (typeof collectionName !== 'string' || collectionName === '') return null;
+	if (typeof recordId !== 'string' && typeof recordId !== 'number') return null;
+	if (String(recordId) === '') return null;
+	return { collectionName, recordId: String(recordId) };
+}

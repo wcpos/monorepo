@@ -85,6 +85,37 @@ jest.mock('../health/components', () => ({
 	),
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => activeT }));
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
+}));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+type MockRecordLabel = {
+	kind: string;
+	handle: string | null;
+	uuid?: string | null;
+	status: string;
+	text: string;
+};
+let mockRecordLabel: MockRecordLabel | null = null;
+const mockUseRecordLabel = jest.fn(
+	(collection?: string | null, recordId?: string | null): MockRecordLabel | null =>
+		collection && recordId ? mockRecordLabel : null
+);
+jest.mock('../health/use-record-label', () => ({
+	useRecordLabel: (collection?: string | null, recordId?: string | null) =>
+		mockUseRecordLabel(collection, recordId),
+}));
 jest.mock('../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '10:00' }),
 }));
@@ -103,6 +134,16 @@ beforeEach(() => {
 		value: { writeText: mockWriteText },
 	});
 	mockWriteText.mockClear();
+	mockPush.mockClear();
+	mockUseRecordLabel.mockClear();
+	mockRecordLabel = null;
+	mockIsPro = true;
+	mockCaps = {
+		canEditProducts: true,
+		canEditVariations: true,
+		canEditCustomers: true,
+		canEditCoupons: true,
+	};
 	activeT = mockT;
 });
 
@@ -369,7 +410,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Note the unsaved change and check device storage, then restart. Do not clear local data."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Free up device storage, then check the change shows up. If it's missing, enter it again. Contact support if it repeats."
 			)
 		).not.toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
@@ -386,20 +427,20 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				'Data on this device may be affected — contact support before clearing it. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.'
+				"Don't clear this device's data — it may hold changes your store doesn't have yet. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 			)
 		).not.toBeNull();
 	});
 
-	it('pairs the data-at-risk warning with the local repair step on a repair-local code', () => {
+	it('sends damaged local data to support, never to a Repair button that does not exist', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC111' }} kind="error" />);
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Read the help page before using Clear & re-download… on the damaged data."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Tap Copy debug info at the top of Logs and send it to WCPOS support. Don't reinstall."
 			)
 		).not.toBeNull();
-		expect(screen.queryByText(/Contact support/)).toBeNull();
+		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 	});
 
 	it.each(['PAYMENT201', 'PRINT201'] as const)(
@@ -412,27 +453,361 @@ describe('RowDetail', () => {
 					? 'Check the terminal and provider dashboard before re-charging.'
 					: 'Check the printer before reprinting.';
 			expect(
-				screen.getByText(
-					`The final result couldn't be confirmed — verify before retrying. ${action}`
-				)
+				screen.getByText(`The result couldn't be confirmed — check before trying again. ${action}`)
 			).not.toBeNull();
 			expect(screen.queryByText(/check your store/i)).toBeNull();
 		}
 	);
 
-	it('sends SYNC311 to the help page before any local-data reset', () => {
+	it('never tells a merchant to clear an unopenable database on SYNC311', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
-		// Clearing deletes unsent sales, so the one-line hint never says "clear"
-		// without the help page's unsent-sales check in front of it.
+		// Clearing deletes the only copy of sales that never reached the store
+		// (2026-10-17 audit): the action is update-then-support, behind the
+		// data-at-risk warning.
 		expect(
 			screen.getByText(
-				"Update WCPOS; if it still won't open, read the help page before clearing local data."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Update WCPOS to the latest version and reopen. If it still won't open, tap Copy debug info and contact support."
 			)
 		).not.toBeNull();
+		expect(screen.queryByText(/clear the local database/i)).toBeNull();
+		expect(
+			screen.queryByText(
+				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
+			)
+		).toBeNull();
+		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 		expect(screen.queryByText(/^Clear the local database/)).toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
 		expect(screen.queryByText(/clearing the local database and reopening fixes it/)).toBeNull();
 		expect(screen.queryByText(/Clear & re-download/)).toBeNull();
+	});
+
+	describe('names the record and links to where it is fixed', () => {
+		const heldRow: LogRow = {
+			...row,
+			level: 'warn',
+			code: 'SYNC221',
+			message: 'orders ae263330 — conflict transition failed',
+			context: {
+				type: 'queue.write.conflict-transition',
+				collection: 'orders',
+				recordId: 'ae263330-fbff-4834-8798-3f52ff650c79',
+			},
+		};
+
+		it('shows the record by name, keeping the raw id in Details only', () => {
+			mockRecordLabel = {
+				kind: 'Order',
+				handle: '#1234 · 45.00',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
+				status: 'found',
+				text: 'Order: #1234 · 45.00',
+			};
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(mockUseRecordLabel).toHaveBeenCalledWith(
+				'orders',
+				'ae263330-fbff-4834-8798-3f52ff650c79'
+			);
+			expect(screen.getByText('Record')).not.toBeNull();
+			expect(screen.getByText('Order: #1234 · 45.00')).not.toBeNull();
+			expect(screen.getByTestId('logs-context').textContent).toContain(
+				'ae263330-fbff-4834-8798-3f52ff650c79'
+			);
+		});
+
+		it('opens the record on its edit screen', () => {
+			mockRecordLabel = {
+				kind: 'Order',
+				handle: '#1234 · 45.00',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
+				status: 'found',
+				text: 'Order: #1234 · 45.00',
+			};
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
+			expect(mockPush).toHaveBeenCalledWith('/orders/edit/ae263330-fbff-4834-8798-3f52ff650c79');
+		});
+
+		it('offers no Open record for a record this device does not hold', () => {
+			mockRecordLabel = {
+				kind: 'Order',
+				handle: null,
+				status: 'missing',
+				text: 'Order (not on this device)',
+			};
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(screen.getByText('Order (not on this device)')).not.toBeNull();
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+			// The held change is still resolved on the Database tab.
+			expect(screen.getByTestId('logs-go-database-log-1')).not.toBeNull();
+		});
+
+		it('opens a coupon on its edit screen by the found uuid', () => {
+			mockRecordLabel = {
+				kind: 'Coupon',
+				handle: 'SAVE10',
+				uuid: 'c-uuid',
+				status: 'found',
+				text: 'Coupon: SAVE10',
+			};
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC211',
+						context: { type: 'push.rejected', collection: 'coupons', recordId: 'c-uuid' },
+					}}
+					kind="warn"
+					title="Change refused"
+				/>
+			);
+
+			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
+			expect(mockPush).toHaveBeenCalledWith('/coupons/edit/c-uuid');
+		});
+
+		// The edit screens do not repeat the row actions' gate, so the link must.
+		it('offers no Open record on a free (read-only) store', () => {
+			mockIsPro = false;
+			mockRecordLabel = {
+				kind: 'Order',
+				handle: '#1234',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
+				status: 'found',
+				text: 'Order: #1234',
+			};
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+		});
+
+		it('offers no Open record on a product for a cashier without edit_product', () => {
+			mockCaps = { ...mockCaps, canEditProducts: false };
+			mockRecordLabel = {
+				kind: 'Product',
+				handle: 'Blue Tee',
+				uuid: 'p-uuid',
+				status: 'found',
+				text: 'Product: Blue Tee',
+			};
+			render(
+				<RowDetail
+					row={{ ...heldRow, context: { ...heldRow.context, collection: 'products' } }}
+					kind="warn"
+					title="Change held"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+			// The Database link is not an edit and stays.
+			expect(screen.getByTestId('logs-go-database-log-1')).not.toBeNull();
+		});
+
+		it('offers no Open record while the read is still in flight', () => {
+			mockRecordLabel = { kind: 'Order', handle: null, status: 'unresolved', text: 'Order' };
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+		});
+
+		// A pull repair row names the product by the store's id; the edit route
+		// is keyed by the local uuid the read found.
+		it('opens a record found by its store id on its local uuid', () => {
+			mockRecordLabel = {
+				kind: 'Product',
+				handle: 'Blue Tee',
+				uuid: 'p-uuid',
+				status: 'found',
+				text: 'Product: Blue Tee',
+			};
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC331',
+						context: { type: 'apply.escalation', collection: 'products', recordId: 80 },
+					}}
+					kind="warn"
+					title="A record does not match"
+				/>
+			);
+
+			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
+			expect(mockPush).toHaveBeenCalledWith(
+				'/(app)/(drawer)/products/(modals)/edit/product/p-uuid'
+			);
+		});
+
+		it('offers no Database action on an auto-reverted (recovered) SYNC201 row', () => {
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'error',
+						code: 'SYNC201',
+						outcome: 'recovered',
+						context: { type: 'queue.write.auto-reverted', mutationId: 'm-1' },
+					}}
+					kind="error"
+					title="Reverted a change"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
+		});
+
+		// SYNC222's row is a RECOVERED order (the till's values were saved over a
+		// store edit): there is nothing to settle on the Database tab — the copy
+		// sends the merchant to WP Admin — so, like every recovered row, it gets
+		// no Database action even though the code is in the set.
+		it('offers no Database action on a recovered SYNC222 overwrite row', () => {
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC222',
+						outcome: 'recovered',
+						context: { type: 'queue.write.conflict-overwrote-server', mutationId: 'm-1' },
+					}}
+					kind="warn"
+					title="Saved over a store edit"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
+		});
+
+		it.each(['SYNC201', 'SYNC202', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
+			'takes a %s row to Store health → Database',
+			(code) => {
+				render(
+					<RowDetail
+						row={{
+							...row,
+							level: 'warn',
+							code,
+							context: { type: 'push.error', mutationId: 'm-1' },
+						}}
+						kind="warn"
+						title="Problem"
+					/>
+				);
+
+				fireEvent.click(screen.getByTestId('logs-go-database-log-1'));
+				expect(mockPush).toHaveBeenCalledWith('/health/database');
+			}
+		);
+
+		// SYNC211 is also stamped on a settings or auth HTTP 400: nothing about it
+		// lives on the Database tab.
+		it.each(['SYNC201', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
+			'offers no Database action on a %s row with no record or queued change',
+			(code) => {
+				render(
+					<RowDetail
+						row={{ ...row, level: 'warn', code, context: { type: 'http.error', status: 400 } }}
+						kind="warn"
+						title="Problem"
+					/>
+				);
+
+				expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
+			}
+		);
+
+		it('offers neither action on a row with no record and no Database code', () => {
+			render(
+				<RowDetail row={{ ...row, level: 'error', code: 'SYNC101' }} kind="error" title="Oops" />
+			);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
+		});
+	});
+
+	it('shows the summary, guidance and Help on a coded info row', () => {
+		render(
+			<RowDetail
+				row={{ ...row, level: 'info', code: 'PAYMENT101' }}
+				kind="info"
+				title="Payment status refresh failed"
+			/>
+		);
+
+		expect(
+			screen.getByText('Payment succeeded, but WCPOS could not refresh its status afterward.')
+		).not.toBeNull();
+		expect(screen.getByText(/Reopen the order to update its status\./)).not.toBeNull();
+		expect(screen.getByTestId('logs-help-PAYMENT101')).not.toBeNull();
+	});
+
+	it('promotes the field, SKU and overwritten fields the copy points at into the facts', () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'warn',
+					context: {
+						type: 'queue.write.conflict-overwrote-server',
+						field: 'regular_price',
+						sku: 'TEE-BLUE-M',
+						overwrittenFields: ['stock_quantity', 'price'],
+						operation: 'update',
+					},
+				}}
+				kind="warn"
+				title="Overwrote store fields"
+			/>
+		);
+
+		expect(screen.getByText('Field')).not.toBeNull();
+		expect(screen.getByText('regular_price')).not.toBeNull();
+		expect(screen.getByText('SKU')).not.toBeNull();
+		expect(screen.getByText('TEE-BLUE-M')).not.toBeNull();
+		expect(screen.getByText('Overwritten fields')).not.toBeNull();
+		expect(screen.getByText('stock_quantity, price')).not.toBeNull();
+		expect(screen.getByText('Operation')).not.toBeNull();
+		expect(screen.getByText('update')).not.toBeNull();
+	});
+
+	it("lists the store's reason as a fact when the lead does not already quote it", () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					context: { type: 'apply.pull', serverMessage: 'Sorry, you can&#8217;t do that.' },
+				}}
+				kind="sync"
+				title="Saved updates from your store"
+			/>
+		);
+
+		expect(screen.getByText("Store's reason")).not.toBeNull();
+		expect(screen.getByText('Sorry, you can’t do that.')).not.toBeNull();
+	});
+
+	it("does not repeat the store's reason as a fact when the lead quotes it", () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					code: 'SYNC131',
+					context: { type: 'push.error', direction: 'push', serverMessage: 'Store is down.' },
+				}}
+				kind="error"
+				title="Could not send a change to your store"
+			/>
+		);
+
+		expect(screen.getByText('The server said: Store is down.')).not.toBeNull();
+		expect(screen.queryByText("Store's reason")).toBeNull();
 	});
 });

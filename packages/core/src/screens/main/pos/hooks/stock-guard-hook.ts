@@ -41,22 +41,28 @@ export async function evaluateCartStock(ctx: ActionContext, args: StockArgs) {
 				requestedQuantity,
 				existingCartQuantity: aggregateExistingCartQuantity({ ...args, product, variation }),
 			});
-	const reasonKey =
-		result.available === null ? 'pos_products.out_of_stock' : 'pos_cart.only_n_available';
+	// A missing record is not "out of stock": its stock has not reached this device yet.
+	const reasonKey = missing
+		? 'pos_cart.stock_not_loaded'
+		: result.available === null
+			? 'pos_products.out_of_stock'
+			: 'pos_cart.only_n_available';
 	const params: Record<string, string | number> =
 		result.available === null ? { name } : { quantity: result.available, name };
 	if (!result.allowed) {
+		// The store's overselling rule doing its job (or a record still syncing): the toast
+		// warns, the row is lifecycle, not an amber problem.
 		ctx.log(
-			'warn',
+			'info',
 			missing
-				? 'Product is out of stock'
+				? 'Stock record is not on this device yet'
 				: result.available === null
 					? 'Stock check failed because availability is unknown'
 					: 'Stock check found insufficient inventory',
 			{
 				category: STOCK_LOG_CATEGORY,
 				showToast: true,
-				toast: { title: ctx.t(reasonKey, params) },
+				toast: { title: ctx.t(reasonKey, params), type: 'warning' },
 				context: missing
 					? { productId, variationId, reason: 'missing_stock_record' }
 					: { productId, variationId, available: result.available },
@@ -88,9 +94,12 @@ async function guardStock<E extends ActionEvent>(
 		};
 	const result = await next(e);
 	if (stock.warning === 'backorder')
-		ctx.log('warn', 'Product will be backordered', {
+		ctx.log('info', 'Product will be backordered', {
 			category: STOCK_LOG_CATEGORY,
-			toast: { title: ctx.t('pos_cart.will_be_backordered', { name: stock.name }) },
+			toast: {
+				title: ctx.t('pos_cart.will_be_backordered', { name: stock.name }),
+				type: 'warning',
+			},
 			showToast: true,
 		});
 	return result;

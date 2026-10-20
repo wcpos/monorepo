@@ -73,6 +73,7 @@ const SEED_SYMBOLS = [
 	'CHECKOUT_FAILED_CART_SAFE',
 	'CHECKOUT_OUTCOME_UNKNOWN',
 	'CHECKOUT_UNEXPECTED',
+	'CLOCK_OUT_OF_SYNC',
 	'CORS_MISCONFIGURED',
 	'CORS_PREFLIGHT_BLOCKED',
 	'CREDENTIALS_REJECTED',
@@ -114,6 +115,9 @@ const SEED_SYMBOLS = [
 	'RECORD_CONFLICT',
 	'RECORD_INVALID_FIELD',
 	'RECORD_REJECTED',
+	'RECORD_REVERTED',
+	'RECORD_SENT_UNRECORDED',
+	'REFUND_OUTCOME_UNKNOWN',
 	'REGISTER_APPROVAL_REFUSED',
 	'REGISTER_CLOSE_REFUSED',
 	'REGISTER_OPEN_REFUSED',
@@ -136,10 +140,12 @@ const SEED_SYMBOLS = [
 	'SITE_IDENTITY_CLASH',
 	'SKU_DUPLICATE',
 	'STOCK_STALE',
+	'STORE_EDIT_OVERWRITTEN',
 	'STORE_RATE_LIMITED',
 	'STORE_RESPONSE_MALFORMED',
 	'STORE_SERVER_ERROR',
 	'STORE_SESSION_INCOMPLETE',
+	'STORE_SWITCH_FAILED',
 	'STORE_URL_INVALID',
 	'SYNC_BEHIND_HEAD',
 	'SYNC_PARTIAL',
@@ -156,6 +162,7 @@ const SEED_SYMBOLS = [
 	'VERSION_SKEW_PRO_DISABLED',
 	'WCPOS_PLUGIN_OUTDATED',
 	'WOOCOMMERCE_MISSING',
+	'WRITE_STILL_SENDING',
 ];
 
 const generatorScript = path.resolve(__dirname, '../../../../scripts/generate-error-codes.mjs');
@@ -311,7 +318,10 @@ describe('error registry', () => {
 		'never tells a cashier to clear local data without the unsent-sales check (%s)',
 		(code) => {
 			const entry = entryFor(code);
-			expect(entry.actionHint).toMatch(/help page before clearing local data/);
+			// The in-app action never offers clearing (main #2669); the ordered steps live on the help page.
+			expect(entry.actionHint).toMatch(
+				/contact support before clearing anything|tap Copy debug info and contact support/
+			);
 			const steps = entry.troubleshooting;
 			const check = steps.findIndex((step) => step.includes('contact support before clearing'));
 			const clear = steps.findIndex((step) => /clear the local database and reopen/i.test(step));
@@ -326,10 +336,25 @@ describe('error registry', () => {
 	// checks, and toasts show it without the steps, so it points at the page.
 	it('sends SYNC111 to the help page before any Clear & re-download', () => {
 		const entry = entryFor('SYNC111');
-		expect(entry.actionHint).toMatch(/^Read the help page before using Clear & re-download/);
+		// The in-app action sends the merchant to support (main #2669); Clear & re-download stays on the help page.
+		expect(entry.actionHint).toMatch(/^Tap Copy debug info at the top of Logs/);
+		expect(entry.actionHint).not.toMatch(/Clear & re-download/);
 		const guidance = entry.troubleshooting.join(' ');
 		expect(guidance).toContain('changes waiting to send is 0');
 		expect(guidance).toContain('save every open cart with Save to Server');
+	});
+
+	// A device that cannot open its data, or cannot start, may be holding the
+	// only copy of sales that never reached the store. SYNC311 and CLIENT101
+	// once told the cashier to clear the local database — against their own
+	// troubleshooting (2026-10-17 audit). No in-app action may say it again.
+	it('never tells the cashier to clear local data in an in-app action', () => {
+		const offenders = registry
+			.filter(({ actionHint }) =>
+				/clear (the |this device's |)local (database|data)|loses any unsynced/i.test(actionHint)
+			)
+			.map(({ code }) => code);
+		expect(offenders).toEqual([]);
 	});
 
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {

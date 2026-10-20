@@ -24,6 +24,7 @@ import {
 	storeCollections,
 	type StoreDatabase,
 } from '@wcpos/database/collections';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { syncTemplates } from '../../src/store-local';
 
@@ -168,6 +169,22 @@ describe('syncTemplates', () => {
 
 		const docs = await db.collections.templates.find().exec();
 		expect(docs).toHaveLength(serverPayload.length);
+	});
+
+	it('codes a rejected local save SYNC101 — the only copy failing — not the refresh info line', async () => {
+		const collection = db.collections.templates;
+		jest.spyOn(collection, 'bulkUpsert').mockRejectedValueOnce(new Error('storage worker gone'));
+
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			'Receipt templates could not be saved on this device',
+			{ code: 'SYNC101', context: { error: 'storage worker gone' } }
+		);
+		expect(getLogger([]).info).not.toHaveBeenCalledWith(
+			'Receipt templates not refreshed; using the saved templates',
+			expect.anything()
+		);
 	});
 
 	it('ignores a non-array response body', async () => {

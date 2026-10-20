@@ -13,6 +13,7 @@ import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
+import { reportPrintFailure } from '../hooks/use-print/print-failure';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
@@ -255,30 +256,66 @@ export function useReceiptDocument({
 				context: { event: 'receipt.print_attempted', orderId: order?.uuid ?? orderId },
 			});
 		},
-		onPrintError: (error) =>
-			getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
-				context: {
-					event: 'receipt.print_failed',
-					orderId: order?.uuid ?? orderId,
-					error: error.message,
-				},
-			}),
 	});
 
 	const [printedTo, setPrintedTo] = React.useState<string | null>(null);
 	const printDestination =
 		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
-	const print = React.useCallback(async () => {
-		if (
-			(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
-			(!selectedTemplate?.offline_capable || !selectedTemplate.content)
-		)
-			throw new Error(t('reports.closure_template_required'));
-		const dispatched = (await printReceipt()) === true;
-		if (dispatched) setPrintedTo(printDestination);
-		return dispatched;
-	}, [printReceipt, printDestination, document, selectedTemplate, t]);
+	// Failures are reported per INVOCATION (the transport rethrows), so a manual print
+	// that fails while an autoprint is still in flight is never mislabelled PRINT101,
+	// nor the reverse.
+	const runPrint = React.useCallback(
+		async (onFailure: (error: unknown) => void) => {
+			if (
+				(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
+				(!selectedTemplate?.offline_capable || !selectedTemplate.content)
+			)
+				throw new Error(t('reports.closure_template_required'));
+			let dispatched: boolean;
+			try {
+				dispatched = (await printReceipt()) === true;
+			} catch (error) {
+				onFailure(error);
+				throw error;
+			}
+			if (dispatched) setPrintedTo(printDestination);
+			return dispatched;
+		},
+		[printReceipt, printDestination, document, selectedTemplate, t]
+	);
+	// For hosts that show their own inline error (reports, closures): the row only.
+	const print = React.useCallback(
+		() =>
+			runPrint((error) =>
+				getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
+					code: ERROR_CODES.PRINT_UNEXPECTED,
+					context: {
+						event: 'receipt.print_failed',
+						orderId: order?.uuid ?? orderId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				})
+			),
+		[runPrint, order?.uuid, orderId]
+	);
+	// The receipt's Print button and the autoprint: a closed print dialog is a cancel
+	// (debug); a real failure is one coded row and a toast, so neither can fail silently.
+	const printAndReport = React.useCallback(
+		(autoPrint = false) =>
+			runPrint((error) =>
+				reportPrintFailure(
+					getLogger(['wcpos', 'pos', 'receipt']),
+					'Receipt print failed',
+					error,
+					t,
+					{
+						autoPrint,
+						context: { event: 'receipt.print_failed', orderId: order?.uuid ?? orderId },
+					}
+				)
+			).catch(() => false),
+		[runPrint, order?.uuid, orderId, t]
+	);
 
 	/**
 	 * Allow auto print for checkout
@@ -326,10 +363,17 @@ export function useReceiptDocument({
 		) {
 			hasAutoPrintedRef.current = true;
 			setAttemptedFor(order?.uuid ?? null);
-			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
-			print().catch(() => undefined);
+			// Reported as PRINT101: the sale is saved, print it from the receipt.
+			void printAndReport(true);
 		}
-	}, [order?.uuid, autoPrintAllowed, hasFinalData, frameKey, print, uiSettings.autoPrintReceipt]);
+	}, [
+		order?.uuid,
+		autoPrintAllowed,
+		hasFinalData,
+		frameKey,
+		printAndReport,
+		uiSettings.autoPrintReceipt,
+	]);
 
 	// Final API data can arrive without causing the receipt frame to load again.
 	React.useEffect(() => {
@@ -377,6 +421,7 @@ export function useReceiptDocument({
 		resolvedPrinter,
 		mismatchWarning,
 		print,
+		printAndReport,
 		isPrinting,
 		printedTo,
 		canDownloadPdf,

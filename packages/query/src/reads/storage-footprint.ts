@@ -203,7 +203,7 @@ export async function measureStorageFootprint(
 			} catch (error) {
 				// A site row without a usable url cannot own scope data — its bytes
 				// land in "other stores"; record which site so the bucket is explicable.
-				healthLogger.warn('Storage footprint could not hash a site url', {
+				healthLogger.debug('Storage footprint could not hash a site url', {
 					context: {
 						siteId: site.uuid,
 						error: getErrorMessage(error),
@@ -215,7 +215,7 @@ export async function measureStorageFootprint(
 		// Unknown sites collapse "signed-out stores" into "other stores" —
 		// wrong bucket, never a hidden byte — but the misclassification must
 		// be visible in the log pipeline.
-		healthLogger.warn(
+		healthLogger.debug(
 			'Storage footprint could not read the sites list; buckets may be misattributed',
 			{
 				context: { error: getErrorMessage(error) },

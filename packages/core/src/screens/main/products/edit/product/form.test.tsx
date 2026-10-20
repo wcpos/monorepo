@@ -6,6 +6,7 @@ import * as React from 'react';
 import { act, render } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { EditProductForm } from './form';
 import { EditVariationForm } from '../variation/form';
@@ -185,5 +186,7 @@ describe('EditProductForm save', () => {
 		});
 
 		expect(mockDialogClose).not.toHaveBeenCalled();
+		// localPatch already wrote its SYNC101 row and toast; no second report here.
+		expect(getLogger([]).error).not.toHaveBeenCalled();
 	});
 });

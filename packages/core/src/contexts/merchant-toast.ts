@@ -35,7 +35,8 @@ export interface MerchantToastText {
  * The merchant sentence for a toast, in precedence order:
  *
  *   1. An explicit `toast.title` from the call site. Someone wrote that line
- *      FOR the cashier; it always wins.
+ *      FOR the cashier; it always wins the title, and the code's action hint
+ *      (when there is a code) is still the description.
  *   2. The error code's translated summary, with the code's action hint as the
  *      description — the same two strings the log row detail already shows, so
  *      the toast and the health screen say the same thing in the same language.
@@ -50,15 +51,24 @@ export function resolveMerchantToastText(
 	t: TranslateError,
 	copy: MerchantToastCopy
 ): MerchantToastText {
+	const code = copy.errorCode;
+	const knownCode = typeof code === 'string' && isErrorCode(code) ? code : undefined;
+	const action =
+		knownCode !== undefined
+			? resolvedOrNull(translateErrorAction(t, knownCode), ACTION_KEY_PREFIX)
+			: null;
+
 	if (copy.explicitTitle !== undefined) {
-		return { title: copy.explicitTitle };
+		// The call site's sentence says what happened; the code still says what to
+		// do. Dropping the hint left "Checkout failed" with no next step.
+		return action !== null
+			? { title: copy.explicitTitle, description: action }
+			: { title: copy.explicitTitle };
 	}
 
-	const code = copy.errorCode;
-	if (typeof code === 'string' && isErrorCode(code)) {
-		const summary = resolvedOrNull(translateErrorSummary(t, code), SUMMARY_KEY_PREFIX);
+	if (knownCode !== undefined) {
+		const summary = resolvedOrNull(translateErrorSummary(t, knownCode), SUMMARY_KEY_PREFIX);
 		if (summary !== null) {
-			const action = resolvedOrNull(translateErrorAction(t, code), ACTION_KEY_PREFIX);
 			return action !== null ? { title: summary, description: action } : { title: summary };
 		}
 	}

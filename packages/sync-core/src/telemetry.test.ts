@@ -217,8 +217,8 @@ describe('NOOP_OBSERVER hot-path tripwire', () => {
 	});
 });
 
-it('types maintenance lane failures for the log observer', () => {
+it('types maintenance lane failures, with their streak, for the log observer', () => {
 	expectTypeOf<Extract<SyncEvent, { type: 'maintenance.lane.error' }>['fields']>().toEqualTypeOf<
-		Readonly<{ lane: string; status?: number }> | undefined
+		Readonly<{ lane: string; status?: number; consecutiveFailures: number }> | undefined
 	>();
 });

@@ -368,6 +368,22 @@ describe('sentry-sink.web', () => {
 		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
 	});
 
+	it('groups a dead-letter verdict (push.rejected) the same way as the push.error before it', () => {
+		const rejected = buildCaptureOptions({
+			message:
+				'customers ef72631f — rejected by server (HTTP 400: registration-error-email-exists)',
+			code: 'SYNC201',
+			context: {
+				type: 'push.rejected',
+				collection: 'customers',
+				recordId: 'ef72631f',
+				status: 400,
+				reason: 'registration-error-email-exists',
+			},
+		}).fingerprint;
+		expect(rejected).toEqual(['SYNC201', 'customers', '400', 'registration-error-email-exists']);
+	});
+
 	it('groups a boundary-caught render error by its message, not by the screen that threw', () => {
 		const message = 'useStoreSession must be called within an active store session';
 		const capture = (componentStack: string) =>

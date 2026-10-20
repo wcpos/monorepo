@@ -17,6 +17,7 @@ jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 const logger = {
 	error: jest.fn(),
 	warn: jest.fn(),
+	info: jest.fn(),
 };
 
 describe('cart-failure', () => {
@@ -67,13 +68,14 @@ describe('cart-failure', () => {
 		});
 	});
 
-	it('reports a stale cart line as a warning without an error code', () => {
+	it('reports a stale cart line as info without an error code (another tab removed it)', () => {
 		reportStaleCartLine(logger as never, 'Line is stale', {
 			toastTitle: 'Line no longer exists',
 			context: { uuid: 'line-1' },
 		});
 
-		expect(logger.warn).toHaveBeenCalledWith('Line is stale', {
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalledWith('Line is stale', {
 			showToast: true,
 			toast: { title: 'Line no longer exists' },
 			context: { uuid: 'line-1' },

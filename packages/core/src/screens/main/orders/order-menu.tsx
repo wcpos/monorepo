@@ -73,16 +73,19 @@ export function OrderActionsMenu({
 			collection: 'orders',
 			wooId: orderID,
 		}).catch((error) => {
-			syncLogger.error('Failed to refresh order', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+			// The engine already wrote the coded row for this require (SYNC321), and
+			// the device's copy is untouched: the cashier only needs to know the
+			// refresh did not happen.
+			syncLogger.debug('Failed to refresh order', {
 				showToast: true,
+				toast: { title: t('orders.refresh_failed'), type: 'warning' },
 				context: {
 					orderId: orderID,
 					error: getErrorMessage(error),
 				},
 			});
 		});
-	}, [runtime, orderID]);
+	}, [runtime, orderID, t]);
 
 	const handleOpen = useReopenOrder(order);
 
@@ -114,10 +117,13 @@ export function OrderActionsMenu({
 		if (!receipt.annihilated) {
 			void awaitWriteOutcome(runtime.engine, receipt.mutationId).catch((error) => {
 				if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
-					syncLogger.error('Server refused to delete order', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+					// The engine's push.rejected row (SYNC201) already records this refusal;
+					// the cashier is owed the toast, not a second row.
+					syncLogger.debug('Server refused to delete order', {
 						showToast: true,
-						toast: { title: t('orders.delete_not_permitted') },
+						// For AUTH201's hint: nothing was lost, ask the admin for the permission.
+						code: ERROR_CODES.INSUFFICIENT_ROLE,
+						toast: { title: t('orders.delete_not_permitted'), type: 'error' },
 						context: { orderId: order.uuid },
 					});
 				}
@@ -184,7 +190,7 @@ export function OrderActionsMenu({
 									<Text>{t('orders.refund')}</Text>
 								</DropdownMenuItem>
 							)}
-							<DropdownMenuItem onPress={handleRefresh}>
+							<DropdownMenuItem testID="order-refresh-menu-item" onPress={handleRefresh}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
 							</DropdownMenuItem>

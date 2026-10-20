@@ -103,6 +103,7 @@ export const SYNC_EVENT_TYPES = [
 	'push.rejected',
 	'queue.drain.progress',
 	'queue.scheduler.drain',
+	'queue.write.ack-failed',
 	'queue.write.annihilate',
 	'queue.write.auto-reverted',
 	'queue.write.born-twice-requeue',
@@ -959,6 +960,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		description: 'The POS worked through a batch of queued background sync jobs.',
 		introducedIn: '1.10.0',
 	},
+	'queue.write.ack-failed': {
+		type: 'queue.write.ack-failed',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_ack_failed',
+		label: 'Could not record a sent change on this device',
+		introducedIn: '1.11.3',
+	},
 	'queue.write.annihilate': {
 		type: 'queue.write.annihilate',
 		domain: 'SYNC',
@@ -1015,7 +1023,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'queue.write.conflict-transition',
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_conflict_transition',
-		label: 'Could not settle a clashing change',
+		label: 'Change held — your store has a newer version',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.discard-repull-deferred': {

@@ -65,8 +65,15 @@ export function useVariationsRefresh(handle: QueryHandle) {
 				if (settleTimer !== undefined) clearTimeout(settleTimer);
 				if (cancelled || variationCount > 0) return;
 				const delay = VARIATION_SYNC_RETRY_DELAYS_MS[attempt - 1];
-				if (delay === undefined) return;
-				logger.warn(
+				if (delay === undefined) {
+					// Retries are spent and the popover still has nothing to show.
+					logger.warn('Variations did not load after every retry', {
+						context: { attempts: attempt, timedOut },
+					});
+					return;
+				}
+				// An automatic retry: forensic; the row that matters is the one above.
+				logger.debug(
 					timedOut
 						? 'Variation refresh did not settle in time, retrying'
 						: 'Variation refresh yielded no variations, retrying',

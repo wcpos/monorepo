@@ -86,7 +86,7 @@ export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<Unsent
 		if (unsent.status === 'none') return readUnsentChanges();
 		return unsent;
 	} catch (error) {
-		healthLogger.warn('Unsent-changes count probe failed; showing the cached value', {
+		healthLogger.debug('Unsent-changes count probe failed; showing the cached value', {
 			context: { error: getErrorMessage(error) },
 		});
 		return readUnsentChanges();

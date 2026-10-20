@@ -1,6 +1,11 @@
 import type { SiteDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { sanitizeWPCredentialsData } from '@wcpos/database/collections/wp-credentials';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import {
+	getErrorMessage,
+	getLogger,
+	isErrorReported,
+	markErrorReported,
+} from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { UserDatabaseUnavailableError } from '../commands/printer-profiles';
@@ -245,6 +250,8 @@ export async function recordCashierProfile(
 			});
 		}
 	} catch (error) {
+		// mergeStoresWithResponse already wrote its own row for its failure.
+		if (isErrorReported(error)) throw error;
 		const errorMsg = getErrorMessage(error);
 		appLogger.error('Failed to update user in local database', {
 			code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
@@ -253,6 +260,8 @@ export async function recordCashierProfile(
 				userId,
 			},
 		});
+		// Mark it logged, so the caller's outer catch does not write a second row.
+		markErrorReported(error);
 		throw error;
 	}
 }

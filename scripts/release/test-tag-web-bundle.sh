@@ -69,7 +69,9 @@ done
 [[ "$globoff" == true ]] || exit 64
 printf '%s\n' "$url" >> "$MOCK_LOG"
 case "$url" in
-	*purge.jsdelivr.net*) printf '{}' > "$body"; printf 200 ;;
+	*purge.jsdelivr.net*)
+		if [[ -n "${MOCK_PURGE_BODY:-}" ]]; then printf '%s' "$MOCK_PURGE_BODY"; else printf '{}'; fi > "$body"
+		printf 200 ;;
 	*)
 		n=$(( $(cat "$MOCK_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$MOCK_COUNT"
 		if [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
@@ -146,9 +148,7 @@ MOCK_HTTP=404 expect_status "404 fails even with matching bytes" fail cdn verify
 MOCK_EXIT=16 expect_status "transport failure fails even with matching bytes" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
 rm -f "$MOCK_COUNT" "$MOCK_LOG"
 MOCK_OK_AT=3 expect_status "wrong twice then correct passes" pass cdn verify_cdn_paths 1.11 5 <<<"$good_sha $entry"
-expect_eq "exact failing path purged twice" \
-	"$(printf 'https://purge.jsdelivr.net/gh/wcpos/web-bundle@1.11/build/%s\n' "$entry" "$entry")" \
-	"$(grep 'purge.jsdelivr.net' "$MOCK_LOG")"
+expect_eq "polling never purges (a re-purge extends jsDelivr's throttle)" 0 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
 rm -f "$MOCK_COUNT" "$MOCK_LOG"
 MOCK_OK_AT=4 expect_status "verified paths are not fetched again" pass cdn verify_cdn_paths 1.11 5 \
 	<<<"$(printf '%s ready.js\n%s %s' "$good_sha" "$good_sha" "$entry")"
@@ -172,6 +172,28 @@ done
 MOCK_BAD_PATH=metadata.json expect_status "wrong unhashed bytes fail phase B" fail cdn phase
 MOCK_VERSION=1.11.0 expect_status "matching bytes but stale version fails phase B" fail cdn phase
 expect_status "library can run standalone" pass cdn bash "$SCRIPT_DIR/cdn-verify.sh" 1.11 0 <<<"$good_sha $entry"
+
+# --- purge throttling: logged, recorded, and named on failure ---
+throttled_body() { printf '{"id":"x","status":"finished","paths":{"/gh/wcpos/web-bundle@1.11/build/%s":{"throttled":true,"throttlingReset":%s}}}' "$1" "$2"; }
+# Run under $(...): the throttle globals start fresh for each call.
+purge_state() { for b in "$@"; do MOCK_PURGE_BODY="$b" PATH="$tmpdir/cdn:$PATH" purge_cdn_path 1.11 metadata.json; done
+	echo "state ${CDN_PURGE_THROTTLED:-none} ${CDN_PURGE_THROTTLE_RESET}"; }
+out=$(purge_state "$(throttled_body metadata.json 100)" "$(throttled_body metadata.json 2861)" "$(throttled_body metadata.json 50)")
+expect_eq "a throttled purge is logged as THROTTLED" 1 "$(grep -c 'metadata.json -> HTTP 200, THROTTLED (reset in 2861s)' <<<"$out")"
+expect_eq "a throttled purge records the largest reset" "state 1 2861" "$(tail -1 <<<"$out")"
+out=$(purge_state '{"status":"finished","paths":{"/gh/wcpos/web-bundle@1.11/build/metadata.json":{"throttled":false,"providers":{"CF":true}}}}')
+expect_eq "an accepted purge is logged and leaves no throttle" "$(printf 'purge @1.11/build/metadata.json -> HTTP 200, accepted\nstate none 0')" "$out"
+out=$(purge_state 'not json' '{"paths":{}}')
+expect_eq "an unreadable purge body is unknown, not throttled" 2 "$(grep -c -- '-> HTTP 200, unknown' <<<"$out")"
+expect_eq "and leaves no throttle" "state none 0" "$(tail -1 <<<"$out")"
+rm -f "$MOCK_COUNT" "$MOCK_LOG"
+MOCK_PURGE_BODY="$(throttled_body metadata.json 2861)" MOCK_BAD_PATH=metadata.json expect_status "throttled phase B fails" fail cdn phase
+expect_eq "each unhashed path is purged once, never while polling" 4 "$(grep -c 'purge.jsdelivr.net.*/build/' "$MOCK_LOG")"
+expect_eq "the failure names the throttle and when it resets" 1 "$(grep -c 'jsDelivr throttled the purge.*resets in about 48 min' "$tmpdir/out")"
+expect_eq "and does not say re-run to retry" 0 "$(grep -ci 're-run this command' "$tmpdir/out" || true)"
+MOCK_BAD_PATH=metadata.json expect_status "unthrottled phase B fails" fail cdn phase
+expect_eq "the failure says jsDelivr did not refresh" 1 "$(grep -c 'IS published as v1.11.1, but jsDelivr did not refresh within the deadline' "$tmpdir/out")"
+expect_eq "and does not claim a throttle" 0 "$(grep -c 'throttled' "$tmpdir/out" || true)"
 
 # --- tag_action ---
 all=$'v1.10.40\nv1.11.0\nv1.11.1'
