@@ -7,12 +7,12 @@ export function SvgDragHandleVertical(props: SvgProps) {
 	return (
 		<Svg {...props} viewBox="0 0 24 24">
 			<Path
-				fill="currentColor"
+				fill="none"
 				stroke="currentColor"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				strokeWidth={1.5}
-				d="M12 12.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1m0 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1m0-16a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1"
+				strokeWidth={2}
+				d="M8 5a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m6-14a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0"
 			/>
 		</Svg>
 	);

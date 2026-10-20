@@ -45,7 +45,7 @@
  "dot": "circle-dot-linear",
  "download": "download-linear",
  "dragHandle": "hamburger-menu-linear",
- "dragHandleVertical": "menu-dots-linear",
+ "dragHandleVertical": "tabler:grip-vertical",
  "edit": "pen-linear",
  "emergency": "health-linear",
  "equals": "hamburger-menu-linear",

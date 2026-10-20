@@ -11,7 +11,7 @@ import {
 	IconSetProvider,
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
-import { ListRow } from '@wcpos/components/list-row';
+import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
@@ -235,40 +235,37 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 					<SavedMark name="icons" />
 				</View>
 			</View>
-			{/* A radio group with the section's name, so the eight rows read as one choice. */}
-			<View className="pt-2" accessibilityRole="radiogroup" aria-label={t('settings.icons')}>
-				{ICON_SET_IDS.map((id) => {
-					const selected = icons === id;
-					return (
-						<ListRow
-							key={id}
-							testID={`settings-icons-${id}`}
-							// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
-							accessibilityRole="radio"
-							aria-checked={selected}
-							selected={selected}
-							onPress={() => {
-								void handleIconsChange(id);
-							}}
-							// Label above the strip, the same two lines at every width: six lg
-							// glyphs are 180 px, so nothing wraps on a phone and every row is one height.
-							bodyClassName="gap-1.5"
-							trailing={selected ? <Icon name="check" className="text-primary" /> : undefined}
-						>
-							<Text className="text-sm font-medium" numberOfLines={1}>
-								{t(`settings.icons.${id}`)}
-							</Text>
+			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
+			    and Space selects; the radio dot is the selected state. */}
+			<RadioGroup
+				value={icons}
+				onValueChange={(value) => {
+					void handleIconsChange(value as IconSetId);
+				}}
+				aria-label={t('settings.icons')}
+				className="gap-0 pt-2"
+			>
+				{ICON_SET_IDS.map((id) => (
+					<RadioGroupOption
+						key={id}
+						value={id}
+						testID={`settings-icons-${id}`}
+						label={t(`settings.icons.${id}`)}
+						className="items-center py-2"
+						labelClassName="text-sm font-medium"
+						// One line at every width: radio, label and a 160 px strip fit a phone.
+						right={
 							<IconSetProvider set={id}>
-								<HStack className="gap-3">
+								<HStack className="ml-auto gap-2" testID={`settings-icons-${id}-samples`}>
 									{ICON_SAMPLES.map((name) => (
 										<Icon key={name} name={name} size="lg" className="text-foreground" />
 									))}
 								</HStack>
 							</IconSetProvider>
-						</ListRow>
-					);
-				})}
-			</View>
+						}
+					/>
+				))}
+			</RadioGroup>
 		</SettingsSection>
 	);
 }
@@ -302,7 +299,7 @@ function ThemeSettingsContent() {
 			{
 				name: 'system',
 				labelKey: 'settings.theme.system',
-				icon: 'contrast',
+				icon: 'desktop',
 				descriptionKey: 'settings.theme.system_description',
 			},
 			{

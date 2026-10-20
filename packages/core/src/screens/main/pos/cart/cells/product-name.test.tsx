@@ -108,7 +108,7 @@ describe('the stock mark (roadmap#62)', () => {
 		mockUnmet = [{ lineUuid: 'line-1', available: 2 }];
 		render(<ProductName {...props('line-1')} />);
 		const mark = screen.getByTestId('cart-line-stock-mark');
-		expect(mark.textContent).toBe('[box]pos_cart.n_available {"quantity":2}');
+		expect(mark.textContent).toBe('[product]pos_cart.n_available {"quantity":2}');
 		expect(mark.innerHTML).toContain('text-foreground');
 		expect(mark.innerHTML).not.toMatch(/text-destructive|text-attention/);
 	});
@@ -116,7 +116,9 @@ describe('the stock mark (roadmap#62)', () => {
 	it('says out of stock when nothing is known, and marks no other line', () => {
 		mockUnmet = [{ lineUuid: 'line-1', available: null }];
 		render(<ProductName {...props('line-1')} />);
-		expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe('[box]common.out_of_stock');
+		expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe(
+			'[product]common.out_of_stock'
+		);
 		render(<ProductName {...props('line-2')} />);
 		expect(screen.getAllByTestId('cart-line-stock-mark')).toHaveLength(1);
 	});
@@ -127,7 +129,7 @@ describe('the stock mark (roadmap#62)', () => {
 			mockUnmet = [{ lineUuid: 'line-1', available }];
 			render(<ProductName {...props('line-1')} />);
 			expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe(
-				'[box]common.out_of_stock'
+				'[product]common.out_of_stock'
 			);
 		}
 	);
@@ -137,7 +139,7 @@ describe('the stock mark (roadmap#62)', () => {
 		mockUnmet = [{ lineUuid: 'line-1', available: 2 }];
 		render(<ProductName {...props('line-1')} />);
 		expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe(
-			'[box]pos_cart.n_available {"quantity":2}'
+			'[product]pos_cart.n_available {"quantity":2}'
 		);
 	});
 

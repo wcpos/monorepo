@@ -19,6 +19,57 @@ jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/form', () => ({ FormItem: () => null, FormLabel: () => null }));
+jest.mock('@wcpos/components/radio-group', () => {
+	const ReactMock = jest.requireActual('react') as typeof React;
+	const Ctx = ReactMock.createContext<{ value: string; select: (v: string) => void }>({
+		value: '',
+		select: () => {},
+	});
+	return {
+		RadioGroup: ({
+			children,
+			value,
+			onValueChange,
+			'aria-label': label,
+		}: React.PropsWithChildren<{
+			value: string;
+			onValueChange: (v: string) => void;
+			'aria-label': string;
+		}>) => (
+			<Ctx.Provider value={{ value, select: onValueChange }}>
+				<div role="radiogroup" aria-label={label}>
+					{children}
+				</div>
+			</Ctx.Provider>
+		),
+		RadioGroupOption: ({
+			value,
+			label,
+			right,
+			testID,
+		}: {
+			value: string;
+			label: string;
+			right?: React.ReactNode;
+			testID?: string;
+		}) => {
+			const group = ReactMock.useContext(Ctx);
+			return (
+				<div>
+					<button
+						role="radio"
+						aria-checked={group.value === value}
+						data-testid={testID}
+						onClick={() => group.select(value)}
+					>
+						{label}
+					</button>
+					{right}
+				</div>
+			);
+		},
+	};
+});
 
 const mockLocalPatch = jest.fn().mockResolvedValue({});
 const store: { theme: string; scale?: string; icons?: string } = { theme: 'light' };
@@ -123,7 +174,9 @@ describe('the Icons section', () => {
 		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
 		expect(
-			getAllByTestId(/^settings-icons-/).map((row) => row.getAttribute('data-testid'))
+			getAllByTestId(/^settings-icons-(?!.*-samples$)/).map((row) =>
+				row.getAttribute('data-testid')
+			)
 		).toEqual(mockIconSets.map((id) => `settings-icons-${id}`));
 		expect(
 			getByRole('radiogroup', { name: 'settings.icons' }).querySelectorAll('[role="radio"]')
@@ -132,7 +185,6 @@ describe('the Icons section', () => {
 			const row = getByTestId(`settings-icons-${id}`);
 			expect(row.getAttribute('role')).toBe('radio');
 			expect(row.getAttribute('aria-checked')).toBe(String(id === 'tabler'));
-			expect(!!row.querySelector('[data-icon="check"]')).toBe(id === 'tabler');
 			expect(row.textContent).toBe(`settings.icons.${id}`);
 		});
 	});
@@ -142,7 +194,7 @@ describe('the Icons section', () => {
 		const { getByTestId } = render(<ThemeSettings />);
 
 		mockIconSets.forEach((id) => {
-			const strip = getByTestId(`settings-icons-${id}`).querySelector('[data-set]')!;
+			const strip = getByTestId(`settings-icons-${id}-samples`).closest('[data-set]')!;
 			expect(strip.getAttribute('data-set')).toBe(id);
 			expect(
 				Array.from(strip.querySelectorAll('[data-icon]')).map((icon) =>
