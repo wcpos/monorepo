@@ -5,7 +5,6 @@ import cloneDeep from 'lodash/cloneDeep';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -37,13 +36,12 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				const result = await recordLedger(order, changes);
 				if (!result) throw new Error('offline_void_local_patch_failed');
 			};
-			// A void is never approval-checked; the journal still records the order as it stood.
+			// A void is never approval-checked; the poster journals the order as it stands.
 			const post = moneyCommandPoster({
 				runtime: manager,
 				storeDB,
 				orderUuid: order.uuid,
 				post: (url, body) => http.post(url, body),
-				approval: { total: String(payload.total ?? ''), currency: payload.currency ?? '' },
 			});
 			const outcome = await voidPayments(
 				{
@@ -55,14 +53,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				{
 					post,
 					isOnline: () => onlineStatus.status === 'online-website-available',
-					mirror: async ({ payment, order: summary }) => {
-						await mirrorServerOrder(manager, order.uuid, {
-							payment,
-							order: summary,
-							sentRevision: post.sentRevision(),
-						});
-						await post.settle();
-					},
+					mirror: ({ payment, order: summary }) => post.mirror({ payment, order: summary }),
 				}
 			);
 			// Reversing a cash leg reverses its rounding (#66, #84). A sweep of the latest ledger, not

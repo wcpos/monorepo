@@ -10,6 +10,7 @@ import {
 	startTerminalPaymentsService,
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
+import { passThroughPoster } from '../../../../../../services/terminal-payments/pass-through-poster.test-utils';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
 import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
@@ -33,9 +34,20 @@ jest.mock('../../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('@wcpos/query', () => ({
-	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
-		Object.assign((url: string, body: unknown) => post(url, body), {
-			sentRevision: () => 'sha256:sent',
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
 			settle: async () => undefined,
 		}),
 	engineCollection: () => null,
@@ -264,7 +276,11 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	expect(view.result.current).toBeNull();
 	let service!: ReturnType<typeof startTerminalPaymentsService>;
 	act(() => {
-		service = startTerminalPaymentsService({ http: mockHttp, mirror: async () => {} });
+		service = startTerminalPaymentsService({
+			http: mockHttp,
+			commandPoster: () => passThroughPoster((url, body) => mockHttp.post(url, body)),
+			mirror: async () => {},
+		});
 	});
 	expect(service.getSnapshot().size).toBe(2);
 	expect(view.result.current?.phase).toBe('polling');

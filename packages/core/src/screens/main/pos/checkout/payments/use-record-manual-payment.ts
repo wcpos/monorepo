@@ -4,7 +4,6 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -80,15 +79,12 @@ export function useRecordManualPayment(
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
 			let provenanceError: unknown;
+			// A record is never approval-checked (the server re-checks the money): no approval.
 			const post = moneyCommandPoster({
 				runtime: manager,
 				storeDB,
 				orderUuid: order.uuid,
 				post: (url, body) => http.post(url, body),
-				approval: input.approval ?? {
-					total: String(payload.total ?? ''),
-					currency: payload.currency ?? storeCurrency,
-				},
 				provenance: (command) => commandProvenance(ctx, order, sessionId, command),
 			});
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
@@ -124,12 +120,7 @@ export function useRecordManualPayment(
 				},
 				mirror: async ({ payment, status }, { accepted }) => {
 					try {
-						await mirrorServerOrder(manager, order.uuid, {
-							payment,
-							order: status ? ({ status } as never) : null,
-							sentRevision: post.sentRevision(),
-						});
-						await post.settle();
+						await post.mirror({ payment, order: status ? ({ status } as never) : null });
 						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
 						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
 							const meta_data = await completionMetaFor(ctx, latestMeta, {

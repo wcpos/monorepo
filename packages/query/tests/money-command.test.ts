@@ -578,6 +578,28 @@ it('provenance is minted once per command and rides every re-send, and only on t
 	expect(provenance).toHaveBeenCalledTimes(1);
 });
 
+it('with no approval a command freezes an open entry’s approval, else the resident’s total and currency', async () => {
+	// Nothing journaled for the order: the resident as it stands.
+	await writeResident((doc) => ({ ...doc, payload: { ...doc.payload, total: '77.00' } }));
+	store.modes = ['drop'];
+	await expect(
+		poster({ approval: undefined })('orders/5/payments/leg-2/void', {})
+	).rejects.toThrow();
+	expect((await entries())[0].approval).toEqual({ total: '77.00', currency: 'USD' });
+	// A resumed leg (no press) captures a leg whose intent is still journaled: its approval.
+	store.modes = ['drop'];
+	await expect(
+		poster({ approval: { total: '77.00', currency: 'USD' } })('orders/5/payments/leg-1/intent', {})
+	).rejects.toThrow();
+	await writeResident((doc) => ({ ...doc, payload: { ...doc.payload, total: '55.00' } }));
+	store.modes = ['drop'];
+	await expect(
+		poster({ approval: undefined })('orders/5/payments/leg-1/capture', {})
+	).rejects.toThrow();
+	const capture = (await entries()).find(({ kind }) => kind === 'capture')!;
+	expect(capture.approval).toEqual({ total: '77.00', currency: 'USD' });
+});
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });

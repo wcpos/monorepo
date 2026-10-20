@@ -73,6 +73,39 @@ export function withMetaReplaced(
 	return result;
 }
 
+export const COMPLETIONS_META_KEY = '_wcpos_completions';
+/** One entry of the server-owned completion history (ADR 0040): a completion and what it counted. */
+export interface SaleCompletion {
+	readonly id?: string;
+	readonly n?: number;
+	readonly payment_ids?: readonly string[];
+	readonly [key: string]: unknown;
+}
+
+/**
+ * The order's completion history, however the meta carries it: the store serves it as an array,
+ * and a JSON-encoded string (a meta value WooCommerce stored as text) reads the same. Anything
+ * unreadable is no history.
+ */
+export function readCompletions(
+	meta: readonly MetaDataEntry[] | null | undefined
+): SaleCompletion[] {
+	let value = meta?.find(({ key }) => key === COMPLETIONS_META_KEY)?.value;
+	if (typeof value === 'string') {
+		try {
+			value = JSON.parse(value);
+		} catch {
+			return [];
+		}
+	}
+	return Array.isArray(value)
+		? value.filter(
+				(entry): entry is SaleCompletion =>
+					typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+			)
+		: [];
+}
+
 /** Fully stamped: the sale has its place in the register's numbered sequence. */
 export function hasSaleProvenance(meta: readonly MetaDataEntry[] | null | undefined): boolean {
 	return !!meta?.some(({ key }) => key === '_wcpos_sale_counter');

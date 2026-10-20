@@ -9,7 +9,6 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { moneyCommandPoster, type useQueryRuntime } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
 import { readOrderCommands } from '@wcpos/query/store-local';
 import { createEngineDatabase, createFakeEngine, engineOrder } from '@wcpos/query/testing';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
@@ -207,13 +206,8 @@ function service(timers: ReturnType<typeof scheduler>) {
 				post: store.post,
 				approval: approval ?? { total: '10.00', currency: 'USD' },
 			}),
-		mirror: async (orderUuid, { payment, order }, poster) => {
-			await mirrorServerOrder(runtime, orderUuid, {
-				payment,
-				order,
-				sentRevision: poster?.sentRevision() ?? null,
-			});
-			await poster?.settle();
+		mirror: async (_orderUuid, { payment, order }, poster) => {
+			await poster.mirror({ payment, order });
 			if (payment.status === 'captured') settledCaptures += 1;
 		},
 		setTimeout: timers.setTimeout,

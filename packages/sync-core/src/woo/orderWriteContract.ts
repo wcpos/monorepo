@@ -135,9 +135,6 @@ export function toOrderWirePayload<T extends Record<string, unknown>>(payload: T
 	return wire as T;
 }
 
-/** The pre-ADR 0040 name; the one strip is `toOrderWirePayload`. */
-export const stripServerAuthoredOrderMoney = toOrderWirePayload;
-
 const tillOwnedMeta = (meta: unknown): string =>
 	JSON.stringify(
 		(Array.isArray(meta) ? (meta as MetaEntry[]) : [])

@@ -7,7 +7,6 @@ import {
 	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
 	SERVER_OWNED_ORDER_FIELDS,
 	SERVER_OWNED_ORDER_META_KEYS,
-	stripServerAuthoredOrderMoney,
 	toOrderWirePayload,
 } from './orderWriteContract';
 
@@ -46,7 +45,7 @@ describe('the server-authored order money', () => {
 			fee_lines: [{ id: 5, total: '0.00' }],
 		};
 
-		expect(stripServerAuthoredOrderMoney(payload)).toEqual({
+		expect(toOrderWirePayload(payload)).toEqual({
 			status: 'pos-open',
 			line_items: [{ id: 3, subtotal: '30.00', total: '30.00', total_tax: '6.71328' }],
 			shipping_lines: [{ id: 4, total: '0.00' }],
@@ -56,7 +55,7 @@ describe('the server-authored order money', () => {
 
 	it('returns the same reference when there was no aggregate to drop', () => {
 		const payload = { status: 'pos-open', line_items: [] };
-		expect(stripServerAuthoredOrderMoney(payload)).toBe(payload);
+		expect(toOrderWirePayload(payload)).toBe(payload);
 	});
 });
 
@@ -95,7 +94,7 @@ describe('whether an order change set asserts anything', () => {
 it('keeps the durable money-owner hint as outbound intent', () => {
 	const meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
 	expect(orderChangesAssertIntent({ meta_data })).toBe(true);
-	expect(stripServerAuthoredOrderMoney({ meta_data, total: '99', total_tax: '9' })).toEqual({
+	expect(toOrderWirePayload({ meta_data, total: '99', total_tax: '9' })).toEqual({
 		meta_data,
 	});
 });
@@ -145,7 +144,6 @@ describe('the order wire (ADR 0040)', () => {
 		);
 		const clean = { customer_note: 'note', status: 'pos-open', meta_data: kept };
 		expect(toOrderWirePayload(clean)).toBe(clean);
-		expect(stripServerAuthoredOrderMoney).toBe(toOrderWirePayload);
 	});
 
 	it('drops a non-pushable status, normalising wc-, and keeps each pushable one', () => {

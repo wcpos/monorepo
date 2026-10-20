@@ -91,10 +91,21 @@ jest.mock('../../provenance/command-provenance', () => ({
 	commandProvenance: (...args: unknown[]) => mockCommandProvenance(...args),
 }));
 jest.mock('@wcpos/query', () => ({
-	moneyCommandPoster: (input: { post: (url: string, body: unknown) => Promise<unknown> }) =>
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
 		mockPosterInputs.push(input) &&
 		Object.assign((url: string, body: unknown) => input.post(url, body), {
-			sentRevision: () => 'sha256:sent',
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
 			settle: async () => undefined,
 		}),
 	useQueryRuntime: () => mockRuntime,
@@ -329,20 +340,25 @@ it.each(['ledger', 'provenance'] as const)(
 		else mockPatch.mockRejectedValueOnce(error);
 		const hook = renderHook(() => useTerminalPaymentsService());
 		try {
-			const result = start.mock.calls[0][0].mirror('completed-order', {
-				payment: { ...mockRow, status: 'captured' },
-				order: {
-					status: 'completed',
-					total: '10.00',
-					paid: '10.00',
-					balance: '0.00',
-					authorized: '0.00',
-					refund_due: '0.00',
-					refund_pending: '0.00',
-					payment_method: 'device',
-					payment_method_title: 'Reader',
+			const options = start.mock.calls[0][0];
+			const result = options.mirror(
+				'completed-order',
+				{
+					payment: { ...mockRow, status: 'captured' },
+					order: {
+						status: 'completed',
+						total: '10.00',
+						paid: '10.00',
+						balance: '0.00',
+						authorized: '0.00',
+						refund_due: '0.00',
+						refund_pending: '0.00',
+						payment_method: 'device',
+						payment_method_title: 'Reader',
+					},
 				},
-			});
+				options.commandPoster('completed-order', { sessionId: null })
+			);
 			if (failure === 'ledger') {
 				await expect(result).rejects.toBe(error);
 				expect(mockPatch).not.toHaveBeenCalled();
@@ -555,10 +571,11 @@ describe('a server capture of the order in checkout', () => {
 		mockMirror.mockImplementationOnce(async () => void (await onWrite()));
 		const options = start.mock.calls[0][0];
 		try {
-			const run = options.mirror('completed-order', {
-				payment: { ...mockRow, status: paymentStatus },
-				order: order(status),
-			});
+			const run = options.mirror(
+				'completed-order',
+				{ payment: { ...mockRow, status: paymentStatus }, order: order(status) },
+				options.commandPoster('completed-order', { sessionId: null })
+			);
 			if (fail) await expect(run).rejects.toThrow();
 			else await run;
 		} finally {

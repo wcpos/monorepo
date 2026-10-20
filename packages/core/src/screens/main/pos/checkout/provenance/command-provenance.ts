@@ -1,4 +1,4 @@
-import { derive, readLedger, toMinor } from '@wcpos/order-math';
+import { derive, readCompletions, readLedger, toMinor } from '@wcpos/order-math';
 import type { CommandProvenance, EngineRecord, ProvenanceCommand } from '@wcpos/query';
 import type { MetaDataEntry } from '@wcpos/order-math';
 
@@ -6,7 +6,6 @@ import { completionMeta } from './stamp-completion';
 
 import type { SaleContext } from '../sale-completion';
 
-const COMPLETIONS_META_KEY = '_wcpos_completions';
 const FIELDS: Record<string, keyof CommandProvenance> = {
 	_wcpos_register: 'register_id',
 	_wcpos_session: 'session_id',
@@ -64,11 +63,7 @@ export async function commandProvenance(
 ): Promise<CommandProvenance | null> {
 	const payload = order.getLatest().payload;
 	const meta = payload.meta_data ?? [];
-	const history = meta.find(({ key }) => key === COMPLETIONS_META_KEY)?.value;
-	const recompletion = Array.isArray(history)
-		? history.length > 0
-		: typeof history === 'string' && history !== '' && history !== '[]';
-	if (!recompletion) return fromMeta(meta, false);
+	if (readCompletions(meta).length === 0) return fromMeta(meta, false);
 	if (!completesSale(command, payload, ctx.dp ?? 2)) return null;
 	const { userDB, siteUuid, storeId } = ctx;
 	return fromMeta(

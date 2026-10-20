@@ -13,7 +13,7 @@ import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
-import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
+import { observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -62,17 +62,17 @@ export function useTerminalPaymentsService(): void {
 	const actor = ctx.actor;
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
-	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	// The service outlives a cashier change — its effect keys on store, site and
 	// manager only, so an in-flight leg is never torn down by a re-login — and the
 	// action row must name whoever is at the till when the money lands, not
 	// whoever started the service. So the actor is read live, like the rest.
-	const latest = React.useRef({ recordLedger, stampCompletion, methods, online, actor, ctx });
+	const latest = React.useRef({ stampCompletion, methods, online, actor, ctx });
 	React.useLayoutEffect(() => {
-		latest.current = { recordLedger, stampCompletion, methods, online, actor, ctx };
-	}, [recordLedger, stampCompletion, methods, online, actor, ctx]);
+		latest.current = { stampCompletion, methods, online, actor, ctx };
+	}, [stampCompletion, methods, online, actor, ctx]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -109,14 +109,9 @@ export function useTerminalPaymentsService(): void {
 					storeDB,
 					orderUuid,
 					post: (url, body) => binding.client.post(url, body),
-					// A resumed leg has no press: it freezes the order as it stands.
-					approval:
-						approval ??
-						(async () => {
-							const resident = await readResidentOrder(manager, orderUuid);
-							const payload = resident?.payload as EngineRecord<'orders'>['payload'] | undefined;
-							return { total: String(payload?.total ?? ''), currency: payload?.currency ?? '' };
-						}),
+					// A resumed leg has no press: the poster takes its journaled approval, or freezes
+					// the order as it stands.
+					approval,
 					// A re-completion names the session the leg's gates approved, and only the
 					// command that completes the sale mints a counter.
 					provenance: async (command) => {
@@ -148,14 +143,12 @@ export function useTerminalPaymentsService(): void {
 					const enterReceiptAfter = settlesSale(payment, order, dp())
 						? receiptEntryAfterWrite(orderUuid)
 						: null;
-					await mirrorServerOrder(manager, orderUuid, {
+					await poster.mirror({
 						payment,
 						order,
 						// A device leg's tip moves the order total.
 						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
-						sentRevision: poster?.sentRevision() ?? null,
 					});
-					await poster?.settle();
 					mirrored = true;
 					if (!stopped) enterReceiptAfter?.();
 					const payload = (resident.getLatest?.().payload ??

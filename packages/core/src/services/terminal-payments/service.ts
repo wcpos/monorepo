@@ -52,14 +52,15 @@ export interface TerminalPaymentsServiceOptions {
 	 * is the session the leg's gates approved (the one its row was minted under): a re-completion's
 	 * provenance names it.
 	 */
-	commandPoster?: (
+	commandPoster: (
 		orderUuid: string,
 		options: { approval?: OrderApproval; sessionId: string | null }
 	) => MoneyCommandPoster;
+	/** Mirror a leg's answer through the poster that sent its command (journal, revision guard). */
 	mirror: (
 		orderUuid: string,
 		response: ServerLegResponse,
-		poster?: MoneyCommandPoster
+		poster: MoneyCommandPoster
 	) => Promise<void>;
 	getBalance?: (orderUuid: string) => Promise<string>;
 	getActor?: () => { id: string; name: string };
@@ -230,22 +231,20 @@ export class TerminalPaymentsService {
 				if (this.stopped || !id) continue;
 				let response: { data: unknown };
 				const release = holdLiveTab('payment');
-				const poster = this.options.commandPoster?.(orderUuid, {
+				// A money route never skips the journal: the capture re-sends its open command.
+				const poster = this.options.commandPoster(orderUuid, {
 					sessionId: row.session_id ?? null,
 				});
 				try {
-					response = await (poster ?? this.options.http.post)(
-						`orders/${id}/payments/${row.id}/capture`,
-						{
-							context: { provider_refs: refs },
-						}
-					);
+					response = await poster(`orders/${id}/payments/${row.id}/capture`, {
+						context: { provider_refs: refs },
+					});
 				} finally {
 					release();
 				}
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
-				await this.options.mirror(orderUuid, data, ...(poster ? [poster] : []));
+				await this.options.mirror(orderUuid, data, poster);
 				if (entry.reportedFailure) {
 					entry.reportedFailure = false;
 					// Clears the stuck row this payment wrote when its retries ran out. It has
@@ -461,13 +460,13 @@ export class TerminalPaymentsService {
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
-		const poster = this.options.commandPoster?.(input.orderUuid, {
+		const poster = this.options.commandPoster(input.orderUuid, {
 			approval: input.approval,
 			sessionId: input.row.session_id ?? null,
 		});
 		const deps = {
-			...this.options.http,
-			...(poster ? { post: poster } : {}),
+			get: this.options.http.get,
+			post: poster,
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"
@@ -479,7 +478,7 @@ export class TerminalPaymentsService {
 				((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
 			mirror: async (response: ServerLegResponse) => {
 				try {
-					await this.options.mirror(input.orderUuid, response, ...(poster ? [poster] : []));
+					await this.options.mirror(input.orderUuid, response, poster);
 					finishingError = undefined;
 				} catch (error) {
 					finishingError = getErrorMessage(error);

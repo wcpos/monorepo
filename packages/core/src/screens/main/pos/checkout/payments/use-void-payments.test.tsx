@@ -28,9 +28,20 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
 jest.mock('@wcpos/query', () => ({
-	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
-		Object.assign((url: string, body: unknown) => post(url, body), {
-			sentRevision: () => 'sha256:sent',
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
 			settle: async () => undefined,
 		}),
 	useQueryRuntime: () => ({}),

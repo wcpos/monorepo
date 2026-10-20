@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { MoneyCommandError, type MoneyCommandErrorReason, type OrderApproval } from '@wcpos/query';
+import { MoneyCommandError, type MoneyCommandErrorReason } from '@wcpos/query';
 import {
 	isDefinitiveMoneyRefusal,
 	moneyRefusalOf,
@@ -37,8 +37,6 @@ export interface RecordManualPaymentInput {
 	tendered?: string | number | null;
 	/** The row's id when the caller has already named it (a rounding fee line points at it). */
 	paymentId?: string;
-	/** The order's total and currency as the cashier approved them at the press (ADR 0040). */
-	approval?: OrderApproval;
 }
 export interface RecordManualPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;

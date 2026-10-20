@@ -10,7 +10,6 @@ import {
 	type Post,
 	type ProvenanceCommand,
 } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
 import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
@@ -43,25 +42,20 @@ export async function closeSale(
 	order: EngineRecord<'orders'>,
 	deps: {
 		post: Post;
-		approval: OrderApproval;
+		/** Absent (the boundary's own decision): the order as it stands once its lines are written. */
+		approval?: OrderApproval;
 		provenance: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
-		online: boolean;
 	}
 ): Promise<CloseOutcome> {
+	// Connectivity is the caller's (`writeZeroBalanceCompletion` refuses offline before any
+	// write); an order the store has never seen has nothing to close yet.
 	const id = order.getLatest().payload.id;
-	if (!deps.online || !id) return { kind: 'offline' };
+	if (!id) return { kind: 'offline' };
 	const post = moneyCommandPoster({ runtime, storeDB, orderUuid: order.uuid, ...deps });
-	const mirror = async (summary: OrderPaymentSummary | null | undefined) => {
-		await mirrorServerOrder(runtime, order.uuid, {
-			order: summary,
-			sentRevision: post.sentRevision(),
-		});
-		await post.settle();
-	};
 	try {
 		const { data } = await post(`orders/${id}/close`, {});
 		const answer = data as { order?: OrderPaymentSummary; completion?: { n: number; id: string } };
-		await mirror(answer.order);
+		await post.mirror({ order: answer.order });
 		return {
 			kind: 'completed',
 			order: answer.order ?? null,
@@ -73,7 +67,7 @@ export async function closeSale(
 		const refusal = moneyRefusalOf(error);
 		if (refusal?.code === MONEY_ANSWER_CODES.balanceOutstanding) {
 			const summary = refusal.data?.order as OrderPaymentSummary | undefined;
-			await mirror(summary);
+			await post.mirror({ order: summary });
 			return { kind: 'outstanding', order: summary ?? null };
 		}
 		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
@@ -84,7 +78,10 @@ export async function closeSale(
 	}
 }
 
-/** The till's close: REST client, live connectivity and provenance for the sale's session. */
+/**
+ * The till's close: REST client and provenance for the sale's session, plus live connectivity
+ * for the boundary's `writeZeroBalanceCompletion`, which refuses offline before any write.
+ */
 export function useCloseSale() {
 	const http = useRestHttpClient();
 	const ctx = useSaleContext();
@@ -96,20 +93,13 @@ export function useCloseSale() {
 	const close = React.useCallback(
 		(
 			order: EngineRecord<'orders'>,
-			options: { sessionId: string | null; approval?: OrderApproval; queuedOffline?: boolean }
-		) => {
-			const payload = order.getLatest().payload;
-			return closeSale(ctx.runtime, ctx.storeDB, order, {
+			options: { sessionId: string | null; approval?: OrderApproval }
+		) =>
+			closeSale(ctx.runtime, ctx.storeDB, order, {
 				post: (url, body) => http.post(url, body),
-				// The boundary's own decision is the order as it stands once its lines are written.
-				approval: options.approval ?? {
-					total: String(payload.total ?? ''),
-					currency: payload.currency ?? '',
-				},
+				approval: options.approval,
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId, command),
-				online: onlineRef.current && !options.queuedOffline,
-			});
-		},
+			}),
 		[ctx, http]
 	);
 	return React.useMemo(() => ({ close, online: () => onlineRef.current }), [close]);

@@ -13,7 +13,6 @@ import {
 	type OrderApproval,
 	useQueryRuntime,
 } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
@@ -41,17 +40,13 @@ export function useGatewayPayment() {
 			order: EngineRecord<'orders'>,
 			options: { destination?: string | null; approval?: OrderApproval; sessionId?: string | null }
 		) => {
-			const payload = order.getLatest().payload;
 			const post = moneyCommandPoster({
 				runtime: manager,
 				storeDB,
 				orderUuid: order.uuid,
 				post: (url, body) => http.post(url, body),
 				// A cancel is never approval-checked; a submit carries the cashier's press.
-				approval: options.approval ?? {
-					total: String(payload.total ?? ''),
-					currency: payload.currency ?? '',
-				},
+				approval: options.approval,
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId ?? null, command),
 			});
 			return {
@@ -64,13 +59,11 @@ export function useGatewayPayment() {
 					awaiting,
 				}: Parameters<Parameters<typeof submitGatewayPayment>[3]['mirror']>[0]) => {
 					try {
-						await mirrorServerOrder(manager, order.uuid, {
+						await post.mirror({
 							payment,
 							order: summary,
 							meta: (meta) => withAwaitingCustomer(meta, awaiting),
-							sentRevision: post.sentRevision(),
 						});
-						await post.settle();
 					} catch (error) {
 						// The store has already answered; only this till's copy is behind. Pull it.
 						const id = order.getLatest().payload.id;

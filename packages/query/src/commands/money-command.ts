@@ -2,7 +2,7 @@ import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
 
 import { mintUuid } from '../mint-uuid';
-import { mirrorServerOrder } from '../mutations/mirror-server-order';
+import { mirrorServerOrder, type MoneyAnswer } from '../mutations/mirror-server-order';
 import { pushRecord } from '../mutations/push-record';
 import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
@@ -59,9 +59,13 @@ export class MoneyCommandError extends Error {
 	}
 }
 export type MoneyCommandPoster = Post & {
-	/** The revision the last command was sent with, answered or refused (the mirror's guard). */
-	sentRevision(): string | null;
-	/** After the mirror persisted the answers: delete their entries, then the forced refresh. */
+	/**
+	 * Mirror an answer onto the LATEST resident under the revision the last command was sent
+	 * with (the summary's status lands only while the resident still carries it), then settle:
+	 * delete the answered entries and run the forced refresh.
+	 */
+	mirror(answer: Omit<MoneyAnswer, 'sentRevision'>): Promise<void>;
+	/** Delete the answered entries, then the forced refresh (what `mirror` ends with). */
 	settle(): Promise<void>;
 };
 
@@ -184,7 +188,7 @@ export async function sendMoneyCommand(
 	runtime: QueryRuntime,
 	storeDB: StoreLocalDatabase,
 	entry: MoneyCommandEntry,
-	deps: { post: Post; onSent?: (revision: string) => void }
+	deps: { post: Post }
 ): Promise<{ data: Record<string, unknown> & { revision?: string }; sentRevision: string }> {
 	const orderId = classifyMoneyRoute(entry.path)?.orderId ?? 0;
 	const fresh = entry.sentAt === null;
@@ -208,7 +212,6 @@ export async function sendMoneyCommand(
 		}
 	for (let stale = false; ; stale = true) {
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
-		deps.onSent?.(revision);
 		try {
 			const command = entry.kind === 'record' ? {} : { command_id: entry.id };
 			const { data } = await deps.post(entry.path, { ...entry.body, ...command, revision });
@@ -271,28 +274,39 @@ export async function settleMoneyCommand(
 		});
 }
 
-/** Try again: re-send every dispatched command of the order; a never-sent one is dropped. */
+/** A re-sent command and the store's 2xx answer to it. */
+export interface ResentCommand {
+	readonly kind: MoneyCommandKind;
+	readonly data: Record<string, unknown>;
+}
+
+/**
+ * Try again: re-send every dispatched command of the order through a poster (the same entry,
+ * id and frozen body), mirror each answer and settle it; a never-sent one is dropped. Returns
+ * the answers, so the caller finishes the sale from them as from a first answer.
+ */
 export async function resendOpenCommands(
 	runtime: QueryRuntime,
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	deps: { post: Post }
-): Promise<void> {
+): Promise<ResentCommand[]> {
 	const { entries } = await readOrderCommands(storeDB, orderUuid);
+	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post });
+	const answers: ResentCommand[] = [];
 	for (const entry of entries) {
 		if (entry.sentAt === null) {
 			await settleCommand(storeDB, orderUuid, entry.id);
 			continue;
 		}
-		const { data, sentRevision } = await sendMoneyCommand(runtime, storeDB, entry, deps);
-		await mirrorServerOrder(runtime, orderUuid, {
+		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
+		await poster.mirror({
 			payment: data.payment as PaymentRow | undefined,
 			order: data.order as OrderPaymentSummary | undefined,
-			sentRevision,
 		});
-		await settleCommand(storeDB, orderUuid, entry.id, answerChain(data.revision, Date.now()));
+		answers.push({ kind: entry.kind, data });
 	}
-	if (entries.length) await settleMoneyCommand(runtime, storeDB, orderUuid);
+	return answers;
 }
 
 function answerChain(revision: unknown, at: number): RevisionChain | undefined {
@@ -315,20 +329,40 @@ export function moneyCommandPoster(input: {
 	storeDB: StoreLocalDatabase;
 	orderUuid: string;
 	post: Post;
-	/** Frozen at the cashier's press; a resumed leg (no press) reads the order when it freezes. */
-	approval: OrderApproval | (() => Promise<OrderApproval>);
+	/**
+	 * The order's total and currency as the cashier approved them at the press. Absent (a void,
+	 * a cancel, a record, a resumed leg with no press), the command is frozen with an open journal
+	 * entry's approval when the order has one, else the resident's total and currency.
+	 */
+	approval?: OrderApproval;
 	/** Called once, when the command is frozen; it sees the command it describes. */
 	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
+	// The revision the last command went out under, read off the body the envelope sends.
 	let sentRevision: string | null = null;
+	const send: Post = (url, body) => {
+		sentRevision = (body as { revision?: string }).revision ?? null;
+		return input.post(url, body);
+	};
 	const dispatch = async (entry: MoneyCommandEntry) => {
-		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, {
-			post: input.post,
-			onSent: (revision) => (sentRevision = revision),
-		});
+		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, { post: send });
 		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
 		return response;
+	};
+	const freezeApproval = async (entries: readonly MoneyCommandEntry[], target: string | null) => {
+		if (input.approval) return input.approval;
+		const journaled = entries.find((entry) => entry.target === target) ?? entries[0];
+		if (journaled) return journaled.approval;
+		const { payload } = (await readOrder(input.runtime, input.orderUuid)).order;
+		return { total: String(payload.total ?? ''), currency: String(payload.currency ?? '') };
+	};
+	const settle = async () => {
+		const done = answered;
+		answered = [];
+		for (const { id, chain } of done)
+			await settleCommand(input.storeDB, input.orderUuid, id, chain);
+		if (done.length) await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
 	};
 	const poster = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);
@@ -358,7 +392,10 @@ export function moneyCommandPoster(input: {
 			target: route.target,
 			id: rowId ?? mintUuid(),
 			body: frozen,
-			approval: typeof input.approval === 'function' ? await input.approval() : input.approval,
+			approval: await freezeApproval(
+				entries.filter(({ sentAt }) => sentAt !== null),
+				route.target
+			),
 			sentAt: null,
 			sentRevision: null,
 		};
@@ -366,13 +403,10 @@ export function moneyCommandPoster(input: {
 		return dispatch(entry);
 	};
 	return Object.assign(poster, {
-		sentRevision: () => sentRevision,
-		settle: async () => {
-			const done = answered;
-			answered = [];
-			for (const { id, chain } of done)
-				await settleCommand(input.storeDB, input.orderUuid, id, chain);
-			if (done.length) await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
+		mirror: async (answer: Omit<MoneyAnswer, 'sentRevision'>) => {
+			await mirrorServerOrder(input.runtime, input.orderUuid, { ...answer, sentRevision });
+			await settle();
 		},
+		settle,
 	});
 }

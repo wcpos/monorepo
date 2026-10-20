@@ -868,8 +868,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
 					online: () => online && !queuedOffline && !!payload.id,
-					close: (target) =>
-						closeSale.close(target, { sessionId, approval: closeApproval, queuedOffline }),
+					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
 				});
 				if (closed && typeof closed === 'object' && 'kind' in closed) reportClose(closed);
 				return;
@@ -1148,7 +1147,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
-				approval,
 			}).catch(async (error: unknown) => {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';

@@ -77,7 +77,6 @@ export {
 	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
 	SERVER_OWNED_ORDER_FIELDS,
 	SERVER_OWNED_ORDER_META_KEYS,
-	stripServerAuthoredOrderMoney,
 	toOrderWirePayload,
 } from './woo/orderWriteContract';
 export {

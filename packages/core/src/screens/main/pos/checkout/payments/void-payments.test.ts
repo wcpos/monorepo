@@ -121,6 +121,21 @@ describe('voidPayments', () => {
 		expect(deps.post.mock.calls.map(([url]) => url)).toEqual(['orders/42/payments/open/void']);
 	});
 
+	it('a string-encoded completion history still keeps its counted captured row out of a void', async () => {
+		const deps = createDeps();
+		deps.post.mockResolvedValue({ data: {} });
+		const voidable = order([payment('counted', 'captured'), payment('open', 'captured')]);
+		const history = {
+			key: '_wcpos_completions',
+			value: JSON.stringify([{ id: 'c1', n: 1, payment_ids: ['counted'] }]),
+		};
+		voidable.meta_data.push(history as never);
+
+		await voidPayments(voidable, deps);
+
+		expect(deps.post.mock.calls.map(([url]) => url)).toEqual(['orders/42/payments/open/void']);
+	});
+
 	it('posts each live leg in ledger order and mirrors each answered row with its summary', async () => {
 		const deps = createDeps();
 		const pending = payment('pending', 'pending');

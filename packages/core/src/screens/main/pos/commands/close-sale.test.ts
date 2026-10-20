@@ -7,7 +7,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: () => ({})
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
 jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => ({}) }));
 const mockPosterInput = jest.fn();
-const mockMirror = jest.fn(async () => undefined);
+const mockMirror = jest.fn(async (..._args: unknown[]) => undefined);
 const mockSettle = jest.fn(async () => undefined);
 jest.mock('@wcpos/query', () => {
 	class MoneyCommandError extends Error {
@@ -17,10 +17,20 @@ jest.mock('@wcpos/query', () => {
 	}
 	return {
 		MoneyCommandError,
-		moneyCommandPoster: (input: { post: (url: string, body: unknown) => Promise<unknown> }) => {
+		moneyCommandPoster: (input: {
+			post: (url: string, body: unknown) => Promise<unknown>;
+			runtime: unknown;
+			orderUuid: string;
+		}) => {
 			mockPosterInput(input);
 			return Object.assign((url: string, body: unknown) => input.post(url, body), {
-				sentRevision: () => 'sha256:sent',
+				mirror: async (answer: object) => {
+					await mockMirror(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					});
+					await mockSettle();
+				},
 				settle: mockSettle,
 			});
 		},
@@ -39,8 +49,8 @@ const refusal = (status: number, code: string, data?: object) =>
 	Object.assign(new Error(code), {
 		response: { status, data: { code, message: `${code} says`, data } },
 	});
-function deps(post: jest.Mock, online = true) {
-	return { post, approval, provenance: async () => null, online };
+function deps(post: jest.Mock) {
+	return { post, approval, provenance: async () => null };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -106,9 +116,13 @@ it.each([
 	expect(post).toHaveBeenCalledTimes(1);
 });
 
-it('offline nothing is sent', async () => {
+it('an order the store has never seen sends nothing (connectivity is the caller’s check)', async () => {
 	const post = jest.fn();
-	expect(await closeSale({} as never, {} as never, order, deps(post, false))).toEqual({
+	const unsynced = {
+		uuid: 'order-2',
+		getLatest: () => ({ payload: { total: '0.00', currency: 'EUR' } }),
+	} as unknown as EngineRecord<'orders'>;
+	expect(await closeSale({} as never, {} as never, unsynced, deps(post))).toEqual({
 		kind: 'offline',
 	});
 	expect(post).not.toHaveBeenCalled();

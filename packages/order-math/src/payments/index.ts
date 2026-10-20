@@ -10,6 +10,9 @@ export {
 	hasSaleTime,
 	withSaleProvenance,
 	withMetaReplaced,
+	COMPLETIONS_META_KEY,
+	readCompletions,
+	type SaleCompletion,
 } from './provenance';
 export { derive, isCompletingStatus } from './derive';
 export {

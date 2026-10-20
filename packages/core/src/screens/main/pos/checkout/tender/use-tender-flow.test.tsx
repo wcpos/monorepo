@@ -40,6 +40,7 @@ import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
+import { passThroughPoster } from '../../../../../services/terminal-payments/pass-through-poster.test-utils';
 
 import type {
 	TerminalLegState,
@@ -347,11 +348,20 @@ jest.mock('@wcpos/query', () => ({
 	MoneyCommandError: class MoneyCommandError extends Error {},
 	moneyCommandPoster: (input: {
 		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
 		approval: unknown;
 	}) => {
 		mockPosterInputs.push(input);
 		return Object.assign((url: string, body: unknown) => input.post(url, body), {
-			sentRevision: () => 'sha256:sent',
+			// The mocked mirrorServerOrder under a fixed revision.
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
 			settle: async () => undefined,
 		});
 	},
@@ -679,7 +689,6 @@ describe('useTenderFlow', () => {
 			amount: '92.95',
 			tendered: '100.00',
 			session: { registerId: 'register', sessionId: null },
-			approval: expect.any(Object),
 		});
 	});
 
@@ -771,7 +780,6 @@ describe('useTenderFlow', () => {
 			amount: '50.00',
 			tendered: '50.00',
 			session: { registerId: 'register', sessionId: null },
-			approval: expect.any(Object),
 		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -797,7 +805,6 @@ describe('useTenderFlow', () => {
 			amount: '92.95',
 			tendered: null,
 			session: { registerId: 'register', sessionId: null },
-			approval: expect.any(Object),
 		});
 	});
 
@@ -1579,6 +1586,7 @@ describe('server tender', () => {
 					}),
 					post: jest.fn(),
 				},
+				commandPoster: () => passThroughPoster(jest.fn()),
 				mirror: async () => {},
 				completeOrder,
 			});
@@ -1746,6 +1754,7 @@ describe('device tender', () => {
 		const post = jest.fn(async () => ({ data: { handoff: { token: 'connection' } } }));
 		mockRealService = new TerminalPaymentsService({
 			http: { post, get: jest.fn() },
+			commandPoster: () => passThroughPoster(post),
 			mirror: async () => {},
 		});
 		registerDriver(createSimulatedDriver());

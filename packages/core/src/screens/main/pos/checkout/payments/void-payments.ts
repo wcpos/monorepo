@@ -1,4 +1,4 @@
-import { isLivePaymentStatus, readLedger } from '@wcpos/order-math';
+import { isLivePaymentStatus, readCompletions, readLedger } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 /**
@@ -51,11 +51,8 @@ export async function voidPayments(
 ): Promise<VoidPaymentsOutcome> {
 	// The server never voids a captured row a completion counted, nor a captured non-manual row
 	// (an adopted WooCommerce tender among them): those leave the balance only through a refund.
-	const completions = order.meta_data.find(({ key }) => key === '_wcpos_completions')?.value;
 	const counted = new Set(
-		(Array.isArray(completions) ? completions : []).flatMap(
-			(entry: { payment_ids?: string[] }) => entry?.payment_ids ?? []
-		)
+		readCompletions(order.meta_data).flatMap(({ payment_ids }) => payment_ids ?? [])
 	);
 	const liveRows = readLedger(order.meta_data).filter(
 		({ id, status, capture_mode }) =>

@@ -170,12 +170,10 @@ export {
 } from './commands/printer-profiles';
 export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
 export {
-	classifyMoneyRoute,
 	MoneyCommandError,
 	moneyCommandPoster,
 	resendOpenCommands,
-	sendMoneyCommand,
-	settleMoneyCommand,
+	type ResentCommand,
 	type CommandProvenance,
 	type MoneyCommandEntry,
 	type MoneyCommandErrorReason,

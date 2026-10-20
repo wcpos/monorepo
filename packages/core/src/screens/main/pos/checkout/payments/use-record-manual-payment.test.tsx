@@ -43,13 +43,26 @@ jest.mock('@wcpos/query', () => ({
 	// revision so a test can see the post went through it.
 	moneyCommandPoster: (input: {
 		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
 		orderUuid: string;
 		approval: unknown;
 	}) => {
 		mockPosterInput(input);
 		return Object.assign(
 			(url: string, body: object) => input.post(url, { ...body, revision: 'sha256:sent' }),
-			{ sentRevision: () => 'sha256:sent', settle: mockSettle }
+			{
+				// The mocked mirrorServerOrder under the revision the post went out with, then settle.
+				mirror: async (answer: object) => {
+					await jest
+						.requireMock('@wcpos/query/mutations')
+						.mirrorServerOrder(input.runtime, input.orderUuid, {
+							...answer,
+							sentRevision: 'sha256:sent',
+						});
+					await mockSettle();
+				},
+				settle: mockSettle,
+			}
 		);
 	},
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
@@ -315,13 +328,11 @@ it('posts the record through the command poster with the order revision', async 
 	onlineStatus = 'online-website-available';
 	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
 	const { result } = renderHook(() => useRecordManualPayment());
-	const approval = { total: '100.00', currency: 'EUR' };
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 
-	await act(() => result.current(order, method, { session: gateSession(), amount: 40, approval }));
-
-	expect(mockPosterInput).toHaveBeenCalledWith(
-		expect.objectContaining({ orderUuid: order.uuid, approval })
-	);
+	// A record is never approval-checked: the poster freezes the order as it stands.
+	expect(mockPosterInput).toHaveBeenCalledWith(expect.objectContaining({ orderUuid: order.uuid }));
+	expect(mockPosterInput.mock.calls[0][0].approval).toBeUndefined();
 	expect(mockPost).toHaveBeenCalledWith(
 		'orders/1042/payments',
 		expect.objectContaining({ payment: expect.any(Object), revision: 'sha256:sent' })
