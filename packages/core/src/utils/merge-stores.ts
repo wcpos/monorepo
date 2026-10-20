@@ -76,6 +76,17 @@ export function normalizeStorePayload(store: ServerStorePayload): ServerStorePay
 		out.opening_hours = [];
 	}
 
+	// customer_tax_id_types: omitted by plugin versions before the allow-list
+	// setting existed. [] is the "offer every type" sentinel, so an absent or
+	// malformed field lands on the same permissive default.
+	if (!Array.isArray(out.customer_tax_id_types)) {
+		out.customer_tax_id_types = [];
+	} else {
+		out.customer_tax_id_types = out.customer_tax_id_types.filter(
+			(entry: unknown): entry is string => typeof entry === 'string'
+		);
+	}
+
 	// tax_ids: server may omit the field entirely on older plugin versions.
 	// Coerce to [] so RxDB validation against the current schema doesn't reject
 	// otherwise-valid store payloads, and drop malformed entries (missing
