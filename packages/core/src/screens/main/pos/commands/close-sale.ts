@@ -31,6 +31,24 @@ export type CloseOutcome =
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
 
+/** The store's summary, read as the gateway answers are: a status says what the order is now. */
+function isSummary(value: unknown): value is OrderPaymentSummary {
+	return (
+		!!value &&
+		typeof value === 'object' &&
+		typeof (value as { status?: unknown }).status === 'string'
+	);
+}
+function isCompletion(value: unknown): value is { n: number; id: string } {
+	const completion = value as { n?: unknown; id?: unknown } | null | undefined;
+	return (
+		!!completion &&
+		typeof completion === 'object' &&
+		typeof completion.n === 'number' &&
+		typeof completion.id === 'string'
+	);
+}
+
 /**
  * Complete a covered sale through `POST orders/{id}/close` (ADR 0040 D2): the till never writes
  * `completed` itself. Journaled and approved like a charge, so a lost answer re-sends the same
@@ -54,13 +72,13 @@ export async function closeSale(
 	const post = moneyCommandPoster({ runtime, storeDB, orderUuid: order.uuid, ...deps });
 	try {
 		const { data } = await post(`orders/${id}/close`, {});
-		const answer = data as { order?: OrderPaymentSummary; completion?: { n: number; id: string } };
+		// Only the store's own summary and completion say the sale closed. A 2xx without them (a
+		// proxy page, a plugin filter) proves nothing: the entry stays journaled for a re-send.
+		const answer = (data ?? {}) as { order?: unknown; completion?: unknown };
+		if (!isSummary(answer.order) || !isCompletion(answer.completion))
+			throw new Error('close_malformed_response');
 		await post.mirror({ order: answer.order });
-		return {
-			kind: 'completed',
-			order: answer.order ?? null,
-			completion: answer.completion ?? null,
-		};
+		return { kind: 'completed', order: answer.order, completion: answer.completion };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };

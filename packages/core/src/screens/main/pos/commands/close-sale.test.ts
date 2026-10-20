@@ -83,6 +83,25 @@ it('a 2xx with a completion completes, mirroring the summary under the sent revi
 	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+	['no body', null],
+	['no summary', { completion: { n: 1, id: 'c1' } }],
+	['a summary without a status', { order: { total: '0.00' }, completion: { n: 1, id: 'c1' } }],
+	['no completion', { order: { status: 'completed' } }],
+	['a completion without its number', { order: { status: 'completed' }, completion: { id: 'c1' } }],
+])(
+	'a 2xx with %s is not a close: nothing is mirrored or settled and the entry stays',
+	async (_, data) => {
+		const post = jest.fn(async () => ({ data }));
+
+		await expect(closeSale({} as never, {} as never, order, deps(post))).rejects.toThrow(
+			'close_malformed_response'
+		);
+		expect(mockMirror).not.toHaveBeenCalled();
+		expect(mockSettle).not.toHaveBeenCalled();
+	}
+);
+
 it('balance outstanding mirrors the summary and says what is due', async () => {
 	const summary = { status: 'pos-partial', balance: '4.00' };
 	const post = jest.fn(async () => {
