@@ -22,7 +22,7 @@ export function Note({ row }: CellContext<{ record: EngineRecord<'orders'> }, 'c
 	return (
 		<Tooltip delayDuration={150} showOnNative>
 			<TooltipTrigger asChild>
-				<IconButton name="messageLines" accessibilityLabel={t('common.customer_note')} />
+				<IconButton name="note" accessibilityLabel={t('common.customer_note')} />
 			</TooltipTrigger>
 			<TooltipContent>
 				<Text>{note}</Text>

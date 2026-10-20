@@ -15,7 +15,7 @@ function Open({ side }: { side: 'top' | 'bottom' }) {
 	return (
 		<Tooltip delayDuration={0}>
 			<TooltipPrimitive.Trigger ref={trigger} asChild>
-				<IconButton name="circleInfo" accessibilityLabel="Stock" testID="gallery-tooltip-trigger" />
+				<IconButton name="info" accessibilityLabel="Stock" testID="gallery-tooltip-trigger" />
 			</TooltipPrimitive.Trigger>
 			<TooltipContent side={side} avoidCollisions={false}>
 				<Text>12 in stock</Text>

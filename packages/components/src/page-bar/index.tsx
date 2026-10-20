@@ -67,7 +67,7 @@ export function PageBar({
 						<Breadcrumb parents={[back]} testID={id('back')} className="-ml-2" />
 					) : onMenu ? (
 						<IconButton
-							name="bars"
+							name="menu"
 							onPress={onMenu.onPress}
 							accessibilityLabel={onMenu.label}
 							testID={id('menu')}

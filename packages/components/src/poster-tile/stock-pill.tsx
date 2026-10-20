@@ -20,7 +20,7 @@ export function StockPill({ label, testID, ...props }: StockPillProps) {
 				accessibilityLabel={label}
 				testID={testID}
 			>
-				<Icon name="box" size="xs" className={tone} />
+				<Icon name="product" size="xs" className={tone} />
 				<Text className={`text-xs font-bold tabular-nums ${tone}`}>{props.value}</Text>
 			</View>
 		);
@@ -31,7 +31,7 @@ export function StockPill({ label, testID, ...props }: StockPillProps) {
 			accessibilityLabel={label}
 			testID={testID}
 		>
-			<Icon name="clock" size="xs" className="text-muted-foreground" />
+			<Icon name="pending" size="xs" className="text-muted-foreground" />
 			<Text className="text-muted-foreground text-xs font-bold">{label}</Text>
 		</View>
 	);

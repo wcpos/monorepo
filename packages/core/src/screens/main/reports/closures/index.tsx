@@ -80,7 +80,7 @@ export function Closures({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<IconButton
-							name="ellipsisVertical"
+							name="more"
 							testID="closures-overflow"
 							accessibilityLabel={t('reports.more')}
 							className="self-end"

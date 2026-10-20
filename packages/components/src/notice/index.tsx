@@ -19,9 +19,9 @@ type NoticeProps = ViewProps & {
 	docs?: { label: string; href: string; testID?: string };
 };
 const tones = {
-	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'triangleExclamation' },
-	info: { surface: 'border-border bg-card', icon: 'circleInfo' },
-	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'circleExclamation' },
+	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'warning' },
+	info: { surface: 'border-border bg-card', icon: 'info' },
+	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'alert' },
 } as const;
 
 export function Notice({

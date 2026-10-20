@@ -21,7 +21,7 @@ const examples: ({ id: string } & React.ComponentProps<typeof DrawerItem>)[] = [
 		onPress: () => {},
 		icon: () => (
 			<View>
-				<Icon name="bell" />
+				<Icon name="notifications" />
 				<Text className="bg-primary text-primary-foreground rounded-lg">3</Text>
 			</View>
 		),

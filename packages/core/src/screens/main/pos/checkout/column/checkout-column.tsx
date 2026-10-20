@@ -97,7 +97,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 					</Button>
 				) : null}
 				<IconButton
-					name="xmark"
+					name="close"
 					accessibilityLabel={t('common.close')}
 					testID="checkout-close"
 					onPress={back}

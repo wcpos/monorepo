@@ -207,7 +207,7 @@ export function ReaderRow({
 					)}
 				>
 					<Icon
-						name="creditCard"
+						name="card"
 						variant={error ? 'destructive' : connected ? 'success' : 'muted'}
 						size="lg"
 						loading={scan !== null && found === null}
@@ -299,7 +299,7 @@ export function ReaderRow({
 							<Button
 								variant="outline"
 								className="flex-1"
-								rightIcon="arrowUpRight"
+								rightIcon="openExternal"
 								onPress={() => void openExternalURL(CARD_READER_DOCS_URL)}
 								testID={`reader-row-${method.id}-help`}
 							>
@@ -371,7 +371,7 @@ export function ReaderRow({
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton
-								name="ellipsisVertical"
+								name="more"
 								variant="outline"
 								accessibilityLabel={t('common.more_actions')}
 								// The menu stays in place; with nothing to release or forget it is disabled.
@@ -388,7 +388,7 @@ export function ReaderRow({
 									onPress={() => void actions.disconnect(method)}
 									testID={`reader-row-${method.id}-release`}
 								>
-									<Icon name="circleInfo" />
+									<Icon name="info" />
 									<Text>{t('settings.card_readers.release_reader')}</Text>
 								</DropdownMenuItem>
 							) : null}
@@ -402,7 +402,7 @@ export function ReaderRow({
 									onPress={() => actions.askForget(method)}
 									testID={`reader-row-${method.id}-forget`}
 								>
-									<Icon name="trash" className="fill-destructive" />
+									<Icon name="delete" className="fill-destructive" />
 									<Text>{t('settings.card_readers.forget')}</Text>
 								</DropdownMenuItem>
 							) : null}

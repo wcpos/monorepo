@@ -189,7 +189,7 @@ function DialogPanel(allProps: DialogContentProps) {
 			<View className={cn('absolute right-1', fill ? 'top-0' : 'top-1')}>
 				<DialogClose asChild>
 					<IconButton
-						name="xmark"
+						name="close"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
 						iconClassName={cn('size-4.5', closeIconClassName)}
 						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}

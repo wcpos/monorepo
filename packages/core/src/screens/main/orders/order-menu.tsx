@@ -145,7 +145,7 @@ export function OrderActionsMenu({
 				<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem onPress={() => router.setParams({ order: order.uuid })}>
-						<Icon name="eye" />
+						<Icon name="show" />
 						<Text>{t('common.view')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem
@@ -156,7 +156,7 @@ export function OrderActionsMenu({
 							})
 						}
 					>
-						<Icon name="penToSquare" />
+						<Icon name="edit" />
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem
@@ -164,7 +164,7 @@ export function OrderActionsMenu({
 						onPress={handleOpen}
 						disabled={storageDegraded}
 					>
-						<Icon name="cartShopping" />
+						<Icon name="cart" />
 						<Text>{t('orders.re-open')}</Text>
 					</DropdownMenuItem>
 					{orderID && (
@@ -186,12 +186,12 @@ export function OrderActionsMenu({
 									onPress={handleRefund}
 									disabled={storageDegraded}
 								>
-									<Icon name="arrowRotateLeft" />
+									<Icon name="undo" />
 									<Text>{t('orders.refund')}</Text>
 								</DropdownMenuItem>
 							)}
 							<DropdownMenuItem testID="order-refresh-menu-item" onPress={handleRefresh}>
-								<Icon name="arrowRotateRight" />
+								<Icon name="refresh" />
 								<Text>{t('common.sync')}</Text>
 							</DropdownMenuItem>
 						</>
@@ -203,7 +203,7 @@ export function OrderActionsMenu({
 						onPress={() => setDeleteDialogOpened(true)}
 						disabled={storageDegraded}
 					>
-						<Icon name="trash" className="text-destructive" />
+						<Icon name="delete" className="text-destructive" />
 						<Text>{t('common.delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>

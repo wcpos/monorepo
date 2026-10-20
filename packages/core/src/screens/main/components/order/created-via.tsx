@@ -32,7 +32,7 @@ export function CreatedVia({
 	row,
 }: CellContext<{ record: EngineRecord<'orders'> }, 'created_via'>) {
 	const createdVia = useRecordField(row.original.record, ({ payload }) => payload.created_via);
-	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'circleQuestion') as string;
+	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'help') as string;
 	const iconType = get(iconMap, [createdVia ?? '', 'type'], 'muted') as string;
 	const t = useT();
 

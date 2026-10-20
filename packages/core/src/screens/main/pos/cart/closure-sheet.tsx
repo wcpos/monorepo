@@ -157,7 +157,7 @@ export function ClosureSheet({
 							testID="closure-print"
 							// Done is the sheet's one primary; printing the Z report is the alternative beside it.
 							variant="outline"
-							leftIcon="printer"
+							leftIcon="print"
 							size="lg"
 							loading={busy}
 							onPress={async () => {

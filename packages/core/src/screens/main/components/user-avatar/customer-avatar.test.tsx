@@ -24,7 +24,7 @@ it('keeps the Guest glyph for a guest order that carries only an email', () => {
 	const { container } = render(
 		<CustomerAvatar customer={{ id: 0, billing: { email: 'jane@shop.example' } }} />
 	);
-	expect(container.querySelector('[data-icon="user"]')).not.toBeNull();
+	expect(container.querySelector('[data-icon="customer"]')).not.toBeNull();
 	expect(container.querySelector('[data-testid="initials"]')).toBeNull();
 });
 

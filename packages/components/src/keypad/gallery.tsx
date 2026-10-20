@@ -14,9 +14,9 @@ const numeric = [...digits, [zero, { value: '.', label: '.' }]];
 const icons = (t: (key: string) => string) => [
 	...digits,
 	[
-		{ value: 'clear', icon: 'xmark' as const, accessibilityLabel: t('common.clear') },
+		{ value: 'clear', icon: 'close' as const, accessibilityLabel: t('common.clear') },
 		{ value: '0', label: '0' },
-		{ value: 'backspace', icon: 'deleteLeft' as const, accessibilityLabel: t('common.backspace') },
+		{ value: 'backspace', icon: 'backspace' as const, accessibilityLabel: t('common.backspace') },
 	],
 ];
 function TranslatedKeypad({

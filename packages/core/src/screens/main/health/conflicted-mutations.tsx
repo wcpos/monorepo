@@ -274,7 +274,7 @@ export function ConflictedMutationsPanel() {
 									<DropdownMenu>
 										<DropdownMenuTrigger asChild>
 											<IconButton
-												name="ellipsisVertical"
+												name="more"
 												testID={`db-conflicted-menu-${row.mutationId}`}
 												accessibilityLabel={t('common.actions')}
 											/>
@@ -286,7 +286,7 @@ export function ConflictedMutationsPanel() {
 												disabled={busyId !== null || row.residentUnknown}
 												onPress={() => setDiscarding(row)}
 											>
-												<Icon name="trash" className="fill-destructive" />
+												<Icon name="delete" className="fill-destructive" />
 												<Text>{t('health.database.conflicted.discard_change')}</Text>
 											</DropdownMenuItem>
 										</DropdownMenuContent>

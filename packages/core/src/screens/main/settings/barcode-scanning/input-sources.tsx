@@ -151,7 +151,7 @@ function ScannerProfileRow({
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<IconButton
-						name="ellipsisVertical"
+						name="more"
 						testID="scanner-profile-menu"
 						accessibilityLabel={t('common.actions')}
 					/>
@@ -162,7 +162,7 @@ function ScannerProfileRow({
 						testID="scanner-profile-delete"
 						onPress={() => onRemove(profile)}
 					>
-						<Icon name="trash" className="fill-destructive" />
+						<Icon name="delete" className="fill-destructive" />
 						<Text>{t('settings.scanner_remove')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>

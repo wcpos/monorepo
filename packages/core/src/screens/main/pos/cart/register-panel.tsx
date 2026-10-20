@@ -144,7 +144,7 @@ export function RegisterPanel({
 										? 'arrowDown'
 										: type === 'paid_out'
 											? 'arrowUp'
-											: 'cashRegister'
+											: 'register'
 								}
 							/>
 							<Text numberOfLines={1} className="font-medium">

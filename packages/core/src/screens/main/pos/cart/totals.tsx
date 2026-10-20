@@ -103,7 +103,7 @@ export function Totals() {
 							return (
 								<HStack key={code}>
 									<Chip
-										icon="badgePercent"
+										icon="discount"
 										label={label}
 										onClear={() => removeCoupon(code)}
 										clearTestID={`remove-coupon-${code}`}

@@ -66,8 +66,8 @@ it('closes a failed step red with a cross, and quiets the rail and the step afte
 	);
 	const [, failed, quiet] = beads();
 	expect(failed).toContain('bg-destructive');
-	expect(classes(screen.getByTestId('icon-xmark'))).toContain('text-card');
-	expect(classes(screen.getByTestId('icon-xmark'))).toContain('size-2.5');
+	expect(classes(screen.getByTestId('icon-close'))).toContain('text-card');
+	expect(classes(screen.getByTestId('icon-close'))).toContain('size-2.5');
 	expect(quiet).toContain('border-2');
 	expect(quiet).not.toContain('bg-');
 	expect(rails()[0]).not.toContain('opacity-50');

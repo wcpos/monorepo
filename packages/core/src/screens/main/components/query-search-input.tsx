@@ -60,7 +60,7 @@ function DebouncedSearchInput({
 			value={draftSearch}
 			onChangeText={handleSearch}
 			clearable
-			leftIcon="magnifyingGlass"
+			leftIcon="search"
 			{...props}
 		/>
 	);

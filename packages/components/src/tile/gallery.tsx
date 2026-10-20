@@ -30,11 +30,11 @@ export const stories = [
 			grid(
 				<>
 					<Tile selected onPress={onPress} className="min-w-0 flex-1" testID="tile-cash">
-						<Icon name="cashRegister" />
+						<Icon name="register" />
 						<Text>Cash</Text>
 					</Tile>
 					<Tile onPress={onPress} className="min-w-0 flex-1" testID="tile-card">
-						<Icon name="creditCard" />
+						<Icon name="card" />
 						<Text>Card</Text>
 					</Tile>
 					<Tile disabled onPress={onPress} className="min-w-0 flex-1" testID="tile-off">

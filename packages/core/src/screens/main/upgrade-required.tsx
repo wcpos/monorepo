@@ -18,7 +18,7 @@ export function UpgradeRequired() {
 		<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
 			<VStack>
 				<HStack>
-					<Icon name="triangleExclamation" variant="destructive" />
+					<Icon name="warning" variant="destructive" />
 					<Text className="text-destructive">
 						{t('common.please_update_your_woocommerce_pos_plugin')}
 					</Text>

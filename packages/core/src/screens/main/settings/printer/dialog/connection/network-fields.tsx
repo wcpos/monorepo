@@ -141,7 +141,7 @@ export function NetworkFields({
 					loading={scanning}
 				>
 					<HStack className="items-center gap-1">
-						<Icon name="magnifyingGlass" size="sm" />
+						<Icon name="search" size="sm" />
 						<Text>{t('settings.scan_network')}</Text>
 					</HStack>
 				</Button>
@@ -244,7 +244,7 @@ export function NetworkFields({
 									</Text>
 								)}
 								<HStack className="items-center gap-1 pt-1">
-									<Icon name="circlePlus" size="sm" className="text-primary" />
+									<Icon name="increment" size="sm" className="text-primary" />
 									<Text className="text-primary text-xs font-semibold">
 										{t('settings.use_this_printer')}
 									</Text>

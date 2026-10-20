@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import get from 'lodash/get';
 import { useCSSVariable } from 'uniwind';
 
 import { Platform } from '@wcpos/utils/platform';
@@ -11,15 +10,15 @@ import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { TextClassContext } from '../text';
-import * as FontAwesome from './components/fontawesome/solid';
-import { SvgLock } from './components/lock';
-import * as Tabler from './components/tabler';
+import { useIconSet } from './set-context';
+import { ICON_SETS } from './sets';
 
-import type { SvgProps } from 'react-native-svg';
+import type { IconName } from './names';
 
-const Svgs = { ...FontAwesome, ...Tabler, lock: SvgLock };
-
-export type IconName = Extract<keyof typeof Svgs, string>;
+export type { IconName } from './names';
+export type { IconSetId } from './sets';
+export { ICON_SET_IDS, DEFAULT_ICON_SET } from './sets';
+export { IconSetProvider, useIconSet } from './set-context';
 
 /**
  * Map variant to CSS variable name for SVG fill colors
@@ -94,7 +93,8 @@ export function Icon({
 	pointerEvents,
 	...props
 }: IconProps) {
-	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
+	const set = useIconSet();
+	const Svg = ICON_SETS[set][name] ?? ICON_SETS[set].alert;
 	const textClass = React.useContext(TextClassContext);
 
 	// Combine all classNames to find the effective text color

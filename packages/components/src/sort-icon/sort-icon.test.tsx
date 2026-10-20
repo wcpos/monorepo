@@ -13,10 +13,10 @@ jest.mock('../icon', () => ({
 }));
 
 it.each<[SortIconProps, string, string]>([
-	[{}, 'caretUp', 'text-transparent'],
-	[{ hovered: true }, 'caretUp', 'text-muted-foreground'],
-	[{ direction: 'asc' }, 'caretUp', 'text-foreground'],
-	[{ direction: 'desc', hovered: true }, 'caretDown', 'text-foreground'],
+	[{}, 'chevronUp', 'text-transparent'],
+	[{ hovered: true }, 'chevronUp', 'text-muted-foreground'],
+	[{ direction: 'asc' }, 'chevronUp', 'text-foreground'],
+	[{ direction: 'desc', hovered: true }, 'chevronDown', 'text-foreground'],
 ])('renders one caret for %j', (props, name, colour) => {
 	const { container } = render(<SortIcon {...props} />);
 	const icons = container.querySelectorAll('[data-icon]');

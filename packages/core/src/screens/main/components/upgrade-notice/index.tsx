@@ -24,7 +24,7 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
 			    assistive tech and its contrast is not load-bearing. */}
-			<Icon name="star" size="sm" className="text-warn-text" aria-hidden />
+			<Icon name="featured" size="sm" className="text-warn-text" aria-hidden />
 			<Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
 				<Text className="font-semibold">{t('pro.strip_title')}</Text>
 				{!isPhone && <> {t('pro.strip_body')}</>}
@@ -50,7 +50,7 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 			</Button>
 			<IconButton
 				testID="upgrade-notice-dismiss"
-				name="xmark"
+				name="close"
 				size="sm"
 				accessibilityLabel={t('pro.strip_dismiss')}
 				onPress={() => setShowUpgrade(false)}

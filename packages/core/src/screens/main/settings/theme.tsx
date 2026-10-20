@@ -216,13 +216,13 @@ function ThemeSettingsContent() {
 			{
 				name: 'system',
 				labelKey: 'settings.theme.system',
-				icon: 'circleHalfStroke',
+				icon: 'contrast',
 				descriptionKey: 'settings.theme.system_description',
 			},
 			{
 				name: 'light',
 				labelKey: 'settings.theme.light',
-				icon: 'sunBright',
+				icon: 'sun',
 				descriptionKey: 'settings.theme.light_description',
 			},
 			{
@@ -234,19 +234,19 @@ function ThemeSettingsContent() {
 			{
 				name: 'ocean',
 				labelKey: 'settings.theme.ocean',
-				icon: 'water',
+				icon: 'wave',
 				descriptionKey: 'settings.theme.ocean_description',
 			},
 			{
 				name: 'sunset',
 				labelKey: 'settings.theme.sunset',
-				icon: 'sunHaze',
+				icon: 'sunset',
 				descriptionKey: 'settings.theme.sunset_description',
 			},
 			{
 				name: 'monochrome',
 				labelKey: 'settings.theme.monochrome',
-				icon: 'circleHalf',
+				icon: 'contrast',
 				descriptionKey: 'settings.theme.monochrome_description',
 			},
 		],

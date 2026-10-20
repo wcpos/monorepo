@@ -33,7 +33,7 @@ export function PaymentMethodPill() {
 					clearLabel={t('common.remove')}
 					clearTestID="order-filter-payment-method-remove"
 					testID="order-filter-payment-method"
-					icon="creditCard"
+					icon="card"
 					on={isActive}
 					onClear={isActive ? () => actions.clearFilter('payment_method') : undefined}
 					label={value?.label || t('common.payment_method')}

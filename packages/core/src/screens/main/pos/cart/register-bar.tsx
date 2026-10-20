@@ -83,7 +83,7 @@ function RegisterBarContent({
 			>
 				{screenSize !== 'lg' && (
 					<IconButton
-						name="bars"
+						name="menu"
 						testID="pos-drawer-open-button"
 						accessibilityLabel={t('common.menu')}
 						onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
@@ -116,7 +116,7 @@ function RegisterBarContent({
 				<View className="flex-1" />
 				{(session || lastClosure) && (
 					<IconButton
-						name="cashRegister"
+						name="register"
 						accessibilityLabel={t('common.register')}
 						testID="register-bar-drawer"
 						iconClassName={overdue ? 'text-warning' : 'text-foreground'}

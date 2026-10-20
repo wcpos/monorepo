@@ -89,7 +89,7 @@ function PaidMoment({ children, sent = false }: { children: React.ReactNode; sen
 					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : 'bg-success/15'}`}
 				>
 					<Icon
-						name={sent ? 'clock' : 'check'}
+						name={sent ? 'pending' : 'check'}
 						size={sent ? '4xl' : undefined}
 						className={sent ? 'text-muted-foreground' : 'text-success'}
 					/>

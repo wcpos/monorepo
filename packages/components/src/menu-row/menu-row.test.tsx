@@ -99,7 +99,7 @@ it('a locked row is dimmed and still presses', () => {
 });
 
 it('paints destructive words and icons red, with a destructive hover and press wash', () => {
-	render(<MenuRow label="Forget" variant="destructive" leading={<Icon name="trash" />} />);
+	render(<MenuRow label="Forget" variant="destructive" leading={<Icon name="delete" />} />);
 	const row = screen.getByRole('button');
 	expect(within(row).getByText('Forget').dataset.classes).toContain('text-destructive');
 	expect(row.querySelector('svg')?.parentElement?.dataset.classes).toContain('text-destructive');

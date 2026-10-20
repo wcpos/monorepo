@@ -129,7 +129,7 @@ function UISettingsDialog({
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
 						<IconButton
-							name="sliders"
+							name="filters"
 							testID={triggerTestID}
 							accessibilityLabel={triggerLabel ?? title}
 						/>

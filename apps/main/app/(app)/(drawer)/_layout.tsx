@@ -105,7 +105,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="cashRegister"
+							name="register"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -119,7 +119,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="gifts"
+							name="gift"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -147,7 +147,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="badgePercent"
+							name="discount"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -161,7 +161,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="users"
+							name="customers"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -175,7 +175,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="chartMixedUpCircleDollar"
+							name="reports"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -190,7 +190,7 @@ function ThemedDrawer({
 						<View>
 							<Icon
 								size="xl"
-								name="heartPulse"
+								name="health"
 								className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 							/>
 							<LogsBadge unread={unreadErrorCount} />
@@ -207,7 +207,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="gear"
+							name="settings"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),
@@ -221,7 +221,7 @@ function ThemedDrawer({
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
-							name="commentQuestion"
+							name="support"
 							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
 						/>
 					),

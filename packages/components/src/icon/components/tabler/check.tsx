@@ -5,18 +5,15 @@ import Svg, { Path } from 'react-native-svg';
 import type { SvgProps } from 'react-native-svg';
 export function SvgCheck(props: SvgProps) {
 	return (
-		<Svg
-			{...props}
-			fill="none"
-			stroke="currentColor"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			strokeWidth={1.5}
-			className="icon icon-tabler icons-tabler-outline icon-tabler-check"
-			viewBox="0 0 24 24"
-		>
-			<Path stroke="none" d="M0 0h24v24H0z" />
-			<Path d="m5 12 5 5L20 7" />
+		<Svg {...props} viewBox="0 0 24 24">
+			<Path
+				fill="none"
+				stroke="currentColor"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={1.5}
+				d="m5 12 5 5L20 7"
+			/>
 		</Svg>
 	);
 }

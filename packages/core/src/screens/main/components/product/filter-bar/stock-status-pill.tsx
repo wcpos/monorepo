@@ -45,7 +45,7 @@ export function StockStatusPill() {
 		>
 			<SelectPrimitiveTrigger asChild>
 				<Chip
-					icon="warehouseFull"
+					icon="warehouse"
 					on={isActive}
 					testID="filter-pill-stock_status"
 					clearTestID="filter-pill-remove-stock_status"

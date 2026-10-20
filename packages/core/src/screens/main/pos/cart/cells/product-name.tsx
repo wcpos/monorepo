@@ -101,7 +101,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					className="bg-attention/15 items-center gap-1 self-start rounded px-1"
 					testID="cart-line-stock-mark"
 				>
-					<Icon name="box" size="xs" variant="attention" />
+					<Icon name="product" size="xs" variant="attention" />
 					<Text className="text-foreground text-xs font-semibold">
 						{(stockMark.available ?? 0) > 0
 							? t('pos_cart.n_available', { quantity: stockMark.available! })

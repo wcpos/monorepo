@@ -33,7 +33,7 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			<Tooltip showOnNative>
 				<TooltipTrigger asChild>
 					<IconButton
-						name="arrowRotateRight"
+						name="refresh"
 						size="sm"
 						loading={active}
 						accessibilityLabel={
@@ -51,14 +51,14 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			</Tooltip>
 			<DropdownMenuContent side="top" align="end">
 				<DropdownMenuItem onPress={sync}>
-					<Icon name="arrowRotateRight" />
+					<Icon name="refresh" />
 					<Text>{t('common.sync')}</Text>
 				</DropdownMenuItem>
 				{clearAndSync && (
 					<>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
-							<Icon name="trash" />
+							<Icon name="delete" />
 							<Text>{t('common.clear_and_refresh')}</Text>
 						</DropdownMenuItem>
 					</>

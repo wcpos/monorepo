@@ -39,7 +39,7 @@ export function UpdateRequired() {
 		>
 			<VStack className="max-w-md items-center">
 				<HStack>
-					<Icon name="triangleExclamation" variant="destructive" />
+					<Icon name="warning" variant="destructive" />
 					<Text className="text-destructive">{translateErrorSummary(t, CODE)}</Text>
 				</HStack>
 				<Text className="text-center">{translateErrorAction(t, CODE)}</Text>
