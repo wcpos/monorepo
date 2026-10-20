@@ -127,7 +127,7 @@ export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
 export function leaveCheckout(uuid: string) {
-	releaseTender();
+	releaseTender(uuid);
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -175,10 +175,11 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
 /**
  * The cashier closed a tender (the column's Back through `leaveCheckout`, the phone sheet's
  * close), as opposed to a status write unmounting it: a write still pending for that order
- * must not select its receipt afterwards.
+ * must not select its receipt afterwards. Only the watched order's close counts: another
+ * order leaving checkout (its own completion finishing) says nothing about this one.
  */
-export function releaseTender() {
-	tenderGeneration++;
+export function releaseTender(uuid: string) {
+	if (watchedTender?.uuid === uuid) tenderGeneration++;
 }
 /**
  * Called just before a status write that settles the sale; the returned function is called

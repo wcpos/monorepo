@@ -81,9 +81,9 @@ export function TenderCheckout({ order }: Props) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
-		releaseTender();
+		releaseTender(order.uuid);
 		router.back();
-	}, [flow, router, stage, finishSale]);
+	}, [flow, router, stage, finishSale, order.uuid]);
 
 	const lines = React.useMemo(
 		() =>

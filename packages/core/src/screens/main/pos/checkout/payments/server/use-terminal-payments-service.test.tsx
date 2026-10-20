@@ -634,7 +634,7 @@ describe('a server capture of the order in checkout', () => {
 		[
 			'the cashier closed the phone sheet during the write',
 			() => watch('completed-order'),
-			{ duringWrite: () => releaseTender() },
+			{ duringWrite: () => releaseTender('completed-order') },
 		],
 		[
 			'the cashier switched to another order during the write',
@@ -667,6 +667,13 @@ describe('a server capture of the order in checkout', () => {
 		expect(after.receiptOrders.has('completed-order')).toBe(false);
 		expect(after.selectedReceiptOrder).not.toBe('completed-order');
 		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
+	});
+
+	// Another order's completion leaves its checkout while this write is pending.
+	it('still selects when a different order leaves checkout during the write', async () => {
+		watch('completed-order');
+		const { after } = await settle('mirror', { duringWrite: () => leaveCheckout('other-order') });
+		expect(after.selectedReceiptOrder).toBe('completed-order');
 	});
 
 	// The receipt is live before the sale's background completion runs: one the cashier has
