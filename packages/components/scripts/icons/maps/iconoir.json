@@ -101,7 +101,7 @@
  "split": "git-fork",
  "store": "shop",
  "sun": "sun-light",
- "sunset": "sun-light",
+ "sunset": "tabler:haze",
  "support": "headset",
  "swap": "repeat",
  "tag": "label",

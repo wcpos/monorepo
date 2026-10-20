@@ -235,7 +235,8 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 					<SavedMark name="icons" />
 				</View>
 			</View>
-			<View className="pt-2">
+			{/* A radio group with the section's name, so the eight rows read as one choice. */}
+			<View className="pt-2" accessibilityRole="radiogroup" aria-label={t('settings.icons')}>
 				{ICON_SET_IDS.map((id) => {
 					const selected = icons === id;
 					return (
@@ -249,13 +250,16 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 							onPress={() => {
 								void handleIconsChange(id);
 							}}
-							// Label left, strip right; the strip wraps under the label on a phone.
-							bodyClassName="flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2"
+							// Label above the strip, the same two lines at every width: six lg
+							// glyphs are 180 px, so nothing wraps on a phone and every row is one height.
+							bodyClassName="gap-1.5"
 							trailing={selected ? <Icon name="check" className="text-primary" /> : undefined}
 						>
-							<Text className="text-sm font-medium">{t(`settings.icons.${id}`)}</Text>
+							<Text className="text-sm font-medium" numberOfLines={1}>
+								{t(`settings.icons.${id}`)}
+							</Text>
 							<IconSetProvider set={id}>
-								<HStack className="flex-wrap gap-3">
+								<HStack className="gap-3">
 									{ICON_SAMPLES.map((name) => (
 										<Icon key={name} name={name} size="lg" className="text-foreground" />
 									))}

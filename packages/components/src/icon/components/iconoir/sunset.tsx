@@ -11,8 +11,8 @@ export function SvgSunset(props: SvgProps) {
 				stroke="currentColor"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				strokeWidth={1.5}
-				d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12m10-6h1M12 2V1m0 22v-1m8-2-1-1m1-15-1 1M4 20l1-1M4 4l1 1m-4 7h1"
+				strokeWidth={2}
+				d="M3 12h1m8-9v1m8 8h1M5.6 5.6l.7.7m12.1-.7-.7.7M8 12a4 4 0 1 1 8 0M3 16h18M3 20h18"
 			/>
 		</Svg>
 	);

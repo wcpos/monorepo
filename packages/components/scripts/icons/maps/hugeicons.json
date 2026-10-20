@@ -6,7 +6,7 @@
  "arrowLeft": "arrow-left-01",
  "arrowRight": "arrow-right-01",
  "arrowUp": "arrow-up-01",
- "backspace": "delete-01",
+ "backspace": "tabler:backspace",
  "barcode": "barcode",
  "basket": "shopping-basket-01",
  "blocked": "ban",

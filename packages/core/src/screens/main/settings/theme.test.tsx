@@ -73,13 +73,14 @@ beforeEach(() => {
 
 describe('the Scale row', () => {
 	it('offers four scale steps with Auto selected by default', () => {
-		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
+		const { getByTestId, getAllByTestId, getByRole, getAllByRole } = render(<ThemeSettings />);
 
 		['auto', 'compact', 'regular', 'spacious'].forEach((option) => {
 			expect(getByTestId(`settings-scale-${option}`).textContent).toBe(`settings.scale.${option}`);
 		});
 		expect(getAllByTestId(/^settings-scale-(auto|compact|regular|spacious)$/)).toHaveLength(4);
-		expect(getByRole('radiogroup').querySelectorAll('[role="radio"]')).toHaveLength(4);
+		// Scale is the first radio group on the screen; Icons (named) is the second.
+		expect(getAllByRole('radiogroup')[0].querySelectorAll('[role="radio"]')).toHaveLength(4);
 		expect(getByTestId('settings-scale-auto').getAttribute('aria-checked')).toBe('true');
 	});
 
@@ -119,11 +120,14 @@ describe('the Scale row', () => {
 
 describe('the Icons section', () => {
 	it('offers the eight sets in order, Tabler 1.5 selected by default', () => {
-		const { getByTestId, getAllByTestId } = render(<ThemeSettings />);
+		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
 		expect(
 			getAllByTestId(/^settings-icons-/).map((row) => row.getAttribute('data-testid'))
 		).toEqual(mockIconSets.map((id) => `settings-icons-${id}`));
+		expect(
+			getByRole('radiogroup', { name: 'settings.icons' }).querySelectorAll('[role="radio"]')
+		).toHaveLength(mockIconSets.length);
 		mockIconSets.forEach((id) => {
 			const row = getByTestId(`settings-icons-${id}`);
 			expect(row.getAttribute('role')).toBe('radio');
