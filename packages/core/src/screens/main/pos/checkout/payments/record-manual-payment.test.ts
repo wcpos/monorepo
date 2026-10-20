@@ -78,7 +78,6 @@ const mintedCard: PaymentRow = {
 
 function createDeps(online = true): RecordManualPaymentDeps & {
 	post: jest.Mock;
-	resend: jest.Mock;
 	sleep: jest.Mock;
 	mirror: jest.Mock;
 	raiseAttention: jest.Mock;
@@ -92,7 +91,6 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		registerId: null,
 		currency: 'EUR',
 		dp: 2,
-		resend: jest.fn(),
 		sleep: jest.fn(async () => undefined),
 		mirror: jest.fn(async () => undefined),
 		fetchOrderStatus: jest.fn(async () => null),
@@ -310,13 +308,16 @@ describe('recordManualPayment', () => {
 		async (error) => {
 			const deps = createDeps();
 			deps.post.mockRejectedValue(error);
-			deps.resend.mockRejectedValue(error);
 
 			const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-			expect(deps.post).toHaveBeenCalledTimes(1);
+			// Every attempt is the same call; the poster re-sends the journaled record for it.
+			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
+			for (const [url, body] of deps.post.mock.calls) {
+				expect(url).toBe(deps.post.mock.calls[0][0]);
+				expect(body).toEqual(deps.post.mock.calls[0][1]);
+			}
 			expect(deps.post.mock.calls[0][1].payment.id).toBe(UUID.toLowerCase());
-			expect(deps.resend).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length);
 			expect(deps.sleep.mock.calls).toEqual(RECORD_UNKNOWN_RETRY_DELAYS_MS.map((ms) => [ms]));
 			expect(deps.mirror).not.toHaveBeenCalled();
 			expect(result).toEqual({
@@ -329,14 +330,13 @@ describe('recordManualPayment', () => {
 	it('a re-send that the store answers records the row once', async () => {
 		const deps = createDeps();
 		const serverRow = { ...mintedCard, status: 'captured' as const };
-		deps.post.mockRejectedValue(responseError(502));
-		deps.resend.mockResolvedValue({
+		deps.post.mockRejectedValueOnce(responseError(502)).mockResolvedValueOnce({
 			data: { payment: serverRow, order: { status: 'pos-partial' } },
 		});
 
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		expect(deps.resend).toHaveBeenCalledTimes(1);
+		expect(deps.post).toHaveBeenCalledTimes(2);
 		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: serverRow });
 		expect(deps.mirror).toHaveBeenCalledTimes(1);
 	});

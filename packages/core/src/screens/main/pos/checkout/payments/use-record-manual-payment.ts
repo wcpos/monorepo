@@ -117,7 +117,6 @@ export function useRecordManualPayment(
 				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
 				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
-				resend: () => post.resend(),
 				fetchOrderStatus: async () => {
 					const response = await http.get(`orders/${paymentOrder.id}`);
 					const status = (response?.data as { status?: unknown } | undefined)?.status;

@@ -29,7 +29,8 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 	return Object.assign(new Error(code), { response: { status, data: { code, data } } });
 }
 
-type Mode = 'lose' | 'locked' | '403' | 'stale';
+/** `lose`: stored, answer lost. `drop`: lost before the store saw it. `503`: refused unstored. */
+type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -61,6 +62,8 @@ class FakeStore {
 		const mode = this.modes.shift();
 		if (mode === 'locked') throw httpError(409, 'wcpos_payment_locked');
 		if (mode === '403') throw httpError(403, 'rest_forbidden');
+		if (mode === '503') throw httpError(503, 'http_service_unavailable');
+		if (mode === 'drop') throw new Error('Network Error');
 		const { revision, command_id, ...rest } = body;
 		const route = classifyMoneyRoute(url)!;
 		const key = (command_id as string | undefined) ?? (rest.payment as PaymentRow).id;
@@ -374,6 +377,46 @@ it('lost close answer, remote reopen, restart: the re-send replays C1 and create
 	await restart();
 	expect(store.completions).toBe(1);
 	expect(sentBodies()[1].command_id).toBe(sentBodies()[0].command_id);
+});
+
+it('a close lost before the server stored it, then a remote reopen and a restart: the re-send is refused as stale and re-approval is required; no new completion', async () => {
+	store.modes = ['drop'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	store.total = '90.00'; // another till reopened the sale and changed it
+	store.n += 1;
+	await adoptStore(false); // and a pull adopted that document before the restart
+	await expect(restart()).rejects.toMatchObject({ reason: 'order_changed' });
+	const [first, second] = sentBodies();
+	expect(second.revision).toBe(first.revision);
+	expect(second.command_id).toBe(first.command_id);
+	expect(store.post).toHaveBeenCalledTimes(2);
+	expect(store.completions).toBe(0);
+	expect(await entries()).toEqual([]);
+});
+
+it('a clock stepped back after an answer cannot wedge the approval of the next close', async () => {
+	const post = poster();
+	await post('orders/5/payments', { payment: cash() });
+	await post.settle();
+	clock -= 1_000_000; // the wall clock steps back behind the chain's answer
+	await nakedRevision(store.revision); // a 428 refresh revokes the adoption's authority
+	const close = poster();
+	await close('orders/5/close', {});
+	await close.settle();
+	expect(store.completions).toBe(1);
+	expect(await entries()).toEqual([]);
+});
+
+it('a capture retried through a fresh poster re-sends the journaled command, never a new one', async () => {
+	store.modes = ['503'];
+	await expect(poster()('orders/5/payments/leg-1/capture', { context: {} })).rejects.toThrow();
+	const post = poster();
+	await post('orders/5/payments/leg-1/capture', { context: {} });
+	await post.settle();
+	const [first, second] = sentBodies();
+	expect(second.command_id).toBe(first.command_id);
+	expect({ ...second, revision: null }).toEqual({ ...first, revision: null });
+	expect(await entries()).toEqual([]);
 });
 
 it('a stale close with a changed but covered total requires renewed approval', async () => {

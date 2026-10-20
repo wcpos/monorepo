@@ -44,8 +44,6 @@ export interface RecordManualPaymentDeps {
 	persistProvenance?: () => Promise<void>;
 	currency: string;
 	dp: number;
-	/** Re-send the journaled record under its frozen body (the server replays a stored row). */
-	resend: () => Promise<{ data: unknown }>;
 	sleep?: (ms: number) => Promise<void>;
 	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
 	mirror: (
@@ -170,12 +168,12 @@ export async function recordManualPayment(
 	// Only the request is inside the try: once the server has answered 2xx the row is
 	// recorded, and a failure while mirroring it locally must surface as that failure —
 	// never as a re-send, which the journal already holds for Try again.
+	// Every attempt is the same call: the poster re-sends the journaled record for this row id,
+	// its frozen body and identity, and the server replays a row it already stored.
 	let accepted: { payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
-			const response = await (attempt === 0
-				? deps.post(`orders/${order.id}/payments`, { payment: minted.row })
-				: deps.resend());
+			const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
 			accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
 		} catch (error) {
 			// Refused before it left the till (no revision, or the order changed): nothing was sent.

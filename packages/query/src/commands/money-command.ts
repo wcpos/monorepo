@@ -50,8 +50,6 @@ export type MoneyCommandPoster = Post & {
 	sentRevision(): string | null;
 	/** After the mirror persisted the answers: delete their entries, then the forced refresh. */
 	settle(): Promise<void>;
-	/** Re-send the last journaled command under its frozen body and id (the server replays). */
-	resend(): Promise<{ data: Record<string, unknown> }>;
 };
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
@@ -125,14 +123,36 @@ function approvalHolds(approval: OrderApproval, order: { total?: unknown; curren
 	);
 }
 
-/** The corrective refresh: re-adopts the document even under an equal stamp. */
-async function readopt(runtime: QueryRuntime, orderId: number): Promise<void> {
+/**
+ * The corrective refresh: re-adopts the document even under an equal stamp. An adoption this
+ * refresh causes is later than the chain's answer by construction, whatever the wall clock says,
+ * so when the clock has stepped back since the answer the chain records it (its `answeredAt`
+ * moves below the adoption's `at`): a clock step can never wedge authority, and so approvals.
+ */
+async function readopt(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	orderId: number
+): Promise<{ order: ResidentOrder; chain: RevisionChain | null }> {
+	const before = (await readOrder(runtime, orderUuid)).order.sync?.adopted;
 	await refreshRecordByWooId(runtime.engine, {
 		id: `money-command:readopt:${orderId}`,
 		collection: 'orders',
 		wooId: orderId,
 		readopt: true,
 	}).catch(() => undefined);
+	const { order } = await readOrder(runtime, orderUuid);
+	const { chain } = await readOrderCommands(storeDB, orderUuid);
+	const adopted = order.sync?.adopted;
+	const adoptedNow =
+		!!adopted &&
+		adopted.revision === order.sync.revision &&
+		(adopted.at !== before?.at || adopted.revision !== before?.revision);
+	if (!chain || !adoptedNow || (adopted.at ?? 0) > chain.answeredAt) return { order, chain };
+	const recorded = { ...chain, answeredAt: (adopted.at ?? 0) - 1 };
+	await settleCommand(storeDB, orderUuid, null, recorded);
+	return { order, chain: recorded };
 }
 
 /** Pre-flight: push pending local work, choose the revision, re-check the approval. */
@@ -148,14 +168,14 @@ async function chooseRevision(
 		await pushRecord(runtime, resident as never);
 		({ resident, order } = await readOrder(runtime, entry.orderUuid));
 	}
-	const { chain } = await readOrderCommands(storeDB, entry.orderUuid);
-	const approved = fresh && APPROVED_KINDS.has(entry.kind);
+	let { chain } = await readOrderCommands(storeDB, entry.orderUuid);
+	// A re-send reaches here only without a sent revision of its own (see sendMoneyCommand).
+	const approved = APPROVED_KINDS.has(entry.kind);
 	if (
 		!holdsAuthority(order, chain) &&
 		(approved || !(chain?.answerRevision || order.sync?.revision))
 	) {
-		await readopt(runtime, orderId);
-		({ order } = await readOrder(runtime, entry.orderUuid));
+		({ order, chain } = await readopt(runtime, storeDB, entry.orderUuid, orderId));
 		if (approved && !holdsAuthority(order, chain))
 			throw new MoneyCommandError('revision_unavailable', entry);
 	}
@@ -180,13 +200,20 @@ export async function sendMoneyCommand(
 ): Promise<{ data: Record<string, unknown> & { revision?: string }; sentRevision: string }> {
 	const orderId = classifyMoneyRoute(entry.path)?.orderId ?? 0;
 	const fresh = entry.sentAt === null;
+	// A re-send of an approved command goes out under the revision it was first sent with. The
+	// server checks the replay before the revision, so a stored command replays; one it never
+	// stored is refused as stale, and the stale path re-checks the approval against the document
+	// it adopts before it re-sends once. A re-send never borrows a newer revision the cashier did
+	// not approve against: a remote reopen, then a restart, must not close the reopened sale.
 	let revision: string;
-	try {
-		revision = await chooseRevision(runtime, storeDB, entry, orderId, fresh);
-	} catch (error) {
-		if (fresh) await settleCommand(storeDB, entry.orderUuid, entry.id);
-		throw error;
-	}
+	if (!fresh && APPROVED_KINDS.has(entry.kind) && entry.sentRevision) revision = entry.sentRevision;
+	else
+		try {
+			revision = await chooseRevision(runtime, storeDB, entry, orderId, fresh);
+		} catch (error) {
+			if (fresh) await settleCommand(storeDB, entry.orderUuid, entry.id);
+			throw error;
+		}
 	for (let stale = false; ; stale = true) {
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
 		deps.onSent?.(revision);
@@ -242,9 +269,7 @@ export async function settleMoneyCommand(
 ): Promise<void> {
 	const { order } = await readOrder(runtime, orderUuid);
 	if (!order.payload.id) return;
-	await readopt(runtime, order.payload.id);
-	const after = (await readOrder(runtime, orderUuid)).order;
-	const { chain } = await readOrderCommands(storeDB, orderUuid);
+	const { order: after, chain } = await readopt(runtime, storeDB, orderUuid, order.payload.id);
 	if (chain && holdsAuthority(after, chain))
 		await settleCommand(storeDB, orderUuid, null, {
 			...chain,
@@ -285,6 +310,12 @@ function answerChain(revision: unknown, at: number): RevisionChain | undefined {
  * A drop-in `post` for the money routes: classifies the path, freezes the body (provenance for
  * the completion-capable kinds, minted once here), journals it, and sends it through the
  * envelope. Any other path passes through untouched (the status poll, bootstraps).
+ *
+ * A retry is a re-send: a call for a command the journal already holds as dispatched (the same
+ * kind and target, or for `record` the same row id) re-sends that entry, with its id, frozen
+ * body, provenance and approval, whichever poster or process sent it first. A leg's retry, a
+ * fresh poster per settlement attempt and Try again all land on the one command the server
+ * replays.
  */
 export function moneyCommandPoster(input: {
 	runtime: QueryRuntime;
@@ -297,9 +328,7 @@ export function moneyCommandPoster(input: {
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
 	let sentRevision: string | null = null;
-	let last: MoneyCommandEntry | null = null;
 	const dispatch = async (entry: MoneyCommandEntry) => {
-		last = entry;
 		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, {
 			post: input.post,
 			onSent: (revision) => (sentRevision = revision),
@@ -311,6 +340,19 @@ export function moneyCommandPoster(input: {
 		const route = classifyMoneyRoute(url);
 		if (!route) return input.post(url, body);
 		const frozen = { ...(body as Record<string, unknown>) };
+		const rowId =
+			route.kind === 'record'
+				? String((frozen.payment as { id?: unknown } | undefined)?.id ?? '')
+				: null;
+		const same = (entry: MoneyCommandEntry) =>
+			entry.kind === route.kind &&
+			(rowId === null ? entry.target === route.target : entry.id === rowId);
+		const { entries } = await readOrderCommands(input.storeDB, input.orderUuid);
+		const open = entries.find((entry) => same(entry) && entry.sentAt !== null);
+		if (open) return dispatch(open);
+		// A never-dispatched leftover (a crash before it was sent) put nothing on the server.
+		for (const unsent of entries.filter(same))
+			await settleCommand(input.storeDB, input.orderUuid, unsent.id);
 		const provenance = PROVENANCE_KINDS.has(route.kind) ? await input.provenance?.() : null;
 		if (provenance) frozen.provenance = provenance;
 		const entry: MoneyCommandEntry = {
@@ -318,10 +360,7 @@ export function moneyCommandPoster(input: {
 			kind: route.kind,
 			path: url,
 			target: route.target,
-			id:
-				route.kind === 'record'
-					? String((frozen.payment as { id?: unknown } | undefined)?.id ?? '')
-					: mintUuid(),
+			id: rowId ?? mintUuid(),
 			body: frozen,
 			approval: typeof input.approval === 'function' ? await input.approval() : input.approval,
 			sentAt: null,
@@ -332,12 +371,6 @@ export function moneyCommandPoster(input: {
 	};
 	return Object.assign(poster, {
 		sentRevision: () => sentRevision,
-		resend: async () => {
-			const { entries } = await readOrderCommands(input.storeDB, input.orderUuid);
-			const entry = entries.find(({ id }) => id === last?.id);
-			if (!entry) throw new Error('money_command_not_journaled');
-			return dispatch(entry);
-		},
 		settle: async () => {
 			const done = answered;
 			answered = [];
