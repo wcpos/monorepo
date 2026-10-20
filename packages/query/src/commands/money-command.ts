@@ -12,7 +12,9 @@ import {
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
+	readMoneyJournal,
 	readOrderCommands,
+	retireChain,
 	type RevisionChain,
 	settleCommand,
 } from '../store-local/money-commands';
@@ -275,6 +277,31 @@ export async function settleMoneyCommand(
 			adoptedAfterAnswer: true,
 			adoptedRevision: after.sync.revision,
 		});
+}
+
+/**
+ * Retire the chains whose purpose has ended: the order has no open entry and the resident has
+ * adopted a later document than the chain's answer under another revision than the post-answer
+ * refresh recorded. Revision choice then reads the resident (it holds authority), and the
+ * receipt's barrier no longer holds. A chain whose order is not resident stays; age bounds it
+ * (`CHAIN_RETENTION_MS`).
+ */
+export async function retireSettledChains(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase
+): Promise<void> {
+	for (const [orderUuid, { entries, chain }] of Object.entries(await readMoneyJournal(storeDB))) {
+		if (!chain || entries.length > 0) continue;
+		const resident = await findEngineResident(runtime, 'orders', orderUuid).catch(() => null);
+		if (!resident) continue;
+		const { adopted } = (resident.getLatest().toJSON() as unknown as ResidentOrder).sync ?? {};
+		if (
+			adopted?.revision &&
+			(adopted.at ?? 0) > chain.answeredAt &&
+			adopted.revision !== chain.adoptedRevision
+		)
+			await retireChain(storeDB, orderUuid, chain.answeredAt);
+	}
 }
 
 /** A re-sent command and the store's 2xx answer to it. */

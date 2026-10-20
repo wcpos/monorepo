@@ -41,17 +41,47 @@ type OrderCommands = { entries: Record<string, MoneyCommandEntry>; chain: Revisi
 type Journal = { orders: Record<string, OrderCommands> };
 const ID = 'money-commands';
 
-async function modifyOrder(
+/**
+ * How long an order's revision chain outlives its answer. Longer than any plausible lost-answer
+ * retry (a till left offline over a long weekend still re-sends inside it); after that the next
+ * command reads the resident's revision, and a receipt for an older completion reads the adopted
+ * document, never the chain. Bounds the one journal document every money command rewrites.
+ */
+export const CHAIN_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function modifyJournal(storeDB: StoreLocalDatabase, modify: (data: Journal) => void) {
+	const doc = await ensureLocalDocument<Journal>(storeDB, ID, { orders: {} });
+	await doc.incrementalModify((data) => {
+		modify(data);
+		const now = Date.now();
+		for (const [uuid, order] of Object.entries(data.orders)) {
+			if (order.chain && now - order.chain.answeredAt > CHAIN_RETENTION_MS) order.chain = null;
+			if (Object.keys(order.entries).length === 0 && !order.chain) delete data.orders[uuid];
+		}
+		return data;
+	});
+}
+
+function modifyOrder(
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	modify: (order: OrderCommands) => void
 ) {
-	const doc = await ensureLocalDocument<Journal>(storeDB, ID, { orders: {} });
-	await doc.incrementalModify((data) => {
-		const order = (data.orders[orderUuid] ??= { entries: {}, chain: null });
-		modify(order);
-		if (Object.keys(order.entries).length === 0 && !order.chain) delete data.orders[orderUuid];
-		return data;
+	return modifyJournal(storeDB, (data) =>
+		modify((data.orders[orderUuid] ??= { entries: {}, chain: null }))
+	);
+}
+
+/**
+ * Retire a settled order's chain: no entry is open and the caller saw a later adoption move the
+ * resident past it, so it neither picks a revision nor guards a receipt any more. A chain an
+ * answer replaced meanwhile (another `answeredAt`) is kept.
+ */
+export function retireChain(storeDB: StoreLocalDatabase, orderUuid: string, answeredAt: number) {
+	return modifyJournal(storeDB, (data) => {
+		const order = data.orders[orderUuid];
+		if (order && Object.keys(order.entries).length === 0 && order.chain?.answeredAt === answeredAt)
+			order.chain = null;
 	});
 }
 
@@ -94,6 +124,19 @@ export async function readOrderCommands(
 	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
 	const order = doc?.toJSON(true).data.orders[orderUuid];
 	return { entries: Object.values(order?.entries ?? {}), chain: order?.chain ?? null };
+}
+
+/** Every journaled order: the store-session recovery re-sends what was sent and never answered. */
+export async function readMoneyJournal(
+	storeDB: StoreLocalDatabase
+): Promise<Record<string, { entries: MoneyCommandEntry[]; chain: RevisionChain | null }>> {
+	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
+	return Object.fromEntries(
+		Object.entries(doc?.toJSON(true).data.orders ?? {}).map(([uuid, order]) => [
+			uuid,
+			{ entries: Object.values(order.entries), chain: order.chain },
+		])
+	);
 }
 
 /** The same read, live: the tender gates on a sent command until it settles. */

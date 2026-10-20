@@ -173,6 +173,7 @@ export {
 	MoneyCommandError,
 	moneyCommandPoster,
 	resendOpenCommands,
+	retireSettledChains,
 	type ResentCommand,
 	type CommandProvenance,
 	type MoneyCommandEntry,

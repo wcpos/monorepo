@@ -14,9 +14,14 @@ import {
 	MoneyCommandError,
 	moneyCommandPoster,
 	resendOpenCommands,
+	retireSettledChains,
 } from '../src/commands/money-command';
 import { pushRecord } from '../src/mutations/push-record';
-import { readOrderCommands } from '../src/store-local/money-commands';
+import {
+	CHAIN_RETENTION_MS,
+	journalCommand,
+	readOrderCommands,
+} from '../src/store-local/money-commands';
 import { createEngineDatabase, createFakeEngine, engineOrder } from '../src/testing';
 
 import type { QueryRuntime } from '../src/provider';
@@ -644,6 +649,61 @@ it('with no approval a command freezes an open entry’s approval, else the resi
 	).rejects.toThrow();
 	const capture = (await entries()).find(({ kind }) => kind === 'capture')!;
 	expect(capture.approval).toEqual({ total: '77.00', currency: 'USD' });
+});
+
+const chain = async () => (await readOrderCommands(storeDB, 'order')).chain;
+
+it('a settled order’s chain is dropped on the next journal write once older than CHAIN_RETENTION_MS', async () => {
+	const post = poster();
+	const { data } = await post('orders/5/payments', { payment: cash() });
+	await post.mirror({ payment: data.payment as PaymentRow });
+	// Any journal write sweeps: here another order's command is frozen.
+	const write = (id: string) =>
+		journalCommand(storeDB, {
+			orderUuid: 'other',
+			kind: 'capture',
+			path: 'orders/6/payments/leg/capture',
+			target: 'leg',
+			id,
+			body: {},
+			approval,
+			sentAt: null,
+			sentRevision: null,
+		});
+	await write('c-1');
+	expect(await chain()).not.toBeNull();
+	clock += CHAIN_RETENTION_MS;
+	await write('c-2');
+	expect(await chain()).toBeNull();
+});
+
+it('a settled chain is retired once the resident adopts a later revision than its post-answer refresh, and kept until then', async () => {
+	const post = poster();
+	const { data } = await post('orders/5/payments', { payment: cash() });
+	await post.mirror({ payment: data.payment as PaymentRow });
+	expect(await chain()).toMatchObject({
+		adoptedAfterAnswer: true,
+		adoptedRevision: store.revision,
+	});
+	await retireSettledChains(runtime, storeDB);
+	expect(await chain()).not.toBeNull();
+	// Another till moves the order; the pull adopts the newer document.
+	store.n += 1;
+	await adoptStore(false);
+	await retireSettledChains(runtime, storeDB);
+	expect(await chain()).toBeNull();
+});
+
+it('a chain with an open entry is never retired by a later adoption', async () => {
+	const post = poster();
+	const { data } = await post('orders/5/payments', { payment: cash() });
+	await post.mirror({ payment: data.payment as PaymentRow });
+	store.modes = ['lose'];
+	await expect(post('orders/5/payments', { payment: cash('row-2') })).rejects.toThrow();
+	store.n += 1;
+	await adoptStore(false);
+	await retireSettledChains(runtime, storeDB);
+	expect(await chain()).not.toBeNull();
 });
 
 it('the status poll passes through without an envelope', async () => {
