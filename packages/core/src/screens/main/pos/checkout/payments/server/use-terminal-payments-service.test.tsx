@@ -11,6 +11,18 @@ import {
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
 import { row } from '../device/fixtures.test-utils';
+import {
+	type CheckoutModeSnapshot,
+	enterCheckout,
+	enterReceipt,
+	finishReceipt,
+	getCheckoutModeSnapshot,
+	leaveCheckout,
+	releaseTender,
+	resetCheckoutMode,
+	selectReceipt,
+	watchTender,
+} from '../../checkout-mode';
 
 const mockStore = { id: 1, price_num_decimals: 2 };
 const mockSite = {};
@@ -496,4 +508,209 @@ it('preserves both offline payment rows when two legs race on one order', async 
 		mockPatch.mockImplementation(async () => ({}));
 		mockResident.payload = original;
 	}
+});
+
+// A settling status drops the order from the till's open orders, which unmounts the tender
+// whose subscriber used to select its receipt: the service enters and selects it once the
+// write has landed, never before (a selected receipt renders, and can print, what is resident).
+describe('a server capture of the order in checkout', () => {
+	const order = (status: string) => ({
+		status,
+		total: '10.00',
+		paid: '10.00',
+		balance: '0.00',
+		payment_method: 'device',
+		payment_method_title: 'Reader',
+	});
+	type Write = 'mirror' | 'offline';
+	/** Runs one settling write; `duringWrite` acts while it is pending, `fail` makes it fail. */
+	async function settle(
+		write: Write,
+		{
+			status = 'completed',
+			paymentStatus = 'captured',
+			duringWrite,
+			fail,
+		}: {
+			status?: string;
+			paymentStatus?: 'captured' | 'failed';
+			duringWrite?: (hook: { unmount: () => void }) => void;
+			fail?: 'rejects' | 'returns nothing';
+		} = {}
+	) {
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const original = mockResident.payload.meta_data;
+		// No recoverable offline row: only this test's write reaches the store.
+		mockResident.payload.meta_data = write === 'offline' ? withLedger([], []) : [];
+		const hook = renderHook(() => useTerminalPaymentsService());
+		let unmounted = false;
+		const host = {
+			unmount: () => {
+				unmounted = true;
+				hook.unmount();
+			},
+		};
+		let atWrite: CheckoutModeSnapshot | null = null;
+		const onWrite = async () => {
+			atWrite = getCheckoutModeSnapshot();
+			duringWrite?.(host);
+			if (fail === 'rejects') throw new Error('disk full');
+			return fail === 'returns nothing' ? undefined : {};
+		};
+		if (write === 'mirror') mockMirror.mockImplementationOnce(async () => void (await onWrite()));
+		else mockPatch.mockImplementationOnce(onWrite as never);
+		const options = start.mock.calls[0][0];
+		try {
+			const run =
+				write === 'mirror'
+					? options.mirror('completed-order', {
+							payment: { ...mockRow, status: paymentStatus },
+							order: order(status),
+						})
+					: options.patchAndEnqueue!('completed-order', mockRow);
+			if (fail) await expect(run).rejects.toThrow();
+			else await run;
+		} finally {
+			if (!unmounted) hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+		return { atWrite: atWrite! as CheckoutModeSnapshot, after: getCheckoutModeSnapshot() };
+	}
+	let unwatch: (() => void) | undefined;
+	// Earlier background completions in this file leave their receipts in the module store.
+	beforeEach(() => resetCheckoutMode());
+	afterEach(() => {
+		unwatch?.();
+		unwatch = undefined;
+		resetCheckoutMode();
+	});
+	const watch = (uuid: string, autoShowReceipt = true) => {
+		enterCheckout('completed-order');
+		unwatch = watchTender(uuid, autoShowReceipt);
+	};
+
+	it.each(['mirror', 'offline'] as const)(
+		'%s: nothing is entered at the write; the receipt is entered and selected after it',
+		async (write) => {
+			watch('completed-order');
+			const { atWrite, after } = await settle(write);
+			expect(atWrite.receiptOrders.size).toBe(0);
+			expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
+			expect(after.receiptOrders.has('completed-order')).toBe(true);
+			expect(after.checkoutOrders.has('completed-order')).toBe(false);
+			expect(after.selectedReceiptOrder).toBe('completed-order');
+		}
+	);
+
+	// The write unmounts the column, whose cleanup clears the watch: the decision was taken
+	// before the write.
+	it('selects after the write even though the column unmounted during it', async () => {
+		watch('completed-order');
+		const { after } = await settle('mirror', { duringWrite: () => unwatch?.() });
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+	});
+
+	// After a reload, resolveStage restores the column from the live ledger row alone: the
+	// order is on screen and watched without ever joining checkoutOrders.
+	it('selects the receipt of a checkout restored from its ledger', async () => {
+		unwatch = watchTender('completed-order', true);
+		const { after } = await settle('mirror');
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+	});
+
+	// Each of these is left to the background completion, which enters the receipt unselected.
+	it.each([
+		['receipts do not show automatically', () => watch('completed-order', false), {}],
+		['the cashier is on another order', () => watch('other-order'), {}],
+		[
+			'the cashier closed the column checkout during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => leaveCheckout('completed-order') },
+		],
+		[
+			'the cashier closed the phone sheet during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => releaseTender('completed-order') },
+		],
+		[
+			'the cashier switched to another order during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => void watchTender('other-order', true) },
+		],
+		[
+			'the cashier selected another receipt during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => selectReceipt('other-sale') },
+		],
+		[
+			'a store switch stopped the service during the write',
+			() => watch('completed-order'),
+			{
+				duringWrite: (hook: { unmount: () => void }) => {
+					hook.unmount();
+					resetCheckoutMode();
+				},
+			},
+		],
+		['the write rejects', () => watch('completed-order'), { fail: 'rejects' as const }],
+		['the payment failed', () => watch('completed-order'), { paymentStatus: 'failed' as const }],
+		['the order was cancelled', () => watch('completed-order'), { status: 'cancelled' }],
+		['the payment leaves a balance', () => watch('completed-order'), { status: 'pos-partial' }],
+	])('enters nothing when %s', async (_name, arrange, options) => {
+		arrange();
+		const before = getCheckoutModeSnapshot().selectedReceiptOrder;
+		const { after } = await settle('mirror', options);
+		expect(after.receiptOrders.has('completed-order')).toBe(false);
+		expect(after.selectedReceiptOrder).not.toBe('completed-order');
+		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
+	});
+
+	// Another order's completion leaves its checkout while this write is pending.
+	it('still selects when a different order leaves checkout during the write', async () => {
+		watch('completed-order');
+		const { after } = await settle('mirror', { duringWrite: () => leaveCheckout('other-order') });
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+	});
+
+	// The receipt is live before the sale's background completion runs: one the cashier has
+	// already finished must not come back as a paid tab from that completion.
+	it('keeps a receipt finished before the background completion from coming back', async () => {
+		watch('completed-order');
+		const { after } = await settle('mirror');
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+		finishReceipt('completed-order');
+		enterReceipt('completed-order', { select: false });
+		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(false);
+		// Skipped once: the order's next sale (re-opened into checkout) enters as usual.
+		enterCheckout('completed-order');
+		enterReceipt('completed-order', { select: false });
+		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
+	});
+
+	it.each(['rejects', 'returns nothing'] as const)(
+		'offline: enters nothing when the write %s, and checkout stays',
+		async (fail) => {
+			watch('completed-order');
+			const { after } = await settle('offline', { fail });
+			expect(after.receiptOrders.size).toBe(0);
+			expect(after.checkoutOrders.has('completed-order')).toBe(true);
+			expect(after.selectedReceiptOrder).toBeNull();
+		}
+	);
+
+	it('offline: enters nothing when a store switch stopped the service during the write', async () => {
+		watch('completed-order');
+		const { after } = await settle('offline', {
+			duringWrite: (hook) => {
+				hook.unmount();
+				resetCheckoutMode();
+			},
+		});
+		expect(after.receiptOrders.size).toBe(0);
+		expect(after.selectedReceiptOrder).toBeNull();
+	});
 });

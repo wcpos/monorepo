@@ -62,6 +62,7 @@ import {
 	setTenderMethod,
 	setTenderPlan,
 	useTenderMethod,
+	watchTender,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
@@ -1275,6 +1276,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		tiles,
 		reducerDispatch,
 	]);
+
+	// A settling capture's status write can unmount this flow before its subscriber below
+	// sees the settlement; the service selects the receipt for a watched tender instead.
+	// Layout, not passive: a capture can land between this commit and passive effects.
+	React.useLayoutEffect(
+		() => watchTender(order.uuid, !!uiSettings.autoShowReceipt),
+		[order.uuid, uiSettings.autoShowReceipt]
+	);
 
 	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
 	React.useEffect(() => {

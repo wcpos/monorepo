@@ -6,11 +6,12 @@ import {
 	derive,
 	hasSaleProvenance,
 	isCompletingStatus,
+	isSettledPaymentRow,
 	readLedger,
 	upsertPaymentRow,
 	withLedger,
 } from '@wcpos/order-math';
-import type { MetaDataEntry } from '@wcpos/order-math';
+import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
@@ -18,7 +19,12 @@ import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/qu
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { completeSale, completionMetaFor } from '../../sale-completion';
+import {
+	completeSale,
+	completionMetaFor,
+	isSaleComplete,
+	isSettledOrderStatus,
+} from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
@@ -30,9 +36,27 @@ import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
 import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
-import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
+import {
+	getOrderSaveState,
+	receiptEntryAfterWrite,
+	subscribeCheckoutMode,
+} from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
+
+/**
+ * Whether this payment finishes the sale: the settlement's own test (a settled row and
+ * `isSaleComplete`, as the service's recordSettlement judges it), plus the status blocklist,
+ * so a cancelled or failed order never shows a Paid receipt.
+ */
+function settlesSale(payment: PaymentRow, order: OrderPaymentSummary | undefined, dp: number) {
+	return (
+		order !== undefined &&
+		isSettledPaymentRow(payment) &&
+		isSettledOrderStatus(order.status, null) &&
+		isSaleComplete({ source: 'terminal', row: payment, order }, dp)
+	);
+}
 
 export function useTerminalPaymentsService(): void {
 	const { store, site, userDB } = useStoreSession();
@@ -99,6 +123,15 @@ export function useTerminalPaymentsService(): void {
 						dp: dp(),
 					});
 					const meta_data = withLedger(meta, rows);
+					const result = {
+						...summary,
+						total: String(payload.total ?? '0'),
+						payment_method: summary.payment_method ?? '',
+					};
+					// This write takes the order off the till, as the mirror's below does.
+					const enterReceiptAfter = settlesSale(payment, result, dp())
+						? receiptEntryAfterWrite(orderUuid)
+						: null;
 					const written = await latest.current.recordLedger(resident, {
 						meta_data: isCompletingStatus(summary.status)
 							? await completionMetaFor(latest.current.ctx, meta_data, {})
@@ -106,11 +139,9 @@ export function useTerminalPaymentsService(): void {
 						status: summary.status,
 					});
 					if (!written) throw new Error('Offline payment could not be saved');
-					return {
-						...summary,
-						total: String(payload.total ?? '0'),
-						payment_method: summary.payment_method ?? '',
-					};
+					// A store switch stopped this service and reset checkout mode meanwhile.
+					if (!stopped) enterReceiptAfter?.();
+					return result;
 				}),
 			mirror: async (orderUuid, { payment, order }) => {
 				let mirrored = false;
@@ -122,6 +153,11 @@ export function useTerminalPaymentsService(): void {
 						resident.payload) as EngineRecord<'orders'>['payload'];
 					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
+					// A settling status takes the order off the till and unmounts the tender that used
+					// to select its receipt; the service selects it once the write has landed.
+					const enterReceiptAfter = settlesSale(payment, order, dp())
+						? receiptEntryAfterWrite(orderUuid)
+						: null;
 					await mirrorServerOrder(manager, orderUuid, {
 						// Only the summary fields that are order fields: `paid` and `balance` are
 						// derived from the ledger on read, and an unknown key fails the schema.
@@ -136,6 +172,7 @@ export function useTerminalPaymentsService(): void {
 						meta_data,
 					});
 					mirrored = true;
+					if (!stopped) enterReceiptAfter?.();
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
 						const patched = await latest.current.stampCompletion(
 							resident,

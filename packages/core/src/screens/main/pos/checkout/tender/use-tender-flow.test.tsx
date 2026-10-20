@@ -1543,7 +1543,6 @@ describe('server tender', () => {
 		async (when) => {
 			resetCheckoutMode();
 			const checkoutMode = await import('../checkout-mode');
-			const selectReceipt = jest.spyOn(checkoutMode, 'selectReceipt');
 			let respond!: (value: unknown) => void;
 			let recorded!: () => void;
 			let refreshed!: () => void;
@@ -1612,8 +1611,11 @@ describe('server tender', () => {
 				await act(async () => recorded());
 			}
 			expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
+			// A tender still watching when the completing status arrives has its receipt entered
+			// and selected by the service once the write lands (receiptEntryAfterWrite); one gone
+			// before the response is left to the background completion.
 			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
-				when === 'receipt-entry' ? 'order-1' : null
+				when === 'before-response' ? null : 'order-1'
 			);
 			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 			expect(mockRequire).toHaveBeenCalledTimes(1);
@@ -1629,7 +1631,6 @@ describe('server tender', () => {
 				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
 			).toHaveLength(1);
 			if (when === 'receipt-entry') {
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
 				host.unmount();
 				act(() => {
 					checkoutMode.finishReceipt('order-1');
@@ -1640,15 +1641,14 @@ describe('server tender', () => {
 				const reopened = renderHook(() => useTenderFlow(order));
 				await act(async () => {});
 				expect(reopened.result.current.terminalLeg).toBeNull();
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				// A re-opened flow must not bring the finished sale's receipt back.
 				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 				act(() => reopened.result.current.pickMethod('terminal'));
 				await act(async () => reopened.result.current.takeTender());
 				expect(mockManualPost).toHaveBeenCalledTimes(2);
-				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 				reopened.unmount();
 			}
-			selectReceipt.mockRestore();
 			bridge.unmount();
 			mockRealService = null;
 			mockManualPost.mockReset();
