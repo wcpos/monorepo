@@ -149,7 +149,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				// scope's queue + record, and a switch/reset mid-resolution drops them.
 				let needsRepull: RemoteId | null = null;
 				let residentRemoved = false;
-				let resolved: { collectionName: string; recordId: string } | null = null;
+				let resolved: { collectionName: string; recordId: string; scopeId: string } | null = null;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
@@ -580,7 +580,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								'resolveConflict: scope moved during resolution — retry against the settled scope'
 							);
 						}
-						resolved = { collectionName: entry.collectionName, recordId: entry.recordId };
+						resolved = {
+							collectionName: entry.collectionName,
+							recordId: entry.recordId,
+							scopeId: bound.scopeId,
+						};
 					});
 				} finally {
 					// Release whatever happened — success, refusal, or throw. A resolution
@@ -628,22 +632,27 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				const settledResolution = resolved as {
 					collectionName: string;
 					recordId: string;
+					scopeId: string;
 				} | null;
 				if (settledResolution) {
-					diagnostics({
-						type: 'queue.write.resolve',
-						level: 'info',
-						collection: settledResolution.collectionName,
-						// `residentRemoved` makes a destructive discard legible in the log:
-						// it is the one resolution that deletes a record outright, and "the
-						// order is gone" must never be an unexplained disappearance (R7b).
-						fields: {
-							recordId: settledResolution.recordId,
-							mutationId,
-							resolution,
-							residentRemoved,
-						},
-					});
+					// A switch can land after the guarded write commits (the claim release
+					// and re-pull above run outside it): the observer then belongs to the
+					// incoming scope, and this resolution's row is not its.
+					if (manager.activeScope === settledResolution.scopeId)
+						diagnostics({
+							type: 'queue.write.resolve',
+							level: 'info',
+							collection: settledResolution.collectionName,
+							// `residentRemoved` makes a destructive discard legible in the log:
+							// it is the one resolution that deletes a record outright, and "the
+							// order is gone" must never be an unexplained disappearance (R7b).
+							fields: {
+								recordId: settledResolution.recordId,
+								mutationId,
+								resolution,
+								residentRemoved,
+							},
+						});
 					// The resolution changed queue state outside the drain path — refresh
 					// the cached depth and tell status subscribers, or an idle engine
 					// keeps showing the pre-resolution depth.

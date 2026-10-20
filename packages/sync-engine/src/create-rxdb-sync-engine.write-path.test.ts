@@ -2266,8 +2266,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			releaseClaim();
 			await new Promise((resolve) => setTimeout(resolve, 50));
 
-			// The incoming scope's log never hears about the outgoing scope's revert.
+			// The incoming scope's log never hears about the outgoing scope's revert —
+			// neither its verdict nor the resolution event inside it.
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			expect(diagnostics.some((event) => event.type === 'queue.write.resolve')).toBe(false);
 		} finally {
 			releaseClaim();
 			vi.restoreAllMocks();
