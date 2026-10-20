@@ -443,9 +443,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				<View className="flex-row items-center gap-2">
 					{!phone && toggle}
 					<React.Suspense
-						fallback={
-							<IconButton name="print" accessibilityLabel={t('reports.print')} disabled />
-						}
+						fallback={<IconButton name="print" accessibilityLabel={t('reports.print')} disabled />}
 					>
 						<HeroPrint storeId={storeId} />
 					</React.Suspense>

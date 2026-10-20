@@ -9,9 +9,7 @@ describe('printerIconName', () => {
 	});
 
 	it('returns "print" for a winspool queue', () => {
-		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe(
-			'print'
-		);
+		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe('print');
 	});
 
 	it('returns "print" for a network profile', () => {

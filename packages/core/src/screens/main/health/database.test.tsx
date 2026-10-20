@@ -376,9 +376,7 @@ describe('DatabaseScreen coverage', () => {
 
 	it('builds the row menu like every other row menu: a ⋮ icon button, the destructive row last', () => {
 		const { getAllByTestId } = render(<DatabaseScreen />);
-		expect(getAllByTestId('db-row-menu-products')[0].getAttribute('data-icon')).toBe(
-			'more'
-		);
+		expect(getAllByTestId('db-row-menu-products')[0].getAttribute('data-icon')).toBe('more');
 		const sync = getAllByTestId('db-row-sync-now-products')[0];
 		const clear = getAllByTestId('db-row-clear-products')[0];
 		expect(sync.getAttribute('data-variant')).toBe('default');

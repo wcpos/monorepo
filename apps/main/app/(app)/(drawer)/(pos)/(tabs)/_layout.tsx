@@ -67,10 +67,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 					title: 'Cart',
 					tabBarButtonTestID: 'pos-tab-cart',
 					tabBarIcon: ({ focused }) => (
-						<Icon
-							name="cart"
-							className={focused ? 'text-primary' : 'text-muted-foreground'}
-						/>
+						<Icon name="cart" className={focused ? 'text-primary' : 'text-muted-foreground'} />
 					),
 				}}
 			/>
