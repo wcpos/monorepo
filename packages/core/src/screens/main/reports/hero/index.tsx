@@ -119,7 +119,7 @@ function CashierChip() {
 	return (
 		<MenuChip
 			name="cashier"
-			icon="customer"
+			icon="cashier"
 			scroll
 			value={value === undefined ? 'all' : String(value)}
 			defaultValue="all"

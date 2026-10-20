@@ -1,7 +1,7 @@
 {
  "addCustomer": "user-plus-linear",
  "addToCart": "cart-plus-linear",
- "alert": "info-circle-linear",
+ "alert": "danger-circle-linear",
  "arrowDown": "arrow-down-linear",
  "arrowLeft": "arrow-left-linear",
  "arrowRight": "arrow-right-linear",
@@ -93,7 +93,7 @@
  "rejected": "close-circle-linear",
  "reports": "chart-linear",
  "scan": "barcode-scan-linear",
- "search": "card-search-linear",
+ "search": "magnifier-linear",
  "settings": "settings-linear",
  "shipping": "delivery-linear",
  "show": "eye-linear",

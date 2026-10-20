@@ -186,7 +186,7 @@ export function OrderActionsMenu({
 									onPress={handleRefund}
 									disabled={storageDegraded}
 								>
-									<Icon name="undo" />
+									<Icon name="refund" />
 									<Text>{t('orders.refund')}</Text>
 								</DropdownMenuItem>
 							)}

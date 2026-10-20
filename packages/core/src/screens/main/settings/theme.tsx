@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { Uniwind, useUniwind } from 'uniwind';
 
 import {
-	DEFAULT_ICON_SET,
 	Icon,
 	ICON_SET_IDS,
 	IconName,
@@ -24,6 +23,7 @@ import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
+import { resolveIconSet } from '../../../contexts/icon-set';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -212,7 +212,7 @@ const ICON_SAMPLES: IconName[] = [
 function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const icons = useDocField(store, (latest) => latest.icons) ?? DEFAULT_ICON_SET;
+	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
 
 	const handleIconsChange = React.useCallback(
 		async (value: IconSetId) => {

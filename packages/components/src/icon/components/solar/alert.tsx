@@ -8,8 +8,8 @@ export function SvgAlert(props: SvgProps) {
 		<Svg {...props} viewBox="0 0 24 24">
 			<G fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth={1.5}>
 				<Circle cx={12} cy={12} r={10} />
-				<Path d="M12 17v-6" />
-				<Path strokeLinejoin="round" d="M12 8" />
+				<Path d="M12 7v6" />
+				<Path strokeLinejoin="round" d="M12 16" />
 			</G>
 		</Svg>
 	);
