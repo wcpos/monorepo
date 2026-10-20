@@ -14,6 +14,7 @@ import {
 import {
 	CLIENT_QUERY_PARAM,
 	formatClientSignal,
+	parseUpdateRequiredBody,
 	PROTOCOL_QUERY_PARAM,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
@@ -141,6 +142,19 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 			const errorResponse = get(error, ['response']);
 			if (errorResponse) {
+				// The protocol gate's refusal is keyed on the body code, whatever the status:
+				// the app is too old for this store, not a bad API response.
+				const updateRequired = parseUpdateRequiredBody(get(errorResponse, ['data']));
+				if (updateRequired) {
+					const message = t('auth.update_required');
+					discoveryLogger.error(message, {
+						showToast: true,
+						code: ERROR_CODES.APP_UPDATE_REQUIRED,
+						context: { wpApiUrl, ...updateRequired },
+					});
+					throw new ApiDiscoveryError(message);
+				}
+
 				const status = get(errorResponse, 'status');
 				const contentType = get(errorResponse, ['headers', 'content-type']);
 				const isRestrictedApi =

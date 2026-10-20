@@ -1,3 +1,4 @@
+import { buildRequestPreamble } from './request-preamble';
 import {
 	formatClientSignal,
 	instanceHeaderSupported,
@@ -16,6 +17,18 @@ describe('sync protocol client signal', () => {
 
 	it.each(['', '   ', '\t'])('substitutes unknown for a blank version %p', (version) => {
 		expect(formatClientSignal('web', version)).toBe('web/unknown payments=1.3');
+	});
+});
+
+describe('protocol version', () => {
+	// ADR 0040 D1: the server gates every wcpos/v2 route on protocol 3.
+	it('claims protocol 3 on the header and the query twin', () => {
+		const { url, headers } = buildRequestPreamble(
+			{ purpose: 'sync', client: { platform: 'ios', version: 'test', userAgentHeader: {} } },
+			{ url: 'https://shop.test/wp-json/wcpos/v2/orders' }
+		);
+		expect(headers.get('X-WCPOS-Protocol')).toBe('3');
+		expect(new URL(url).searchParams.get('wcpos_protocol')).toBe('3');
 	});
 });
 
