@@ -269,8 +269,23 @@ export function useReceiptDocument({
 			if (
 				(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
 				(!selectedTemplate?.offline_capable || !selectedTemplate.content)
-			)
+			) {
+				// Refused before anything reached a printer: the view shows the inline
+				// "choose a template" failure, so this is the one row, info and uncoded —
+				// no PRINT code's summary (job failed, printer unreachable) is true here.
+				getLogger(['wcpos', 'pos', 'receipt']).info(
+					'Report print refused: the selected template cannot print this document',
+					{
+						context: {
+							event: 'receipt.print_refused',
+							document,
+							templateId: selectedTemplate?.id ?? null,
+							reason: selectedTemplate?.offline_capable ? 'no-content' : 'not-offline-capable',
+						},
+					}
+				);
 				throw new Error(t('reports.closure_template_required'));
+			}
 			let dispatched: boolean;
 			try {
 				dispatched = (await printReceipt()) === true;

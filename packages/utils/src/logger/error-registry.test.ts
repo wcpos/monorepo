@@ -240,6 +240,16 @@ describe('error registry', () => {
 		expect(guidance).toContain("If it is not a record request, follow the server's message");
 	});
 
+	// A needs-current-version row shows Send again with Discard device change in its
+	// menu; SYNC221's rows show Use server version. SYNC211 names its own workflow.
+	it("gives SYNC211's current-version case its own row actions, not SYNC221's", () => {
+		const guidance = entryFor('SYNC211').troubleshooting.join(' ');
+		expect(guidance).toContain('Press Send again');
+		expect(guidance).toContain("choose Discard device change from the row's ⋮ menu");
+		expect(guidance).not.toContain('as described for SYNC221');
+		expect(guidance).not.toContain('Use server version');
+	});
+
 	it('covers email and PDF paths in PRINT311 guidance', () => {
 		const guidance = entryFor('PRINT311').troubleshooting.join(' ');
 		expect(guidance).toContain('an email address or server status identifies email delivery');

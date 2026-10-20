@@ -610,6 +610,40 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(localRow.print_count).toBe(7);
 		expect(mockPost).toHaveBeenCalledTimes(3);
 	});
+	it('writes one uncoded info row when a closure print is refused for its template', async () => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([
+				{ id: 'php', is_active: true, offline_capable: false, engine: 'legacy-php' },
+			]);
+		const logger = getLogger([]);
+		[logger.error, logger.warn, logger.info].forEach((fn) => (fn as jest.Mock).mockClear());
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+			})
+		);
+		await act(async () => result.current.setSelectedTemplateId('php'));
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
+		});
+		const refusals = (logger.info as jest.Mock).mock.calls.filter(
+			([message]) =>
+				message === 'Report print refused: the selected template cannot print this document'
+		);
+		expect(refusals).toHaveLength(1);
+		expect(refusals[0][1]).not.toHaveProperty('code');
+		expect(refusals[0][1].context).toMatchObject({
+			event: 'receipt.print_refused',
+			document: 'closure:c',
+			templateId: 'php',
+			reason: 'not-offline-capable',
+		});
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
+	});
 	// Revert: drop useReceiptData.error at either renderer or document-hook boundary.
 	it('exposes an authoritative document GET failure and clears it on manual retry', async () => {
 		mockGet.mockRejectedValueOnce(new Error('document unavailable'));

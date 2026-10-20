@@ -213,6 +213,23 @@ it('adopts the bound register detail counters before publishing the binding', as
 	});
 });
 
+it('names the local-floor fallback in one uncoded info row when the counter refresh fails', async () => {
+	mockHttp.get.mockImplementation(async (url) => {
+		if (url === 'registers') return { data: [rows[0]] };
+		throw new Error('Network Error');
+	});
+	const view = mount();
+	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
+	await waitFor(() =>
+		expect(logger.info).toHaveBeenCalledWith(
+			"Register counters not refreshed from the store; using this device's counters",
+			{ context: { registerId: 'a', error: 'Network Error' } }
+		)
+	);
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.error).not.toHaveBeenCalled();
+});
+
 it('does not log a manual re-bind to the current register', async () => {
 	mockHttp.get.mockResolvedValue({ data: rows });
 	const view = mount();

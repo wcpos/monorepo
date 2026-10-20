@@ -5,6 +5,7 @@ import { filter, firstValueFrom } from 'rxjs';
 import { observeUserSites, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Toast } from '@wcpos/components/toast';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -105,6 +106,20 @@ export function DemoButton() {
 			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
 			void handleLoginSuccess({ params: response.params } as any).catch(() => undefined);
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Demo login did not complete', {
+					context: { errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
@@ -113,7 +128,7 @@ export function DemoButton() {
 			// Also mark processed on error to prevent retry.
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, connectedSite, handleLoginSuccess]);
+	}, [response, connectedSite, handleLoginSuccess, t]);
 
 	const handleDemoLogin = async () => {
 		// Reset auth state for new login attempt

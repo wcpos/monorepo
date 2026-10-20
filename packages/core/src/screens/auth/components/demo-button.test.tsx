@@ -35,6 +35,10 @@ jest.mock('@wcpos/utils/app-info', () => ({
 jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+const mockToastShow = jest.fn();
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (props: unknown) => mockToastShow(props) },
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
@@ -112,6 +116,29 @@ describe('DemoButton redirect-return login', () => {
 				expect.any(String),
 				expect.objectContaining({ showToast: true })
 			)
+		);
+		expect(mockHandleLoginSuccess).not.toHaveBeenCalled();
+	});
+
+	it('writes no second coded row when the auth hook already reported the failure', async () => {
+		saveRedirectState(DEMO_LOGIN_URL, CSRF, DEMO_CLAIM_KEY);
+		window.history.replaceState(
+			{},
+			'',
+			`/?access_token=at123&refresh_token=rt456&uuid=uuid-1&id=7&state=${'d'.repeat(64)}`
+		);
+		render(<DemoButton />);
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'auth.login_did_not_complete' })
+			)
+		);
+		// One incident, one row: the redirect handler's own state-mismatch row.
+		expect(mockError).toHaveBeenCalledTimes(1);
+		expect(mockError).toHaveBeenCalledWith(
+			'State parameter mismatch - possible CSRF attack',
+			expect.objectContaining({ code: 'AUTH999' })
 		);
 		expect(mockHandleLoginSuccess).not.toHaveBeenCalled();
 	});

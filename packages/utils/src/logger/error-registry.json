@@ -183,7 +183,7 @@
 		"troubleshooting": [
 			"Expand the log entry and check the endpoint and server response first: this code can also represent an HTTP 400 from a settings, authentication or other non-record request.",
 			"If the context names a record or field, edit that field in the POS — common causes are a value out of range, a rejected format or a required option left empty. A refused edit to a product, variation, customer or coupon was already undone, so correct the field and save it again; for an order or a newly created record, press Send again on its row under \"… changes never reached your server\" in Store health → Database.",
-			"If the record is instead listed under \"… changes were held\" with \"Your store required a current version\", no field is at fault — decide between Send again and Discard device change as described for SYNC221.",
+			"If the record is instead listed under \"… changes were held\" with \"Your store required a current version\", no field is at fault and this device cannot tell which version is newer. Press Send again to resend this device's change on top of the store's current version, or choose Discard device change from the row's ⋮ menu to drop it and keep the store's version.",
 			"If it is not a record request, follow the server's message for the named endpoint instead. The browser's developer tools (Network tab) — or Advanced → Toggle Developer Tools in the desktop app — show the response when the details are not in the POS log.",
 			"Site admin: if a named field looks correct in the POS, compare it with the same record in WP Admin — plugin-added validation on the store can reject values the POS considers fine."
 		],
