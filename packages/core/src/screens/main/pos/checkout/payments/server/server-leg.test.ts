@@ -52,6 +52,9 @@ const order: OrderPaymentSummary = {
 	total: '10.00',
 	paid: '10.00',
 	balance: '0.00',
+	authorized: '0.00',
+	refund_due: '0.00',
+	refund_pending: '0.00',
 	payment_method: 'terminal',
 	payment_method_title: 'Terminal',
 };

@@ -67,8 +67,11 @@ describe('derive', () => {
 		);
 		expect(result).toEqual({
 			paid: '42.50',
+			authorized: '0.00',
 			balance: '0.00',
 			overpaid: '0.00',
+			refund_due: '0.00',
+			refund_pending: '0.00',
 			change: '7.50',
 			status: 'completed',
 			payment_method: 'pos_cash',
@@ -170,9 +173,51 @@ describe('derive', () => {
 		expect(result).toMatchObject({ payment_method: 'pos_gift_card', status: 'completed' });
 	});
 
-	it('counts authorized payments as approved', () => {
+	// ADR 0040 D6: only captured money counts toward paid.
+	it('a full authorization leaves the order pos-open with the balance still due', () => {
 		const result = derive(18, [row({ amount: '18.00', status: 'authorized' })], descriptors);
-		expect(result).toMatchObject({ paid: '18.00', balance: '0.00', status: 'completed' });
+		expect(result).toMatchObject({
+			paid: '0.00',
+			authorized: '18.00',
+			balance: '18.00',
+			status: 'pos-open',
+		});
+	});
+
+	it('a succeeded refund on a reopened sale raises the balance and blocks completion until collected', () => {
+		const refunds: PaymentRow['refunds'] = [
+			{ id: 7, amount: '10.00', status: 'succeeded', provider_ref: null },
+		];
+		const reopened = derive(50, [row({ amount: '50.00', refunds })], descriptors);
+		expect(reopened).toMatchObject({ paid: '50.00', balance: '10.00', refund_due: '0.00' });
+		expect(reopened.status).toBe('pos-partial');
+		const collected = derive(
+			50,
+			[row({ id: 'a', amount: '50.00', refunds }), row({ id: 'b', amount: '10.00' })],
+			descriptors
+		);
+		expect(collected).toMatchObject({ balance: '0.00', status: 'completed' });
+	});
+
+	it('captured money above a reduced total completes with refund_due', () => {
+		expect(derive(40, [row({ amount: '50.00' })], descriptors)).toMatchObject({
+			paid: '50.00',
+			balance: '0.00',
+			refund_due: '10.00',
+			status: 'completed',
+		});
+	});
+
+	it('a pending refund allocation is refund_pending, never balance', () => {
+		const refunds: PaymentRow['refunds'] = [
+			{ id: 8, amount: '15.00', status: 'pending', provider_ref: null },
+		];
+		expect(derive(50, [row({ amount: '50.00', refunds })], descriptors)).toMatchObject({
+			balance: '0.00',
+			refund_due: '0.00',
+			refund_pending: '15.00',
+			status: 'completed',
+		});
 	});
 
 	it('keeps a pending leg live without counting it', () => {

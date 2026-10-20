@@ -57,6 +57,9 @@ function setup() {
 		total: '10',
 		paid: '10',
 		balance: '0',
+		authorized: '0',
+		refund_due: '0',
+		refund_pending: '0',
 		payment_method: 'terminal',
 		payment_method_title: 'Terminal',
 	};

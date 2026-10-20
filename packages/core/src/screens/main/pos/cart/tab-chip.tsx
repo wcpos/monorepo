@@ -44,8 +44,8 @@ export function TabChip({
 	// The latest store document, not the session's snapshot (see checkout's use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { balance } = derive(payload.total, rows, methods, { dp });
-	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
-	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
+	// Same set `derive` counts as paid: captured only, an authorization is a hold (ADR 0040 D6).
+	const captured = rows.some((row) => row.status === 'captured');
 	// Contract 1.2: a sent order waits for its customer; its receipt moment is not a Paid one.
 	const sent = activeAwaitingCustomer(payload.meta_data) !== null;
 	const waiting = rows.find(

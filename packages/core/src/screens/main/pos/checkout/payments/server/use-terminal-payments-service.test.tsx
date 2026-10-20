@@ -243,6 +243,9 @@ it('names the cashier at the till when a capture lands, not the one who started 
 		await import('../../../../../../services/terminal-payments'),
 		'startTerminalPaymentsService'
 	);
+	const original = mockResident.payload.meta_data;
+	// ADR 0040 D6: the resident's balance is zero only through captured money.
+	mockResident.payload.meta_data = withLedger([], [{ ...mockRow, status: 'captured' }]);
 	const hook = renderHook(() => useTerminalPaymentsService());
 	try {
 		const service = getTerminalPaymentsService()!;
@@ -280,6 +283,7 @@ it('names the cashier at the till when a capture lands, not the one who started 
 		hook.unmount();
 		start.mockRestore();
 		mockSession.wpCredentials = { id: 7, display_name: 'Pat' };
+		mockResident.payload.meta_data = original;
 	}
 });
 
@@ -304,6 +308,9 @@ it.each(['ledger', 'provenance'] as const)(
 					total: '10.00',
 					paid: '10.00',
 					balance: '0.00',
+					authorized: '0.00',
+					refund_due: '0.00',
+					refund_pending: '0.00',
 					payment_method: 'device',
 					payment_method_title: 'Reader',
 				},
@@ -519,6 +526,9 @@ describe('a server capture of the order in checkout', () => {
 		total: '10.00',
 		paid: '10.00',
 		balance: '0.00',
+		authorized: '0.00',
+		refund_due: '0.00',
+		refund_pending: '0.00',
 		payment_method: 'device',
 		payment_method_title: 'Reader',
 	});
@@ -570,7 +580,8 @@ describe('a server capture of the order in checkout', () => {
 							payment: { ...mockRow, status: paymentStatus },
 							order: order(status),
 						})
-					: options.patchAndEnqueue!('completed-order', mockRow);
+					: // ADR 0040 D6: only a captured row covers the sale, so the write settles it.
+						options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
 			if (fail) await expect(run).rejects.toThrow();
 			else await run;
 		} finally {

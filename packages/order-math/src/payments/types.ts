@@ -198,7 +198,13 @@ export interface OrderPaymentSummary {
 	status: string;
 	total: string;
 	paid: string;
+	/** Σ authorized rows: held, not counted toward paid (ADR 0040 D6). */
+	authorized: string;
 	balance: string;
+	/** max(0, −signed balance): money owed back to the customer. */
+	refund_due: string;
+	/** Σ pending refund allocations; shown beside the balance, never added to it. */
+	refund_pending: string;
 	payment_method: string;
 	payment_method_title: string;
 }
@@ -251,8 +257,11 @@ export interface PaymentRefusalBody {
 export type PosOrderStatus = 'pos-open' | 'pos-partial' | 'pending' | (string & {});
 export interface DerivedOrderView {
 	paid: string;
+	authorized: string;
 	balance: string;
 	overpaid: string;
+	refund_due: string;
+	refund_pending: string;
 	change: string;
 	status: PosOrderStatus;
 	payment_method: string | null;
