@@ -118,6 +118,7 @@ import {
 	deviceTransports,
 	initialReaderId,
 	legacyPaymentMethods,
+	OFFLINE_TENDERS_QUEUE,
 	queuesOffline,
 	selectableReaders,
 	type TenderTile,
@@ -590,7 +591,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
 			const offlineTransport =
-				tile.method.capture.mode === 'device' && tile.reason === 'offline'
+				OFFLINE_TENDERS_QUEUE && tile.method.capture.mode === 'device' && tile.reason === 'offline'
 					? deviceTransports(tile.method).find((item) => queuesOffline(tile.method, item))
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;

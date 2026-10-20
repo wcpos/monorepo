@@ -1967,7 +1967,9 @@ describe('device tender', () => {
 		expect(mockInfo).toHaveBeenCalled();
 	});
 });
-it('reopens a device tile via its queued transport when the selected transport needs a connection', async () => {
+// ADR 0040 PR A: offline tenders do not queue yet (OFFLINE_TENDERS_QUEUE), so a device tile whose
+// transport would queue is not reopened offline; PR B reopens it via the queued transport.
+it('does not reopen an offline device tile via a queued transport until offline tenders queue', async () => {
 	jest.clearAllMocks();
 	mockLeg = null;
 	mockRealService = null;
@@ -1988,8 +1990,7 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].reason).toBe('offline');
 	act(() => result.current.dispatch({ type: 'back' }));
 	act(() => result.current.pickMethod(deviceMethod.id));
-	expect(result.current.deviceTransport).toBe('bluetooth');
-	// ADR 0040 PR A: the queued transport is refused offline too, until PR B queues it.
+	expect(result.current.state.methodId).toBeNull();
 	expect(result.current.tiles[0]).toMatchObject({ disabled: true, reason: 'offline' });
 });
 

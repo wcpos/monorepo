@@ -20,7 +20,7 @@ import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
-import { deviceTransports, queuesOffline, selectableReaders } from './tiles';
+import { deviceTransports, OFFLINE_TENDERS_QUEUE, queuesOffline, selectableReaders } from './tiles';
 import { disabledReasonKey } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
@@ -241,9 +241,12 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			: fixedAmount
 				? flow.entryAppliedMinor
 				: flow.state.entryMinor;
+	// An offline device tile is choosable only while offline tenders queue (ADR 0040 PR B); until
+	// then it is listed as unavailable, never a pill whose commit button stays dead.
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
-		(tile.reason === 'offline' &&
+		(OFFLINE_TENDERS_QUEUE &&
+			tile.reason === 'offline' &&
 			tile.method.capture.mode === 'device' &&
 			deviceTransports(tile.method).some((transport) => queuesOffline(tile.method, transport)));
 	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));
