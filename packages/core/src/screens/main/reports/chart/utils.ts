@@ -1,15 +1,13 @@
-import {
-	addMinutes,
-	differenceInDays,
-	differenceInMinutes,
-	eachDayOfInterval,
-	eachMonthOfInterval,
-	format,
-	isSameDay,
-	startOfDay,
-	startOfHour,
-	startOfMonth,
-} from 'date-fns';
+import { addMinutes } from 'date-fns/addMinutes';
+import { differenceInDays } from 'date-fns/differenceInDays';
+import { differenceInMinutes } from 'date-fns/differenceInMinutes';
+import { eachDayOfInterval } from 'date-fns/eachDayOfInterval';
+import { eachMonthOfInterval } from 'date-fns/eachMonthOfInterval';
+import { format } from 'date-fns/format';
+import { isSameDay } from 'date-fns/isSameDay';
+import { startOfDay } from 'date-fns/startOfDay';
+import { startOfHour } from 'date-fns/startOfHour';
+import { startOfMonth } from 'date-fns/startOfMonth';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 

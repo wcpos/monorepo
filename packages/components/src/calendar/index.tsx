@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 import { CalendarProps, Calendar as RNCalendar } from 'react-native-calendars';
 import { useCSSVariable } from 'uniwind';
 
@@ -37,11 +37,21 @@ export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Pro
 		'--color-border',
 	]).map(String);
 
-	// Update locale configuration when language changes
+	const [loadedLocale, setLoadedLocale] = React.useState<string | undefined>();
+	// A failed locale chunk keeps English names; success remounts the calendar to read LocaleConfig.
 	React.useEffect(() => {
+		let live = true;
 		if (locale) {
-			updateLocaleConfig(locale);
+			void updateLocaleConfig(locale, () => live).then(
+				(updated) => {
+					if (updated) setLoadedLocale(locale);
+				},
+				() => undefined
+			);
 		}
+		return () => {
+			live = false;
+		};
 	}, [locale]);
 
 	// Derive current month directly from dateRange (no state sync needed)
@@ -119,6 +129,7 @@ export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Pro
 
 	return (
 		<RNCalendar
+			key={loadedLocale ?? 'default'}
 			firstDay={1}
 			onDayPress={handleDayPress}
 			markedDates={markedDates}

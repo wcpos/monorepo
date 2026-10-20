@@ -20,6 +20,7 @@
       "browser": "./src/get-instance-id.web.ts",
       "default": "./src/get-instance-id.ts"
     },
+    "./date-fns-locale": "./src/date-fns-locale.ts",
     "./logger": "./src/logger/index.ts",
     "./logger/constants": "./src/logger/constants.ts",
     "./open-external-url": {
@@ -45,6 +46,7 @@
     "expo-application": "~57.0.2",
     "expo-constants": "~57.0.12",
     "expo-file-system": "~57.0.4",
+    "react": "*",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
@@ -61,6 +63,7 @@
   "dependencies": {
     "@sentry/browser": "10.72.0",
     "@sentry/react-native": "8.25.0",
+    "date-fns": "^4.4.0",
     "lodash": "^4.18.1",
     "react-native-logs": "^5.6.0"
   },

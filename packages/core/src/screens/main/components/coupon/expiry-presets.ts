@@ -1,4 +1,6 @@
-import { addMonths, addWeeks, endOfDay } from 'date-fns';
+import { addMonths } from 'date-fns/addMonths';
+import { addWeeks } from 'date-fns/addWeeks';
+import { endOfDay } from 'date-fns/endOfDay';
 
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
