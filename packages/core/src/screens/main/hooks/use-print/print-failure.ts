@@ -26,6 +26,13 @@ const CANCELLED = /Printing did not complete|Print job cancelled|Printer service
 const UNREACHABLE =
 	/timed out|timeout|ETIMEDOUT|ECONNREFUSED|refused|not responding|bluetooth.*unavailable|is not connected|missing its device key|missing an address|Network Error|MODULE_MISSING/i;
 
+/**
+ * The system-print fallback's receipt fetch timing out (printFromUrl). The receipt
+ * server did not answer, not the printer, so it stays off UNREACHABLE like the other
+ * asset fetches.
+ */
+const RECEIPT_FETCH_TIMEOUT = /Receipt fetch timed out/i;
+
 /** Transport error codes for a request that never reached its destination. */
 const UNREACHABLE_CODES = new Set(['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNREFUSED']);
 
@@ -48,7 +55,7 @@ export function classifyPrintFailure(
 	if (
 		name === 'PrinterConnectionError' ||
 		(typeof code === 'string' && UNREACHABLE_CODES.has(code)) ||
-		UNREACHABLE.test(message)
+		(UNREACHABLE.test(message) && !RECEIPT_FETCH_TIMEOUT.test(message))
 	) {
 		return { cancelled: false, code: ERROR_CODES.PRINTER_UNREACHABLE };
 	}
