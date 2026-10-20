@@ -21,6 +21,33 @@ describe('RequestStateManager', () => {
 			expect(requestStateManager.checkCanProceed().blockCode).toBe(PREFLIGHT_BLOCK.RECOVERING);
 		});
 
+		it('lets an unauthenticated request through a latched authFailed', () => {
+			// The latch exists to stop credentialed polling against a dead session.
+			// A probe that sends no token is outside its remit — and blocking it
+			// strands the cashier, because connecting to another store is the way
+			// out of a dead session (2026-08-25 desktop lockout).
+			requestStateManager.setAuthFailed(true);
+
+			expect(requestStateManager.checkCanProceed({ authenticated: false })).toEqual({ ok: true });
+			expect(requestStateManager.checkCanProceed().blockCode).toBe(PREFLIGHT_BLOCK.AUTH_REQUIRED);
+		});
+
+		it('still blocks an unauthenticated request when offline or recovering', () => {
+			// Skipping the auth latch must not turn the probe into an unblockable
+			// request: offline and recovery blocks are about the transport, and they
+			// apply to anonymous requests exactly as they do to credentialed ones.
+			requestStateManager.setOffline(true);
+			expect(requestStateManager.checkCanProceed({ authenticated: false }).blockCode).toBe(
+				PREFLIGHT_BLOCK.OFFLINE
+			);
+			requestStateManager.setOffline(false);
+
+			requestStateManager.pauseRequests();
+			expect(requestStateManager.checkCanProceed({ authenticated: false }).blockCode).toBe(
+				PREFLIGHT_BLOCK.RECOVERING
+			);
+		});
+
 		it('should return ok:true by default', () => {
 			expect(requestStateManager.checkCanProceed()).toEqual({ ok: true });
 		});
