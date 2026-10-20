@@ -13,6 +13,8 @@ node_modules
 !.claude/rules/**
 !.claude/skills/
 !.claude/skills/**
+!.claude/specs/
+!.claude/specs/**
 !.claude/settings.json
 docs/
 apps/main/web-build-atlas/
