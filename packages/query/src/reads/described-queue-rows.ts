@@ -41,7 +41,8 @@ export function observeDescribedQueueRows(engine: RxdbSyncEngine, selection?: Qu
 											if (resident) residentRead = 'ok';
 										} catch (error) {
 											residentRead = 'failed';
-											logger.warn('Queue description could not read the local record', {
+											// Debug: a display-only fallback with no merchant consequence.
+											logger.debug('Queue description could not read the local record', {
 												context: {
 													collection: row.collectionName,
 													recordId: row.recordId,

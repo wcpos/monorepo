@@ -5,6 +5,7 @@ export {
 } from './use-engine-document';
 export { readResidentOrder, readResidentRecord } from './read-resident-record';
 export { readCustomerByWooId } from './read-customer-by-woo-id';
+export { observeRecordToName, type RecordToNameEmission } from './observe-record-to-name';
 export {
 	ORDER_REFRESH_TIMEOUT_MS,
 	demandRecordsByWooId,

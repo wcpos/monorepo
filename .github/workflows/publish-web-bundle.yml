@@ -350,10 +350,10 @@ jobs:
           git push origin "$BRANCH"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Runs even when nothing was pushed or built: a re-run after a verification
-      # failure finds the SHA already published (or builds the same bytes) and has
-      # nothing new to commit, but the lane still has to be made right. With no
-      # build output, the branch tree on GitHub is the expectation instead.
+      # Runs even when nothing was pushed or built, so a later run that finds the SHA
+      # already published still purges and verifies the lane; after a failure, wait
+      # for the throttle reset the error names before running again. With no build
+      # output, the branch tree on GitHub is the expectation instead.
       - name: 🧹 Purge and verify jsDelivr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -377,14 +377,14 @@ jobs:
             fi
           done <<< "$expected"
           if ! printf '%s' "$hashed" | verify_cdn_paths "$BRANCH" "$CDN_HASHED_DEADLINE_SECONDS"; then
-            echo "::error::jsDelivr does not serve the bytes of the published hashed files on @${BRANCH}; metadata.json was not purged, so stores still load the previous build. Re-run the workflow to retry."
+            echo "::error::jsDelivr does not serve the bytes of the published hashed files on @${BRANCH}; metadata.json was not purged, so stores still load the previous build. $(cdn_refresh_advice "on the @${BRANCH} branch")"
             exit 1
           fi
           while read -r sha path; do
             [[ -z "$path" ]] || purge_cdn_path "$BRANCH" "$path"
           done <<< "$unhashed"
           if ! printf '%s' "$unhashed" | verify_cdn_paths "$BRANCH" "$CDN_UNHASHED_DEADLINE_SECONDS"; then
-            echo "::error::jsDelivr does not serve the published metadata.json/index.html/workers on @${BRANCH} after the purge; re-run the workflow to purge and verify again."
+            echo "::error::jsDelivr does not serve the published metadata.json/index.html/workers on @${BRANCH} after the purge. $(cdn_refresh_advice "on the @${BRANCH} branch")"
             exit 1
           fi
           echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"

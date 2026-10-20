@@ -249,7 +249,7 @@ describe('useUpdateCartLine — shipping_lines', () => {
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
-	it('warns without patching when the shipping line is absent', async () => {
+	it('notes (info, not a warning) without patching when the shipping line is absent', async () => {
 		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
@@ -257,7 +257,8 @@ describe('useUpdateCartLine — shipping_lines', () => {
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Shipping line update targeted a line that is no longer in the cart',
 			{
 				showToast: true,

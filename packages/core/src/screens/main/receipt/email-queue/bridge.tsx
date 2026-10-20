@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	drainReceiptEmailQueue,
 	observeReceiptEmailQueueAvailability,
@@ -60,7 +61,12 @@ export function ReceiptEmailQueueBridge() {
 				post,
 				logger,
 			}).catch((error: unknown) => {
-				logger.warn('Receipt email drain failed', {
+				// Transport deferrals are handled (and retried) inside the drain and never
+				// reach here. What does is the local queue write failing — e.g. the POST
+				// succeeded but marking the row sent did not, so it can RESEND the receipt.
+				// That is the only copy failing: one coded row.
+				logger.error('Receipt email queue could not record its state', {
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: { error: getErrorMessage(error) },
 				});
 			});

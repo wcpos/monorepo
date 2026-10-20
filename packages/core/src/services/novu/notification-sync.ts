@@ -1,9 +1,10 @@
 import { type StoreLocalDatabase, upsertNotification } from '@wcpos/query';
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
-import { getNotificationBehavior } from './notification-behaviors';
+import { getNotificationBehavior, WORKFLOW_IDS } from './notification-behaviors';
 
 import type { NovuNotification } from './client';
 
@@ -18,7 +19,7 @@ function handleActionUrl(url: string): void {
 	// External URLs (http://, https://)
 	if (url.startsWith('http://') || url.startsWith('https://')) {
 		openExternalURL(url).catch((error) => {
-			novuLogger.error('Novu: Failed to open external URL', {
+			novuLogger.debug('Novu: Failed to open external URL', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { url, error },
 			});
@@ -79,10 +80,30 @@ function processNotificationBehavior(
 					: undefined,
 			},
 		};
-		if (level === 'error') {
-			novuLogger.error(title, { ...options, code: ERROR_CODES.UNEXPECTED_ERROR });
+		// The notification's own subject is the toast title: a code's generic summary
+		// ("WCPOS encountered an unexpected error") must never replace it. A licence
+		// expiry carries LICENSE101's hint; any other critical notice carries no code —
+		// it is the store's message, not an app fault.
+		const withTitle = { ...options, toast: { ...options.toast, title } };
+		if (!behavior.saveToDb) {
+			// `saveToDb: false` (announcements) means a toast and no Logs row; every
+			// non-debug logger level persists, so the toast is shown directly.
+			novuLogger.debug(title, { context: body ? { body } : undefined });
+			Toast.show({
+				type: level === 'warn' ? 'warning' : level,
+				title,
+				...(withTitle.toast.text2 ? { description: withTitle.toast.text2 } : {}),
+				closeButton: withTitle.toast.dismissable,
+				...(withTitle.toast.action ? { action: withTitle.toast.action } : {}),
+			});
+		} else if (level === 'error' && workflowId === WORKFLOW_IDS.LICENSE_EXPIRED) {
+			novuLogger.error(title, { ...withTitle, code: ERROR_CODES.LICENSE_NOT_ACTIVE_HERE });
+		} else if (level === 'error') {
+			// Any other critical notice is the store's message, not an app fault: no
+			// "unexpected error" code to replace its subject or mislead its hint.
+			novuLogger.warn(title, withTitle);
 		} else {
-			novuLogger[level](title, options);
+			novuLogger[level](title, withTitle);
 		}
 	} else if (behavior.saveToDb) {
 		// Save to logs DB without showing toast
@@ -109,7 +130,7 @@ export async function syncNotificationToRxDB(
 ): Promise<void> {
 	const notificationId = notification.id;
 	if (!notificationId) {
-		novuLogger.error('Novu: Notification missing ID', {
+		novuLogger.debug('Novu: Notification missing ID', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { keys: Object.keys(notification) },
 		});
@@ -145,8 +166,10 @@ export async function syncNotificationToRxDB(
 		await upsertNotification(database, nextNotification, { preserveLocalState });
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
-		novuLogger.error('Novu: Failed to sync notification to RxDB', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
+		// A local findOne/insert/upsert rejected: the device's copy of the notification
+		// is what failed, so it keeps a coded row (warn — the notification still shows).
+		novuLogger.warn('Novu: Failed to sync notification to RxDB', {
+			code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 			context: { notificationId, error },
 		});
 	}

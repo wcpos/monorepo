@@ -219,7 +219,8 @@ export function ProductGrid({
 	// once sync catches up. One line per change, not per skipped hit.
 	React.useEffect(() => {
 		if (skippedStaleHits > 0) {
-			gridLogger.warn('Products grid skipped stale rows while sync catches up', {
+			// Lifecycle, not amber: the grid heals itself once sync catches up.
+			gridLogger.info('Products grid skipped stale rows while sync catches up', {
 				context: { skipped: skippedStaleHits },
 			});
 		}

@@ -75,6 +75,11 @@ function createMockStorageInstance(overrides: Partial<RxStorageInstance<any, any
 	} as unknown as RxStorageInstance<any, any, any, any>;
 }
 
+/** RxDB's real write conflict: an RxError carrying the CONFLICT code. */
+function rxConflict(): Error {
+	return Object.assign(new Error('Document update conflict'), { code: 'CONFLICT' });
+}
+
 function createMockStorage(instance: RxStorageInstance<any, any, any, any>) {
 	return {
 		name: 'mock-storage',
@@ -188,11 +193,12 @@ describe('wrappedErrorHandlerStorage', () => {
 			const write = jest.fn().mockRejectedValue(remoteError());
 			const instance = await wrap(write);
 			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
-			write.mockRejectedValueOnce(new Error('CONFLICT'));
+			write.mockRejectedValueOnce(rxConflict());
 			await instance.bulkWrite([], 'test');
 			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
 			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
-			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(1);
+			// One for the local conflict, one for the repeated remote failure.
+			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(2);
 		});
 
 		it.each(['NotFoundError', 'QuotaExceededError'])(
@@ -319,11 +325,8 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it.each([
-			['CONFLICT error', new Error('CONFLICT on document xyz')],
-			['409 error', new Error('HTTP 409 response')],
-			['COL22 error', new Error('COL22: schema validation')],
-			['schema validation error', new Error('schema validation failed for field')],
-			['schema mismatch error', new Error('schema mismatch detected')],
+			['CONFLICT error', rxConflict()],
+			['409 status', Object.assign(new Error('write failed'), { status: 409 })],
 			['key range error', new Error('No key or key range specified')],
 			['invalid key error', new Error('No valid key provided')],
 		])('should return an empty array for handled error: %s', async (_label, error) => {
@@ -341,7 +344,7 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		it('should log a warning for handled errors', async () => {
 			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				findDocumentsById: jest.fn().mockRejectedValue(new Error('No key or key range specified')),
 			});
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -426,11 +429,8 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it.each([
-			['CONFLICT error', new Error('CONFLICT on document')],
-			['409 error', new Error('409 write rejected')],
-			['COL22 error', new Error('COL22 validation failure')],
-			['schema validation error', new Error('schema validation error on write')],
-			['schema mismatch error', new Error('schema mismatch on field')],
+			['CONFLICT error', rxConflict()],
+			['409 status', Object.assign(new Error('write failed'), { status: 409 })],
 			['key range error', new Error('No key or key range specified')],
 			['invalid key error', new Error('No valid key for write')],
 		])('should return error response for handled error: %s', async (_label, error) => {
@@ -461,7 +461,7 @@ describe('wrappedErrorHandlerStorage', () => {
 		it('should use the document as documentInDb when previous is absent', async () => {
 			const writes = [{ document: { id: 'new-doc', value: 'x' }, previous: undefined }];
 			const instance = createMockStorageInstance({
-				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				bulkWrite: jest.fn().mockRejectedValue(rxConflict()),
 			});
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -476,7 +476,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			const prev = { id: 'doc', value: 'old' };
 			const writes = [{ document: { id: 'doc', value: 'new' }, previous: prev }];
 			const instance = createMockStorageInstance({
-				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				bulkWrite: jest.fn().mockRejectedValue(rxConflict()),
 			});
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -499,7 +499,7 @@ describe('wrappedErrorHandlerStorage', () => {
 						separator: '|',
 					},
 				},
-				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				bulkWrite: jest.fn().mockRejectedValue(rxConflict()),
 			});
 			const storage = createMockStorage(compositeInstance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -563,9 +563,12 @@ describe('wrappedErrorHandlerStorage', () => {
 	// -----------------------------------------------------------------------
 
 	describe('error classification logging', () => {
-		it('should log with WRITE_CONFLICT code for CONFLICT errors', async () => {
+		// A local revision conflict is not the store clash SYNC221 names, and RxDB
+		// retries it; a coded row would tell the merchant to compare records for
+		// nothing.
+		it('logs a real RxDB conflict at debug with no code', async () => {
 			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				findDocumentsById: jest.fn().mockRejectedValue(rxConflict()),
 			});
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -573,30 +576,62 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			await wrappedInstance.findDocumentsById(['1'], false);
 
-			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-				expect.stringContaining('Write conflict'),
-				expect.objectContaining({
-					code: 'SYNC221',
-				})
+			expect(mockLoggerInstance.debug).toHaveBeenCalledWith(
+				expect.stringContaining('Local write conflict'),
+				expect.not.objectContaining({ code: expect.anything() })
 			);
+			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
 		});
 
-		it('should log with SCHEMA_VALIDATION_FAILED code for COL22 errors', async () => {
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(new Error('COL22 invalid')),
-			});
-			const storage = createMockStorage(instance);
-			const wrapped = wrappedErrorHandlerStorage({ storage });
-			const wrappedInstance = await wrapped.createStorageInstance({} as any);
-
-			await wrappedInstance.findDocumentsById(['1'], false);
-
-			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-				expect.stringContaining('Schema validation'),
-				expect.objectContaining({
-					code: 'SYNC311',
-				})
+		// The worker's error text carries document data and stack frames; a "409"
+		// or "CONFLICT" or "schema" in there is a coincidence, not a classification.
+		it.each([
+			['409 in a document price', 'Transaction aborted writing {"price":"409.00"}'],
+			['409 in a stack line', 'boom\n    at bulkWrite (worker.js:409:12)'],
+			['CONFLICT in document data', 'Transaction aborted writing {"note":"CONFLICT"}'],
+			['COL22 in document data', 'Transaction aborted writing {"sku":"COL22"}'],
+			['schema mismatch wording', 'schema mismatch on field'],
+		])('rethrows and logs SYNC999 for a lookalike: %s', async (_label, remoteMessage) => {
+			const error = new Error(
+				'could not requestRemote: ' + JSON.stringify({ error: { message: remoteMessage } })
 			);
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(error),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({} as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toBe(error);
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				'Storage remote method error in bulkWrite',
+				expect.objectContaining({ code: 'SYNC999' })
+			);
+			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+		});
+
+		it('classifies a worker-serialised CONFLICT by its code field', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest
+					.fn()
+					.mockRejectedValue(
+						new Error(
+							'could not requestRemote: ' +
+								JSON.stringify({ error: { message: 'Document update conflict', code: 'CONFLICT' } })
+						)
+					),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({} as any);
+
+			const result = await wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
+
+			expect(result.error[0]).toMatchObject({ status: 409, documentId: '1' });
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
 		});
 
 		it('should log with STORAGE_ERROR code for key errors', async () => {
@@ -927,7 +962,7 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		it('stays quiet for handled write conflicts and ordinary errors', async () => {
 			const instance = createMockStorageInstance({
-				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				bulkWrite: jest.fn().mockRejectedValue(rxConflict()),
 				query: jest.fn().mockRejectedValue(new Error('boom')),
 			});
 			const wrappedInstance = await wrappedErrorHandlerStorage({

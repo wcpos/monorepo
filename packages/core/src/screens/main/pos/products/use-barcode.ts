@@ -14,7 +14,11 @@ import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan, wooIdOf } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -28,6 +32,27 @@ import { useScanFeedback } from './use-scan-feedback';
 import type { ScanFeedbackHandle } from './use-scan-feedback';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
+
+/**
+ * The online lookup's failure, from its message (the resolver reports no status
+ * field): the store not answering is SYNC121, a store error SYNC131, an ended
+ * session AUTH101 — not "loading products hit an unexpected problem".
+ */
+export function barcodeLookupErrorCode(message: string | undefined): ErrorCode {
+	if (!message) return ERROR_CODES.PRODUCT_UNEXPECTED;
+	if (message.startsWith('resolve/barcode request failed:')) {
+		// The resolver wraps a reply it could not parse in the same prefix: the store
+		// answered, with a malformed body (SYNC151), so it is not "unreachable".
+		return /JSON|Unexpected token|SyntaxError/i.test(message)
+			? ERROR_CODES.STORE_RESPONSE_MALFORMED
+			: ERROR_CODES.SYNC_UNREACHABLE;
+	}
+	const status = /^resolve\/barcode failed: (\d{3})/.exec(message)?.[1];
+	if (status === '401') return ERROR_CODES.SESSION_EXPIRED;
+	if (status !== undefined && status.startsWith('5')) return ERROR_CODES.STORE_SERVER_ERROR;
+	return ERROR_CODES.PRODUCT_UNEXPECTED;
+}
+
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
 const AMBIGUOUS_HYDRATION_LIMIT = 10;
 
@@ -167,7 +192,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showNotFound = () => {
 			scan.notFound(barcodeStr);
-			barcodeLogger.warn('Barcode scan did not match a product', {
+			// A routine miss (PRODUCT301 is info); the scan toast already says so.
+			barcodeLogger.info('Barcode scan did not match a product', {
 				code: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 				context: {
 					barcode: barcodeStr,
@@ -178,13 +204,16 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showLookupError = (errorCode: ErrorCode, error?: string) => {
 			scan.error(barcodeStr);
-			barcodeLogger.error('Barcode lookup failed', {
-				code: errorCode,
-				context: {
-					barcode: barcodeStr,
-					...(error ? { error } : {}),
-				},
-			});
+			barcodeLogger[ERROR_CATALOGUE[errorCode].severity === 'error' ? 'error' : 'warn'](
+				'Barcode lookup failed',
+				{
+					code: errorCode,
+					context: {
+						barcode: barcodeStr,
+						...(error ? { error } : {}),
+					},
+				}
+			);
 			guardedSetSearch(barcodeStr);
 		};
 
@@ -213,6 +242,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			if (engineStatus.connectivity === 'offline') {
 				scan.unavailable(barcodeStr);
 				barcodeLogger.warn('Barcode online lookup skipped because the sync engine is offline', {
+					code: ERROR_CODES.SYNC_UNREACHABLE,
 					context: {
 						barcode: barcodeStr,
 						connectivity: engineStatus.connectivity,
@@ -250,7 +280,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			}
 
 			if (resolution.outcome === 'error') {
-				showLookupError(ERROR_CODES.PRODUCT_UNEXPECTED, resolution.message);
+				showLookupError(barcodeLookupErrorCode(resolution.message), resolution.message);
 				return;
 			}
 
@@ -379,7 +409,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const outOfStock = !resolveStock(product.payload).sellable;
 		if (!showOutOfStock && outOfStock) {
 			scan.outOfStock(product.payload.name ?? '', barcodeStr);
-			barcodeLogger.warn('Barcode scan matched an out-of-stock product', {
+			// The store's stock rule doing its job; the scan toast explains it.
+			barcodeLogger.info('Barcode scan matched an out-of-stock product', {
 				context: {
 					barcode: barcodeStr,
 					productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),

@@ -1,3 +1,5 @@
+import { logRecordRef } from '@wcpos/query/store-local';
+
 import type { LevelKind } from '../health/components/level-indicator';
 
 /**
@@ -305,24 +307,47 @@ export function formatSkewMagnitude(skewSeconds: number): string {
 	return `${(seconds / 3_600).toFixed(1)} h`;
 }
 
+/** The record a row is about, when its context names one (`collection` + `recordId`). */
+export function recordRefOf(row: LogRow): { collectionName: string; recordId: string } | null {
+	return logRecordRef(row.context);
+}
+
 /**
  * Correlation data for the expanded row detail. Raw values out — the component
  * owns locale-aware time formatting.
  */
 export type RowDetailData = {
-	/** e.g. `op_9d21 · sync.record` */
+	/** e.g. `op_9d21 · sync.record · update` */
 	operation?: string;
 	/** e.g. `c41a88 · 400 · 500 ms` */
 	request?: string;
 	serverCode?: string;
 	attempts?: { times: number; firstSeen: number; lastSeen: number };
+	/**
+	 * The specifics the guidance copy points at ("the field named below", "the
+	 * SKU the store refused", "the fields listed below", "the store's reason") —
+	 * promoted out of the collapsed Details tree so the row shows what its own
+	 * sentence refers to.
+	 */
+	field?: string;
+	sku?: string;
+	overwrittenFields?: string;
+	serverMessage?: string;
 };
+
+function nonEmptyString(value: unknown): string | undefined {
+	return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
 
 export function rowDetailData(row: LogRow): RowDetailData {
 	const context = row.context ?? {};
 	const detail: RowDetailData = {};
 
-	const operationParts = [row.operationId, row.operationType].filter(
+	// The record change itself (create / update / delete), the "operation named
+	// in the log" the guidance copy refers to: `operation` on most rows, `op` on
+	// the push rows that persist the mutation kind.
+	const recordChange = context.operation ?? context.op;
+	const operationParts = [row.operationId, row.operationType, recordChange].filter(
 		(part): part is string => typeof part === 'string' && part.length > 0
 	);
 	if (operationParts.length > 0) detail.operation = operationParts.join(' · ');
@@ -345,6 +370,19 @@ export function rowDetailData(row: LogRow): RowDetailData {
 				? context.errorCode
 				: undefined;
 	if (serverCode) detail.serverCode = serverCode;
+
+	const field = nonEmptyString(context.field);
+	if (field) detail.field = field;
+	const sku = nonEmptyString(context.sku);
+	if (sku) detail.sku = sku;
+	if (Array.isArray(context.overwrittenFields)) {
+		const fields = context.overwrittenFields.filter(
+			(entry): entry is string => typeof entry === 'string' && entry !== ''
+		);
+		if (fields.length > 0) detail.overwrittenFields = fields.join(', ');
+	}
+	const serverMessage = nonEmptyString(context.serverMessage);
+	if (serverMessage) detail.serverMessage = serverMessage;
 
 	const count = Math.max(row.count ?? 1, row.attempt ?? 0);
 	if (count > 1) {

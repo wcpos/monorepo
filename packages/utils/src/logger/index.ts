@@ -47,6 +47,13 @@ export interface LoggerOptions {
 	actor?: { id?: string; role?: string; name?: string };
 	toast?: {
 		title?: string; // Override the toast title when the log message is forensic (ids, codes) rather than cashier-readable
+		/**
+		 * The toast's variant, when it should differ from the log level. A caller
+		 * whose incident is already on record (the sync observer wrote the coded
+		 * row) logs at `debug` and still owes the cashier an error toast; a benign
+		 * `info` row can still warrant a warning toast. Defaults to the level.
+		 */
+		type?: 'success' | 'error' | 'info' | 'warning';
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
 		showErrorCode?: boolean; // Show error code "Help" link (default: true if errorCode exists)
@@ -819,9 +826,9 @@ const mainTransport = (props: any) => {
 		// Get error code from context
 		const errorCode = options.context?.errorCode;
 
-		// Map log levels to toast types
-		let toastType = level.text;
-		if (level.text === 'warn') {
+		// Map log levels to toast types, unless the call site chose the variant.
+		let toastType = options.toast?.type ?? level.text;
+		if (toastType === 'warn') {
 			toastType = 'warning';
 		}
 

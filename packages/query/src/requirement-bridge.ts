@@ -37,7 +37,8 @@ export function declareRequirements(
 		const handle = engine.require(requirement);
 		handle.ready.catch((error) => {
 			if (requirement.kind === 'search') {
-				requirementLogger.warn('Search requirement failed; continuing with local results', {
+				// The engine already logs coverage.require.error; local results still show.
+				requirementLogger.debug('Search requirement failed; continuing with local results', {
 					context: {
 						collection: requirement.collection,
 						termLength: requirement.term?.length ?? 0,

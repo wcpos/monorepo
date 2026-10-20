@@ -471,6 +471,10 @@ describe('drainMutationQueue', () => {
 		expect((await q.all())[0]).toMatchObject({ status: 'rejected' });
 		expect(await q.pending()).toEqual([]); // dead-lettered (removed), NOT left to retry forever
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 400)).toBe(true);
+		// `op` lets the engine tell a catalogue edit (auto-reverted next) from a create.
+		expect(events.find((e) => e.type === 'push.rejected')?.fields).toMatchObject({
+			op: 'update',
+		});
 	});
 
 	it('dead-letters a cannot-delete refusal with its detail and never pushes it again', async () => {
@@ -1148,6 +1152,74 @@ describe('drainMutationQueue — retry backoff (ADR 0012)', () => {
 		expect(
 			events.some((e) => e.type === 'queue.write.reschedule-failed' && e.level === 'warn')
 		).toBe(true);
+	});
+
+	it('counts a reschedule that keeps failing across drains, outside the unpersisted row', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		const reschedule = vi.spyOn(q, 'reschedule').mockRejectedValue(new Error('storage down'));
+		const settleFailures = new Map<string, number>();
+		const events: SyncEvent[] = [];
+		let clock = 1_000;
+		const drain = () => {
+			// Past any backoff the landed reschedule set.
+			clock += 10 * 60_000;
+			return drainMutationQueue({
+				queue: q,
+				push: async () => {
+					throw new Error('network');
+				},
+				now: () => clock,
+				backoff: NO_JITTER_BACKOFF,
+				settleFailures,
+				observe: (e) => events.push(e),
+			});
+		};
+		await drain();
+		await drain();
+		reschedule.mockRestore();
+		await drain();
+		vi.spyOn(q, 'reschedule').mockRejectedValue(new Error('storage down'));
+		await drain();
+
+		// Every failed reschedule leaves attempts unpersisted, so the row cannot count;
+		// the host-owned streak does, and a reschedule that landed resets it.
+		expect(
+			events
+				.filter((e) => e.type === 'queue.write.reschedule-failed')
+				.map((e) => e.fields?.consecutiveFailures)
+		).toEqual([1, 2, 1]);
+	});
+
+	it('reports an ack that keeps failing after its push landed, with a streak', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		vi.spyOn(q, 'acknowledge').mockRejectedValue(new Error('storage down'));
+		const settleFailures = new Map<string, number>();
+		const events: SyncEvent[] = [];
+		for (let tick = 0; tick < 2; tick += 1) {
+			await drainMutationQueue({
+				queue: q,
+				push: async (m) => ({
+					outcome: 'updated',
+					mutation: m,
+					httpStatus: 200,
+					document: { id: 1 },
+					currentRevision: null,
+				}),
+				now: () => 1_000_000 * (tick + 1),
+				backoff: NO_JITTER_BACKOFF,
+				settleFailures,
+				observe: (e) => events.push(e),
+			});
+		}
+
+		expect(
+			events
+				.filter((e) => e.type === 'queue.write.ack-failed')
+				.map((e) => [e.level, e.fields?.consecutiveFailures])
+		).toEqual([
+			['warn', 1],
+			['warn', 2],
+		]);
 	});
 
 	it('a deferred head row does not consume the limit — a ready row behind it still pushes', async () => {

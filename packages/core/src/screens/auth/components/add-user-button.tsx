@@ -5,6 +5,7 @@ import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -54,8 +55,23 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 			}
 			authLogger.debug(`Login successful for site: ${site.name}`);
 			processedResponseRef.current = responseKey;
-			void handleLoginSuccess({ params: response.params });
+			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
+			void handleLoginSuccess({ params: response.params }).catch(() => undefined);
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Login did not complete', {
+					context: { siteName: site.name, errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
@@ -66,7 +82,7 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name]);
+	}, [response, handleLoginSuccess, site.name, t]);
 
 	const disabled = !isReady || isProcessing;
 

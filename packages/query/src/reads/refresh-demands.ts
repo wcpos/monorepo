@@ -75,8 +75,10 @@ export function refreshStockFor(engine: RxdbSyncEngine, lineItems: LineItems): v
 			() => handle.release(),
 			(error) => {
 				handle.release();
-				stockLogger.error('Stock refresh failed', {
-					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				// A background re-pull after a sale that already succeeded; the engine
+				// wrote the coded row for the failed require (SYNC321) and the stock
+				// catches up on the next sync.
+				stockLogger.debug('Stock refresh failed', {
 					context: {
 						collection: request.collection,
 						error: getErrorMessage(error),
@@ -152,9 +154,9 @@ export function watchVariationParentRefresh(engine: RxdbSyncEngine): () => void 
 		try {
 			await handle.ready;
 		} catch (error) {
-			// Background repair of a derived display value: logged, never toasted.
-			parentLogger.error('Failed to refresh variable product price range', {
-				code: ERROR_CODES.PRODUCT_UNEXPECTED,
+			// Background repair of a derived display value, and the engine already wrote
+			// the coded row for the failed require (SYNC321): forensic only.
+			parentLogger.debug('Failed to refresh variable product price range', {
 				context: { parentId: String(parentRemoteId), error: getErrorMessage(error) },
 			});
 		} finally {

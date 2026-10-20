@@ -29,9 +29,10 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 		}
 
 		if (isError) {
-			// Zero/many matches is a workflow miss, not a system failure — warn
-			// matches the registry severity of both codes.
-			barcodeLogger.warn(text1, {
+			// Zero/many matches is a workflow miss, not a system failure. The level is
+			// each code's registry severity: no match (PRODUCT301) is info, an ambiguous
+			// barcode (PRODUCT321, a catalogue problem to fix) is warn.
+			barcodeLogger[results.length === 0 ? 'info' : 'warn'](text1, {
 				showToast: true,
 				toast: {
 					text2,
@@ -64,7 +65,12 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 		barcode$,
 		(rawBarcode) =>
 			void handleBarcode(rawBarcode).catch((error) =>
-				barcodeLogger.error(String(error), { code: ERROR_CODES.PRODUCT_UNEXPECTED })
+				// The scan did nothing visible; say so rather than fail silently.
+				barcodeLogger.error('Barcode scan failed', {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+					showToast: true,
+					context: { error: String(error) },
+				})
 			)
 	);
 

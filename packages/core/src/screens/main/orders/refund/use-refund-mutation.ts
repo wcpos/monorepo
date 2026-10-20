@@ -132,7 +132,9 @@ export function useRefundMutation() {
 				// the cashier to retry, and each retry mints a fresh idempotency key,
 				// so a retry POSTs a SECOND refund. Log it; the local order heals on
 				// the next sync pass.
-				refundLogger.warn('Refund succeeded but the local order refresh failed', {
+				// Forensic: the engine already logs the failed require, and nothing is
+				// wrong with the refund — an amber row would invite the very retry above.
+				refundLogger.debug('Refund succeeded but the local order refresh failed', {
 					context: {
 						orderId,
 						error: getErrorMessage(error),

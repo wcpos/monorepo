@@ -4,7 +4,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 
-import { log } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported, log } from '@wcpos/utils/logger';
 
 import { useLocalMutation } from './use-local-mutation';
 import { useCartWrite } from '../../pos/commands/use-cart-write';
@@ -183,6 +183,13 @@ describe('useLocalMutation', () => {
 		expect(stored).toMatchObject({
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
+		});
+		// SYNC101's own summary and hint are the toast; "There was an error: queue
+		// unavailable" said neither what happened nor what to do.
+		expect(getLogger([]).error).toHaveBeenCalledWith('Local mutation failed', {
+			code: 'SYNC101',
+			showToast: true,
+			context: expect.objectContaining({ error: 'queue unavailable' }),
 		});
 	});
 
@@ -364,12 +371,23 @@ describe('useLocalMutation', () => {
 		};
 
 		const { result } = renderHook(() => useLocalMutation());
-		await expect(
-			result.current.localPatch({
+		const rethrown = await result.current
+			.localPatch({
 				document: document as never,
 				data: { status: 'processing' } as never,
 			})
-		).rejects.toThrow('Active engine scope changed twice during orders mutation');
+			.then(
+				() => undefined,
+				(error: unknown) => error
+			);
+		expect(rethrown).toEqual(
+			expect.objectContaining({
+				message: 'Active engine scope changed twice during orders mutation',
+			})
+		);
+		// Logged and toasted here, so a caller catching the rethrow must not report it again.
+		expect(getLogger([]).error).toHaveBeenCalledTimes(1);
+		expect(isErrorReported(rethrown)).toBe(true);
 
 		expect(firstStored).toMatchObject({ status: 'pending', payload: { status: 'pending' } });
 		expect(secondStored).toMatchObject({ status: 'pending', payload: { status: 'pending' } });

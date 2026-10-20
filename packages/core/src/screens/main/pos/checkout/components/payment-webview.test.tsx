@@ -807,7 +807,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			await Promise.resolve();
 		});
 
-		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(setLoading).toHaveBeenCalledWith(false);
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
@@ -940,14 +941,86 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 
 		expect(setLoading).toHaveBeenCalledWith(false);
-		expect(logger.error).toHaveBeenCalledWith('Payment failed. Please try again.', {
+		// A decline is not "confirm whether the payment went through": the gateway's own
+		// sentence is the toast, the sale is not paid, and the cart is safe to retry.
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).toHaveBeenCalledWith('Payment was not completed by the gateway', {
 			showToast: true,
-			code: ERROR_CODES.PAYMENT_UNEXPECTED,
+			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+			toast: { title: 'Payment failed. Please try again.' },
 			context: {
+				gatewayMessage: 'Payment failed. Please try again.',
 				action: 'wcpos-payment-blocked',
 				payloadData: payload.data,
 			},
 		});
+	});
+
+	it('warns (never errors) when the follow-up to a successful payment throws', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		mockStockAdjustment.mockImplementationOnce(() => {
+			throw new Error('stock adjust broke');
+		});
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: {
+							id: 42,
+							status: 'completed',
+							number: '42',
+							meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+							line_items: [],
+						},
+					},
+				},
+			});
+		});
+
+		// The payment was taken: a red error toast reads as "charge again" (PAYMENT101, owner).
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).toHaveBeenCalledWith(
+			'stock adjust broke',
+			expect.objectContaining({
+				showToast: true,
+				code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
+			})
+		);
+	});
+
+	it('falls back to translated copy when a blocked submit carries no gateway sentence', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: { action: 'wcpos-payment-blocked', payload: { message: ' ', data: {} } },
+				},
+			});
+		});
+
+		expect(logger.warn).toHaveBeenCalledWith(
+			'Payment was not completed by the gateway',
+			expect.objectContaining({ toast: { title: 'pos_checkout.payment_not_completed' } })
+		);
 	});
 
 	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
@@ -1221,7 +1294,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			await Promise.resolve();
 		});
 
-		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(setLoading).toHaveBeenCalledWith(false);
 		expect(mockReplace).not.toHaveBeenCalled();
@@ -1463,7 +1537,8 @@ describe('PaymentWebview settled order status', () => {
 
 		await postReceived({ ...pendingPayload, payment_method: 'pos_card' });
 
-		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
@@ -1784,7 +1859,8 @@ describe('PaymentWebview settled order status', () => {
 
 		await postReceived(pendingPayload);
 
-		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
@@ -1910,7 +1986,8 @@ describe('PaymentWebview settled order status', () => {
 
 		await postReceived({ ...pendingPayload, status: 'pos-open' });
 
-		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();

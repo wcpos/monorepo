@@ -20,9 +20,10 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useLoginHandler } from '../hooks/use-login-handler';
@@ -113,6 +114,8 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					}
 				} catch (error) {
 					processedResponseRef.current = null;
+					// handleLoginSuccess already wrote the row and toast for its own failure.
+					if (isErrorReported(error)) return;
 					authLogger.error('Failed to finish re-authentication', {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						showToast: true,
@@ -121,6 +124,20 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				}
 			})();
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Re-authentication did not complete', {
+					context: { siteName: site.name, errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Re-authentication failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,

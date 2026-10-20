@@ -27,6 +27,7 @@ export {
 	observeRecordOutcomeRows,
 	observeClockCheckRows,
 	readRecentErrorLogs,
+	logRecordRef,
 } from './logs';
 export {
 	observeScannerProfiles,

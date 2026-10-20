@@ -106,7 +106,7 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 		}
 		// Disconnect the WebSocket before releasing the reference
 		void novuClient.socket.disconnect().catch((error) => {
-			novuLogger.warn('Novu: Failed to disconnect previous client', { context: { error } });
+			novuLogger.debug('Novu: Failed to disconnect previous client', { context: { error } });
 		});
 		novuClient = null;
 	}
@@ -173,7 +173,7 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
  */
 export async function waitForNovuReady(timeoutMs = 5000): Promise<boolean> {
 	if (!socketConnectedPromise) {
-		novuLogger.warn('Novu: No socket connection promise - client not initialized');
+		novuLogger.debug('Novu: No socket connection promise - client not initialized');
 		return false;
 	}
 
@@ -218,7 +218,7 @@ function dedupeNotification(notificationId: string | undefined): boolean {
  */
 export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 	if (!novuClient) {
-		novuLogger.warn('Novu: Cannot subscribe to events - client not initialized');
+		novuLogger.debug('Novu: Cannot subscribe to events - client not initialized');
 		return () => {};
 	}
 
@@ -284,7 +284,7 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
  */
 export async function fetchNotifications(limit = 50): Promise<NovuNotification[]> {
 	if (!novuClient) {
-		novuLogger.error('Novu: Cannot fetch notifications - client not initialized', {
+		novuLogger.debug('Novu: Cannot fetch notifications - client not initialized', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 		});
 		return [];
@@ -294,7 +294,7 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 		const { data, error } = await novuClient.notifications.list({ limit });
 
 		if (error) {
-			novuLogger.error('Novu: Failed to fetch notifications', {
+			novuLogger.debug('Novu: Failed to fetch notifications', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
@@ -307,7 +307,7 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 
 		return data?.notifications || [];
 	} catch (error) {
-		novuLogger.error('Novu: Failed to fetch notifications', {
+		novuLogger.debug('Novu: Failed to fetch notifications', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: getErrorMessage(error) },
 		});
@@ -324,7 +324,7 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
 	try {
 		const { error } = await novuClient.notifications.read({ notificationId });
 		if (error) {
-			novuLogger.error('Novu: Failed to mark as read', {
+			novuLogger.debug('Novu: Failed to mark as read', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { notificationId, error: error.message },
 			});
@@ -332,7 +332,7 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
 		}
 		return true;
 	} catch (error) {
-		novuLogger.error('Novu: Failed to mark as read', {
+		novuLogger.debug('Novu: Failed to mark as read', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { notificationId, error: getErrorMessage(error) },
 		});
@@ -349,7 +349,7 @@ export async function markAllAsRead(): Promise<boolean> {
 	try {
 		const { error } = await novuClient.notifications.readAll();
 		if (error) {
-			novuLogger.error('Novu: Failed to mark all as read', {
+			novuLogger.debug('Novu: Failed to mark all as read', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
@@ -357,7 +357,7 @@ export async function markAllAsRead(): Promise<boolean> {
 		}
 		return true;
 	} catch (error) {
-		novuLogger.error('Novu: Failed to mark all as read', {
+		novuLogger.debug('Novu: Failed to mark all as read', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: getErrorMessage(error) },
 		});
@@ -374,7 +374,7 @@ export async function markAsSeen(notificationId: string): Promise<boolean> {
 	try {
 		const { error } = await novuClient.notifications.seen({ notificationId });
 		if (error) {
-			novuLogger.error('Novu: Failed to mark as seen', {
+			novuLogger.debug('Novu: Failed to mark as seen', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { notificationId, error: error.message },
 			});
@@ -382,7 +382,7 @@ export async function markAsSeen(notificationId: string): Promise<boolean> {
 		}
 		return true;
 	} catch (error) {
-		novuLogger.error('Novu: Failed to mark as seen', {
+		novuLogger.debug('Novu: Failed to mark as seen', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { notificationId, error: getErrorMessage(error) },
 		});
@@ -399,7 +399,7 @@ export async function markAllAsSeen(): Promise<boolean> {
 	try {
 		const { error } = await novuClient.notifications.seenAll();
 		if (error) {
-			novuLogger.error('Novu: Failed to mark all as seen', {
+			novuLogger.debug('Novu: Failed to mark all as seen', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
@@ -407,7 +407,7 @@ export async function markAllAsSeen(): Promise<boolean> {
 		}
 		return true;
 	} catch (error) {
-		novuLogger.error('Novu: Failed to mark all as seen', {
+		novuLogger.debug('Novu: Failed to mark all as seen', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: getErrorMessage(error) },
 		});
@@ -428,7 +428,7 @@ export function disconnectNovuClient(): void {
 		}
 		// Disconnect the WebSocket before releasing the reference
 		void novuClient.socket.disconnect().catch((error) => {
-			novuLogger.warn('Novu: Failed to disconnect client', { context: { error } });
+			novuLogger.debug('Novu: Failed to disconnect client', { context: { error } });
 		});
 		novuClient = null;
 		currentSubscriberId = null;

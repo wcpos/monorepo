@@ -296,19 +296,22 @@ export const useRestHttpClient = (endpoint = '') => {
 				 * Some servers return invalid JSON, so we try to recover from it
 				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
 				 */
-				if (typeof response?.data === 'string') {
-					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
-						code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
-						context: {
-							endpoint,
-							url: config.url,
-							responsePreview: response.data.substring(0, 200),
-						},
-					});
-					response.data = extractValidJSON(response?.data);
+				// An empty body (a 204) is not stray text. One row per response: SYNC151 when
+				// the stray text was cleaned up, or extractValidJSON's own SYNC131 when it
+				// could not be — never both.
+				if (typeof response?.data === 'string' && response.data !== '') {
+					const raw = response.data;
+					response.data = extractValidJSON(raw);
 
 					if (response.data) {
-						httpLogger.debug('Successfully recovered valid JSON from response');
+						httpLogger.warn('Server returned text instead of JSON - recovered', {
+							code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
+							context: {
+								endpoint,
+								url: config.url,
+								responsePreview: raw.substring(0, 200),
+							},
+						});
 					}
 				}
 				return unwrapResponseEnvelope(response);

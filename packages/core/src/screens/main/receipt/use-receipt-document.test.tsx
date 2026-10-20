@@ -4,6 +4,8 @@ import * as React from 'react';
 import { of } from 'rxjs';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
@@ -180,6 +182,75 @@ it('does not report a failed print as printed or retry auto-print', async () => 
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(result.current.printedTo).toBeNull();
 	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+
+it('reports a failed autoprint as PRINT101, and a manual print during it on its own terms', async () => {
+	let failAutoprint!: (error: Error) => void;
+	mockPrint
+		.mockImplementationOnce(
+			() =>
+				new Promise<boolean>((_resolve, reject) => {
+					failAutoprint = reject;
+				})
+		)
+		.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+
+	// A manual Print fails while the autoprint is still in flight: PRINT201, not PRINT101.
+	await act(async () => {
+		await result.current.printAndReport();
+	});
+	expect(getLogger([]).error).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT201', showToast: true })
+	);
+
+	await act(async () => {
+		failAutoprint(new Error('ECONNREFUSED'));
+		await Promise.resolve();
+	});
+	expect(getLogger([]).warn).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT101', showToast: true })
+	);
+});
+
+it('logs a cancelled report/closure print as debug and a real failure by its classified code, row only', async () => {
+	mockPrint
+		.mockRejectedValueOnce(new Error('Printing did not complete'))
+		.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	const logger = getLogger([]);
+	// The logger mock is shared across this file; start from a clean slate.
+	[logger.error, logger.warn, logger.debug].forEach((fn) => (fn as jest.Mock).mockClear());
+	mockToast.mockClear();
+
+	// The cashier closed the iOS print dialog: no coded row.
+	await act(async () => {
+		await expect(result.current.print()).rejects.toThrow('Printing did not complete');
+	});
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.debug).toHaveBeenCalledWith(
+		'Receipt print failed (cancelled)',
+		expect.objectContaining({ context: expect.objectContaining({ event: 'receipt.print_failed' }) })
+	);
+
+	// A real failure carries the classifier's code, and the host's inline error is the only UI.
+	await act(async () => {
+		await expect(result.current.print()).rejects.toThrow('busy');
+	});
+	expect(logger.error).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT201' })
+	);
+	expect(logger.error).not.toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT999' })
+	);
+	expect(mockToast).not.toHaveBeenCalled();
 });
 
 it('does not auto-print again when a paid tab is revisited', async () => {
@@ -538,6 +609,40 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('Selected COPY 6');
 		expect(localRow.print_count).toBe(7);
 		expect(mockPost).toHaveBeenCalledTimes(3);
+	});
+	it('writes one uncoded info row when a closure print is refused for its template', async () => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([
+				{ id: 'php', is_active: true, offline_capable: false, engine: 'legacy-php' },
+			]);
+		const logger = getLogger([]);
+		[logger.error, logger.warn, logger.info].forEach((fn) => (fn as jest.Mock).mockClear());
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+			})
+		);
+		await act(async () => result.current.setSelectedTemplateId('php'));
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
+		});
+		const refusals = (logger.info as jest.Mock).mock.calls.filter(
+			([message]) =>
+				message === 'Report print refused: the selected template cannot print this document'
+		);
+		expect(refusals).toHaveLength(1);
+		expect(refusals[0][1]).not.toHaveProperty('code');
+		expect(refusals[0][1].context).toMatchObject({
+			event: 'receipt.print_refused',
+			document: 'closure:c',
+			templateId: 'php',
+			reason: 'not-offline-capable',
+		});
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 	// Revert: drop useReceiptData.error at either renderer or document-hook boundary.
 	it('exposes an authoritative document GET failure and clears it on manual retry', async () => {

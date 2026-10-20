@@ -4,7 +4,6 @@
 import { act, waitFor } from '@testing-library/react';
 
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	fetchFreshRecords,
@@ -16,6 +15,7 @@ const mockFindEngineResident = jest.fn();
 const mockRequire = jest.fn();
 const mockEvents = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerDebug = jest.fn();
 
 const engine = {
 	events: mockEvents,
@@ -41,7 +41,10 @@ let residentScopeId = 'scope-1';
 let activeScopeId = 'scope-1';
 
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		debug: (...args: unknown[]) => mockLoggerDebug(...args),
+	}),
 	getErrorMessage: (error: unknown) => String(error),
 }));
 
@@ -245,8 +248,10 @@ it('releases the requirement and logs without a toast when the fetch fails', asy
 	});
 
 	expect(releases[0]).toHaveBeenCalledTimes(1);
-	expect(mockLoggerError).toHaveBeenCalledTimes(1);
-	expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('showToast', true);
+	// The engine wrote the coded row for the failed require; this one is forensic only.
+	expect(mockLoggerError).not.toHaveBeenCalled();
+	expect(mockLoggerDebug).toHaveBeenCalledTimes(1);
+	expect(mockLoggerDebug.mock.calls[0][1]).not.toHaveProperty('showToast', true);
 });
 
 it('unsubscribes on unmount and declares nothing afterwards', async () => {
@@ -296,8 +301,8 @@ describe('refreshStockFor', () => {
 		readyControls[0].reject(new Error('offline'));
 		await Promise.resolve();
 		expect(releases[0]).toHaveBeenCalledTimes(1);
-		expect(mockLoggerError).toHaveBeenCalledWith('Stock refresh failed', {
-			code: ERROR_CODES.PRODUCT_UNEXPECTED,
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerDebug).toHaveBeenCalledWith('Stock refresh failed', {
 			context: { collection: 'products', error: 'Error: offline' },
 		});
 	});

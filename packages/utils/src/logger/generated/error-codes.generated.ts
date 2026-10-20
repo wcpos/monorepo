@@ -7,6 +7,7 @@ export type ErrorCode =
 	| 'SYNC131'
 	| 'SYNC141'
 	| 'SYNC201'
+	| 'SYNC202'
 	| 'SYNC211'
 	| 'SYNC301'
 	| 'SYNC311'
@@ -31,6 +32,7 @@ export type ErrorCode =
 	| 'PAYMENT212'
 	| 'PAYMENT221'
 	| 'PAYMENT301'
+	| 'PAYMENT311'
 	| 'PAYMENT401'
 	| 'PAYMENT501'
 	| 'PRINT101'
@@ -59,6 +61,8 @@ export type ErrorCode =
 	| 'SYNC401'
 	| 'SYNC411'
 	| 'SYNC221'
+	| 'SYNC222'
+	| 'SYNC231'
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
 	| 'CLIENT111'
@@ -83,6 +87,7 @@ export type ErrorCode =
 	| 'SYNC161'
 	| 'SYNC171'
 	| 'SYNC181'
+	| 'SYNC191'
 	| 'CHECKOUT111'
 	| 'PRODUCT321'
 	| 'PRODUCT421'
@@ -102,6 +107,8 @@ export type ErrorCode =
 	| 'REGISTER221'
 	| 'REGISTER301'
 	| 'CLIENT151'
+	| 'CLIENT181'
+	| 'CLIENT171'
 	| 'AUTH131'
 	| 'CLIENT161';
 export type ErrorDomain =
@@ -137,73 +144,90 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			'Note the unsaved change and check device storage, then restart. Do not clear local data.',
+			"Free up device storage, then check the change shows up. If it's missing, enter it again. Contact support if it repeats.",
 		dataSafety: 'data-at-risk',
-		summary:
-			'This change could not be saved to the local database and remains only on this device.',
+		summary: "WCPOS couldn't write a change to this device's storage.",
 	},
 	SYNC111: {
 		code: 'SYNC111',
 		symbol: 'LOCAL_DB_CORRUPTED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Read the help page before using Clear & re-download… on the damaged data.',
+		actionHint:
+			"Tap Copy debug info at the top of Logs and send it to WCPOS support. Don't reinstall.",
 		dataSafety: 'data-at-risk',
-		summary: 'Local store data is damaged and needs repair before syncing can continue.',
+		summary: "Some data stored on this device is damaged, so it can't sync.",
 	},
 	SYNC121: {
 		code: 'SYNC121',
 		symbol: 'SYNC_UNREACHABLE',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Keep working — sync resumes when the store is reachable.',
-		dataSafety: 'local-only',
-		summary: 'Your store cannot be reached right now, so changes will stay on this device.',
+		actionHint:
+			'Nothing to do — keep selling. Changes send automatically when the connection returns.',
+		dataSafety: 'no-impact',
+		summary: "Your store can't be reached right now.",
 	},
 	SYNC131: {
 		code: 'SYNC131',
 		symbol: 'STORE_SERVER_ERROR',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Ask the site admin to check the server logs, then retry.',
+		actionHint:
+			'Try the action again. If it keeps happening, ask your site admin to check WooCommerce → Status → Logs.',
 		dataSafety: 'local-only',
-		summary: 'Your store returned an error, so this action did not complete.',
+		summary: "Your store had an error and didn't finish this request.",
 	},
 	SYNC141: {
 		code: 'SYNC141',
 		symbol: 'STORE_RATE_LIMITED',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Wait — WCPOS retries automatically.',
-		dataSafety: 'local-only',
-		summary: 'Your store is limiting requests temporarily, so this action will retry later.',
+		actionHint:
+			"Nothing to do — WCPOS retries automatically. If this appears every day, ask your site admin about the store's rate limit.",
+		dataSafety: 'no-impact',
+		summary: 'Your store asked WCPOS to slow down for a moment.',
 	},
 	SYNC201: {
 		code: 'SYNC201',
 		symbol: 'RECORD_REJECTED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Fix the field the store refused, then retry.',
+		actionHint:
+			"Read the store's reason. If Store health → Database lists the change, fix the record and tap Send again, or Discard it. If not, the store's version was restored — make the change again if it's still needed.",
 		dataSafety: 'local-only',
-		summary: 'This record was rejected by your store and is saved only on this device.',
+		summary: "Your store refused this change, so it hasn't reached the store.",
+	},
+	SYNC202: {
+		code: 'SYNC202',
+		symbol: 'RECORD_REVERTED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"The change wasn't saved. Read the store's reason, fix what it names, then make the change again.",
+		dataSafety: 'no-impact',
+		summary: "Your store refused this change, so this device went back to the store's version.",
 	},
 	SYNC211: {
 		code: 'SYNC211',
 		symbol: 'RECORD_INVALID_FIELD',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Fix the named field, then retry.',
+		actionHint:
+			"The store's reason names the value. Correct it where you entered it, then save again.",
 		dataSafety: 'local-only',
-		summary: 'This record has a field your store will not accept.',
+		summary: 'Your store refused a value it was sent.',
 	},
 	SYNC301: {
 		code: 'SYNC301',
 		symbol: 'SYNC_BEHIND_HEAD',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Download the affected data again.',
+		actionHint:
+			'Nothing to do. If prices or stock still look out of date, tap Check everything now in Store health → Database.',
 		dataSafety: 'no-impact',
-		summary: 'Some older store changes were skipped and must be downloaded again.',
+		summary:
+			"Your store's list of changes moved unexpectedly, so WCPOS is re-checking it by itself. Nothing is lost.",
 	},
 	SYNC311: {
 		code: 'SYNC311',
@@ -211,34 +235,38 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			"Update WCPOS; if it still won't open, read the help page before clearing local data.",
-		dataSafety: 'no-impact',
-		summary: 'Local data is from an incompatible version and cannot open yet.',
+			"Update WCPOS to the latest version and reopen. If it still won't open, tap Copy debug info and contact support.",
+		dataSafety: 'data-at-risk',
+		summary: "Data on this device was saved by a different WCPOS version and can't be opened yet.",
 	},
 	SYNC321: {
 		code: 'SYNC321',
 		symbol: 'SYNC_PARTIAL',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Retry only the records that failed.',
+		actionHint:
+			'Nothing to do if the next sync clears it. If Store health → Database lists changes that need attention, settle them there.',
 		dataSafety: 'local-only',
-		summary: 'Some records synced, but one or more records did not.',
+		summary: "Some data didn't sync this time.",
 	},
 	SYNC331: {
 		code: 'SYNC331',
 		symbol: 'LOCAL_RECORD_DIVERGED',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Download the affected records again.',
+		actionHint:
+			"In Store health → Database, use Clear & re-download on that list to replace this device's copy with the store's.",
 		dataSafety: 'no-impact',
-		summary: 'This record on the device does not match your store and needs local repair.',
+		summary:
+			"This device's copy of a record doesn't match your store's. Nothing you entered is affected.",
 	},
 	SYNC341: {
 		code: 'SYNC341',
 		symbol: 'APP_UPDATE_REQUIRED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Update the POS app on this device, then reopen it.',
+		actionHint:
+			'Update WCPOS (on the web, reload the page), then reopen. Unsent sales stay on this device and send after the update.',
 		dataSafety: 'no-impact',
 		summary: 'This store now requires a newer version of the POS app.',
 	},
@@ -247,7 +275,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SESSION_EXPIRED',
 		domain: 'AUTH',
 		severity: 'warn',
-		actionHint: 'Sign in again.',
+		actionHint: "Sign in again. Nothing is lost — unsent changes send once you're signed in.",
 		dataSafety: 'no-impact',
 		summary: 'Your session ended and you need to sign in again.',
 	},
@@ -256,7 +284,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'INSUFFICIENT_ROLE',
 		domain: 'AUTH',
 		severity: 'error',
-		actionHint: 'Ask your store admin to grant your account POS access.',
+		actionHint:
+			'Nothing was lost. Ask your store admin to give your user role permission for this action.',
 		dataSafety: 'no-impact',
 		summary: 'Your account does not have permission to perform this action.',
 	},
@@ -274,9 +303,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'REST_ROUTE_MISSING',
 		domain: 'AUTH',
 		severity: 'error',
-		actionHint: "Ask the site admin to check WCPOS is active and REST isn't blocked.",
+		actionHint:
+			'Ask your site admin to check the WCPOS plugin is active (WP Admin → Plugins) and that no security plugin blocks the REST API.',
 		dataSafety: 'no-impact',
-		summary: 'The WCPOS store route is unavailable.',
+		summary: "Your store isn't answering WCPOS's requests.",
 	},
 	AUTH401: {
 		code: 'AUTH401',
@@ -301,7 +331,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'CHECKOUT_OUTCOME_UNKNOWN',
 		domain: 'CHECKOUT',
 		severity: 'error',
-		actionHint: 'Check whether the order exists before retrying. Do not re-charge.',
+		actionHint:
+			"Open the order and check its status before retrying. If it's paid or completed, don't charge again.",
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS could not confirm whether checkout completed.',
 	},
@@ -310,7 +341,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'CHECKOUT_EMPTY_RESPONSE',
 		domain: 'CHECKOUT',
 		severity: 'error',
-		actionHint: 'Check whether the order exists before retrying. Do not re-charge.',
+		actionHint:
+			"Open the order and check its status before retrying. If it's paid or completed, don't charge again.",
 		dataSafety: 'outcome-unknown',
 		summary: 'The store returned no checkout result, so the order status is unknown.',
 	},
@@ -327,8 +359,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		code: 'PAYMENT101',
 		symbol: 'PAYMENT_OK_STATUS_CHECK_FAILED',
 		domain: 'PAYMENT',
-		severity: 'info',
-		actionHint: 'No action needed — the payment succeeded; do not charge again.',
+		severity: 'warn',
+		actionHint: 'Reopen the order to update its status.',
 		dataSafety: 'money-moved',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
 	},
@@ -404,6 +436,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'The selected payment gateway is unavailable for this store.',
 	},
+	PAYMENT311: {
+		code: 'PAYMENT311',
+		symbol: 'REFUND_OUTCOME_UNKNOWN',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Open the order and check its refunds before trying again — a retry could refund twice.',
+		dataSafety: 'outcome-unknown',
+		summary: "WCPOS couldn't confirm whether this refund went through.",
+	},
 	PAYMENT401: {
 		code: 'PAYMENT401',
 		symbol: 'TERMINAL_PAIRING_INCOMPLETE',
@@ -429,7 +471,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'AUTOPRINT_DID_NOT_START',
 		domain: 'PRINT',
 		severity: 'warn',
-		actionHint: 'Print the receipt manually.',
+		actionHint: "The sale is saved. Open the order's receipt and tap Print Receipt.",
 		dataSafety: 'no-impact',
 		summary: 'Automatic printing did not start for this receipt.',
 	},
@@ -456,16 +498,18 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'PRODUCT_SAVE_FAILED',
 		domain: 'PRODUCT',
 		severity: 'error',
-		actionHint: 'Fix the reported cause, then retry.',
+		actionHint:
+			'Read the reason shown, fix what it names or check your connection, then save the product again.',
 		dataSafety: 'local-only',
-		summary: 'This product could not be saved to your store.',
+		summary: "This product change hasn't reached your store yet.",
 	},
 	PRODUCT111: {
 		code: 'PRODUCT111',
 		symbol: 'VARIATION_ADD_FAILED',
 		domain: 'PRODUCT',
 		severity: 'error',
-		actionHint: 'Fix the variation fields, then retry.',
+		actionHint:
+			"Nothing else changed. Open the product and check whether the variation is there; if it isn't, make sure it uses attributes set on the parent product, then add it again.",
 		dataSafety: 'local-only',
 		summary: 'This variation could not be added to the product.',
 	},
@@ -528,7 +572,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'APP_START_FAILED',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: "Restart; if it still won't start, open the help page before clearing local data.",
+		actionHint:
+			"Restart WCPOS (on the web, reload the tab). If it still won't start, contact support before clearing anything.",
 		dataSafety: 'local-only',
 		summary: 'WCPOS could not finish starting.',
 	},
@@ -537,17 +582,19 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'OUT_OF_MEMORY',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Close other apps or tabs, then restart.',
-		dataSafety: 'local-only',
-		summary: 'WCPOS ran out of memory and could not finish the operation.',
+		actionHint:
+			'Close other apps or tabs, restart WCPOS, then check your last sale or change saved.',
+		dataSafety: 'outcome-unknown',
+		summary: 'This device ran out of memory, and the last action may not have finished.',
 	},
 	CLIENT211: {
 		code: 'CLIENT211',
 		symbol: 'NATIVE_CRASH',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Restart, and install app and device updates.',
-		dataSafety: 'local-only',
+		actionHint:
+			'Restart WCPOS and check your last sale or change saved. Install any app or system updates.',
+		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS stopped because of a device-level crash.',
 	},
 	CLIENT999: {
@@ -555,7 +602,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'UNEXPECTED_ERROR',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Retry once; report it with the log details if it repeats.',
+		actionHint:
+			'Check whether your last action went through before trying again — for a sale, open the order and check its status. If it repeats, tap Copy debug info and send it to WCPOS support.',
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS encountered an unexpected error.',
 	},
@@ -564,7 +612,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SYNC_UNEXPECTED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Check the log — retry if it queued, otherwise re-enter and save.',
+		actionHint:
+			"Check the action named in this entry finished; if it didn't, repeat it. If this repeats, tap Copy debug info and send it to support.",
 		dataSafety: 'local-only',
 		summary: 'Syncing hit an unexpected problem.',
 	},
@@ -609,16 +658,18 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'PRINT_UNEXPECTED',
 		domain: 'PRINT',
 		severity: 'error',
-		actionHint: 'Repeat only the operation named in the log.',
+		actionHint:
+			'Repeat the print or receipt action named in this entry. Contact support if it repeats.',
 		dataSafety: 'no-impact',
-		summary: 'Printing hit an unexpected problem.',
+		summary: 'Printing hit an unexpected problem. No sale is affected.',
 	},
 	PRODUCT999: {
 		code: 'PRODUCT999',
 		symbol: 'PRODUCT_UNEXPECTED',
 		domain: 'PRODUCT',
 		severity: 'error',
-		actionHint: 'Try again; report it if it repeats.',
+		actionHint:
+			'Repeat what you were doing and check it saved. If products still look wrong, tap Copy debug info and send it to support.',
 		dataSafety: 'no-impact',
 		summary: 'Loading or updating products hit an unexpected problem.',
 	},
@@ -635,8 +686,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		code: 'SYNC401',
 		symbol: 'SYNC_TASK_CRASHED',
 		domain: 'SYNC',
-		severity: 'error',
-		actionHint: 'Nothing to do — the task restarts automatically.',
+		severity: 'warn',
+		actionHint: 'Nothing to do — the task restarts automatically, and nothing is lost.',
 		dataSafety: 'no-impact',
 		summary: 'A background sync task stopped unexpectedly before finishing.',
 	},
@@ -645,7 +696,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'DEMAND_REQUEST_FLOOD',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Keep working; report it if it keeps happening.',
+		actionHint:
+			'Nothing to do — nothing was lost. If it keeps appearing, tap Copy debug info and send it to WCPOS support.',
 		dataSafety: 'no-impact',
 		summary: 'This device asked the store for data far more often than normal.',
 	},
@@ -655,9 +707,29 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint:
-			'Compare with the store, then choose Send again or Use server version in Store health → Database.',
+			"If Store health → Database lists a held change for it, tap Send again to keep this device's version, or Use server version to keep the store's. Otherwise, nothing to do.",
 		dataSafety: 'order-safe',
-		summary: 'A change on this device clashed with an edit made in your store.',
+		summary: 'A change on this device met a newer edit in your store. Nothing is lost.',
+	},
+	SYNC222: {
+		code: 'SYNC222',
+		symbol: 'STORE_EDIT_OVERWRITTEN',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Check the fields listed below in WP Admin. If the store's edit was the right one, make it again there.",
+		dataSafety: 'order-safe',
+		summary: 'This device saved its version over a newer edit made in your store.',
+	},
+	SYNC231: {
+		code: 'SYNC231',
+		symbol: 'RECORD_SENT_UNRECORDED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Nothing to do — don't enter it again. WCPOS keeps re-checking, and the store ignores the repeat.",
+		dataSafety: 'no-impact',
+		summary: "Your store received this change, but this device couldn't record that it was sent.",
 	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
@@ -665,9 +737,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint:
-			"Stop — confirm the charge and settle to the store's total before the customer leaves.",
-		dataSafety: 'money-moved',
-		summary: 'Your store calculated different totals for this order than the till showed.',
+			'Open the order and compare totals before the customer leaves. If money was already taken, charge or refund the difference.',
+		dataSafety: 'order-safe',
+		summary:
+			"Your store's total for this order differs from what the till showed. The order is saved with the store's total.",
 	},
 	PRODUCT411: {
 		code: 'PRODUCT411',
@@ -831,9 +904,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'CACHE_SHARED_REPLAY',
 		domain: 'HOST',
 		severity: 'error',
-		actionHint: 'Ask your host to exclude the API from caching.',
-		dataSafety: 'data-at-risk',
-		summary: "A cache in front of the store is replaying one person's API responses to everyone.",
+		actionHint:
+			"Nothing on this device is lost. Ask your host to stop caching the store's API (both /wp-json/ and ?rest_route= addresses). If WCPOS didn't connect, reconnect afterwards.",
+		dataSafety: 'no-impact',
+		summary: "Your host's cache can replay one person's store data to another.",
 	},
 	HOST161: {
 		code: 'HOST161',
@@ -849,38 +923,49 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'STORE_RESPONSE_MALFORMED',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'Confirm the request succeeded; ask the admin to check for PHP notices.',
+		actionHint:
+			"Check the action you were doing finished. If this appears often, ask your site admin to check the site's PHP error log for warnings.",
 		dataSafety: 'no-impact',
-		summary: 'Your store sent a malformed response that WCPOS had to repair before reading.',
+		summary: "Your store's reply had stray text in it, which WCPOS tried to clean up.",
 	},
 	SYNC161: {
 		code: 'SYNC161',
 		symbol: 'LOCAL_DB_UNAVAILABLE',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Restart WCPOS.',
+		actionHint:
+			'Restart WCPOS (on the web, reload the tab), then check your last sale or change saved.',
 		dataSafety: 'data-at-risk',
-		summary:
-			'The local database on this device stopped responding, so actions that need it are paused.',
+		summary: "This device's storage stopped responding, so saving is paused.",
 	},
 	SYNC171: {
 		code: 'SYNC171',
 		symbol: 'LOCAL_DB_SETUP_FAILED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Free up device storage, then restart.',
-		dataSafety: 'local-only',
-		summary: 'A local database on this device could not be created or removed.',
+		actionHint: 'Free up device storage, then restart WCPOS. Contact support if it keeps failing.',
+		dataSafety: 'no-impact',
+		summary: "WCPOS couldn't set up or remove storage on this device.",
 	},
 	SYNC181: {
 		code: 'SYNC181',
 		symbol: 'LOCAL_DB_STALLED',
 		domain: 'SYNC',
 		severity: 'warn',
-		actionHint: 'No action needed unless a screen stays stuck; then reload the app.',
+		actionHint:
+			'Nothing to do if WCPOS is working. If a screen stays stuck, reload WCPOS, then check your last change saved.',
 		dataSafety: 'outcome-unknown',
-		summary:
-			'A local database operation is taking far longer than normal; its outcome is not yet known.',
+		summary: 'Saving or loading on this device is very slow, and its outcome is not yet known.',
+	},
+	SYNC191: {
+		code: 'SYNC191',
+		symbol: 'WRITE_STILL_SENDING',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Nothing to do — don't enter it again. It sends automatically and appears once the store confirms.",
+		dataSafety: 'no-impact',
+		summary: 'This change is still on its way to your store.',
 	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
@@ -915,7 +1000,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'RECEIPT_DELIVERY_FAILED',
 		domain: 'PRINT',
 		severity: 'error',
-		actionHint: 'Retry; check the email/SMTP or download settings.',
+		actionHint:
+			"The sale is saved. Check the email address, or the device's storage for a PDF, then try again from the receipt. If every email fails, ask your site admin to check email sending.",
 		dataSafety: 'order-safe',
 		summary: 'This receipt could not be emailed or downloaded.',
 	},
@@ -933,10 +1019,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SEARCH_INDEX_DIVERGENCE',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'No action needed. If search results still look wrong, reload the app.',
+		actionHint: 'Nothing to do unless search still looks wrong — then reload WCPOS.',
 		dataSafety: 'no-impact',
-		summary:
-			'Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.',
+		summary: "Search showed some results that don't match your products, so WCPOS hid them.",
 	},
 	CLIENT142: {
 		code: 'CLIENT142',
@@ -954,10 +1039,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint:
-			'No action needed. If search still misses products you can see in the catalogue, reload the app.',
+			"Nothing to do unless a product you can see still won't come up in search — then reload WCPOS.",
 		dataSafety: 'no-impact',
-		summary:
-			'The search index could not find a product it should contain; the app attempts an automatic search index rebuild.',
+		summary: 'Search was missing a product it should have found.',
 	},
 	CLIENT144: {
 		code: 'CLIENT144',
@@ -1069,6 +1153,25 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'Part of the screen failed to load and was replaced by an error message.',
 	},
+	CLIENT181: {
+		code: 'CLIENT181',
+		symbol: 'STORE_SWITCH_FAILED',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint: 'Reload WCPOS and choose the store again. Nothing on this device is lost.',
+		dataSafety: 'no-impact',
+		summary: "WCPOS couldn't switch to that store.",
+	},
+	CLIENT171: {
+		code: 'CLIENT171',
+		symbol: 'CLOCK_OUT_OF_SYNC',
+		domain: 'CLIENT',
+		severity: 'warn',
+		actionHint:
+			"Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
+		dataSafety: 'order-safe',
+		summary: "This device's clock and your store's clock are more than a minute apart.",
+	},
 	AUTH131: {
 		code: 'AUTH131',
 		symbol: 'STORE_SESSION_INCOMPLETE',
@@ -1098,6 +1201,7 @@ export const ERROR_CODES = {
 	STORE_SERVER_ERROR: 'SYNC131',
 	STORE_RATE_LIMITED: 'SYNC141',
 	RECORD_REJECTED: 'SYNC201',
+	RECORD_REVERTED: 'SYNC202',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
@@ -1122,6 +1226,7 @@ export const ERROR_CODES = {
 	PAYMENT_GATEWAY_REFUSED: 'PAYMENT212',
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
+	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
 	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',
@@ -1150,6 +1255,8 @@ export const ERROR_CODES = {
 	SYNC_TASK_CRASHED: 'SYNC401',
 	DEMAND_REQUEST_FLOOD: 'SYNC411',
 	RECORD_CONFLICT: 'SYNC221',
+	STORE_EDIT_OVERWRITTEN: 'SYNC222',
+	RECORD_SENT_UNRECORDED: 'SYNC231',
 	TOTALS_DIVERGED: 'CHECKOUT401',
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
 	APP_START_SLOW: 'CLIENT111',
@@ -1174,6 +1281,7 @@ export const ERROR_CODES = {
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',
 	LOCAL_DB_STALLED: 'SYNC181',
+	WRITE_STILL_SENDING: 'SYNC191',
 	CART_UPDATE_FAILED: 'CHECKOUT111',
 	BARCODE_AMBIGUOUS: 'PRODUCT321',
 	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',
@@ -1193,6 +1301,8 @@ export const ERROR_CODES = {
 	REGISTER_TAKEN_OVER: 'REGISTER221',
 	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
+	STORE_SWITCH_FAILED: 'CLIENT181',
+	CLOCK_OUT_OF_SYNC: 'CLIENT171',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
 	REGISTER_TAB_NOT_OWNED: 'CLIENT161',
 } as const satisfies Record<string, ErrorCode>;

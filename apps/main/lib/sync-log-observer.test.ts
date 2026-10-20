@@ -4,6 +4,7 @@
 import type { SyncEvent } from '@wcpos/sync-core';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { rejectedWriteCode } from '@wcpos/utils/logger/rejected-write-code';
 
 import { CONFORMANCE_TABLE, createSyncLogObserver } from './sync-log-observer';
 
@@ -52,12 +53,49 @@ describe('createSyncLogObserver', () => {
 		}
 	});
 
-	it('classifies a request deadline as unreachable rather than a crashed task', () => {
+	it('files a quietly settled failed request as failed, with no code', () => {
 		observer.observe(
-			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
+			event({ type: 'transport.request', level: 'info', fields: { status: 503, path: '/x' } })
 		);
-		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
-		expect(rows[0].message).toMatch(/deadline/i);
+		observer.observe(event({ type: 'transport.request', level: 'info', fields: { status: 0 } }));
+
+		expect(rows.map((row) => [row.level, row.code, row.terminal?.outcome])).toEqual([
+			['info', undefined, 'failed'],
+			['info', undefined, 'failed'],
+		]);
+	});
+
+	it('classifies a persistent request deadline as unreachable rather than a crashed task', () => {
+		observer.observe(
+			event({
+				type: 'engine.request.deadline',
+				level: 'warn',
+				fields: { lane: 'change-signal', elapsedMs: 60_000, consecutiveDeadlines: 3 },
+			})
+		);
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			code: 'SYNC121',
+			terminal: { outcome: 'failed' },
+		});
+		expect(rows[0].message).toMatch(/deadline.*60000/i);
+	});
+
+	it('keeps a deadline the next tick retries at info until the lane has timed out 3 times', () => {
+		for (const consecutiveDeadlines of [1, 2]) {
+			observer.observe(
+				event({
+					type: 'engine.request.deadline',
+					level: 'warn',
+					fields: { lane: 'change-signal', elapsedMs: 60_000, consecutiveDeadlines },
+				})
+			);
+		}
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+		]);
+		expect(rows[0].terminal?.outcome).toBe('failed');
 	});
 
 	it('stamps mapped failure codes but not mapped info rows', () => {
@@ -89,73 +127,165 @@ describe('createSyncLogObserver', () => {
 		[409, 'SYNC221'],
 		[404, 'SYNC131'],
 		[422, 'SYNC131'],
+		// An unexpected 1xx/3xx (or an unreadable 2xx) is still an answer.
+		[302, 'SYNC131'],
 	])('resolves transport status %s to %s', (status, errorCode) => {
 		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
 
 		expect(rows[0].code).toBe(errorCode);
 	});
 
-	it('classifies engine request deadlines as unreachable, not crashed', () => {
-		observer.observe(
-			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
-		);
-		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
-		expect(rows[0].message).toMatch(/deadline.*60000/i);
-	});
-
-	it('classifies signal tick auth, rate-limit and local failures separately', () => {
-		for (const fields of [{ status: 401 }, { status: 429 }, {}]) {
-			observer.observe(event({ type: 'signal.tick.error', level: 'error', fields }));
+	it('leaves a signal tick failed by a request to the transport row that reported it', () => {
+		for (const status of [0, 401, 429, 503]) {
+			observer.observe(
+				event({
+					type: 'signal.tick.error',
+					level: 'error',
+					fields: { lane: 'change-signal', status, consecutiveFailures: 5 },
+				})
+			);
 		}
 
-		expect(rows.map((row) => row.code)).toEqual(['AUTH101', 'SYNC141', 'SYNC401']);
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+			['info', undefined],
+			['info', undefined],
+		]);
 	});
 
-	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
-		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
+	it('alarms on a local signal tick failure only once it has repeated 3 times', () => {
+		for (const consecutiveFailures of [1, 2, 3]) {
+			observer.observe(
+				event({
+					type: 'signal.tick.error',
+					level: 'error',
+					message: 'bulkUpsert failed',
+					fields: { lane: 'change-signal', consecutiveFailures },
+				})
+			);
+		}
 
-		expect(rows[0].code).toBe('SYNC401');
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+			['warn', 'SYNC401'],
+		]);
+	});
+
+	it('names a persisting 2xx poison page as a server error, not unreachability', () => {
+		observer.observe(
+			event({
+				type: 'signal.tick.error',
+				level: 'error',
+				fields: { lane: 'change-signal', status: 200, consecutiveFailures: 3 },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({ level: 'warn', code: 'SYNC131' });
 	});
 
 	it.each([
-		[{ status: 401 }, 'AUTH101'],
-		[{ status: 403 }, 'AUTH201'],
 		[{ status: 429 }, 'SYNC141'],
-		[{ status: 204, reason: 'no-document' }, 'SYNC321'],
-		[{ status: 400, reason: 'pos_data_invalid' }, 'SYNC211'],
-		[{ status: 409, reason: 'identity-ambiguous' }, 'SYNC201'],
 		[{ status: 503 }, 'SYNC131'],
-	])('resolves push.error fields %j to %s', (fields, errorCode) => {
-		observer.observe(event({ type: 'push.error', level: 'error', fields }));
+		// A 2xx whose ack could not be read reached the store; it did not confirm.
+		[{ status: 204, reason: 'no-document' }, 'SYNC131'],
+		// No answer in time — never "rejected by your store".
+		[{ status: 408 }, 'SYNC121'],
+		[{ status: 425 }, 'SYNC121'],
+		[{ reason: 'TypeError', phase: 'transport' }, 'SYNC121'],
+	])('resolves a persisting retryable push.error %j to %s', (fields, errorCode) => {
+		observer.observe(
+			event({
+				type: 'push.error',
+				level: 'error',
+				fields: { ...fields, attempt: 3, retryable: true },
+			})
+		);
 
-		expect(rows[0].code).toBe(errorCode);
+		expect(rows[0]).toMatchObject({ level: 'warn', code: errorCode });
 	});
 
-	it('renders a startup stall at warn per the CLIENT111 ruling', () => {
-		observer.observe(event({ type: 'engine.ready-stalled', level: 'error' }));
+	it('keeps a retryable push.error at info until the third failed push of the record', () => {
+		for (const attempt of [1, 2]) {
+			observer.observe(
+				event({
+					type: 'push.error',
+					level: 'error',
+					fields: { recordId: 'o-1', status: 503, attempt, retryable: true },
+				})
+			);
+		}
 
-		expect(rows[0].level).toBe('warn');
-		expect(rows[0].code).toBe('CLIENT111');
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+		]);
+		// Still a failed transfer for the stuck-records view.
+		expect(rows[0].terminal?.outcome).toBe('failed');
 	});
 
-	it('stamps a refused write session as AUTH101 at error', () => {
+	it.each([
+		// The drain holds the session; the auth layer writes the verdict.
+		[{ status: 401, retryable: true }],
+
+		// Dead-letters next: push.rejected / auto-reverted carry the verdict.
+		[{ status: 403, retryable: false }],
+		[{ status: 400, reason: 'pos_data_invalid', retryable: false }],
+		[{ status: 409, reason: 'identity-ambiguous', retryable: false }],
+	])('leaves push.error %j to the row that settles it', (fields) => {
+		observer.observe(
+			event({ type: 'push.error', level: 'error', fields: { ...fields, attempt: 5 } })
+		);
+
+		expect(rows[0]).toMatchObject({ level: 'info', code: undefined });
+	});
+
+	it('warns SYNC131 once a 428 has looped for 3 pushes (the revision refresh keeps failing)', () => {
+		// The drain refreshes the revision and re-pushes; only a refresh that keeps
+		// throwing backs the row off and retries with nothing else reporting it.
+		for (const attempt of [1, 2, 3]) {
+			observer.observe(
+				event({
+					type: 'push.error',
+					level: 'warn',
+					fields: { status: 428, reason: 'precondition-required', retryable: false, attempt },
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+			['warn', 'SYNC131'],
+		]);
+	});
+
+	it('keeps the first startup stall at info and warns from the repeat per the CLIENT111 ruling', () => {
+		observer.observe(
+			event({ type: 'engine.ready-stalled', level: 'error', fields: { stalls: 1 } })
+		);
+		observer.observe(
+			event({ type: 'engine.ready-stalled', level: 'error', fields: { stalls: 2 } })
+		);
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'CLIENT111'],
+		]);
+	});
+
+	it('leaves a refused write session to the auth layer row', () => {
 		observer.observe(
 			event({
 				type: 'queue.write.session-refused',
-				level: 'warn',
+				level: 'error',
 				message: 'store refused the session',
 			})
 		);
 
-		expect(rows[0].level).toBe('error');
-		expect(rows[0].code).toBe('AUTH101');
-	});
-
-	it('keeps a 401 push row at warn with AUTH101', () => {
-		observer.observe(event({ type: 'push.error', level: 'warn', fields: { status: 401 } }));
-
-		expect(rows[0].level).toBe('warn');
-		expect(rows[0].code).toBe('AUTH101');
+		expect(rows[0].level).toBe('info');
+		expect(rows[0].code).toBeUndefined();
 	});
 
 	it('demotes engine.guard warnings to info', () => {
@@ -225,7 +355,7 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('persists cursor anomalies as unknown warn rows with cursor context', () => {
+	it('persists cursor anomalies as unknown info rows with cursor context', () => {
 		observer.observe(
 			event({
 				type: 'signal.cursor',
@@ -235,9 +365,11 @@ describe('createSyncLogObserver', () => {
 			})
 		);
 
+		// A deliberate rebaseline the same tick reconciles — no SYNC301 instruction.
 		expect(rows).toEqual([
 			expect.objectContaining({
-				level: 'warn',
+				level: 'info',
+				code: undefined,
 				context: expect.objectContaining({ reason: 'reset', from: 5, to: 0 }),
 				terminal: { operationType: 'sync.cursor', outcome: 'unknown' },
 			}),
@@ -282,8 +414,10 @@ describe('createSyncLogObserver', () => {
 			})
 		);
 
+		// Error: the dead-letter verdict, at the severity of the code it carries.
 		expect(rows[0]).toMatchObject({
-			level: 'warn',
+			level: 'error',
+			code: 'SYNC211',
 			message: 'orders 4711 — rejected by server (HTTP 400: pos_data_invalid)',
 			context: {
 				type: 'push.rejected',
@@ -298,7 +432,7 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('persists catalog auto-reverts as recovered errors and requests a toast', () => {
+	it('persists catalog auto-reverts as recovered SYNC202 warnings and requests a toast', () => {
 		observer.observe(
 			event({
 				type: 'queue.write.auto-reverted',
@@ -315,7 +449,8 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({
-			level: 'error',
+			level: 'warn',
+			code: 'SYNC202',
 			message:
 				'products product-9 — change reverted to server value; see Store health (HTTP 403: woocommerce_rest_cannot_edit [redacted])',
 			context: {
@@ -338,6 +473,30 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it('keeps SYNC221 for the parked clash, not the first 409 an order re-pushes past', () => {
+		observer.observe(
+			event({
+				type: 'push.conflict',
+				level: 'warn',
+				collection: 'orders',
+				fields: { recordId: 'order-9', mutationId: 'mutation-9' },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'queue.write.conflict-transition',
+				level: 'warn',
+				collection: 'orders',
+				fields: { recordId: 'order-9', mutationId: 'mutation-9' },
+			})
+		);
+
+		expect(rows.map((row) => [row.context.type, row.level, row.code])).toEqual([
+			['push.conflict', 'info', undefined],
+			['queue.write.conflict-transition', 'warn', 'SYNC221'],
+		]);
+	});
+
 	it('names the server fields overwritten by a recovered conflict', () => {
 		observer.observe(
 			event({
@@ -354,8 +513,10 @@ describe('createSyncLogObserver', () => {
 			})
 		);
 
+		// SYNC222: the order saved, but someone may need to redo the store's edit.
 		expect(rows[0]).toMatchObject({
 			level: 'warn',
+			code: 'SYNC222',
 			message: 'orders order-9 — overwrote 2 store fields: line_items[12], status',
 			context: {
 				type: 'queue.write.conflict-overwrote-server',
@@ -407,17 +568,15 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].message).not.toContain('customer@example.com');
 	});
 
-	// Regression: the did-work gate must never suppress a warn/error event.
-	// `queue.scheduler.drain` raises its level to 'error' on completionLost /
-	// failureLost / renewalLost while `succeeded` and `failed` are both 0
-	// (maintenance-lanes.ts), so gating on those counters silently dropped the
-	// lost-work evidence this observer exists to preserve.
+	// Regression: the did-work gate must never suppress a warn/error event. An
+	// emitter can raise the level on a signal its counters don't carry, so gating
+	// on those counters would silently drop the evidence this observer preserves.
 	it('never lets the did-work gate drop a failure-level event', () => {
 		observer.observe(
 			event({
-				type: 'queue.scheduler.drain',
+				type: 'queue.write.drain',
 				level: 'error',
-				fields: { scanned: 3, succeeded: 0, failed: 0, completionLost: 1 },
+				fields: { pushed: 0, conflicts: 0, failed: 0, rejected: 0 },
 			})
 		);
 
@@ -426,6 +585,24 @@ describe('createSyncLogObserver', () => {
 			level: 'error',
 			terminal: { operationType: 'sync.queue', outcome: 'failed' },
 		});
+	});
+
+	it('keeps scheduler drain summaries, lost work included, as uncoded info rows', () => {
+		observer.observe(
+			event({
+				type: 'queue.scheduler.drain',
+				level: 'warn',
+				fields: { scanned: 3, succeeded: 0, failed: 0, completionLost: 1 },
+			})
+		);
+		observer.observe(
+			event({ type: 'queue.scheduler.drain', level: 'warn', fields: { succeeded: 0, failed: 2 } })
+		);
+
+		expect(rows.map((row) => [row.level, row.code, row.terminal?.outcome])).toEqual([
+			['info', undefined, 'ok'],
+			['info', undefined, 'failed'],
+		]);
 		expect(rows[0].context).toMatchObject({ completionLost: 1 });
 	});
 
@@ -546,7 +723,7 @@ describe('createSyncLogObserver', () => {
 		expect(rows).toHaveLength(1);
 	});
 
-	it('persists a rebuilt coverage ledger as a recovered warning', () => {
+	it('persists a rebuilt coverage ledger as a recovered info event', () => {
 		observer.observe(
 			event({
 				type: 'coverage.ledger-rebuilt',
@@ -557,7 +734,7 @@ describe('createSyncLogObserver', () => {
 
 		expect(rows).toEqual([
 			expect.objectContaining({
-				level: 'warn',
+				level: 'info',
 				context: expect.objectContaining({ type: 'coverage.ledger-rebuilt' }),
 				terminal: expect.objectContaining({
 					operationType: 'sync.coverage',
@@ -599,7 +776,7 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({
-			level: 'warn',
+			level: 'info',
 			context: expect.objectContaining({ type: 'targeted.pull.shortfall-prune' }),
 			terminal: { operationType: 'sync.apply', outcome: 'recovered' },
 		});
@@ -740,17 +917,257 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('renders a maintenance lane crash as a warning', () => {
-		observer.observe(
-			event({ type: 'maintenance.lane.error', level: 'error', message: 'lane down' })
-		);
+	it('renders a repeating maintenance lane crash as a SYNC401 warning', () => {
+		for (const consecutiveFailures of [1, 3]) {
+			observer.observe(
+				event({
+					type: 'maintenance.lane.error',
+					level: 'error',
+					message: 'lane down',
+					fields: { lane: 'product-trickle', consecutiveFailures },
+				})
+			);
+		}
 
-		expect(rows[0]).toMatchObject({
-			level: 'warn',
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC401'],
+		]);
+		expect(rows[1]).toMatchObject({
 			message: 'lane down',
 			terminal: { operationType: 'sync.lane', outcome: 'failed' },
 		});
 		expect(promoteRecorderMock).toHaveBeenCalledWith('maintenance.lane.error');
+	});
+
+	it('leaves a maintenance lane failed by a request to the transport row', () => {
+		observer.observe(
+			event({
+				type: 'maintenance.lane.error',
+				level: 'error',
+				message: '/products trickle pull failed: HTTP 503',
+				fields: { lane: 'product-trickle', status: 503, consecutiveFailures: 4 },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({ level: 'info', code: undefined });
+	});
+
+	it('leaves a requirement failed by a request to the transport row, and warns on a local one', () => {
+		observer.observe(
+			event({ type: 'coverage.require.error', level: 'error', fields: { status: 400 } })
+		);
+		observer.observe(event({ type: 'coverage.require.error', level: 'error', fields: {} }));
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC401'],
+		]);
+	});
+
+	it('tells the merchant to update the plugin when the store rejects the customer sort', () => {
+		observer.observe(event({ type: 'customer.browse-window.sort-rejected', level: 'warn' }));
+
+		expect(rows[0]).toMatchObject({ level: 'warn', code: 'AUTH331' });
+	});
+
+	it.each([
+		['push.aborted', 'warn'],
+		['queue.write.reschedule-failed', 'warn'],
+		['product.browse-window.approximate', 'warn'],
+		['product.browse-window.brand-filter-ignored', 'warn'],
+		['coverage.require.stalled', 'warn'],
+		['browse-window.backstop-reached', 'warn'],
+		['engine.reset-needs-confirmation', 'warn'],
+		['apply.barcode-rederive', 'warn'],
+	] as const)('keeps self-settling %s as an uncoded info row', (type, level) => {
+		observer.observe(event({ type, level, fields: { recordId: 'r-1' } }));
+
+		expect(rows[0]).toMatchObject({ level: 'info', code: undefined });
+	});
+
+	it('keeps a failed existence-audit cursor write as a failed info row', () => {
+		observer.observe(
+			event({
+				type: 'coverage.existence-reconcile',
+				level: 'warn',
+				fields: { pruned: 0, missing: 0, changed: 0, outcome: 'failed' },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			code: undefined,
+			terminal: { outcome: 'failed' },
+		});
+	});
+
+	it.each([
+		['queue.write.reschedule-failed', 'consecutiveFailures', 'SYNC101', {}],
+		// SYNC231, never SYNC101: the store has the change, so "enter it again"
+		// would make a second sale.
+		['queue.write.ack-failed', 'consecutiveFailures', 'SYNC231', {}],
+		['coverage.require.stalled', 'consecutiveStalls', 'SYNC181', {}],
+		['coverage.existence-reconcile', 'consecutiveFailures', 'SYNC101', { outcome: 'failed' }],
+	] as const)(
+		'keeps %s at info until its %s streak persists, then warns %s',
+		(type, field, errorCode, extra) => {
+			for (const count of [1, 3]) {
+				observer.observe(
+					event({
+						type,
+						level: 'warn',
+						fields: { recordId: 'r-1', pruned: 0, ...extra, [field]: count },
+					})
+				);
+			}
+
+			expect(rows.map((row) => [row.level, row.code])).toEqual([
+				['info', undefined],
+				['warn', errorCode],
+			]);
+		}
+	);
+
+	it('files an ack that failed after its push landed as unknown, never a stuck upload', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.ack-failed',
+				level: 'warn',
+				fields: { recordId: 'o-1', consecutiveFailures: 1 },
+			})
+		);
+
+		expect(rows[0].terminal?.outcome).toBe('unknown');
+	});
+
+	it('warns SYNC401 on scheduler task failures no other row reported, once they persist', () => {
+		for (const consecutiveUnreportedFailures of [1, 3]) {
+			observer.observe(
+				event({
+					type: 'queue.scheduler.drain',
+					level: 'warn',
+					fields: {
+						succeeded: 0,
+						failed: 2,
+						failedUnreported: 1,
+						consecutiveUnreportedFailures,
+					},
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC401'],
+		]);
+	});
+
+	it.each([300, 302, 101])(
+		'treats an unexpected %s as a request the transport already reported',
+		(status) => {
+			observer.observe(
+				event({
+					type: 'signal.tick.error',
+					level: 'error',
+					fields: { lane: 'change-signal', status, consecutiveFailures: 5 },
+				})
+			);
+			observer.observe(event({ type: 'transport.request', level: 'info', fields: { status } }));
+
+			expect(rows.map((row) => [row.level, row.code, row.terminal?.outcome])).toEqual([
+				['info', undefined, 'failed'],
+				['info', undefined, 'failed'],
+			]);
+		}
+	);
+
+	it('streak-gates a write drain crash and keeps the claim-release failure quiet', () => {
+		for (const consecutiveFailures of [1, 3]) {
+			observer.observe(
+				event({ type: 'queue.write.tick.error', level: 'error', fields: { consecutiveFailures } })
+			);
+		}
+		// Conflict resolution's claim release: no streak, self-heals at the lease.
+		observer.observe(
+			event({ type: 'queue.write.tick.error', level: 'warn', fields: { mutationId: 'm-1' } })
+		);
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC401'],
+			['info', undefined],
+		]);
+	});
+
+	it.each([
+		[{ status: 403 }, 'AUTH201'],
+		[{ status: 400, reason: 'pos_data_invalid' }, 'SYNC211'],
+		[{ status: 400, reason: 'rest_invalid_param' }, 'SYNC211'],
+		[{ status: 400, reason: 'woocommerce_rest_invalid_id' }, 'SYNC201'],
+	])('maps push.rejected %j to %s', (fields, errorCode) => {
+		observer.observe(
+			event({ type: 'push.rejected', level: 'warn', fields: { recordId: 'o-1', ...fields } })
+		);
+
+		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
+	});
+
+	// Drift guard: the screen's toast codes the same refusal through the shared
+	// rejectedWriteCode helper; this row and that toast must never disagree.
+	it.each([
+		{ status: 403, reason: 'woocommerce_rest_cannot_edit' },
+		{ status: 400, reason: 'pos_data_invalid' },
+		{ status: 400, reason: 'rest_invalid_param' },
+		{ status: 400, reason: 'woocommerce_rest_invalid_id' },
+	])('codes push.rejected %j exactly as the shared rejectedWriteCode does', (fields) => {
+		observer.observe(
+			event({ type: 'push.rejected', level: 'warn', fields: { recordId: 'o-1', ...fields } })
+		);
+
+		expect(rows[0]?.code).toBe(rejectedWriteCode(fields.status, fields.reason));
+	});
+
+	it('warns SYNC131 once a push has found the record locked for 3 attempts', () => {
+		for (const attempt of [1, 3]) {
+			observer.observe(
+				event({
+					type: 'push.in_progress',
+					level: 'warn',
+					fields: { recordId: 'o-1', reason: 'record-locked', attempt, retryable: true },
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC131'],
+		]);
+	});
+
+	it('keeps a catalogue dead letter whose revert is pending an uncoded attempt', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				level: 'warn',
+				collection: 'products',
+				fields: { recordId: 'p-1', status: 403, revertPending: true },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			code: undefined,
+			terminal: { outcome: 'rejected' },
+		});
+	});
+
+	it('parks needs-revision under the conflict code, not "fix the named field"', () => {
+		observer.observe(
+			event({ type: 'queue.write.needs-revision', level: 'warn', fields: { recordId: 'o-1' } })
+		);
+
+		expect(rows[0]).toMatchObject({ level: 'warn', code: 'SYNC221' });
 	});
 
 	it('renders a demand-path flood as a durable coded warning with its evidence in context', () => {
@@ -785,7 +1202,7 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('promotes barcode selector hydration failure to a visible warning', () => {
+	it('records barcode selector hydration failure as a visible info row', () => {
 		observer.observe(
 			event({
 				type: 'engine.barcode-selector-hydrate-failed',
@@ -795,7 +1212,8 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({
-			level: 'warn',
+			level: 'info',
+			code: undefined,
 			terminal: { operationType: 'sync.startup', outcome: 'failed' },
 		});
 	});
@@ -946,7 +1364,7 @@ describe('push.money-divergence is an advisory, not a failed transfer', () => {
 		});
 	});
 
-	const divergence = () =>
+	const divergence = (roundingClass: 'sub-cent' | 'cent' | 'material' = 'cent') =>
 		observer.observe(
 			event({
 				type: 'push.money-divergence',
@@ -958,10 +1376,48 @@ describe('push.money-divergence is an advisory, not a failed transfer', () => {
 					mutationId: 'm-1',
 					outcome: 'failed',
 					mode: 'exact-6dp',
+					roundingClass,
 					divergentFields: 'total,total_tax',
 				},
 			})
 		);
+
+	it('keeps a difference under one minor unit as an info row with no stop instruction', () => {
+		const persisted: { level: string; code?: ErrorCode }[] = [];
+		createSyncLogObserver({
+			persist: (level, _message, _context, _terminal, _toast, code) =>
+				persisted.push({ level, code }),
+		}).observe(
+			event({
+				type: 'push.money-divergence',
+				level: 'error',
+				collection: 'orders',
+				fields: { recordId: 'o-1', outcome: 'failed', roundingClass: 'sub-cent' },
+			})
+		);
+
+		expect(persisted).toEqual([{ level: 'info', code: undefined }]);
+	});
+
+	it.each(['cent', 'material'] as const)(
+		'keeps CHECKOUT401 at error for a %s divergence',
+		(cls) => {
+			const persisted: { level: string; code?: ErrorCode }[] = [];
+			createSyncLogObserver({
+				persist: (level, _message, _context, _terminal, _toast, code) =>
+					persisted.push({ level, code }),
+			}).observe(
+				event({
+					type: 'push.money-divergence',
+					level: 'error',
+					collection: 'orders',
+					fields: { recordId: 'o-1', outcome: 'failed', roundingClass: cls },
+				})
+			);
+
+			expect(persisted).toEqual([{ level: 'error', code: 'CHECKOUT401' }]);
+		}
+	);
 
 	it('is NOT a sync.record row, so it cannot be read as a stuck record', () => {
 		divergence();

@@ -50,32 +50,32 @@ it('refuses insufficient stock with the existing toast key and params', async ()
 		},
 	});
 	expect(next).not.toHaveBeenCalled();
-	expect(log).toHaveBeenCalledWith('warn', 'Stock check found insufficient inventory', {
+	expect(log).toHaveBeenCalledWith('info', 'Stock check found insufficient inventory', {
 		category: ['wcpos', 'pos', 'cart', 'stock'],
 		showToast: true,
-		toast: { title: 'pos_cart.only_n_available' },
+		toast: { title: 'pos_cart.only_n_available', type: 'warning' },
 		context: { productId: 1, variationId: 0, available: 1 },
 	});
 });
-it('refuses unknown stock with the existing out-of-stock toast', async () => {
+it('refuses a stock record not yet on this device without calling it out of stock', async () => {
 	readCatalog.mockResolvedValue(null);
 	expect(await stockGuardOnAdd(ctx, e, next)).toMatchObject({
-		deny: { reasonKey: 'pos_products.out_of_stock', params: { name: 'Item' } },
+		deny: { reasonKey: 'pos_cart.stock_not_loaded', params: { name: 'Item' } },
 	});
 	expect(next).not.toHaveBeenCalled();
-	expect(log).toHaveBeenCalledWith('warn', 'Product is out of stock', {
+	expect(log).toHaveBeenCalledWith('info', 'Stock record is not on this device yet', {
 		category: ['wcpos', 'pos', 'cart', 'stock'],
 		showToast: true,
-		toast: { title: 'pos_products.out_of_stock' },
+		toast: { title: 'pos_cart.stock_not_loaded', type: 'warning' },
 		context: { productId: 1, variationId: 0, reason: 'missing_stock_record' },
 	});
 });
 it('warns about a backorder only after next resolves', async () => {
 	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 1, backorders: 'notify' });
 	expect(await stockGuardOnAdd(ctx, e, next)).toBe('saved');
-	expect(log).toHaveBeenCalledWith('warn', 'Product will be backordered', {
+	expect(log).toHaveBeenCalledWith('info', 'Product will be backordered', {
 		category: ['wcpos', 'pos', 'cart', 'stock'],
-		toast: { title: 'pos_cart.will_be_backordered' },
+		toast: { title: 'pos_cart.will_be_backordered', type: 'warning' },
 		showToast: true,
 	});
 	expect(log.mock.invocationCallOrder[0]).toBeGreaterThan(next.mock.invocationCallOrder[0]);

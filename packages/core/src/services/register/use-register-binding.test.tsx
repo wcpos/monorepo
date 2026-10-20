@@ -25,6 +25,12 @@ let mockDB: UserDatabase;
 let mockSite = '';
 let mockStoreId = 2;
 const logger = jest.mocked(getLogger(['wcpos', 'register']));
+// The real adoption by default; one test makes the local write fail after a good store read.
+const mockAdoptCounters = jest.fn();
+jest.mock('@wcpos/query/register-session', () => {
+	const actual = jest.requireActual('@wcpos/query/register-session');
+	return { ...actual, adoptCounters: (...args: unknown[]) => mockAdoptCounters(...args) };
+});
 const mockHttp = { get: jest.fn() };
 jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => ({
@@ -54,6 +60,9 @@ beforeEach(async () => {
 	mockStatus = 'online-website-available';
 	mockStoreId = 2;
 	mockHttp.get.mockReset();
+	mockAdoptCounters.mockImplementation(
+		jest.requireActual('@wcpos/query/register-session').adoptCounters
+	);
 });
 afterEach(async () => {
 	await mockDB.remove();
@@ -211,6 +220,60 @@ it('adopts the bound register detail counters before publishing the binding', as
 		last_closure_number: 9,
 		perpetual_sales_total: '100.0000',
 	});
+});
+
+it('names the local-floor fallback in one uncoded info row when the counter refresh fails', async () => {
+	mockHttp.get.mockImplementation(async (url) => {
+		if (url === 'registers') return { data: [rows[0]] };
+		throw new Error('Network Error');
+	});
+	const view = mount();
+	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
+	await waitFor(() =>
+		expect(logger.info).toHaveBeenCalledWith(
+			"Register counters not refreshed from the store; using this device's counters",
+			{ context: { registerId: 'a', step: 'store-read', error: 'Network Error' } }
+		)
+	);
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.error).not.toHaveBeenCalled();
+});
+
+it('names a local adoption failure after a good store read, and still binds', async () => {
+	mockHttp.get.mockImplementation(async (url) => ({
+		data:
+			url === 'registers'
+				? [rows[0]]
+				: {
+						...rows[0],
+						counters: {
+							last_closure_number: 9,
+							perpetual_sales_total: '100',
+							perpetual_refunds_total: '10',
+						},
+					},
+	}));
+	mockAdoptCounters.mockRejectedValue(new Error('Register is not initialized'));
+	const view = mount();
+	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
+	await waitFor(() =>
+		expect(logger.info).toHaveBeenCalledWith(
+			"Register counters from the store could not be saved on this device; using this device's counters",
+			{
+				context: {
+					registerId: 'a',
+					step: 'local-adoption',
+					error: 'Register is not initialized',
+				},
+			}
+		)
+	);
+	expect(logger.info).not.toHaveBeenCalledWith(
+		"Register counters not refreshed from the store; using this device's counters",
+		expect.anything()
+	);
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.error).not.toHaveBeenCalled();
 });
 
 it('does not log a manual re-bind to the current register', async () => {

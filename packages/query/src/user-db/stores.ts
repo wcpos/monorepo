@@ -4,7 +4,7 @@ import isPlainObject from 'lodash/isPlainObject';
 
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const appLogger = getLogger(['wcpos', 'app', 'stores']);
@@ -315,13 +315,15 @@ export async function mergeStoresWithResponse({
 	} catch (error) {
 		const errorMsg = getErrorMessage(error);
 		appLogger.error('Failed to merge stores with response', {
-			code: ERROR_CODES.AUTH_UNEXPECTED,
+			code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 			context: {
 				error: errorMsg,
 				wpUserUuid: wpUser.uuid,
 				remoteStoreCount: remoteStores?.length || 0,
 			},
 		});
+		// One failure, one row: the callers that catch the rethrow must not log it again.
+		markErrorReported(error);
 		throw error;
 	}
 }
@@ -390,9 +392,11 @@ export async function insertStorePayloads(
 				const toastMessage = `Failed to save ${summaries.length} store${summaries.length === 1 ? '' : 's'}: ${summaries
 					.map((s: { detail: string }) => s.detail)
 					.join(' | ')}`;
+				// A local database write: SYNC101's own summary and hint are the toast
+				// (the technical detail stays in the row), not AUTH999's sign-in copy.
 				appLogger.error(toastMessage, {
 					showToast: true,
-					code: ERROR_CODES.AUTH_UNEXPECTED,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						failures: summaries,
 						// Include the raw first error for deep debugging

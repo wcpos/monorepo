@@ -13,6 +13,8 @@ import {
 } from '@wcpos/query';
 import type { QueueRow, RxdbSyncEngine } from '@wcpos/sync-engine';
 
+import { recordHandle } from './record-handle';
+
 /**
  * The unresolved-conflict feed for Store health → Database.
  *
@@ -51,29 +53,16 @@ export type UnresolvedConflict = {
 };
 
 /**
- * Best-effort record handle, same precedence the attention banner resolves
- * (products: name; orders: number · total; customers: first/last or username),
- * read from the resident first and the queued snapshot as the last resort — a
+ * The record handle (shared with the attention panel and the Logs rows), read
+ * from the resident first and the queued snapshot as the last resort — a
  * parked UPDATE's payload may be partial (a lone stock tweak carries no name).
  */
 function labelFor(resident: Record<string, unknown> | null, entry: QueueRow): string | null {
-	const queued = (entry.payload ?? {}) as Record<string, unknown>;
-	const residentPayload = (resident?.payload ?? {}) as Record<string, unknown>;
-	const pick = (key: string): unknown => resident?.[key] ?? residentPayload[key] ?? queued[key];
-	const name = pick('name');
-	if (typeof name === 'string' && name.trim() !== '') return name.trim();
-	const number = pick('number');
-	if (typeof number === 'string' || typeof number === 'number') {
-		const total = pick('total');
-		return typeof total === 'string' && total !== '' ? `#${number} · ${total}` : `#${number}`;
-	}
-	const person = [pick('first_name'), pick('last_name')]
-		.filter((part): part is string => typeof part === 'string' && part.trim() !== '')
-		.map((part) => part.trim())
-		.join(' ');
-	if (person !== '') return person;
-	const username = pick('username');
-	return typeof username === 'string' && username !== '' ? username : null;
+	return recordHandle(
+		entry.collectionName,
+		resident,
+		(entry.payload ?? {}) as Record<string, unknown>
+	);
 }
 
 function describe(rows: readonly DescribedQueueRow[]): UnresolvedConflict[] {

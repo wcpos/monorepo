@@ -17,7 +17,7 @@ import { usePointer } from '@wcpos/components/lib/device';
 import { hapticTick } from '@wcpos/components/lib/haptics';
 import { EASE, EASE_EXIT, OVERLAY_FADE, PANEL_SLIDE_OUT } from '@wcpos/components/lib/motion';
 import type { PulseTableRowRef } from '@wcpos/components/table';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { editOffset, releaseOutcome, removeOffset, removePoint } from './line-strip.geometry';
@@ -217,9 +217,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				removeLineItem(uuid, type)
 					.catch((error: unknown) => {
 						// `localPatch` logs and toasts every failure it handles, and re-raises
-						// only ActiveScopeChangedTwiceError, so a rejection getting this far
-						// is unexpected. Log it — without a second toast, which would double
-						// up on the cashier.
+						// only ActiveScopeChangedTwiceError — already reported, so skipped. Any
+						// other rejection getting this far is unexpected. Log it — without a
+						// second toast, which would double up on the cashier.
+						if (isErrorReported(error)) return;
 						cartLogger.error('Cart line removal failed', {
 							code: ERROR_CODES.CART_UPDATE_FAILED,
 							context: { uuid, itemType: type, error: getErrorMessage(error) },

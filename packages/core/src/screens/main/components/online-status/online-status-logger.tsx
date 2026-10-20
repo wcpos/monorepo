@@ -43,11 +43,12 @@ export function OnlineStatusLogger() {
 				// is the `warn` promise. The level also reaches `console.*` on native:
 				// at `error` the expo dev client draws a full-screen redbox over the app
 				// on every transient blip (class 13; run 33487044969 iOS phone flow 05,
-				// where it swallowed the drawer tap). The toast and the SYNC_UNEXPECTED
-				// help link are unchanged.
+				// where it swallowed the drawer tap). The code is SYNC_UNREACHABLE: its
+				// "keep selling, changes send when the connection returns" is the truth;
+				// SYNC_UNEXPECTED told the cashier to re-enter and save.
 				case 'offline':
 					logger.warn('Device went offline', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+						code: ERROR_CODES.SYNC_UNREACHABLE,
 						context: { type: 'connectivity.device-offline' },
 						showToast: true,
 						toast: { title: translate('common.device_went_offline') },
@@ -55,7 +56,7 @@ export function OnlineStatusLogger() {
 					break;
 				case 'online-website-unavailable':
 					logger.warn('Website is unreachable', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+						code: ERROR_CODES.SYNC_UNREACHABLE,
 						context: { type: 'connectivity.website-unreachable' },
 						showToast: true,
 						toast: { title: translate('common.website_is_unreachable') },

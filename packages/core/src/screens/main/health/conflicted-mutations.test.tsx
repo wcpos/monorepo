@@ -102,6 +102,19 @@ jest.mock('./components', () => ({
 	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
 }));
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
+}));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
 }));
@@ -314,10 +327,30 @@ describe('ConflictedMutationsPanel', () => {
 
 		await waitFor(() =>
 			expect(mockToast).toHaveBeenCalledWith(
-				expect.objectContaining({ type: 'error', text2: 'storage fault' })
+				expect.objectContaining({
+					type: 'error',
+					text2: 'Try again. If it keeps failing, reload WCPOS.',
+				})
 			)
 		);
 		expect(getByTestId('db-conflicted-row-m-1')).toBeTruthy();
+	});
+
+	it('says another window is resolving it (info, no row) when the claim is held elsewhere', async () => {
+		rows = [row()];
+		mockResolveConflict.mockRejectedValueOnce(
+			new Error('resolveConflict: another window is resolving "m-1" right now — try again')
+		);
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		fireEvent.click(getByTestId('db-conflicted-resend-m-1'));
+
+		await waitFor(() =>
+			expect(mockToast).toHaveBeenCalledWith({
+				type: 'info',
+				text1: 'Another window is resolving this change right now.',
+			})
+		);
 	});
 
 	it('Open record routes to the collection edit surface', () => {

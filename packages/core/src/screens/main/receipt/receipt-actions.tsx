@@ -64,7 +64,8 @@ export function ReceiptActions({
 			</Action>
 			<Action
 				testID="receipt-print-button"
-				onPress={() => doc.print().catch(() => undefined)}
+				// One coded row and a toast on failure (a closed print dialog is a cancel).
+				onPress={() => void doc.printAndReport()}
 				loading={doc.isPrinting || doc.isSyncing}
 			>
 				{t(doc.printedTo ? 'receipt.print_again' : 'receipt.print_receipt')}

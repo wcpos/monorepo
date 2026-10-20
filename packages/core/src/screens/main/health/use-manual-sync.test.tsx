@@ -4,6 +4,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useCollectionCheck, useManualSync } from './use-manual-sync';
 
@@ -113,7 +114,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'HTTP 502',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -147,7 +149,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'HTTP 502',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -187,7 +190,8 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'scope database not open',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
 		});
 	});
 
@@ -221,7 +225,7 @@ describe('useManualSync', () => {
 		});
 	});
 
-	it('falls back to the raw reason for other skips', async () => {
+	it('tells the cashier to reopen the store when no store is open', async () => {
 		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'no active scope' });
 
 		const { result } = renderHook(() => useManualSync());
@@ -230,7 +234,19 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'warning',
 			text1: 'Sync didn’t run.',
-			text2: 'no active scope',
+			text2: 'No store is open on this device right now. Reopen the store, then try again.',
+		});
+	});
+
+	it('shows no raw engine reason for other skips', async () => {
+		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'some engine detail' });
+
+		const { result } = renderHook(() => useManualSync());
+		await act(() => result.current.sync());
+
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'warning',
+			text1: 'Sync didn’t run.',
 		});
 	});
 
@@ -243,7 +259,13 @@ describe('useManualSync', () => {
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
 			text1: 'Couldn’t sync with the server.',
-			text2: 'engine disposed',
+			// The engine's raw reason stays in its own row; the cashier gets what to do.
+			text2: 'Check your connection and try again. Logs has the details.',
+		});
+		// …and Logs really has them: a throw happens before the engine writes any row.
+		expect(getLogger([]).error).toHaveBeenCalledWith('Manual sync threw', {
+			code: 'CLIENT999',
+			context: { error: 'engine disposed' },
 		});
 	});
 });

@@ -311,7 +311,8 @@ describe('useSplitLineItem', () => {
 		await act(async () => {
 			await result.current.splitLineItem('missing');
 		});
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Split targeted a line that is no longer in the cart',
 			{
 				showToast: true,

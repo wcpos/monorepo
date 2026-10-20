@@ -99,6 +99,8 @@ describe('per-task drain outcomes', () => {
 				kind: 'failed',
 				documents: 0,
 				requests: 0,
+				// The request it failed on, which the transport row already reported.
+				requestStatus: 500,
 			},
 			{
 				taskId: 'products:browse:windowed',
@@ -111,6 +113,21 @@ describe('per-task drain outcomes', () => {
 				requests: 2,
 			},
 		]);
+	});
+
+	it('counts failures no transport row reported apart from request failures', async () => {
+		const local = state({ taskId: 'a:windowed', queryKey: 'a' });
+		const remote = state({ taskId: 'b:windowed', queryKey: 'b' });
+		const repository = createRepository([local, remote]);
+		const fetcher = vi.fn(async (task: { id: string }) => {
+			if (task.id === 'a:windowed') throw new Error('bulkUpsert failed');
+			throw new Error('Woo REST b request failed: 503');
+		});
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		// Only the local failure has nothing else to report it.
+		expect(result).toMatchObject({ failed: 2, failedUnreported: 1 });
 	});
 
 	it('attributes documents and requests to the task that fetched them', async () => {
@@ -254,6 +271,7 @@ describe('runPersistedSchedulerTasks', () => {
 			succeeded: 1,
 			coalescedReruns: 0,
 			failed: 0,
+			failedUnreported: 0,
 			totalDocuments: 25,
 			totalRequests: 1,
 			// A real drain is never a ledger-rebuild abort (#956).

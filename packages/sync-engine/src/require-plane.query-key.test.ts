@@ -7,7 +7,7 @@ import { REFERENCE_LANE_CONFIGS } from './scheduler/rx-pos-bootstrap-seeder';
 function queryKeyFor(requirement: EngineRequirement): string | null {
 	const plane = createRequirePlane({
 		admitted: () => new Promise(() => undefined),
-		manager: {} as never,
+		manager: { onEvent: () => () => undefined } as never,
 		databaseFor: () => null,
 		coverageFor: () => null,
 		fetcher: async () => new Response(),

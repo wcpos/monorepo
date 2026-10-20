@@ -29,7 +29,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, type OrderPayload, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
@@ -42,7 +42,7 @@ import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import { pushFailureCode } from '../../contexts/push-failure-code';
+import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useOrderRecord } from '../commands/use-order-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -146,11 +146,10 @@ export function EditOrderForm({ order }: Props) {
 			setLoading(true);
 			try {
 				const patched = await saveOrderFields(order, data as unknown as Partial<OrderPayload>);
-				// localPatch swallows write errors and resolves undefined - pushing
-				// anyway would sync the unchanged resident and report success
-				if (!patched) {
-					throw new Error('Local patch failed');
-				}
+				// localPatch reports its own failure (row + toast) and resolves undefined.
+				// Pushing anyway would sync the unchanged resident and report success;
+				// reporting it again would put a second row and toast on one failure.
+				if (!patched) return;
 				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (savedDoc) {
@@ -166,15 +165,12 @@ export function EditOrderForm({ order }: Props) {
 					}
 				});
 			} catch (error) {
-				const errorMessage = getErrorMessage(error);
-				mutationLogger.error('Failed to save order', {
-					showToast: true,
-					code: pushFailureCode(error),
-					toast: { title: t('common.failed_to_save_order') },
-					context: {
-						orderId: order.getLatest().payload.id,
-						error: errorMessage,
-					},
+				// A localPatch rethrow (the scope moved twice) is already reported.
+				if (isErrorReported(error)) return;
+				reportPushFailure(mutationLogger, 'Failed to save order', error, {
+					title: t('common.failed_to_save_order'),
+					stillSendingTitle: t('common.order_still_sending'),
+					context: { orderId: order.getLatest().payload.id },
 				});
 			} finally {
 				setLoading(false);
@@ -257,12 +253,12 @@ export function EditOrderForm({ order }: Props) {
 				: undefined;
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {
-			mutationLogger.error('Error fetching customer', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
-				context: {
-					customerId: customerIdToLoad,
-					error: t('orders.customer_not_found'),
-				},
+			// Nothing is broken — the record has not synced to this device yet — but
+			// the cashier picked a customer and saw nothing happen, so say why.
+			mutationLogger.info('Selected customer is not on this device', {
+				showToast: true,
+				toast: { title: t('orders.customer_not_on_device'), type: 'warning' },
+				context: { customerId: customerIdToLoad },
 			});
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- effect-as-event-handler for the async customer lookup; pre-existing, surfaced when form.watch's compiler bailout went away. The component does not compile regardless (try/finally). Follow-up: fire this from the lookup emission instead.
 			setCustomerIdToLoad(null);

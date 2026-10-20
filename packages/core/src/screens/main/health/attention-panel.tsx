@@ -1,95 +1,18 @@
 import * as React from 'react';
 
-import { type Href, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQueryRuntime } from '@wcpos/query';
-import { readResidentRecord } from '@wcpos/query/record-readers';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
-import { rowKeyForTelemetryCollection } from './database-logic';
+import { useRecordEditRoute } from './record-edit-route';
 import { useManualSync } from './use-manual-sync';
+import { useRecordLabel } from './use-record-label';
 
 import type { StuckRecord } from '../logs/logs-logic';
-
-const healthLogger = getLogger(['wcpos', 'health']);
-
-/** Edit routes per collection — only collections with an edit surface link out.
- * Shared with the conflicted-mutations panel so the two surfaces can never
- * disagree about where a record is edited. */
-export const FIX_ROUTES: Record<string, (uuid: string) => Href> = {
-	products: (uuid) => `/(app)/(drawer)/products/(modals)/edit/product/${uuid}`,
-	variations: (uuid) => `/(app)/(drawer)/products/(modals)/edit/variation/${uuid}`,
-	orders: (uuid) => `/orders/edit/${uuid}`,
-	customers: (uuid) => `/customers/edit/${uuid}`,
-};
-
-/**
- * Best-effort display name for the stuck record, read from the local doc
- * (products: name; orders: number; customers: first/last name or username). Falls back to
- * `collection/id` — the record always stays identifiable.
- */
-function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
-	const runtime = useQueryRuntime();
-	// Keyed by the stuck record's identity: a stale resolution simply stops
-	// matching instead of needing a synchronous reset in the effect.
-	const [resolved, setResolved] = React.useState<{ key: string; label: string } | null>(null);
-
-	// Effect (last resort per project.mdc): a one-shot async doc read with no
-	// observable seam — the label is decoration on top of the log-derived row.
-	React.useEffect(() => {
-		if (!stuck) return;
-		const rowKey = rowKeyForTelemetryCollection(stuck.collection);
-		if (rowKey === null) return;
-		let cancelled = false;
-		void (async () => {
-			try {
-				const doc = await readResidentRecord(runtime.engine, rowKey, stuck.recordId);
-				if (cancelled || !doc) return;
-				const source = doc as { number?: unknown; payload?: Record<string, unknown> };
-				const payload = source.payload ?? {};
-				const customerName = [payload.first_name, payload.last_name]
-					.filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
-					.map((part) => part.trim())
-					.join(' ');
-				const number = source.number ?? payload.number;
-				const name =
-					typeof payload.name === 'string' && payload.name.length > 0
-						? payload.name
-						: typeof number === 'string' || typeof number === 'number'
-							? `#${number}`
-							: customerName.length > 0
-								? customerName
-								: typeof payload.username === 'string'
-									? payload.username
-									: null;
-				if (name) setResolved({ key: stuck.key, label: name });
-			} catch (error) {
-				if (cancelled) return;
-				// Doc unavailable — the collection/id fallback still identifies it, but a
-				// failed read on the health surface itself must reach the log pipeline.
-				healthLogger.warn('Attention panel could not read the stuck record for its label', {
-					context: {
-						collection: stuck.collection,
-						recordId: stuck.recordId,
-						error: getErrorMessage(error),
-					},
-				});
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, [runtime.engine, stuck]);
-
-	return resolved !== null && stuck !== undefined && resolved.key === stuck.key
-		? resolved.label
-		: null;
-}
 
 /**
  * Database-tab attention panel (spec §9): the derived stuck-records view made
@@ -101,12 +24,19 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const router = useRouter();
 	const { syncing, busy, sync } = useManualSync();
 	const first = stuck[0];
-	const label = useStuckRecordLabel(first);
+	const label = useRecordLabel(first ? first.collection : undefined, first?.recordId);
+	const editRoute = useRecordEditRoute();
 
 	if (!first) return null;
+	const collectionName = first.collection;
 
-	const fixRoute = FIX_ROUTES[first.collection]?.(first.recordId);
-	const displayName = label ?? `${first.collection}/${first.recordId.slice(0, 8)}`;
+	// From the FOUND record's uuid: a pull-side row's id is the store's
+	// numeric id, which no edit screen can open.
+	const fixRoute = editRoute(collectionName, label?.status === 'found' ? label.uuid : null);
+	// The handle alone when there is one — the sentence around it already says
+	// what kind it is; otherwise the shared kind / "not on this device" line.
+	// Never the raw id: support reads that from the log row's Details.
+	const displayName = label?.handle ?? label?.text ?? collectionName;
 
 	return (
 		<Callout tone="destructive" testID="db-attention-panel">

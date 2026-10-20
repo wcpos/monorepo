@@ -24,7 +24,8 @@ export async function logPrintJob<T extends number | void>(
 		});
 		return result;
 	} catch (error) {
-		printerLogger.warn(`${lane} print failed`, {
+		// Forensic: the caller owns the one coded row (receipt print: row + toast; test print: row).
+		printerLogger.debug(`${lane} print failed`, {
 			context: {
 				...context,
 				elapsedMs: Date.now() - startedAt,

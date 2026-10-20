@@ -275,7 +275,7 @@ describe('useUpdateCartLine — fee_lines', () => {
 		expect(data.fee_lines[0].total).toBe('8.8');
 	});
 
-	it('warns without patching when the fee line is absent', async () => {
+	it('notes (info, not a warning) without patching when the fee line is absent', async () => {
 		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
@@ -283,7 +283,8 @@ describe('useUpdateCartLine — fee_lines', () => {
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Fee line update targeted a line that is no longer in the cart',
 			{
 				showToast: true,

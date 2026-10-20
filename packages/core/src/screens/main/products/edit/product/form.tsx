@@ -26,7 +26,7 @@ import {
 } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, ProductPayload } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
@@ -128,9 +128,9 @@ export function EditProductForm({ product }: Props) {
 			setLoading(true);
 			try {
 				const savedFields = await saveCatalogueFields(product, patchData);
-				if (!savedFields) {
-					throw new Error('Local patch failed');
-				}
+				// localPatch reports its own failure (row + toast) and resolves undefined;
+				// reporting it again put a second row and toast on one failed save.
+				if (!savedFields) return;
 				const saved = product.getLatest().payload;
 				mutationLogger.success(t('common.saved', { name: saved.name }), {
 					showToast: true,
@@ -141,10 +141,13 @@ export function EditProductForm({ product }: Props) {
 				});
 				close();
 			} catch (error) {
+				// A localPatch rethrow (the scope moved twice) is already reported.
+				if (isErrorReported(error)) return;
 				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save product', {
 					showToast: true,
-					code: ERROR_CODES.PRODUCT_SAVE_FAILED,
+					// A local save: the store was never contacted, so no "store refused" code.
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					toast: { title: t('products.failed_to_save_product') },
 					context: {
 						productId: product.getLatest().payload.id,

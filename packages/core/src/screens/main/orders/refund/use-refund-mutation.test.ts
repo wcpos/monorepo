@@ -49,9 +49,15 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
 
+const mockRefundError = jest.fn();
+const mockRefundWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockRefundError(...args),
+		warn: (...args: unknown[]) => mockRefundWarn(...args),
+		debug: jest.fn(),
+	}),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -394,6 +400,9 @@ describe('useRefundMutation', () => {
 
 		expect(mockPost).toHaveBeenCalledTimes(1);
 		expect(release).toHaveBeenCalledTimes(1);
+		// The refund succeeded: an amber row would invite the double-refund retry.
+		expect(mockRefundWarn).not.toHaveBeenCalled();
+		expect(mockRefundError).not.toHaveBeenCalled();
 	});
 
 	it('fails fast when attempting to refund an order without a persisted id', async () => {

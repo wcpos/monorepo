@@ -20,6 +20,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { isChooserCancel } from './chooser-cancel';
 
 import type { UseSerialScanResult } from './use-serial-scan';
 
@@ -276,9 +277,12 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			const port = await serial.requestPort({ allowedBluetoothServiceClassIds });
 			await attachPort(port, true);
 		} catch (error) {
-			serialLogger.warn('serial connect cancelled or failed', {
-				context: { error: String(error) },
-			});
+			// Closing the browser's port chooser throws NotFoundError: a cancel, not a fault.
+			const cancelled = isChooserCancel(error);
+			serialLogger[cancelled ? 'debug' : 'warn'](
+				cancelled ? 'serial connect cancelled' : 'serial connect failed',
+				{ context: { error: String(error) } }
+			);
 		}
 	}, [attachPort, storeDB]);
 
@@ -311,7 +315,8 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 				await attachPort(matches[0], false);
 			}
 		})().catch((error) => {
-			serialLogger.warn('Failed to reopen saved serial scanner', {
+			// A silent best-effort reopen on mount (another tab may hold the port).
+			serialLogger.debug('Failed to reopen saved serial scanner', {
 				context: { error: String(error) },
 			});
 		});

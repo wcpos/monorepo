@@ -97,7 +97,9 @@ describe('NetworkAdapter', () => {
 		errorCallback?.(new Error('socket closed'));
 
 		await expect(promise).rejects.toThrow('socket closed');
-		expect(warn).toHaveBeenCalledWith('Raw TCP job failed', {
+		// Forensic: the receipt / test print that called it owns the one coded row.
+		expect(warn).not.toHaveBeenCalled();
+		expect(debug).toHaveBeenCalledWith('Raw TCP job failed', {
 			context: {
 				host: '192.168.1.145',
 				port: 9100,
@@ -115,7 +117,9 @@ describe('NetworkAdapter', () => {
 		await vi.advanceTimersByTimeAsync(10_000);
 
 		await rejection;
-		expect(warn).toHaveBeenCalledWith('Raw TCP job failed', {
+		// Forensic: the receipt / test print that called it owns the one coded row.
+		expect(warn).not.toHaveBeenCalled();
+		expect(debug).toHaveBeenCalledWith('Raw TCP job failed', {
 			context: expect.objectContaining({ cause: 'timeout' }),
 		});
 		vi.useRealTimers();

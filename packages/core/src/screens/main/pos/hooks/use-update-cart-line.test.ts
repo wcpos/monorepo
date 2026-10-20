@@ -155,7 +155,9 @@ it('reports a stale line item edit without dispatching', async () => {
 	});
 	expect(seen).not.toHaveBeenCalled();
 	expect(mockPatch).not.toHaveBeenCalled();
-	expect(mockWarn).toHaveBeenCalledWith(
+	// Multi-tab is first-class: the cart already shows the other tab's change (info, not warn).
+	expect(mockWarn).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({
 			showToast: true,

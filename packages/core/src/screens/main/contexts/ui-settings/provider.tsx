@@ -5,7 +5,7 @@ import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import { openStoreState } from '@wcpos/query/store-local';
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useUILabel } from './use-ui-label';
@@ -90,11 +90,15 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			// Add timeout detection for potential hangs
 			const addStatePromise = openStoreState(storeDB, `${id}_v2`);
 			const timeoutId = setTimeout(() => {
-				uiLogger.warn(
-					`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`
-				);
+				// SYNC181: the outcome is not known yet, and its hint says what to do if a
+				// screen stays stuck.
+				uiLogger.warn(`storeDB.addState('${id}_v2') is taking longer than 5 seconds`, {
+					code: ERROR_CODES.LOCAL_DB_STALLED,
+					context: { settingsId: id },
+				});
 			}, 5000);
 
+			// Settled either way (`finally`) — a rejection must not leave the stall row to fire later.
 			const observable$ = from(addStatePromise.finally(() => clearTimeout(timeoutId))).pipe(
 				switchMap(async (state) => {
 					try {
@@ -105,6 +109,8 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 							code: ERROR_CODES.UNEXPECTED_ERROR,
 							context: { error: String(error) },
 						});
+						// The error boundary that catches the rethrow must not log it again.
+						markErrorReported(error);
 						throw error;
 					}
 				})

@@ -1,4 +1,5 @@
 import { isWcposPluginCompatible } from './use-app-info';
+import { MINIMUM_WCPOS_PLUGIN_VERSION } from '../utils/wcpos-plugin-version';
 
 jest.mock('@wcpos/utils/app-info', () => ({
 	AppInfo: {
@@ -33,5 +34,15 @@ describe('isWcposPluginCompatible', () => {
 	it('rejects missing or invalid plugin versions', () => {
 		expect(isWcposPluginCompatible(undefined)).toBe(false);
 		expect(isWcposPluginCompatible('not-a-version')).toBe(false);
+	});
+
+	/**
+	 * Patch compatibility rule (roadmap RELEASE-CHECKLIST.md, 2026-10-19):
+	 * every patch on a lane works with every other patch on that lane, so the
+	 * plugin floor is a minor boundary. A floor like `2.0.3` would turn a patch
+	 * release into a forced plugin update for every merchant on `2.0.0`–`2.0.2`.
+	 */
+	it('keeps the plugin floor on a minor boundary', () => {
+		expect(MINIMUM_WCPOS_PLUGIN_VERSION).toMatch(/^\d+\.\d+\.0$/);
 	});
 });

@@ -7,14 +7,44 @@ const t = (key: string) => catalogue[key] ?? key;
 const DEV_MESSAGE = 'Failed to save site data: request timed out';
 
 describe('resolveMerchantToastText', () => {
-	it('gives an explicit title precedence over everything', () => {
+	it('gives an explicit title precedence and keeps the code’s action hint as the description', () => {
+		// "Checkout failed" alone told the cashier nothing about what to do next.
 		expect(
 			resolveMerchantToastText(t, {
 				explicitTitle: 'Could not save the site.',
 				errorCode: 'AUTH301',
 				logMessage: DEV_MESSAGE,
 			})
-		).toEqual({ title: 'Could not save the site.' });
+		).toEqual({
+			title: 'Could not save the site.',
+			description: catalogue['health.logs.error_action.AUTH301'],
+		});
+	});
+
+	it('shows an explicit title alone when there is no code', () => {
+		expect(
+			resolveMerchantToastText(t, { explicitTitle: 'Already resolved.', logMessage: DEV_MESSAGE })
+		).toEqual({ title: 'Already resolved.' });
+	});
+
+	it('lets the call site’s own second sentence outrank the action hint', () => {
+		const show = jest.fn();
+
+		createMerchantToast(
+			t,
+			show
+		)({
+			type: 'warning',
+			title: 'Offline',
+			description: 'Reconnect, then try again.',
+			merchantCopy: { explicitTitle: 'Offline', errorCode: 'SYNC121', logMessage: DEV_MESSAGE },
+		});
+
+		expect(show).toHaveBeenCalledWith({
+			type: 'warning',
+			title: 'Offline',
+			description: 'Reconnect, then try again.',
+		});
 	});
 
 	it('resolves a coded call to the catalogue’s translated summary and action', () => {

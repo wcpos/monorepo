@@ -111,14 +111,20 @@ describe('useSiteInfo', () => {
 	it('still reports a genuine fetch failure', async () => {
 		// The silence above must be specific to the sleep block: a real failure
 		// still has to reach the log, or this guard hides outages.
-		mockGet.mockRejectedValue(new Error('Network Error'));
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 500'), {
+				isAxiosError: true,
+				response: { status: 500 },
+			})
+		);
 
 		const { result } = renderHook(() => useSiteInfo({ site: mockSite as never }));
 
-		await waitFor(() => expect(result.current.error).toBe('Network Error'));
+		await waitFor(() => expect(result.current.error).toBe('Request failed with status code 500'));
+		// The code of what the store did (SYNC131), not SYNC999's "re-enter and save".
 		expect(mockError).toHaveBeenCalledWith(
 			'Failed to fetch site info',
-			expect.objectContaining({ code: 'SYNC999' })
+			expect.objectContaining({ code: 'SYNC131' })
 		);
 	});
 

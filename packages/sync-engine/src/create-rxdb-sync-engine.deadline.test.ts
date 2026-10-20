@@ -3,6 +3,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createAutomaticTickGate } from './automatic-tick-gate';
 import { createEngineHarness, type EngineHarness } from './testing';
+import { requestStatusOf } from './transport-failure';
 import { RequestTimeoutError } from './write-path/request-timeout';
 
 setPremiumFlag();
@@ -99,7 +100,7 @@ it('releases a black-holed query-total lane before its lease expires so the next
 	expect(harness.diagnostics).toContainEqual(
 		expect.objectContaining({
 			type: 'engine.request.deadline',
-			fields: { lane: 'query-total-retry', elapsedMs: 25_000 },
+			fields: { lane: 'query-total-retry', elapsedMs: 25_000, consecutiveDeadlines: 1 },
 		})
 	);
 	const second = gate.runLane('query-total-retry');
@@ -202,4 +203,105 @@ it('settles caller cancellation immediately without deadline or pressure for ign
 	await vi.advanceTimersByTimeAsync(60_000);
 	expect(harness.diagnostics.some((event) => event.type === 'engine.request.deadline')).toBe(false);
 	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
+});
+
+it('numbers consecutive deadlines per lane and restarts after any answer', async () => {
+	vi.useFakeTimers();
+	const { fetcher } = harness.engine.hostTransport();
+	const blackHole = () => {
+		fetch.mockReturnValueOnce(new Promise(() => {}));
+		const request = fetcher('https://example.test/probe').catch(() => {});
+		return vi.advanceTimersByTimeAsync(60_000).then(() => request);
+	};
+	await blackHole();
+	await blackHole();
+	await blackHole();
+	fetch.mockResolvedValueOnce(new Response('[]', { status: 503 }));
+	await fetcher('https://example.test/probe');
+	await blackHole();
+
+	expect(
+		harness.diagnostics
+			.filter((event) => event.type === 'engine.request.deadline')
+			.map((event) => event.fields?.consecutiveDeadlines)
+	).toEqual([1, 2, 3, 1]);
+});
+
+it('leaves a thrown failure unmarked unless the host wrote its transport row', async () => {
+	// The engine's wrapper also sees rejections no transport row reported (a body
+	// stream that broke after a 200); only the host, at the line that writes the
+	// row, may mark an error as already reported.
+	const broken = new TypeError('body stream failed');
+	fetch.mockRejectedValueOnce(broken);
+	const { fetcher } = harness.engine.hostTransport();
+
+	await expect(fetcher('https://example.test/probe')).rejects.toBe(broken);
+
+	expect(requestStatusOf(broken)).toBeUndefined();
+});
+
+it('starts the deadline streak over under another store scope', async () => {
+	// The census count is the one deadline lane a scope switch never answers on,
+	// so only the scope change itself can start the streak over here.
+	const census = await createEngineHarness({
+		mode: 'manual',
+		queryTotal: { fetchWooQueryTotal: () => new Promise(() => {}) },
+	});
+	vi.useFakeTimers();
+	try {
+		const blackHole = async () => {
+			const check = census.engine.checkCollection('products');
+			await vi.advanceTimersByTimeAsync(25_000);
+			await check;
+		};
+		await blackHole();
+		await blackHole();
+		vi.useRealTimers();
+		await census.engine.scope.switch({
+			site: 'https://engine-harness.example.test',
+			storeId: 2,
+			cashierId: 'deadline-streak-other-store',
+		});
+		vi.useFakeTimers();
+		await blackHole();
+
+		// Store A's two deadlines must not make store B's first read as its third.
+		expect(
+			census.diagnostics
+				.filter(
+					(event) =>
+						event.type === 'engine.request.deadline' && event.fields?.lane === 'query-total-retry'
+				)
+				.map((event) => (event.fields as { consecutiveDeadlines?: number }).consecutiveDeadlines)
+		).toEqual([1, 2, 1]);
+	} finally {
+		vi.useRealTimers();
+		await census.dispose();
+	}
+});
+
+it("keeps a timing-out path's streak when a healthy probe answers on the same lane", async () => {
+	vi.useFakeTimers();
+	const { fetcher } = harness.engine.hostTransport();
+	const probe = async () => {
+		fetch.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+		await fetcher('https://example.test/probe/tick');
+	};
+	const timeout = async () => {
+		fetch.mockReturnValueOnce(new Promise(() => {}));
+		const request = fetcher('https://example.test/probe/sequence-log?since=4').catch(() => {});
+		await vi.advanceTimersByTimeAsync(60_000);
+		await request;
+	};
+	for (let cycle = 0; cycle < 3; cycle += 1) {
+		await probe();
+		await timeout();
+	}
+
+	// The probe's answers are another path's: the sequence-log streak reaches 3.
+	expect(
+		harness.diagnostics
+			.filter((event) => event.type === 'engine.request.deadline')
+			.map((event) => (event.fields as { consecutiveDeadlines?: number }).consecutiveDeadlines)
+	).toEqual([1, 2, 3]);
 });

@@ -33,7 +33,8 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
-import { FIX_ROUTES } from './attention-panel';
+import { useRecordEditRoute } from './record-edit-route';
+import { classifyResolutionError } from './resolution-error';
 import { Callout } from './components';
 import { useManualSync } from './use-manual-sync';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -64,6 +65,7 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
 export function ConflictedMutationsPanel() {
 	const t = useT();
 	const router = useRouter();
+	const editRoute = useRecordEditRoute();
 	const runtime = useQueryRuntime();
 	const { syncing, sync } = useManualSync();
 	const { rows, readError } = useUnresolvedConflicts();
@@ -131,6 +133,18 @@ export function ConflictedMutationsPanel() {
 				});
 				return;
 			}
+			// Clicking a change that is already resolved is not an error: say so, no row.
+			const kind = classifyResolutionError(error);
+			if (kind !== 'failed') {
+				Toast.show({
+					type: 'info',
+					text1:
+						kind === 'already-resolved'
+							? t('health.database.already_resolved')
+							: t('health.database.resolving_elsewhere'),
+				});
+				return;
+			}
 			const message = getErrorMessage(error);
 			logger.error('conflict resolution failed', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -148,7 +162,8 @@ export function ConflictedMutationsPanel() {
 					resolution === 'discard'
 						? t('health.database.conflicted.discard_failed')
 						: t('health.database.conflicted.resend_failed'),
-				text2: message,
+				// The raw engine message (with its uuid) stays in the row, not the toast.
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);
@@ -177,7 +192,7 @@ export function ConflictedMutationsPanel() {
 
 			<VStack className="gap-0">
 				{rows.map((row) => {
-					const fixRoute = FIX_ROUTES[row.collectionName]?.(row.recordId);
+					const fixRoute = editRoute(row.collectionName, row.recordId);
 					// Discarding the local change loses it (or the record): that one goes in the row's ⋮
 					// menu. Taking the server's version is a second constructive choice beside Resend, so
 					// both are outline and the row has no primary.

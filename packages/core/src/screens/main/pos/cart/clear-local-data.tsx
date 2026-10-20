@@ -68,9 +68,9 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 			return;
 		}
 
-		uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
-		});
+		// A fallback that works on web, and a refusal with its own toast on native:
+		// worth a warn for support, not a red "unexpected error, report it".
+		uiLogger.warn('Failed to schedule the pre-hydration reset; falling back to direct clear');
 
 		if (Platform.OS !== 'web') {
 			// Without the flag, a direct clear would leave the running app pointing

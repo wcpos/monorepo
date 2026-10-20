@@ -28,11 +28,13 @@ describe('useReceiptData', () => {
 		jest.clearAllMocks();
 	});
 
+	// The receipt falls back to locally built data and still prints: never a
+	// warn/error row, and never PRINT999 "printing hit a problem".
 	it.each([
-		[{ isSleeping: true }, 'warn'],
-		[{ blockCode: 'preflight-offline' }, 'warn'],
-		[{ blockCode: 'preflight-auth-required' }, 'error'],
-		[{}, 'error'],
+		[{ isSleeping: true }, 'debug'],
+		[{ blockCode: 'preflight-offline' }, 'debug'],
+		[{ blockCode: 'preflight-auth-required' }, 'info'],
+		[{}, 'info'],
 	] as const)(
 		'logs receipt refusal %j at %s without changing the result',
 		async (fields, level) => {
@@ -40,11 +42,12 @@ describe('useReceiptData', () => {
 			mockGet.mockRejectedValueOnce(error);
 			const { result } = renderHook(() => useReceiptData({ orderId: 42 }));
 			await waitFor(() => expect(result.current.error).toBe(error));
-			expect(getLogger([])[level]).toHaveBeenCalledWith('Failed to fetch receipt data', {
-				code: 'PRINT999',
-				context: { orderId: 42, mode: 'live', error: 'refused' },
-			});
-			expect(getLogger([])[level === 'warn' ? 'error' : 'warn']).not.toHaveBeenCalled();
+			expect(getLogger([])[level]).toHaveBeenCalledWith(
+				'Receipt built from local data: server receipt data unavailable',
+				{ context: { orderId: 42, mode: 'live', error: 'refused' } }
+			);
+			expect(getLogger([]).error).not.toHaveBeenCalled();
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
 		}
 	);
 

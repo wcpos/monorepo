@@ -181,7 +181,7 @@ export async function syncSubscriberToServer(
 	} catch (error: any) {
 		const errorMessage = error?.response?.data?.message || error?.message || 'Network error';
 
-		novuLogger.warn('Novu: Subscriber sync failed', {
+		novuLogger.debug('Novu: Subscriber sync failed', {
 			context: {
 				subscriberId,
 				environment,

@@ -19,7 +19,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -87,8 +87,10 @@ export function EditCartCustomerForm() {
 			shipping: data.shipping,
 			taxIds: data.tax_ids ?? [],
 		});
-		// A refused edit keeps the dialog and the cashier's input; the reason was presented.
-		if (written === false) return false;
+		// A refused edit (false) keeps the dialog and the cashier's input; the reason was
+		// presented. A failed write (undefined) was already reported by localPatch: keep
+		// the dialog (and the edits) open too.
+		if (!written) return false;
 		closeDialog();
 		return true;
 	};
@@ -98,15 +100,17 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
 		const wooCustomerId = Number(customerID ?? 0);
+		// Never say "Saved to the order" (below) for an order write that failed.
 		if (!(await handleSaveToOrder(data))) return;
 		setLoading(true);
 		try {
 			const result = await saveCustomerAddresses(wooCustomerId, data);
 			if (result.status === 'not-found') {
-				cartLogger.error('Customer record was not found', {
+				// The order's address is already saved above; only the profile copy could
+				// not be made, because the customer record is not on this device.
+				cartLogger.info('Customer record is not on this device; profile not updated', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					toast: { title: t('common.no_customer_found') },
+					toast: { title: t('pos_cart.customer_profile_not_on_device'), type: 'warning' },
 					context: {
 						customerId: wooCustomerId,
 					},
@@ -125,6 +129,8 @@ export function EditCartCustomerForm() {
 			}
 			closeDialog();
 		} catch (error) {
+			// patch() and localPatch report their own failures (a scope that moved twice).
+			if (isErrorReported(error)) return;
 			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save customer', {
 				showToast: true,

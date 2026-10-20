@@ -16,6 +16,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 import { savePrinterProfile } from '@wcpos/query';
 
+import { logTestPrintFailure } from '../../../hooks/use-print/print-failure';
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -293,7 +294,7 @@ export function usePrinterDialogForm({
 					}
 				})
 				.catch((error) => {
-					printerLogger.warn('Printer vendor probe failed', { context: { error: String(error) } });
+					printerLogger.debug('Printer vendor probe failed', { context: { error: String(error) } });
 					// A probe that never answered leaves nothing detected: the label must not claim a
 					// printer the cashier has switched off.
 					if (probeRequestIdRef.current === requestId) setDetectedVendor(null);
@@ -345,6 +346,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
+			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
 			setTestError(toTestPrintFailure(err));
 		} finally {
 			setTestLoading(false);
@@ -372,6 +374,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
+			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' }, 'drawer');
 			setTestError(toTestPrintFailure(err));
 		} finally {
 			setDrawerLoading(false);
@@ -394,6 +397,7 @@ export function usePrinterDialogForm({
 			try {
 				await printerService.testPrint(buildProfile(data), { openDrawer: false });
 			} catch (err) {
+				logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
 				setTestError(toTestPrintFailure(err));
 				setSaveLoading(false);
 				return;

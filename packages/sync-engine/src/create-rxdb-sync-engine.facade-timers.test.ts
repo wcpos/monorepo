@@ -399,12 +399,15 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			await engine.sync('change-signal');
 			message = 'different failure';
 			await engine.sync('change-signal');
-			for (const type of ['signal.tick.error', 'engine.lane.tick']) {
-				const rows = diagnostics.mock.calls
+			const levelsOf = (type: string) =>
+				diagnostics.mock.calls
 					.map(([event]) => event)
-					.filter((event) => event.type === type);
-				expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
-			}
+					.filter((event) => event.type === type)
+					.map((event) => event.level);
+			expect(levelsOf('signal.tick.error')).toEqual(['error', 'info', 'error']);
+			// The lane's own signal.tick.error reports the failure, so the summary
+			// tick row never escalates on its own.
+			expect(levelsOf('engine.lane.tick')).toEqual(['info', 'info', 'info']);
 		} finally {
 			await engine.dispose();
 		}
@@ -475,7 +478,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		}
 	});
 
-	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
+	it('keeps every tick row, at info, with each failed tick error', async () => {
 		let failure: string | null = null;
 		const diagnostics = vi.fn();
 		const engine = engineWith({
@@ -515,7 +518,9 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 				.filter(
 					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'change-signal'
 				);
-			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error', 'info', 'error']);
+			// recordLaneTick summaries are info even when the tick failed: the lane's
+			// own row (signal.tick.error here) carries the failure.
+			expect(rows.map((event) => event.level)).toEqual(['info', 'info', 'info', 'info', 'info']);
 			expect(rows.map((event) => event.fields.error)).toEqual([
 				'Census refresh failed for products',
 				'Census refresh failed for products',
@@ -530,8 +535,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'query-total-retry'
 				);
 			expect(firstCensus).toMatchObject({
-				level: 'error',
-				fields: { error: 'Census refresh failed for products' },
+				level: 'info',
+				fields: { status: 'error', error: 'Census refresh failed for products' },
 			});
 		} finally {
 			await engine.dispose();
