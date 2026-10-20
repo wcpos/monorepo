@@ -1982,6 +1982,10 @@ export function createRxdbSyncEngine(
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
+					// The discard can commit and the switch land before it returns: the
+					// diagnostics observer then belongs to the incoming scope, so the
+					// verdict is stale either way, success or failure.
+					if (manager.activeScope !== revertScopeId) return;
 					diagnostics({
 						type: 'queue.write.auto-reverted',
 						level: 'error',

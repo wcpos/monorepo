@@ -2226,6 +2226,55 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it("drops a revert's success verdict when the store switched before the revert returned", async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const a = freshIdentity();
+		const engine = engineWith({
+			fetch: route.fetch,
+			identity: a,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		let releaseClaim!: () => void;
+		const claimReleased = new Promise<void>((resolve) => {
+			releaseClaim = resolve;
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// The discard commits; the revert then waits on its claim release, its
+			// post-resolution work, while the cashier switches.
+			const queue = queueFor(engine.active()!.database as never);
+			const release = queue.releaseResolutionClaim.bind(queue);
+			const releaseSpy = vi
+				.spyOn(queue, 'releaseResolutionClaim')
+				.mockImplementation(async (mutationId, holder) => {
+					await claimReleased;
+					return release(mutationId, holder);
+				});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(() => expect(releaseSpy).toHaveBeenCalled());
+			expect(await engine.conflicts()).toEqual([]);
+
+			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
+			releaseClaim();
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// The incoming scope's log never hears about the outgoing scope's revert.
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			releaseClaim();
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
