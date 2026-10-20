@@ -153,15 +153,14 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				// Everything this resolution logs AFTER its guarded write — the claim
 				// release, the re-pull, the settled row — runs outside the guard, so a
 				// switch can land first; the observer then belongs to the incoming scope,
-				// and none of these rows are its.
-				let boundScopeId: string | null = null;
-				const inBoundScope = (): boolean =>
-					boundScopeId !== null && manager.activeScope === boundScopeId;
+				// and none of these rows are its. The bound EPOCH decides, not the scope
+				// id, which matches again after a switch away and back (A→B→A).
+				let inBoundScope = (): boolean => false;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
-						boundScopeId = bound.scopeId;
+						inBoundScope = () => bound.isCurrent();
 						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
