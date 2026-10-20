@@ -17,8 +17,8 @@ export interface VoidPaymentsDeps {
 	isOnline: () => boolean;
 	/** Offline void rides the order write the engine already queues. */
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
-	/** Online void mirrors the server's copy onto the resident; no second write. */
-	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
+	/** Online void mirrors each answered row onto the latest resident; no second write. */
+	mirror: (answer: { payment: PaymentRow; order: OrderPaymentSummary | null }) => Promise<void>;
 	now?: () => string;
 }
 export interface VoidPaymentsFailure {
@@ -89,8 +89,8 @@ export async function voidPayments(
 		});
 		return { kind: 'voided', via: 'offline', rows, failed: [], order: null };
 	}
-	let merged = ledger;
 	let lastOrder: OrderPaymentSummary | null = null;
+	const answers: { payment: PaymentRow; order: OrderPaymentSummary | null }[] = [];
 	const rows: PaymentRow[] = [];
 	const failed: VoidPaymentsFailure[] = [];
 	for (const row of liveRows) {
@@ -102,7 +102,7 @@ export async function voidPayments(
 				order?: OrderPaymentSummary;
 			};
 			const serverRow = accepted.payment ?? localVoid;
-			merged = upsertPaymentRow(merged, serverRow);
+			answers.push({ payment: serverRow, order: accepted.order ?? null });
 			rows.push(serverRow);
 			// Keep the most recent summary the server DID send: a later response that
 			// omits one must not throw away the order status an earlier one gave us.
@@ -123,9 +123,6 @@ export async function voidPayments(
 	if (rows.length === 0) {
 		return { kind: 'voided', via: 'online', rows, failed, order: null };
 	}
-	await deps.mirror({
-		meta_data: withLedger(order.meta_data, merged),
-		...(lastOrder ? { status: lastOrder.status } : {}),
-	});
+	for (const answer of answers) await deps.mirror(answer);
 	return { kind: 'voided', via: 'online', rows, failed, order: lastOrder };
 }

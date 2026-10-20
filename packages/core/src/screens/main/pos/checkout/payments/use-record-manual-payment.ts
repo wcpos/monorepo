@@ -3,7 +3,7 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { mirrorServerOrder } from '@wcpos/query/mutations';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -20,6 +20,7 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
+import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
 
@@ -58,7 +59,7 @@ export function useRecordManualPayment(
 	const ctx = useSaleContext();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, storeDB } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const storeDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
@@ -79,8 +80,19 @@ export function useRecordManualPayment(
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
 			let provenanceError: unknown;
-			const outcome = await recordManualPayment(paymentOrder, method, input, {
+			const post = moneyCommandPoster({
+				runtime: manager,
+				storeDB,
+				orderUuid: order.uuid,
 				post: (url, body) => http.post(url, body),
+				approval: input.approval ?? {
+					total: String(payload.total ?? ''),
+					currency: payload.currency ?? storeCurrency,
+				},
+				provenance: () => commandProvenance(ctx, order, sessionId),
+			});
+			const outcome = await recordManualPayment(paymentOrder, method, input, {
+				post,
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
@@ -116,15 +128,17 @@ export function useRecordManualPayment(
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async (changes, { accepted }) => {
+				mirror: async ({ payment, status }, { accepted }) => {
 					try {
-						await mirrorServerOrder(manager, order.uuid, changes);
-						if (
-							accepted &&
-							isCompletingStatus(changes.status ?? '') &&
-							!hasSaleProvenance(changes.meta_data)
-						) {
-							const meta_data = await completionMetaFor(ctx, changes.meta_data, {
+						await mirrorServerOrder(manager, order.uuid, {
+							payment,
+							order: status ? ({ status } as never) : null,
+							sentRevision: post.sentRevision(),
+						});
+						await post.settle();
+						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
+						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
+							const meta_data = await completionMetaFor(ctx, latestMeta, {
 								sessionId,
 								extraMeta: input.extraMeta,
 							});
@@ -220,6 +234,7 @@ export function useRecordManualPayment(
 			recordLedger,
 			stampCompletion,
 			manager,
+			storeDB,
 			t,
 		]
 	);

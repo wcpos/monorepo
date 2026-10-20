@@ -167,7 +167,11 @@ const ACK_MAY_CHANGE = [
 ];
 
 function withoutAckFields(order: Json | undefined): Json {
-	const rest: Json = { ...order, sync: { ...(order?.sync as Json), revision: undefined } };
+	// An adopting ack stamps the revision and, for orders, the adoption it certifies (ADR 0040).
+	const rest: Json = {
+		...order,
+		sync: { ...(order?.sync as Json), revision: undefined, adopted: undefined },
+	};
 	for (const field of ACK_MAY_CHANGE) delete rest[field];
 	return rest;
 }
@@ -190,7 +194,11 @@ function expectSent(state: Awaited<ReturnType<typeof stored>>, applied: Applied)
 			...order.stored,
 			remoteId: String(server.id),
 			remoteKey: String(server.id),
-			sync: { ...(order.stored.sync as Json), revision: server.revision },
+			sync: {
+				...(order.stored.sync as Json),
+				revision: server.revision,
+				adopted: { revision: server.revision, at: expect.any(Number) },
+			},
 			local: { dirty: false, pendingMutationIds: [] },
 			payload,
 			number: String(payload.number ?? ''),

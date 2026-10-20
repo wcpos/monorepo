@@ -10,6 +10,8 @@ const mockPost = jest.fn();
 const mockGet = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
+const mockPosterInput = jest.fn();
+const mockSettle = jest.fn(async () => undefined);
 const mockLoggerError = jest.fn();
 const mockT = jest.fn();
 const mockEngineRequire = jest.fn((_input: unknown) => ({
@@ -37,6 +39,19 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 jest.mock('@wcpos/query', () => ({
+	// The envelope itself is pinned in query/tests/money-command.test.ts; here it stamps the
+	// revision so a test can see the post went through it.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		orderUuid: string;
+		approval: unknown;
+	}) => {
+		mockPosterInput(input);
+		return Object.assign(
+			(url: string, body: object) => input.post(url, { ...body, revision: 'sha256:sent' }),
+			{ sentRevision: () => 'sha256:sent', settle: mockSettle }
+		);
+	},
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => manager,
 	// pushFailureCode tests these with instanceof and reads `status`.
@@ -48,6 +63,7 @@ jest.mock('@wcpos/query', () => ({
 		}
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	MoneyCommandError: class MoneyCommandError extends Error {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
@@ -146,7 +162,9 @@ it('refreshes the order over REST when a refusal omits the server summary', asyn
 
 	expect(mockGet).toHaveBeenCalledWith('orders/1042');
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
-		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+		expect.objectContaining({
+			changes: expect.objectContaining({ order: { status: 'completed' } }),
+		})
 	);
 });
 
@@ -309,7 +327,28 @@ it('logs the cart-safe error without enqueueing a payment when the provenance pa
 	expect(JSON.stringify(order.payload)).toBe(original);
 });
 
-it('awaits the provenance push before posting and preserves the tuple in the mirror', async () => {
+it('posts the record through the command poster with the order revision', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	const approval = { total: '100.00', currency: 'EUR' };
+
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40, approval }));
+
+	expect(mockPosterInput).toHaveBeenCalledWith(
+		expect.objectContaining({ orderUuid: order.uuid, approval })
+	);
+	expect(mockPost).toHaveBeenCalledWith(
+		'orders/1042/payments',
+		expect.objectContaining({ payment: expect.any(Object), revision: 'sha256:sent' })
+	);
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ sentRevision: 'sha256:sent' }) })
+	);
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
+
+it('awaits the provenance push before posting and mirrors only the answered row, never pre-command meta', async () => {
 	onlineStatus = 'online-website-available';
 	const calls: string[] = [];
 	mockLocalPatch.mockImplementationOnce(async ({ data }) => {
@@ -333,13 +372,13 @@ it('awaits the provenance push before posting and preserves the tuple in the mir
 	expect(calls).toEqual(['patched', 'pushed', 'post']);
 	expect(mockPushDocument).toHaveBeenCalledWith(order);
 	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	// The tuple stays on the resident: the mirror upserts the row onto the latest order.
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
 		expect.objectContaining({
-			changes: expect.objectContaining({
-				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
-			}),
+			changes: expect.objectContaining({ payment: expect.objectContaining({ amount: '100.00' }) }),
 		})
 	);
+	expect(mockPatchEngineResident.mock.calls[0][0]).not.toHaveProperty('changes.meta_data');
 });
 
 it('does not post or enqueue a payment when the provenance push rejects', async () => {
@@ -407,7 +446,9 @@ it('mirrors a refused server status without allocating or patching provenance', 
 		kind: 'refused',
 	});
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
-		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+		expect.objectContaining({
+			changes: expect.objectContaining({ order: { status: 'completed' } }),
+		})
 	);
 	expect(completion).not.toHaveBeenCalled();
 	expect(mockLocalPatch).not.toHaveBeenCalled();

@@ -11,9 +11,9 @@ import {
 	upsertPaymentRow,
 	withLedger,
 } from '@wcpos/order-math';
-import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -26,6 +26,7 @@ import {
 	isSettledOrderStatus,
 } from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
+import { commandProvenance } from '../../provenance/command-provenance';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -59,7 +60,7 @@ function settlesSale(payment: PaymentRow, order: OrderPaymentSummary | undefined
 }
 
 export function useTerminalPaymentsService(): void {
-	const { store, site, userDB } = useStoreSession();
+	const { store, site, userDB, storeDB } = useStoreSession();
 	const ctx = useSaleContext();
 	const actor = ctx.actor;
 	const http = useRestHttpClient();
@@ -105,6 +106,25 @@ export function useTerminalPaymentsService(): void {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
 			},
+			commandPoster: (orderUuid, approval) =>
+				moneyCommandPoster({
+					runtime: manager,
+					storeDB,
+					orderUuid,
+					post: (url, body) => binding.client.post(url, body),
+					// A resumed leg has no press: it freezes the order as it stands.
+					approval:
+						approval ??
+						(async () => {
+							const resident = await readResidentOrder(manager, orderUuid);
+							const payload = resident?.payload as EngineRecord<'orders'>['payload'] | undefined;
+							return { total: String(payload?.total ?? ''), currency: payload?.currency ?? '' };
+						}),
+					provenance: async () => {
+						const resident = await readResidentOrder(manager, orderUuid);
+						return resident ? commandProvenance(latest.current.ctx, resident as never, null) : null;
+					},
+				}),
 			isOnline: () => latest.current.online,
 			resolveOrderId: async (orderUuid) => {
 				if (getOrderSaveState(orderUuid)) return null;
@@ -143,37 +163,31 @@ export function useTerminalPaymentsService(): void {
 					if (!stopped) enterReceiptAfter?.();
 					return result;
 				}),
-			mirror: async (orderUuid, { payment, order }) => {
+			mirror: async (orderUuid, { payment, order }, poster) => {
 				let mirrored = false;
 				try {
 					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
-					const payload = (resident.getLatest?.().payload ??
-						resident.payload) as EngineRecord<'orders'>['payload'];
-					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
-					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
 					// A settling status takes the order off the till and unmounts the tender that used
 					// to select its receipt; the service selects it once the write has landed.
 					const enterReceiptAfter = settlesSale(payment, order, dp())
 						? receiptEntryAfterWrite(orderUuid)
 						: null;
 					await mirrorServerOrder(manager, orderUuid, {
-						// Only the summary fields that are order fields: `paid` and `balance` are
-						// derived from the ledger on read, and an unknown key fails the schema.
-						...(order
-							? {
-									status: order.status,
-									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
-									payment_method: order.payment_method,
-									payment_method_title: order.payment_method_title,
-								}
-							: {}),
-						meta_data,
+						payment,
+						order,
+						// A device leg's tip moves the order total.
+						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
+						sentRevision: poster?.sentRevision() ?? null,
 					});
+					await poster?.settle();
 					mirrored = true;
 					if (!stopped) enterReceiptAfter?.();
-					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
+					const payload = (resident.getLatest?.().payload ??
+						resident.payload) as EngineRecord<'orders'>['payload'];
+					const meta_data = cloneDeep(payload.meta_data ?? []);
+					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta_data)) {
 						const patched = await latest.current.stampCompletion(
 							resident,
 							await completionMetaFor(latest.current.ctx, meta_data, {})
@@ -248,5 +262,5 @@ export function useTerminalPaymentsService(): void {
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};
-	}, [store, site, manager, userDB]);
+	}, [store, site, manager, userDB, storeDB]);
 }

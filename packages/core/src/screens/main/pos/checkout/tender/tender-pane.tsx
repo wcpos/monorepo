@@ -80,6 +80,25 @@ export function TenderPane({ flow, format, compact }: Props) {
 		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
 	}
 
+	// A command sent and never answered offers one thing: re-send it (ADR 0040).
+	if (flow.unansweredCommand) {
+		return (
+			<VStack space="sm" className="flex-1" testID="checkout-unanswered">
+				<Text className="text-muted-foreground text-sm">
+					{t('pos_checkout.payment_unanswered')}
+				</Text>
+				<Button
+					size="lg"
+					testID="checkout-unanswered-retry"
+					onPress={() => void flow.retryCommand()}
+					disabled={flow.busy}
+				>
+					<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
+				</Button>
+			</VStack>
+		);
+	}
+
 	if (flow.tiles.length === 0) {
 		return (
 			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payment_methods')}</Text>

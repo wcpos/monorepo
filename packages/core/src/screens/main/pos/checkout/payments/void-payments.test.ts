@@ -124,7 +124,7 @@ describe('voidPayments', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
-	it('posts each live leg in ledger order and mirrors the last server status once', async () => {
+	it('posts each live leg in ledger order and mirrors each answered row with its summary', async () => {
 		const deps = createDeps();
 		const pending = payment('pending', 'pending');
 		const captured = payment('captured', 'captured');
@@ -146,13 +146,11 @@ describe('voidPayments', () => {
 
 		expect(deps.post).toHaveBeenNthCalledWith(1, 'orders/42/payments/pending/void', {});
 		expect(deps.post).toHaveBeenNthCalledWith(2, 'orders/42/payments/captured/void', {});
-		expect(deps.mirror).toHaveBeenCalledTimes(1);
-		expect(writtenRows(deps.mirror)).toEqual([
-			serverPending,
-			payment('old', 'voided'),
-			serverCaptured,
+		// One mirror per answer, onto the latest ledger: never a rebuilt snapshot (ADR 0040).
+		expect(deps.mirror.mock.calls).toEqual([
+			[{ payment: serverPending, order: null }],
+			[{ payment: serverCaptured, order: summary }],
 		]);
-		expect(deps.mirror).toHaveBeenCalledWith(expect.objectContaining({ status: 'cancelled' }));
 		expect(result).toEqual({
 			kind: 'voided',
 			via: 'online',
@@ -175,18 +173,18 @@ describe('voidPayments', () => {
 			.mockResolvedValueOnce({ data: {} });
 
 		const result = await voidPayments(order([first, refused, last]), deps);
-		const written = writtenRows(deps.mirror);
+		const written = deps.mirror.mock.calls.map(([answer]) => answer.payment);
 
 		expect(written[0]).toEqual(voidedFirst);
-		expect(written[1]).toBe(refused);
-		expect(written[2]).toMatchObject({ id: 'last', status: 'voided' });
-		expect(result.rows).toEqual([voidedFirst, written[2]]);
+		expect(written[1]).toMatchObject({ id: 'last', status: 'voided' });
+		expect(written.map(({ id }: { id: string }) => id)).not.toContain('refused');
+		expect(result.rows).toEqual([voidedFirst, written[1]]);
 		// The store answered with a refusal, so the caller may safely tell the cashier to
 		// refund this one by hand.
 		expect(result.failed).toEqual([
 			{ paymentId: 'refused', message: 'Provider refused the void', refused: true },
 		]);
-		expect(deps.mirror).toHaveBeenCalledTimes(1);
+		expect(deps.mirror).toHaveBeenCalledTimes(2);
 	});
 
 	it('writes nothing when every online void fails', async () => {

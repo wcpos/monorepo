@@ -360,6 +360,7 @@
 	"pos_checkout.try_capture_again": "Try capture again",
 	"pos_checkout.release_this_payment": "Release this payment",
 	"pos_checkout.try_again": "Try again",
+	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
 	"pos_checkout.choose_another_way": "Choose another way",
 	"auth.connect_another_store": "Connect another store",
 	"auth.finding_your_store": "Finding your store…",

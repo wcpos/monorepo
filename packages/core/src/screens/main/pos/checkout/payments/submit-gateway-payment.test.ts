@@ -1,9 +1,4 @@
-import {
-	AWAITING_CUSTOMER_META_KEY,
-	LEDGER_META_KEY,
-	type MetaDataEntry,
-	type PaymentRow,
-} from '@wcpos/order-math';
+import { AWAITING_CUSTOMER_META_KEY, type MetaDataEntry, type PaymentRow } from '@wcpos/order-math';
 
 import {
 	cancelGatewayInvoice,
@@ -98,10 +93,8 @@ describe('submitGatewayPayment', () => {
 			},
 		});
 		expect(mirror).toHaveBeenCalledWith({
-			status: 'pending',
-			meta_data: [
-				{ key: AWAITING_CUSTOMER_META_KEY, value: (outcome as { stamp: unknown }).stamp },
-			],
+			order: summary('pending'),
+			awaiting: (outcome as { stamp: unknown }).stamp,
 		});
 	});
 	it('sent with an open order (a replayed send cancelled elsewhere) writes no stamp', async () => {
@@ -112,7 +105,7 @@ describe('submitGatewayPayment', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pos-open') },
 		});
 		await submitGatewayPayment(order, 'wcpos_email_invoice', input, deps);
-		expect(mirror).toHaveBeenCalledWith({ status: 'pos-open', meta_data: [] });
+		expect(mirror).toHaveBeenCalledWith({ order: summary('pos-open'), awaiting: null });
 	});
 	it('recorded: mirrors the captured row into the ledger and drops any stamp', async () => {
 		const { post, mirror, order, deps } = harness([
@@ -127,12 +120,11 @@ describe('submitGatewayPayment', () => {
 		});
 		const outcome = await submitGatewayPayment(order, 'custom_gateway', input, deps);
 		expect(outcome).toMatchObject({ kind: 'recorded', row: { id: 'attempt-1' } });
+		// The answered row and summary; the mirror upserts it onto the latest ledger.
 		expect(mirror).toHaveBeenCalledWith({
-			status: 'completed',
-			meta_data: [
-				{ key: LEDGER_META_KEY, value: { schema: 1, payments: [row()] } },
-				{ key: '_wcpos_payment_method', value: 'custom_gateway' },
-			],
+			payment: row(),
+			order: { ...summary('completed'), balance: '0.00' },
+			awaiting: null,
 		});
 	});
 	it('settled: no row, the stale stamp is cleared and the summary status is mirrored', async () => {
@@ -144,7 +136,7 @@ describe('submitGatewayPayment', () => {
 		});
 		const outcome = await submitGatewayPayment(order, 'bacs', input, deps);
 		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
-		expect(mirror).toHaveBeenCalledWith({ status: 'pending', meta_data: [] });
+		expect(mirror).toHaveBeenCalledWith({ order: summary('pending'), awaiting: null });
 	});
 	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
 		const { post, mirror, order, deps } = harness();
@@ -243,10 +235,7 @@ describe('cancelGatewayInvoice', () => {
 		expect(post).toHaveBeenCalledWith('orders/42/payment-methods/wcpos_email_invoice/cancel', {
 			attempt_id: 'attempt-0',
 		});
-		expect(mirror).toHaveBeenCalledWith({
-			status: 'pos-open',
-			meta_data: [{ key: 'other', value: 1 }],
-		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary('pos-open'), awaiting: null });
 	});
 	it('an empty 2xx confirms nothing: no stamp is cleared', async () => {
 		const { post, mirror, order, deps } = harness();

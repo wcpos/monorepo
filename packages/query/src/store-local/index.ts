@@ -5,6 +5,16 @@ export {
 	resolveCompletionAttempt,
 } from './completion-journal';
 export {
+	journalCommand,
+	markSent,
+	observeOrderCommands,
+	readOrderCommands,
+	settleCommand,
+	type MoneyCommandEntry,
+	type OrderApproval,
+	type RevisionChain,
+} from './money-commands';
+export {
 	customerLinkChanges,
 	dropCustomerLink,
 	pendingCustomerLinks,

@@ -5,10 +5,6 @@ import {
 	MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
-	readLedger,
-	upsertPaymentRow,
-	withAwaitingCustomer,
-	withLedger,
 } from '@wcpos/order-math';
 
 /**
@@ -31,8 +27,12 @@ export interface SubmitGatewayPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 	/** Where the gateway sent the customer, read from the declared fields (spec §3.2). */
 	destination: string | null;
-	/** Mirror the server's answer into the resident order; the status is the summary's. */
-	mirror: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
+	/** Mirror the server's answer onto the latest resident: its row, summary and stamp. */
+	mirror: (answer: {
+		payment?: PaymentRow;
+		order: OrderPaymentSummary;
+		awaiting: AwaitingCustomerStamp | null;
+	}) => Promise<void>;
 	cashierId: number;
 	now?: () => string;
 }
@@ -137,10 +137,14 @@ export async function submitGatewayPayment(
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
 	const mirror = async (
 		outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' | 'settled' }>,
-		meta_data: MetaDataEntry[]
+		awaiting: AwaitingCustomerStamp | null
 	) => {
 		try {
-			await deps.mirror({ meta_data, status: outcome.order.status });
+			await deps.mirror({
+				...(outcome.kind === 'recorded' ? { payment: outcome.row } : {}),
+				order: outcome.order,
+				awaiting,
+			});
 		} catch (mirrorError) {
 			throw new GatewayMirrorError(outcome, mirrorError);
 		}
@@ -148,21 +152,12 @@ export async function submitGatewayPayment(
 	};
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
-		return mirror(
-			{ kind: 'recorded', row, order: data.order },
-			withAwaitingCustomer(
-				withLedger(order.meta_data, upsertPaymentRow(readLedger(order.meta_data), row)),
-				null
-			)
-		);
+		return mirror({ kind: 'recorded', row, order: data.order }, null);
 	}
 	if (data.outcome === 'settled') {
 		// The store settled the sale on the merchant's stored status and cleared any stamp an
 		// earlier send left (§3.1); the till's copy follows, with the summary's status.
-		return mirror(
-			{ kind: 'settled', order: data.order },
-			withAwaitingCustomer(order.meta_data, null)
-		);
+		return mirror({ kind: 'settled', order: data.order }, null);
 	}
 	if (data.outcome === 'sent') {
 		const stamp: AwaitingCustomerStamp = {
@@ -176,7 +171,7 @@ export async function submitGatewayPayment(
 		// one was cancelled elsewhere (§4.2): the order is open, and the stamp is not ours to write.
 		return mirror(
 			{ kind: 'sent', order: data.order, stamp },
-			withAwaitingCustomer(order.meta_data, data.order.status === 'pos-open' ? null : stamp)
+			data.order.status === 'pos-open' ? null : stamp
 		);
 	}
 	throw new Error('gateway_submit_malformed_response');
@@ -210,10 +205,7 @@ export async function cancelGatewayInvoice(
 		throw error;
 	}
 	try {
-		await deps.mirror({
-			meta_data: withAwaitingCustomer(order.meta_data, null),
-			status: summary.status,
-		});
+		await deps.mirror({ order: summary, awaiting: null });
 	} catch (mirrorError) {
 		throw new GatewayCancelMirrorError(summary, mirrorError);
 	}

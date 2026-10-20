@@ -1,6 +1,13 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
+import {
+	type MetaDataEntry,
+	type PaymentRow,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useVoidPayments } from './use-void-payments';
@@ -21,6 +28,11 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
 jest.mock('@wcpos/query', () => ({
+	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
+		Object.assign((url: string, body: unknown) => post(url, body), {
+			sentRevision: () => 'sha256:sent',
+			settle: async () => undefined,
+		}),
 	useQueryRuntime: () => ({}),
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 }));
@@ -116,7 +128,15 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		jest.clearAllMocks();
 		payload = { id: 42, total: '12.06', fee_lines: fees, meta_data: ledger('captured') };
 		mockLocalPatch.mockImplementation(apply);
-		mockMirror.mockImplementation(apply);
+		// The mirror upserts the answered row onto the latest ledger.
+		mockMirror.mockImplementation(async ({ changes }: { changes: { payment: PaymentRow } }) => {
+			const meta = payload.meta_data as MetaDataEntry[];
+			payload = {
+				...payload,
+				meta_data: withLedger(meta, upsertPaymentRow(readLedger(meta), changes.payment)),
+			};
+			return {};
+		});
 	});
 	afterEach(() => {
 		mockStatus = 'offline';

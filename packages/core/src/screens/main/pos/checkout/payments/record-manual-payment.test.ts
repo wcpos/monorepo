@@ -189,16 +189,9 @@ describe('recordManualPayment', () => {
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
 		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+		// The answered row, never a ledger rebuilt from the pre-command snapshot (ADR 0040).
 		expect(deps.mirror).toHaveBeenCalledWith(
-			{
-				meta_data: expect.arrayContaining([
-					expect.objectContaining({
-						key: '_wcpos_payments',
-						value: { schema: 1, payments: [serverRow] },
-					}),
-				]),
-				status: 'completed',
-			},
+			{ payment: serverRow, status: 'completed' },
 			{ accepted: true }
 		);
 		expect(result).toEqual({ kind: 'recorded', via: 'online', row: serverRow, order: summary });
@@ -219,7 +212,7 @@ describe('recordManualPayment', () => {
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
 		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
-		expect(ledgerFrom(deps.mirror).payments).toEqual([failedRow]);
+		expect(deps.mirror.mock.calls[0][0].payment).toEqual(failedRow);
 		expect(deps.raiseAttention).toHaveBeenCalledWith({
 			row: failedRow,
 			order: summary,
@@ -238,7 +231,7 @@ describe('recordManualPayment', () => {
 
 		await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		expect(ledgerFrom(deps.mirror).payments[0]).toEqual({
+		expect(deps.mirror.mock.calls[0][0].payment).toEqual({
 			...mintedCard,
 			status: 'failed',
 			failure_reason: 'order_already_paid',

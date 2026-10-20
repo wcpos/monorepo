@@ -50,7 +50,10 @@ export class ActiveScopeChangedTwiceError extends Error {
 }
 
 // Resolvers may run for pre-flight and each conflict retry; keep them free of external side effects.
-export type PayloadChanges = (currentPayload: Record<string, unknown>) => Record<string, unknown>;
+export type PayloadChanges = (
+	currentPayload: Record<string, unknown>,
+	currentDocument?: Record<string, unknown>
+) => Record<string, unknown>;
 
 export type LocalPatchProps<TDocument extends MutationDocument, TData extends object> = {
 	document: TDocument;
@@ -225,7 +228,7 @@ export async function applyEngineResidentChanges(
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
-		const resolved = typeof changes === 'function' ? changes(priorPayload) : changes;
+		const resolved = typeof changes === 'function' ? changes(priorPayload, old) : changes;
 		if (typeof changes === 'function' && Object.keys(resolved).length === 0) {
 			// A race after a nonempty pre-flight may now yield nothing. Deliberately
 			// accept RxDB's identical-content revision bump, without stamping or enqueueing.

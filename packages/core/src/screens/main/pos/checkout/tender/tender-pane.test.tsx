@@ -258,6 +258,8 @@ function makeFlow(count = 1): TenderFlow {
 		fieldErrors: {},
 		invoiceSent: null,
 		cancelInvoice: jest.fn(),
+		unansweredCommand: false,
+		retryCommand: jest.fn(async () => undefined),
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { MoneyCommandError, type OrderApproval } from '@wcpos/query';
 import {
 	derive,
 	isCompletingStatus,
@@ -38,6 +39,8 @@ export interface RecordManualPaymentInput {
 	tendered?: string | number | null;
 	/** The row's id when the caller has already named it (a rounding fee line points at it). */
 	paymentId?: string;
+	/** The order's total and currency as the cashier approved them at the press (ADR 0040). */
+	approval?: OrderApproval;
 }
 export interface RecordManualPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
@@ -51,8 +54,9 @@ export interface RecordManualPaymentDeps {
 	currency: string;
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
+	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
 	mirror: (
-		changes: { meta_data: MetaDataEntry[]; status?: string },
+		answer: { payment: PaymentRow; status?: string },
 		options: { accepted: boolean }
 	) => Promise<void>;
 	/**
@@ -150,8 +154,6 @@ export async function recordManualPayment(
 		dp: deps.dp,
 	});
 	if (!minted.ok) return { kind: 'invalid', reason: minted.reason };
-	const metaDataWith = (row: PaymentRow) =>
-		withLedger(order.meta_data, upsertPaymentRow(readLedger(order.meta_data), row));
 
 	const writeOffline = async (row: PaymentRow): Promise<RecordManualPaymentOutcome> => {
 		const offlineRow = row.recorded_offline ? row : { ...row, recorded_offline: true };
@@ -185,6 +187,8 @@ export async function recordManualPayment(
 		const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
 		accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
 	} catch (error) {
+		// Refused before it left the till (no revision, or the order changed): nothing was sent.
+		if (error instanceof MoneyCommandError) throw error;
 		const response = errorResponse(error);
 		const reason = refusalReason(response?.data?.code);
 		if (reason) {
@@ -213,11 +217,10 @@ export async function recordManualPayment(
 			}
 			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
 			try {
-				const changes = {
-					meta_data: metaDataWith(failedRow),
-					...(authoritativeStatus ? { status: authoritativeStatus } : {}),
-				};
-				await deps.mirror(changes, { accepted: false });
+				await deps.mirror(
+					{ payment: failedRow, ...(authoritativeStatus ? { status: authoritativeStatus } : {}) },
+					{ accepted: false }
+				);
 			} catch (mirrorError) {
 				throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 			}
@@ -242,11 +245,10 @@ export async function recordManualPayment(
 	const serverOrder = accepted.order ?? null;
 	const outcome = { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder } as const;
 	try {
-		const changes = {
-			meta_data: metaDataWith(serverRow),
-			...(serverOrder ? { status: serverOrder.status } : {}),
-		};
-		await deps.mirror(changes, { accepted: true });
+		await deps.mirror(
+			{ payment: serverRow, ...(serverOrder ? { status: serverOrder.status } : {}) },
+			{ accepted: true }
+		);
 	} catch (mirrorError) {
 		throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 	}

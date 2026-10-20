@@ -6,6 +6,7 @@ import { mintRemoteId, type OrderDocument } from '@wcpos/sync-core';
 import { createEngineHarness } from '../engine-harness';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
+import { withOrderReadopt } from '../write-path/order-readopt';
 import { collectionSchedulerRepository } from './engine-scheduler-drain';
 
 import type { LocalReferenceDocument } from '../collections/reference-collection-schema';
@@ -160,4 +161,46 @@ it('compares real RxDB defaults without modifying the incoming page', async () =
 	expect(incoming).toEqual([{ uuid: 'a' }]);
 	await repository.upsertMany([{ uuid: 'a', enabled: true }]);
 	expect(write).toHaveBeenCalledTimes(1);
+});
+
+// ADR 0040 §1.3: a naked revision write can leave the resident stamped with the revision the
+// server serves, so the equal-stamp skip keeps the stale payload; only a corrective refresh
+// (readopt) writes it, and every written order is stamped as adopted under its revision.
+it('an order pull stamps sync.adopted; under an equal stamp only a readopt refresh re-adopts', async () => {
+	const harness = await createEngineHarness({ captureTimers: true });
+	const collection = harness.collection<PullDocument>('orders');
+	const repository = new EngineOrderRepository(collection.database as never);
+	const remoteId = mintRemoteId(1, 'fixture');
+	const pulled = (revision: string, currency: string): PullDocument =>
+		({
+			uuid: 'order-1',
+			remoteId,
+			remoteKey: String(remoteId),
+			payload: { id: 1, total: '100', currency, meta_data: [] },
+			sync: { revision, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		}) as unknown as PullDocument;
+	const stored = async () =>
+		(await collection.findOne('order-1').exec())!.toJSON() as unknown as {
+			payload: { currency: string };
+			sync: { revision: string; adopted?: { revision: string; at: number } };
+		};
+	await repository.upsertMany([pulled('sha256:a', 'USD')]);
+	expect((await stored()).sync.adopted).toEqual({ revision: 'sha256:a', at: expect.any(Number) });
+	const write = vi.spyOn(collection.storageInstance, 'bulkWrite');
+	await repository.upsertMany([pulled('sha256:a', 'USD')]);
+	expect(write).not.toHaveBeenCalled(); // unchanged: no write, the adoption kept
+	// A naked writer stamps the server's next revision without its document.
+	await (await collection.findOne('order-1').exec())!.incrementalModify((doc) => ({
+		...doc,
+		sync: { ...doc.sync, revision: 'sha256:b' },
+	}));
+	await repository.upsertMany([pulled('sha256:b', 'EUR')]);
+	expect((await stored()).payload.currency).toBe('USD');
+	expect((await stored()).sync.adopted?.revision).toBe('sha256:a');
+	await withOrderReadopt(collection.database, [String(remoteId)], () =>
+		repository.upsertMany([pulled('sha256:b', 'EUR')])
+	);
+	expect((await stored()).payload.currency).toBe('EUR');
+	expect((await stored()).sync.adopted?.revision).toBe('sha256:b');
 });

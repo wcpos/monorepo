@@ -25,6 +25,7 @@ import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
+import { readoptRequested, withAdoption } from './order-readopt';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -332,11 +333,29 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		let changed = withoutUnchanged(
-			this.db.orders,
-			residents,
-			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
-		);
+		// The resident's own `sync.adopted` rides the comparison, so an unchanged pull stays
+		// skipped; a document actually written is stamped as adopted now. A corrective refresh
+		// (`readopt`) writes even under an equal stamp (ADR 0040 §1.3).
+		const pulled = materialized.map(({ storedDocument }) => {
+			const document = withOrderColumns(storedDocument);
+			const resident = residents.get(document.uuid)?.toJSON() as
+				{ sync?: { adopted?: unknown } } | undefined;
+			const adopted = resident?.sync?.adopted;
+			return adopted === undefined
+				? document
+				: { ...document, sync: { ...document.sync, adopted } };
+		});
+		const readopt = (document: { remoteId: unknown }) =>
+			readoptRequested(this.db, document.remoteId);
+		const adoptedAt = Date.now();
+		let changed = [
+			...withoutUnchanged(
+				this.db.orders,
+				residents,
+				pulled.filter((document) => !readopt(document))
+			),
+			...pulled.filter(readopt),
+		].map((document) => withAdoption(document, adoptedAt));
 		// A new order is inserted in bulk. An order already resident is written through its OWN
 		// incremental write, whose modifier reads the document CURRENT at the write — so a receipt
 		// count raised since the residency read above (a receipt printed, the previous-generation

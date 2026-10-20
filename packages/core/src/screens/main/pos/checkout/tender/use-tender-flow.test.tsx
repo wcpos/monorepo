@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
@@ -75,8 +75,16 @@ const mockReaderState = {
 		mockReaderChanges.next();
 	},
 };
-const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
+// The money command journal's local document (ADR 0040): null until a command is journaled.
+const mockJournal$ = new BehaviorSubject<unknown>(null);
+const mockResend = jest.fn(async () => undefined);
+const mockPosterInputs: { approval: unknown }[] = [];
+const mockStoreDB = {
+	addState: jest.fn(async () => mockReaderState),
+	getLocal$: () => mockJournal$,
+};
 beforeEach(() => {
+	mockJournal$.next(null);
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 });
@@ -336,6 +344,18 @@ jest.mock('@wcpos/query', () => ({
 		}
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	MoneyCommandError: class MoneyCommandError extends Error {},
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		approval: unknown;
+	}) => {
+		mockPosterInputs.push(input);
+		return Object.assign((url: string, body: unknown) => input.post(url, body), {
+			sentRevision: () => 'sha256:sent',
+			settle: async () => undefined,
+		});
+	},
+	resendOpenCommands: (...args: unknown[]) => mockResend(...(args as [])),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -434,6 +454,27 @@ describe('useTenderFlow', () => {
 				}),
 			],
 		]);
+	});
+
+	// ADR 0040 §1.3: a sent command whose answer never arrived (this process or a previous one)
+	// offers no tile and no close, only a re-send of the same journaled command.
+	it('an entry with sentAt hides the tiles and Try again re-sends it', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.tiles.length).toBeGreaterThan(0);
+		const entry = { id: 'row-1', sentAt: '2026-10-20T10:00:00Z' };
+		act(() =>
+			mockJournal$.next({
+				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-1': entry } } } } }),
+			})
+		);
+		expect(result.current.unansweredCommand).toBe(true);
+		expect(result.current.tiles).toEqual([]);
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		await act(async () => result.current.retryCommand());
+		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
+			post: expect.any(Function),
+		});
 	});
 
 	it('preselects the first available method once, without recording', async () => {
@@ -635,6 +676,7 @@ describe('useTenderFlow', () => {
 			amount: '92.95',
 			tendered: '100.00',
 			session: { registerId: 'register', sessionId: null },
+			approval: expect.any(Object),
 		});
 	});
 
@@ -706,6 +748,7 @@ describe('useTenderFlow', () => {
 			amount: '50.00',
 			tendered: '50.00',
 			session: { registerId: 'register', sessionId: null },
+			approval: expect.any(Object),
 		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -731,6 +774,7 @@ describe('useTenderFlow', () => {
 			amount: '92.95',
 			tendered: null,
 			session: { registerId: 'register', sessionId: null },
+			approval: expect.any(Object),
 		});
 	});
 
@@ -2765,6 +2809,23 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
+	// ADR 0040: the approval is frozen at the press, before the provenance save; the envelope then
+	// refuses a submit whose order moved (query/tests/money-command.test.ts).
+	it('a provenance push that moves the total from 100 to 120 before the gateway deps are built stops the submit', async () => {
+		mockPayload.total = '100.00';
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		jest.mocked(provenance.persistSaleProvenance).mockImplementationOnce(async () => {
+			mockPayload.total = '120.00';
+		});
+		mockPosterInputs.length = 0;
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockPosterInputs.at(-1)?.approval).toEqual({ total: '100.00', currency: 'EUR' });
+	});
+
 	it('prefills the declared components from the order and posts them under a fresh attempt id', async () => {
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
@@ -3955,6 +4016,26 @@ describe('cash rounding (#66, #84)', () => {
 
 jest.mock('@wcpos/query/mutations', () => ({
 	...jest.requireActual('@wcpos/query/mutations'),
-	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
-		mockManualMirror({ manager, collection: 'orders', recordId, changes }),
+	// The real mirror resolves the answer over the LATEST resident (ADR 0040); the spy sees the
+	// changes it would write: the row upserted into the current ledger, the asserted meta, the status.
+	mirrorServerOrder: (
+		manager: unknown,
+		recordId: string,
+		answer: {
+			payment?: PaymentRow;
+			order?: { status?: string } | null;
+			meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
+		}
+	) => {
+		const ledger = jest.requireActual('@wcpos/order-math');
+		const meta = (mockPayload.meta_data ?? []) as MetaDataEntry[];
+		const ledgerMeta = answer.payment
+			? ledger.withLedger(meta, ledger.upsertPaymentRow(ledger.readLedger(meta), answer.payment))
+			: meta;
+		const changes = {
+			...(answer.order?.status ? { status: answer.order.status } : {}),
+			meta_data: answer.meta ? answer.meta(ledgerMeta) : ledgerMeta,
+		};
+		return mockManualMirror({ manager, collection: 'orders', recordId, changes });
+	},
 }));

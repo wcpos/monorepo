@@ -26,7 +26,8 @@ import {
 	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, resendOpenCommands, useDocField, useRecordField } from '@wcpos/query';
+import { observeOrderCommands } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -49,6 +50,7 @@ import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
@@ -123,6 +125,9 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
+	unansweredCommand: boolean;
+	retryCommand: () => Promise<void>;
 	rememberedReaderId: string | null;
 	rememberReader: (reader: RememberedReader) => Promise<void>;
 	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
@@ -209,7 +214,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, storeDB } = useStoreSession();
+	const http = useRestHttpClient();
+	const [sentCommands, setSentCommands] = React.useState(0);
+	// The command journal is an external store: a command sent and never answered gates the
+	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
+	React.useEffect(() => {
+		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
+			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null).length),
+			error: () => undefined,
+		});
+		return () => subscription.unsubscribe();
+	}, [storeDB, order.uuid]);
+	// While this till's own request is in flight its entry is sent too; that is not unanswered.
+	const unansweredCommand = sentCommands > 0 && !busy;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -654,15 +672,42 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[order, state, dp, byId, actor, orderContext]
 	);
 
+	/** Try again: re-send the unanswered command under its own id; the store replays it. */
+	const retryCommand = React.useCallback(async () => {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
+				post: (url, body) => http.post(url, body),
+			});
+		} catch (error) {
+			logger.error(t('pos_checkout.payment_unanswered'), {
+				code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+				showToast: true,
+				context: {
+					orderId: order.uuid,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [ctx.runtime, storeDB, order.uuid, http, t]);
+
 	const takeTender = React.useCallback(async () => {
 		if (
 			busyRef.current ||
+			unansweredCommand ||
 			(saveState && saveState.kind !== 'queued-offline') ||
 			service?.get(order.uuid)
 		)
 			return;
 		busyRef.current = true;
 		setBusy(true);
+		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
+		const approval = { total: String(order.getLatest().payload.total ?? ''), currency };
 		let savingProvenance = false;
 		// The split as the cashier saw it, written with whichever leg completes the sale —
 		// cash included, which does not pass through saveProvenance below. With no plan, a
@@ -865,6 +910,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					method,
 					transport: deviceTransport,
 					offline,
+					approval,
 					tipEligibleMinor:
 						method.capabilities.tips === 'on_reader' &&
 						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
@@ -919,6 +965,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					orderNumber: payload.number ?? String(payload.id),
 					row: minted.row,
 					reader: reader.id,
+					approval,
 				});
 				void remember(reader);
 				reducerDispatch({ type: 'tender-started' });
@@ -958,11 +1005,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (attemptRef.current && invoiceSent?.attempt_id === attemptRef.current)
 					attemptRef.current = null;
 				attemptRef.current ??= uuidv4();
-				const outcome = await gateway.submit(order, method.id, {
-					attemptId: attemptRef.current,
-					values: fields ? declaredValues(fields, fieldValues) : {},
-					destination: fields ? destinationOf(fields, fieldValues) : null,
-				});
+				const outcome = await gateway.submit(
+					order,
+					method.id,
+					{
+						attemptId: attemptRef.current,
+						values: fields ? declaredValues(fields, fieldValues) : {},
+						destination: fields ? destinationOf(fields, fieldValues) : null,
+					},
+					{ approval, sessionId }
+				);
 				attemptRef.current = null;
 				if (outcome.kind === 'fields_invalid') {
 					setErrorsFor({ methodId: method.id, errors: outcome.errors });
@@ -1057,6 +1109,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
+				approval,
 			}).catch(async (error: unknown) => {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
@@ -1235,6 +1288,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
+		unansweredCommand,
 		actionCtx,
 		actionActor,
 		ctx,
@@ -1587,7 +1641,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
 			hasLiveLeg: liveRows.length > 0,
 			online,
-			tiles,
+			// A sent, unanswered command offers no tile and no close: only Try again.
+			tiles: unansweredCommand ? [] : tiles,
 			legacyMethods,
 			methodsLoaded,
 			unsupportedSchema,
@@ -1607,6 +1662,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredCommand,
+			retryCommand,
 		}),
 		[
 			plan,
@@ -1661,6 +1718,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredCommand,
+			retryCommand,
 		]
 	);
 }

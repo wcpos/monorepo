@@ -83,6 +83,11 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('@wcpos/query', () => ({
+	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
+		Object.assign((url: string, body: unknown) => post(url, body), {
+			sentRevision: () => 'sha256:sent',
+			settle: async () => undefined,
+		}),
 	useQueryRuntime: () => mockRuntime,
 	engineCollection: () => ({ find: mockFind }),
 }));

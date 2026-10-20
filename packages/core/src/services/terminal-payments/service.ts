@@ -1,4 +1,5 @@
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import type { MoneyCommandPoster, OrderApproval } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
@@ -46,7 +47,13 @@ export interface TerminalPaymentsServiceOptions {
 	isOnline?: () => boolean;
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
-	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
+	/** The money command poster for one order (ADR 0040): journal, revision, approval. */
+	commandPoster?: (orderUuid: string, approval?: OrderApproval) => MoneyCommandPoster;
+	mirror: (
+		orderUuid: string,
+		response: ServerLegResponse,
+		poster?: MoneyCommandPoster
+	) => Promise<void>;
 	getBalance?: (orderUuid: string) => Promise<string>;
 	getActor?: () => { id: string; name: string };
 	completeOrder?: (
@@ -76,6 +83,8 @@ interface BeginInput extends ResumeInput {
 	transport?: PaymentTransport;
 	offline?: boolean;
 	tipEligibleMinor?: number | null;
+	/** The order's total and currency as the cashier approved them at the press. */
+	approval?: OrderApproval;
 }
 type TerminalLeg = ServerLeg | DeviceLeg;
 export interface TerminalSettlement extends ServerLegResponse {
@@ -214,16 +223,20 @@ export class TerminalPaymentsService {
 				if (this.stopped || !id) continue;
 				let response: { data: unknown };
 				const release = holdLiveTab('payment');
+				const poster = this.options.commandPoster?.(orderUuid);
 				try {
-					response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
-						context: { provider_refs: refs },
-					});
+					response = await (poster ?? this.options.http.post)(
+						`orders/${id}/payments/${row.id}/capture`,
+						{
+							context: { provider_refs: refs },
+						}
+					);
 				} finally {
 					release();
 				}
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
-				await this.options.mirror(orderUuid, data);
+				await this.options.mirror(orderUuid, data, ...(poster ? [poster] : []));
 				if (entry.reportedFailure) {
 					entry.reportedFailure = false;
 					// Clears the stuck row this payment wrote when its retries ran out. It has
@@ -439,8 +452,10 @@ export class TerminalPaymentsService {
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
+		const poster = this.options.commandPoster?.(input.orderUuid, input.approval);
 		const deps = {
 			...this.options.http,
+			...(poster ? { post: poster } : {}),
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"
@@ -452,7 +467,7 @@ export class TerminalPaymentsService {
 				((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
 			mirror: async (response: ServerLegResponse) => {
 				try {
-					await this.options.mirror(input.orderUuid, response);
+					await this.options.mirror(input.orderUuid, response, ...(poster ? [poster] : []));
 					finishingError = undefined;
 				} catch (error) {
 					finishingError = getErrorMessage(error);

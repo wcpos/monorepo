@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
-import { readLedger, withLedger } from '@wcpos/order-math';
+import { withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -33,6 +33,11 @@ jest.mock('../../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('@wcpos/query', () => ({
+	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
+		Object.assign((url: string, body: unknown) => post(url, body), {
+			sentRevision: () => 'sha256:sent',
+			settle: async () => undefined,
+		}),
 	engineCollection: () => null,
 	useQueryRuntime: () => mockManager,
 	useRecordField: (
@@ -121,10 +126,11 @@ it.each(['0.00', '4.00'])(
 		});
 		await act(() => jest.advanceTimersByTimeAsync(0));
 		expect(mockFind).toHaveBeenCalledWith(mockManager, 'order');
+		// The answer, never a rebuilt meta array: the mirror upserts it onto the latest order.
 		const changes = mockPatch.mock.calls[0][0].changes;
-		expect(changes.status).toBe('completed');
-		expect(changes.meta_data[0]).toEqual({ key: 'other', value: 7 });
-		expect(readLedger(changes.meta_data)).toEqual([{ ...row, status: 'captured' }]);
+		expect(changes.order.status).toBe('completed');
+		expect(changes).not.toHaveProperty('meta_data');
+		expect(changes.payment).toEqual({ ...row, status: 'captured' });
 		expect(mockReceipt.mock.calls).toEqual(
 			balance === '0.00' ? [['order', { select: false }]] : []
 		);

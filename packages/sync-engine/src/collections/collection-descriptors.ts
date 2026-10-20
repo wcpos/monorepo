@@ -393,6 +393,10 @@ function ackBookkeeping(options: {
 					sync: {
 						...sync,
 						revision: ack.currentRevision ?? sync.revision,
+						// Only an ack that adopts the whole document certifies it (ADR 0040 §1.3).
+						...(adopting && collection === 'orders' && ack.currentRevision
+							? { adopted: { revision: ack.currentRevision, at: Date.now() } }
+							: {}),
 						...(ack.mutation.operation === 'create' && createAckSource
 							? { source: createAckSource }
 							: {}),

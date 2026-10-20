@@ -4,7 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { mirrorServerOrder } from '@wcpos/query/mutations';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -25,7 +25,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 	const onlineStatus = useOnlineStatus();
 	const { recordLedger } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
-	const { store } = useStoreSession();
+	const { store, storeDB } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 
@@ -37,6 +37,14 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				const result = await recordLedger(order, changes);
 				if (!result) throw new Error('offline_void_local_patch_failed');
 			};
+			// A void is never approval-checked; the journal still records the order as it stood.
+			const post = moneyCommandPoster({
+				runtime: manager,
+				storeDB,
+				orderUuid: order.uuid,
+				post: (url, body) => http.post(url, body),
+				approval: { total: String(payload.total ?? ''), currency: payload.currency ?? '' },
+			});
 			const outcome = await voidPayments(
 				{
 					uuid: order.uuid,
@@ -45,11 +53,16 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 					meta_data: cloneDeep(payload.meta_data ?? []),
 				},
 				{
-					post: (url, body) => http.post(url, body),
+					post,
 					isOnline: () => onlineStatus.status === 'online-website-available',
 					patchAndEnqueue: enqueue,
-					mirror: async (changes) => {
-						await mirrorServerOrder(manager, order.uuid, changes);
+					mirror: async ({ payment, order: summary }) => {
+						await mirrorServerOrder(manager, order.uuid, {
+							payment,
+							order: summary,
+							sentRevision: post.sentRevision(),
+						});
+						await post.settle();
 					},
 				}
 			);
@@ -94,6 +107,6 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				);
 			return outcome;
 		},
-		[http, onlineStatus.status, recordLedger, manager, dp]
+		[http, onlineStatus.status, recordLedger, manager, storeDB, dp]
 	);
 }
