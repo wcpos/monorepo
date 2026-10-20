@@ -46,10 +46,12 @@ export class MoneyCommandError extends Error {
 	}
 }
 export type MoneyCommandPoster = Post & {
-	/** The revision the last answered command was sent with (the mirror's status guard). */
+	/** The revision the last command was sent with, answered or refused (the mirror's guard). */
 	sentRevision(): string | null;
 	/** After the mirror persisted the answers: delete their entries, then the forced refresh. */
 	settle(): Promise<void>;
+	/** Re-send the last journaled command under its frozen body and id (the server replays). */
+	resend(): Promise<{ data: Record<string, unknown> }>;
 };
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
@@ -174,7 +176,7 @@ export async function sendMoneyCommand(
 	runtime: QueryRuntime,
 	storeDB: StoreLocalDatabase,
 	entry: MoneyCommandEntry,
-	deps: { post: Post }
+	deps: { post: Post; onSent?: (revision: string) => void }
 ): Promise<{ data: Record<string, unknown> & { revision?: string }; sentRevision: string }> {
 	const orderId = classifyMoneyRoute(entry.path)?.orderId ?? 0;
 	const fresh = entry.sentAt === null;
@@ -187,6 +189,7 @@ export async function sendMoneyCommand(
 	}
 	for (let stale = false; ; stale = true) {
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
+		deps.onSent?.(revision);
 		try {
 			const command = entry.kind === 'record' ? {} : { command_id: entry.id };
 			const { data } = await deps.post(entry.path, { ...entry.body, ...command, revision });
@@ -294,6 +297,16 @@ export function moneyCommandPoster(input: {
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
 	let sentRevision: string | null = null;
+	let last: MoneyCommandEntry | null = null;
+	const dispatch = async (entry: MoneyCommandEntry) => {
+		last = entry;
+		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, {
+			post: input.post,
+			onSent: (revision) => (sentRevision = revision),
+		});
+		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
+		return response;
+	};
 	const poster = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);
 		if (!route) return input.post(url, body);
@@ -315,13 +328,16 @@ export function moneyCommandPoster(input: {
 			sentRevision: null,
 		};
 		await journalCommand(input.storeDB, entry);
-		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, input);
-		sentRevision = response.sentRevision;
-		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
-		return response;
+		return dispatch(entry);
 	};
 	return Object.assign(poster, {
 		sentRevision: () => sentRevision,
+		resend: async () => {
+			const { entries } = await readOrderCommands(input.storeDB, input.orderUuid);
+			const entry = entries.find(({ id }) => id === last?.id);
+			if (!entry) throw new Error('money_command_not_journaled');
+			return dispatch(entry);
+		},
 		settle: async () => {
 			const done = answered;
 			answered = [];

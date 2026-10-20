@@ -124,27 +124,20 @@ beforeEach(() => {
 	onlineStatus = 'offline';
 });
 
-it('routes an offline row through localPatch on the supplied order document', async () => {
+// ADR 0040 PR A: a tender the server cannot hear is refused (CHECKOUT101); PR B queues it.
+it('refuses an offline row with CHECKOUT101 and writes nothing', async () => {
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() =>
+	await expect(
 		result.current(order, method, { session: gateSession(), amount: 40, tendered: 50 })
-	);
+	).resolves.toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 
-	expect(mockLocalPatch).toHaveBeenCalledWith({
-		document: order,
-		data: {
-			status: 'pos-partial',
-			meta_data: expect.arrayContaining([
-				expect.objectContaining({
-					key: '_wcpos_payments',
-					value: expect.objectContaining({
-						payments: [expect.objectContaining({ recorded_offline: true, change: '10.00' })],
-					}),
-				}),
-			]),
-		},
-	});
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+	);
 });
 
 it('refreshes the order over REST when a refusal omits the server summary', async () => {
@@ -166,15 +159,6 @@ it('refreshes the order over REST when a refusal omits the server summary', asyn
 			changes: expect.objectContaining({ order: { status: 'completed' } }),
 		})
 	);
-});
-
-it('rejects the payment when localPatch reports a failed write', async () => {
-	mockLocalPatch.mockResolvedValue(undefined);
-	const { result } = renderHook(() => useRecordManualPayment());
-
-	await expect(
-		result.current(order, method, { session: gateSession(), amount: 40 })
-	).rejects.toThrow();
 });
 
 it('logs a refused online payment as a failed sync record needing attention', async () => {
@@ -486,23 +470,14 @@ beforeEach(() => {
 	mockSessionId = 'session';
 });
 
-it.each(['offline', 'online-website-available'])(
-	'stamps the session on manual payments (%s)',
-	async (status) => {
-		mockSessionsOn = true;
-		onlineStatus = status;
-		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
-		const { result } = renderHook(() => useRecordManualPayment());
-		await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
-		if (status === 'offline') {
-			const { readLedger } =
-				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
-			expect(readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0].session_id).toBe(
-				'session'
-			);
-		} else expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
-	}
-);
+it('stamps the session on manual payments', async () => {
+	mockSessionsOn = true;
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
+	expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
+});
 
 jest.mock('../sale-completion', () => {
 	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
@@ -549,23 +524,6 @@ jest.mock('../hooks/use-sale-context', () => ({
 	}),
 }));
 
-it('includes completion metadata, ledger and status in one offline local write', async () => {
-	const { result } = renderHook(() => useRecordManualPayment());
-	await act(() => result.current(order, method, { session: gateSession(), amount: 100 }));
-	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledWith({
-		document: order,
-		data: {
-			status: 'completed',
-			meta_data: expect.arrayContaining([
-				{ key: '_wcpos_sale_counter', value: '1' },
-				expect.objectContaining({ key: '_wcpos_payments' }),
-			]),
-		},
-	});
-	expect(mockPost).not.toHaveBeenCalled();
-	expect(mockPushDocument).not.toHaveBeenCalled();
-});
 it('does not fallback-stamp an accepted response whose status is still partial', async () => {
 	onlineStatus = 'online-website-available';
 	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
@@ -577,6 +535,8 @@ it('does not fallback-stamp an accepted response whose status is still partial',
 });
 
 it('stamps the ids the tender gates handed over', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() =>
 		result.current(order, method, {
@@ -586,9 +546,7 @@ it('stamps the ids the tender gates handed over', async () => {
 		})
 	);
 
-	const { readLedger } =
-		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
-	const row = readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0];
+	const row = mockPost.mock.calls[0][1].payment;
 	expect(row.session_id).toBe('session-from-gate');
 	expect(row.register_id).toBe('register-from-gate');
 });
@@ -603,14 +561,13 @@ it.each([
 		const payload = order.payload as typeof order.payload & { currency?: string };
 		if (orderCurrency) payload.currency = orderCurrency;
 		else delete payload.currency;
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
 		const { result } = renderHook(() => useRecordManualPayment());
 		await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 		delete payload.currency;
 
-		const { readLedger } =
-			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
-		const row = readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0];
-		expect(row.currency).toBe(minted);
+		expect(mockPost.mock.calls[0][1].payment.currency).toBe(minted);
 	}
 );
 

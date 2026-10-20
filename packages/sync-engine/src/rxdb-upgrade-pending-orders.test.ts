@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRxDatabase, RXDB_VERSION, type RxStorage } from 'rxdb';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { getRxStorageSQLite, getSQLiteBasicsNodeNative } from 'rxdb-premium/plugins/storage-sqlite';
@@ -57,6 +57,28 @@ import {
 } from './write-path/legacy-scope-drain';
 
 import type { EngineConnectivity } from './create-rxdb-sync-engine';
+
+// The fixture is a generation-5 database, and this suite pins the drain MACHINERY: generation 7
+// parks a protocol-2 queue instead (ADR 0040; `rxdb-upgrade-protocol-3-parking.test.ts`), and PR B
+// drains generation 7 again. So the suite runs this build as it stood at generation 6: drainable 5,
+// no protocol-3 floor, the generation-5 recipe.
+vi.mock('@wcpos/sync-core', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@wcpos/sync-core')>();
+	return {
+		...actual,
+		SCOPE_DATABASE_GENERATION: 6,
+		DRAINABLE_SCOPE_DATABASE_GENERATION: 5,
+		FIRST_PROTOCOL_3_SCOPE_GENERATION: 5,
+		scopeDatabaseName: (
+			identity: Parameters<typeof actual.scopeDatabaseName>[0],
+			options?: Parameters<typeof actual.scopeDatabaseName>[1]
+		) => actual.scopeDatabaseName(identity, { generation: 6, ...options }),
+	};
+});
+vi.mock('./collections/drainable-generation', async () => {
+	const recipe = await import('./upgrade-fixtures/generation-5-recipe.test-utils');
+	return { ...recipe, DRAINABLE_SCHEMAS_GENERATION: 5 };
+});
 
 const require = createRequire(import.meta.url);
 const { getRxStorageFilesystemNode } =

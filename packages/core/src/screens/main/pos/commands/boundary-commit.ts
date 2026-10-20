@@ -31,6 +31,7 @@ import {
 } from './paid-balance-boundary';
 import { writeZeroBalanceCompletion } from './zero-balance-completion';
 
+import type { useCloseSale } from './close-sale';
 import type { OrderPayload } from './cart-config-for-order';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
@@ -44,6 +45,7 @@ export async function commitAtBoundary(
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
+		closeSale: ReturnType<typeof useCloseSale>;
 	},
 	{
 		order,
@@ -107,6 +109,8 @@ export async function commitAtBoundary(
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
 				complete: ctx.complete,
+				online: ctx.closeSale.online,
+				close: (target) => ctx.closeSale.close(target, { sessionId }),
 				changes: (payload) => {
 					overpaid = undefined;
 					if (
@@ -165,6 +169,13 @@ export async function commitAtBoundary(
 					return patch;
 				},
 			});
+			// A system pass that cannot close (offline, refused) leaves the order pos-partial.
+			if (completion && typeof completion === 'object' && 'kind' in completion) {
+				logger.debug('settlement.boundary-not-closed', {
+					context: { orderId: order.uuid, outcome: completion.kind },
+				});
+				return completion;
+			}
 			if (completion) {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {

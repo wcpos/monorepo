@@ -52,6 +52,7 @@ export {
 	type LegacyScopeDrainPorts,
 	type LegacyScopeDrainWriteEvent,
 	type LegacyScopeRemainingWork,
+	WRITTEN_BEFORE_PROTOCOL_3,
 } from './write-path/legacy-scope-drain';
 /** The open-cart hold (see the module essay): the drain wiring and the health
  * counters must decide "is this row held?" by the same rule, never by two. The

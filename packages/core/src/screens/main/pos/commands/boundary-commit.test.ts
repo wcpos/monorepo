@@ -40,7 +40,15 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 }));
 jest.mock('../checkout/provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
-let ctx: SaleContext;
+let ctx: SaleContext & { closeSale: typeof closeSale };
+// The server completes a covered sale through close (ADR 0040 D2); its mirror lands the status.
+const closeSale = {
+	online: jest.fn(() => true),
+	close: jest.fn(async (target: EngineRecord<'orders'>) => {
+		Object.assign(target.getLatest().payload, { status: 'completed' });
+		return { kind: 'completed' as const, order: null, completion: null };
+	}),
+};
 const write = jest.fn(
 	async ({
 		document,
@@ -105,7 +113,8 @@ beforeEach(async () => {
 		storeId: 1,
 		dp: 2,
 		sessionsOn: true,
-	} as unknown as SaleContext;
+		closeSale,
+	} as unknown as typeof ctx;
 });
 afterEach(async () => {
 	await ctx.storeDB.remove();

@@ -45,6 +45,7 @@ export {
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	FIRST_PROTOCOL_3_SCOPE_GENERATION,
 	isScopeDatabaseName,
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,

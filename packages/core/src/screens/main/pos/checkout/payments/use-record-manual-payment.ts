@@ -63,7 +63,7 @@ export function useRecordManualPayment(
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const storeDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
-	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
 	const t = useT();
 
@@ -98,8 +98,6 @@ export function useRecordManualPayment(
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				completionMeta: (meta) =>
-					completionMetaFor(ctx, meta, { sessionId, extraMeta: input.extraMeta }),
 				persistProvenance: async () => {
 					try {
 						await persistSaleProvenance(ctx, {
@@ -119,10 +117,7 @@ export function useRecordManualPayment(
 				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
 				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
-				patchAndEnqueue: async (changes) => {
-					const result = await recordLedger(order, changes);
-					if (!result) throw new Error('Payment could not be saved locally.');
-				},
+				resend: () => post.resend(),
 				fetchOrderStatus: async () => {
 					const response = await http.get(`orders/${paymentOrder.id}`);
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
@@ -220,6 +215,16 @@ export function useRecordManualPayment(
 					},
 				});
 			}
+			if (outcome.kind === 'unknown')
+				logger.error(t('pos_checkout.payment_unanswered'), {
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					showToast: true,
+					context: {
+						orderId: paymentOrder.id,
+						paymentId: outcome.row.id,
+						amount: outcome.row.amount,
+					},
+				});
 			return outcome;
 		},
 		[
@@ -231,7 +236,6 @@ export function useRecordManualPayment(
 			store,
 			storeCurrency,
 			storeDecimals,
-			recordLedger,
 			stampCompletion,
 			manager,
 			storeDB,

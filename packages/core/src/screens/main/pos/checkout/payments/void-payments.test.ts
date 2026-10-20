@@ -1,4 +1,3 @@
-import { readLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { voidPayments } from './void-payments';
@@ -50,20 +49,14 @@ function order(rows: PaymentRow[], id: number | null = 42) {
 
 function createDeps(online = true): VoidPaymentsDeps & {
 	post: jest.Mock;
-	patchAndEnqueue: jest.Mock;
 	mirror: jest.Mock;
 } {
 	return {
 		post: jest.fn(),
 		isOnline: () => online,
-		patchAndEnqueue: jest.fn(async () => undefined),
 		mirror: jest.fn(async () => undefined),
 		now: () => '2026-09-03T11:00:00.000Z',
 	};
-}
-
-function writtenRows(write: jest.Mock): PaymentRow[] {
-	return readLedger(write.mock.calls[0][0].meta_data);
 }
 
 describe('voidPayments', () => {
@@ -83,45 +76,49 @@ describe('voidPayments', () => {
 			order: null,
 		});
 		expect(deps.post).not.toHaveBeenCalled();
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
-	it('voids every live leg offline and leaves terminal rows untouched', async () => {
+	// ADR 0040 PR A: a void the server cannot hear is refused; nothing is voided locally.
+	it('offline voids nothing and reports every row refused', async () => {
 		const deps = createDeps(false);
 		const rows = [
 			payment('pending', 'pending'),
 			payment('voided', 'voided'),
 			payment('authorized', 'authorized'),
-			payment('failed', 'failed'),
 			payment('captured', 'captured'),
 		];
 
 		const result = await voidPayments(order(rows), deps);
-		const written = writtenRows(deps.patchAndEnqueue);
 
-		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
-		expect(deps.patchAndEnqueue).toHaveBeenCalledWith(
-			expect.objectContaining({ status: 'pos-open' })
-		);
-		expect(written.map(({ id, status }) => ({ id, status }))).toEqual([
-			{ id: 'pending', status: 'voided' },
-			{ id: 'voided', status: 'voided' },
-			{ id: 'authorized', status: 'voided' },
-			{ id: 'failed', status: 'failed' },
-			{ id: 'captured', status: 'voided' },
-		]);
-		expect(written[1]).toBe(rows[1]);
-		expect(written[3]).toBe(rows[3]);
 		expect(result).toEqual({
 			kind: 'voided',
 			via: 'offline',
-			rows: [written[0], written[2], written[4]],
-			failed: [],
+			rows: [],
+			failed: ['pending', 'authorized', 'captured'].map((paymentId) => ({
+				paymentId,
+				message: 'offline_unavailable',
+				refused: true,
+			})),
 			order: null,
 		});
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	it('a captured row counted in a completion, or an adopted woocommerce tender, is not sent to void', async () => {
+		const deps = createDeps();
+		deps.post.mockResolvedValue({ data: {} });
+		const counted = payment('counted', 'captured');
+		const adopted = { ...payment('adopted', 'captured'), capture_mode: 'server' as const };
+		const open = payment('open', 'captured');
+		const voidable = order([counted, adopted, open]);
+		const history = { key: '_wcpos_completions', value: [{ payment_ids: ['counted'] }] };
+		voidable.meta_data.push(history as never);
+
+		await voidPayments(voidable, deps);
+
+		expect(deps.post.mock.calls.map(([url]) => url)).toEqual(['orders/42/payments/open/void']);
 	});
 
 	it('posts each live leg in ledger order and mirrors each answered row with its summary', async () => {
@@ -158,7 +155,6 @@ describe('voidPayments', () => {
 			failed: [],
 			order: summary,
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 	});
 
 	it('leaves a refused row live while voiding the other rows', async () => {
@@ -208,16 +204,15 @@ describe('voidPayments', () => {
 			],
 			order: null,
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 });
-it('cannot void device money through the manual offline write seam', async () => {
-	const deps = createDeps(false);
+it('cannot void an offline device authorization before it settles', async () => {
+	const deps = createDeps();
 	const result = await voidPayments(
 		order([{ ...payment('device', 'authorized'), capture_mode: 'device', recorded_offline: true }]),
 		deps
 	);
 	expect(result.failed).toHaveLength(1);
-	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+	expect(deps.post).not.toHaveBeenCalled();
 });

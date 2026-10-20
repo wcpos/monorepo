@@ -554,7 +554,7 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
-	it('treats a save queued offline as offline for tender, even once connectivity is back', async () => {
+	it('treats a save queued offline as offline for tender, even once connectivity is back: no tile records it', async () => {
 		const onlineOnly = {
 			...card,
 			id: 'pos_online',
@@ -573,10 +573,13 @@ describe('useTenderFlow', () => {
 			reason: 'offline',
 		});
 		expect(mockRecordOptions).toHaveBeenLastCalledWith({ offline: true });
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.view).toBe('amount');
+		// ADR 0040 PR A: a tender the server cannot hear is refused, cash included.
+		expect(result.current.tiles.find((tile) => tile.method.id === 'pos_cash')).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+		});
 		await act(async () => result.current.takeTender());
-		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it.each(['online-website-available', 'offline'])(
@@ -695,7 +698,10 @@ describe('useTenderFlow', () => {
 	});
 
 	it('completes a zero-balance order without recording a payment row', async () => {
-		mockPayload = { total: '0.00', meta_data: [] };
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: null },
+		});
 		const { result } = renderHook(() => useTenderFlow(order));
 
 		await act(async () => result.current.takeTender());
@@ -705,13 +711,30 @@ describe('useTenderFlow', () => {
 			document: order,
 			changes: expect.any(Function),
 		});
+		// ADR 0040 D2: the provenance rides the write, the status comes from the store's close.
 		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
-			status: 'completed',
 			meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
 		});
+		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },
 			expect.objectContaining({ dispatchToken: expect.any(Object) })
+		);
+	});
+
+	it('a zero balance offline is refused with CHECKOUT101 and writes nothing', async () => {
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		mockOnlineStatus = 'offline';
+		const { result } = renderHook(() => useTenderFlow(order));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.close_needs_connection',
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
 		);
 	});
 
@@ -1885,7 +1908,8 @@ it('reopens a device tile via its queued transport when the selected transport n
 	act(() => result.current.dispatch({ type: 'back' }));
 	act(() => result.current.pickMethod(deviceMethod.id));
 	expect(result.current.deviceTransport).toBe('bluetooth');
-	expect(result.current.tiles[0].disabled).toBe(false);
+	// ADR 0040 PR A: the queued transport is refused offline too, until PR B queues it.
+	expect(result.current.tiles[0]).toMatchObject({ disabled: true, reason: 'offline' });
 });
 
 let mockBoundRegisterId: string | null = 'register';
@@ -1903,11 +1927,14 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 	}),
 }));
 
-it('zero balance writes completion and provenance together exactly once', async () => {
+it('zero balance writes its provenance once, then closes', async () => {
 	jest.mocked(recordCompletionAttempt).mockClear();
-	mockPayload = { total: '0.00', meta_data: [] };
+	mockPayload = { id: 42, total: '0.00', meta_data: [] };
+	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed' }, completion: null } });
 	mockLocalPatch.mockClear();
+	mockLocalPatch.mockResolvedValue({ document: order });
 	mockBlockIfDegraded.mockReturnValue(false);
+	mockOnlineStatus = 'online-website-available';
 	const { result } = renderHook(() => useTenderFlow(order));
 	await act(async () => result.current.takeTender());
 	expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
@@ -1919,9 +1946,11 @@ it('zero balance writes completion and provenance together exactly once', async 
 		changes: expect.any(Function),
 	});
 	expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
-		status: 'completed',
 		meta_data: [{ key: '_wcpos_sale_counter', value: '1' }],
 	});
+	expect(mockManualPost.mock.invocationCallOrder[0]).toBeGreaterThan(
+		mockLocalPatch.mock.invocationCallOrder[0]
+	);
 });
 
 it.each([
@@ -3721,7 +3750,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockSessionsOn = false;
 		mockBindingStatus = 'bound';
 		mockMethods = [roundingCash, card];
-		mockOnlineStatus = 'offline';
+		// Online: until ADR 0040 PR B an offline tender is refused, so rounding is taken online.
+		mockOnlineStatus = 'online-website-available';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockRecordManualPayment.mockResolvedValue(recorded);
@@ -3801,12 +3831,20 @@ describe('cash rounding (#66, #84)', () => {
 	it('writes the rounding fee before the cash row: the stored total moves by the fee alone and the leg settles', async () => {
 		mockUseRealManual = true;
 		mockPayload = sale('12.03', '10.03');
+		// The store records the row and completes the sale; the mirror lands both on the order.
+		mockManualPost.mockImplementation(async (_url: string, body: { payment: PaymentRow }) => ({
+			data: {
+				payment: { ...body.payment, status: 'captured' },
+				order: { status: 'completed', balance: '0.00' },
+			},
+		}));
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
 		await act(async () => result.current.takeTender());
 
-		const [fee, leg] = patches();
+		const [fee] = patches();
+		const leg = mockManualMirror.mock.calls[0][0].changes as Record<string, unknown>;
 		const [line] = fee.fee_lines as {
 			name: string;
 			tax_status: string;
@@ -3962,8 +4000,11 @@ describe('cash rounding (#66, #84)', () => {
 		);
 	});
 
-	it('a cash due rounded to nothing writes the fee and the completion in one patch', async () => {
+	it('a cash due rounded to nothing writes the fee in one patch and completes through close', async () => {
 		mockPayload = sale('0.02');
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		});
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
@@ -3973,10 +4014,12 @@ describe('cash rounding (#66, #84)', () => {
 			expect.objectContaining({
 				fee_lines: [expect.objectContaining({ total: '-0.02', tax_status: 'none' })],
 				total: '0.00',
-				status: 'completed',
 				meta_data: expect.any(Array),
 			}),
 		]);
+		// ADR 0040 D2: the till never writes completed; the store closes the sale.
+		expect(patches()[0]).not.toHaveProperty('status');
+		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },

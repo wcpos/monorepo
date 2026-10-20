@@ -1,6 +1,7 @@
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import {
+	RECORD_UNKNOWN_RETRY_DELAYS_MS,
 	recordManualPayment,
 	type RecordManualPaymentDeps,
 	RecordManualPaymentError,
@@ -77,7 +78,8 @@ const mintedCard: PaymentRow = {
 
 function createDeps(online = true): RecordManualPaymentDeps & {
 	post: jest.Mock;
-	patchAndEnqueue: jest.Mock;
+	resend: jest.Mock;
+	sleep: jest.Mock;
 	mirror: jest.Mock;
 	raiseAttention: jest.Mock;
 	fetchOrderStatus: jest.Mock;
@@ -90,7 +92,8 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		registerId: null,
 		currency: 'EUR',
 		dp: 2,
-		patchAndEnqueue: jest.fn(async () => undefined),
+		resend: jest.fn(),
+		sleep: jest.fn(async () => undefined),
 		mirror: jest.fn(async () => undefined),
 		fetchOrderStatus: jest.fn(async () => null),
 		raiseAttention: jest.fn(),
@@ -103,42 +106,17 @@ function responseError(status: number, code?: string, data: Record<string, unkno
 	return { response: { status, data: code ? { code, message: 'Server refused', data } : data } };
 }
 
-function ledgerFrom(call: jest.Mock): { schema: number; payments: PaymentRow[] } {
-	return call.mock.calls[0][0].meta_data.find(
-		(entry: { key: string }) => entry.key === '_wcpos_payments'
-	).value;
-}
-
 describe('recordManualPayment', () => {
-	it('records cash offline and preserves existing metadata without mutating the order', async () => {
+	// ADR 0040 PR A: a tender the server cannot hear is refused; PR B queues it as a command.
+	it('offline is refused and nothing is written', async () => {
 		const deps = createDeps(false);
 		const original = structuredClone(order.meta_data);
 
 		const result = await recordManualPayment(order, cash, { amount: 42.5, tendered: 50 }, deps);
 
+		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
-		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
-		expect(deps.patchAndEnqueue.mock.calls[0][0].status).toBe('pos-partial');
-		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data[0]).toEqual(order.meta_data[0]);
-		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data).toContainEqual({
-			key: '_wcpos_payment_method',
-			value: 'pos_cash',
-		});
-		expect(ledgerFrom(deps.patchAndEnqueue)).toEqual({
-			schema: 1,
-			payments: [
-				expect.objectContaining({
-					id: UUID.toLowerCase(),
-					recorded_offline: true,
-					status: 'captured',
-					amount: '42.50',
-					tendered: '50.00',
-					change: '7.50',
-				}),
-			],
-		});
-		expect(result).toMatchObject({ kind: 'recorded', via: 'offline', order: null });
 		expect(order.meta_data).toEqual(original);
 	});
 
@@ -157,19 +135,15 @@ describe('recordManualPayment', () => {
 			outcome: { kind: 'recorded', via: 'online', row: serverRow, order: summary },
 			cause: mirrorFailure,
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 	});
 
-	it.each([0, null])('uses the offline path for an online order with server id %s', async (id) => {
+	it.each([0, null])('refuses an order the store has not seen (server id %s)', async (id) => {
 		const deps = createDeps(true);
 
-		await recordManualPayment({ ...order, id }, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment({ ...order, id }, card, { amount: '42.50' }, deps);
 
+		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.post).not.toHaveBeenCalled();
-		expect(ledgerFrom(deps.patchAndEnqueue).payments[0]).toMatchObject({
-			order_id: 0,
-			recorded_offline: true,
-		});
 	});
 
 	it('posts online and mirrors the authoritative server row and status', async () => {
@@ -188,7 +162,6 @@ describe('recordManualPayment', () => {
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		// The answered row, never a ledger rebuilt from the pre-command snapshot (ADR 0040).
 		expect(deps.mirror).toHaveBeenCalledWith(
 			{ payment: serverRow, status: 'completed' },
@@ -211,7 +184,6 @@ describe('recordManualPayment', () => {
 
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror.mock.calls[0][0].payment).toEqual(failedRow);
 		expect(deps.raiseAttention).toHaveBeenCalledWith({
 			row: failedRow,
@@ -329,27 +301,45 @@ describe('recordManualPayment', () => {
 			status: 409,
 			message: 'Server refused',
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
 
-	it.each([new Error('network'), responseError(503)])(
-		'falls back offline with the attempted row id after %p',
+	it.each([new Error('network'), responseError(503), responseError(409, 'wcpos_payment_locked')])(
+		'a 5xx re-sends the same row and body and ends unknown with the command (%p)',
 		async (error) => {
 			const deps = createDeps();
 			deps.post.mockRejectedValue(error);
+			deps.resend.mockRejectedValue(error);
 
 			const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
+			expect(deps.post).toHaveBeenCalledTimes(1);
 			expect(deps.post.mock.calls[0][1].payment.id).toBe(UUID.toLowerCase());
-			expect(ledgerFrom(deps.patchAndEnqueue).payments[0]).toMatchObject({
-				id: UUID.toLowerCase(),
-				recorded_offline: true,
+			expect(deps.resend).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length);
+			expect(deps.sleep.mock.calls).toEqual(RECORD_UNKNOWN_RETRY_DELAYS_MS.map((ms) => [ms]));
+			expect(deps.mirror).not.toHaveBeenCalled();
+			expect(result).toEqual({
+				kind: 'unknown',
+				row: expect.objectContaining({ id: UUID.toLowerCase() }),
 			});
-			expect(result).toMatchObject({ kind: 'recorded', via: 'offline' });
 		}
 	);
+
+	it('a re-send that the store answers records the row once', async () => {
+		const deps = createDeps();
+		const serverRow = { ...mintedCard, status: 'captured' as const };
+		deps.post.mockRejectedValue(responseError(502));
+		deps.resend.mockResolvedValue({
+			data: { payment: serverRow, order: { status: 'pos-partial' } },
+		});
+
+		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		expect(deps.resend).toHaveBeenCalledTimes(1);
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: serverRow });
+		expect(deps.mirror).toHaveBeenCalledTimes(1);
+	});
 
 	it('returns invalid for card tendered input without any side effect', async () => {
 		const deps = createDeps();
@@ -358,25 +348,9 @@ describe('recordManualPayment', () => {
 
 		expect(result).toEqual({ kind: 'invalid', reason: 'tendered_not_allowed' });
 		expect(deps.post).not.toHaveBeenCalled();
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
-});
-
-it.each([
-	['100.00', true],
-	['42.50', false],
-] as const)('completion provenance with offline amount %s', async (amount, completes) => {
-	const deps = createDeps(false);
-	const tuple = { key: '_wcpos_sale_counter', value: '1' };
-	const completion = jest.fn(async (meta) => [...meta, tuple]);
-	deps.completionMeta = completion;
-	await recordManualPayment(order, cash, { amount }, deps);
-	expect(completion).toHaveBeenCalledTimes(completes ? 1 : 0);
-	const meta = deps.patchAndEnqueue.mock.calls[0][0].meta_data;
-	expect(meta.some((entry: { key: string }) => entry.key === '_wcpos_payments')).toBe(true);
-	expect(meta.includes(tuple)).toBe(completes);
 });
 
 it.each(['0.00', '42.50'])(
@@ -440,6 +414,5 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
-	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 	expect(deps.mirror).not.toHaveBeenCalled();
 });

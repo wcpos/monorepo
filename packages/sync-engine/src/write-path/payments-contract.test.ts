@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import { createFakeWriteServer, ORDER_MONEY_ORACLE } from '@wcpos/sync-core/testing';
 
 import { createEngineHarness } from '../testing';
@@ -91,7 +92,7 @@ it('pushes a drainable-generation row queued before the upgrade', async () => {
 	const sent: Record<string, unknown>[] = [];
 	const { engine } = await createEngineHarness({
 		mode: 'manual',
-		ports: { scopeDatabaseGeneration: 5 },
+		ports: { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION },
 		fetch: async (url, init) => {
 			if (url.includes('/push/orders')) sent.push(JSON.parse(init!.body as string));
 			return server.fetch(url, init as never);

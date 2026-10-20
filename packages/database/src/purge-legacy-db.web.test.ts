@@ -76,7 +76,7 @@ describe('purgeLegacyDatabases web', () => {
 
 	it('never reaches a kept drainable scope database, by name or by the pool', async () => {
 		const { SQLITE_POOL_DIRECTORY } = await import('./adapters/storage/sqlite-pool');
-		const drainable = 'pos_v5_0123456789ab_s1_c2';
+		const drainable = 'pos_v6_0123456789ab_s1_c2';
 		const older = 'pos_v4_0123456789ab_s1_c2';
 		opfsNames.push(
 			SQLITE_POOL_DIRECTORY,

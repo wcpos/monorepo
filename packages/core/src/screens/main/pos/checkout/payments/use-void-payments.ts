@@ -55,7 +55,6 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				{
 					post,
 					isOnline: () => onlineStatus.status === 'online-website-available',
-					patchAndEnqueue: enqueue,
 					mirror: async ({ payment, order: summary }) => {
 						await mirrorServerOrder(manager, order.uuid, {
 							payment,

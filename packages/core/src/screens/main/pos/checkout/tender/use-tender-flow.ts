@@ -116,6 +116,7 @@ import {
 	type TenderTile,
 } from './tiles';
 import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
+import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
@@ -204,6 +205,17 @@ export interface TenderFlow {
 	cancelInvoice: () => Promise<void>;
 }
 
+function closeMessage(
+	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
+	t: ReturnType<typeof useT>
+): string {
+	if (closed.kind === 'refused') return closed.message;
+	if (closed.kind === 'order_changed') return t('pos_checkout.order_changed_retry');
+	if (closed.kind === 'outstanding')
+		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
+	return t('pos_checkout.close_needs_connection');
+}
+
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
@@ -270,6 +282,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const gateway = useGatewayPayment();
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
+	const closeSale = useCloseSale();
 	const completeOrderFlow = useCompleteOrderFlow(order);
 	const router = useRouter();
 	const { screenSize } = useTheme();
@@ -696,6 +709,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}
 	}, [ctx.runtime, storeDB, order.uuid, http, t]);
 
+	/** A zero balance the store did not close: say why, and what is due when it said. */
+	const reportClose = React.useCallback(
+		(closed: Exclude<CloseOutcome, { kind: 'completed' }>) => {
+			const context = { orderId: payload.id ?? null, orderUUID: order.uuid, close: closed.kind };
+			if (closed.kind === 'outstanding' || closed.kind === 'order_changed')
+				logger.info(closeMessage(closed, t), { showToast: true, context });
+			else
+				logger.error(closeMessage(closed, t), {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					context: { ...context, ...(closed.kind === 'refused' ? { reason: closed.code } : {}) },
+				});
+		},
+		[payload.id, order.uuid, t]
+	);
+
 	const takeTender = React.useCallback(async () => {
 		if (
 			busyRef.current ||
@@ -825,14 +854,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-				await writeZeroBalanceCompletion(ctx, {
+				const closed = await writeZeroBalanceCompletion(ctx, {
 					order,
 					sessionId,
 					queue,
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
+					online: () => online && !queuedOffline && !!payload.id,
+					close: (target) => closeSale.close(target, { sessionId, approval, queuedOffline }),
 				});
+				if (closed && typeof closed === 'object' && 'kind' in closed) reportClose(closed);
 				return;
 			}
 			if (!method) return;
@@ -1116,7 +1148,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (paymentId && !landed) await unround().catch(() => undefined);
 				throw error;
 			});
-			if (paymentId && outcome.kind !== 'recorded') await unround();
+			// An unknown outcome may have landed: its rounding stays with the row it names.
+			if (paymentId && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{
@@ -1134,7 +1167,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				setTenderMethod(order.uuid, null);
 				return;
 			}
-			if (outcome.kind === 'failed') {
+			// Unknown: the journal keeps the command and the pane offers Try again.
+			if (outcome.kind === 'failed' || outcome.kind === 'unknown') {
 				reducerDispatch({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
@@ -1289,6 +1323,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}
 	}, [
 		unansweredCommand,
+		closeSale,
+		reportClose,
 		actionCtx,
 		actionActor,
 		ctx,

@@ -1,15 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { MoneyCommandError, type OrderApproval } from '@wcpos/query';
-import {
-	derive,
-	isCompletingStatus,
-	mintManualPayment,
-	readLedger,
-	toMinor,
-	upsertPaymentRow,
-	withLedger,
-} from '@wcpos/order-math';
+import { derive, mintManualPayment, readLedger, toMinor } from '@wcpos/order-math';
 import type {
 	MetaDataEntry,
 	OrderPaymentSummary,
@@ -20,9 +12,9 @@ import type {
 /**
  * Record a `manual` payment (cash, dummy card) against an order — Payments Contract v1
  * §5 / §7 (wcpos/roadmap#142). The ledger lives in the order's `_wcpos_payments`
- * typed meta; an offline row rides the order write the sync engine already queues,
- * an online row goes through `POST orders/{id}/payments` and the server's copy is
- * mirrored back. Pure apart from the injected deps so the decision tree is testable.
+ * typed meta, which the server owns: a row goes through `POST orders/{id}/payments` as a
+ * journaled money command and the server's copy is mirrored back; offline it is refused
+ * until ADR 0040 PR B queues it. Pure apart from the injected deps so the decision tree is testable.
  */
 
 export interface RecordManualPaymentOrder {
@@ -49,11 +41,12 @@ export interface RecordManualPaymentDeps {
 	storeId: number | null;
 	registerId: string | null;
 	sessionId?: string | null;
-	completionMeta?: (meta: MetaDataEntry[]) => Promise<MetaDataEntry[]>;
 	persistProvenance?: () => Promise<void>;
 	currency: string;
 	dp: number;
-	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
+	/** Re-send the journaled record under its frozen body (the server replays a stored row). */
+	resend: () => Promise<{ data: unknown }>;
+	sleep?: (ms: number) => Promise<void>;
 	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
 	mirror: (
 		answer: { payment: PaymentRow; status?: string },
@@ -84,8 +77,16 @@ export type RecordManualPaymentOutcome =
 			order: OrderPaymentSummary | null;
 	  }
 	| { kind: 'refused'; reason: RefusalReason; row: PaymentRow; order: OrderPaymentSummary | null }
-	| { kind: 'failed'; reason: 'provenance_save_failed' }
+	| { kind: 'failed'; reason: 'provenance_save_failed' | 'offline_unavailable' }
+	/** No answer after every re-send: the journal keeps the command, and Try again re-sends it. */
+	| { kind: 'unknown'; row: PaymentRow }
 	| { kind: 'invalid'; reason: InvalidReason };
+
+/**
+ * A 5xx, a lost answer or a held order lock is re-sent after each of these, the same row and
+ * body: long enough to ride out a proxy restart, short enough to wait for at a till.
+ */
+export const RECORD_UNKNOWN_RETRY_DELAYS_MS = [1000, 3000, 9000] as const;
 
 export class RecordManualPaymentError extends Error {
 	public constructor(
@@ -154,21 +155,8 @@ export async function recordManualPayment(
 		dp: deps.dp,
 	});
 	if (!minted.ok) return { kind: 'invalid', reason: minted.reason };
-
-	const writeOffline = async (row: PaymentRow): Promise<RecordManualPaymentOutcome> => {
-		const offlineRow = row.recorded_offline ? row : { ...row, recorded_offline: true };
-		const ledger = upsertPaymentRow(readLedger(order.meta_data), offlineRow);
-		const status = derive(order.total, ledger, [method], { dp: deps.dp }).status;
-		const meta = withLedger(order.meta_data, ledger);
-		await deps.patchAndEnqueue({
-			meta_data:
-				isCompletingStatus(status) && deps.completionMeta ? await deps.completionMeta(meta) : meta,
-			status,
-		});
-		return { kind: 'recorded', via: 'offline', row: offlineRow, order: null };
-	};
-
-	if (!online) return writeOffline(minted.row);
+	// ADR 0040 PR A: a tender the server cannot hear is refused; PR B queues it as a command.
+	if (!online) return { kind: 'failed', reason: 'offline_unavailable' };
 
 	const { balance } = derive(order.total, readLedger(order.meta_data), [method], { dp: deps.dp });
 	if (toMinor(minted.row.amount, deps.dp) === toMinor(balance, deps.dp)) {
@@ -181,65 +169,72 @@ export async function recordManualPayment(
 
 	// Only the request is inside the try: once the server has answered 2xx the row is
 	// recorded, and a failure while mirroring it locally must surface as that failure —
-	// never as the offline fallback, which would enqueue the row a second time.
-	let accepted: { payment?: PaymentRow; order?: OrderPaymentSummary };
-	try {
-		const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
-		accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
-	} catch (error) {
-		// Refused before it left the till (no revision, or the order changed): nothing was sent.
-		if (error instanceof MoneyCommandError) throw error;
-		const response = errorResponse(error);
-		const reason = refusalReason(response?.data?.code);
-		if (reason) {
-			// The server STORED the refused row as `failed`; put the order in front of the
-			// cashier independently, then mirror the server's copy into the ledger.
-			const failedRow = response?.data?.data?.payment ?? {
-				...minted.row,
-				status: 'failed',
-				failure_reason: reason,
-			};
-			const serverOrder = response?.data?.data?.order ?? null;
-			deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
-			// A refusal IS the server saying our copy of the order is stale — it is already
-			// paid, or its balance is smaller than the one we held. Mirroring the failed row
-			// under the stale local status would leave a paid order sitting at `pending`, so
-			// when the refusal body omits the summary, ask the server for the order's status
-			// before mirroring. A failed refresh is not fatal: the row and the attention
-			// entry still land, the status is simply left untouched.
-			let authoritativeStatus = serverOrder?.status ?? null;
-			if (!authoritativeStatus) {
-				try {
-					authoritativeStatus = await deps.fetchOrderStatus();
-				} catch {
-					authoritativeStatus = null;
+	// never as a re-send, which the journal already holds for Try again.
+	let accepted: { payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
+	for (let attempt = 0; !accepted; attempt++)
+		try {
+			const response = await (attempt === 0
+				? deps.post(`orders/${order.id}/payments`, { payment: minted.row })
+				: deps.resend());
+			accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
+		} catch (error) {
+			// Refused before it left the till (no revision, or the order changed): nothing was sent.
+			if (error instanceof MoneyCommandError) throw error;
+			const response = errorResponse(error);
+			const reason = refusalReason(response?.data?.code);
+			if (reason) {
+				// The server STORED the refused row as `failed`; put the order in front of the
+				// cashier independently, then mirror the server's copy into the ledger.
+				const failedRow = response?.data?.data?.payment ?? {
+					...minted.row,
+					status: 'failed',
+					failure_reason: reason,
+				};
+				const serverOrder = response?.data?.data?.order ?? null;
+				deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
+				// A refusal IS the server saying our copy of the order is stale — it is already
+				// paid, or its balance is smaller than the one we held. Mirroring the failed row
+				// under the stale local status would leave a paid order sitting at `pending`, so
+				// when the refusal body omits the summary, ask the server for the order's status
+				// before mirroring. A failed refresh is not fatal: the row and the attention
+				// entry still land, the status is simply left untouched.
+				let authoritativeStatus = serverOrder?.status ?? null;
+				if (!authoritativeStatus) {
+					try {
+						authoritativeStatus = await deps.fetchOrderStatus();
+					} catch {
+						authoritativeStatus = null;
+					}
 				}
+				const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
+				try {
+					await deps.mirror(
+						{ payment: failedRow, ...(authoritativeStatus ? { status: authoritativeStatus } : {}) },
+						{ accepted: false }
+					);
+				} catch (mirrorError) {
+					throw new RecordManualPaymentMirrorError(outcome, mirrorError);
+				}
+				return outcome;
 			}
-			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
-			try {
-				await deps.mirror(
-					{ payment: failedRow, ...(authoritativeStatus ? { status: authoritativeStatus } : {}) },
-					{ accepted: false }
+			const status = response?.status;
+			const code = response?.data?.code;
+			// No answer, a 5xx or a held lock proves nothing: re-send the same journaled record.
+			if (!response || (status !== undefined && status >= 500) || code === 'wcpos_payment_locked') {
+				if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
+					return { kind: 'unknown', row: minted.row };
+				await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
+					RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
 				);
-			} catch (mirrorError) {
-				throw new RecordManualPaymentMirrorError(outcome, mirrorError);
+				continue;
 			}
-			return outcome;
+			if (code && status !== undefined && status >= 400 && status < 500) {
+				// A definitive refusal the server will repeat (conflict, unknown method, bad
+				// param): nothing is written — the caller decides.
+				throw new RecordManualPaymentError(response?.data?.message ?? code, code, status);
+			}
+			throw error;
 		}
-		const status = response?.status;
-		const code = response?.data?.code;
-		if (code && status !== undefined && status >= 400 && status < 500) {
-			// A definitive refusal the server will repeat (conflict, unknown method, bad
-			// param): nothing is written — the caller decides.
-			throw new RecordManualPaymentError(response?.data?.message ?? code, code, status);
-		}
-		if (!response || (status !== undefined && status >= 500)) {
-			// The server may or may not have stored the row. The SAME id rides the order
-			// write, so a replay of a known id returns the stored row instead of a duplicate.
-			return writeOffline(minted.row);
-		}
-		throw error;
-	}
 
 	const serverRow = accepted.payment ?? minted.row;
 	const serverOrder = accepted.order ?? null;

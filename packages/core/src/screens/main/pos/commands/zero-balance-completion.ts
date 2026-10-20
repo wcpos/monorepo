@@ -2,10 +2,15 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { completionMetaFor, type SaleContext } from '../checkout/sale-completion';
 
+import type { CloseOutcome } from './close-sale';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
-/** The manual tender and paid-balance boundary share one atomic status/provenance write. */
+/**
+ * The manual tender and paid-balance boundary share one atomic line/provenance write, then the
+ * server completes the sale through `close` (ADR 0040 D2): the till never writes `completed`.
+ * Offline nothing is written; a close the server refuses leaves the order as it was.
+ */
 export async function writeZeroBalanceCompletion(
 	ctx: SaleContext,
 	{
@@ -17,6 +22,8 @@ export async function writeZeroBalanceCompletion(
 		queue,
 		complete,
 		write,
+		online,
+		close,
 	}: {
 		order: EngineRecord<'orders'>;
 		sessionId: string | null;
@@ -26,13 +33,21 @@ export async function writeZeroBalanceCompletion(
 		write: (changes: PayloadChanges) => Promise<unknown>;
 		queue: OrderMutationContext;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
+		online: () => boolean;
+		close: (order: EngineRecord<'orders'>) => Promise<CloseOutcome>;
 	}
-) {
+): Promise<
+	| 'superseded'
+	| { superseded: true; reason: string }
+	| Exclude<CloseOutcome, { kind: 'completed' }>
+	| undefined
+> {
 	const latest = order.getLatest().payload;
 	// Reject an obsolete boundary before allocating irreversible sale provenance.
 	if (changes(latest) === null) return 'superseded';
+	if (!online()) return { kind: 'offline' };
 	const preflightReason = await revalidate?.();
-	if (preflightReason) return { superseded: true as const, reason: preflightReason };
+	if (preflightReason) return { superseded: true, reason: preflightReason };
 	const stamped = aggregateOnly?.()
 		? (latest.meta_data ?? [])
 		: await completionMetaFor(ctx, latest.meta_data, { sessionId });
@@ -43,7 +58,7 @@ export async function writeZeroBalanceCompletion(
 	// A late supersession can leave a counter gap. Re-read stock AFTER allocation, then keep
 	// synchronous payload validity in the resolver; never await provenance after this fence.
 	const reason = await revalidate?.();
-	if (reason) return { superseded: true as const, reason };
+	if (reason) return { superseded: true, reason };
 	let superseded = false;
 	const written = await write((current) => {
 		const patch = changes(current);
@@ -52,7 +67,6 @@ export async function writeZeroBalanceCompletion(
 		const meta = (current.meta_data ?? []) as typeof stamped;
 		return {
 			...patch,
-			status: 'completed',
 			meta_data: [
 				...meta,
 				...additions.filter((entry) => !meta.some(({ key }) => key === entry.key)),
@@ -61,5 +75,7 @@ export async function writeZeroBalanceCompletion(
 	});
 	if (superseded) return 'superseded';
 	if (!written) throw new Error('zero_balance_completion_failed');
+	const closed = await close(order);
+	if (closed.kind !== 'completed') return closed;
 	await complete(order, queue);
 }

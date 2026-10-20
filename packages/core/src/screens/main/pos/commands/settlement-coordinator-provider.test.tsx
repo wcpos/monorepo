@@ -60,6 +60,9 @@ jest.mock('@wcpos/query/register-session', () => ({
 	observeOpenSessionPresence: () => sessionChanges,
 }));
 jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => saleContext }));
+// Stable, like the hook's memoised value: the coordinator's effect keys on it.
+const mockCloseSale = { close: jest.fn(), online: () => true };
+jest.mock('./close-sale', () => ({ useCloseSale: () => mockCloseSale }));
 jest.mock('./boundary-commit', () => ({
 	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
 		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };

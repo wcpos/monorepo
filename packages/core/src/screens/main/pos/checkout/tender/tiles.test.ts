@@ -111,10 +111,21 @@ describe('buildTenderTiles', () => {
 		const [onlineOnly] = buildTenderTiles([makeMethod({ capabilities: { offline: 'none' } })], {
 			online: true,
 		});
-		const [recordable] = buildTenderTiles([makeMethod()], { online: false });
+		const [recordable] = buildTenderTiles([makeMethod()], { online: true });
 
 		expect(onlineOnly).toMatchObject({ disabled: false, reason: null, worksOffline: false });
 		expect(recordable).toMatchObject({ disabled: false, reason: null, worksOffline: true });
+	});
+
+	// ADR 0040 PR A: the tender passes `online: false` for an offline till and for a queued-offline
+	// save alike (use-tender-flow), so one rule covers both.
+	it('offline and queued-offline orders disable manual and device tiles with the offline reason', () => {
+		registerDriver(createSimulatedDriver());
+		const tiles = buildTenderTiles([makeMethod(), deviceMethod], { online: false });
+		expect(tiles.map(({ disabled, reason }) => ({ disabled, reason }))).toEqual([
+			{ disabled: true, reason: 'offline' },
+			{ disabled: true, reason: 'offline' },
+		]);
 	});
 });
 
@@ -217,8 +228,10 @@ describe('device tiles', () => {
 			disabled: false,
 			settlesLater: false,
 		});
+		// Until ADR 0040 PR B queues it, a tender that settles later is refused offline.
 		expect(buildTenderTiles([device], { online: false })[0]).toMatchObject({
-			disabled: false,
+			disabled: true,
+			reason: 'offline',
 			settlesLater: true,
 		});
 		expect(

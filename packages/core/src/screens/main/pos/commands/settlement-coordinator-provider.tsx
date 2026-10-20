@@ -20,6 +20,7 @@ import { couponReferences } from './coupon-continuation';
 import { readCouponContext } from '../hooks/use-coupon-context';
 import { plainPatch } from './plain-patch';
 import { commitAtBoundary } from './boundary-commit';
+import { useCloseSale } from './close-sale';
 import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { completeSale } from '../checkout/sale-completion';
@@ -59,6 +60,7 @@ export function SettlementCoordinatorProvider() {
 		bindingRef.current = { status: bindingStatus, registerId };
 	}, [bindingStatus, registerId]);
 	const saleContext = useSaleContext();
+	const closeSale = useCloseSale();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
 	const read = useCartConfigReader();
@@ -147,6 +149,7 @@ export function SettlementCoordinatorProvider() {
 									{ host: 'background' },
 									slot
 								),
+							closeSale,
 						},
 						{
 							order: document as EngineRecord<'orders'>,
@@ -203,6 +206,7 @@ export function SettlementCoordinatorProvider() {
 		manager,
 		handle,
 		read,
+		closeSale,
 		serverOwnsMoney,
 		report,
 		t,

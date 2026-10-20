@@ -1,10 +1,10 @@
-import { isLivePaymentStatus, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import { isLivePaymentStatus, readLedger } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 /**
- * Void the live payment legs when a cashier abandons a half-paid order. Offline
- * voids ride the order write already queued by the engine; online voids stay
- * sequential because each response recomputes the server's order status.
+ * Void the live payment legs when a cashier abandons a half-paid order. Offline a void is
+ * refused (ADR 0040 PR A); online voids stay sequential because each response recomputes
+ * the server's order status.
  */
 
 export interface VoidPaymentsOrder {
@@ -15,8 +15,6 @@ export interface VoidPaymentsOrder {
 export interface VoidPaymentsDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 	isOnline: () => boolean;
-	/** Offline void rides the order write the engine already queues. */
-	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
 	/** Online void mirrors each answered row onto the latest resident; no second write. */
 	mirror: (answer: { payment: PaymentRow; order: OrderPaymentSummary | null }) => Promise<void>;
 	now?: () => string;
@@ -51,23 +49,45 @@ export async function voidPayments(
 	order: VoidPaymentsOrder,
 	deps: VoidPaymentsDeps
 ): Promise<VoidPaymentsOutcome> {
-	const ledger = readLedger(order.meta_data);
-	const liveRows = ledger.filter(({ status }) => isLivePaymentStatus(status));
+	// The server never voids a captured row a completion counted, nor a captured non-manual row
+	// (an adopted WooCommerce tender among them): those leave the balance only through a refund.
+	const completions = order.meta_data.find(({ key }) => key === '_wcpos_completions')?.value;
+	const counted = new Set(
+		(Array.isArray(completions) ? completions : []).flatMap(
+			(entry: { payment_ids?: string[] }) => entry?.payment_ids ?? []
+		)
+	);
+	const liveRows = readLedger(order.meta_data).filter(
+		({ id, status, capture_mode }) =>
+			isLivePaymentStatus(status) &&
+			(status !== 'captured' || (capture_mode === 'manual' && !counted.has(id)))
+	);
 	if (liveRows.length === 0) {
 		return { kind: 'voided', via: 'offline', rows: [], failed: [], order: null };
 	}
 
 	const now = deps.now ?? (() => new Date().toISOString());
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
+	// ADR 0040 PR A: a void the server cannot hear is refused, and nothing is voided locally.
+	if (!online)
+		return {
+			kind: 'voided',
+			via: 'offline',
+			rows: [],
+			failed: liveRows.map((row) => ({
+				refused: true,
+				paymentId: row.id,
+				message: 'offline_unavailable',
+			})),
+			order: null,
+		};
 	const deviceHeld = liveRows.filter(
-		(row) =>
-			row.capture_mode === 'device' &&
-			(!online || (row.recorded_offline && row.status === 'authorized'))
+		(row) => row.capture_mode === 'device' && row.recorded_offline && row.status === 'authorized'
 	);
 	if (deviceHeld.length)
 		return {
 			kind: 'voided',
-			via: online ? 'online' : 'offline',
+			via: 'online',
 			rows: [],
 			failed: deviceHeld.map((row) => ({
 				refused: true,
@@ -76,19 +96,6 @@ export async function voidPayments(
 			})),
 			order: null,
 		};
-	if (!online) {
-		const rows = liveRows.map((row) => ({
-			...row,
-			status: 'voided' as const,
-			updated_at_gmt: now(),
-		}));
-		const merged = rows.reduce(upsertPaymentRow, ledger);
-		await deps.patchAndEnqueue({
-			meta_data: withLedger(order.meta_data, merged),
-			status: 'pos-open',
-		});
-		return { kind: 'voided', via: 'offline', rows, failed: [], order: null };
-	}
 	let lastOrder: OrderPaymentSummary | null = null;
 	const answers: { payment: PaymentRow; order: OrderPaymentSummary | null }[] = [];
 	const rows: PaymentRow[] = [];

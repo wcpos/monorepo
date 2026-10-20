@@ -8,8 +8,6 @@ import {
 	isCompletingStatus,
 	isSettledPaymentRow,
 	readLedger,
-	upsertPaymentRow,
-	withLedger,
 } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -34,7 +32,6 @@ import {
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
 import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
-import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import {
@@ -131,38 +128,11 @@ export function useTerminalPaymentsService(): void {
 				const resident = await readResidentOrder(manager, orderUuid);
 				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
 			},
-			patchAndEnqueue: (orderUuid, payment) =>
-				enqueueOrderMutation(orderUuid, async () => {
-					const resident = await readResidentOrder(manager, orderUuid);
-					if (stopped || !resident) throw new Error('Offline payment order is not resident');
-					const payload = (resident.getLatest?.().payload ??
-						resident.payload) as EngineRecord<'orders'>['payload'];
-					const meta = cloneDeep(payload.meta_data ?? []);
-					const rows = upsertPaymentRow(readLedger(meta), payment);
-					const summary = derive(payload.total, rows, latest.current.methods, {
-						dp: dp(),
-					});
-					const meta_data = withLedger(meta, rows);
-					const result = {
-						...summary,
-						total: String(payload.total ?? '0'),
-						payment_method: summary.payment_method ?? '',
-					};
-					// This write takes the order off the till, as the mirror's below does.
-					const enterReceiptAfter = settlesSale(payment, result, dp())
-						? receiptEntryAfterWrite(orderUuid)
-						: null;
-					const written = await latest.current.recordLedger(resident, {
-						meta_data: isCompletingStatus(summary.status)
-							? await completionMetaFor(latest.current.ctx, meta_data, {})
-							: meta_data,
-						status: summary.status,
-					});
-					if (!written) throw new Error('Offline payment could not be saved');
-					// A store switch stopped this service and reset checkout mode meanwhile.
-					if (!stopped) enterReceiptAfter?.();
-					return result;
-				}),
+			// ADR 0040 PR A: an offline authorization is never written locally (device tiles are
+			// disabled offline); PR B queues it as a record command.
+			patchAndEnqueue: async () => {
+				throw new Error('offline_unavailable');
+			},
 			mirror: async (orderUuid, { payment, order }, poster) => {
 				let mirrored = false;
 				try {

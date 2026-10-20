@@ -47,6 +47,7 @@ import {
 	type RxdbSyncEngine,
 	setSyncEngineLogger,
 	type StoreScopeIdentity,
+	WRITTEN_BEFORE_PROTOCOL_3,
 } from '@wcpos/sync-engine';
 import {
 	REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE,
@@ -510,6 +511,25 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolea
 			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: { databaseName: outcome.databaseName, error: outcome.error },
 		});
+		return;
+	}
+	if (outcome.status === 'kept' && outcome.reason === WRITTEN_BEFORE_PROTOCOL_3) {
+		// ADR 0040: a protocol-2 queue is parked, never sent. It sits in Store health's log, at
+		// error on the first attempt of a process and then daily, naming what was never sent.
+		const unsent = remainingCount(outcome.remaining);
+		if (!isRetry || outcome.reportDue)
+			engineLogger.error(
+				`${unsent} changes from before this update were never sent and will not be`,
+				{
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					context: {
+						databaseName: outcome.databaseName,
+						reason: outcome.reason,
+						unsent,
+						orders: outcome.keptOrderUuids,
+					},
+				}
+			);
 		return;
 	}
 	if (outcome.status === 'kept') {

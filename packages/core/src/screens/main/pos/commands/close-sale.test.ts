@@ -1,0 +1,116 @@
+import type { EngineRecord } from '@wcpos/query';
+
+import { closeSale } from './close-sale';
+
+// The hook's dependencies; closeSale itself takes everything it needs as arguments.
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: () => ({}) }));
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
+jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => ({}) }));
+const mockPosterInput = jest.fn();
+const mockMirror = jest.fn(async () => undefined);
+const mockSettle = jest.fn(async () => undefined);
+jest.mock('@wcpos/query', () => {
+	class MoneyCommandError extends Error {
+		constructor(public reason: string) {
+			super(reason);
+		}
+	}
+	return {
+		MoneyCommandError,
+		moneyCommandPoster: (input: { post: (url: string, body: unknown) => Promise<unknown> }) => {
+			mockPosterInput(input);
+			return Object.assign((url: string, body: unknown) => input.post(url, body), {
+				sentRevision: () => 'sha256:sent',
+				settle: mockSettle,
+			});
+		},
+	};
+});
+jest.mock('@wcpos/query/mutations', () => ({
+	mirrorServerOrder: (...args: unknown[]) => mockMirror(...(args as [])),
+}));
+
+const order = {
+	uuid: 'order-1',
+	getLatest: () => ({ payload: { id: 42, total: '0.00', currency: 'EUR' } }),
+} as unknown as EngineRecord<'orders'>;
+const approval = { total: '10.00', currency: 'EUR' };
+const refusal = (status: number, code: string, data?: object) =>
+	Object.assign(new Error(code), {
+		response: { status, data: { code, message: `${code} says`, data } },
+	});
+function deps(post: jest.Mock, online = true) {
+	return { post, approval, provenance: async () => null, online };
+}
+
+beforeEach(() => jest.clearAllMocks());
+
+it('a zero-balance close carries the approval and is refused when the covered total changed', async () => {
+	const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+	const post = jest.fn(async () => {
+		throw new MoneyCommandError('order_changed');
+	});
+
+	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+
+	expect(mockPosterInput).toHaveBeenCalledWith(expect.objectContaining({ approval }));
+	expect(post).toHaveBeenCalledWith('orders/42/close', {});
+	expect(outcome).toEqual({ kind: 'order_changed' });
+	expect(mockMirror).not.toHaveBeenCalled();
+});
+
+it('a 2xx with a completion completes, mirroring the summary under the sent revision', async () => {
+	const summary = { status: 'completed' };
+	const post = jest.fn(async () => ({ data: { order: summary, completion: { n: 2, id: 'c2' } } }));
+
+	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+
+	expect(outcome).toEqual({ kind: 'completed', order: summary, completion: { n: 2, id: 'c2' } });
+	expect(mockMirror).toHaveBeenCalledWith({}, 'order-1', {
+		order: summary,
+		sentRevision: 'sha256:sent',
+	});
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
+
+it('balance outstanding mirrors the summary and says what is due', async () => {
+	const summary = { status: 'pos-partial', balance: '4.00' };
+	const post = jest.fn(async () => {
+		throw refusal(409, 'wcpos_balance_outstanding', { order: summary });
+	});
+
+	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+		kind: 'outstanding',
+		order: summary,
+	});
+	expect(mockMirror).toHaveBeenCalledWith(
+		{},
+		'order-1',
+		expect.objectContaining({ order: summary })
+	);
+});
+
+it.each([
+	[409, 'wcpos_payment_in_flight'],
+	[400, 'wcpos_insufficient_stock'],
+])('a %s %s is refused with the store message and never retried', async (status, code) => {
+	const post = jest.fn(async () => {
+		throw refusal(status, code);
+	});
+
+	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+		kind: 'refused',
+		code,
+		message: `${code} says`,
+	});
+	expect(post).toHaveBeenCalledTimes(1);
+});
+
+it('offline nothing is sent', async () => {
+	const post = jest.fn();
+	expect(await closeSale({} as never, {} as never, order, deps(post, false))).toEqual({
+		kind: 'offline',
+	});
+	expect(post).not.toHaveBeenCalled();
+	expect(mockPosterInput).not.toHaveBeenCalled();
+});
