@@ -217,6 +217,42 @@ it('reports a failed autoprint as PRINT101, and a manual print during it on its 
 	);
 });
 
+it('logs a cancelled report/closure print as debug and a real failure by its classified code, row only', async () => {
+	mockPrint
+		.mockRejectedValueOnce(new Error('Printing did not complete'))
+		.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	const logger = getLogger([]);
+	// The logger mock is shared across this file; start from a clean slate.
+	[logger.error, logger.warn, logger.debug].forEach((fn) => (fn as jest.Mock).mockClear());
+	mockToast.mockClear();
+
+	// The cashier closed the iOS print dialog: no coded row.
+	await act(async () => {
+		await expect(result.current.print()).rejects.toThrow('Printing did not complete');
+	});
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.debug).toHaveBeenCalledWith(
+		'Receipt print failed (cancelled)',
+		expect.objectContaining({ context: expect.objectContaining({ event: 'receipt.print_failed' }) })
+	);
+
+	// A real failure carries the classifier's code, and the host's inline error is the only UI.
+	await act(async () => {
+		await expect(result.current.print()).rejects.toThrow('busy');
+	});
+	expect(logger.error).toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT201' })
+	);
+	expect(logger.error).not.toHaveBeenCalledWith(
+		'Receipt print failed',
+		expect.objectContaining({ code: 'PRINT999' })
+	);
+	expect(mockToast).not.toHaveBeenCalled();
+});
+
 it('does not auto-print again when a paid tab is revisited', async () => {
 	const first = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
 	await act(async () => first.result.current.previewProps.handleLoad());

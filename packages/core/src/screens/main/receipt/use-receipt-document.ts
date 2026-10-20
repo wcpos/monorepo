@@ -5,15 +5,15 @@ import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/r
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { getReceiptPreviewPaperWidth } from './components/receipt-preview-viewport';
 import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
-import { reportPrintFailure } from '../hooks/use-print/print-failure';
+import { classifyPrintFailure, reportPrintFailure } from '../hooks/use-print/print-failure';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
@@ -283,19 +283,26 @@ export function useReceiptDocument({
 		},
 		[printReceipt, printDestination, document, selectedTemplate, t]
 	);
-	// For hosts that show their own inline error (reports, closures): the row only.
+	// For hosts that show their own inline error (reports, closures): the row only, no
+	// toast. A closed print dialog is a cancel (debug); a real failure carries its
+	// classified code (PRINT201/PRINT301) at that code's severity.
 	const print = React.useCallback(
 		() =>
-			runPrint((error) =>
-				getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
-					code: ERROR_CODES.PRINT_UNEXPECTED,
-					context: {
-						event: 'receipt.print_failed',
-						orderId: order?.uuid ?? orderId,
-						error: error instanceof Error ? error.message : String(error),
-					},
-				})
-			),
+			runPrint((error) => {
+				const logger = getLogger(['wcpos', 'pos', 'receipt']);
+				const context = {
+					event: 'receipt.print_failed',
+					orderId: order?.uuid ?? orderId,
+					error: getErrorMessage(error),
+				};
+				const failure = classifyPrintFailure(error);
+				if (failure.cancelled) {
+					logger.debug('Receipt print failed (cancelled)', { context });
+					return;
+				}
+				const level = ERROR_CATALOGUE[failure.code].severity === 'error' ? 'error' : 'warn';
+				logger[level]('Receipt print failed', { code: failure.code, context });
+			}),
 		[runPrint, order?.uuid, orderId]
 	);
 	// The receipt's Print button and the autoprint: a closed print dialog is a cancel
