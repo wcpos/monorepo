@@ -114,17 +114,27 @@ async function adoptFromServer(
 	siteUuid: string,
 	registerId: string
 ): Promise<void> {
+	// Binding proceeds on the local floor either way, and the closure queue re-adopts on
+	// `wcpos_closure_number_invalid`: self-healing, so info with no code. The transport's
+	// own row is debug, so this is the one row that names the fallback — and which step failed.
+	const logger = getLogger(['wcpos', 'register']);
+	let counters: RegisterCounters | null;
 	try {
 		const row = (await http.get(`registers/${registerId}`)).data as Register;
-		const counters = readCounters(row?.counters);
-		if (counters) await adoptCounters(userDB, siteUuid, registerId, counters);
+		counters = readCounters(row?.counters);
 	} catch (error) {
-		// Binding proceeds on the local floor, and the closure queue re-adopts on
-		// `wcpos_closure_number_invalid`: self-healing, so info with no code. The
-		// transport's own row is debug, so this is the one row that names the fallback.
-		getLogger(['wcpos', 'register']).info(
-			"Register counters not refreshed from the store; using this device's counters",
-			{ context: { registerId, error: getErrorMessage(error) } }
+		logger.info("Register counters not refreshed from the store; using this device's counters", {
+			context: { registerId, step: 'store-read', error: getErrorMessage(error) },
+		});
+		return;
+	}
+	if (!counters) return;
+	try {
+		await adoptCounters(userDB, siteUuid, registerId, counters);
+	} catch (error) {
+		logger.info(
+			"Register counters from the store could not be saved on this device; using this device's counters",
+			{ context: { registerId, step: 'local-adoption', error: getErrorMessage(error) } }
 		);
 	}
 }
