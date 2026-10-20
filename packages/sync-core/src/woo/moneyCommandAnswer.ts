@@ -17,6 +17,21 @@ export const RESENDABLE_MONEY_CODES: readonly string[] = [
 ];
 /** A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. */
 export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 408, 426, 429];
+/**
+ * The 5xx answers the store documents as its own decision with no money moved, so a re-send
+ * cannot take money and the journal must let the cashier move on. Free `next`
+ * `Payments/Contract/Gateway_Submission.php`: 501 `wcpos_capture_mode_unsupported` is answered
+ * before anything runs (:54); 502 `wcpos_provider_error` is the gateway's own refusal, after
+ * which the store restores the previous method, marks the attempt `cancelled` and forgets the
+ * command (`restore_method`, :266-281, :517-530), so a re-send of it is refused 409
+ * `wcpos_payment_conflict` (:87). The one exception the server names, a gateway that throws
+ * AFTER dispatch, leaves its attempt `sent` (:266) behind the same 502; a re-send would only
+ * replay that `sent`, and the store's log names the attempt for the operator.
+ */
+export const DEFINITIVE_SERVER_ERROR_CODES: readonly string[] = [
+	'wcpos_capture_mode_unsupported',
+	'wcpos_provider_error',
+];
 
 /** Refusals for which the server STORED the record as a `failed` row, and what they mean. */
 export const PAYMENT_ROW_REFUSALS = {
@@ -62,7 +77,8 @@ export function moneyRefusalOf(error: unknown): MoneyRefusal | null {
 /** Whether the answer settles the command (the server decided; a re-send repeats it). */
 export function isDefinitiveMoneyRefusal(refusal: MoneyRefusal | null): boolean {
 	if (!refusal?.code || refusal.status === undefined) return false;
-	if (refusal.status < 400 || refusal.status >= 500) return false;
+	if (refusal.status >= 500) return DEFINITIVE_SERVER_ERROR_CODES.includes(refusal.code);
+	if (refusal.status < 400) return false;
 	if (RESENDABLE_MONEY_CODES.includes(refusal.code)) return false;
 	// A 403 that names a contract code is the store's decision, not a session wall: the store
 	// refuses a disabled method with 403 `wcpos_payment_method_disabled` on submit and on record

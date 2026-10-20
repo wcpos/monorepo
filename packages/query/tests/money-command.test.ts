@@ -30,7 +30,7 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 }
 
 /** `lose`: stored, answer lost. `drop`: lost before the store saw it. `503`: refused unstored. */
-type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale';
+type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -63,6 +63,7 @@ class FakeStore {
 		if (mode === 'locked') throw httpError(409, 'wcpos_payment_locked');
 		if (mode === '403') throw httpError(403, 'rest_forbidden');
 		if (mode === '503') throw httpError(503, 'http_service_unavailable');
+		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
 		if (mode === 'drop') throw new Error('Network Error');
 		const { revision, command_id, ...rest } = body;
 		const route = classifyMoneyRoute(url)!;
@@ -340,6 +341,19 @@ it('a refused pre-flight push ends as preflight_failed: nothing is sent and no e
 	expect(error).toMatchObject({ reason: 'preflight_failed', cause: refused });
 	expect(store.post).not.toHaveBeenCalled();
 	expect(await entries()).toEqual([]);
+});
+
+it('a 502 wcpos_provider_error settles the submit: the store took nothing and the cashier can choose again', async () => {
+	store.modes = ['provider'];
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+	).rejects.toThrow('wcpos_provider_error');
+	expect(await entries()).toEqual([]);
+	store.modes = ['503'];
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-2', values: {} })
+	).rejects.toThrow('http_service_unavailable');
+	expect(await entries()).toHaveLength(1);
 });
 
 it('a 403 leaves the entry in place', async () => {

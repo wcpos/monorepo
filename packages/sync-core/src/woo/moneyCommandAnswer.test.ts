@@ -15,6 +15,8 @@ describe('the money command answer rule', () => {
 		[422, 'wcpos_fields_invalid'],
 		[422, 'wcpos_some_code_nobody_listed'],
 		[403, 'wcpos_payment_method_disabled'],
+		[502, 'wcpos_provider_error'],
+		[501, 'wcpos_capture_mode_unsupported'],
 	])('a %i %s is definitive', (status, code) => {
 		expect(isDefinitiveMoneyRefusal(moneyRefusalOf(wpError(status, code)))).toBe(true);
 	});
@@ -28,7 +30,8 @@ describe('the money command answer rule', () => {
 		[426, 'wcpos_update_required'],
 		[429, 'too_many_requests'],
 		[500, 'internal_server_error'],
-		[502, 'wcpos_provider_error'],
+		[502, 'bad_gateway'],
+		[503, 'wcpos_some_code_nobody_listed'],
 	])('a %i %s is not definitive', (status, code) => {
 		expect(isDefinitiveMoneyRefusal(moneyRefusalOf(wpError(status, code)))).toBe(false);
 	});

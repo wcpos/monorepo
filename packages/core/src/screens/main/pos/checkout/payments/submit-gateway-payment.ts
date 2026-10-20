@@ -116,8 +116,10 @@ export async function submitGatewayPayment(
 						: { _form: response?.data?.message ?? '' },
 			};
 		}
-		// The money answer rule (sync-core): a named 4xx is the store's decision; a session or
-		// proxy answer is not, and the journal keeps the submit for a re-send.
+		// The money answer rule (sync-core): a named 4xx is the store's decision, and so is a 502
+		// `wcpos_provider_error`, the gateway's own refusal (a notice, an exception, a redirect
+		// elsewhere: Free took nothing and put the previous method back). The poster has settled
+		// the journal for both. A session or proxy answer is not, and the journal keeps the submit.
 		if (code && isDefinitiveMoneyRefusal(moneyRefusalOf(error))) {
 			return {
 				kind: 'refused',
@@ -125,11 +127,6 @@ export async function submitGatewayPayment(
 				message: refusalMessage(response, code),
 				provider: code === 'wcpos_provider_error',
 			};
-		}
-		// A 502 is the gateway's own refusal (a notice, an exception, a redirect elsewhere):
-		// Free took nothing and put the previous method back, so it is a refusal, not an outage.
-		if (code === 'wcpos_provider_error') {
-			return { kind: 'refused', code, message: refusalMessage(response, code), provider: true };
 		}
 		throw error;
 	}
