@@ -587,10 +587,15 @@ it('a second stale leaves the entry; 422 command_conflict is definitive and neve
 
 it('a 2xx answer’s revision is sent by the next command unless the resident adopted a server revision after the answer', async () => {
 	refreshWorks = false;
+	const stamped = (await residentJSON()).sync.revision;
 	const post = poster();
 	await post('orders/5/payments', { payment: cash('row-1', '10.00') });
 	await post.settle();
 	const answered = store.revision;
+	// The answer's revision lives in the chain, never on the resident: a stamp without its
+	// document would make the next pull skip the server's payload (the equal-stamp skip).
+	expect((await residentJSON()).sync.revision).toBe(stamped);
+	expect(answered).not.toBe(stamped);
 	await post('orders/5/payments', { payment: cash('row-2', '10.00') });
 	expect(sentBodies()[1].revision).toBe(answered);
 	await post.settle();
