@@ -6,6 +6,10 @@ import { completionMetaFor } from '../checkout/sale-completion';
 jest.mock('../checkout/sale-completion', () => ({
 	completionMetaFor: jest.fn(async () => [{ key: '_wcpos_sale_counter', value: '7' }]),
 }));
+const mockResolve = jest.fn(async (..._args: unknown[]) => undefined);
+jest.mock('@wcpos/query/store-local', () => ({
+	resolveCompletionAttempt: (...args: unknown[]) => mockResolve(...args),
+}));
 
 const payload = { id: 42, total: '0.00', status: 'pos-partial', meta_data: [] };
 const order = {
@@ -27,7 +31,8 @@ function run(online: boolean) {
 		online: () => online,
 		close: jest.fn(async () => ({ kind: 'completed' as const, order: null, completion: null })),
 	};
-	return { input, written, result: writeZeroBalanceCompletion({} as never, input as never) };
+	const ctx = { storeDB: 'store-db' } as never;
+	return { input, written, result: writeZeroBalanceCompletion(ctx, input as never) };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -59,4 +64,26 @@ it('offline refuses before writing or allocating a sale counter', async () => {
 	expect(completionMetaFor).not.toHaveBeenCalled();
 	expect(input.write).not.toHaveBeenCalled();
 	expect(input.close).not.toHaveBeenCalled();
+});
+
+// The callers journal the completing sale first: a close that cannot finish it resolves that
+// attempt, except `outstanding` (a settling leg may still cover it) and a close with no answer.
+it.each([
+	['offline', null, true],
+	['refused', { kind: 'refused', code: 'wcpos_invalid_transition', message: 'm' }, true],
+	['order_changed', { kind: 'order_changed' }, true],
+	['outstanding', { kind: 'outstanding', order: null }, false],
+])('a %s close (%j) resolves the completion attempt: %s', async (kind, closed, resolves) => {
+	const { input, result } = run(kind !== 'offline');
+	if (closed) input.close.mockResolvedValueOnce(closed as never);
+	await result;
+	expect(mockResolve).toHaveBeenCalledTimes(resolves ? 1 : 0);
+	if (resolves) expect(mockResolve).toHaveBeenCalledWith('store-db', 'order-1');
+});
+
+it('a close with no answer keeps the completion attempt for the re-send', async () => {
+	const { input, result } = run(true);
+	input.close.mockRejectedValueOnce(new Error('Network Error'));
+	await expect(result).rejects.toThrow('Network Error');
+	expect(mockResolve).not.toHaveBeenCalled();
 });

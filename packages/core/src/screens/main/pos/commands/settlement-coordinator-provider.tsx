@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	type EngineWarning,
 	settleAggregate,
@@ -74,6 +75,14 @@ export function SettlementCoordinatorProvider() {
 	);
 	const coverage = useObservableEagerState(coverage$);
 	const [inputs$] = React.useState(() => new BehaviorSubject(inputs));
+	// A boundary deferred offline is retried when the till reconnects.
+	const [reconnected$] = React.useState(() => new Subject<void>());
+	const online = useOnlineStatus().status === 'online-website-available';
+	const wasOnline = React.useRef(online);
+	React.useEffect(() => {
+		if (online && !wasOnline.current) reconnected$.next();
+		wasOnline.current = online;
+	}, [online, reconnected$]);
 	const [ratesReady$] = React.useState(
 		() => new BehaviorSubject<RatesReady>({ ready: false, generation: 0 })
 	);
@@ -86,6 +95,7 @@ export function SettlementCoordinatorProvider() {
 		const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(null);
 		const coordinator = createSettlementCoordinator({
 			inputs$,
+			reconnected$,
 			completionChanges$: registerId
 				? observeOpenSessionPresence(saleContext.storeDB, { registerId })
 				: undefined,
@@ -211,6 +221,7 @@ export function SettlementCoordinatorProvider() {
 		report,
 		t,
 		inputs$,
+		reconnected$,
 		ratesReady$,
 		coverage$,
 		saleContext,
