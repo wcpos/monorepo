@@ -749,7 +749,7 @@ describe('useTenderFlow', () => {
 	it('completes a zero-balance order without recording a payment row', async () => {
 		mockPayload = { id: 42, total: '0.00', meta_data: [] };
 		mockManualPost.mockResolvedValue({
-			data: { order: { status: 'completed' }, completion: null },
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
 
@@ -1159,6 +1159,20 @@ describe('useTenderFlow', () => {
 				context: expect.objectContaining({ type: 'payment.void-unknown' }),
 			})
 		);
+	});
+
+	it('an offline cancel says it needs the store and never promises a hand refund', async () => {
+		mockVoidPayments.mockResolvedValue({ kind: 'offline', paymentIds: ['payment-1'] });
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.void_needs_connection',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
 	});
 
 	it('does not record when the storage money-path guard blocks the take', async () => {
@@ -1997,7 +2011,9 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 it('zero balance writes its provenance once, then closes', async () => {
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockPayload = { id: 42, total: '0.00', meta_data: [] };
-	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed' }, completion: null } });
+	mockManualPost.mockResolvedValue({
+		data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+	});
 	mockLocalPatch.mockClear();
 	mockLocalPatch.mockResolvedValue({ document: order });
 	mockBlockIfDegraded.mockReturnValue(false);

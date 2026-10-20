@@ -362,6 +362,7 @@
 	"pos_checkout.try_again": "Try again",
 	"pos_checkout.close_balance_outstanding": "The store says {balance} is still due on this sale.",
 	"pos_checkout.close_needs_connection": "Completing this sale needs the store. Try again when you are online.",
+	"pos_checkout.void_needs_connection": "Cancelling these payments needs the store. Nothing was cancelled; try again when you are online.",
 	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
 	"pos_checkout.choose_another_way": "Choose another way",
 	"auth.connect_another_store": "Connect another store",

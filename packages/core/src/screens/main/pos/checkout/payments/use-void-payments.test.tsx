@@ -126,7 +126,7 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 	});
 	const sweep = () => mockLocalPatch.mock.calls.map(([{ data }]) => data).find((d) => d.fee_lines);
 
-	// ADR 0040 PR A: an offline void is refused, so the leg and its fee both stay.
+	// ADR 0040 PR A: an offline void is not sent, so the leg and its fee both stay.
 	it('offline: nothing is voided, so the fee stays with its leg', async () => {
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
@@ -186,7 +186,9 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('a row the store refused to void keeps its fee', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockRejectedValue({ response: { data: { message: 'no' } } });
+		mockPost.mockRejectedValue({
+			response: { status: 422, data: { code: 'wcpos_invalid_transition', message: 'no' } },
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
@@ -202,7 +204,9 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		const failed = { ...fees[1], total: '0.03', meta_data: [posData('payment-0')] };
 		payload = { ...payload, total: '12.11', fee_lines: [...fees, orphan, failed] };
 		mockStatus = 'online-website-available';
-		mockPost.mockRejectedValue({ response: { data: { message: 'no' } } });
+		mockPost.mockRejectedValue({
+			response: { status: 422, data: { code: 'wcpos_invalid_transition', message: 'no' } },
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);

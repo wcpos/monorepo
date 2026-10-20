@@ -79,8 +79,9 @@ describe('voidPayments', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
-	// ADR 0040 PR A: a void the server cannot hear is refused; nothing is voided locally.
-	it('offline voids nothing and reports every row refused', async () => {
+	// ADR 0040 PR A: a void the server cannot hear is not sent; nothing is voided locally, and
+	// no row is reported refused (the store never answered, so no hand refund is promised).
+	it('offline voids nothing and reports its own outcome, never a refusal', async () => {
 		const deps = createDeps(false);
 		const rows = [
 			payment('pending', 'pending'),
@@ -92,15 +93,8 @@ describe('voidPayments', () => {
 		const result = await voidPayments(order(rows), deps);
 
 		expect(result).toEqual({
-			kind: 'voided',
-			via: 'offline',
-			rows: [],
-			failed: ['pending', 'authorized', 'captured'].map((paymentId) => ({
-				paymentId,
-				message: 'offline_unavailable',
-				refused: true,
-			})),
-			order: null,
+			kind: 'offline',
+			paymentIds: ['pending', 'authorized', 'captured'],
 		});
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
@@ -180,10 +174,16 @@ describe('voidPayments', () => {
 		const voidedFirst = { ...first, status: 'voided' as const };
 		deps.post
 			.mockResolvedValueOnce({ data: { payment: voidedFirst } })
-			.mockRejectedValueOnce({ response: { data: { message: 'Provider refused the void' } } })
+			.mockRejectedValueOnce({
+				response: {
+					status: 422,
+					data: { code: 'wcpos_invalid_transition', message: 'Provider refused the void' },
+				},
+			})
 			.mockResolvedValueOnce({ data: {} });
 
 		const result = await voidPayments(order([first, refused, last]), deps);
+		if (result.kind !== 'voided') throw new Error('expected an online void');
 		const written = deps.mirror.mock.calls.map(([answer]) => answer.payment);
 
 		expect(written[0]).toEqual(voidedFirst);
@@ -221,6 +221,28 @@ describe('voidPayments', () => {
 		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
+
+	// The journal keeps each of these for a re-send (sync-core's money answer rule): the void may
+	// yet apply, so none is a refusal and the cashier is never told to refund by hand.
+	it.each([
+		[409, 'wcpos_payment_locked'],
+		[401, 'rest_not_logged_in'],
+		[403, 'rest_forbidden'],
+		[408, 'request_timeout'],
+		[426, 'wcpos_update_required'],
+		[429, 'too_many_requests'],
+		[503, 'http_service_unavailable'],
+	])('a %i %s is unknown, never refused', async (status, code) => {
+		const deps = createDeps();
+		deps.post.mockRejectedValueOnce({ response: { status, data: { code, message: code } } });
+
+		const result = await voidPayments(order([payment('held', 'captured')]), deps);
+
+		expect(result).toMatchObject({
+			kind: 'voided',
+			failed: [{ paymentId: 'held', message: code, refused: false }],
+		});
+	});
 });
 it('cannot void an offline device authorization before it settles', async () => {
 	const deps = createDeps();
@@ -228,6 +250,6 @@ it('cannot void an offline device authorization before it settles', async () => 
 		order([{ ...payment('device', 'authorized'), capture_mode: 'device', recorded_offline: true }]),
 		deps
 	);
-	expect(result.failed).toHaveLength(1);
+	expect(result).toMatchObject({ kind: 'voided', failed: [expect.anything()] });
 	expect(deps.post).not.toHaveBeenCalled();
 });

@@ -1619,6 +1619,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			const outcome = await voidPayments(order);
+			// Nothing reached the store: no leg was voided and none was refused, so the cashier is
+			// told the cancel needs a connection, never to refund by hand (the legs are still held).
+			if (outcome.kind === 'offline') {
+				logger.info(t('pos_checkout.void_needs_connection'), {
+					showToast: true,
+					context: { ...orderContext, paymentId: outcome.paymentIds.join(', ') },
+				});
+				return;
+			}
 			for (const row of outcome.rows) {
 				logger.info('Payment voided', {
 					actor,
