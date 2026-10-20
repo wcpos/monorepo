@@ -151,9 +151,13 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
  * cashier is watching from one completing in the background.
  */
 let watchedTender: { uuid: string; autoShowReceipt: boolean } | null = null;
+// Bumped by every registration, never by a cleanup: the write's own unmount leaves it, a
+// switch to another order (which mounts that order's tender) moves it.
+let tenderGeneration = 0;
 export function watchTender(uuid: string, autoShowReceipt: boolean) {
 	const entry = { uuid, autoShowReceipt };
 	watchedTender = entry;
+	tenderGeneration++;
 	return () => {
 		if (watchedTender === entry) watchedTender = null;
 	};
@@ -164,14 +168,18 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
  * unmounts the tender whose settlement subscriber was the only caller of `selectReceipt`
  * (its cleanup also clears the watch), so the decision is taken now and acted on after:
  * the receipt is entered and selected when the cashier was watching this order's tender,
- * receipts show automatically, and no other receipt was selected in between. Otherwise
- * nothing happens here and the background completion enters it unselected, as before.
+ * receipts show automatically, and the cashier did not move on in between: no other receipt
+ * selected, no other tender registered (a tab switch clears the selection, so only the
+ * registration shows it). Otherwise nothing happens here and the background completion
+ * enters it unselected, as before.
  */
 export function receiptEntryAfterWrite(uuid: string): () => void {
 	const select = watchedTender?.uuid === uuid && watchedTender.autoShowReceipt;
 	const selection = snapshot.selectedReceiptOrder;
+	const generation = tenderGeneration;
 	return () => {
-		if (select && snapshot.selectedReceiptOrder === selection) enterReceipt(uuid);
+		if (select && snapshot.selectedReceiptOrder === selection && tenderGeneration === generation)
+			enterReceipt(uuid);
 	};
 }
 export function finishReceipt(uuid: string) {

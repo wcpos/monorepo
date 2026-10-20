@@ -623,6 +623,11 @@ describe('a server capture of the order in checkout', () => {
 		['receipts do not show automatically', () => watch('completed-order', false), {}],
 		['the cashier is on another order', () => watch('other-order'), {}],
 		[
+			'the cashier switched to another order during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => void watchTender('other-order', true) },
+		],
+		[
 			'the cashier selected another receipt during the write',
 			() => watch('completed-order'),
 			{ duringWrite: () => selectReceipt('other-sale') },
