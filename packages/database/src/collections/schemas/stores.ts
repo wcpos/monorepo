@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 18,
+	version: 19,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -606,6 +606,23 @@ export const storesLiteral = {
 			type: 'string',
 			enum: ['auto', 'compact', 'regular', 'spacious'],
 			default: 'auto',
+		},
+		icons: {
+			title: 'App icons',
+			description:
+				'Which icon family the app draws. Device-local beside the theme, never server-owned.',
+			type: 'string',
+			enum: [
+				'fontawesome',
+				'tabler',
+				'tabler-2',
+				'hugeicons',
+				'lucide',
+				'phosphor',
+				'iconoir',
+				'solar',
+			],
+			default: 'tabler',
 		},
 		date_created_gmt: {
 			type: 'string',

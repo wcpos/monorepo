@@ -21,7 +21,17 @@ jest.mock('@wcpos/components/label', () => ({
 jest.mock('@wcpos/components/form', () => ({ FormItem: () => null, FormLabel: () => null }));
 
 const mockLocalPatch = jest.fn().mockResolvedValue({});
-const store: { theme: string; scale?: string } = { theme: 'light' };
+const store: { theme: string; scale?: string; icons?: string } = { theme: 'light' };
+const mockIconSets = [
+	'fontawesome',
+	'tabler',
+	'tabler-2',
+	'hugeicons',
+	'lucide',
+	'phosphor',
+	'iconoir',
+	'solar',
+];
 
 let mockTheme = 'light';
 let mockAdaptive = false;
@@ -31,6 +41,14 @@ jest.mock('uniwind', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+	IconSetProvider: ({ set, children }: React.PropsWithChildren<{ set: string }>) => (
+		<span data-set={set}>{children}</span>
+	),
+	// A getter: the factory is hoisted above the list it hands out.
+	get ICON_SET_IDS() {
+		return mockIconSets;
+	},
+	DEFAULT_ICON_SET: 'tabler',
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(document: T, selector: (value: T) => unknown) => selector(document),
@@ -48,6 +66,7 @@ jest.mock('./components/settings-section', () => ({
 beforeEach(() => {
 	jest.clearAllMocks();
 	store.scale = undefined;
+	store.icons = undefined;
 	mockTheme = 'light';
 	mockAdaptive = false;
 });
@@ -95,6 +114,56 @@ describe('the Scale row', () => {
 		fireEvent.click(getByTestId('settings-scale-auto'));
 		expect(getByTestId('settings-scale-auto').getAttribute('aria-checked')).toBe('true');
 		expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
+});
+
+describe('the Icons section', () => {
+	it('offers the eight sets in order, Tabler 1.5 selected by default', () => {
+		const { getByTestId, getAllByTestId } = render(<ThemeSettings />);
+
+		expect(
+			getAllByTestId(/^settings-icons-/).map((row) => row.getAttribute('data-testid'))
+		).toEqual(mockIconSets.map((id) => `settings-icons-${id}`));
+		mockIconSets.forEach((id) => {
+			const row = getByTestId(`settings-icons-${id}`);
+			expect(row.getAttribute('role')).toBe('radio');
+			expect(row.getAttribute('aria-checked')).toBe(String(id === 'tabler'));
+			expect(!!row.querySelector('[data-icon="check"]')).toBe(id === 'tabler');
+			expect(row.textContent).toBe(`settings.icons.${id}`);
+		});
+	});
+
+	// Each row draws its strip in its own family, whatever the app draws.
+	it("draws six sample glyphs inside each row in that row's set", () => {
+		const { getByTestId } = render(<ThemeSettings />);
+
+		mockIconSets.forEach((id) => {
+			const strip = getByTestId(`settings-icons-${id}`).querySelector('[data-set]')!;
+			expect(strip.getAttribute('data-set')).toBe(id);
+			expect(
+				Array.from(strip.querySelectorAll('[data-icon]')).map((icon) =>
+					icon.getAttribute('data-icon')
+				)
+			).toEqual(['cart', 'search', 'viewGrid', 'viewList', 'settings', 'confirmed']);
+		});
+	});
+
+	it('shows the stored set', () => {
+		store.icons = 'phosphor';
+
+		const { getByTestId } = render(<ThemeSettings />);
+
+		expect(getByTestId('settings-icons-phosphor').getAttribute('aria-checked')).toBe('true');
+		expect(getByTestId('settings-icons-tabler').getAttribute('aria-checked')).toBe('false');
+	});
+
+	it('persists the pressed set through localPatch and marks it saved', async () => {
+		const { getByTestId } = render(<ThemeSettings />);
+
+		await act(async () => fireEvent.click(getByTestId('settings-icons-lucide')));
+
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'lucide' } });
+		expect(getByTestId('settings-saved-icons').textContent).toBe('settings.saved');
 	});
 });
 

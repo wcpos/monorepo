@@ -3,8 +3,16 @@ import { View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
-import { Icon, IconName } from '@wcpos/components/icon';
+import {
+	DEFAULT_ICON_SET,
+	Icon,
+	ICON_SET_IDS,
+	IconName,
+	type IconSetId,
+	IconSetProvider,
+} from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
@@ -187,6 +195,80 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	);
 }
 
+/** Six glyphs met on every screen, enough to judge a family at a glance. */
+const ICON_SAMPLES: IconName[] = [
+	'cart',
+	'search',
+	'viewGrid',
+	'viewList',
+	'settings',
+	'confirmed',
+];
+
+/**
+ * The Icons section: one row per candidate family, its samples drawn in that
+ * family. The choice reaches the screens through `IconSetSettingProvider`.
+ */
+function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
+	const { store } = useStoreSession();
+	const markSaved = useMarkSaved();
+	const icons = useDocField(store, (latest) => latest.icons) ?? DEFAULT_ICON_SET;
+
+	const handleIconsChange = React.useCallback(
+		async (value: IconSetId) => {
+			try {
+				const result = await patchStoreSettings(store, { icons: value }, t);
+				if (result) markSaved(['icons']);
+			} catch (error) {
+				console.error('Failed to persist selected icons', error);
+			}
+		},
+		[t, store, markSaved]
+	);
+
+	return (
+		<SettingsSection title={t('settings.icons')}>
+			<View className="relative self-start">
+				<Text className="text-muted-foreground text-xs">{t('settings.icons.description')}</Text>
+				{/* Out of flow beside the description, like the theme's: the rows never move. */}
+				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
+					<SavedMark name="icons" />
+				</View>
+			</View>
+			<View className="pt-2">
+				{ICON_SET_IDS.map((id) => {
+					const selected = icons === id;
+					return (
+						<ListRow
+							key={id}
+							testID={`settings-icons-${id}`}
+							// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
+							accessibilityRole="radio"
+							aria-checked={selected}
+							selected={selected}
+							onPress={() => {
+								void handleIconsChange(id);
+							}}
+							// Label left, strip right; the strip wraps under the label on a phone.
+							bodyClassName="flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2"
+							trailing={selected ? <Icon name="check" className="text-primary" /> : undefined}
+						>
+							<Text className="text-sm font-medium">{t(`settings.icons.${id}`)}</Text>
+							<IconSetProvider set={id}>
+								<HStack className="flex-wrap gap-3">
+									{ICON_SAMPLES.map((name) => (
+										<Icon key={name} name={name} size="lg" className="text-foreground" />
+									))}
+								</HStack>
+							</IconSetProvider>
+						</ListRow>
+					);
+				})}
+			</View>
+		</SettingsSection>
+	);
+}
+
 /**
  * Theme Settings Component
  *
@@ -284,6 +366,7 @@ function ThemeSettingsContent() {
 			<SettingsSection>
 				<ScaleRow t={t} />
 			</SettingsSection>
+			<IconsSection t={t} />
 		</VStack>
 	);
 }

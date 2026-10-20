@@ -12,6 +12,7 @@
 		"./extensions/hotkeys": "./src/extensions/hotkeys/index.ts",
 		"./extensions/slots": "./src/extensions/slots/index.ts",
 		"./contexts/app-state": "./src/contexts/app-state/index.tsx",
+		"./contexts/icon-set": "./src/contexts/icon-set/index.tsx",
 		"./contexts/hydration-providers": "./src/contexts/hydration-providers.tsx",
 		"./contexts/merchant-toast": "./src/contexts/merchant-toast.ts",
 		"./contexts/persisted-state": "./src/contexts/persisted-state.tsx",

@@ -237,6 +237,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			// Auto — resolveStep falls back to the window — so nothing is written.
 			return oldDoc;
 		},
+		19(oldDoc: StoreDocumentType) {
+			// v19 adds the optional `icons` family beside `scale`. Absent means the
+			// default set — the provider falls back to it — so nothing is written.
+			return oldDoc;
+		},
 	},
 };
 

@@ -48,7 +48,25 @@ describe('stores migration strategy', () => {
 		expect(migrated).toBe(oldStore);
 		expect((migrated as { scale?: string }).scale).toBeUndefined();
 		expect(storesLiteral.properties.scale.default).toBe('auto');
-		expect(storesLiteral.version).toBe(18);
+		expect(storesLiteral.version).toBeGreaterThanOrEqual(18);
+	});
+
+	// v19 adds the per-store `icons` family. Also a pass-through: an absent value
+	// reads as the default set, which the schema defaults to and the provider falls
+	// back to, so no document is rewritten to gain it.
+	it('migration 19 passes a version-18 document through with no icons, which reads as tabler', async () => {
+		const { userCollections } = await import('./index');
+		const { storesLiteral } = await import('./schemas/stores');
+		const migrate = userCollections.stores.migrationStrategies?.[19];
+		if (!migrate) throw new Error('stores migration 19 missing');
+		const oldStore = { localID: 'store-1', theme: 'dark', scale: 'compact' };
+
+		const migrated = migrate(oldStore as never, undefined as never);
+
+		expect(migrated).toBe(oldStore);
+		expect((migrated as { icons?: string }).icons).toBeUndefined();
+		expect(storesLiteral.properties.icons.default).toBe('tabler');
+		expect(storesLiteral.version).toBe(19);
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier
@@ -57,6 +75,7 @@ describe('stores migration strategy', () => {
 		const { SERVER_OWNED_STORE_FIELDS } = await import('./schemas/stores');
 
 		expect(SERVER_OWNED_STORE_FIELDS as readonly string[]).not.toContain('scale');
+		expect(SERVER_OWNED_STORE_FIELDS as readonly string[]).not.toContain('icons');
 		expect(SERVER_OWNED_STORE_FIELDS as readonly string[]).not.toContain('theme');
 	});
 
