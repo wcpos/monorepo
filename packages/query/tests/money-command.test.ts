@@ -13,6 +13,7 @@ import {
 	classifyMoneyRoute,
 	MoneyCommandError,
 	moneyCommandPoster,
+	recoverMoneyCommands,
 	resendOpenCommands,
 	retireSettledChains,
 } from '../src/commands/money-command';
@@ -704,6 +705,37 @@ it('a chain with an open entry is never retired by a later adoption', async () =
 	await adoptStore(false);
 	await retireSettledChains(runtime, storeDB);
 	expect(await chain()).not.toBeNull();
+});
+
+it('the store-session recovery re-sends a sent, unanswered command with no tender on screen, and settles it', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	expect(await entries()).toHaveLength(1);
+	// No tender: the pull adopted the completed sale and it left the open orders.
+	const recovered = await recoverMoneyCommands(runtime, storeDB, { post: store.post });
+	expect(recovered).toEqual([
+		{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
+	]);
+	expect(store.completions).toBe(1);
+	expect(await entries()).toEqual([]);
+});
+
+it('the store-session recovery leaves a command on the wire from this process to its sender', async () => {
+	let answer!: () => void;
+	const held = new Promise<void>((resolve) => (answer = resolve));
+	const sending = poster({
+		post: async (url, body) => {
+			await held;
+			return store.post(url, body);
+		},
+	})('orders/5/close', {});
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await Promise.resolve();
+	expect((await entries())[0]?.sentAt).not.toBeNull();
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	answer();
+	await sending;
+	expect(store.post).toHaveBeenCalledTimes(1);
 });
 
 it('the status poll passes through without an envelope', async () => {

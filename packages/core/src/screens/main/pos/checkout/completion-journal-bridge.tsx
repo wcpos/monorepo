@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { recoverMoneyCommands, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -17,6 +18,7 @@ import {
 } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	getTerminalPaymentsServiceStartVersion,
 	subscribeTerminalPaymentsServiceStart,
@@ -37,11 +39,24 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
  */
 const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
-/** Replays outstanding finishes at store-session start, never collecting or pushing money. */
+/**
+ * Replays outstanding finishes at store-session start, never collecting money. First, at start
+ * and on every reconnect, it re-sends the money commands that were sent and never answered
+ * (ADR 0040 §1.3): a pull can adopt a sale completed by such a command and take it out of the
+ * open orders, so no tender is left to press Try again. An answer that completes the sale then
+ * finishes it here (receipt and audit) through the completion journal.
+ */
 export function SaleCompletionBridge(): null {
 	const { storeDB } = useStoreSession();
 	const manager = useQueryRuntime();
 	const ctx = useSaleContext();
+	const http = useRestHttpClient();
+	const httpRef = React.useRef(http);
+	const online = useOnlineStatus().status === 'online-website-available';
+	const onlineRef = React.useRef(online);
+	React.useLayoutEffect(() => {
+		httpRef.current = http;
+	}, [http]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -53,7 +68,15 @@ export function SaleCompletionBridge(): null {
 		ctx: typeof ctx;
 		startVersion: number;
 		stopped: boolean;
+		reconnect: () => void;
 	} | null>(null);
+
+	// A reconnect re-sends what the outage left unanswered, then finishes what it completed.
+	React.useEffect(() => {
+		const was = onlineRef.current;
+		onlineRef.current = online;
+		if (online && !was) session.current?.reconnect();
+	}, [online]);
 
 	// The journal belongs to the external store session, not a checkout screen.
 	React.useEffect(() => {
@@ -72,7 +95,7 @@ export function SaleCompletionBridge(): null {
 				previous.stopped = true;
 			};
 		}
-		const current = { storeDB, manager, ctx, startVersion, stopped: false };
+		const current = { storeDB, manager, ctx, startVersion, stopped: false, reconnect: () => {} };
 		session.current = current;
 		/**
 		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
@@ -135,10 +158,27 @@ export function SaleCompletionBridge(): null {
 				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) => await readResidentOrder(manager, uuid);
-		const replay = async () => {
+		/** The orders whose unanswered commands a re-send has now answered. */
+		const recover = async (): Promise<ReadonlySet<string>> => {
+			try {
+				const recovered = await recoverMoneyCommands(manager, storeDB, {
+					post: (url, body) => httpRef.current.post(url, body),
+				});
+				return new Set(
+					recovered.filter(({ answers }) => answers.length > 0).map(({ orderUuid }) => orderUuid)
+				);
+			} catch (error) {
+				logger.debug('Could not re-send unanswered money commands', {
+					context: { error: String(error) },
+				});
+				return new Set();
+			}
+		};
+		const replay = async (only?: ReadonlySet<string>) => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {
 				if (current.stopped) return;
+				if (only && !only.has(uuid)) continue;
 				try {
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
@@ -248,11 +288,25 @@ export function SaleCompletionBridge(): null {
 				}
 			}
 		};
-		void replay().catch((error: unknown) => {
-			logger.debug('Could not read pending sale completions', {
-				context: { error: String(error) },
+		// One run at a time: a reconnect during the start's replay waits for it.
+		let queue: Promise<void> = Promise.resolve();
+		const run = (task: () => Promise<void>) => {
+			queue = queue.then(task).catch((error: unknown) => {
+				logger.debug('Could not read pending sale completions', {
+					context: { error: String(error) },
+				});
 			});
+		};
+		run(async () => {
+			if (onlineRef.current) await recover();
+			if (!current.stopped) await replay();
 		});
+		current.reconnect = () =>
+			run(async () => {
+				if (current.stopped) return;
+				const answered = await recover();
+				if (answered.size > 0 && !current.stopped) await replay(answered);
+			});
 		return () => {
 			current.stopped = true;
 		};

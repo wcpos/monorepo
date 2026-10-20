@@ -45,7 +45,17 @@ jest.mock('../../../../services/terminal-payments', () => ({
 }));
 let mockManager = {};
 let mockContext: SaleContext;
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => mockManager }));
+const mockRecover = jest.fn();
+const mockHttp = { post: jest.fn() };
+let mockOnline = 'online-website-available';
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => mockManager,
+	recoverMoneyCommands: (...args: unknown[]) => mockRecover(...args),
+}));
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnline }),
+}));
 jest.mock('./hooks/use-sale-context', () => ({ useSaleContext: () => mockContext }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockContext.storeDB }),
@@ -80,6 +90,8 @@ const drain = () =>
 addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
+	mockRecover.mockResolvedValue([]);
+	mockOnline = 'online-website-available';
 	mockRefresh.mockResolvedValue('refreshed');
 	mockStartVersion = 0;
 	mockManager = {};
@@ -212,6 +224,61 @@ it.each([true, false])(
 		expect(owner.completeSale).not.toHaveBeenCalled();
 	}
 );
+
+// ADR 0040 §1.3: a pull can adopt a sale its unanswered command completed and take it out of the
+// open orders, so no tender is left to press Try again; the store session re-sends it.
+it('re-sends unanswered money commands at start, before replaying, and finishes the sale an answer completed', async () => {
+	await record();
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	mockRecover.mockImplementation(async () => {
+		mockFind.mockResolvedValue(resident());
+		return [{ orderUuid: 'order', answers: [{ kind: 'close', data: {} }] }];
+	});
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockRecover).toHaveBeenCalledWith(mockManager, mockContext.storeDB, {
+		post: expect.any(Function),
+	});
+	expect(mockRecover.mock.invocationCallOrder[0]).toBeLessThan(
+		mockFind.mock.invocationCallOrder[0]
+	);
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+	expect(mockCatchUp).not.toHaveBeenCalled();
+});
+
+it('a reconnect re-sends what the outage left unanswered and finishes only the orders it answered', async () => {
+	mockOnline = 'offline';
+	await record('order');
+	await record('other');
+	const completed = new Set<string>();
+	mockFind.mockImplementation(async (_manager: unknown, uuid: string) =>
+		resident(uuid, completed.has(uuid) ? 'completed' : 'pos-open')
+	);
+	const view = render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).other).toMatchObject({
+			unpaidStarts: 1,
+		})
+	);
+	expect(mockRecover).not.toHaveBeenCalled();
+	mockRecover.mockImplementation(async () => {
+		completed.add('order');
+		completed.add('other');
+		return [{ orderUuid: 'order', answers: [{ kind: 'record', data: {} }] }];
+	});
+	mockOnline = 'online-website-available';
+	view.rerender(<SaleCompletionBridge />);
+	await waitFor(() => expect(owner.completeSale).toHaveBeenCalledTimes(1));
+	expect(owner.completeSale).toHaveBeenCalledWith(
+		mockContext,
+		expect.objectContaining({ uuid: 'order' }),
+		{ source: 'replay' },
+		{ host: 'background' }
+	);
+	expect(mockRecover).toHaveBeenCalledTimes(1);
+	// Only the answered order is replayed: the other's unpaid start is not counted twice.
+	expect((await pendingCompletions(mockContext.storeDB)).other).toMatchObject({ unpaidStarts: 1 });
+});
 
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();

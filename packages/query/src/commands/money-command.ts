@@ -185,6 +185,9 @@ async function chooseRevision(
 	return revision;
 }
 
+/** Commands on the wire from this process: the store-session recovery leaves them to their sender. */
+const inFlight = new Set<string>();
+
 /**
  * Send (or re-send) a journaled command. A never-dispatched entry that is refused locally is
  * deleted: nothing left the till. From `markSent` on, only a definitive answer deletes it.
@@ -219,7 +222,10 @@ export async function sendMoneyCommand(
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
 		try {
 			const command = entry.kind === 'record' ? {} : { command_id: entry.id };
-			const { data } = await deps.post(entry.path, { ...entry.body, ...command, revision });
+			inFlight.add(entry.id);
+			const { data } = await deps
+				.post(entry.path, { ...entry.body, ...command, revision })
+				.finally(() => inFlight.delete(entry.id));
 			// A non-JSON 2xx (a proxy page) proves nothing: the entry stays for a re-send.
 			if (!data || typeof data !== 'object') throw new Error('money_command_unreadable_answer');
 			return { data: data as Record<string, unknown>, sentRevision: revision };
@@ -337,6 +343,42 @@ export async function resendOpenCommands(
 		answers.push({ kind: entry.kind, data });
 	}
 	return answers;
+}
+
+/** A store-session recovery's re-sends for one order, answered. */
+export interface RecoveredOrder {
+	readonly orderUuid: string;
+	readonly answers: ResentCommand[];
+}
+
+/**
+ * The store-session recovery (store session start and every reconnect): re-send every command
+ * that was sent and never answered, for every order, whether or not a tender is on screen. A pull
+ * can adopt a completed sale and take it out of the open orders before the cashier presses Try
+ * again; its journaled command must still be answered, mirrored and settled. An order whose
+ * command is on the wire from this process is left to its sender. A re-send that fails stays
+ * journaled for the next recovery or Try again. Then the settled chains are retired.
+ */
+export async function recoverMoneyCommands(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	deps: { post: Post }
+): Promise<RecoveredOrder[]> {
+	const recovered: RecoveredOrder[] = [];
+	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
+		const sent = entries.filter(({ sentAt }) => sentAt !== null);
+		if (sent.length === 0 || sent.some(({ id }) => inFlight.has(id))) continue;
+		try {
+			recovered.push({
+				orderUuid,
+				answers: await resendOpenCommands(runtime, storeDB, orderUuid, deps),
+			});
+		} catch {
+			// Not definitive, or refused: the poster kept or settled the entry accordingly.
+		}
+	}
+	await retireSettledChains(runtime, storeDB).catch(() => undefined);
+	return recovered;
 }
 
 function answerChain(revision: unknown, at: number): RevisionChain | undefined {
