@@ -768,3 +768,29 @@ describe('reconcileCreateAck', () => {
 		).toThrow(/never be re-keyed/);
 	});
 });
+
+it('an order row queued before the strip is cleaned at push time', async () => {
+	const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(200, { id: 1 }));
+	await pushRecordMutation({
+		mutation: mut({
+			collectionName: 'orders',
+			operation: 'update',
+			payload: {
+				status: 'completed',
+				customer_note: 'note',
+				total: '10.00',
+				transaction_id: 'txn',
+				meta_data: [
+					{ key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+					{ key: 'custom', value: 'kept' },
+				],
+			},
+		}),
+		resolveEndpoint,
+		fetcher,
+	});
+	expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).payload).toEqual({
+		customer_note: 'note',
+		meta_data: [{ key: 'custom', value: 'kept' }],
+	});
+});

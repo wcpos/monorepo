@@ -152,7 +152,7 @@ it.each([true, false])(
 			const db = engine.active()!.database;
 			const facet = writeFacetFor('orders')!;
 			const previous = stamped ? 'old' : 'server';
-			const keys = ['_wcpos_completed_at', '_wcpos_reopened_at'];
+			const keys = ['_wcpos_completed_at', '_wcpos_completions'];
 			await facet.upsertServerDocument(
 				db,
 				facet.documentFromServerPayload({

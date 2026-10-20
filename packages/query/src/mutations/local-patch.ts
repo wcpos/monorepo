@@ -155,7 +155,10 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 		if (engineCollection) {
 			const syncChanges = syncableChanges(engineCollection, changes);
 			let patched: EngineResident;
-			if (Object.keys(syncChanges).length > 0 && assertsSomething(engineCollection, syncChanges)) {
+			if (
+				Object.keys(syncChanges).length > 0 &&
+				assertsSomething(engineCollection, syncChanges, snapshot)
+			) {
 				patched = await patchAndEnqueueEngineResident({
 					manager,
 					collection: engineCollection,

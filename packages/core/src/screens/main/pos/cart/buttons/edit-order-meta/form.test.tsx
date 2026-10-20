@@ -15,7 +15,11 @@ const mockPatch = jest.fn(),
 	mockPush = jest.fn(),
 	mockMove = jest.fn(),
 	mockClose = jest.fn(),
-	mockGuard = jest.fn();
+	mockGuard = jest.fn(),
+	mockSelectProps = jest.fn();
+function mockStatusSelect() {
+	return null;
+}
 function mockWrap({ children }: React.PropsWithChildren) {
 	return <>{children}</>;
 }
@@ -48,7 +52,10 @@ jest.mock('@wcpos/components/form', () => ({
 	FormField: jest.requireActual('react-hook-form').Controller,
 	FormInput: mockInput,
 	FormTextarea: mockInput,
-	FormSelect: mockInput,
+	FormSelect: (props: Record<string, unknown>) => {
+		mockSelectProps(props);
+		return mockInput(props);
+	},
 	FormCombobox: mockInput,
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
@@ -131,7 +138,7 @@ jest.mock('../../../../../../query', () => ({
 jest.mock('../../../../components/customer-select', () => ({ CustomerList: () => null }));
 jest.mock('../../../../components/currency-select', () => ({ CurrencySelect: mockInput }));
 jest.mock('../../../../components/order/order-status-select', () => ({
-	OrderStatusSelect: mockInput,
+	OrderStatusSelect: mockStatusSelect,
 }));
 jest.mock('../../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../components/meta-data-form', () => ({
@@ -364,4 +371,34 @@ it('rejects renaming an ordinary row to a protected key', async () => {
 	fireEvent.change(input, { target: { value: '_pos_user' } });
 	expect(screen.queryByDisplayValue('_pos_user')).toBeNull();
 	expect(screen.getByDisplayValue('ordinary')).toBe(input);
+});
+
+// ADR 0040: under the server's reopen rule a stale pushable status is a reopen, so a
+// save names the status only when the cashier changed it.
+it('a note-only save does not write status', async () => {
+	await save();
+	expect(mockPatch).toHaveBeenCalledWith({
+		document: order,
+		data: expect.objectContaining({ customer_note: 'Keep note' }),
+	});
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+});
+
+it('the status picker offers pushable statuses and shows a paid status read-only', () => {
+	const statusProps = () =>
+		mockSelectProps.mock.calls
+			.map(([props]) => props as Record<string, unknown>)
+			.filter((props) => props.customComponent === mockStatusSelect)
+			.at(-1)!;
+	const formData = { ...payload, cashier_id: '7' };
+	const view = render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	expect([...(statusProps().allowed as string[])].sort()).toEqual(
+		['cancelled', 'on-hold', 'pending', 'pos-open'].sort()
+	);
+	expect(statusProps().disabled).toBeFalsy();
+	view.rerender(
+		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
+	);
+	expect(statusProps().allowed).toEqual(expect.arrayContaining(['completed', 'pos-open']));
+	expect(statusProps().disabled).toBe(true);
 });

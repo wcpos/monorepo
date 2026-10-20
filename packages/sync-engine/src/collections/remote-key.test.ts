@@ -95,3 +95,46 @@ it('order acknowledgement clears an absent server stamp and retains the hint wit
 	});
 	expect(resident.payload.meta_data).toEqual([uuid, { ...hint, id: 8 }]);
 });
+
+it('an order ack adopts every server-owned meta key while a successor is queued', async () => {
+	const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000078' };
+	const custom = { key: 'custom', value: 'local edit' };
+	const resident = {
+		payload: {
+			meta_data: [
+				uuid,
+				custom,
+				{ key: '_wcpos_payments', value: 'stale' },
+				{ key: '_wcpos_completions', value: 'stale' },
+			],
+		},
+		local: { pendingMutationIds: ['previous', 'successor'] },
+	};
+	const db = {
+		collections: {
+			orders: {
+				findOne: () => ({
+					exec: async () => ({
+						incrementalModify: async (modify: (row: typeof resident) => typeof resident) =>
+							Object.assign(resident, modify(resident)),
+					}),
+				}),
+			},
+		},
+	} as unknown as RxDatabase;
+	const ledger = { id: 9, key: '_wcpos_payments', value: 'server' };
+	const commands = { id: 10, key: '_wcpos_commands', value: 'server' };
+	const server = {
+		id: 7,
+		meta_data: [uuid, { key: 'custom', value: 'server copy' }, ledger, commands],
+	};
+	await writeFacetFor('orders')!.reconcile(db, {
+		recordId: uuid.value,
+		remoteId: remoteId(7),
+		currentRevision: 'r2',
+		document: server,
+		identityDocument: server,
+		mutation: { mutationId: 'previous', operation: 'update', recordId: uuid.value },
+	});
+	expect(resident.payload.meta_data).toEqual([uuid, custom, ledger, commands]);
+});

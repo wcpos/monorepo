@@ -2,15 +2,19 @@
  * Ledger tests protect typed-meta preservation and deterministic manual payment rows.
  */
 
+import { SERVER_OWNED_ORDER_META_KEYS } from '@wcpos/sync-core';
+
 import {
 	hasLiveSettlementLeg,
 	isFailedPaymentStatus,
 	isFinalPaymentStatus,
 	isLivePaymentStatus,
 	isSettledPaymentRow,
+	LEDGER_META_KEY,
 	mintDevicePayment,
 	mintManualPayment,
 	mintServerPayment,
+	PAYMENT_METHOD_INDEX_META_KEY,
 	readLedger,
 	upsertPaymentRow,
 	withLedger,
@@ -355,4 +359,12 @@ it.each([
 	expect(isSettledPaymentRow(row({ status, recorded_offline: offline }))).toBe(settled);
 	expect(isFinalPaymentStatus(status)).toBe(final);
 	expect(isFailedPaymentStatus(status)).toBe(failed);
+});
+
+// The ledger and its method index are the server's (ADR 0040 rule 2): the wire strip
+// must name both, so renaming either key here without the strip list fails.
+it('the ledger keys are server-owned order meta', () => {
+	expect(SERVER_OWNED_ORDER_META_KEYS).toEqual(
+		expect.arrayContaining([LEDGER_META_KEY, PAYMENT_METHOD_INDEX_META_KEY])
+	);
 });

@@ -57,39 +57,110 @@ export const SERVER_AUTHORED_ORDER_MONEY_FIELDS = [
 	'tax_lines',
 ] as const;
 
-const SERVER_AUTHORED = new Set<string>(SERVER_AUTHORED_ORDER_MONEY_FIELDS);
+/**
+ * The statuses a till may push (ADR 0040 D4). The server answers any other with
+ * 422 `wcpos_status_not_pushable` for the whole push, and a pushable status that
+ * differs from a paid order's is a reopen. A wire fact, so it lives beside the strip.
+ */
+export const PUSHABLE_ORDER_STATUSES = ['pos-open', 'pending', 'on-hold', 'cancelled'] as const;
+export type PushableOrderStatus = (typeof PUSHABLE_ORDER_STATUSES)[number];
 
 /**
- * A revision stamp, not a claim. `date_modified_gmt` is `readonly` in the same
- * schema, rides along on every local patch, and asserting it alone is not a
- * reason to spend a request.
+ * Order fields and meta the server owns under ADR 0040 rule 2: it derives paid from
+ * its own payment rows and drops these from a push. Mirrors
+ * `Pos_Order_Audit::SERVER_MONEY_FIELDS` / `SERVER_MONEY_META_KEYS`; a new key joins
+ * both in one change.
  */
-const NOT_AN_ASSERTION = new Set<string>(['date_modified_gmt']);
+export const SERVER_OWNED_ORDER_FIELDS: readonly string[] = [
+	'set_paid',
+	'date_paid',
+	'date_paid_gmt',
+	'transaction_id',
+	'payment_method',
+	'payment_method_title',
+];
+export const SERVER_OWNED_ORDER_META_KEYS: readonly string[] = [
+	'_wcpos_payments',
+	'_wcpos_payment_method',
+	'_wcpos_payment_id',
+	'_wcpos_payment_live',
+	'_wcpos_commands',
+	'_wcpos_completed_at',
+	'_wcpos_completions',
+	'_wcpos_fiscal_pending',
+	'_wcpos_gateway_attempts',
+	'_wcpos_awaiting_customer',
+	'_payment_method',
+	'_payment_method_title',
+	'_transaction_id',
+	'_date_paid',
+	'_paid_date',
+];
 
-/**
- * Drop the server-authored aggregate from an outbound order payload.
- *
- * @returns The payload without those fields — the SAME reference when it
- *   carried none of them.
- */
-export function stripServerAuthoredOrderMoney<T extends Record<string, unknown>>(payload: T): T {
-	const present = Object.keys(payload).some((key) => SERVER_AUTHORED.has(key));
-	if (!present) return payload;
-	return Object.fromEntries(
-		Object.entries(payload).filter(([key]) => !SERVER_AUTHORED.has(key))
-	) as T;
+/** Never on the wire. `date_modified_gmt` is a readonly revision stamp, not a claim. */
+const NOT_ASSERTED = new Set<string>([
+	...SERVER_AUTHORED_ORDER_MONEY_FIELDS,
+	...SERVER_OWNED_ORDER_FIELDS,
+]);
+const SERVER_OWNED_META = new Set<string>(SERVER_OWNED_ORDER_META_KEYS);
+
+/** The server normalises a `wc-` prefix before it checks the status. */
+export function isPushableOrderStatus(status: unknown): status is PushableOrderStatus {
+	if (typeof status !== 'string') return false;
+	const bare = status.startsWith('wc-') ? status.slice(3) : status;
+	return (PUSHABLE_ORDER_STATUSES as readonly string[]).includes(bare);
 }
+
+type MetaEntry = { key?: unknown; value?: unknown } | null;
+const isServerOwnedMeta = (entry: MetaEntry) => SERVER_OWNED_META.has(String(entry?.key));
+
+/**
+ * The payload an order push may carry: no server-authored aggregate, no server-owned
+ * field or meta entry, and no status the server would refuse.
+ *
+ * @returns The SAME reference when there was nothing to drop.
+ */
+export function toOrderWirePayload<T extends Record<string, unknown>>(payload: T): T {
+	const meta = Array.isArray(payload.meta_data) ? (payload.meta_data as MetaEntry[]) : null;
+	const dropsMeta = meta?.some(isServerOwnedMeta) ?? false;
+	const dropsStatus = 'status' in payload && !isPushableOrderStatus(payload.status);
+	if (!dropsMeta && !dropsStatus && !Object.keys(payload).some((key) => NOT_ASSERTED.has(key)))
+		return payload;
+	const wire: Record<string, unknown> = Object.fromEntries(
+		Object.entries(payload).filter(
+			([key]) => !NOT_ASSERTED.has(key) && !(key === 'status' && dropsStatus)
+		)
+	);
+	if (meta && dropsMeta) wire.meta_data = meta.filter((entry) => !isServerOwnedMeta(entry));
+	return wire as T;
+}
+
+/** The pre-ADR 0040 name; the one strip is `toOrderWirePayload`. */
+export const stripServerAuthoredOrderMoney = toOrderWirePayload;
+
+const tillOwnedMeta = (meta: unknown): string =>
+	JSON.stringify(
+		(Array.isArray(meta) ? (meta as MetaEntry[]) : [])
+			.filter((entry) => !isServerOwnedMeta(entry))
+			.map((entry) => [entry?.key, entry?.value])
+	);
 
 /**
  * Does this set of order changes assert anything the server will act on?
  *
- * False for a pure money settlement: every field it writes is server-authored,
- * so enqueueing it would cost a push whose body the server discards unread —
- * and whose ack would then be compared against a payload asserting nothing.
- * The changes are still applied to the local record; they are just not sent.
+ * False when every changed key is server-authored or server-owned, the revision
+ * stamp, a status the server refuses or the one `current` already holds, or a
+ * `meta_data` array whose till-owned entries equal `current`'s (by key and value).
+ * Such changes are still applied to the local record; they are just not sent.
  */
-export function orderChangesAssertIntent(changes: Record<string, unknown>): boolean {
-	return Object.keys(changes).some(
-		(key) => !SERVER_AUTHORED.has(key) && !NOT_AN_ASSERTION.has(key)
-	);
+export function orderChangesAssertIntent(
+	changes: Record<string, unknown>,
+	current?: Record<string, unknown>
+): boolean {
+	return Object.entries(changes).some(([key, value]) => {
+		if (NOT_ASSERTED.has(key) || key === 'date_modified_gmt') return false;
+		if (key === 'status') return isPushableOrderStatus(value) && value !== current?.status;
+		if (key === 'meta_data') return tillOwnedMeta(value) !== tillOwnedMeta(current?.meta_data);
+		return true;
+	});
 }

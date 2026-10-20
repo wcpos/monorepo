@@ -43,7 +43,13 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
-import { NO_STORE, PROTECTED_ORDER_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	isPushableOrderStatus,
+	NO_STORE,
+	PROTECTED_ORDER_META_KEYS,
+	PUSHABLE_ORDER_STATUSES,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -116,6 +122,11 @@ export function EditOrderMetaForm({
 	});
 
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
+	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
+	const statusPushable = isPushableOrderStatus(formData.status);
+	const allowedStatuses = statusPushable
+		? PUSHABLE_ORDER_STATUSES
+		: [...PUSHABLE_ORDER_STATUSES, formData.status];
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
 	/**
@@ -131,7 +142,9 @@ export function EditOrderMetaForm({
 			setPending(data);
 			return false;
 		}
-		const { cashier_id: _cashierId, ...patch } = data;
+		// Status is an intent, never an echo (ADR 0040): it is unchanged here (a change goes
+		// through the send below), and re-writing it would queue a reopen from a stale copy.
+		const { cashier_id: _cashierId, status: _unchanged, ...patch } = data;
 		const written = await writeOrderFields(order, () => patch);
 		if (written && close) closeDialog();
 		return written;
@@ -240,6 +253,8 @@ export function EditOrderMetaForm({
 								<FormSelect
 									label={t('common.status')}
 									customComponent={OrderStatusSelect}
+									allowed={allowedStatuses}
+									disabled={!statusPushable}
 									{...field}
 								/>
 							</View>

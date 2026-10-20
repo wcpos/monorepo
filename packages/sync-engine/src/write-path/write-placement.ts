@@ -84,8 +84,11 @@ export function coalescedPayload(input: {
 	incomingPayload: Record<string, unknown>;
 }): Record<string, unknown> {
 	if (input.operation === 'delete') return input.incomingPayload;
+	// Status is an intent, never an echo (ADR 0040): a stale resident `pending` on a paid
+	// order would be a reopen, so only the prior or incoming write may name it.
+	const { status: _echo, ...resident } = input.residentPayload ?? {};
 	return {
-		...(input.residentPayload ?? {}),
+		...(input.prior.collectionName === 'orders' ? resident : (input.residentPayload ?? {})),
 		...(input.prior.operation === 'delete' ? {} : input.prior.payload),
 		...input.incomingPayload,
 	};

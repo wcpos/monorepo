@@ -40,7 +40,7 @@ import {
 	type RemoteId,
 	remoteIdOrNull,
 	remoteKeyFor,
-	SERVER_ORDER_MONEY_META_KEYS,
+	SERVER_OWNED_ORDER_META_KEYS,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
@@ -672,10 +672,10 @@ const ordersWriteFacet = createWriteFacet({
 			// Even with a successor, the server owns these facts; editable intent stays local.
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
-					(entry) => !SERVER_ORDER_MONEY_META_KEYS.includes(entry.key)
+					(entry) => !SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
 				),
 				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
-					SERVER_ORDER_MONEY_META_KEYS.includes(entry.key)
+					SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
 				),
 			],
 		}),

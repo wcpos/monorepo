@@ -111,9 +111,10 @@ export function syncableChanges(
  */
 export function assertsSomething(
 	collection: WriteableCollection,
-	changes: Record<string, unknown>
+	changes: Record<string, unknown>,
+	current?: Record<string, unknown>
 ): boolean {
-	return collection === 'orders' ? orderChangesAssertIntent(changes) : true;
+	return collection === 'orders' ? orderChangesAssertIntent(changes, current) : true;
 }
 
 function ensureRecordMetadata(
@@ -319,7 +320,8 @@ export async function patchAndEnqueueEngineResident(input: {
 				if (collection === 'orders') changes = protectOrderMeta(currentPayload, changes);
 				shouldEnqueue =
 					typeof input.changes !== 'function' ||
-					(Object.keys(changes).length > 0 && assertsSomething(collection, changes));
+					(Object.keys(changes).length > 0 &&
+						assertsSomething(collection, changes, currentPayload));
 				const identities = [
 					['_wcpos_register', input.registerId],
 					['_wcpos_till', input.tillId ?? getRegisterId()],

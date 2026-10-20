@@ -486,15 +486,15 @@ it('optimistically patches a server-born resident and enqueues syncable fields',
 	const patchResult = await act(() =>
 		localPatch({
 			document: document as never,
-			data: { status: 'processing' } as never,
+			data: { status: 'on-hold' } as never,
 		})
 	);
 
 	expect(stored).toMatchObject({
 		remoteKey: '42',
-		status: 'processing',
+		status: 'on-hold',
 		payload: {
-			status: 'processing',
+			status: 'on-hold',
 			date_modified_gmt: '2026-03-02T00:00:00',
 		},
 	});
@@ -503,12 +503,12 @@ it('optimistically patches a server-born resident and enqueues syncable fields',
 		operation: 'update',
 		recordId: 'order-uuid',
 		payload: {
-			status: 'processing',
+			status: 'on-hold',
 			date_modified_gmt: '2026-03-02T00:00:00',
 		},
 	});
 	expect(patchResult?.changes).toEqual({
-		status: 'processing',
+		status: 'on-hold',
 		date_modified_gmt: '2026-03-02T00:00:00',
 	});
 });
@@ -700,7 +700,7 @@ it('compensates and retries the resident patch once when the active scope change
 	await act(() =>
 		localPatch({
 			document: document as never,
-			data: { status: 'processing' } as never,
+			data: { status: 'on-hold' } as never,
 		})
 	);
 
@@ -709,8 +709,8 @@ it('compensates and retries the resident patch once when the active scope change
 		payload: { id: 42, status: 'pending' },
 	});
 	expect(secondStored).toMatchObject({
-		status: 'processing',
-		payload: { id: 42, status: 'processing' },
+		status: 'on-hold',
+		payload: { id: 42, status: 'on-hold' },
 	});
 	expect(mockWrite).toHaveBeenCalledTimes(2);
 });
@@ -722,7 +722,7 @@ it('compensates and retries the resident patch once when the active scope change
  * the cart still has to display it, and an offline till still has to run on
  * it.
  */
-it('register attribution starts with resident metadata and retains a simultaneous ledger edit', async () => {
+it('register attribution starts with resident metadata and retains a simultaneous meta edit', async () => {
 	const { patchAndEnqueueEngineResident } = await import('../../src/mutations');
 	activeScopeId = 'scope-1';
 	mockStatus.mockReturnValue({ activeScopeId });
@@ -730,7 +730,7 @@ it('register attribution starts with resident metadata and retains a simultaneou
 	const meta = [
 		{ id: 1, key: 'custom', value: 'keep' },
 		{ key: '_pos_user', value: 'original' },
-		{ key: '_wcpos_payments', value: 'old' },
+		{ key: 'gift_message', value: 'old' },
 	];
 	const stored = { payload: { meta_data: meta } };
 	const resident = {
@@ -745,16 +745,16 @@ it('register attribution starts with resident metadata and retains a simultaneou
 		recordId: 'order',
 		registerId: 'register',
 		tillId: 'installation',
-		changes: { meta_data: [{ key: '_wcpos_payments', value: 'new' }] },
+		changes: { meta_data: [{ key: 'gift_message', value: 'new' }] },
 	};
 	await patchAndEnqueueEngineResident(input);
 	expect(mockWrite).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			payload: {
-				// Protected resident entries survive replacement; the caller's ledger edit
+				// Protected resident entries survive replacement; the caller's meta edit
 				// still lands, while unprotected resident entries are not carried through.
 				meta_data: [
-					{ key: '_wcpos_payments', value: 'new' },
+					{ key: 'gift_message', value: 'new' },
 					{ key: '_pos_user', value: 'original' },
 					{ key: '_wcpos_register', value: 'register' },
 					{ key: '_wcpos_till', value: 'installation' },
@@ -766,7 +766,7 @@ it('register attribution starts with resident metadata and retains a simultaneou
 		...input,
 		registerId: 'other',
 		tillId: 'other-till',
-		changes: { status: 'processing' },
+		changes: { status: 'on-hold' },
 	});
 	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_register', value: 'register' });
 	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_till', value: 'installation' });
@@ -878,3 +878,39 @@ it.each([undefined, 17])(
 		);
 	}
 );
+
+// ADR 0040 rule 2: the ledger is the server's; a ledger-only write is the till's
+// local copy and must not spend a push the server would strip to nothing.
+it('a patch that changes only _wcpos_payments is applied locally and not queued', async () => {
+	const meta = [
+		{ id: 1, key: 'custom', value: 'keep' },
+		{ id: 2, key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+	];
+	const stored: Record<string, unknown> = {
+		uuid: 'order-uuid',
+		remoteId: '42',
+		payload: { id: 42, status: 'pos-open', meta_data: meta },
+		sync: { revision: 'rev-1' },
+		local: { dirty: false, pendingMutationIds: [] },
+	};
+	mockFindOneExec.mockResolvedValue({
+		incrementalModify: async (
+			modifier: (old: Record<string, unknown>) => Record<string, unknown>
+		) => Object.assign(stored, modifier(stored)),
+		toJSON: () => JSON.parse(JSON.stringify(stored)),
+	});
+	const document = {
+		uuid: 'order-uuid',
+		id: 42,
+		collection: { name: 'orders' },
+		getLatest: () => document,
+	};
+	const ledger = { id: 2, key: '_wcpos_payments', value: { schema: 1, payments: [{ id: 'p' }] } };
+
+	await act(() =>
+		localPatch({ document: document as never, data: { meta_data: [meta[0], ledger] } as never })
+	);
+
+	expect(mockWrite).not.toHaveBeenCalled();
+	expect((stored.payload as { meta_data: unknown[] }).meta_data).toEqual([meta[0], ledger]);
+});

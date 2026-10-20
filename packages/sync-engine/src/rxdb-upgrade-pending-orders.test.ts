@@ -42,6 +42,7 @@ import {
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	type StoreScopeIdentity,
+	toOrderWirePayload,
 } from '@wcpos/sync-core';
 
 import { drainableGenerationCollectionCreators } from './collections/drainable-generation';
@@ -180,7 +181,10 @@ function expectSent(state: Awaited<ReturnType<typeof stored>>, applied: Applied)
 		const after = state.orders.get(order.uuid);
 		expect(withoutAckFields(after), order.case).toEqual(withoutAckFields(order.stored));
 		const server = applied.get(order.uuid)!;
-		const pushed = sendOnce.find((row) => row.uuid === order.uuid)!.stored.payload as Json;
+		// The push-time strip (ADR 0040) leaves a pre-upgrade row's refused status off the wire.
+		const pushed = toOrderWirePayload(
+			sendOnce.find((row) => row.uuid === order.uuid)!.stored.payload as Json
+		);
 		const payload: Json = { ...(order.stored.payload as Json), ...pushed, id: server.id };
 		expect(after, order.case).toEqual({
 			...order.stored,

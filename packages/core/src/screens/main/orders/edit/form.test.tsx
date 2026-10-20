@@ -55,7 +55,10 @@ const mockWatch = (name: string) => {
 
 const form = {
 	control: {},
-	handleSubmit: jest.fn((callback: unknown) => callback),
+	// The form's values are the order's own: the save drops what is unchanged.
+	handleSubmit: jest.fn(
+		(callback: (data: unknown) => unknown) => () => callback({ ...orderPayload })
+	),
 	setValue,
 	watch: jest.fn(mockWatch),
 };

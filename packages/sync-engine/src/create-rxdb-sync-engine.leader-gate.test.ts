@@ -63,13 +63,13 @@ describe('single-owner write-plane coalescing', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: ORDER_ID,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await queueRows(engine)).toEqual([
 				expect.objectContaining({
 					coalesced: 1,
-					payload: expect.objectContaining({ status: 'completed' }),
+					payload: expect.objectContaining({ status: 'cancelled' }),
 				}),
 			]);
 		} finally {
