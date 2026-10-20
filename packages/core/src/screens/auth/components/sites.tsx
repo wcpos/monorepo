@@ -29,13 +29,10 @@ import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
-import { Site, SiteHeader } from './site';
+import { Site, SiteContent, SiteHeader } from './site';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
-import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
-import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useVersionCheck } from '../../../hooks/use-version-check';
 
 interface SitesProps {
 	user: UserDocument;
@@ -201,21 +198,6 @@ function AccordionSite({
 /**
  * Content inside an accordion item — needs Suspense boundary above it
  */
-function AccordionSiteContent({ site }: { site: SiteDocument }) {
-	const { wcposVersionPass } = useVersionCheck({ site });
-	const t = useT();
-
-	useSiteInfo({ site });
-
-	if (!wcposVersionPass) {
-		return (
-			<HStack space="sm" className="items-center py-2">
-				<Text className="text-warning">
-					{t('common.please_update_your_woocommerce_pos_plugin')}
-				</Text>
-			</HStack>
-		);
-	}
-
-	return <WPUsers site={site} />;
+export function AccordionSiteContent({ site }: { site: SiteDocument }) {
+	return <SiteContent site={site} />;
 }

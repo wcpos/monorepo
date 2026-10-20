@@ -58,10 +58,12 @@ export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocum
 }
 
 /**
- * Full site component — header + users/stores/login
+ * A site's content below its header — shared by the single-site card and the
+ * multi-site accordion so both surfaces gate the same way. Precedence: plugin
+ * too old (the older, cheaper check), then app too old (the server's
+ * wcpos_update_required refusal), then the users list.
  */
-export function Site({ user, site }: Props) {
-	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+export function SiteContent({ site }: { site: import('@wcpos/database').SiteDocument }) {
 	const t = useT();
 	const { wcposVersionPass } = useVersionCheck({ site });
 
@@ -76,6 +78,45 @@ export function Site({ user, site }: Props) {
 	const handleRetryUpdateRequired = React.useCallback(() => {
 		if (wpApiUrl) clearUpdateRequired(wpApiUrl);
 	}, [wpApiUrl]);
+
+	if (!wcposVersionPass) {
+		return (
+			<HStack space="sm" className="items-center">
+				<Icon name="triangleExclamation" className="fill-warning" />
+				<Text className="text-warning">
+					{t('common.please_update_your_woocommerce_pos_plugin')}
+				</Text>
+			</HStack>
+		);
+	}
+
+	if (updateRequired) {
+		// No Logout (nobody is logged in) and no Add user (it cannot help):
+		// one action — Reload on web, Try again elsewhere.
+		return (
+			<UpdateRequiredNotice
+				testID="update-required-card-notice"
+				align="start"
+				onRetry={handleRetryUpdateRequired}
+			/>
+		);
+	}
+
+	return (
+		<ErrorBoundary>
+			<Suspense>
+				<WPUsers site={site} />
+			</Suspense>
+		</ErrorBoundary>
+	);
+}
+
+/**
+ * Full site component — header + users/stores/login
+ */
+export function Site({ user, site }: Props) {
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
@@ -105,29 +146,7 @@ export function Site({ user, site }: Props) {
 					/>
 				</HStack>
 
-				{/* Site Content: plugin too old, then app too old, then the users */}
-				{!wcposVersionPass ? (
-					<HStack space="sm" className="items-center">
-						<Icon name="triangleExclamation" className="fill-warning" />
-						<Text className="text-warning">
-							{t('common.please_update_your_woocommerce_pos_plugin')}
-						</Text>
-					</HStack>
-				) : updateRequired ? (
-					// No Logout (nobody is logged in) and no Add user (it cannot help):
-					// one action — Reload on web, Try again elsewhere.
-					<UpdateRequiredNotice
-						testID="update-required-card-notice"
-						align="start"
-						onRetry={handleRetryUpdateRequired}
-					/>
-				) : (
-					<ErrorBoundary>
-						<Suspense>
-							<WPUsers site={site} />
-						</Suspense>
-					</ErrorBoundary>
-				)}
+				<SiteContent site={site} />
 			</VStack>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
