@@ -53,7 +53,10 @@ const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethod
 	...overrides,
 });
 
-jest.mock('../checkout-mode', () => ({ useOrderCheckoutStage: () => mockStage }));
+jest.mock('../checkout-mode', () => ({
+	releaseTender: () => {},
+	useOrderCheckoutStage: () => mockStage,
+}));
 jest.mock('../receipt-stage/receipt-stage', () => ({
 	ReceiptStage: () => <div data-testid="checkout-receipt-stage" />,
 }));

@@ -18,7 +18,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useOrderCheckoutStage } from '../checkout-mode';
+import { releaseTender, useOrderCheckoutStage } from '../checkout-mode';
 import { ReceiptStage } from '../receipt-stage/receipt-stage';
 import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
@@ -81,6 +81,7 @@ export function TenderCheckout({ order }: Props) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
+		releaseTender();
 		router.back();
 	}, [flow, router, stage, finishSale]);
 

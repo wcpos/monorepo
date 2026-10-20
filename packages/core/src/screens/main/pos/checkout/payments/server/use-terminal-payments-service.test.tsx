@@ -14,7 +14,11 @@ import { row } from '../device/fixtures.test-utils';
 import {
 	type CheckoutModeSnapshot,
 	enterCheckout,
+	enterReceipt,
+	finishReceipt,
 	getCheckoutModeSnapshot,
+	leaveCheckout,
+	releaseTender,
 	resetCheckoutMode,
 	selectReceipt,
 	watchTender,
@@ -623,6 +627,16 @@ describe('a server capture of the order in checkout', () => {
 		['receipts do not show automatically', () => watch('completed-order', false), {}],
 		['the cashier is on another order', () => watch('other-order'), {}],
 		[
+			'the cashier closed the column checkout during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => leaveCheckout('completed-order') },
+		],
+		[
+			'the cashier closed the phone sheet during the write',
+			() => watch('completed-order'),
+			{ duringWrite: () => releaseTender() },
+		],
+		[
 			'the cashier switched to another order during the write',
 			() => watch('completed-order'),
 			{ duringWrite: () => void watchTender('other-order', true) },
@@ -653,6 +667,21 @@ describe('a server capture of the order in checkout', () => {
 		expect(after.receiptOrders.has('completed-order')).toBe(false);
 		expect(after.selectedReceiptOrder).not.toBe('completed-order');
 		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
+	});
+
+	// The receipt is live before the sale's background completion runs: one the cashier has
+	// already finished must not come back as a paid tab from that completion.
+	it('keeps a receipt finished before the background completion from coming back', async () => {
+		watch('completed-order');
+		const { after } = await settle('mirror');
+		expect(after.selectedReceiptOrder).toBe('completed-order');
+		finishReceipt('completed-order');
+		enterReceipt('completed-order', { select: false });
+		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(false);
+		// Skipped once: the order's next sale (re-opened into checkout) enters as usual.
+		enterCheckout('completed-order');
+		enterReceipt('completed-order', { select: false });
+		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
 	});
 
 	it.each(['rejects', 'returns nothing'] as const)(

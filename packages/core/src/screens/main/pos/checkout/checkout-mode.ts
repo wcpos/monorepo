@@ -35,6 +35,12 @@ let snapshot: CheckoutModeSnapshot = {
 // Receipt panes remount when cashiers switch tabs; an auto-print attempt belongs
 // to the sale, not the mount. Keep this transient and clear it when the sale ends.
 const receiptPrintAttempts = new Set<string>();
+// A receipt the terminal service entered after its write (receiptEntryAfterWrite) is live
+// before the sale's background completion runs. If the cashier finishes it first, that
+// completion's unselected entry must not bring the paid tab back (finishing also clears the
+// print claim, so the tab could print again): it is skipped once.
+const enteredAfterWrite = new Set<string>();
+const finishedBeforeCompletion = new Set<string>();
 export function claimReceiptAutoPrint(uuid: string) {
 	if (receiptPrintAttempts.has(uuid)) return false;
 	receiptPrintAttempts.add(uuid);
@@ -91,6 +97,8 @@ export function clearOrderSaveIfMutation(uuid: string, mutationId: string) {
 		clearOrderSaving(uuid);
 }
 export function enterCheckout(uuid: string) {
+	enteredAfterWrite.delete(uuid);
+	finishedBeforeCompletion.delete(uuid);
 	if (snapshot.checkoutOrders.has(uuid)) return;
 	publish({ ...snapshot, checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]) });
 }
@@ -119,6 +127,7 @@ export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
 export function leaveCheckout(uuid: string) {
+	releaseTender();
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -134,6 +143,7 @@ export function leaveCheckout(uuid: string) {
  * serving: that order keeps its tab ("Paid · receipt") and waits to be tapped.
  */
 export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
+	if (!select && finishedBeforeCompletion.delete(uuid)) return;
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
@@ -163,6 +173,14 @@ export function watchTender(uuid: string, autoShowReceipt: boolean) {
 	};
 }
 /**
+ * The cashier closed a tender (the column's Back through `leaveCheckout`, the phone sheet's
+ * close), as opposed to a status write unmounting it: a write still pending for that order
+ * must not select its receipt afterwards.
+ */
+export function releaseTender() {
+	tenderGeneration++;
+}
+/**
  * Called just before a status write that settles the sale; the returned function is called
  * once the write has succeeded. That write drops the order from the till's open orders and
  * unmounts the tender whose settlement subscriber was the only caller of `selectReceipt`
@@ -178,11 +196,14 @@ export function receiptEntryAfterWrite(uuid: string): () => void {
 	const selection = snapshot.selectedReceiptOrder;
 	const generation = tenderGeneration;
 	return () => {
-		if (select && snapshot.selectedReceiptOrder === selection && tenderGeneration === generation)
+		if (select && snapshot.selectedReceiptOrder === selection && tenderGeneration === generation) {
 			enterReceipt(uuid);
+			enteredAfterWrite.add(uuid);
+		}
 	};
 }
 export function finishReceipt(uuid: string) {
+	if (enteredAfterWrite.delete(uuid)) finishedBeforeCompletion.add(uuid);
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -202,6 +223,8 @@ export function selectReceipt(uuid: string | null) {
 }
 export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
+	enteredAfterWrite.clear();
+	finishedBeforeCompletion.clear();
 	publish({
 		tenderMethods: new Map(),
 		tenderPlans: new Map(),
