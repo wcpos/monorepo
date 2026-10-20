@@ -18,8 +18,11 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { Platform } from '@wcpos/utils/platform';
+import { currentUpdateRequired, subscribeUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { WPUsers } from './wp-users';
+import { UpdateRequiredNotice } from '../../../components/update-required-notice';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useVersionCheck } from '../../../hooks/use-version-check';
@@ -64,6 +67,19 @@ export function Site({ user, site }: Props) {
 
 	useSiteInfo({ site });
 
+	// The server's protocol-gate refusal, latched under wp_api_url by the login
+	// validation or the sync engine (the same key the in-app gate reads).
+	const wpApiUrl = site.wp_api_url ?? '';
+	const subscribe = React.useCallback(
+		(onChange: () => void) => (wpApiUrl ? subscribeUpdateRequired(wpApiUrl, onChange) : () => {}),
+		[wpApiUrl]
+	);
+	const getSnapshot = React.useCallback(
+		() => (wpApiUrl ? currentUpdateRequired(wpApiUrl) : null),
+		[wpApiUrl]
+	);
+	const updateRequired = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
 			const latest = site.getLatest();
@@ -92,20 +108,28 @@ export function Site({ user, site }: Props) {
 					/>
 				</HStack>
 
-				{/* Site Content */}
-				{wcposVersionPass ? (
-					<ErrorBoundary>
-						<Suspense>
-							<WPUsers site={site} />
-						</Suspense>
-					</ErrorBoundary>
-				) : (
+				{/* Site Content: plugin too old, then app too old, then the users */}
+				{!wcposVersionPass ? (
 					<HStack space="sm" className="items-center">
 						<Icon name="triangleExclamation" className="fill-warning" />
 						<Text className="text-warning">
 							{t('common.please_update_your_woocommerce_pos_plugin')}
 						</Text>
 					</HStack>
+				) : updateRequired ? (
+					// No Logout (nobody is logged in) and no Add user (it cannot help):
+					// the only action is the update, picked up by Reload on web.
+					<UpdateRequiredNotice
+						testID="update-required-card-notice"
+						showReload={Platform.isWeb}
+						align="start"
+					/>
+				) : (
+					<ErrorBoundary>
+						<Suspense>
+							<WPUsers site={site} />
+						</Suspense>
+					</ErrorBoundary>
 				)}
 			</VStack>
 
