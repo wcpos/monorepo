@@ -1,0 +1,85 @@
+samples=395483 wall=60274 ms bundle=http://192.168.1.152:8081/node_modules/expo-router/entry.bundle//&platform=ios&dev=false&hot=false&lazy=true&minify=true&transform.engine=hermes&transform.bytecode=1&transform.routerRoot=app&transform.reactCompiler=true&unstable_transformProfile=hermes-stable
+
+== self time ==
+  56999 ms  94.6%  (idle) native:NaN:NaN
+    458 ms   0.8%  completeRoot native:NaN:NaN
+    258 ms   0.4%  create native:NaN:NaN
+    180 ms   0.3%  writeBytes native:NaN:NaN
+    180 ms   0.3%  propagateParentContextChanges bundle:16433:3  →  propagateParentContextChanges worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:1930
+    122 ms   0.2%  exists native:NaN:NaN
+     97 ms   0.2%  delete native:NaN:NaN
+     80 ms   0.1%  open native:NaN:NaN
+     50 ms   0.1%  parsePath bundle:32886:19  →  parsePath worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:1080
+     45 ms   0.1%  utf8PercentEncodeCodePoint bundle:32055:3  →  utf8PercentEncodeCodePoint worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:191
+     44 ms   0.1%  createNode native:NaN:NaN
+     42 ms   0.1%  propagateContextChanges bundle:16387:3  →  propagateContextChanges worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:1869
+     38 ms   0.1%  hermesBuiltinCopyDataProperties native:NaN:NaN
+     34 ms   0.1%  performUnitOfWork bundle:20728:3  →  performUnitOfWork worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9496
+     30 ms   0.0%  (anon) bundle:207868:42  →  prototype.unsubscribe worktrees/ios-device-profile/node_modules/rxjs/dist/cjs/internal/Subscription.js:46
+     28 ms   0.0%  View bundle:29485:3  →  View worktrees/ios-device-profile/node_modules/react-native/Libraries/Components/View/View.js:26
+     25 ms   0.0%  updateWorkInProgressHook bundle:17486:3  →  updateWorkInProgressHook worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:3741
+     24 ms   0.0%  next bundle:32469:3  →  next worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:625
+     21 ms   0.0%  functionPrototypeBind native:NaN:NaN
+     21 ms   0.0%  arrayIteratorPrototypeNext native:NaN:NaN
+     21 ms   0.0%  readBytes native:NaN:NaN
+     20 ms   0.0%  FileSystemFile native:NaN:NaN
+     20 ms   0.0%  getStyles bundle:52718:14  →  UniwindStoreBuilder#getStyles worktrees/ios-device-profile/node_modules/uniwind/src/core/native/store.ts:23
+     19 ms   0.0%  (anon) bundle:207939:34  →  prototype.add worktrees/ios-device-profile/node_modules/rxjs/dist/cjs/internal/Subscription.js:115
+     18 ms   0.0%  createWorkInProgress bundle:21081:3  →  createWorkInProgress worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:10036
+     18 ms   0.0%  Subscriber bundle:207645:5  →  Subscriber worktrees/ios-device-profile/node_modules/rxjs/dist/cjs/internal/Subscriber.js:29
+     17 ms   0.0%  shouldHandleAsObject bundle:316335:30  →  shouldHandleAsObject worktrees/ios-device-profile/node_modules/i18next/dist/esm/i18next.js:477
+     17 ms   0.0%  appendChild native:NaN:NaN
+     17 ms   0.0%  isSpecial bundle:32157:3  →  isSpecial worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:304
+     16 ms   0.0%  parseURLRaw bundle:32411:13  →  parseURLRaw worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:566
+     15 ms   0.0%  updateEffectImpl bundle:17898:3  →  updateEffectImpl worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:4316
+     15 ms   0.0%  (anon) bundle:198121:43  →  errorContext$argument_0 worktrees/ios-device-profile/node_modules/rxjs/dist/esm5/internal/Observable.js:23
+     15 ms   0.0%  commitLayoutEffectOnFiber bundle:19688:3  →  commitLayoutEffectOnFiber worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:7748
+     14 ms   0.0%  diffProperties bundle:13688:3  →  diffProperties worktrees/ios-device-profile/node_modules/react-native/Libraries/ReactNative/ReactFabricPublicInstance/ReactNativeAttributePayload.js:235
+     14 ms   0.0%  get bundle:330096:12  →  Proxy$argument_1.get worktrees/ios-device-profile/node_modules/rxdb/dist/esm/rx-document.js:389
+     14 ms   0.0%  isSubscription bundle:199169:3  →  isSubscription worktrees/ios-device-profile/node_modules/rxjs/dist/esm5/internal/Subscription.js:131
+     14 ms   0.0%  isSubscriber bundle:198195:3  →  isSubscriber worktrees/ios-device-profile/node_modules/rxjs/dist/esm5/internal/Observable.js:99
+     13 ms   0.0%  close native:NaN:NaN
+     13 ms   0.0%  bubbleProperties bundle:19242:3  →  bubbleProperties worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:6985
+     13 ms   0.0%  toJSON bundle:329882:11  →  basePrototype.toJSON worktrees/ios-device-profile/node_modules/rxdb/dist/esm/rx-document.js:175
+
+== total (inclusive) time ==
+  60274 ms 100.0%  (root) native:NaN:NaN
+  56999 ms  94.6%  (idle) native:NaN:NaN
+   1782 ms   3.0%  performWorkOnRootViaSchedulerTask bundle:16624:3  →  performWorkOnRootViaSchedulerTask worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:2219
+   1782 ms   3.0%  performWorkOnRoot bundle:20395:3  →  performWorkOnRoot worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:8958
+   1280 ms   2.1%  (anon) native:NaN:NaN
+   1277 ms   2.1%  tryCallOne native:NaN:NaN
+    802 ms   1.3%  commitRootWhenReady bundle:20477:3  →  commitRootWhenReady worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9116
+    802 ms   1.3%  commitRoot bundle:20818:3  →  commitRoot worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9649
+    514 ms   0.9%  renderRootSync bundle:20583:3  →  renderRootSync worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9316
+    506 ms   0.8%  workLoopSync bundle:20632:3  →  workLoopSync worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9377
+    505 ms   0.8%  performUnitOfWork bundle:20728:3  →  performUnitOfWork worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9496
+    464 ms   0.8%  renderRootConcurrent bundle:20635:3  →  renderRootConcurrent worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9380
+    464 ms   0.8%  workLoopConcurrentByScheduler bundle:20725:3  →  workLoopConcurrentByScheduler worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9492
+    437 ms   0.7%  step native:NaN:NaN
+    435 ms   0.7%  generatorPrototypeResume native:NaN:NaN
+    417 ms   0.7%  beginWork bundle:19030:3  →  beginWork worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:6418
+    410 ms   0.7%  flushMutationEffects bundle:20858:3  →  flushMutationEffects worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9720
+    410 ms   0.7%  commitMutationEffectsOnFiber bundle:19876:3  →  commitMutationEffectsOnFiber worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:8047
+    394 ms   0.7%  completeRoot native:NaN:NaN
+    383 ms   0.6%  updateFunctionComponent bundle:18689:3  →  updateFunctionComponent worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:5598
+    377 ms   0.6%  renderWithHooks bundle:17400:3  →  renderWithHooks worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:3618
+    361 ms   0.6%  (anon) bundle:392874:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:473
+    361 ms   0.6%  spawn native:NaN:NaN
+    361 ms   0.6%  Promise native:NaN:NaN
+    361 ms   0.6%  tryCallTwo native:NaN:NaN
+    361 ms   0.6%  ?anon_0_ bundle:392874:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:473
+    358 ms   0.6%  flushSpawnedWork bundle:20903:3  →  flushSpawnedWork worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9769
+    358 ms   0.6%  flushSyncWorkAcrossRoots_impl bundle:16543:3  →  flushSyncWorkAcrossRoots_impl worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:2079
+    358 ms   0.6%  performSyncWorkOnRoot bundle:16635:3  →  performSyncWorkOnRoot worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:2238
+    327 ms   0.5%  (anon) bundle:392753:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:330
+    326 ms   0.5%  ?anon_0_ bundle:392778:13  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:362
+    326 ms   0.5%  writeChunk bundle:392786:21  →  FileSystemWritableFileStream#writeChunk worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:371
+    326 ms   0.5%  ?anon_2_writeChunk bundle:392795:21  →  FileSystemWritableFileStream#writeChunk worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:382
+    293 ms   0.5%  ?anon_2_processChangesFileIfRequired bundle:391884:136  →  processChangesFileIfRequired worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/bulk-write.js:75
+    279 ms   0.5%  lazyInit bundle:392731:13  →  FileSystemWritableFileStream#lazyInit worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:307
+    257 ms   0.4%  flushPassiveEffects bundle:20951:3  →  flushPassiveEffects worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9840
+    257 ms   0.4%  flushPendingEffects bundle:20945:3  →  flushPendingEffects worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:9834
+    223 ms   0.4%  commitPassiveMountOnFiber bundle:20092:3  →  commitPassiveMountOnFiber worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:8401
+    223 ms   0.4%  recursivelyTraversePassiveMountEffects bundle:20089:3  →  recursivelyTraversePassiveMountEffects worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:8385
+    196 ms   0.3%  attemptEarlyBailoutIfNoScheduledUpdate bundle:18981:3  →  attemptEarlyBailoutIfNoScheduledUpdate worktrees/ios-device-profile/node_modules/react-native/Libraries/Renderer/implementations/ReactFabric-prod.js:6322
