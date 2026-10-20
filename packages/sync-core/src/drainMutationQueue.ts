@@ -529,6 +529,7 @@ export async function drainMutationQueue(input: {
 			reason?: string;
 			serverMessage?: string;
 		};
+		let rejection: DrainResult['rejected'][number] | undefined;
 		try {
 			// Persist the WHY ON the row (#832), not just in the event: the event is
 			// long gone by the time anyone looks, and a dead letter with no stated
@@ -550,9 +551,8 @@ export async function drainMutationQueue(input: {
 			// panel, so counting an unpersisted one tells every surface the row was
 			// dead-lettered while storage still holds it as claimed/pending — the row
 			// is then invisible to recovery and to anyone reading the logs.
-			const rejection = { mutation, status, reason, serverMessage };
+			rejection = { mutation, status, reason, serverMessage };
 			rejected.push(rejection);
-			input.onRejected?.(rejection);
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the
 			// health banner reads that classification, so emitting it on a failed
@@ -601,6 +601,24 @@ export async function drainMutationQueue(input: {
 			// the same treatment as any other failed write: visible, and slowed down.
 			failed += 1;
 			await applyBackoff(mutation);
+		}
+		// Told only once the dead letter is durable AND announced, and outside the
+		// persistence try: a throwing host callback is not a failed queue write, so
+		// it must never be reported as one or put the settled row behind backoff.
+		if (rejection !== undefined && input.onRejected) {
+			try {
+				input.onRejected(rejection);
+			} catch (error) {
+				emit({
+					type: 'engine.listener-error',
+					level: 'debug',
+					collection: mutation.collectionName,
+					message: `drain onRejected callback threw: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+					fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
+				});
+			}
 		}
 		blockedRecords.add(recordKey(mutation));
 	};

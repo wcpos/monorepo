@@ -1245,6 +1245,34 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(unpersisted?.fields).toMatchObject({ mutationId: 'm1' });
 	});
 
+	it('a throwing onRejected callback never unsettles a durable dead letter', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		const events: { type: string; level?: string; fields?: Record<string, unknown> }[] = [];
+
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (mutation) => {
+				throw new RecordPushError(mutation, 400, 'rest_invalid_param', false, 'Invalid billing');
+			},
+			onRejected: () => {
+				throw new Error('host callback failed');
+			},
+			observe: (event) => events.push(event as never),
+			now: () => 1_767_225_600_000,
+		});
+
+		// Still the durable dead letter it was, announced as one…
+		const row = (await q.all())[0];
+		expect(row).toMatchObject({ status: 'rejected', rejectedStatus: 400 });
+		expect(result.rejected).toHaveLength(1);
+		expect(events.some((event) => event.type === 'push.rejected')).toBe(true);
+		// …never reported as an unpersisted verdict, and never put behind backoff.
+		expect(events.some((event) => event.type === 'push.dead-letter-unpersisted')).toBe(false);
+		expect(result.failed).toBe(0);
+		expect(row?.nextAttemptAt).toBeUndefined();
+		expect(events.find((event) => event.type === 'engine.listener-error')?.level).toBe('debug');
+	});
+
 	it('preserves requeue provenance when a REQUEUED row dead-letters again — the count is the UI story (#832)', async () => {
 		const q = await queueWith(mut({ mutationId: 'm-requeued', recordId: 'rec-A' }));
 		const row = (await q.all())[0];
