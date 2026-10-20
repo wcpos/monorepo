@@ -103,7 +103,7 @@ export function useTerminalPaymentsService(): void {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
 			},
-			commandPoster: (orderUuid, approval) =>
+			commandPoster: (orderUuid, { approval, sessionId }) =>
 				moneyCommandPoster({
 					runtime: manager,
 					storeDB,
@@ -117,9 +117,13 @@ export function useTerminalPaymentsService(): void {
 							const payload = resident?.payload as EngineRecord<'orders'>['payload'] | undefined;
 							return { total: String(payload?.total ?? ''), currency: payload?.currency ?? '' };
 						}),
-					provenance: async () => {
+					// A re-completion names the session the leg's gates approved, and only the
+					// command that completes the sale mints a counter.
+					provenance: async (command) => {
 						const resident = await readResidentOrder(manager, orderUuid);
-						return resident ? commandProvenance(latest.current.ctx, resident as never, null) : null;
+						return resident
+							? commandProvenance(latest.current.ctx, resident as never, sessionId, command)
+							: null;
 					},
 				}),
 			isOnline: () => latest.current.online,

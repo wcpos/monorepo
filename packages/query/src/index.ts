@@ -178,10 +178,12 @@ export {
 	settleMoneyCommand,
 	type CommandProvenance,
 	type MoneyCommandEntry,
+	type MoneyCommandErrorReason,
 	type MoneyCommandKind,
 	type MoneyCommandPoster,
 	type OrderApproval,
 	type Post,
+	type ProvenanceCommand,
 } from './commands/money-command';
 
 export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';

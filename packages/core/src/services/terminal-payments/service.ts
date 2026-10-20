@@ -47,8 +47,15 @@ export interface TerminalPaymentsServiceOptions {
 	isOnline?: () => boolean;
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
-	/** The money command poster for one order (ADR 0040): journal, revision, approval. */
-	commandPoster?: (orderUuid: string, approval?: OrderApproval) => MoneyCommandPoster;
+	/**
+	 * The money command poster for one order (ADR 0040): journal, revision, approval. `sessionId`
+	 * is the session the leg's gates approved (the one its row was minted under): a re-completion's
+	 * provenance names it.
+	 */
+	commandPoster?: (
+		orderUuid: string,
+		options: { approval?: OrderApproval; sessionId: string | null }
+	) => MoneyCommandPoster;
 	mirror: (
 		orderUuid: string,
 		response: ServerLegResponse,
@@ -223,7 +230,9 @@ export class TerminalPaymentsService {
 				if (this.stopped || !id) continue;
 				let response: { data: unknown };
 				const release = holdLiveTab('payment');
-				const poster = this.options.commandPoster?.(orderUuid);
+				const poster = this.options.commandPoster?.(orderUuid, {
+					sessionId: row.session_id ?? null,
+				});
 				try {
 					response = await (poster ?? this.options.http.post)(
 						`orders/${id}/payments/${row.id}/capture`,
@@ -452,7 +461,10 @@ export class TerminalPaymentsService {
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
-		const poster = this.options.commandPoster?.(input.orderUuid, input.approval);
+		const poster = this.options.commandPoster?.(input.orderUuid, {
+			approval: input.approval,
+			sessionId: input.row.session_id ?? null,
+		});
 		const deps = {
 			...this.options.http,
 			...(poster ? { post: poster } : {}),

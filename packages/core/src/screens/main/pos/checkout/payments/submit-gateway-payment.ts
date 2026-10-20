@@ -6,6 +6,7 @@ import {
 	type OrderPaymentSummary,
 	type PaymentRow,
 } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 
 /**
  * Submit a `gateway` capture-mode method (Payments Contract 1.2 §2, roadmap#415 R2/R4):
@@ -99,7 +100,6 @@ export async function submitGatewayPayment(
 	} catch (error) {
 		const response = errorResponse(error);
 		const code = response?.data?.code;
-		const status = response?.status;
 		if (code === 'wcpos_fields_invalid') {
 			const errors = response?.data?.data?.errors;
 			return {
@@ -116,7 +116,9 @@ export async function submitGatewayPayment(
 						: { _form: response?.data?.message ?? '' },
 			};
 		}
-		if (code && status !== undefined && status >= 400 && status < 500) {
+		// The money answer rule (sync-core): a named 4xx is the store's decision; a session or
+		// proxy answer is not, and the journal keeps the submit for a re-send.
+		if (code && isDefinitiveMoneyRefusal(moneyRefusalOf(error))) {
 			return {
 				kind: 'refused',
 				code,
@@ -200,7 +202,7 @@ export async function cancelGatewayInvoice(
 	} catch (error) {
 		const response = errorResponse(error);
 		const code = response?.data?.code;
-		if (code && response?.status !== undefined && response.status < 500)
+		if (code && isDefinitiveMoneyRefusal(moneyRefusalOf(error)))
 			return { kind: 'refused', code, message: refusalMessage(response, code) };
 		throw error;
 	}

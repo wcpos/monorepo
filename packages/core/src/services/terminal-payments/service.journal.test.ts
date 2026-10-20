@@ -199,7 +199,7 @@ function scheduler() {
 function service(timers: ReturnType<typeof scheduler>) {
 	return new TerminalPaymentsService({
 		http: { get: store.get, post: store.post },
-		commandPoster: (orderUuid, approval) =>
+		commandPoster: (orderUuid, { approval }) =>
 			moneyCommandPoster({
 				runtime,
 				storeDB,

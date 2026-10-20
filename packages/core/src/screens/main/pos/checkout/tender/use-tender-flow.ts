@@ -854,6 +854,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
+				// The close approves the sale the press commits: its rounding fee moves the stored
+				// total by the fee alone, so the approved total is the rounded one.
+				const closeApproval = {
+					...approval,
+					total: fromMinor(toMinor(approval.total, dp) + roundingMinor, dp),
+				};
 				const closed = await writeZeroBalanceCompletion(ctx, {
 					order,
 					sessionId,
@@ -862,7 +868,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
 					online: () => online && !queuedOffline && !!payload.id,
-					close: (target) => closeSale.close(target, { sessionId, approval, queuedOffline }),
+					close: (target) =>
+						closeSale.close(target, { sessionId, approval: closeApproval, queuedOffline }),
 				});
 				if (closed && typeof closed === 'object' && 'kind' in closed) reportClose(closed);
 				return;

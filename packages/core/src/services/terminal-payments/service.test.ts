@@ -103,6 +103,20 @@ it('begin starts one intent and refuses another live leg for the order', async (
 	expect(c.http.post).toHaveBeenCalledTimes(1);
 	expect(c.mirror).toHaveBeenCalledWith('order', { payment: row });
 });
+it('the leg’s command poster carries the session its row was minted under', () => {
+	const c = setup();
+	const commandPoster = jest.fn((_uuid: string, _options: unknown) =>
+		Object.assign((url: string, body: unknown) => c.http.post(url, body), {
+			sentRevision: () => null,
+			settle: async () => undefined,
+		})
+	);
+	const service = new TerminalPaymentsService({ ...c.options, commandPoster });
+	const approval = { total: '10.00', currency: 'USD' };
+	service.begin({ ...input, row: { ...row, session_id: 'session-7' }, approval });
+	expect(commandPoster).toHaveBeenCalledWith('order', { approval, sessionId: 'session-7' });
+	service.stop();
+});
 it('resume is idempotent for the row, polls without intent and leaves unknown reader unclaimed', async () => {
 	const c = setup();
 	const leg = c.service.resume(input)!;

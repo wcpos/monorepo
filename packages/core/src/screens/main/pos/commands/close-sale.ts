@@ -8,10 +8,12 @@ import {
 	moneyCommandPoster,
 	type OrderApproval,
 	type Post,
+	type ProvenanceCommand,
 } from '@wcpos/query';
 import { mirrorServerOrder } from '@wcpos/query/mutations';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
@@ -30,13 +32,6 @@ export type CloseOutcome =
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
 
-/** Refusals that name this sale: the server decided, and the cashier reads its sentence. */
-const REFUSED = new Set([
-	'wcpos_payment_in_flight',
-	'wcpos_insufficient_stock',
-	'wcpos_invalid_transition',
-]);
-
 /**
  * Complete a covered sale through `POST orders/{id}/close` (ADR 0040 D2): the till never writes
  * `completed` itself. Journaled and approved like a charge, so a lost answer re-sends the same
@@ -49,7 +44,7 @@ export async function closeSale(
 	deps: {
 		post: Post;
 		approval: OrderApproval;
-		provenance: () => Promise<CommandProvenance | null>;
+		provenance: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
 		online: boolean;
 	}
 ): Promise<CloseOutcome> {
@@ -75,19 +70,16 @@ export async function closeSale(
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };
-		const body = (
-			error as {
-				response?: {
-					data?: { code?: string; message?: string; data?: { order?: OrderPaymentSummary } };
-				};
-			}
-		)?.response?.data;
-		if (body?.code === 'wcpos_balance_outstanding') {
-			await mirror(body.data?.order);
-			return { kind: 'outstanding', order: body.data?.order ?? null };
+		const refusal = moneyRefusalOf(error);
+		if (refusal?.code === MONEY_ANSWER_CODES.balanceOutstanding) {
+			const summary = refusal.data?.order as OrderPaymentSummary | undefined;
+			await mirror(summary);
+			return { kind: 'outstanding', order: summary ?? null };
 		}
-		if (body?.code && REFUSED.has(body.code))
-			return { kind: 'refused', code: body.code, message: body.message ?? body.code };
+		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
+		// rule): the cashier reads its sentence. Anything else stays journaled for a re-send.
+		if (refusal?.code && isDefinitiveMoneyRefusal(refusal))
+			return { kind: 'refused', code: refusal.code, message: refusal.message ?? refusal.code };
 		throw error;
 	}
 }
@@ -114,7 +106,7 @@ export function useCloseSale() {
 					total: String(payload.total ?? ''),
 					currency: payload.currency ?? '',
 				},
-				provenance: () => commandProvenance(ctx, order, options.sessionId),
+				provenance: (command) => commandProvenance(ctx, order, options.sessionId, command),
 				online: onlineRef.current && !options.queuedOffline,
 			});
 		},

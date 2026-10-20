@@ -1,4 +1,5 @@
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
 
 import { mintUuid } from '../mint-uuid';
 import { mirrorServerOrder } from '../mutations/mirror-server-order';
@@ -34,14 +35,26 @@ export interface CommandProvenance {
 	sale_tz?: string;
 	sale_counter?: string;
 }
-export type MoneyCommandErrorReason = 'revision_unavailable' | 'order_changed';
+/** The command a provenance is frozen for: whether it completes the sale decides the counter. */
+export interface ProvenanceCommand {
+	readonly kind: MoneyCommandKind;
+	readonly target: string | null;
+	readonly body: Readonly<Record<string, unknown>>;
+}
+/**
+ * Why a command ended before (or without) an answer that settles it. `preflight_failed`: the
+ * pre-flight itself failed (the push of pending work was refused, the resident could not be
+ * read), so nothing left the till; the original failure is the `cause`.
+ */
+export type MoneyCommandErrorReason = 'revision_unavailable' | 'order_changed' | 'preflight_failed';
 export class MoneyCommandError extends Error {
 	public constructor(
 		public readonly reason: MoneyCommandErrorReason,
 		public readonly entry: MoneyCommandEntry,
-		public readonly order?: OrderPaymentSummary
+		public readonly order?: OrderPaymentSummary,
+		options?: { cause?: unknown }
 	) {
-		super(`money_command_${reason}`);
+		super(`money_command_${reason}`, options);
 		this.name = 'MoneyCommandError';
 	}
 }
@@ -61,17 +74,6 @@ const PROVENANCE_KINDS = new Set<MoneyCommandKind>([
 	'submit',
 	'close',
 ]);
-/** Refusals naming this row or command: the server decided, and a re-send would repeat it. */
-const DEFINITIVE_CODES = new Set([
-	'wcpos_command_conflict',
-	'wcpos_order_already_paid',
-	'wcpos_invalid_transition',
-	'wcpos_amount_exceeds_balance',
-	'wcpos_balance_outstanding',
-	'wcpos_payment_in_flight',
-	'wcpos_insufficient_stock',
-	'rest_invalid_param',
-]);
 const ROUTE =
 	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
 
@@ -82,20 +84,6 @@ export function classifyMoneyRoute(
 	if (!match) return null;
 	const kind = (match[3] ?? match[5] ?? match[6] ?? 'record') as MoneyCommandKind;
 	return { kind, orderId: Number(match[1]), target: match[2] ?? match[4] ?? null };
-}
-
-type Failure = { code?: string; data?: Record<string, unknown> };
-function failureOf(error: unknown): Failure | null {
-	const response = (error as { response?: { data?: unknown } } | null)?.response;
-	if (!response || typeof response !== 'object') return null;
-	const body = response.data as { code?: unknown; data?: unknown } | null | undefined;
-	if (!body || typeof body !== 'object') return {};
-	return {
-		...(typeof body.code === 'string' ? { code: body.code } : {}),
-		...(body.data && typeof body.data === 'object'
-			? { data: body.data as Record<string, unknown> }
-			: {}),
-	};
 }
 
 type ResidentOrder = {
@@ -211,8 +199,12 @@ export async function sendMoneyCommand(
 		try {
 			revision = await chooseRevision(runtime, storeDB, entry, orderId, fresh);
 		} catch (error) {
-			if (fresh) await settleCommand(storeDB, entry.orderUuid, entry.id);
-			throw error;
+			if (!fresh) throw error;
+			// Never dispatched: nothing can be on the server, so the outcome is terminal and typed.
+			await settleCommand(storeDB, entry.orderUuid, entry.id);
+			throw error instanceof MoneyCommandError
+				? error
+				: new MoneyCommandError('preflight_failed', entry, undefined, { cause: error });
 		}
 	for (let stale = false; ; stale = true) {
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
@@ -224,8 +216,8 @@ export async function sendMoneyCommand(
 			if (!data || typeof data !== 'object') throw new Error('money_command_unreadable_answer');
 			return { data: data as Record<string, unknown>, sentRevision: revision };
 		} catch (error) {
-			const failure = failureOf(error);
-			if (failure?.code === 'wcpos_revision_stale' && !stale) {
+			const failure = moneyRefusalOf(error);
+			if (failure?.code === MONEY_ANSWER_CODES.revisionStale && !stale) {
 				const current = failure.data?.current as Record<string, unknown> | undefined;
 				const currentRevision = failure.data?.currentRevision;
 				const adopted = current
@@ -247,8 +239,9 @@ export async function sendMoneyCommand(
 				revision = currentRevision;
 				continue;
 			}
-			if (failure?.code && DEFINITIVE_CODES.has(failure.code)) {
-				const payment = failure.data?.payment as PaymentRow | undefined;
+			// Every named 4xx refusal is the server's decision (sync-core's money answer rule).
+			if (isDefinitiveMoneyRefusal(failure)) {
+				const payment = failure?.data?.payment as PaymentRow | undefined;
 				if (payment)
 					await mirrorServerOrder(runtime, entry.orderUuid, { payment, sentRevision: revision });
 				await settleCommand(storeDB, entry.orderUuid, entry.id);
@@ -324,7 +317,8 @@ export function moneyCommandPoster(input: {
 	post: Post;
 	/** Frozen at the cashier's press; a resumed leg (no press) reads the order when it freezes. */
 	approval: OrderApproval | (() => Promise<OrderApproval>);
-	provenance?: () => Promise<CommandProvenance | null>;
+	/** Called once, when the command is frozen; it sees the command it describes. */
+	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
 	let sentRevision: string | null = null;
@@ -353,7 +347,9 @@ export function moneyCommandPoster(input: {
 		// A never-dispatched leftover (a crash before it was sent) put nothing on the server.
 		for (const unsent of entries.filter(same))
 			await settleCommand(input.storeDB, input.orderUuid, unsent.id);
-		const provenance = PROVENANCE_KINDS.has(route.kind) ? await input.provenance?.() : null;
+		const provenance = PROVENANCE_KINDS.has(route.kind)
+			? await input.provenance?.({ kind: route.kind, target: route.target, body: frozen })
+			: null;
 		if (provenance) frozen.provenance = provenance;
 		const entry: MoneyCommandEntry = {
 			orderUuid: input.orderUuid,

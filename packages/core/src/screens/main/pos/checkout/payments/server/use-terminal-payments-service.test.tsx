@@ -82,9 +82,18 @@ const mockPatch = jest.fn<
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
+const mockPosterInputs: {
+	post: (url: string, body: unknown) => Promise<unknown>;
+	provenance?: (command: unknown) => Promise<unknown>;
+}[] = [];
+const mockCommandProvenance = jest.fn(async (..._args: unknown[]) => null);
+jest.mock('../../provenance/command-provenance', () => ({
+	commandProvenance: (...args: unknown[]) => mockCommandProvenance(...args),
+}));
 jest.mock('@wcpos/query', () => ({
-	moneyCommandPoster: ({ post }: { post: (url: string, body: unknown) => Promise<unknown> }) =>
-		Object.assign((url: string, body: unknown) => post(url, body), {
+	moneyCommandPoster: (input: { post: (url: string, body: unknown) => Promise<unknown> }) =>
+		mockPosterInputs.push(input) &&
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
 			sentRevision: () => 'sha256:sent',
 			settle: async () => undefined,
 		}),
@@ -143,6 +152,28 @@ it('recovers a completed resident offline authorization without any open checkou
 });
 
 // ADR 0040 PR A: an offline authorization is never written locally; PR B queues it.
+it('a re-completion provenance names the session the leg was approved under', async () => {
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		start.mock.calls[0][0].commandPoster!('completed-order', { sessionId: 'session-7' });
+		const command = { kind: 'capture', target: 'leg', body: { context: {} } };
+		await mockPosterInputs.at(-1)!.provenance!(command);
+		expect(mockCommandProvenance).toHaveBeenCalledWith(
+			expect.anything(),
+			mockResident,
+			'session-7',
+			command
+		);
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+	}
+});
+
 it('the offline payment writer refuses with offline_unavailable', async () => {
 	const start = jest.spyOn(
 		await import('../../../../../../services/terminal-payments'),

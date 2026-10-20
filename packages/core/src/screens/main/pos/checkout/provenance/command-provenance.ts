@@ -1,4 +1,5 @@
-import type { CommandProvenance, EngineRecord } from '@wcpos/query';
+import { derive, readLedger, toMinor } from '@wcpos/order-math';
+import type { CommandProvenance, EngineRecord, ProvenanceCommand } from '@wcpos/query';
 import type { MetaDataEntry } from '@wcpos/order-math';
 
 import { completionMeta } from './stamp-completion';
@@ -25,21 +26,53 @@ function fromMeta(meta: readonly MetaDataEntry[], withCounter: boolean): Command
 }
 
 /**
+ * Whether the command, if the store runs it, completes the sale: a close or a gateway submit
+ * always does; a record or a capture when its amount covers the balance. An intent never does
+ * (an authorization does not count, ADR 0040 D6): its capture is the completing command.
+ */
+function completesSale(
+	command: ProvenanceCommand,
+	payload: EngineRecord<'orders'>['payload'],
+	dp: number
+): boolean {
+	if (command.kind === 'close' || command.kind === 'submit') return true;
+	if (command.kind !== 'record' && command.kind !== 'capture') return false;
+	const rows = readLedger(payload.meta_data ?? []);
+	const amount =
+		command.kind === 'record'
+			? (command.body.payment as { amount?: unknown } | undefined)?.amount
+			: ((command.body.context as { amount?: unknown } | undefined)?.amount ??
+				rows.find(({ id }) => id === command.target)?.amount);
+	if (amount === undefined || amount === null) return false;
+	const { balance } = derive(payload.total, rows, [], { dp });
+	return toMinor(amount as string, dp) >= toMinor(balance, dp);
+}
+
+/**
  * The provenance a completion-capable money command carries (ADR 0040 §1.3 step 2). The first
  * completion is described by the till tuple `persistProvenance` stamped (the server keeps its own
  * counter for it); a re-completion mints a fresh tuple with its own sale counter, once, when the
- * command is frozen.
+ * command is frozen, and only for the command that completes the sale: a partial leg of a
+ * reopened sale carries none and allocates no counter. `sessionId` is the session the leg's gates
+ * approved (a resumed leg: the session its row was minted under).
  */
 export async function commandProvenance(
-	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId'>,
+	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId'> & { dp?: number },
 	order: EngineRecord<'orders'>,
-	sessionId: string | null
+	sessionId: string | null,
+	command: ProvenanceCommand
 ): Promise<CommandProvenance | null> {
-	const meta = order.getLatest().payload.meta_data ?? [];
+	const payload = order.getLatest().payload;
+	const meta = payload.meta_data ?? [];
 	const history = meta.find(({ key }) => key === COMPLETIONS_META_KEY)?.value;
 	const recompletion = Array.isArray(history)
 		? history.length > 0
 		: typeof history === 'string' && history !== '' && history !== '[]';
 	if (!recompletion) return fromMeta(meta, false);
-	return fromMeta(await completionMeta({ meta_data: [] }, { ...ctx, sessionId }), true);
+	if (!completesSale(command, payload, ctx.dp ?? 2)) return null;
+	const { userDB, siteUuid, storeId } = ctx;
+	return fromMeta(
+		await completionMeta({ meta_data: [] }, { userDB, siteUuid, storeId, sessionId }),
+		true
+	);
 }

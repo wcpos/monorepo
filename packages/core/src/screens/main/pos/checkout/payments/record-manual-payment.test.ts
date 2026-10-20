@@ -1,3 +1,4 @@
+import { MoneyCommandError } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import {
@@ -324,6 +325,33 @@ describe('recordManualPayment', () => {
 				kind: 'unknown',
 				row: expect.objectContaining({ id: UUID.toLowerCase() }),
 			});
+		}
+	);
+
+	it('a pre-flight failure is terminal: a typed failed outcome, never re-sent', async () => {
+		const deps = createDeps();
+		const refused = responseError(401, 'rest_not_logged_in');
+		const entry = { sentAt: null } as never;
+		deps.post.mockRejectedValue(
+			new MoneyCommandError('preflight_failed', entry, undefined, { cause: refused })
+		);
+
+		const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+		expect(result).toEqual({ kind: 'failed', reason: 'preflight_failed', cause: refused });
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.sleep).not.toHaveBeenCalled();
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	it.each([401, 403, 408, 426, 429])(
+		'a %i is the session’s or the proxy’s answer: re-sent, never a refusal',
+		async (status) => {
+			const deps = createDeps();
+			deps.post.mockRejectedValue(responseError(status, 'rest_forbidden'));
+			const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+			expect(result).toMatchObject({ kind: 'unknown' });
+			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
 		}
 	);
 

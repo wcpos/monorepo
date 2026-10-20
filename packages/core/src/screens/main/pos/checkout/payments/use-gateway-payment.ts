@@ -52,7 +52,7 @@ export function useGatewayPayment() {
 					total: String(payload.total ?? ''),
 					currency: payload.currency ?? '',
 				},
-				provenance: () => commandProvenance(ctx, order, options.sessionId ?? null),
+				provenance: (command) => commandProvenance(ctx, order, options.sessionId ?? null, command),
 			});
 			return {
 				post,

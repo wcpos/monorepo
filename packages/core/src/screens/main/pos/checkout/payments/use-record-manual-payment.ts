@@ -89,7 +89,7 @@ export function useRecordManualPayment(
 					total: String(payload.total ?? ''),
 					currency: payload.currency ?? storeCurrency,
 				},
-				provenance: () => commandProvenance(ctx, order, sessionId),
+				provenance: (command) => commandProvenance(ctx, order, sessionId, command),
 			});
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
@@ -193,24 +193,21 @@ export function useRecordManualPayment(
 				},
 			});
 			if (outcome.kind === 'failed') {
+				// The provenance push's failure, or the money command's refused pre-flight push.
+				const cause = provenanceError ?? ('cause' in outcome ? outcome.cause : undefined);
 				logger.error('Checkout failed', {
-					// A refused session behind the provenance push still reads as AUTH101.
+					// A refused session behind either push still reads as AUTH101.
 					code:
-						provenanceError === undefined
+						cause === undefined
 							? ERROR_CODES.CHECKOUT_FAILED_CART_SAFE
-							: pushFailureCode(provenanceError, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
+							: pushFailureCode(cause, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
 					context: {
 						error: outcome.reason,
-						...(provenanceError === undefined
+						...(cause === undefined
 							? {}
-							: {
-									cause:
-										provenanceError instanceof Error
-											? provenanceError.message
-											: String(provenanceError),
-								}),
+							: { cause: cause instanceof Error ? cause.message : String(cause) }),
 					},
 				});
 			}

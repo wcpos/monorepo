@@ -303,6 +303,45 @@ it.each([
 	}
 );
 
+it('wcpos_fields_invalid settles the submit and returns the field errors to the form', async () => {
+	const errors = { card_number: 'Enter a card number' };
+	store.post.mockRejectedValueOnce(httpError(400, 'wcpos_fields_invalid', { errors }));
+	const error = await poster()('orders/5/payment-methods/stripe/submit', {
+		attempt_id: 'a',
+	}).catch((e: unknown) => e);
+	expect(error).toMatchObject({
+		response: { data: { code: 'wcpos_fields_invalid', data: { errors } } },
+	});
+	expect(await entries()).toEqual([]);
+});
+
+it.each([
+	[404, 'rest_no_route', 0],
+	[422, 'wcpos_a_code_nobody_listed', 0],
+	[409, 'wcpos_currency_locked', 0],
+	[408, 'request_timeout', 1],
+	[429, 'too_many_requests', 1],
+	[426, 'wcpos_update_required', 1],
+])(
+	'a %i %s settles the command only when it is the server’s decision',
+	async (status, code, left) => {
+		store.post.mockRejectedValueOnce(httpError(status, code));
+		await expect(poster()('orders/5/payments/leg-1/capture', {})).rejects.toThrow(code);
+		expect(await entries()).toHaveLength(left);
+	}
+);
+
+it('a refused pre-flight push ends as preflight_failed: nothing is sent and no entry remains', async () => {
+	await writeResident((doc) => ({ ...doc, local: { dirty: true, pendingMutationIds: ['m'] } }));
+	const refused = httpError(401, 'rest_not_logged_in');
+	jest.mocked(pushRecord).mockRejectedValue(refused);
+	const error = await poster()('orders/5/payments', { payment: cash() }).catch((e: unknown) => e);
+	expect(error).toBeInstanceOf(MoneyCommandError);
+	expect(error).toMatchObject({ reason: 'preflight_failed', cause: refused });
+	expect(store.post).not.toHaveBeenCalled();
+	expect(await entries()).toEqual([]);
+});
+
 it('a 403 leaves the entry in place', async () => {
 	store.modes = ['403'];
 	await expect(poster()('orders/5/payments', { payment: cash() })).rejects.toThrow();

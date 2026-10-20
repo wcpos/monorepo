@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { MoneyCommandError, type OrderApproval } from '@wcpos/query';
+import { MoneyCommandError, type MoneyCommandErrorReason, type OrderApproval } from '@wcpos/query';
+import {
+	isDefinitiveMoneyRefusal,
+	moneyRefusalOf,
+	PAYMENT_ROW_REFUSALS,
+	type PaymentRowRefusal,
+} from '@wcpos/sync-core';
 import { derive, mintManualPayment, readLedger, toMinor } from '@wcpos/order-math';
 import type {
 	MetaDataEntry,
@@ -66,7 +72,7 @@ export interface RecordManualPaymentDeps {
 }
 type InvalidReason =
 	'not_manual' | 'amount_not_positive' | 'tendered_not_allowed' | 'tendered_below_amount';
-type RefusalReason = 'order_already_paid' | 'amount_exceeds_balance';
+type RefusalReason = PaymentRowRefusal;
 export type RecordManualPaymentOutcome =
 	| {
 			kind: 'recorded';
@@ -76,6 +82,8 @@ export type RecordManualPaymentOutcome =
 	  }
 	| { kind: 'refused'; reason: RefusalReason; row: PaymentRow; order: OrderPaymentSummary | null }
 	| { kind: 'failed'; reason: 'provenance_save_failed' | 'offline_unavailable' }
+	/** Never dispatched (pre-flight failed, no revision, order changed): nothing reached the store. */
+	| { kind: 'failed'; reason: MoneyCommandErrorReason; cause?: unknown }
 	/** No answer after every re-send: the journal keeps the command, and Try again re-sends it. */
 	| { kind: 'unknown'; row: PaymentRow }
 	| { kind: 'invalid'; reason: InvalidReason };
@@ -107,27 +115,6 @@ export class RecordManualPaymentMirrorError extends Error {
 		super('Payment outcome could not be mirrored locally.', { cause });
 		this.name = 'RecordManualPaymentMirrorError';
 	}
-}
-
-type ErrorResponse = {
-	status?: number;
-	data?: {
-		code?: string;
-		message?: string;
-		data?: { payment?: PaymentRow; order?: OrderPaymentSummary };
-	};
-};
-
-function errorResponse(error: unknown): ErrorResponse | undefined {
-	if (!error || typeof error !== 'object') return undefined;
-	const response = (error as { response?: unknown }).response;
-	return response && typeof response === 'object' ? (response as ErrorResponse) : undefined;
-}
-
-function refusalReason(code: string | undefined): RefusalReason | null {
-	if (code === 'wcpos_order_already_paid') return 'order_already_paid';
-	if (code === 'wcpos_amount_exceeds_balance') return 'amount_exceeds_balance';
-	return null;
 }
 
 export async function recordManualPayment(
@@ -176,19 +163,25 @@ export async function recordManualPayment(
 			const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
 			accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
 		} catch (error) {
-			// Refused before it left the till (no revision, or the order changed): nothing was sent.
-			if (error instanceof MoneyCommandError) throw error;
-			const response = errorResponse(error);
-			const reason = refusalReason(response?.data?.code);
+			// Refused before it left the till (the pre-flight failed, no revision, the order
+			// changed): nothing was sent, so it is terminal, never the unknown re-send path.
+			if (error instanceof MoneyCommandError && error.entry.sentAt === null)
+				return { kind: 'failed', reason: error.reason, cause: error.cause };
+			const refusal = moneyRefusalOf(error);
+			const refused = refusal?.data as
+				{ payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
+			const reason = refusal?.code
+				? (PAYMENT_ROW_REFUSALS as Record<string, RefusalReason | undefined>)[refusal.code]
+				: undefined;
 			if (reason) {
 				// The server STORED the refused row as `failed`; put the order in front of the
 				// cashier independently, then mirror the server's copy into the ledger.
-				const failedRow = response?.data?.data?.payment ?? {
+				const failedRow = refused?.payment ?? {
 					...minted.row,
 					status: 'failed',
 					failure_reason: reason,
 				};
-				const serverOrder = response?.data?.data?.order ?? null;
+				const serverOrder = refused?.order ?? null;
 				deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
 				// A refusal IS the server saying our copy of the order is stale — it is already
 				// paid, or its balance is smaller than the one we held. Mirroring the failed row
@@ -215,23 +208,22 @@ export async function recordManualPayment(
 				}
 				return outcome;
 			}
-			const status = response?.status;
-			const code = response?.data?.code;
-			// No answer, a 5xx or a held lock proves nothing: re-send the same journaled record.
-			if (!response || (status !== undefined && status >= 500) || code === 'wcpos_payment_locked') {
-				if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
-					return { kind: 'unknown', row: minted.row };
-				await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
-					RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
-				);
-				continue;
-			}
-			if (code && status !== undefined && status >= 400 && status < 500) {
+			if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
 				// A definitive refusal the server will repeat (conflict, unknown method, bad
 				// param): nothing is written — the caller decides.
-				throw new RecordManualPaymentError(response?.data?.message ?? code, code, status);
+				throw new RecordManualPaymentError(
+					refusal.message ?? refusal.code,
+					refusal.code,
+					refusal.status
+				);
 			}
-			throw error;
+			// No answer, a 5xx, a held lock, a session or proxy answer proves nothing: re-send the
+			// same journaled record.
+			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
+				return { kind: 'unknown', row: minted.row };
+			await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
+				RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
+			);
 		}
 
 	const serverRow = accepted.payment ?? minted.row;

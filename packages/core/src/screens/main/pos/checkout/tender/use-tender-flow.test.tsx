@@ -3911,6 +3911,8 @@ describe('cash rounding (#66, #84)', () => {
 			}),
 		],
 		['invalid', async () => ({ kind: 'invalid', reason: 'tendered_below_amount' })],
+		// A pre-flight failure is terminal (nothing reached the store), never the unknown path.
+		['refused at pre-flight', async () => ({ kind: 'failed', reason: 'preflight_failed' })],
 		[
 			'thrown by the writer',
 			async () => {
@@ -4021,6 +4023,25 @@ describe('cash rounding (#66, #84)', () => {
 		expect(patches()[0]).not.toHaveProperty('status');
 		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'zero-balance' },
+			expect.anything()
+		);
+	});
+
+	it('a cash balance of 0.02 rounded to zero completes through close on the first press', async () => {
+		mockPayload = sale('0.02');
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		// The close is approved against the total the rounding fee commits (0.00), not the 0.02
+		// the cashier saw before it: the store's order and the approval agree on the first press.
+		const close = mockPosterInputs.at(-1) as { approval: { total: string } };
+		expect(close.approval.total).toBe('0.00');
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },
 			expect.anything()
