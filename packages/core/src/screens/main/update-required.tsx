@@ -2,7 +2,6 @@ import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Platform } from '@wcpos/utils/platform';
 
 import { UpdateRequiredNotice } from '../../components/update-required-notice';
 import { useAppState } from '../../contexts/app-state';
@@ -28,7 +27,7 @@ export function UpdateRequired() {
 			testID="update-required-screen"
 			style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
 		>
-			<UpdateRequiredNotice showReload={Platform.isWeb}>
+			<UpdateRequiredNotice>
 				<Button testID="update-required-logout" variant="outline" onPress={logout}>
 					<ButtonText>{t('common.logout')}</ButtonText>
 				</Button>

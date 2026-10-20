@@ -19,11 +19,11 @@ import {
 } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
-import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
+import { useReportUpdateRequired } from './use-update-required';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
@@ -112,12 +112,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	// per-site gate under wp_api_url — the key the sync engine and the in-app
 	// UpdateRequiredGate use — so the login card shows the update notice instead
 	// of "Re-authenticate" and "No stores found".
-	const onUpdateRequired = React.useCallback(
-		(details: Exclude<UpdateRequiredState, null>) => {
-			if (wpApiUrl) reportUpdateRequired(wpApiUrl, details);
-		},
-		[wpApiUrl]
-	);
+	const onUpdateRequired = useReportUpdateRequired(wpApiUrl);
 
 	// Create HTTP client with token refresh handler
 	const httpClient = useHttpClient([tokenRefreshHandler], onUpdateRequired);

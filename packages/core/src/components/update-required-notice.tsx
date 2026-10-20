@@ -7,6 +7,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
+import { Platform } from '@wcpos/utils/platform';
 
 import { useT } from '../contexts/translations';
 import { translateErrorAction } from '../screens/main/logs/generated/error-actions.generated';
@@ -15,8 +16,11 @@ import { translateErrorSummary } from '../screens/main/logs/generated/error-summ
 const CODE = 'SYNC341';
 
 interface Props {
-	/** Web only: a reload picks up the updated bundle and clears the in-memory latch. */
-	showReload: boolean;
+	/**
+	 * Off web only (native, Electron), where there is no Reload: re-check the
+	 * store. Never offered alongside Reload — one primary action.
+	 */
+	onRetry?: () => void;
 	/** `center` for the full-screen gate, `start` inline on the login card. */
 	align?: 'center' | 'start';
 	testID?: string;
@@ -30,10 +34,13 @@ interface Props {
  * UpdateRequired screen and the login card, so both read the same SYNC341
  * summary, action and docs link — one source for screen, card, row and docs page.
  */
-export function UpdateRequiredNotice({ showReload, align = 'center', testID, children }: Props) {
+export function UpdateRequiredNotice({ onRetry, align = 'center', testID, children }: Props) {
 	const t = useT();
 	const centered = align === 'center';
-	const hasActions = showReload || React.Children.count(children) > 0;
+	// Web: a reload picks up the updated bundle and clears the in-memory latch.
+	const showReload = Platform.isWeb;
+	const showRetry = !showReload && onRetry !== undefined;
+	const hasActions = showReload || showRetry || React.Children.count(children) > 0;
 
 	return (
 		<VStack testID={testID} className={centered ? 'max-w-md items-center' : undefined}>
@@ -50,6 +57,11 @@ export function UpdateRequiredNotice({ showReload, align = 'center', testID, chi
 					{showReload ? (
 						<Button testID="update-required-reload" onPress={() => window.location.reload()}>
 							<ButtonText>{t('common.reload', { _tags: 'core' })}</ButtonText>
+						</Button>
+					) : null}
+					{showRetry ? (
+						<Button testID="update-required-retry" variant="outline" onPress={onRetry}>
+							<ButtonText>{t('common.retry')}</ButtonText>
 						</Button>
 					) : null}
 					{children}

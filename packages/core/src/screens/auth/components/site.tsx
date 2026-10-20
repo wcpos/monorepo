@@ -18,13 +18,13 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { Platform } from '@wcpos/utils/platform';
-import { currentUpdateRequired, subscribeUpdateRequired } from '@wcpos/utils/update-required-gate';
+import { clearUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { WPUsers } from './wp-users';
 import { UpdateRequiredNotice } from '../../../components/update-required-notice';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
+import { useUpdateRequired } from '../../../hooks/use-update-required';
 import { useVersionCheck } from '../../../hooks/use-version-check';
 
 interface Props {
@@ -69,16 +69,13 @@ export function Site({ user, site }: Props) {
 
 	// The server's protocol-gate refusal, latched under wp_api_url by the login
 	// validation or the sync engine (the same key the in-app gate reads).
-	const wpApiUrl = site.wp_api_url ?? '';
-	const subscribe = React.useCallback(
-		(onChange: () => void) => (wpApiUrl ? subscribeUpdateRequired(wpApiUrl, onChange) : () => {}),
-		[wpApiUrl]
-	);
-	const getSnapshot = React.useCallback(
-		() => (wpApiUrl ? currentUpdateRequired(wpApiUrl) : null),
-		[wpApiUrl]
-	);
-	const updateRequired = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	const wpApiUrl = site.wp_api_url;
+	const updateRequired = useUpdateRequired(wpApiUrl);
+	// Native/Electron have no Reload: clearing the latch remounts WPUsers, whose
+	// validation re-runs and re-latches if the store still refuses this app.
+	const handleRetryUpdateRequired = React.useCallback(() => {
+		if (wpApiUrl) clearUpdateRequired(wpApiUrl);
+	}, [wpApiUrl]);
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
@@ -118,11 +115,11 @@ export function Site({ user, site }: Props) {
 					</HStack>
 				) : updateRequired ? (
 					// No Logout (nobody is logged in) and no Add user (it cannot help):
-					// the only action is the update, picked up by Reload on web.
+					// one action — Reload on web, Try again elsewhere.
 					<UpdateRequiredNotice
 						testID="update-required-card-notice"
-						showReload={Platform.isWeb}
 						align="start"
+						onRetry={handleRetryUpdateRequired}
 					/>
 				) : (
 					<ErrorBoundary>
