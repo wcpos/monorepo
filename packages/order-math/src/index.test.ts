@@ -28,7 +28,6 @@ test('public value surface is exactly the spec', () => {
 		'mintManualPayment',
 		'mintServerPayment',
 		'parsePaymentsContract',
-		'paymentsContractAtLeast',
 		'readAwaitingCustomer',
 		'readLedger',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then

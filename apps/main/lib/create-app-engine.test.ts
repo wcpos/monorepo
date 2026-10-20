@@ -8,6 +8,7 @@ import {
 	legacyUnsentReportOutstanding,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
@@ -355,10 +356,10 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`
 		);
 		expect(fetch.mock.calls[1]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1`
 		);
 		fetch.mockRestore();
 	});
@@ -1638,7 +1639,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1',
+			`https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.objectContaining({}) })
 		);
 		const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
@@ -1660,7 +1661,7 @@ describe('createAppSyncEngine scope cache', () => {
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`
 		);
 		fetch.mockRestore();
 	});

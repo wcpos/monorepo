@@ -144,7 +144,13 @@ export function EditOrderMetaForm({
 		}
 		// Status is an intent, never an echo (ADR 0040): it is unchanged here (a change goes
 		// through the send below), and re-writing it would queue a reopen from a stale copy.
-		const { cashier_id: _cashierId, status: _unchanged, ...patch } = data;
+		// transaction_id is the server's (stripped on the wire), shown read-only.
+		const {
+			cashier_id: _cashierId,
+			status: _unchanged,
+			transaction_id: _transaction,
+			...patch
+		} = data;
 		const written = await writeOrderFields(order, () => patch);
 		if (written && close) closeDialog();
 		return written;
@@ -158,7 +164,7 @@ export function EditOrderMetaForm({
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, ...fields } = pending;
+		const { cashier_id, transaction_id: _transaction, ...fields } = pending;
 		const patch = () => ({
 			...fields,
 			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
@@ -333,6 +339,8 @@ export function EditOrderMetaForm({
 							<View className="flex-1">
 								<FormInput
 									label={t('common.transaction_id')}
+									testID="order-meta-transaction-id"
+									editable={false}
 									onChange={onChange}
 									value={value ?? ''}
 									{...rest}

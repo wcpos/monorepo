@@ -38,13 +38,20 @@ function mockInput({
 	value,
 	onChange,
 	testID,
+	editable,
 }: {
 	value?: string;
 	onChange?: (value: string) => void;
 	testID?: string;
+	editable?: boolean;
 }) {
 	return (
-		<input data-testid={testID} value={value ?? ''} onChange={(e) => onChange?.(e.target.value)} />
+		<input
+			data-testid={testID}
+			readOnly={editable === false}
+			value={value ?? ''}
+			onChange={(e) => onChange?.(e.target.value)}
+		/>
 	);
 }
 jest.mock('@wcpos/components/form', () => ({
@@ -401,4 +408,21 @@ it('the status picker offers pushable statuses and shows a paid status read-only
 	);
 	expect(statusProps().allowed).toEqual(expect.arrayContaining(['completed', 'pos-open']));
 	expect(statusProps().disabled).toBe(true);
+});
+
+// ADR 0040: the server owns transaction_id and strips it from every push, so the cart shows it
+// read-only and neither the local save nor the send writes it.
+it('shows transaction_id read-only and never writes it', async () => {
+	const formData = { ...payload, transaction_id: 'tx-1', cashier_id: '7' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	expect((screen.getByTestId('order-meta-transaction-id') as HTMLInputElement).readOnly).toBe(true);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
+	mockPatch.mockClear();
+	render(
+		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
+	);
+	await act(async () => fireEvent.click(screen.getAllByTestId('order-meta-save')[1]));
+	await confirm();
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
 });

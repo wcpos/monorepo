@@ -135,8 +135,4 @@ export type {
 	GatewaySubmitResponse,
 } from './payments';
 
-export {
-	APP_PAYMENTS_CONTRACT,
-	parsePaymentsContract,
-	paymentsContractAtLeast,
-} from './payments/contract';
+export { APP_PAYMENTS_CONTRACT, parsePaymentsContract } from './payments/contract';

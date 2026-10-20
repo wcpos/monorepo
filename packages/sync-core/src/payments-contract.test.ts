@@ -1,24 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePaymentsContract, paymentsContractAtLeast } from './payments-contract';
+import { parsePaymentsContract } from './payments-contract';
 
-// The helpers live here (sync-engine and order-math both consume them); order-math only re-exports.
-describe('payments contract helpers', () => {
+// The parser lives here (query reads the store's contract through it); order-math only re-exports.
+describe('payments contract parser', () => {
 	it.each([
-		['1.3', { major: 1, minor: 3 }, true],
-		['1.10', { major: 1, minor: 10 }, true],
-		['2.0', { major: 2, minor: 0 }, true],
-		[null, null, false],
-		['abc', null, false],
-		['1.3beta', null, false],
-	] as const)('parses and compares %s', (value, parsed, expected) => {
+		['1.3', { major: 1, minor: 3 }],
+		['1.10', { major: 1, minor: 10 }],
+		['2.0', { major: 2, minor: 0 }],
+		[null, null],
+		['abc', null],
+		['1.3beta', null],
+	] as const)('parses %s', (value, parsed) => {
 		expect(parsePaymentsContract(value)).toEqual(parsed);
-		expect(paymentsContractAtLeast(value, '1.3')).toBe(expected);
-	});
-
-	it('compares numeric minors and rejects malformed floors', () => {
-		expect(paymentsContractAtLeast('1.10', '1.9')).toBe(true);
-		expect(paymentsContractAtLeast('1.9', '1.10')).toBe(false);
-		expect(paymentsContractAtLeast('1.3', 'abc')).toBe(false);
 	});
 });
