@@ -149,11 +149,19 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				// scope's queue + record, and a switch/reset mid-resolution drops them.
 				let needsRepull: RemoteId | null = null;
 				let residentRemoved = false;
-				let resolved: { collectionName: string; recordId: string; scopeId: string } | null = null;
+				let resolved: { collectionName: string; recordId: string } | null = null;
+				// Everything this resolution logs AFTER its guarded write — the claim
+				// release, the re-pull, the settled row — runs outside the guard, so a
+				// switch can land first; the observer then belongs to the incoming scope,
+				// and none of these rows are its.
+				let boundScopeId: string | null = null;
+				const inBoundScope = (): boolean =>
+					boundScopeId !== null && manager.activeScope === boundScopeId;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
+						boundScopeId = bound.scopeId;
 						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
@@ -580,11 +588,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								'resolveConflict: scope moved during resolution — retry against the settled scope'
 							);
 						}
-						resolved = {
-							collectionName: entry.collectionName,
-							recordId: entry.recordId,
-							scopeId: bound.scopeId,
-						};
+						resolved = { collectionName: entry.collectionName, recordId: entry.recordId };
 					});
 				} finally {
 					// Release whatever happened — success, refusal, or throw. A resolution
@@ -595,6 +599,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						await (claimedQueue as ReturnType<typeof queueFor>)
 							.releaseResolutionClaim(mutationId, resolutionInstanceIdFor())
 							.catch((error) => {
+								if (!inBoundScope()) return;
 								// The release must never mask the try-block's outcome, and a failed
 								// release self-heals at the lease deadline — but a storage failure
 								// here is still a failure someone may be diagnosing, so it is
@@ -620,25 +625,22 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							reason: `conflict-discard:${mutationId}`,
 						});
 					} catch (error) {
-						diagnostics({
-							type: 'queue.write.discard-repull-deferred',
-							level: 'warn',
-							collection: 'orders',
-							message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-							fields: { mutationId, remoteId: needsRepull },
-						});
+						if (inBoundScope())
+							diagnostics({
+								type: 'queue.write.discard-repull-deferred',
+								level: 'warn',
+								collection: 'orders',
+								message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+								fields: { mutationId, remoteId: needsRepull },
+							});
 					}
 				}
 				const settledResolution = resolved as {
 					collectionName: string;
 					recordId: string;
-					scopeId: string;
 				} | null;
 				if (settledResolution) {
-					// A switch can land after the guarded write commits (the claim release
-					// and re-pull above run outside it): the observer then belongs to the
-					// incoming scope, and this resolution's row is not its.
-					if (manager.activeScope === settledResolution.scopeId)
+					if (inBoundScope())
 						diagnostics({
 							type: 'queue.write.resolve',
 							level: 'info',
