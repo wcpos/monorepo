@@ -31,12 +31,7 @@ import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
-import {
-	QueryProvider,
-	readStorePaymentsContract,
-	useDocField,
-	useFollowedCollection,
-} from '@wcpos/query';
+import { QueryProvider, useDocField, useFollowedCollection } from '@wcpos/query';
 import { credentialsTokenOwner } from '@wcpos/query/user-db';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
@@ -84,7 +79,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store, userDB, extraData } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
@@ -148,7 +143,6 @@ function AppStack() {
 		registerEngineScopeSwitcher(async (session) => {
 			if (!session.site || !session.wpCredentials) return;
 			await switchAppEngineScope(session, {
-				paymentsContract: () => readStorePaymentsContract(session.extraData),
 				...createSessionFetcherOptions(
 					session.site.getLatest(),
 					credentialsTokenOwner(session.wpCredentials),
@@ -164,7 +158,6 @@ function AppStack() {
 			createAppSyncEngine({
 				wpApiUrl,
 				siteDocument: site,
-				paymentsContract: () => readStorePaymentsContract(extraData),
 				...createSessionFetcherOptions(
 					{
 						wcpos_api_url: wcposApiUrl,
@@ -183,7 +176,6 @@ function AppStack() {
 			}),
 		[
 			site,
-			extraData,
 			wpApiUrl,
 			wcposApiUrl,
 			storeID,

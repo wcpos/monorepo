@@ -26,8 +26,6 @@ jest.mock('@wcpos/order-math', () => ({
 	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
 }));
 
-const paymentMethods = new BehaviorSubject<unknown>(null);
-const extraData = { get: () => paymentMethods.value, get$: () => paymentMethods };
 const events = new Subject<{ type: string; collection?: string }>();
 const coverage = new BehaviorSubject({ complete: true });
 const statuses = new BehaviorSubject({ collections: { taxRates: { coverageGeneration: 0 } } });
@@ -87,7 +85,6 @@ let mockInputs = {
 };
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
-	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	readCoverageGeneration: jest.requireActual('@wcpos/query').readCoverageGeneration,
 	useQueryRuntime: () => manager,
 	observeCatalogChanges: jest.requireActual('@wcpos/query').observeCatalogChanges,
@@ -95,7 +92,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: any, read: any) => read(doc),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 }, extraData }),
+	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 } }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: jest.fn(() => ({ registerId: 'register', status: 'bound' })),
@@ -146,7 +143,6 @@ const flush = async () => {
 	});
 };
 beforeEach(() => {
-	paymentMethods.next(null);
 	currentConfig = config;
 	sessionOpen = true;
 	ownsMoney.mockReset().mockReturnValue(false);
@@ -505,7 +501,7 @@ it.each(['divergence', 'command', 'replay-owner', 'replay-edit'] as const)(
 		await flush();
 		if (scenario === 'divergence') ownsMoney.mockReturnValue(true);
 		else if (scenario === 'replay-owner')
-			a.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+			a.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
 		else {
 			a.payload.line_items = [{ product_id: 1, quantity: 1, subtotal: '30', total: '30' }];
 			a.payload.total = '30';
@@ -607,22 +603,6 @@ it('leaves a coupon edit to the continuation and completes once at the redistrib
 	act(() => orders.next({ ready: true, hits: [{ record: a }] }));
 	await flush();
 	expect(commitAtBoundary).toHaveBeenCalledTimes(1);
-	expect(writes).toHaveLength(1);
-	view.unmount();
-});
-
-it('wakes a hint-only open order when the store contract resolves to 1.3', async () => {
-	orders.next({
-		ready: true,
-		hits: [
-			{ record: record({ meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }) },
-		],
-	});
-	const view = render(<SettlementCoordinatorProvider />);
-	await flush();
-	expect(writes).toHaveLength(0);
-	act(() => paymentMethods.next({ schema: 1, methods: [], contract: '1.3' }));
-	await flush();
 	expect(writes).toHaveLength(1);
 	view.unmount();
 });

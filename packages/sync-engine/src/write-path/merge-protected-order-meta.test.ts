@@ -34,7 +34,7 @@ it.each(['server', 'mutation'] as const)(
 	}
 );
 
-it('server adoption replaces the stamp, while retaining the local hint', () => {
+it('the epoch-era stamp is plain meta, while the local hint survives server adoption', () => {
 	const stamp = { key: '_wcpos_money_owner', value: 'server' };
 	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
 	expect(mergeProtectedOrderMeta([stamp, hint], [])).toEqual([hint]);
@@ -42,14 +42,5 @@ it('server adoption replaces the stamp, while retaining the local hint', () => {
 	expect(mergeProtectedOrderMeta([stamp], [{ ...stamp, value: null }])).toEqual([
 		{ ...stamp, value: null },
 	]);
-	expect(mergeProtectedOrderMeta([stamp], [], 'mutation')).toEqual([stamp]);
-});
-
-it('server adoption replaces a protected epoch', () => {
-	expect(
-		mergeProtectedOrderMeta(
-			[{ key: '_wcpos_money_epoch', value: '1' }],
-			[{ key: '_wcpos_money_epoch', value: '2' }]
-		)
-	).toEqual([{ key: '_wcpos_money_epoch', value: '2' }]);
+	expect(mergeProtectedOrderMeta([stamp], [], 'mutation')).toEqual([]);
 });

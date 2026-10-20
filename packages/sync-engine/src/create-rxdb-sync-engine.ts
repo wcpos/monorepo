@@ -253,8 +253,6 @@ export type EngineStringStore = {
 };
 
 export type RxdbSyncEnginePorts = {
-	/** The active store payments contract; unknown stores retain the legacy envelope. */
-	paymentsContract?: () => string | null;
 	getInstanceId?: () => string | undefined | Promise<string | undefined>;
 	site: { syncBaseUrl: string; wpJsonRoot: string; wcposVersion?: () => string | undefined };
 	/** Optional host lifecycle barrier. Initial database creation waits for this
@@ -1962,7 +1960,6 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writePlane = createWritePlane({
-		paymentsContract: ports.paymentsContract,
 		// A drainable-generation engine acknowledges through projections that fit its schemas.
 		...(scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
 			? {}

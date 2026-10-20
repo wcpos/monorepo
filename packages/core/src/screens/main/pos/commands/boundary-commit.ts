@@ -43,7 +43,6 @@ export async function commitAtBoundary(
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
-		storeContract?: () => string | null;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
 	},
 	{
@@ -147,11 +146,7 @@ export async function commitAtBoundary(
 						if (!allowed(payload, true)) return null;
 						aggregateOnly = true;
 					}
-					if (
-						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
-						ctx.serverOwnsMoney(order.uuid)
-					)
-						return null;
+					if (serverOwnsMoney(payload.meta_data) || ctx.serverOwnsMoney(order.uuid)) return null;
 					const config = ctx.configForOrder(payload);
 					const snapshot = snapshotFromOrderJSON(payload);
 					const fresh = coupons

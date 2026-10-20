@@ -8,7 +8,7 @@ import { useUniwind } from 'uniwind';
 
 import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
-import { readStorePaymentsContract, useDocField } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
@@ -43,8 +43,7 @@ export const unstable_settings = {
 };
 
 export default function POSLayout() {
-	const { wpCredentials, store, extraData } = useStoreSession();
-	const storeContract = React.useCallback(() => readStorePaymentsContract(extraData), [extraData]);
+	const { wpCredentials, store } = useStoreSession();
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	useResetCheckoutModeOnStoreChange(storeID);
@@ -124,7 +123,7 @@ export default function POSLayout() {
 	// BOUNDARY — nothing pushes into it from outside React; every entry comes from
 	// an engine call a cart hook just made, below this point.
 	return (
-		<OrderMoneyDivergenceProvider storeContract={storeContract}>
+		<OrderMoneyDivergenceProvider>
 			<OrderEngineWarningsProvider>
 				<ErrorBoundary onReset={retryOwnedReads} resetKeys={[openOrdersHandle]}>
 					<Suspense>

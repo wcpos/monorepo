@@ -51,7 +51,6 @@ export type WritePlane = {
 	sessionHeld(): boolean;
 };
 type WritePlaneDeps = {
-	paymentsContract?: () => string | null;
 	assertUsable: () => void;
 	settled: (kind: 'read' | 'write') => Promise<void>;
 	manager: StoreScopeManager;
@@ -110,7 +109,6 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		deps.onStatusChanged();
 	};
 	const drainLane = createWriteDrainLane({
-		paymentsContract: deps.paymentsContract,
 		manager: deps.manager,
 		databaseFor: deps.databaseFor,
 		fetcher: deps.fetcher,

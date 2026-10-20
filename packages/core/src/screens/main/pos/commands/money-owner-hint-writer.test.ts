@@ -7,8 +7,9 @@ jest.mock('./plain-patch', () => ({
 	findEngineResident: jest.fn(async () => ({})),
 	plainPatch: jest.fn(async () => {}),
 }));
-it.each(['1.3', '1.2', null])('writes hints only before 1.3 (%s)', async (storeContract) => {
-	jest.clearAllMocks();
+
+// The hint is ADR 0032's line-money ownership; ADR 0040's contract does not stand it down.
+it('writes the hint at contract 1.3', async () => {
 	let listener!: (event: { type: string; recordId: string }) => void;
 	const manager = {
 		engine: {
@@ -18,21 +19,15 @@ it.each(['1.3', '1.2', null])('writes hints only before 1.3 (%s)', async (storeC
 			},
 		},
 	};
-	const stop = createMoneyOwnerHintWriter(
-		manager as unknown as ReturnType<typeof useQueryRuntime>,
-		{ storeContract: () => storeContract }
-	);
+	// The writer takes no contract: a store reporting 1.3 cannot stand it down.
+	const stop = createMoneyOwnerHintWriter(manager as unknown as ReturnType<typeof useQueryRuntime>);
 	listener({ type: 'order-money-divergence', recordId: 'order' });
 	await new Promise((resolve) => setImmediate(resolve));
-	if (storeContract === '1.3') {
-		expect(findEngineResident).not.toHaveBeenCalled();
-		expect(plainPatch).not.toHaveBeenCalled();
-	} else {
-		expect(plainPatch).toHaveBeenCalledTimes(1);
-		const input = jest.mocked(plainPatch).mock.calls[0][2];
-		expect(input.changes({})).toEqual({
-			meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }],
-		});
-	}
+	expect(plainPatch).toHaveBeenCalledTimes(1);
+	expect(findEngineResident).toHaveBeenCalledTimes(1);
+	const input = jest.mocked(plainPatch).mock.calls[0][2];
+	expect(input.changes({})).toEqual({
+		meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }],
+	});
 	stop();
 });

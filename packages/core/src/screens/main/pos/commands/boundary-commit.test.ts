@@ -237,7 +237,7 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 			if (change === 'lines') order.payload.line_items = [{ total: '8', subtotal: '8' }];
 			if (change === 'status') order.payload.status = 'completed';
 			if (change === 'ownership')
-				order.payload.meta_data!.push({ key: '_wcpos_money_owner', value: 'server' });
+				order.payload.meta_data!.push({ key: '_wcpos_money_owner_hint', value: 'server' });
 			if (change === 'refund')
 				order.payload.meta_data = [
 					{

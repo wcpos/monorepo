@@ -2904,25 +2904,3 @@ describe('previous-generation database drain', () => {
 		);
 	});
 });
-
-it('reads the current store contract through the host port, including an awaited scope switch', async () => {
-	const { createAppSyncEngine, createRxdbSyncEngine, switchAppEngineScope } = loadCreateAppEngine();
-	let contract = '1.2';
-	const options = { ...BASE_OPTIONS, paymentsContract: () => contract };
-	createAppSyncEngine(options);
-	const ports = createRxdbSyncEngine.mock.calls[0]![0] as {
-		paymentsContract?: () => string | null;
-	};
-	expect(ports.paymentsContract?.()).toBe('1.2');
-	contract = '1.3';
-	expect(ports.paymentsContract?.()).toBe('1.3');
-	await switchAppEngineScope(
-		{
-			site: { wp_api_url: BASE_OPTIONS.scope.site },
-			store: { id: 'store-2' },
-			wpCredentials: { id: 'cashier-1' },
-		},
-		{ ...options, paymentsContract: () => null }
-	);
-	expect(ports.paymentsContract?.()).toBeNull();
-});

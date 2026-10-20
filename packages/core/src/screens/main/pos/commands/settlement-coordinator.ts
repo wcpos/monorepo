@@ -30,7 +30,6 @@ interface Deps {
 	references$: Observable<CouponReferences>;
 	readCoupons: (payload: OrderPayload) => Promise<CouponContext>;
 	serverOwnsMoney: (uuid: string) => boolean;
-	storeContract?: () => string | null;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	settle: (
@@ -65,7 +64,7 @@ function closed(
 		) ||
 		(!ignoreCheckout && deps.inCheckout(record.uuid)) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() })
+		serverOwnsMoney(payload.meta_data)
 	);
 }
 
@@ -105,10 +104,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			p.billing,
 			p.shipping,
 			p.meta_data?.filter(
-				({ key }) =>
-					key === '_woocommerce_pos_tax_based_on' ||
-					key === '_wcpos_money_owner' ||
-					key === '_wcpos_money_owner_hint'
+				({ key }) => key === '_woocommerce_pos_tax_based_on' || key === '_wcpos_money_owner_hint'
 			),
 			// A guard can outlive a ledger update that supersedes a paid-balance completion.
 			readLedger(p.meta_data)

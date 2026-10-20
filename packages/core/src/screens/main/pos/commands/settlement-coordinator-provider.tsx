@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject, skip } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 import {
 	type EngineWarning,
@@ -10,13 +10,7 @@ import {
 	settlementPatch,
 	snapshotFromOrderJSON,
 } from '@wcpos/order-math';
-import {
-	observeCatalogChanges,
-	observeCoverage,
-	readStorePaymentsContract,
-	useDocField,
-	useQueryRuntime,
-} from '@wcpos/query';
+import { observeCatalogChanges, observeCoverage, useDocField, useQueryRuntime } from '@wcpos/query';
 import { observeOpenSessionPresence } from '@wcpos/query/register-session';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
@@ -56,7 +50,7 @@ const observe = (event: SettlementDiagnostic) => logger.warn(event.type, { conte
 /** Session-owned, beside the config reader; no cart tab owns this subscription. */
 export function SettlementCoordinatorProvider() {
 	const manager = useQueryRuntime();
-	const { wpCredentials, store, extraData } = useStoreSession();
+	const { wpCredentials, store } = useStoreSession();
 	const cashier = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeId = useDocField(store, (value) => value.id) as number | undefined;
 	const { registerId, status: bindingStatus } = useRegisterBinding();
@@ -102,7 +96,6 @@ export function SettlementCoordinatorProvider() {
 					couponLines: payload.coupon_lines ?? [],
 				}),
 			serverOwnsMoney,
-			storeContract: () => readStorePaymentsContract(extraData),
 			orderSaveState: getOrderSaveState,
 			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			now: Date.now,
@@ -142,7 +135,6 @@ export function SettlementCoordinatorProvider() {
 							source: 'system',
 							configForOrder: read,
 							serverOwnsMoney,
-							storeContract: () => readStorePaymentsContract(extraData),
 							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							readBindingStatus: () =>
 								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
@@ -195,11 +187,6 @@ export function SettlementCoordinatorProvider() {
 			if (value.ready && !value.error)
 				openOrders$.next(value.hits.map(({ record }) => record as CurrentOrderRecord));
 		});
-		// Descriptor arrival changes ownership eligibility without changing any order.
-		const contract = extraData
-			?.get$('paymentMethods')
-			.pipe(skip(1))
-			.subscribe(() => inputs$.next(inputs$.value));
 		const stock = observeCatalogChanges(manager.engine).subscribe(() =>
 			inputs$.next(inputs$.value)
 		);
@@ -208,7 +195,6 @@ export function SettlementCoordinatorProvider() {
 			coordinator.stop();
 			offEvents();
 			offCheckout();
-			contract?.unsubscribe();
 			stock.unsubscribe();
 			rates.unsubscribe();
 			orders.unsubscribe();
@@ -226,7 +212,6 @@ export function SettlementCoordinatorProvider() {
 		saleContext,
 		bindingStatus,
 		registerId,
-		extraData,
 	]);
 	return null;
 }

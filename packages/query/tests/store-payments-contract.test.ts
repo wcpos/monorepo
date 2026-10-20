@@ -1,11 +1,6 @@
-import { createRxDatabase } from 'rxdb';
-import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
-import { readResidentMoneyEpoch } from '../src/reads/order-money-epoch';
 import {
 	readStorePaymentsContract,
 	useStorePaymentsContract,
@@ -28,25 +23,4 @@ it.each([
 		useStorePaymentsContract(extraData as unknown as RxState<Record<string, unknown>>)
 	);
 	expect(result.current).toBe(expected);
-});
-
-it('resident epoch reads see committed RxDB updates synchronously', async () => {
-	const db = await createRxDatabase({
-		name: 'moneyepochs',
-		storage: getRxStorageMemory(),
-		multiInstance: false,
-	});
-	try {
-		// prettier-ignore
-		await db.addCollections({ orders: { schema: { version: 0, primaryKey: 'uuid', type: 'object', properties: { uuid: { type: 'string', maxLength: 64 }, payload: { type: 'object', additionalProperties: true } }, required: ['uuid', 'payload'] } } });
-		const engine = { active: () => ({ database: db }) } as unknown as RxdbSyncEngine;
-		const doc = await db.collections.orders.insert({ uuid: 'order', payload: {} });
-		expect(readResidentMoneyEpoch(engine, 'order')).toBe(0);
-		await doc.incrementalPatch({
-			payload: { meta_data: [{ key: '_wcpos_money_epoch', value: '2' }] },
-		});
-		expect(readResidentMoneyEpoch(engine, 'order')).toBe(2);
-	} finally {
-		await db.remove();
-	}
 });

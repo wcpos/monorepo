@@ -64,7 +64,6 @@ import {
 	buildCreateMutation,
 	buildDeleteMutation,
 	buildUpdateMutation,
-	readMoneyEpoch,
 	RecordMutationQueue,
 	remoteIdOrNull,
 	RxRecordMutationStorage,
@@ -689,10 +688,6 @@ export async function enqueueWriteIntent(input: {
 			}
 		}
 
-		if (intent.collection === 'orders' && intent.operation === 'update') {
-			mutation.expectedEpoch = readMoneyEpoch(stored?.payload?.meta_data);
-		}
-
 		// Requeue provenance (#832) rides on the row this iteration produces, whether
 		// it is enqueued plainly or swapped into a coalesce replacement below.
 		if (input.provenance) {
@@ -764,9 +759,6 @@ export async function enqueueWriteIntent(input: {
 						: {}),
 					status: 'pending' as const,
 				};
-				// Coalescing keeps the first intent's epoch, including its absence on legacy work.
-				if (prior.expectedEpoch === undefined) delete replacement.expectedEpoch;
-				else replacement.expectedEpoch = prior.expectedEpoch;
 				// Conditional swap: refuses when the prior row is no longer pending
 				// (drain-claimed or consumed by a concurrent write) — re-decide then.
 				if (!(await queue.coalesceInto(prior.mutationId, replacement, nowMs()))) continue;

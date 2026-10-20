@@ -28,7 +28,6 @@
 
 import {
 	drainMutationQueue,
-	paymentsContractAtLeast,
 	pushEndpointResolver,
 	pushRecordMutation,
 	reconcileCreateAck,
@@ -314,7 +313,6 @@ export type WriteDrainReport = {
 };
 
 export type WriteDrainLaneDeps = {
-	paymentsContract?: () => string | null;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: EngineSourceFetcher;
@@ -623,14 +621,6 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								try {
 									const pushed = await pushRecordMutation({
 										mutation: outbound,
-										...(outbound.collectionName === 'orders' &&
-										outbound.operation !== 'delete' &&
-										paymentsContractAtLeast(deps.paymentsContract?.(), '1.3')
-											? {
-													expectedEpoch: outbound.expectedEpoch,
-													tillAggregate: tillAggregates.get(outbound.mutationId),
-												}
-											: {}),
 										resolveEndpoint,
 										barcodeSelectors: barcodeSelectorsFor(
 											scopeBarcodeSelectors(),

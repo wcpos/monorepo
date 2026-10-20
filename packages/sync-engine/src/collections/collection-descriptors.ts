@@ -672,10 +672,10 @@ const ordersWriteFacet = createWriteFacet({
 			// Even with a successor, the server owns these facts; editable intent stays local.
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
-					(entry) => !['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+					(entry) => !SERVER_ORDER_MONEY_META_KEYS.includes(entry.key)
 				),
 				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
-					['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+					SERVER_ORDER_MONEY_META_KEYS.includes(entry.key)
 				),
 			],
 		}),
