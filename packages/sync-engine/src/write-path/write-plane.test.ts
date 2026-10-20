@@ -175,6 +175,133 @@ describe('write-plane status notifications', () => {
 	});
 });
 
+describe('write-plane resolution after a scope switch', () => {
+	// An order discard whose post-commit work (claim release, re-pull) is still
+	// running when the cashier switches: nothing it logs may reach the incoming
+	// scope's observer.
+	async function orderDiscard(hooks: {
+		repull?: (manager: StoreScopeManager) => Promise<void>;
+		release?: (manager: StoreScopeManager) => Promise<void>;
+	}) {
+		let residentData: Record<string, unknown> = {
+			remoteId: remoteId(42),
+			payload: {},
+			local: { dirty: true, pendingMutationIds: ['terminal'] },
+		};
+		const resident = {
+			toJSON: () => residentData,
+			incrementalModify: async (
+				modify: (data: Record<string, unknown>) => Record<string, unknown>
+			) => void (residentData = modify(residentData)),
+			remove: async () => undefined,
+		};
+		const database = {
+			collections: { orders: { findOne: () => ({ exec: async () => resident }) } },
+			listCollections: () => [],
+			resetCollection: async () => undefined,
+			pendingMutationCount: async () => 0,
+			close: async () => undefined,
+		} as unknown as RxDatabase & ScopeDatabase;
+		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		const pending = await queue.enqueue({
+			mutationId: 'terminal',
+			collectionName: 'orders',
+			operation: 'update',
+			recordId: 'order-1',
+			origin: 'existing',
+			payload: {},
+			baseRevision: 'r1',
+			queuedAt: '2026-08-07T00:00:00.000Z',
+		});
+		await queue.replace({ ...pending, status: 'rejected' });
+		const manager = new StoreScopeManager({ createDatabase: async () => database });
+		await manager.switchTo('scope-1');
+		if (hooks.release) {
+			const release = hooks.release;
+			vi.spyOn(queue, 'releaseResolutionClaim').mockImplementation(() => release(manager));
+		}
+		const diagnostics: { type: string }[] = [];
+		const plane = createWritePlane({
+			assertUsable: () => undefined,
+			settled: async () => undefined,
+			manager,
+			databaseFor: () => database,
+			fetcher: async () => {
+				throw new Error('not called');
+			},
+			syncBaseUrl: 'https://example.test',
+			mintUuid: () => 'resolver',
+			now: () => 0,
+			diagnostics: (event) => diagnostics.push(event),
+			onStatusChanged: () => undefined,
+			connectivity: () => 'online',
+			emitWriteEvent: () => undefined,
+			persistOrderRepull: async () => undefined,
+			repullOrdersNow: async () => hooks.repull?.(manager),
+			queueFor: () => queue,
+		});
+		await plane.resolveConflict('terminal', 'discard');
+		return { manager, diagnostics };
+	}
+
+	it('logs no deferred re-pull into the incoming scope', async () => {
+		const { manager, diagnostics } = await orderDiscard({
+			repull: async (scopes) => {
+				await scopes.switchTo('scope-2');
+				throw new Error('scope moved');
+			},
+		});
+		expect(manager.activeScope).toBe('scope-2');
+		expect(diagnostics.map((event) => event.type)).not.toContain(
+			'queue.write.discard-repull-deferred'
+		);
+		expect(diagnostics.map((event) => event.type)).not.toContain('queue.write.resolve');
+	});
+
+	it('logs nothing into the SAME scope reactivated by a switch away and back (A→B→A)', async () => {
+		const { manager, diagnostics } = await orderDiscard({
+			repull: async (scopes) => {
+				await scopes.switchTo('scope-2');
+				await scopes.switchTo('scope-1');
+				throw new Error('scope moved');
+			},
+		});
+		expect(manager.activeScope).toBe('scope-1');
+		const types = diagnostics.map((event) => event.type);
+		expect(types).not.toContain('queue.write.discard-repull-deferred');
+		expect(types).not.toContain('queue.write.resolve');
+	});
+
+	it('logs no failed claim release into the incoming scope', async () => {
+		const { manager, diagnostics } = await orderDiscard({
+			release: async (scopes) => {
+				await scopes.switchTo('scope-2');
+				throw new Error('storage closed');
+			},
+		});
+		expect(manager.activeScope).toBe('scope-2');
+		expect(diagnostics.map((event) => event.type)).not.toContain('queue.write.tick.error');
+	});
+
+	it('still logs both in the scope that resolved', async () => {
+		const { diagnostics } = await orderDiscard({
+			repull: async () => {
+				throw new Error('offline');
+			},
+			release: async () => {
+				throw new Error('storage busy');
+			},
+		});
+		expect(diagnostics.map((event) => event.type)).toEqual(
+			expect.arrayContaining([
+				'queue.write.tick.error',
+				'queue.write.discard-repull-deferred',
+				'queue.write.resolve',
+			])
+		);
+	});
+});
+
 describe('write-plane guard order', () => {
 	it('reports disposal before the non-writeable facet error', async () => {
 		const { plane, settled } = await fixture(() => {

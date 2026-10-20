@@ -18,6 +18,9 @@ const RULES: readonly (readonly [RegExp, string])[] = [
 	[/Unsupported native printer vendor/i, 'err_unsupported'],
 	[/missing its device key|is not connected/i, 'err_reconnect'],
 	[/CoverOpen|PaperEnd|paper/i, 'err_paper'],
+	// A receipt fetch that timed out is the receipt server, not the printer: no
+	// "the printer did not answer" line for it.
+	[/Receipt fetch timed out/i, 'err_generic'],
 	[/timed out|timeout|ETIMEDOUT/i, 'err_timeout'],
 	[/ECONNREFUSED|refused/i, 'err_refused'],
 ];

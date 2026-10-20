@@ -182,10 +182,17 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				let needsRepull: RemoteId | null = null;
 				let residentRemoved = false;
 				let resolved: { collectionName: string; recordId: string } | null = null;
+				// Everything this resolution logs AFTER its guarded write — the claim
+				// release, the re-pull, the settled row — runs outside the guard, so a
+				// switch can land first; the observer then belongs to the incoming scope,
+				// and none of these rows are its. The bound EPOCH decides, not the scope
+				// id, which matches again after a switch away and back (A→B→A).
+				let inBoundScope = (): boolean => false;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
+						inBoundScope = () => bound.isCurrent();
 						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
@@ -621,6 +628,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						await (claimedQueue as ReturnType<typeof queueFor>)
 							.releaseResolutionClaim(mutationId, resolutionInstanceIdFor())
 							.catch((error) => {
+								if (!inBoundScope()) return;
 								// The release must never mask the try-block's outcome, and a failed
 								// release self-heals at the lease deadline — but a storage failure
 								// here is still a failure someone may be diagnosing, so it is
@@ -646,13 +654,14 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							reason: `conflict-discard:${mutationId}`,
 						});
 					} catch (error) {
-						diagnostics({
-							type: 'queue.write.discard-repull-deferred',
-							level: 'warn',
-							collection: 'orders',
-							message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-							fields: { mutationId, remoteId: needsRepull },
-						});
+						if (inBoundScope())
+							diagnostics({
+								type: 'queue.write.discard-repull-deferred',
+								level: 'warn',
+								collection: 'orders',
+								message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+								fields: { mutationId, remoteId: needsRepull },
+							});
 					}
 				}
 				const settledResolution = resolved as {
@@ -660,20 +669,21 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 					recordId: string;
 				} | null;
 				if (settledResolution) {
-					diagnostics({
-						type: 'queue.write.resolve',
-						level: 'info',
-						collection: settledResolution.collectionName,
-						// `residentRemoved` makes a destructive discard legible in the log:
-						// it is the one resolution that deletes a record outright, and "the
-						// order is gone" must never be an unexplained disappearance (R7b).
-						fields: {
-							recordId: settledResolution.recordId,
-							mutationId,
-							resolution,
-							residentRemoved,
-						},
-					});
+					if (inBoundScope())
+						diagnostics({
+							type: 'queue.write.resolve',
+							level: 'info',
+							collection: settledResolution.collectionName,
+							// `residentRemoved` makes a destructive discard legible in the log:
+							// it is the one resolution that deletes a record outright, and "the
+							// order is gone" must never be an unexplained disappearance (R7b).
+							fields: {
+								recordId: settledResolution.recordId,
+								mutationId,
+								resolution,
+								residentRemoved,
+							},
+						});
 					// The resolution changed queue state outside the drain path — refresh
 					// the cached depth and tell status subscribers, or an idle engine
 					// keeps showing the pre-resolution depth.

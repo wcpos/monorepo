@@ -847,9 +847,9 @@ export function createRxdbSyncEngine(
 		// a `push.rejected` marked `revertFailed` when it does not, or marked
 		// `revertSkipped` for a born-local create (which never reverts — it parks
 		// for Store health). This dead letter is stamped `revertPending` so the log
-		// keeps it an uncoded attempt. If the post-drain cleanup throws before
-		// write-rejected (so no revert runs), the write drain emits the verdict
-		// itself (`revertSkipped`) on its way out.
+		// keeps it an uncoded attempt. If the tick throws before write-rejected (so
+		// no revert runs) — later in the drain or in the post-drain cleanup — the
+		// write drain emits the verdict itself (`revertSkipped`) on its way out.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&
@@ -2033,10 +2033,23 @@ export function createRxdbSyncEngine(
 			// The scope this revert belongs to: a revert cut short by a store or
 			// cashier switch is stale, not failed — its verdict would land in the
 			// incoming scope's log. The change stays parked for Store health.
-			const revertScopeId = manager.activeScope;
+			// Bound to the scope's EPOCH, not its id: after a switch away and back
+			// (A→B→A) the id matches again, but this revert's verdict is still stale.
+			let revertIsCurrent = (): boolean => false;
+			try {
+				void manager.runGuarded(async (bound) => {
+					revertIsCurrent = () => bound.isCurrent();
+				});
+			} catch {
+				// No active scope: no log this verdict could belong to.
+			}
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
+					// The discard can commit and the switch land before it returns: the
+					// diagnostics observer then belongs to the incoming scope, so the
+					// verdict is stale either way, success or failure.
+					if (!revertIsCurrent()) return;
 					diagnostics({
 						type: 'queue.write.auto-reverted',
 						level: 'error',
@@ -2054,7 +2067,7 @@ export function createRxdbSyncEngine(
 					});
 				} catch {
 					// The revert failed: the rejected row stays parked for Store Health.
-					if (manager.activeScope === revertScopeId) rejectionVerdict('revertFailed');
+					if (revertIsCurrent()) rejectionVerdict('revertFailed');
 				}
 			})();
 		},

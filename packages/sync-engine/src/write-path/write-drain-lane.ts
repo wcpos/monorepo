@@ -384,8 +384,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		const tickStreak = tickFailureStreaks();
 		// Catalogue dead letters this tick has not yet handed to the engine's revert
 		// (via write-rejected). Their push.rejected was only a stamped attempt, so if
-		// post-drain processing fails first, the verdict is owed here: the row is no
-		// longer pending, and no later drain would ever revisit it.
+		// anything later in the tick fails first — the rest of the drain or the
+		// post-drain processing — the verdict is owed here: the row is no longer
+		// pending, and no later drain would ever revisit it.
 		let verdictsOwed: Awaited<ReturnType<typeof drainMutationQueue>>['rejected'] = [];
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
@@ -774,14 +775,17 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									status,
 									reason,
 								}),
+							// Owed AS the drain makes it, not from the return value: a step
+							// later in this drain can throw after the dead letter is durable.
+							onRejected: (rejection) => {
+								if (AUTO_REVERT_COLLECTIONS.has(rejection.mutation.collectionName))
+									verdictsOwed.push(rejection);
+							},
 							observe: deps.diagnostics,
 							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
-						verdictsOwed = result.rejected.filter(({ mutation: dead }) =>
-							AUTO_REVERT_COLLECTIONS.has(dead.collectionName)
-						);
 						if (result.sessionExpired && restoredScope !== bound.scopeId) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
