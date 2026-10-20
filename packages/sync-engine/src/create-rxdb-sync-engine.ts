@@ -793,9 +793,9 @@ export function createRxdbSyncEngine(
 		// a `push.rejected` marked `revertFailed` when it does not, or marked
 		// `revertSkipped` for a born-local create (which never reverts — it parks
 		// for Store health). This dead letter is stamped `revertPending` so the log
-		// keeps it an uncoded attempt. If the post-drain cleanup throws before
-		// write-rejected (so no revert runs), the write drain emits the verdict
-		// itself (`revertSkipped`) on its way out.
+		// keeps it an uncoded attempt. If the tick throws before write-rejected (so
+		// no revert runs) — later in the drain or in the post-drain cleanup — the
+		// write drain emits the verdict itself (`revertSkipped`) on its way out.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&

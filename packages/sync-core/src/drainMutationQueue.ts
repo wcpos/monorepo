@@ -322,6 +322,12 @@ export async function drainMutationQueue(input: {
 	 */
 	onRetryableFailure?: (failure: DrainResult['failures'][number]) => void;
 	/**
+	 * Called the moment a dead letter is DURABLE, with the same entry `rejected`
+	 * returns. A host that owes a verdict per dead letter must hear of it here:
+	 * if a later step of this drain throws, the return value never arrives.
+	 */
+	onRejected?: (rejection: DrainResult['rejected'][number]) => void;
+	/**
 	 * This drain instance's id + how long its claim lease lasts (task 43 follow-up).
 	 * With both set, a claim carries a stealable lease so two windows draining
 	 * cannot both claim one row. Absent ⇒ no lease (single-process / legacy callers
@@ -544,7 +550,9 @@ export async function drainMutationQueue(input: {
 			// panel, so counting an unpersisted one tells every surface the row was
 			// dead-lettered while storage still holds it as claimed/pending — the row
 			// is then invisible to recovery and to anyone reading the logs.
-			rejected.push({ mutation, status, reason, serverMessage });
+			const rejection = { mutation, status, reason, serverMessage };
+			rejected.push(rejection);
+			input.onRejected?.(rejection);
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the
 			// health banner reads that classification, so emitting it on a failed

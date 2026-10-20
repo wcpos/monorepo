@@ -2114,6 +2114,75 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('owes the verdict when the drain itself throws after the dead letter is durable', async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// A second row, queued behind the catalogue change, so the SAME drain
+			// keeps going after the dead letter.
+			await insertBornLocalOrder(engine, UUID_B, { status: 'pending' }, 'pending');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_B,
+				payload: { status: 'pending' },
+			});
+			// Claiming the next row fails once, after the dead letter is durable — the
+			// drain throws before it can return its rejected list.
+			const queue = queueFor(engine.active()!.database as never);
+			const replace = queue.replace.bind(queue);
+			const claim = queue.claim.bind(queue);
+			let deadLettered = false;
+			let failed = false;
+			vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
+				await replace(row);
+				if (row.status === 'rejected') deadLettered = true;
+			});
+			vi.spyOn(queue, 'claim').mockImplementation(async (row, nowMs) => {
+				if (deadLettered && !failed) {
+					failed = true;
+					throw new Error('queue claim failed');
+				}
+				return claim(row, nowMs);
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'error' });
+			expect(failed).toBe(true);
+			// A later healthy drain must not add a second verdict.
+			await engine.sync('write-drain');
+
+			const rejections = diagnostics.filter(
+				(event) => event.type === 'push.rejected' && event.collection === 'products'
+			);
+			// The stamped attempt, then exactly ONE coded verdict, emitted by the drain.
+			expect(
+				rejections.map((event) => {
+					const fields = event.fields as Record<string, unknown> | undefined;
+					return [event.level, fields?.revertPending, fields?.revertSkipped, fields?.status];
+				})
+			).toEqual([
+				['warn', true, undefined, 403],
+				['error', undefined, true, 403],
+			]);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
+	});
+
 	it("treats a revert cut short by a scope switch as stale, never as the incoming scope's verdict", async () => {
 		let answerPull!: (response: Response) => void;
 		const route = rejectedProductFetch({
