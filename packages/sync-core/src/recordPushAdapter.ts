@@ -99,12 +99,15 @@ export class RecordPushError extends Error {
 	 * (#832); nothing branches on it.
 	 */
 	public readonly serverMessage?: string;
+	/** The error body's `data`, whole: a refusal can name what it refused (ADR 0040's leg). */
+	public readonly data?: Record<string, unknown>;
 	public constructor(
 		mutation: RecordMutation,
 		status: number,
 		reason?: string,
 		permanent = false,
-		serverMessage?: string
+		serverMessage?: string,
+		data?: Record<string, unknown>
 	) {
 		super(
 			`push ${mutation.operation} ${mutation.collectionName}/${mutation.recordId} failed: ${status}${reason ? ` (${reason})` : ''}`
@@ -115,6 +118,7 @@ export class RecordPushError extends Error {
 		this.reason = reason;
 		this.permanent = permanent;
 		this.serverMessage = serverMessage;
+		if (data !== undefined) this.data = data;
 	}
 }
 
@@ -349,12 +353,16 @@ export async function pushRecordMutation(input: {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
 		const serverMessage = readServerSentence(body, response.status);
+		const data = body?.data;
 		const error = new RecordPushError(
 			mutation,
 			response.status,
 			reason,
 			reason === WOO_REST_CANNOT_DELETE,
-			serverMessage
+			serverMessage,
+			data && typeof data === 'object' && !Array.isArray(data)
+				? (data as Record<string, unknown>)
+				: undefined
 		);
 		emit({
 			type: 'push.error',

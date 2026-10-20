@@ -288,6 +288,8 @@ export async function patchAndEnqueueEngineResident(input: {
 	initial?: ScopedEngineResident;
 	registerId?: string;
 	tillId?: string;
+	/** Told the queued row's id once the write sticks, so a caller can follow its outcome. */
+	onEnqueued?: (mutationId: string) => void;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -352,8 +354,9 @@ export async function patchAndEnqueueEngineResident(input: {
 		}
 
 		let writeError: unknown;
+		let mutationId: string | undefined;
 		try {
-			await input.manager.engine.write({
+			({ mutationId } = await input.manager.engine.write({
 				collection: input.collection,
 				// Creation funnels insert the resident and enqueue the create first.
 				// Later local edits are updates; the write plane folds create + update
@@ -365,7 +368,7 @@ export async function patchAndEnqueueEngineResident(input: {
 					changes,
 					(previousResident.payload ?? {}) as Record<string, unknown>
 				),
-			});
+			}));
 		} catch (error) {
 			writeError = error;
 		}
@@ -382,6 +385,7 @@ export async function patchAndEnqueueEngineResident(input: {
 			await resident.incrementalModify(() => previousResident);
 			throw writeError;
 		}
+		if (mutationId) input.onEnqueued?.(mutationId);
 		return patched;
 	}
 	throw new Error(`Unable to patch engine resident "${input.recordId}"`);

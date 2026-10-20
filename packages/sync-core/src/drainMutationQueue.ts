@@ -109,6 +109,8 @@ export type DrainResult = {
 		status?: number;
 		reason?: string;
 		serverMessage?: string;
+		/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+		data?: Record<string, unknown>;
 	}[];
 };
 
@@ -630,10 +632,11 @@ export async function drainMutationQueue(input: {
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void | false> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
-		const { status, reason, serverMessage } = error as {
+		const { status, reason, serverMessage, data } = error as {
 			status?: number;
 			reason?: string;
 			serverMessage?: string;
+			data?: Record<string, unknown>;
 		};
 		let rejection: DrainResult['rejected'][number] | undefined;
 		try {
@@ -660,7 +663,7 @@ export async function drainMutationQueue(input: {
 			// panel, so counting an unpersisted one tells every surface the row was
 			// dead-lettered while storage still holds it as claimed/pending — the row
 			// is then invisible to recovery and to anyone reading the logs.
-			rejection = { mutation, status, reason, serverMessage };
+			rejection = { mutation, status, reason, serverMessage, ...(data ? { data } : {}) };
 			rejected.push(rejection);
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the

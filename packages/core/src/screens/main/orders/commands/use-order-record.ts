@@ -11,11 +11,16 @@ export function useOrderRecord() {
 			!!(await localPatch({ document: order, data }))?.document,
 		[localPatch]
 	);
+	/** Null when the local write failed; otherwise the queued row to follow, if one was queued. */
 	const reopenOrder = React.useCallback(
 		async (
 			order: EngineRecord<'orders'>,
 			data: Pick<OrderPayload, 'status' | 'meta_data'>
-		): Promise<boolean> => !!(await localPatch({ document: order, data }))?.document,
+		): Promise<{ mutationId?: string } | null> => {
+			const result = await localPatch({ document: order, data });
+			if (!result?.document) return null;
+			return { mutationId: result.mutationId };
+		},
 		[localPatch]
 	);
 	return { saveOrderFields, reopenOrder };

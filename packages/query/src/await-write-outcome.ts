@@ -9,13 +9,16 @@ export class WriteOutcomeError extends Error {
 	reason?: string;
 	/** The server's own (already localized) sentence; `reason` is the machine code. */
 	serverMessage?: string;
+	/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+	data?: Record<string, unknown>;
 
 	constructor(
 		eventType: WriteOutcomeError['eventType'],
 		mutationId: string,
 		status?: number,
 		reason?: string,
-		serverMessage?: string
+		serverMessage?: string,
+		data?: Record<string, unknown>
 	) {
 		// The server's sentence rides the message too, so every caller's logged `error` says why.
 		super(`${eventType} for mutation "${mutationId}"${serverMessage ? `: ${serverMessage}` : ''}`);
@@ -24,6 +27,7 @@ export class WriteOutcomeError extends Error {
 		this.status = status;
 		this.reason = reason;
 		this.serverMessage = serverMessage;
+		this.data = data;
 	}
 }
 
@@ -105,14 +109,20 @@ function subscribeTerminal(
 							break;
 						case 'write-conflict':
 						case 'write-rejected': {
-							const detail = event as { status?: number; reason?: string; serverMessage?: string };
+							const detail = event as {
+								status?: number;
+								reason?: string;
+								serverMessage?: string;
+								data?: Record<string, unknown>;
+							};
 							reject(
 								new WriteOutcomeError(
 									event.type,
 									boundId,
 									detail.status,
 									detail.reason,
-									detail.serverMessage
+									detail.serverMessage,
+									detail.data
 								)
 							);
 							break;
