@@ -28,3 +28,5 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 15. The permanent rail is 64 wide so its 48 items sit 8 px from each edge, the dense-strip gutter the front drawer already gives the same items (`mx-2`); at 56 the active square touched the rail. Spacing comes from the gutter table in `CODING_STANDARDS.md` § Design, never per surface — evidence: owner, 2026-10-18; `rail/index.tsx` — platform: all.
 
 Status (2026-10-16, C7 B3): `version.tsx` now composes `@wcpos/components/v2/dialog`; About retains its centred `sm` presentation.
+
+16. The rail's width is the drawer's (`drawerStyle.width` = `RAIL_WIDTH`, 64 = 48 + 2 × 8, exported from `rail/index.tsx`), never a class on `DrawerContentScrollView`: the vendored view spreads unknown props onto a `ScrollView` that the Uniwind transform never saw, so line 15's `w-16` (and `w-14` before it) was dropped and the rail rendered 48 wide with the active square on its edge (measured on dev-next, 2026-10-20) — evidence: `expo-router/build/react-navigation/drawer/views/DrawerContentScrollView.js`; `rail/index.test.tsx` — platform: all.

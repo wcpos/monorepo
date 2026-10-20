@@ -18,7 +18,7 @@ import { Platform } from 'react-native';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { DrawerContent } from './index';
+import { DrawerContent, RAIL_WIDTH } from './index';
 import { DrawerPanelVisibilityProvider, DrawerPanelVisibilityReporter } from '../panel-visibility';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
@@ -33,11 +33,13 @@ jest.mock('expo-router/drawer', () => {
 		DrawerContentScrollView: ({
 			children,
 			testID,
+			className,
 			importantForAccessibility,
 			accessibilityElementsHidden,
 		}: {
 			children?: React.ReactNode;
 			testID?: string;
+			className?: string;
 			importantForAccessibility?: string;
 			accessibilityElementsHidden?: boolean;
 		}) =>
@@ -46,6 +48,7 @@ jest.mock('expo-router/drawer', () => {
 				{
 					'data-testid': 'drawer-scroll',
 					'data-panel': testID,
+					'data-class': className,
 					'data-important': importantForAccessibility,
 					'data-elements-hidden': String(accessibilityElementsHidden),
 				},
@@ -102,6 +105,21 @@ const drawerProps = {
 describe('DrawerContent', () => {
 	it('is the web variant under test', () => {
 		expect(Platform.OS).toBe('web');
+	});
+
+	it('is 64 wide by the drawer style, and puts no class on the vendored scroll view', () => {
+		// 48 item + 8 each side (CODING_STANDARDS § Design, Gutters). The layout sets this as
+		// `drawerStyle.width`; a `w-16` class here was spread onto the vendored ScrollView and
+		// dropped, so the rail rendered 48 wide with the active square on its edge (2026-10-20).
+		expect(RAIL_WIDTH).toBe(48 + 2 * 8);
+		const { container } = render(
+			<DrawerPanelVisibilityProvider>
+				<PlainCall {...drawerProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		const scroll = container.querySelector('[data-testid="drawer-scroll"]');
+		expect(scroll).not.toBeNull();
+		expect(scroll?.getAttribute('data-class')).toBeNull();
 	});
 
 	it('renders with no drawer context in the tree', () => {

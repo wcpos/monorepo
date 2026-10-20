@@ -10,7 +10,10 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { DrawerContent as DrawerRail } from '@wcpos/core/screens/main/components/drawer-content/rail';
+import {
+	DrawerContent as DrawerRail,
+	RAIL_WIDTH,
+} from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
@@ -76,7 +79,9 @@ function ThemedDrawer({
 					// while it measures the panel, and we must not override that.
 					...(hideDrawerPanel ? ({ display: 'none' } as const) : null),
 					backgroundColor: sidebarColor,
-					width: screenSize === 'lg' ? 'auto' : 200,
+					// The rail's width is set here, not by a class on its scroll view (which the
+					// vendored view drops): 64 = the 48 item + 8 each side, from the gutter table.
+					width: screenSize === 'lg' ? RAIL_WIDTH : 200,
 					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,

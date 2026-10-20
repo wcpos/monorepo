@@ -11,10 +11,12 @@ import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { ManagementBar } from '../components/management-bar';
 import Discord from './discord';
 
-// Helper to account for padding (p-2 = 8px on each side)
+// The frame's inset is the page gutter (p-4 = 16 on each side, CODING_STANDARDS § Design,
+// Gutters), the same 16 every other page gives its body; the widget is sized to what is left.
+const PAGE_GUTTER = 16;
 const adjustForPadding = (width: number, height: number) => {
-	const paddingHorizontal = 16; // 8px on each side
-	const paddingVertical = 16; // 8px on each side
+	const paddingHorizontal = PAGE_GUTTER * 2;
+	const paddingVertical = PAGE_GUTTER * 2;
 	return {
 		width: Math.max(0, width - paddingHorizontal),
 		height: Math.max(0, height - paddingVertical),
@@ -48,7 +50,7 @@ export function Support() {
 		>
 			<ManagementBar title={t('common.support')} testID="support-bar" />
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
-			<View testID="support-frame" className="min-h-0 flex-1 p-2" onLayout={handleLayout}>
+			<View testID="support-frame" className="min-h-0 flex-1 p-4" onLayout={handleLayout}>
 				<Discord
 					dom={{
 						matchContents: true,
