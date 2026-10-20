@@ -30,7 +30,7 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 }
 
 /** `lose`: stored, answer lost. `drop`: lost before the store saw it. `503`: refused unstored. */
-type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider';
+type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider' | 'outstanding';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -64,6 +64,8 @@ class FakeStore {
 		if (mode === '403') throw httpError(403, 'rest_forbidden');
 		if (mode === '503') throw httpError(503, 'http_service_unavailable');
 		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
+		if (mode === 'outstanding')
+			throw httpError(409, 'wcpos_balance_outstanding', { order: this.summary() });
 		if (mode === 'drop') throw new Error('Network Error');
 		const { revision, command_id, ...rest } = body;
 		const route = classifyMoneyRoute(url)!;
@@ -354,6 +356,28 @@ it('a 502 wcpos_provider_error settles the submit: the store took nothing and th
 		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-2', values: {} })
 	).rejects.toThrow('http_service_unavailable');
 	expect(await entries()).toHaveLength(1);
+});
+
+it('a definitive refusal mirrored by the caller refreshes the resident ledger and records no answer chain', async () => {
+	// Another till recorded money the resident has not seen: the close is refused as outstanding.
+	store.total = '120.00';
+	store.n += 1;
+	store.modes = ['outstanding'];
+	const post = poster({ approval: { total: '100.00', currency: 'USD' } });
+	// The resident still holds authority under its old revision; the close goes out under it.
+	await nakedRevision(store.revision);
+	await writeResident((doc) => ({
+		...doc,
+		sync: { ...doc.sync, adopted: { revision: store.revision, at: Date.now() } },
+	}));
+	const refusal = await post('orders/5/close', {}).catch((error: unknown) => error);
+	expect((refusal as Error).message).toBe('wcpos_balance_outstanding');
+	expect(await entries()).toEqual([]);
+	requires = [];
+	await post.mirror({ order: store.summary() as never });
+	expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
+	expect((await residentJSON()).payload.total).toBe('120.00');
+	expect((await readOrderCommands(storeDB, 'order')).chain).toBeNull();
 });
 
 it('a 403 leaves the entry in place', async () => {

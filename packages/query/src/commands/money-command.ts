@@ -65,7 +65,10 @@ export type MoneyCommandPoster = Post & {
 	 * delete the answered entries and run the forced refresh.
 	 */
 	mirror(answer: Omit<MoneyAnswer, 'sentRevision'>): Promise<void>;
-	/** Delete the answered entries, then the forced refresh (what `mirror` ends with). */
+	/**
+	 * Delete the answered entries, then the forced refresh (what `mirror` ends with). A definitive
+	 * refusal since the last settle also earns the refresh, never an answer chain.
+	 */
 	settle(): Promise<void>;
 };
 
@@ -339,6 +342,10 @@ export function moneyCommandPoster(input: {
 	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
+	// A definitive refusal settled its own entry, so it is not an answer with a chain; it still
+	// says the resident's money is stale (`wcpos_balance_outstanding`,
+	// `wcpos_amount_exceeds_balance`), so the next settle runs the corrective refresh for it.
+	let refusedSinceSettle = false;
 	// The revision the last command went out under, read off the body the envelope sends.
 	let sentRevision: string | null = null;
 	const send: Post = (url, body) => {
@@ -346,7 +353,12 @@ export function moneyCommandPoster(input: {
 		return input.post(url, body);
 	};
 	const dispatch = async (entry: MoneyCommandEntry) => {
-		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, { post: send });
+		const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, {
+			post: send,
+		}).catch((error: unknown) => {
+			if (isDefinitiveMoneyRefusal(moneyRefusalOf(error))) refusedSinceSettle = true;
+			throw error;
+		});
 		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
 		return response;
 	};
@@ -359,10 +371,13 @@ export function moneyCommandPoster(input: {
 	};
 	const settle = async () => {
 		const done = answered;
+		const refused = refusedSinceSettle;
 		answered = [];
+		refusedSinceSettle = false;
 		for (const { id, chain } of done)
 			await settleCommand(input.storeDB, input.orderUuid, id, chain);
-		if (done.length) await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
+		if (done.length || refused)
+			await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
 	};
 	const poster = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);

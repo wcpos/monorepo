@@ -114,6 +114,9 @@ it.each([
 		message: `${code} says`,
 	});
 	expect(post).toHaveBeenCalledTimes(1);
+	// The refusal says the till's view is stale: the corrective refresh runs, nothing is mirrored.
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+	expect(mockMirror).not.toHaveBeenCalled();
 });
 
 it('an order the store has never seen sends nothing (connectivity is the caller’s check)', async () => {

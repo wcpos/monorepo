@@ -71,9 +71,12 @@ export async function closeSale(
 			return { kind: 'outstanding', order: summary ?? null };
 		}
 		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
-		// rule): the cashier reads its sentence. Anything else stays journaled for a re-send.
-		if (refusal?.code && isDefinitiveMoneyRefusal(refusal))
+		// rule): the cashier reads its sentence, and the resident is refreshed, since the refusal
+		// says the till's view of the sale is stale. Anything else stays journaled for a re-send.
+		if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
+			await post.settle();
 			return { kind: 'refused', code: refusal.code, message: refusal.message ?? refusal.code };
+		}
 		throw error;
 	}
 }
