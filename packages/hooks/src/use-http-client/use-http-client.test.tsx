@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { AxiosError, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 jest.mock('@wcpos/utils/logger', () => {
 	const debug = jest.fn();
@@ -102,7 +103,7 @@ describe('useHttpClient network audit logs', () => {
 			await result.current.get('https://example.com/wp-json/wcpos/v2/products');
 
 			const config = (http.request as jest.Mock).mock.calls[0][0];
-			expect(config.headers['x-wcpos-protocol']).toBe('2');
+			expect(config.headers['x-wcpos-protocol']).toBe(String(SYNC_PROTOCOL_VERSION));
 			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version} payments=1.3`);
 		} finally {
 			AppInfo.platform = webPlatform;
@@ -120,7 +121,7 @@ describe('useHttpClient network audit logs', () => {
 		} as never);
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['x-wcpos-protocol']).toBe('2');
+		expect(config.headers['x-wcpos-protocol']).toBe(String(SYNC_PROTOCOL_VERSION));
 		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version} payments=1.3`);
 	});
 
@@ -629,7 +630,7 @@ describe('request preamble dispatch seam', () => {
 		expect(sent.url).toBe(
 			'https://shop.test/blog/?rest_route=%2Fwcpos%2Fv2%2Forders%2F42' +
 				'&include%5B%5D=1&include%5B%5D=2&status=wc-completed&after=2026-01-01T00%3A00%3A00&_fields=id%2Cstatus' +
-				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}+payments%3D1.3&store_id=7`
+				`&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F${AppInfo.version}+payments%3D1.3&store_id=7`
 		);
 	});
 	it.each(['test', 'development'])(
