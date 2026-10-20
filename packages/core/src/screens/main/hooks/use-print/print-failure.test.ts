@@ -40,6 +40,18 @@ describe('classifyPrintFailure', () => {
 		});
 	});
 
+	it('keeps a receipt fetch TIMEOUT off the printer too: PRINT201, while a printer timeout stays PRINT301', () => {
+		// printFromUrl (system-print fallback with only a receiptUrl) converts its abort to this.
+		expect(classifyPrintFailure(new Error('Receipt fetch timed out after 10000ms'))).toEqual({
+			cancelled: false,
+			code: 'PRINT201',
+		});
+		expect(classifyPrintFailure(new Error('USB print timed out after 10000ms'))).toEqual({
+			cancelled: false,
+			code: 'PRINT301',
+		});
+	});
+
 	it('codes a typed printer connection failure PRINT301', () => {
 		const connection = Object.assign(new Error('Could not reach the Epson printer'), {
 			name: 'PrinterConnectionError',
@@ -80,6 +92,19 @@ describe('reportPrintFailure', () => {
 			toast: { text2: 'settings.setup_err_refused' },
 			context: { orderId: 7, error: 'ECONNREFUSED 10.0.0.5' },
 		});
+	});
+
+	it('never tells the cashier the printer did not answer when the RECEIPT fetch timed out', () => {
+		reportPrintFailure(
+			logger,
+			'Receipt print failed',
+			new Error('Receipt fetch timed out after 10000ms'),
+			t
+		);
+
+		const [, report] = [...logger.error.mock.calls, ...logger.warn.mock.calls][0] ?? [];
+		expect(report).toMatchObject({ code: 'PRINT201' });
+		expect(report).not.toHaveProperty('toast');
 	});
 
 	it('reports a failed autoprint at PRINT101’s own severity (warn)', () => {
