@@ -16,6 +16,7 @@ import {
 	isSettledPaymentRow,
 	mintDevicePayment,
 	mintServerPayment,
+	type OrderPaymentSummary,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
@@ -26,7 +27,13 @@ import {
 	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, resendOpenCommands, useDocField, useRecordField } from '@wcpos/query';
+import {
+	type EngineRecord,
+	MoneyCommandError,
+	resendOpenCommands,
+	useDocField,
+	useRecordField,
+} from '@wcpos/query';
 import { observeOrderCommands } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
@@ -685,29 +692,70 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[order, state, dp, byId, actor, orderContext]
 	);
 
-	/** Try again: re-send the unanswered command under its own id; the store replays it. */
+	/**
+	 * Try again: re-send the unanswered command under its own id; the store replays it. An answer
+	 * finishes the sale exactly as a first answer would (completion, then the receipt). A terminal
+	 * leg's capture is left to the terminal service, which owns that leg's completion.
+	 */
 	const retryCommand = React.useCallback(async () => {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
 		try {
-			await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
+			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
 			});
+			for (const { kind, data } of answers) {
+				const row = data.payment as PaymentRow | undefined;
+				const summary = (data.order ?? null) as OrderPaymentSummary | null;
+				if (kind === 'close') await completeOrderFlow({ source: 'zero-balance' });
+				else if (row && (kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))) {
+					const amountMinor = toMinor(row.amount, dp);
+					await completeOrderFlow({
+						source: 'manual',
+						via: 'online',
+						row,
+						order: summary,
+						mirrorFailed: false,
+						preparedCompleting: amountMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor,
+					}).finally(() => tenderRecorded(row, 'online'));
+				} else if (kind === 'submit' && data.outcome === 'settled' && summary)
+					await completeOrderFlow({ source: 'gateway-settled', order: summary });
+			}
 		} catch (error) {
-			logger.error(t('pos_checkout.payment_unanswered'), {
-				code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
-				showToast: true,
-				context: {
-					orderId: order.uuid,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
+			// The store stored nothing and the order moved: the cashier approves it again.
+			if (error instanceof MoneyCommandError && error.reason === 'order_changed')
+				logger.info(t('pos_checkout.order_changed_retry'), {
+					showToast: true,
+					context: { ...orderContext, retry: 'order_changed' },
+				});
+			else
+				logger.error(t('pos_checkout.payment_unanswered'), {
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					showToast: true,
+					context: {
+						orderId: order.uuid,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [ctx.runtime, storeDB, order.uuid, http, t]);
+	}, [
+		ctx.runtime,
+		storeDB,
+		order.uuid,
+		http,
+		t,
+		completeOrderFlow,
+		dp,
+		balanceMinor,
+		tenderRecorded,
+		orderContext,
+	]);
 
 	/** A zero balance the store did not close: say why, and what is due when it said. */
 	const reportClose = React.useCallback(

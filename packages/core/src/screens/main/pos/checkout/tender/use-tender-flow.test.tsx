@@ -78,7 +78,9 @@ const mockReaderState = {
 };
 // The money command journal's local document (ADR 0040): null until a command is journaled.
 const mockJournal$ = new BehaviorSubject<unknown>(null);
-const mockResend = jest.fn(async () => undefined);
+const mockResend = jest.fn(
+	async (): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
+);
 const mockPosterInputs: { approval: unknown }[] = [];
 const mockStoreDB = {
 	addState: jest.fn(async () => mockReaderState),
@@ -487,6 +489,44 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it('Try again reports a changed order as such, never as an unanswered payment', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_order_changed'), {
+				reason: 'order_changed',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_changed_retry',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
+	});
+
+	it('a Try again the store answers finishes the sale like a first answer', async () => {
+		const row = payment({ amount: '92.95', tendered: '100.00' });
+		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
+		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: summary } }]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				via: 'online',
+				row,
+				order: summary,
+				preparedCompleting: true,
+				amountMinor: 9295,
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
 	it('preselects the first available method once, without recording', async () => {
 		mockMethods = [noDriver, card];
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
@@ -735,6 +775,24 @@ describe('useTenderFlow', () => {
 		mockPayload = { id: 42, total: '0.00', meta_data: [] };
 		mockOnlineStatus = 'offline';
 		const { result } = renderHook(() => useTenderFlow(order));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.close_needs_connection',
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+		);
+	});
+
+	it('a zero balance whose save is queued offline is refused with CHECKOUT101 even online, and sends no close', async () => {
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		markOrderSaving(order.uuid);
+		markOrderQueuedOffline(order.uuid, 'm');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.online).toBe(true);
 
 		await act(async () => result.current.takeTender());
 

@@ -467,9 +467,17 @@ it('a stale close with a changed but covered total requires renewed approval', a
 	expect(store.completions).toBe(1);
 });
 
-it.each(['428 refresh', 'manual rebase', 'non-adopting acknowledgement'])(
-	'a %s cannot authorize close or submit against a stale total or currency',
-	async () => {
+/**
+ * The shape every naked writer leaves: the stamp replaced, `sync.adopted` behind. That the real
+ * writers (the 428 refresh, the manual rebase, a non-adopting acknowledgement) each leave exactly
+ * this is pinned through the engine in sync-engine's `create-rxdb-sync-engine.naked-revision.test.ts`.
+ */
+it.each([
+	['close', 'orders/5/close'],
+	['submit', 'orders/5/payment-methods/cod/submit'],
+])(
+	'a revision written without its document cannot authorize a %s against a stale total or currency',
+	async (_kind, url) => {
 		// A valid post-answer adoption first.
 		const post = poster();
 		await post('orders/5/payments', { payment: cash() });
@@ -483,7 +491,7 @@ it.each(['428 refresh', 'manual rebase', 'non-adopting acknowledgement'])(
 		const { sync } = await residentJSON();
 		expect(sync.adopted?.revision).not.toBe(sync.revision);
 		// The corrective refresh re-adopts under the EQUAL revision and the approval sees 120 EUR.
-		await expect(poster()('orders/5/close', {})).rejects.toMatchObject({ reason: 'order_changed' });
+		await expect(poster()(url, {})).rejects.toMatchObject({ reason: 'order_changed' });
 		expect(requires.at(-1)?.readopt).toBe(true);
 		expect((await residentJSON()).payload).toMatchObject({ total: '120.00', currency: 'EUR' });
 		expect(store.post).toHaveBeenCalledTimes(1);
