@@ -18,7 +18,7 @@ import { useCartConfig } from '../../../pos/hooks/use-cart-config';
 export function TaxBasedOn() {
 	// `hasOrder` is false on the standalone Products screen: there the address is the shop base
 	// whatever the setting says (`orderTaxLocation`).
-	const { rates, taxBasedOn, location, hasOrder } = useTaxLocation();
+	const { rates, taxBasedOn, location, addressUsed, hasOrder } = useTaxLocation();
 	const { allRates } = useTaxSettings();
 	const t = useT();
 	/**
@@ -76,6 +76,7 @@ export function TaxBasedOn() {
 					allRates={allRates}
 					taxBasedOn={taxBasedOn}
 					location={location}
+					addressUsed={addressUsed}
 					hasOrder={hasOrder}
 					config={config}
 					taxClasses={taxClasses}

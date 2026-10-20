@@ -76,8 +76,9 @@ export function classLedgers(
 /**
  * Anything matched is no failure (a missing state that leaves only a country-wide rate, an
  * empty address that a worldwide rate still covers). Otherwise the order's own address with
- * none of the four fields is the break at node 2: there is no fallback to the shop base
- * (`orderTaxLocation`). Any other address that matched nothing breaks at node 3.
+ * none of the four fields is the break at node 2: `orderTaxLocation` now falls back to billing
+ * and then the shop base, so this is reached only by an order address passed in with no fields.
+ * Any other address that matched nothing breaks at node 3.
  */
 export function derivationFailure(
 	location: TaxLocation,

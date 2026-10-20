@@ -431,8 +431,14 @@ describe('tax follows the customer address', () => {
 	};
 
 	function RatesProbe() {
-		const { rates } = useTaxLocation();
-		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
+		const { rates, addressUsed, taxBasedOn } = useTaxLocation();
+		return (
+			<>
+				<output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>
+				<output data-testid="address-used">{addressUsed}</output>
+				<output data-testid="tax-based-on">{taxBasedOn}</output>
+			</>
+		);
 	}
 
 	function renderWithOrder(order: TestOrderRecord) {
@@ -474,6 +480,37 @@ describe('tax follows the customer address', () => {
 			order.patchPayload({ shipping: { country: 'GB' } });
 		});
 
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('falls back to the billing address when the shipping address has no country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+		expect(screen.getByTestId('address-used').textContent).toBe('billing');
+		expect(screen.getByTestId('tax-based-on').textContent).toBe('shipping');
+	});
+
+	it('falls back to the shop base when neither address has a country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		renderWithOrder(makeOrder());
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
+	it('follows the fallback when the shipping country is cleared', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' }, shipping: { country: 'US' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			order.patchPayload({ shipping: { country: '' } });
+		});
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
 	});
 
