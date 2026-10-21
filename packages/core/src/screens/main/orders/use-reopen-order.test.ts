@@ -325,3 +325,29 @@ it('an attempt the order does not hold falls back to the unnamed copy', async ()
 	await act(async () => result.current.reopen());
 	expect(reportedToast()).toMatchObject({ title: 'orders.reopen_money_in_motion_unknown' });
 });
+
+it('queues the reopen as an explicit write, which the open-cart hold never holds', async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
+	mockOnDrain = () =>
+		emit({
+			type: 'write-acknowledged',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'm-reopen',
+		} as EngineEvent);
+	const { result } = renderHook(() => useReopenOrder(paidOrder));
+	await act(async () => result.current.reopen());
+	// The optimistic pos-open makes the order an open cart: a non-explicit row would be held
+	// by the drain and the awaited verdict would never come.
+	expect(applyLocalPatch).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ data: expect.objectContaining({ status: 'pos-open' }) }),
+		expect.objectContaining({ explicit: true })
+	);
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/cart/[...orderId]',
+		params: { orderId: ['order-1'] },
+	});
+});

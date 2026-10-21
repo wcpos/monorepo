@@ -69,7 +69,13 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 	{
 		registerId,
 		collectionName = document.collection?.name,
-	}: { registerId?: string; collectionName?: string } = {}
+		explicit,
+	}: {
+		registerId?: string;
+		collectionName?: string;
+		/** The row is the cashier asking for the push: an open cart's hold never holds it. */
+		explicit?: boolean;
+	} = {}
 ): Promise<{ changes: Record<string, unknown>; document: TDocument; mutationId?: string }> {
 	try {
 		if (resolveChanges)
@@ -167,6 +173,7 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 					changes: syncChanges,
 					initial: scopedEngineResident!,
 					registerId: registerId,
+					...(explicit ? { explicit: true } : {}),
 					onEnqueued: (id) => (mutationId = id),
 				});
 			} else {

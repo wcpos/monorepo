@@ -290,6 +290,8 @@ export async function patchAndEnqueueEngineResident(input: {
 	tillId?: string;
 	/** Told the queued row's id once the write sticks, so a caller can follow its outcome. */
 	onEnqueued?: (mutationId: string) => void;
+	/** Queue an explicit row: the cashier asked for this push, so the open-cart hold releases it. */
+	explicit?: boolean;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -368,6 +370,7 @@ export async function patchAndEnqueueEngineResident(input: {
 					changes,
 					(previousResident.payload ?? {}) as Record<string, unknown>
 				),
+				...(input.explicit ? { explicit: true } : {}),
 			}));
 		} catch (error) {
 			writeError = error;

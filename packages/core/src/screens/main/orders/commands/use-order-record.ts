@@ -13,13 +13,17 @@ export function useOrderRecord() {
 			!!(await localPatch({ document: order, data }))?.document,
 		[localPatch]
 	);
-	/** Null when the local write failed; otherwise the queued row to follow, if one was queued. */
+	/**
+	 * Null when the local write failed; otherwise the queued row to follow, if one was queued.
+	 * The row is explicit: the reopen sets pos-open optimistically, and the open-cart hold would
+	 * otherwise hold the very write whose verdict the caller awaits.
+	 */
 	const reopenOrder = React.useCallback(
 		async (
 			order: EngineRecord<'orders'>,
 			data: Pick<OrderPayload, 'status' | 'meta_data'>
 		): Promise<{ mutationId?: string } | null> => {
-			const result = await localPatch({ document: order, data });
+			const result = await localPatch({ document: order, data }, { explicit: true });
 			if (!result?.document) return null;
 			return { mutationId: result.mutationId };
 		},
