@@ -282,9 +282,9 @@ it('a reconnect re-sends what the outage left unanswered and finishes only the o
 
 // A claim persisted by a process that crashed after its send holds the command for the lease:
 // the recovery skips it, and is run again when that lease lapses, while the till stays online.
-it('re-runs the recovery when a skipped claim lapses, without a reconnect', async () => {
+async function claimLapsingIn(ms: number) {
 	const real = Date.now();
-	const now = jest.spyOn(Date, 'now').mockReturnValue(real - journal.CLAIM_LEASE_MS + 400);
+	const now = jest.spyOn(Date, 'now').mockReturnValue(real - journal.CLAIM_LEASE_MS + ms);
 	await journal.claimRoute(
 		mockContext.storeDB,
 		{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
@@ -303,8 +303,24 @@ it('re-runs the recovery when a skipped claim lapses, without a reconnect', asyn
 	);
 	await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1');
 	now.mockRestore();
+}
+
+it('re-runs the recovery when a skipped claim lapses, without a reconnect', async () => {
+	await claimLapsingIn(400);
 	render(<SaleCompletionBridge />);
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
+});
+
+// The effect re-runs on the same session (a context change, StrictMode): its cleanup clears the
+// lapse timer, and the reused session must arm it again rather than lose the re-run.
+it('keeps the lapse re-run across an effect re-run of the same session', async () => {
+	await claimLapsingIn(600);
+	const view = render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	mockContext = { ...mockContext };
+	view.rerender(<SaleCompletionBridge />);
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
 });
 

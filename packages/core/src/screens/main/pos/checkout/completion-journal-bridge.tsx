@@ -70,6 +70,9 @@ export function SaleCompletionBridge(): null {
 		startVersion: number;
 		stopped: boolean;
 		reconnect: () => void;
+		/** Schedule the re-run for the earliest live claim's lapse; `disarm` cancels it. */
+		arm: () => void;
+		disarm: () => void;
 	} | null>(null);
 
 	// A reconnect re-sends what the outage left unanswered, then finishes what it completed.
@@ -92,11 +95,23 @@ export function SaleCompletionBridge(): null {
 			// Context changes and StrictMode reconnect the same run, never start another.
 			previous.ctx = ctx;
 			previous.stopped = false;
+			// The cleanup that ran before this disarmed the lapse re-run: arm it again.
+			if (onlineRef.current) previous.arm();
 			return () => {
 				previous.stopped = true;
+				previous.disarm();
 			};
 		}
-		const current = { storeDB, manager, ctx, startVersion, stopped: false, reconnect: () => {} };
+		const current = {
+			storeDB,
+			manager,
+			ctx,
+			startVersion,
+			stopped: false,
+			reconnect: () => {},
+			arm: () => {},
+			disarm: () => {},
+		};
 		session.current = current;
 		/**
 		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
@@ -162,13 +177,18 @@ export function SaleCompletionBridge(): null {
 		// A command the recovery skipped because a live claim held it is tried again when that claim
 		// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
 		let lapse: ReturnType<typeof setTimeout> | undefined;
-		const recoverWhenClaimsLapse = async () => {
-			const expiry = await nextClaimExpiry(storeDB).catch(() => null);
+		const disarm = () => {
 			if (lapse !== undefined) clearTimeout(lapse);
 			lapse = undefined;
+		};
+		const recoverWhenClaimsLapse = async () => {
+			const expiry = await nextClaimExpiry(storeDB).catch(() => null);
+			disarm();
 			if (expiry === null || current.stopped) return;
 			lapse = setTimeout(() => current.reconnect(), Math.max(0, expiry - Date.now()) + 1);
 		};
+		current.disarm = disarm;
+		current.arm = () => void recoverWhenClaimsLapse();
 		/** The orders whose unanswered commands a re-send has now answered. */
 		const recover = async (): Promise<ReadonlySet<string>> => {
 			try {
@@ -321,7 +341,7 @@ export function SaleCompletionBridge(): null {
 			});
 		return () => {
 			current.stopped = true;
-			if (lapse !== undefined) clearTimeout(lapse);
+			disarm();
 		};
 	}, [storeDB, manager, ctx, version]);
 	return null;
