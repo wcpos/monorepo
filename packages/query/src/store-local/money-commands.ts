@@ -89,13 +89,14 @@ function modifyOrder(
  */
 export const CLAIM_LEASE_MS = 30_000;
 
-/** Whether another poster holds a live claim on the entry. */
+/**
+ * Whether another poster holds a live claim on the entry: claimed within the lease. A claim
+ * stamped in the future (the clock stepped back after it was written) is expired, not live for
+ * the whole step: a lease is bounded on both sides.
+ */
 export function claimHeld(entry: MoneyCommandEntry, claimant: string | null, now = Date.now()) {
-	return (
-		!!entry.claimedBy &&
-		entry.claimedBy !== claimant &&
-		now - (entry.claimedAt ?? 0) < CLAIM_LEASE_MS
-	);
+	const age = now - (entry.claimedAt ?? 0);
+	return !!entry.claimedBy && entry.claimedBy !== claimant && age >= 0 && age < CLAIM_LEASE_MS;
 }
 
 /** A command route: its kind and target, or for `record` the row id that is its identity. */

@@ -8,8 +8,11 @@ import type { StoreDatabase } from '@wcpos/database';
 
 import {
 	CLAIM_LEASE_MS,
+	claimHeld,
 	claimRoute,
+	markSent,
 	type MoneyCommandEntry,
+	nextClaimExpiry,
 	readOrderCommands,
 	releaseClaim,
 } from '../../src/store-local';
@@ -87,6 +90,24 @@ it('a lapsed claim frees the route for another tab, and a released claim keeps t
 		expect((await readOrderCommands(tabA, 'order')).entries).toEqual([
 			expect.objectContaining({ id: 'command-b', claimedBy: null }),
 		]);
+	} finally {
+		now.mockRestore();
+	}
+});
+
+// A claim stamped in the future (the clock stepped back after it was written) is not live: it
+// would otherwise hold its command for the whole step, and the lapse timer would wait for it.
+it('a claim stamped in the future is expired, and schedules no lapse', async () => {
+	const tab = await open();
+	const now = jest.spyOn(Date, 'now').mockReturnValue(5_000_000);
+	try {
+		await claimRoute(tab, route, 'tab-a', candidate('command-a'));
+		await markSent(tab, 'order', 'command-a', 'sha256:r1');
+		now.mockReturnValue(1_000_000); // the clock stepped back
+		const [entry] = (await readOrderCommands(tab, 'order')).entries;
+		expect(claimHeld(entry, null)).toBe(false);
+		expect(await nextClaimExpiry(tab)).toBeNull();
+		expect(await claimRoute(tab, route, 'tab-b', null)).toMatchObject({ status: 'open' });
 	} finally {
 		now.mockRestore();
 	}
