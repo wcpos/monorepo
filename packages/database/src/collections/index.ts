@@ -233,13 +233,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			return oldDoc;
 		},
 		18(oldDoc: StoreDocumentType) {
-			// v18 adds the optional `scale` override beside `theme`. Absent means
-			// Auto — resolveStep falls back to the window — so nothing is written.
-			return oldDoc;
-		},
-		19(oldDoc: StoreDocumentType) {
-			// v19 adds the optional `icons` family beside `scale`. Absent means the
-			// default set — the provider falls back to it — so nothing is written.
+			// v18 adds the optional `scale` override beside `theme` and, amended
+			// pre-release, the optional `icons` family beside it: v18 has never
+			// shipped (main is at v15), so the field lands here instead of stacking
+			// a migration on an unreleased version. Absent means Auto / the default
+			// set — resolveStep and the icon provider fall back — so nothing is written.
 			return oldDoc;
 		},
 	},

@@ -51,22 +51,24 @@ describe('stores migration strategy', () => {
 		expect(storesLiteral.version).toBeGreaterThanOrEqual(18);
 	});
 
-	// v19 adds the per-store `icons` family. Also a pass-through: an absent value
-	// reads as the default set, which the schema defaults to and the provider falls
-	// back to, so no document is rewritten to gain it.
-	it('migration 19 passes a version-18 document through with no icons, which reads as tabler', async () => {
+	// The per-store `icons` family lands in the unreleased v18 beside `scale`
+	// rather than behind a v19: main ships v15, so no install holds v18 and a
+	// corrective migration would migrate nobody. Same pass-through: an absent
+	// value reads as the default set, which the provider falls back to.
+	it('adds icons to the unreleased v18 schema without a bump or a migration', async () => {
 		const { userCollections } = await import('./index');
 		const { storesLiteral } = await import('./schemas/stores');
-		const migrate = userCollections.stores.migrationStrategies?.[19];
-		if (!migrate) throw new Error('stores migration 19 missing');
-		const oldStore = { localID: 'store-1', theme: 'dark', scale: 'compact' };
+		const migrate = userCollections.stores.migrationStrategies?.[18];
+		if (!migrate) throw new Error('stores migration 18 missing');
+		const oldStore = { localID: 'store-1', theme: 'dark' };
 
 		const migrated = migrate(oldStore as never, undefined as never);
 
 		expect(migrated).toBe(oldStore);
 		expect((migrated as { icons?: string }).icons).toBeUndefined();
 		expect(storesLiteral.properties.icons.default).toBe('tabler');
-		expect(storesLiteral.version).toBe(19);
+		expect(storesLiteral.version).toBe(18);
+		expect(userCollections.stores.migrationStrategies?.[19]).toBeUndefined();
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier
