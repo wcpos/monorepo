@@ -24,6 +24,8 @@ interface UseResolvedPrinterResult {
 	setPrinterSelection: (selection: PrinterSelection) => void;
 	mismatchWarning: string | null;
 	useSystemDialog: boolean;
+	/** Printers or routing overrides are still loading: `resolvedPrinter` may yet change. */
+	isResolving: boolean;
 }
 
 export function useResolvedPrinter({
@@ -50,7 +52,7 @@ export function useResolvedPrinter({
 		[pick, template?.id]
 	);
 
-	const { printers: allPrinters } = useAvailablePrinterProfiles();
+	const { printers: allPrinters, isLoading: printersLoading } = useAvailablePrinterProfiles();
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
@@ -66,7 +68,14 @@ export function useResolvedPrinter({
 			),
 		[storeDB]
 	);
-	const overrides = useObservableState(overrides$, new Map<string, string>());
+	const loadedOverrides = useObservableState<Map<string, string> | undefined>(
+		overrides$,
+		undefined
+	);
+	const overrides = React.useMemo(
+		() => loadedOverrides ?? new Map<string, string>(),
+		[loadedOverrides]
+	);
 
 	// Resolve printer based on selection type
 	const resolvedPrinter = React.useMemo(() => {
@@ -105,5 +114,6 @@ export function useResolvedPrinter({
 		setPrinterSelection,
 		mismatchWarning,
 		useSystemDialog,
+		isResolving: printersLoading || loadedOverrides === undefined,
 	};
 }
