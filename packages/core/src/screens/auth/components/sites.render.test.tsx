@@ -35,6 +35,10 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 		</button>
 	),
 }));
+// The login card's update notice pulls the real Button (and its SVG loader) in.
+jest.mock('../../../components/update-required-notice', () => ({
+	UpdateRequiredNotice: () => null,
+}));
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: () => mockSites,

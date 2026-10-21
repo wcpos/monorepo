@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { DocsLink } from '@wcpos/components/docs-link';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -119,12 +120,8 @@ export function ScannerDeviceChooser() {
 	}
 
 	return (
-		<VStack
-			space="sm"
-			className="border-info/40 bg-info/10 rounded-md border p-2"
-			testID="scanner-device-chooser"
-		>
-			<Text className="text-sm font-medium">{t('settings.scanner_choose_device')}</Text>
+		<VStack space="sm" testID="scanner-device-chooser">
+			<Notice tone="info" title={t('settings.scanner_choose_device')} />
 			{candidates.length === 0 ? (
 				<VStack space="xs">
 					<Text className="text-muted-foreground text-xs">

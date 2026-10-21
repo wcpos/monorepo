@@ -95,7 +95,7 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 				<Chip
 					clearLabel={t('common.remove')}
 					testID="order-filter-cashier"
-					icon="userCrown"
+					icon="cashier"
 					on={isActive}
 					onClear={isActive ? handleRemove : undefined}
 					clearTestID="order-filter-cashier-remove"

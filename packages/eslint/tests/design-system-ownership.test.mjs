@@ -274,3 +274,132 @@ test('enforces variant ownership in apps/main under per-package lint', async () 
 
 	assert.equal(messages.length, 1);
 });
+
+// A screen that replaces the whole app is a GateScreen; the hand-rolled shape it replaced is
+// refused under screens/ and app/. The fixture is the old update-required.tsx root.
+const HAND_CENTRED = `
+	export function UpdateRequired() {
+		return (
+			<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+				<Text>Update</Text>
+			</View>
+		);
+	}
+`;
+const SCRIM = `
+	export function Scrim() {
+		return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'black', opacity: 0.4 }]} />;
+	}
+`;
+const GATE = 'never a hand-centred absoluteFill';
+
+test('rejects a hand-centred absoluteFill on a core screen (the old update-required shape)', async () => {
+	const perPackage = await lint(
+		HAND_CENTRED,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+	const fromRoot = await lint(HAND_CENTRED, IN_APP, 'no-restricted-syntax');
+
+	assert.equal(restrictedSyntax(perPackage, GATE).length, 1);
+	assert.equal(restrictedSyntax(fromRoot, GATE).length, 1);
+});
+
+test('rejects the object form of a hand-centred absoluteFill in apps/main/app', async () => {
+	const messages = await lint(
+		`export default function Gone() {
+			return <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center' }} />;
+		}`,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, GATE).length, 1);
+});
+
+test('allows an absoluteFill scrim without justifyContent', async () => {
+	const messages = await lint(SCRIM, IN_APP, 'no-restricted-syntax', coreConfig, CORE_ROOT);
+
+	assert.deepEqual(restrictedSyntax(messages, GATE), []);
+});
+
+test('keeps variant ownership firing beside the gate guard in apps/main/app', async () => {
+	const messages = await lint(
+		PAINTED_BUTTON,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
+});
+
+const NOTICE = 'A tinted alert box is the Notice component';
+const TINTS = `export function Bad({ active }) { return <>
+	<View className="border bg-destructive/10" />
+	<View className={'bg-warning/10 p-2'} />
+	<View className={\`p-2 bg-attention/10 \${active}\`} />
+	<View className={\`\${active} bg-info/10\`} />
+	<View className={cn('p-2', active && 'bg-success/10')} />
+</>; }`;
+
+test('rejects every hand-rolled notice tint in literal and template classNames', async () => {
+	assert.equal(restrictedSyntax(await variantOwnership(TINTS), NOTICE).length, 5);
+});
+
+test('keeps the notice ratchet under core screen and app config overrides', async () => {
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(CORE_ROOT, 'src/contexts/theme/index.tsx'), coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'app/+not-found.tsx'), mainConfig, MAIN_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(TINTS, file, 'no-restricted-syntax', base, cwd);
+		assert.equal(restrictedSyntax(messages, NOTICE).length, 5, file);
+	}
+});
+
+test('enforces the notice ratchet in other packages too', async () => {
+	const messages = await lint(
+		'export const Bad = () => <View className="bg-info/10" />;',
+		join(REPO_ROOT, 'packages/hooks/notice-fixture.jsx'),
+		'no-restricted-syntax'
+	);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 1);
+});
+
+test('allows the design system to own notice surfaces from root and package lint', async () => {
+	for (const [base, cwd] of [
+		[config, REPO_ROOT],
+		[componentsConfig, COMPONENTS_ROOT],
+	]) {
+		const messages = await lint(TINTS, IN_DESIGN_SYSTEM, 'no-restricted-syntax', base, cwd);
+		assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+	}
+});
+
+test('does not mistake prose, other opacities or Notice for a tinted alert box', async () => {
+	const messages = await variantOwnership(`export const Fine = () => <>
+		<Notice tone="warn" title="bg-warning/10" />
+		<View className="bg-info/100" />
+		<View className="bg-info/20" />
+		<View className="hover:bg-destructive/10 active:bg-warning/10" />
+	</>;`);
+	assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+});
+
+test('allows only the reader icon and highlighted-row class pairs, not generic tint boxes', async () => {
+	const messages =
+		await variantOwnership(`export const Fine = ({ error, connected, highlight }) => <>
+		<View className={cn('size-10 items-center justify-center rounded-lg', error ? 'bg-destructive/10' : connected ? 'bg-success/10' : 'bg-muted')} />
+		<ListItem className={\`border-border rounded-none border-b \${highlight ? 'bg-success/10' : ''}\`} />
+		<View className="rounded-lg bg-destructive/10" />
+		<View className={\`border-border rounded-none border-b \${highlight ? 'bg-warning/10' : ''}\`} />
+	</>;`);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 2);
+});

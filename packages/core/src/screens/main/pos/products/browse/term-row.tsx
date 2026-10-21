@@ -76,7 +76,7 @@ export function TermRow({
 							mark={
 								term.kind === 'term'
 									? { kind: 'folder' }
-									: { kind: 'glyph', name: term.kind === 'all' ? 'grid' : 'sliders' }
+									: { kind: 'glyph', name: term.kind === 'all' ? 'viewGrid' : 'filters' }
 							}
 						/>
 					</View>

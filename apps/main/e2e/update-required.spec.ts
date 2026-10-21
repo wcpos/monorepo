@@ -94,6 +94,8 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	await expect(page.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
 	// Web offers the reload CTA (the web bundle auto-updates on reload).
 	await expect(page.getByTestId('update-required-reload')).toBeVisible();
+	// Logout is offered on every platform, stacked under the primary.
+	await expect(page.getByTestId('update-required-logout')).toBeVisible();
 
 	// Politeness: the transport latch replays the refusal locally, so once the
 	// screen is up the store must see (almost) no further sync traffic. A
@@ -107,5 +109,34 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	).toBeLessThanOrEqual(1);
 
 	// The screen is the surface — the refusal must not spray error toasts.
+	await expect(page.getByTestId('error-toast')).toHaveCount(0);
+});
+
+test('after logout the login card shows the update notice, not Re-authenticate', async ({
+	posPage: page,
+}, testInfo) => {
+	await installProtocolGate(page, getStoreUrl(testInfo));
+	await expect(page.getByTestId('update-required-screen')).toBeVisible({ timeout: 90_000 });
+
+	// Standalone web logout keeps the site and its cashier on the connect screen.
+	await page.getByTestId('update-required-logout').click();
+
+	// The engine's latch is keyed by wp_api_url, so the card is already gated.
+	const notice = page.getByTestId('update-required-card-notice');
+	await expect(notice).toBeVisible({ timeout: 30_000 });
+	// No cashier row means no Re-authenticate button, and no Open POS.
+	await expect(page.getByTestId('wp-user-button')).toHaveCount(0);
+	await expect(page.getByTestId('open-pos-button')).toHaveCount(0);
+
+	// A reload drops the in-memory latch; the card's own cashier validation now
+	// meets the 426 and must latch the same gate instead of "Re-authenticate".
+	await page.reload();
+	await expect(notice).toBeVisible({ timeout: 60_000 });
+	await expect(notice.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
+	await expect(notice.getByTestId('update-required-reload')).toBeVisible();
+	await expect(page.getByTestId('wp-user-button')).toHaveCount(0);
+	await expect(page.getByTestId('open-pos-button')).toHaveCount(0);
+
+	// The notice is the surface — the refusal must not spray error toasts.
 	await expect(page.getByTestId('error-toast')).toHaveCount(0);
 });

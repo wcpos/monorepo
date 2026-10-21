@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { EmptyState } from '@wcpos/components/empty-state';
+import { GateScreen } from '@wcpos/components/gate-screen';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import type { LiveTabState } from '@wcpos/database/live-tab/live-tab.web';
 
@@ -27,8 +26,10 @@ export function ParkedTab({
 }) {
 	const waiting = state.kind === 'taking-over';
 	const lost = state.kind === 'parked' && state.reason === 'worker-lost';
-	const [title, description] =
-		PARKED_TAB_COPY[lost ? 'lost' : waiting ? (state.deferral ?? 'waiting') : 'parked'];
+	const copy = lost ? 'lost' : waiting ? (state.deferral ?? 'waiting') : 'parked';
+	const [title, description] = PARKED_TAB_COPY[copy];
+	// Waiting is quiet, an unanswered handover is a warning, a lost database is the one red state.
+	const tone = lost ? 'bad' : copy === 'no-answer' ? 'warn' : 'muted';
 	return (
 		<View
 			testID="parked-tab"
@@ -37,26 +38,25 @@ export function ParkedTab({
 					state: waiting ? `taking-over:${state.deferral ?? 'waiting'}` : `parked:${state.reason}`,
 				},
 			}}
-			className="bg-background flex-1 items-center justify-center p-6"
+			className="flex-1"
 		>
-			<EmptyState
+			<GateScreen
 				testID="parked-tab-content"
-				kind={lost ? 'failed' : 'empty'}
-				icon={lost ? undefined : 'circleInfo'}
-				size="surface"
-				className="flex-none"
+				tone={tone}
 				title={title}
 				description={description}
+				primary={
+					lost
+						? { label: PARKED_TAB_COPY.reload, onPress: reloadApp, testID: 'parked-tab-reload' }
+						: {
+								label: PARKED_TAB_COPY.takeOver,
+								onPress: takeOver,
+								testID: 'parked-tab-take-over',
+								// The slot stays while the handover runs; a second press cannot start another.
+								disabled: waiting,
+							}
+				}
 			/>
-			<Button
-				testID={lost ? 'parked-tab-reload' : 'parked-tab-take-over'}
-				disabled={waiting}
-				onPress={lost ? reloadApp : takeOver}
-			>
-				<ButtonText testID="parked-tab-action-label">
-					{lost ? PARKED_TAB_COPY.reload : PARKED_TAB_COPY.takeOver}
-				</ButtonText>
-			</Button>
 		</View>
 	);
 }

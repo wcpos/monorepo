@@ -11,11 +11,10 @@ import { EmptyState } from '@wcpos/components/empty-state';
 import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
 import { PaneStack } from '@wcpos/components/pane-stack';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
@@ -24,7 +23,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
-import { StorageOutageBanner } from './storage-outage-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 import { ProductGrid } from './tiles/product-grid';
 import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
@@ -552,19 +551,17 @@ function POSProductsContent({
 				    whose edge is the line. */}
 				<View className="flex-1">
 					{(session?.status === 'counting' || (!session && sessionsOn)) && (
-						<View
-							className="border-border bg-card mx-2 mb-2 flex-row items-center gap-2 rounded-lg border px-3 py-2.5"
+						<Notice
+							tone="info"
+							icon={session?.status === 'counting' ? 'info' : 'lock'}
+							title={t(
+								session?.status === 'counting'
+									? 'pos_products.counting_items_after_count'
+									: 'pos_products.price_check_only_until_open'
+							)}
+							className="mx-2 mb-2"
 							testID="products-locked-notice"
-						>
-							<Icon name="lock" className="text-muted-foreground" />
-							<Text className="flex-1 text-sm">
-								{t(
-									session?.status === 'counting'
-										? 'pos_products.counting_items_after_count'
-										: 'pos_products.price_check_only_until_open'
-								)}
-							</Text>
-						</View>
+						/>
 					)}
 					<View
 						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}

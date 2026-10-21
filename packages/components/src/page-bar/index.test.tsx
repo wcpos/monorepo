@@ -77,10 +77,14 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	expect(status).toHaveTextContent('Offline');
 	expect(status.firstElementChild).toHaveClass('bg-warning'); // the dot carries the colour (R3)
 	expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: '24px' });
-	// Wide widths: a taller row with no rule under it (ledger lines 8, 9).
+	// Wide widths: the page's first row, inset by the page gutter at the top and the sides and
+	// no fixed height, with no rule under it (ledger lines 8, 11).
 	const row = screen.getByTestId('bar').firstElementChild;
-	expect(row).toHaveClass('h-16');
+	expect(row).toHaveClass('pt-4', 'px-4');
+	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
 	expect(row).not.toHaveClass('border-b');
+	// A title-only bar is as tall as one with a control: the title's box is control-height.
+	expect(screen.getByTestId('bar-title').parentElement).toHaveClass('min-h-ctl', 'justify-center');
 	expect(screen.getByTestId('control')).toBeInTheDocument();
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-lines', '1');
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-ellipsis', 'tail');
@@ -187,7 +191,7 @@ it('floors the drawer control and lets the subtitle yield before the title', () 
 	// own name first (Codex review on #2188).
 	// Per class, not as one string: the formatter sorts class lists (see the breadcrumb test).
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	const menu = source.match(/name="bars"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	const menu = source.match(/name="menu"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
 	expect(menu).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
 	const subtitle =
 		source.match(/id\('subtitle'\)[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];

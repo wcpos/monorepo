@@ -25,13 +25,10 @@ beforeEach(() => {
 	mockGet.mockReset();
 });
 
-it("maps the store's active registers by id and shares one request across readers", async () => {
+it("maps the store's registers by id and shares one request across readers", async () => {
 	mockSession = { userDB: {}, site: { uuid: `site-${Math.random()}` }, store: { id: 1 } };
 	mockGet.mockResolvedValue({
-		data: [
-			{ id: 'a', name: 'Front counter', status: 'active' },
-			{ id: 'old', name: 'Retired', status: 'retired' },
-		],
+		data: [{ id: 'a', name: 'Front counter' }],
 	});
 	const first = renderHook(() => useRegisterNames());
 	await waitFor(() => expect(first.result.current).toEqual({ a: 'Front counter' }));
@@ -44,11 +41,11 @@ it("maps the store's active registers by id and shares one request across reader
 it('keeps a separate directory per site and store', async () => {
 	const site = `site-${Math.random()}`;
 	mockSession = { userDB: {}, site: { uuid: site }, store: { id: 1 } };
-	mockGet.mockResolvedValueOnce({ data: [{ id: 'a', name: 'Store one', status: 'active' }] });
+	mockGet.mockResolvedValueOnce({ data: [{ id: 'a', name: 'Store one' }] });
 	const hook = renderHook(() => useRegisterNames());
 	await waitFor(() => expect(hook.result.current.a).toBe('Store one'));
 	mockSession = { userDB: {}, site: { uuid: site }, store: { id: 2 } };
-	mockGet.mockResolvedValueOnce({ data: [{ id: 'b', name: 'Store two', status: 'active' }] });
+	mockGet.mockResolvedValueOnce({ data: [{ id: 'b', name: 'Store two' }] });
 	hook.rerender();
 	await waitFor(() => expect(hook.result.current).toEqual({ b: 'Store two' }));
 	expect(mockGet).toHaveBeenCalledTimes(2);

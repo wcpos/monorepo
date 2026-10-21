@@ -16,7 +16,8 @@ export function netPaidForBoundary(payload: OrderPayload, dp: number) {
 	return getNetPaymentTotal(
 		paid,
 		rows
-			.filter((row) => ['authorized', 'captured'].includes(row.status))
+			// ADR 0040 D6: captured money alone is paid; an authorization is only a hold.
+			.filter((row) => row.status === 'captured')
 			.map((row) => ({ amount: row.refunded_amount }))
 	);
 }

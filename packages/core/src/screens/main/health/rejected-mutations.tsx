@@ -22,6 +22,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -32,7 +33,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../contexts/translations';
 import { classifyResolutionError } from './resolution-error';
-import { Callout } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type RejectedMutation, useRejectedMutations } from './use-rejected-mutations';
 
@@ -73,16 +73,12 @@ export function RejectedMutationsPanel() {
 	// device (cashier-full-information ruling, 2026-08-07).
 	if (readError) {
 		return (
-			<Callout tone="destructive" testID="db-rejected-read-error">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.rejected.read_error_title')}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.rejected.read_error_body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-rejected-read-error"
+				title={t('health.database.rejected.read_error_title')}
+				description={t('health.database.rejected.read_error_body')}
+			/>
 		);
 	}
 
@@ -159,18 +155,12 @@ export function RejectedMutationsPanel() {
 
 	return (
 		<VStack testID="db-rejected" className="gap-2">
-			<Callout tone="destructive" testID="db-rejected-callout">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.rejected.title', {
-							count: rows.length,
-						})}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.rejected.body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-rejected-callout"
+				title={t('health.database.rejected.title', { count: rows.length })}
+				description={t('health.database.rejected.body')}
+			/>
 
 			<VStack className="gap-0">
 				{rows.map((row) => (
@@ -242,7 +232,7 @@ export function RejectedMutationsPanel() {
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
 									<IconButton
-										name="ellipsisVertical"
+										name="more"
 										testID={`db-rejected-menu-${row.mutationId}`}
 										accessibilityLabel={t('common.actions')}
 									/>
@@ -259,7 +249,7 @@ export function RejectedMutationsPanel() {
 										disabled={busyId !== null || row.residentUnknown}
 										onPress={() => setDiscarding(row)}
 									>
-										<Icon name="trash" className="fill-destructive" />
+										<Icon name="delete" className="fill-destructive" />
 										<Text>{t('health.database.rejected.discard')}</Text>
 									</DropdownMenuItem>
 								</DropdownMenuContent>

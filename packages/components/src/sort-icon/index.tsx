@@ -16,7 +16,7 @@ export interface SortIconProps {
 export function SortIcon({ direction, hovered = false }: SortIconProps) {
 	return (
 		<Icon
-			name={direction === 'desc' ? 'caretDown' : 'caretUp'}
+			name={direction === 'desc' ? 'chevronDown' : 'chevronUp'}
 			size="xs"
 			className={
 				direction ? 'text-foreground' : hovered ? 'text-muted-foreground' : 'text-transparent'

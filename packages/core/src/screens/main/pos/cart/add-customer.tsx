@@ -182,7 +182,7 @@ export function AddNewCustomer() {
 					<TooltipTrigger asChild onPress={() => setOpen(true)}>
 						<IconButton
 							testID="add-customer-button"
-							name="userPlus"
+							name="addCustomer"
 							accessibilityLabel={t('common.add_new_customer')}
 						/>
 					</TooltipTrigger>

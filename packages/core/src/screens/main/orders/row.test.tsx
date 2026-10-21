@@ -48,7 +48,7 @@ it('shows identity, note, status/date/payment and refund; press selects the reco
 	render(<OrderRow record={record} onSelect={onSelect} />);
 	expect(screen.getByTestId('order-number-1187').textContent).toBe('#1187');
 	expect(screen.getByTestId('orders-row-one').textContent).toContain('Jane Cooper');
-	expect(screen.getByTestId('icon-messageLines')).toBeTruthy();
+	expect(screen.getByTestId('icon-note')).toBeTruthy();
 	expect(screen.getByTestId('orders-row-one').textContent).toContain('Completed');
 	expect(screen.getByTestId('orders-row-one').textContent).toContain('Sat 12 Sep · Cash');
 	expect(screen.getByTestId('orders-row-one').textContent).toContain('£25.00');
@@ -63,6 +63,6 @@ it('omits absent notes and refunds', () => {
 			onSelect={jest.fn()}
 		/>
 	);
-	expect(screen.queryByTestId('icon-messageLines')).toBeNull();
+	expect(screen.queryByTestId('icon-note')).toBeNull();
 	expect(screen.getByTestId('orders-row-one').textContent).not.toContain('£-');
 });

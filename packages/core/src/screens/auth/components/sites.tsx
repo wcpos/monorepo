@@ -31,23 +31,18 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Notice } from '@wcpos/components/notice';
 import { VStack } from '@wcpos/components/vstack';
-import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
 import { siteListResource } from '../../../hooks/user-db-list-resources';
-import { Site, SiteHeader } from './site';
+import { Site, SiteContent, SiteHeader } from './site';
 import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
-import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
-import { useSiteInfo } from '../../../hooks/use-site-info';
-import { useAppInfo } from '../../../hooks/use-app-info';
 
 interface SitesProps {
 	user: ReadonlyUserRecord;
@@ -187,7 +182,7 @@ function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: Readonl
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<IconButton
-									name="ellipsisVertical"
+									name="more"
 									testID={`auth-site-menu-${site.uuid}`}
 									accessibilityLabel={t('common.actions')}
 								/>
@@ -198,7 +193,7 @@ function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: Readonl
 									testID={`auth-site-remove-${site.uuid}`}
 									onPress={() => setDeleteDialogOpened(true)}
 								>
-									<Icon name="trash" className="fill-destructive" />
+									<Icon name="delete" className="fill-destructive" />
 									<Text>{t('auth.remove_site')}</Text>
 								</DropdownMenuItem>
 							</DropdownMenuContent>
@@ -237,22 +232,6 @@ function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: Readonl
 /**
  * Content inside an accordion item — needs Suspense boundary above it
  */
-function AccordionSiteContent({ site }: { site: ReadonlySiteRecord }) {
-	const { compatibility } = useAppInfo({ site });
-	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
-	const t = useT();
-
-	useSiteInfo({ site });
-
-	if (!wcposVersionPass) {
-		return (
-			<Notice
-				tone="warn"
-				title={t('auth.update_plugin_to_continue')}
-				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
-			/>
-		);
-	}
-
-	return <WPUsers site={site} />;
+export function AccordionSiteContent({ site }: { site: ReadonlySiteRecord }) {
+	return <SiteContent site={site} />;
 }

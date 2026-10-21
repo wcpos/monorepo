@@ -27,9 +27,9 @@ jest.mock('../loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it.each([
-	['warn', 'border-warn/45 bg-warn-bg', 'triangleExclamation', 'status', 'polite'],
-	['info', 'border-border bg-card', 'circleInfo', 'status', 'polite'],
-	['bad', 'border-bad/45 bg-bad-bg', 'circleExclamation', 'alert', 'assertive'],
+	['warn', 'border-warn/45 bg-warn-bg', 'warning', 'status', 'polite'],
+	['info', 'border-border bg-card', 'info', 'status', 'polite'],
+	['bad', 'border-bad/45 bg-bad-bg', 'alert', 'alert', 'assertive'],
 ] as const)('renders the %s tone and live region', (tone, classes, icon, role, live) => {
 	const { container } = render(<Notice tone={tone} title="Title" testID="notice" />);
 	expect(screen.getByTestId('notice')).toHaveClass(...classes.split(' '));
@@ -75,6 +75,17 @@ it('composes a real DocsLink', () => {
 	);
 	fireEvent.click(screen.getByTestId('notice-docs'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com');
+});
+it('renders children inside the text column under the description', () => {
+	render(
+		<Notice tone="warn" title="Title" description="Description" testID="notice">
+			<span data-testid="body">Engine warning</span>
+		</Notice>
+	);
+	const description = screen.getByTestId('notice-description');
+	const body = screen.getByTestId('body');
+	expect(screen.getByTestId('notice')).toContainElement(body);
+	expect(description.nextElementSibling).toBe(body);
 });
 it('has no internal dismissal or timer', () => {
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/onDismiss|xmark|setTimeout/);

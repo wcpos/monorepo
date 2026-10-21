@@ -17,6 +17,9 @@ jest.mock('@wcpos/query/user-db', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 // The approve sheet (rendered by the recount sheet) toasts on failure; the toast module is ESM-only.
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+// The register count renders through Notice, whose docs link and loader are native-runtime imports.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 const viewedStores = of([
 	{
 		id: 0,

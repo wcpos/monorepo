@@ -25,6 +25,7 @@ type PressProps = Kids & {
 };
 
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
@@ -99,7 +100,6 @@ jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (a: unknown) => mockToast(a) },
 }));
 jest.mock('./components', () => ({
-	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
 }));
 let mockIsPro = true;

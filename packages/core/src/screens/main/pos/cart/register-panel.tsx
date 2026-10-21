@@ -140,11 +140,7 @@ export function RegisterPanel({
 						>
 							<Icon
 								name={
-									type === 'paid_in'
-										? 'arrowDown'
-										: type === 'paid_out'
-											? 'arrowUp'
-											: 'cashRegister'
+									type === 'paid_in' ? 'arrowDown' : type === 'paid_out' ? 'arrowUp' : 'register'
 								}
 							/>
 							<Text numberOfLines={1} className="font-medium">

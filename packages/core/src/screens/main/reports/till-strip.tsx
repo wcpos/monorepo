@@ -348,7 +348,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					disabled={busy || !!unavailable}
 					onPress={dispatch}
 				>
-					<Icon name="printer" />
+					<Icon name="print" />
 					<ButtonText>{t(open ? 'register.print_x_report' : 'reports.reprint')}</ButtonText>
 				</Button>
 			)}

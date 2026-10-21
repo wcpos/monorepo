@@ -62,11 +62,10 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T, R>(doc: T, select: (value: T) => R) => select(doc),
 }));
 
-// Render with react-native-web's Text, avoiding raw JSX in @rn-primitives/slot.
-jest.mock('@wcpos/components/text', () => {
-	const { Text } = jest.requireActual('react-native');
-	return { Text };
-});
+// Keep Notice and its login button real; native drawing and URL hand-off are outside this suite.
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 jest.mock('../../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
@@ -114,8 +113,11 @@ describe('SessionHoldBanner', () => {
 		mockSyncBacklogSales = 0;
 		render(<Held />);
 
-		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
-			'Session expired — sign in to reconnect to the store.'
+		expect(screen.getByTestId('session-hold-banner-title').textContent).toContain(
+			'Session expired'
+		);
+		expect(screen.getByTestId('session-hold-banner-description').textContent).toBe(
+			'Sign in to reconnect to the store.'
 		);
 		fireEvent.click(screen.getByTestId('session-hold-login'));
 		expect(mockTrigger).toHaveBeenCalledTimes(1);
@@ -126,8 +128,11 @@ describe('SessionHoldBanner', () => {
 		mockSyncBacklogSales = 2;
 		render(<Held />);
 
-		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
-			'2 sales waiting to sync. Log in to continue.'
+		expect(screen.getByTestId('session-hold-banner-title').textContent).toContain(
+			'2 sales waiting to sync'
+		);
+		expect(screen.getByTestId('session-hold-banner-description').textContent).toBe(
+			'Log in to continue.'
 		);
 	});
 
@@ -136,8 +141,8 @@ describe('SessionHoldBanner', () => {
 		mockSyncBacklogSales = 1;
 		render(<Held />);
 
-		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
-			'1 sale waiting to sync. Log in to continue.'
+		expect(screen.getByTestId('session-hold-banner-title').textContent).toContain(
+			'1 sale waiting to sync'
 		);
 	});
 
@@ -291,7 +296,7 @@ describe('SessionHoldBanner', () => {
 		rerender(<Held />);
 		expect(mockSessionRestored).toHaveBeenCalledTimes(1);
 		expect(requestStateManager.isAuthFailed()).toBe(false);
-		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
+		expect(screen.getByTestId('session-hold-banner-title').textContent).toContain(
 			'2 sales waiting to sync'
 		);
 	});

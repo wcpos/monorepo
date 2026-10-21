@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import * as RadioGroupPrimitive from '@rn-primitives/radio-group';
 
@@ -132,7 +132,21 @@ function RadioGroupOption({
 					</Text>
 				) : null}
 			</VStack>
-			{right}
+			{right ? (
+				// The trailing slot is part of the option's press target (a preview can be most of
+				// the row on a phone). Not a second accessible control: the item carries the radio.
+				<Pressable
+					accessible={false}
+					tabIndex={-1}
+					disabled={isDisabled}
+					testID={props.testID ? `${props.testID}-right` : undefined}
+					onPress={() => {
+						if (value !== selectedValue) onValueChange?.(value);
+					}}
+				>
+					{right}
+				</Pressable>
+			) : null}
 		</HStack>
 	);
 }

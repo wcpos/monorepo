@@ -27,6 +27,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
 import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -52,7 +53,7 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import { Callout, CoverageBar, Stat, StatHeader } from './components';
+import { CoverageBar, Stat, StatHeader } from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,
@@ -339,7 +340,7 @@ function CollectionRowView({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<IconButton
-					name="ellipsisVertical"
+					name="more"
 					accessibilityLabel={t('common.more_actions')}
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
@@ -348,7 +349,7 @@ function CollectionRowView({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
-					<Icon name="arrowRotateRight" />
+					<Icon name="refresh" />
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
@@ -357,7 +358,7 @@ function CollectionRowView({
 					variant="destructive"
 					onPress={() => setConfirming(true)}
 				>
-					<Icon name="trash" className="text-destructive" />
+					<Icon name="delete" className="text-destructive" />
 					<Text>{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
@@ -684,27 +685,25 @@ export function DatabaseScreen() {
 				) : null}
 
 				{stats.clockSkew ? (
-					<Callout tone="warning" testID="db-clock-skew">
-						<Text className="text-warn-text text-sm">
-							{`${
-								stats.clockSkew.skewSeconds > 0
-									? t('health.database.clock_skew_ahead', {
-											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
-										})
-									: t('health.database.clock_skew_behind', {
-											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
-										})
-							} ${t('health.database.clock_skew_hint')}`}
-						</Text>
-					</Callout>
+					<Notice
+						tone="warn"
+						testID="db-clock-skew"
+						title={`${t(
+							stats.clockSkew.skewSeconds > 0
+								? 'health.database.clock_skew_ahead'
+								: 'health.database.clock_skew_behind',
+							{ amount: formatSkewMagnitude(stats.clockSkew.skewSeconds) }
+						)} ${t('health.database.clock_skew_hint')}`}
+					/>
 				) : null}
 
 				{status.connectivity === 'offline' ? (
-					<Callout tone="warning">
-						<Text className="text-warn-text text-sm">
-							{readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')}
-						</Text>
-					</Callout>
+					<Notice
+						tone="warn"
+						title={
+							readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')
+						}
+					/>
 				) : null}
 
 				{/* Per-collection rows (table header in the wide layout only; rows render both

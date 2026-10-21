@@ -2,13 +2,13 @@ import { HStack } from '../hstack';
 import { Icon } from './index';
 
 export const stories = [
-	{ id: 'default', render: () => <Icon name="cartShopping" /> },
+	{ id: 'default', render: () => <Icon name="cart" /> },
 	{
 		id: 'sizes',
 		render: () => (
 			<HStack>
 				{(['xs', 'sm', 'default', 'lg', 'xl', '2xl', '3xl', '4xl'] as const).map((size) => (
-					<Icon key={size} name="cartShopping" size={size} />
+					<Icon key={size} name="cart" size={size} />
 				))}
 			</HStack>
 		),
@@ -19,11 +19,11 @@ export const stories = [
 			<HStack>
 				{(['default', 'primary', 'destructive', 'muted', 'success', 'warning'] as const).map(
 					(variant) => (
-						<Icon key={variant} name="cartShopping" variant={variant} />
+						<Icon key={variant} name="cart" variant={variant} />
 					)
 				)}
 			</HStack>
 		),
 	},
-	{ id: 'loading', render: () => <Icon name="cartShopping" loading /> },
+	{ id: 'loading', render: () => <Icon name="cart" loading /> },
 ];

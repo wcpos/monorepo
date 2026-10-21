@@ -26,7 +26,7 @@ export const stories = [
 				<MenuRow
 					testID="menu-row-settings"
 					label="Settings"
-					leading={<Icon name="gear" />}
+					leading={<Icon name="settings" />}
 					trailing={<Icon name="chevronRight" />}
 					onPress={onPress}
 				/>
@@ -55,14 +55,14 @@ export const stories = [
 				<MenuRow
 					testID="menu-row-details"
 					label="Details"
-					leading={<Icon name="circleInfo" />}
+					leading={<Icon name="info" />}
 					onPress={onPress}
 				/>
 				<MenuRowSeparator />
 				<MenuRow
 					testID="menu-row-forget"
 					label="Forget reader"
-					leading={<Icon name="trash" />}
+					leading={<Icon name="delete" />}
 					variant="destructive"
 					onPress={onPress}
 				/>

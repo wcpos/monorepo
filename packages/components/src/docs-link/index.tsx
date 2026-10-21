@@ -41,10 +41,10 @@ function DocsLink({ href, children, code, testID, className }: DocsLinkProps) {
 				</ButtonText>
 				{code ? (
 					<ButtonText numberOfLines={0} className="text-muted-foreground shrink">
-						{` · ${code}`}
+						{`· ${code}`}
 					</ButtonText>
 				) : null}
-				<Icon name="arrowUpRight" size="xs" />
+				<Icon name="openExternal" size="xs" />
 			</HStack>
 		</Button>
 	);

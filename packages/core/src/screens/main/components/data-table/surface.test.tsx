@@ -39,8 +39,10 @@ it('insets a page by 16 on its sides and bottom, leaving the top to the row abov
 	expect(classes().some((name) => /^(m|mt|my)-/.test(name))).toBe(false);
 });
 
-// The caption row's text sits on the cells' text: the card's gutter plus the cell's 12.
-it('insets the caption row by the gutter plus the cell padding', () => {
+// The caption row's text sits on the cells' text: the card's gutter plus the cell's 12 — and,
+// as the pane's last row, it carries the gutter below it too (the bottom edge is a container
+// edge like the top one; owner, 2026-10-20).
+it('insets the caption row by the gutter plus the cell padding, and by the gutter below', () => {
 	const inset = (gutter?: 'page' | 'dense') => {
 		const { unmount } = render(
 			<CaptionRowInset gutter={gutter}>
@@ -53,10 +55,11 @@ it('insets the caption row by the gutter plus the cell padding', () => {
 		unmount();
 		return value;
 	};
-	expect(inset('page')).toBe('px-7');
-	expect(inset()).toBe('px-5');
-	expect(inset('dense')).toBe('px-5');
-	// The phone card has no side gutter, so the caption sits on the cell's 12 alone.
+	expect(inset('page')).toBe('px-7 pb-4');
+	expect(inset()).toBe('px-5 pb-2');
+	expect(inset('dense')).toBe('px-5 pb-2');
+	// The phone card has no side gutter, so the caption sits on the cell's 12 alone, and the
+	// screen pads the home indicator itself, so there is no bottom gutter either.
 	mockPhone = true;
 	expect(inset('page')).toBe('px-3');
 	expect(inset('dense')).toBe('px-3');

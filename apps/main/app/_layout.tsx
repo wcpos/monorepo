@@ -13,6 +13,7 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
+import { IconSetSettingProvider } from '@wcpos/core/contexts/icon-set';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { ScaleProvider } from '@wcpos/core/contexts/scale';
 import { useT } from '@wcpos/core/contexts/translations';
@@ -162,10 +163,14 @@ function MerchantRootLayout() {
 								    the app's, the (auth) one and the named `pos` host — sits
 								    inside the scale scope. */}
 								<ScaleProvider>
-									<RootStack />
-									<ErrorBoundary>
-										<ThemedToaster />
-									</ErrorBoundary>
+									{/* Inside the scale scope for the same reason: it reads the store's
+									    icon family, and the toaster and every PortalHost draw icons too. */}
+									<IconSetSettingProvider>
+										<RootStack />
+										<ErrorBoundary>
+											<ThemedToaster />
+										</ErrorBoundary>
+									</IconSetSettingProvider>
 								</ScaleProvider>
 							</HydrationProviders>
 						</KeyboardProvider>

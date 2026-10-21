@@ -163,7 +163,8 @@ export const mockRefundsHandle = fakeQueryHandle({}, 'refunds');
 export const mockPrintDocument = {
 	templates: [{ id: 7, title: 'Sales', offline_capable: true }],
 	templatesReady: true,
-	mismatchWarning: null as string | null,
+	mismatch: null as string | null,
+	resolvedPrinter: null as { id: string } | null,
 	selectedTemplateId: 7,
 	setSelectedTemplateId: jest.fn(),
 	isOffline: false,

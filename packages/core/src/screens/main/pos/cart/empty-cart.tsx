@@ -15,7 +15,7 @@ export function EmptyCart() {
 	const t = useT();
 	return (
 		<View testID="cart-empty" className="flex-1 items-center justify-center gap-2 p-4">
-			<Icon name="cartShopping" size="4xl" className="text-muted-foreground" />
+			<Icon name="cart" size="4xl" className="text-muted-foreground" />
 			<Text className="text-muted-foreground text-center text-sm">
 				{t('pos_cart.empty_cart_hint')}
 			</Text>

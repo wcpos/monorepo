@@ -27,11 +27,14 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { clearUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { WPUsers } from './wp-users';
+import { UpdateRequiredNotice } from '../../../components/update-required-notice';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useAppInfo } from '../../../hooks/use-app-info';
+import { useUpdateRequired } from '../../../hooks/use-update-required';
 
 interface Props {
 	user: ReadonlyUserRecord;
@@ -64,15 +67,65 @@ export function SiteHeader({ site }: { site: Pick<ReadonlySiteRecord, 'name' | '
 }
 
 /**
- * Full site component — header + users/stores/login
+ * A site's content below its header — shared by the single-site card and the
+ * multi-site accordion so both surfaces gate the same way. Precedence: plugin
+ * too old (the older, cheaper check), then app too old (the server's
+ * wcpos_update_required refusal), then the users list.
  */
-export function Site({ user, site }: Props) {
-	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+export function SiteContent({ site }: { site: ReadonlySiteRecord }) {
 	const t = useT();
 	const { compatibility } = useAppInfo({ site });
 	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 
 	useSiteInfo({ site });
+
+	// The server's protocol-gate refusal, latched under wp_api_url by the login
+	// validation or the sync engine (the same key the in-app gate reads).
+	const wpApiUrl = site.wp_api_url;
+	const updateRequired = useUpdateRequired(wpApiUrl);
+	// Native/Electron have no Reload: clearing the latch remounts WPUsers, whose
+	// validation re-runs and re-latches if the store still refuses this app.
+	const handleRetryUpdateRequired = React.useCallback(() => {
+		if (wpApiUrl) clearUpdateRequired(wpApiUrl);
+	}, [wpApiUrl]);
+
+	if (!wcposVersionPass) {
+		return (
+			<Notice
+				tone="warn"
+				title={t('auth.update_plugin_to_continue')}
+				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
+			/>
+		);
+	}
+
+	if (updateRequired) {
+		// No Logout (nobody is logged in) and no Add user (it cannot help):
+		// one action — Reload on web, Try again elsewhere.
+		return (
+			<UpdateRequiredNotice
+				testID="update-required-card-notice"
+				align="start"
+				onRetry={handleRetryUpdateRequired}
+			/>
+		);
+	}
+
+	return (
+		<ErrorBoundary>
+			<Suspense>
+				<WPUsers site={site} />
+			</Suspense>
+		</ErrorBoundary>
+	);
+}
+
+/**
+ * Full site component — header + users/stores/login
+ */
+export function Site({ user, site }: Props) {
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
@@ -92,7 +145,7 @@ export function Site({ user, site }: Props) {
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton
-								name="ellipsisVertical"
+								name="more"
 								testID={`auth-site-menu-${site.uuid}`}
 								accessibilityLabel={t('common.actions')}
 							/>
@@ -103,27 +156,14 @@ export function Site({ user, site }: Props) {
 								testID={`auth-site-remove-${site.uuid}`}
 								onPress={() => setDeleteDialogOpened(true)}
 							>
-								<Icon name="trash" className="fill-destructive" />
+								<Icon name="delete" className="fill-destructive" />
 								<Text>{t('auth.remove_site')}</Text>
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</HStack>
 
-				{/* Site Content */}
-				{wcposVersionPass ? (
-					<ErrorBoundary>
-						<Suspense>
-							<WPUsers site={site} />
-						</Suspense>
-					</ErrorBoundary>
-				) : (
-					<Notice
-						tone="warn"
-						title={t('auth.update_plugin_to_continue')}
-						docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
-					/>
-				)}
+				<SiteContent site={site} />
 			</VStack>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>

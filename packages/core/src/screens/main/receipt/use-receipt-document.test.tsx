@@ -13,6 +13,15 @@ import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card
 const mockPrint = jest.fn<Promise<boolean>, []>();
 let mockFinal = true;
 let mockAutoPrint = true;
+let mockServerData = true;
+let mockReceiptData: object | undefined;
+let mockGateway: { settled_order_status?: string | null } | null = null;
+jest.mock('../hooks/use-payment-gateways', () => ({
+	usePaymentGateways: () => ({ gateway: mockGateway }),
+}));
+let mockPrinter: { resolvedPrinter: object; isResolving?: boolean; mismatch?: string | null } = {
+	resolvedPrinter: { name: 'Till printer' },
+};
 const order = { uuid: 'paid', payload: { id: 42, currency: 'USD' } } as never;
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
@@ -37,21 +46,28 @@ jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print: mockPrint, isPrinting: false }),
 	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
 		.isOrderBasedCloudProfile,
+	usesSystemPrintDialog: jest.requireActual('@wcpos/printer/transport/device-key')
+		.usesSystemPrintDialog,
 }));
 const mockToast = jest.fn();
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (props: unknown) => mockToast(props) },
 }));
+// A preview loaded from a URL with no rendered HTML: the dialog print reads the loaded frame,
+// so auto-print waits for it (#2806). The server's receipt data has arrived by default.
 jest.mock('./hooks/use-template-renderer', () => ({
 	useTemplateRenderer: () => ({
 		templates: [{ id: 7 }],
 		selectedTemplateId: 7,
-		renderedHtml: '<html/>',
+		renderedHtml: null,
+		receiptUrl: 'https://shop.test/receipt',
+		receiptData: mockReceiptData,
 		hasFinalData: mockFinal,
+		receiptDataIsServer: mockServerData,
 	}),
 }));
 jest.mock('./hooks/use-resolved-printer', () => ({
-	useResolvedPrinter: () => ({ resolvedPrinter: { name: 'Till printer' } }),
+	useResolvedPrinter: () => mockPrinter,
 }));
 jest.mock('./hooks/use-download-receipt-pdf', () => ({
 	useDownloadReceiptPdf: () => ({ download: jest.fn() }),
@@ -123,6 +139,10 @@ beforeEach(() => {
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockFinal = true;
 	mockAutoPrint = true;
+	mockServerData = true;
+	mockReceiptData = undefined;
+	mockGateway = null;
+	mockPrinter = { resolvedPrinter: { name: 'Till printer' } };
 });
 
 it('waits for final data and frame load, then auto-prints once', async () => {
@@ -144,6 +164,91 @@ it('waits for a frame even when final data is ready first', async () => {
 	expect(mockPrint).not.toHaveBeenCalled();
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it('prints to a raw printer without the frame, but only once the printer is resolved', async () => {
+	const raw = { id: 'raw', name: 'Counter', connectionType: 'network', address: '10.0.0.5' };
+	mockPrinter = { resolvedPrinter: raw, isResolving: true };
+	mockReceiptData = { id: 42 };
+	const { rerender } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	expect(mockPrint).not.toHaveBeenCalled();
+	mockPrinter = { resolvedPrinter: raw, isResolving: false };
+	await act(async () => rerender());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it('does not auto-print a local pos-open fallback; prints once the order settles', async () => {
+	mockServerData = false;
+	const open = { uuid: 'o', payload: { id: 43, status: 'pos-open' } };
+	const { result, rerender } = renderHook(
+		({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }),
+		{ initialProps: { doc: open } }
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).not.toHaveBeenCalled();
+	await act(async () => rerender({ doc: { ...open, payload: { id: 43, status: 'completed' } } }));
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it.each([
+	['pending', true],
+	['processing', false],
+])(
+	'a local fallback at pending auto-prints only for a gateway settling at %s (%s)',
+	async (settled, prints) => {
+		mockServerData = false;
+		mockGateway = { settled_order_status: settled };
+		const open = { uuid: 'p', payload: { id: 44, status: 'pos-open', payment_method: 'bacs' } };
+		const { result, rerender } = renderHook(
+			({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }),
+			{ initialProps: { doc: open } }
+		);
+		await act(async () => result.current.previewProps.handleLoad());
+		const pending = { ...open, payload: { ...open.payload, status: 'pending' } };
+		await act(async () => rerender({ doc: pending }));
+		expect(mockPrint).toHaveBeenCalledTimes(prints ? 1 : 0);
+	}
+);
+describe('finishing while a pos-open fallback waits to settle', () => {
+	const open = { uuid: 'h', payload: { id: 45, status: 'pos-open' } };
+	const renderOpen = () =>
+		renderHook(({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }), {
+			initialProps: { doc: open },
+		});
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockServerData = false;
+	});
+	afterEach(() => jest.useRealTimers());
+
+	it('holds the buttons, then prints once and releases when the order settles', async () => {
+		const { result, rerender } = renderOpen();
+		await act(async () => result.current.previewProps.handleLoad());
+		expect(result.current.autoPrintPending).toBe(true);
+		const settled = { ...open, payload: { ...open.payload, status: 'completed' } };
+		await act(async () => rerender({ doc: settled }));
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+		expect(result.current.autoPrintPending).toBe(false);
+	});
+
+	it('releases the buttons at the order refresh bound without printing', async () => {
+		const { result } = renderOpen();
+		await act(async () => result.current.previewProps.handleLoad());
+		await act(async () => jest.advanceTimersByTime(9_999));
+		expect(result.current.autoPrintPending).toBe(true);
+		await act(async () => jest.advanceTimersByTime(1));
+		expect(result.current.autoPrintPending).toBe(false);
+		expect(mockPrint).not.toHaveBeenCalled();
+		expect(mockToast).not.toHaveBeenCalled();
+	});
+});
+it('reports no printer mismatch for a session report the cloud printer hands to the dialog', () => {
+	const cloud = { id: 'cloud:1', connectionType: 'cloud', cloudProvider: 'star-cloudprnt' };
+	mockPrinter = { resolvedPrinter: cloud, mismatch: 'html-template-cloud-thermal-only' };
+	const report = renderHook(() =>
+		useReceiptDocument({ autoPrintAllowed: false, templateType: 'report', localReport: {} })
+	);
+	expect(report.result.current.mismatch).toBeNull();
+	// A sale receipt on the same printer goes to the cloud job: the warning stands.
+	const sale = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	expect(sale.result.current.mismatch).toBe('html-template-cloud-thermal-only');
 });
 it.each([false, true])(
 	'does not auto-print with allowed=%s and auto-print disabled',

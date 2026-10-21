@@ -163,7 +163,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 										<TooltipTrigger asChild>
 											<IconButton
 												variant="destructive"
-												name="circleMinus"
+												name="decrement"
 												accessibilityLabel={t('tax_id.remove')}
 												onPress={() => remove(index)}
 											/>

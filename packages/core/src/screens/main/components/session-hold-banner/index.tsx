@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
-import { Text } from '@wcpos/components/text';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
+import { Notice } from '@wcpos/components/notice';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -102,28 +103,40 @@ export function SessionHoldProvider({ children }: { children: React.ReactNode })
 	return <SessionHoldContext.Provider value={value}>{children}</SessionHoldContext.Provider>;
 }
 
-/** The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`. */
-export function SessionHoldBanner() {
+/** Whether a session hold is showing: the row after the banner spaces itself from it. */
+export function useSessionHeld(): boolean {
+	return React.useContext(SessionHoldContext) != null;
+}
+
+/**
+ * The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`.
+ * On wide widths it is the row under the bar, so it carries the container's gutter above and
+ * at its sides (16 on a page, 8 in a dense pane; CODING_STANDARDS § Design, Gutters) — the
+ * wide bar ends at its controls and leaves the gutter to its follower. The phone is unchanged.
+ */
+export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dense' }) {
 	const hold = React.useContext(SessionHoldContext);
 	const t = useT();
+	const phone = useIsPhone();
 	if (!hold) return null;
 	const { syncBacklogSales, login } = hold;
 
 	return (
-		<View
+		<Notice
+			tone="bad"
+			title={
+				syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync_title', { count: syncBacklogSales })
+					: t('auth.session_expired_title')
+			}
+			description={
+				syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync_description')
+					: t('auth.session_expired_description')
+			}
+			actions={[{ label: t('auth.log_in'), onPress: login, testID: 'session-hold-login' }]}
+			className={cn(!phone && (gutter === 'page' ? 'mx-4 mt-4' : 'mx-2 mt-2'))}
 			testID="session-hold-banner"
-			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
-		>
-			<Text className="text-destructive flex-1 text-sm">
-				{syncBacklogSales > 0
-					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
-					: t('auth.session_expired')}
-			</Text>
-			<Pressable testID="session-hold-login" onPress={login}>
-				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
-					{t('auth.log_in')}
-				</Text>
-			</Pressable>
-		</View>
+		/>
 	);
 }

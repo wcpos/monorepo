@@ -47,7 +47,7 @@ export function VariationsFilterBar({ row }: Props) {
 				{!!searchTerm && (
 					<Chip
 						size="sm"
-						icon="magnifyingGlass"
+						icon="search"
 						label={searchTerm}
 						onClear={actions.clearSearch}
 						clearLabel={t('common.remove')}

@@ -387,7 +387,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 			>
 				<DisplayOptions />
 			</ManagementBar>
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 			<GuardedOrdersBody initialFilters={initialFilters} />
 		</View>
 	);

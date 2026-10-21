@@ -15,13 +15,14 @@ type NoticeProps = ViewProps & {
 	icon?: IconName;
 	title: string;
 	description?: string;
+	children?: React.ReactNode;
 	actions?: readonly [NoticeAction] | readonly [NoticeAction, NoticeAction];
 	docs?: { label: string; href: string; testID?: string };
 };
 const tones = {
-	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'triangleExclamation' },
-	info: { surface: 'border-border bg-card', icon: 'circleInfo' },
-	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'circleExclamation' },
+	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'warning' },
+	info: { surface: 'border-border bg-card', icon: 'info' },
+	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'alert' },
 } as const;
 
 export function Notice({
@@ -29,6 +30,7 @@ export function Notice({
 	icon,
 	title,
 	description,
+	children,
 	actions,
 	docs,
 	testID,
@@ -66,6 +68,7 @@ export function Notice({
 						{description}
 					</Text>
 				)}
+				{children}
 			</VStack>
 			{(actions || docs) && (
 				<HStack className="flex-wrap gap-2">
@@ -78,7 +81,9 @@ export function Notice({
 							testID={action.testID ?? id(`action-${index}`)}
 							onPress={action.onPress}
 						>
-							<ButtonText className="web:whitespace-normal text-clip">{action.label}</ButtonText>
+							<ButtonText numberOfLines={0} className="web:whitespace-normal text-clip">
+								{action.label}
+							</ButtonText>
 						</Button>
 					))}
 					{docs && (

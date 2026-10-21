@@ -80,7 +80,7 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
 		<VStack key={column.key} className="web:hover:shadow-md gap-0 rounded p-2 transition-shadow">
 			<HStack>
 				<DragHandle className="mr-2">
-					<Icon name="gripLinesVertical" size="xs" className="cursor-grab" />
+					<Icon name="dragHandleVertical" size="xs" className="cursor-grab" />
 				</DragHandle>
 				<FormField
 					control={form.control}

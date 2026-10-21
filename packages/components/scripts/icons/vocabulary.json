@@ -1,0 +1,942 @@
+[
+ {
+  "name": "viewGrid",
+  "section": "Views and layout",
+  "meaning": "Products as tiles (the grid view); also the placeholder on a category tile with no image",
+  "replaces": [
+   "grid",
+   "grid2"
+  ]
+ },
+ {
+  "name": "viewList",
+  "section": "Views and layout",
+  "meaning": "Products as a list (rows); the other half of the grid/list toggle",
+  "replaces": [
+   "list"
+  ]
+ },
+ {
+  "name": "filters",
+  "section": "Views and layout",
+  "meaning": "Open the filter / column settings",
+  "replaces": [
+   "sliders"
+  ]
+ },
+ {
+  "name": "expand",
+  "section": "Views and layout",
+  "meaning": "Expand a collapsed section (vertical)",
+  "replaces": [
+   "arrowsFromLine"
+  ]
+ },
+ {
+  "name": "collapse",
+  "section": "Views and layout",
+  "meaning": "Collapse a section (vertical)",
+  "replaces": [
+   "arrowsToLine"
+  ]
+ },
+ {
+  "name": "dragHandle",
+  "section": "Views and layout",
+  "meaning": "Drag to reorder (horizontal grip)",
+  "replaces": [
+   "gripLines"
+  ]
+ },
+ {
+  "name": "dragHandleVertical",
+  "section": "Views and layout",
+  "meaning": "Drag to reorder (vertical grip)",
+  "replaces": [
+   "gripLinesVertical"
+  ]
+ },
+ {
+  "name": "tree",
+  "section": "Views and layout",
+  "meaning": "A nested list (categories tree)",
+  "replaces": [
+   "listTree"
+  ]
+ },
+ {
+  "name": "more",
+  "section": "Views and layout",
+  "meaning": "The overflow menu on a row (\u22ee)",
+  "replaces": [
+   "ellipsisVertical"
+  ]
+ },
+ {
+  "name": "moreCircle",
+  "section": "Views and layout",
+  "meaning": "More, in a circle",
+  "replaces": [
+   "circleEllipsis"
+  ]
+ },
+ {
+  "name": "menu",
+  "section": "Views and layout",
+  "meaning": "The rail / hamburger",
+  "replaces": [
+   "bars"
+  ]
+ },
+ {
+  "name": "chevronLeft",
+  "section": "Navigation",
+  "meaning": "Back",
+  "replaces": [
+   "chevronLeft"
+  ]
+ },
+ {
+  "name": "chevronRight",
+  "section": "Navigation",
+  "meaning": "Forward / drill into a row (a single chevron, never circled)",
+  "replaces": [
+   "chevronRight",
+   "circleChevronRight"
+  ]
+ },
+ {
+  "name": "chevronDown",
+  "section": "Navigation",
+  "meaning": "Open / expand",
+  "replaces": [
+   "caretDown",
+   "chevronDown"
+  ]
+ },
+ {
+  "name": "chevronUp",
+  "section": "Navigation",
+  "meaning": "Close / collapse",
+  "replaces": [
+   "caretUp",
+   "chevronUp"
+  ]
+ },
+ {
+  "name": "caretLeft",
+  "section": "Navigation",
+  "meaning": "",
+  "replaces": [
+   "caretLeft"
+  ]
+ },
+ {
+  "name": "caretRight",
+  "section": "Navigation",
+  "meaning": "",
+  "replaces": [
+   "caretRight"
+  ]
+ },
+ {
+  "name": "arrowUp",
+  "section": "Navigation",
+  "meaning": "Sort / move up",
+  "replaces": [
+   "arrowUp"
+  ]
+ },
+ {
+  "name": "arrowDown",
+  "section": "Navigation",
+  "meaning": "Sort / move down",
+  "replaces": [
+   "arrowDown"
+  ]
+ },
+ {
+  "name": "arrowLeft",
+  "section": "Navigation",
+  "meaning": "",
+  "replaces": [
+   "arrowLeft"
+  ]
+ },
+ {
+  "name": "arrowRight",
+  "section": "Navigation",
+  "meaning": "",
+  "replaces": [
+   "arrowRight"
+  ]
+ },
+ {
+  "name": "openExternal",
+  "section": "Navigation",
+  "meaning": "Opens in the browser / outside the app",
+  "replaces": [
+   "arrowUpRight"
+  ]
+ },
+ {
+  "name": "signOut",
+  "section": "Navigation",
+  "meaning": "Log out",
+  "replaces": [
+   "arrowRightFromBracket"
+  ]
+ },
+ {
+  "name": "swap",
+  "section": "Navigation",
+  "meaning": "Switch between two things (e.g. store, direction)",
+  "replaces": [
+   "rightLeft"
+  ]
+ },
+ {
+  "name": "refresh",
+  "section": "Navigation",
+  "meaning": "Refresh / sync now",
+  "replaces": [
+   "arrowRotateRight"
+  ]
+ },
+ {
+  "name": "undo",
+  "section": "Navigation",
+  "meaning": "Undo / history",
+  "replaces": [
+   "arrowRotateLeft"
+  ]
+ },
+ {
+  "name": "search",
+  "section": "Navigation",
+  "meaning": "Search",
+  "replaces": [
+   "magnifyingGlass"
+  ]
+ },
+ {
+  "name": "close",
+  "section": "Navigation",
+  "meaning": "Close / clear / dismiss",
+  "replaces": [
+   "xmark"
+  ]
+ },
+ {
+  "name": "check",
+  "section": "Navigation",
+  "meaning": "Done / selected",
+  "replaces": [
+   "check"
+  ]
+ },
+ {
+  "name": "cart",
+  "section": "Cart and tender",
+  "meaning": "The cart",
+  "replaces": [
+   "cartShopping"
+  ]
+ },
+ {
+  "name": "addToCart",
+  "section": "Cart and tender",
+  "meaning": "Add to cart",
+  "replaces": [
+   "cartPlus",
+   "cartCirclePlus"
+  ]
+ },
+ {
+  "name": "cartDone",
+  "section": "Cart and tender",
+  "meaning": "Cart checked out / completed",
+  "replaces": [
+   "cartCircleCheck"
+  ]
+ },
+ {
+  "name": "basket",
+  "section": "Cart and tender",
+  "meaning": "Basket (alternative cart)",
+  "replaces": [
+   "basketShopping"
+  ]
+ },
+ {
+  "name": "register",
+  "section": "Cart and tender",
+  "meaning": "The register / till",
+  "replaces": [
+   "cashRegister"
+  ]
+ },
+ {
+  "name": "store",
+  "section": "Cart and tender",
+  "meaning": "The store (rail glyph)",
+  "replaces": [
+   "store",
+   "shop"
+  ]
+ },
+ {
+  "name": "card",
+  "section": "Cart and tender",
+  "meaning": "Card payment",
+  "replaces": [
+   "creditCard"
+  ]
+ },
+ {
+  "name": "cash",
+  "section": "Cart and tender",
+  "meaning": "Cash payment",
+  "replaces": []
+ },
+ {
+  "name": "currency",
+  "section": "Cart and tender",
+  "meaning": "Money / currency / price",
+  "replaces": [
+   "circleDollar",
+   "badgeDollar"
+  ]
+ },
+ {
+  "name": "discount",
+  "section": "Cart and tender",
+  "meaning": "Discount / coupon",
+  "replaces": [
+   "badgePercent"
+  ]
+ },
+ {
+  "name": "percent",
+  "section": "Cart and tender",
+  "meaning": "Percent key",
+  "replaces": [
+   "percent"
+  ]
+ },
+ {
+  "name": "giftCard",
+  "section": "Cart and tender",
+  "meaning": "Gift card",
+  "replaces": [
+   "giftCard"
+  ]
+ },
+ {
+  "name": "gift",
+  "section": "Cart and tender",
+  "meaning": "Gift / free item",
+  "replaces": [
+   "gift",
+   "gifts"
+  ]
+ },
+ {
+  "name": "receipt",
+  "section": "Cart and tender",
+  "meaning": "Receipt",
+  "replaces": [
+   "receipt"
+  ]
+ },
+ {
+  "name": "invoice",
+  "section": "Cart and tender",
+  "meaning": "Invoice / order document",
+  "replaces": [
+   "fileInvoiceDollar"
+  ]
+ },
+ {
+  "name": "print",
+  "section": "Cart and tender",
+  "meaning": "Print",
+  "replaces": [
+   "printer"
+  ]
+ },
+ {
+  "name": "calculator",
+  "section": "Cart and tender",
+  "meaning": "Calculator / manual amount",
+  "replaces": [
+   "calculator",
+   "calculatorSimple"
+  ]
+ },
+ {
+  "name": "backspace",
+  "section": "Cart and tender",
+  "meaning": "Keypad delete",
+  "replaces": [
+   "deleteLeft"
+  ]
+ },
+ {
+  "name": "plus",
+  "section": "Cart and tender",
+  "meaning": "Add / keypad plus",
+  "replaces": [
+   "plus",
+   "plusLarge"
+  ]
+ },
+ {
+  "name": "minus",
+  "section": "Cart and tender",
+  "meaning": "Subtract / keypad minus",
+  "replaces": [
+   "minus"
+  ]
+ },
+ {
+  "name": "plusMinus",
+  "section": "Cart and tender",
+  "meaning": "Toggle sign",
+  "replaces": [
+   "plusMinus"
+  ]
+ },
+ {
+  "name": "divide",
+  "section": "Cart and tender",
+  "meaning": "Divide key",
+  "replaces": [
+   "divide"
+  ]
+ },
+ {
+  "name": "equals",
+  "section": "Cart and tender",
+  "meaning": "Equals key",
+  "replaces": [
+   "equals"
+  ]
+ },
+ {
+  "name": "increment",
+  "section": "Cart and tender",
+  "meaning": "Quantity up (stepper)",
+  "replaces": [
+   "circlePlus"
+  ]
+ },
+ {
+  "name": "decrement",
+  "section": "Cart and tender",
+  "meaning": "Quantity down (stepper)",
+  "replaces": [
+   "circleMinus"
+  ]
+ },
+ {
+  "name": "split",
+  "section": "Cart and tender",
+  "meaning": "Split payment / split a line",
+  "replaces": []
+ },
+ {
+  "name": "refund",
+  "section": "Cart and tender",
+  "meaning": "Refund",
+  "replaces": []
+ },
+ {
+  "name": "cashDrawer",
+  "section": "Cart and tender",
+  "meaning": "The cash drawer",
+  "replaces": []
+ },
+ {
+  "name": "customer",
+  "section": "People",
+  "meaning": "A customer / the user",
+  "replaces": [
+   "user"
+  ]
+ },
+ {
+  "name": "customers",
+  "section": "People",
+  "meaning": "Customers (plural)",
+  "replaces": [
+   "users"
+  ]
+ },
+ {
+  "name": "addCustomer",
+  "section": "People",
+  "meaning": "Add a customer",
+  "replaces": [
+   "userPlus"
+  ]
+ },
+ {
+  "name": "cashier",
+  "section": "People",
+  "meaning": "The cashier / staff member",
+  "replaces": [
+   "userCrown"
+  ]
+ },
+ {
+  "name": "customerCard",
+  "section": "People",
+  "meaning": "Customer details (ID card)",
+  "replaces": [
+   "addressCard"
+  ]
+ },
+ {
+  "name": "bot",
+  "section": "People",
+  "meaning": "An automated / system actor",
+  "replaces": [
+   "messageBot"
+  ]
+ },
+ {
+  "name": "product",
+  "section": "Catalogue and stock",
+  "meaning": "A product",
+  "replaces": [
+   "box"
+  ]
+ },
+ {
+  "name": "packageOpen",
+  "section": "Catalogue and stock",
+  "meaning": "An opened package",
+  "replaces": [
+   "boxOpenFull"
+  ]
+ },
+ {
+  "name": "inventory",
+  "section": "Catalogue and stock",
+  "meaning": "Stock / boxes",
+  "replaces": [
+   "boxesPacking",
+   "boxesStacked"
+  ]
+ },
+ {
+  "name": "warehouse",
+  "section": "Catalogue and stock",
+  "meaning": "Warehouse / stock location",
+  "replaces": [
+   "warehouseFull"
+  ]
+ },
+ {
+  "name": "shipping",
+  "section": "Catalogue and stock",
+  "meaning": "Shipping",
+  "replaces": [
+   "truck"
+  ]
+ },
+ {
+  "name": "barcode",
+  "section": "Catalogue and stock",
+  "meaning": "Barcode",
+  "replaces": [
+   "barcode",
+   "rectangleBarcode"
+  ]
+ },
+ {
+  "name": "scan",
+  "section": "Catalogue and stock",
+  "meaning": "Scan a barcode",
+  "replaces": [
+   "barcodeRead",
+   "barcodeScan"
+  ]
+ },
+ {
+  "name": "tag",
+  "section": "Catalogue and stock",
+  "meaning": "A tag / label",
+  "replaces": [
+   "tag"
+  ]
+ },
+ {
+  "name": "tags",
+  "section": "Catalogue and stock",
+  "meaning": "Tags (plural)",
+  "replaces": [
+   "tags"
+  ]
+ },
+ {
+  "name": "category",
+  "section": "Catalogue and stock",
+  "meaning": "A category (folder)",
+  "replaces": [
+   "folder"
+  ]
+ },
+ {
+  "name": "categories",
+  "section": "Catalogue and stock",
+  "meaning": "Categories (plural)",
+  "replaces": [
+   "folders"
+  ]
+ },
+ {
+  "name": "featured",
+  "section": "Catalogue and stock",
+  "meaning": "Featured",
+  "replaces": [
+   "star"
+  ]
+ },
+ {
+  "name": "bookmark",
+  "section": "Catalogue and stock",
+  "meaning": "Saved / bookmarked",
+  "replaces": [
+   "bookmark"
+  ]
+ },
+ {
+  "name": "confirmed",
+  "section": "Status and feedback",
+  "meaning": "Success / paid / complete",
+  "replaces": [
+   "circleCheck"
+  ]
+ },
+ {
+  "name": "rejected",
+  "section": "Status and feedback",
+  "meaning": "Failed / cancelled",
+  "replaces": [
+   "circleXmark"
+  ]
+ },
+ {
+  "name": "alert",
+  "section": "Status and feedback",
+  "meaning": "Error / attention (circle)",
+  "replaces": [
+   "circleExclamation"
+  ]
+ },
+ {
+  "name": "warning",
+  "section": "Status and feedback",
+  "meaning": "Warning (triangle)",
+  "replaces": [
+   "triangleExclamation"
+  ]
+ },
+ {
+  "name": "info",
+  "section": "Status and feedback",
+  "meaning": "Info",
+  "replaces": [
+   "circleInfo"
+  ]
+ },
+ {
+  "name": "help",
+  "section": "Status and feedback",
+  "meaning": "Help / question",
+  "replaces": [
+   "circleQuestion"
+  ]
+ },
+ {
+  "name": "support",
+  "section": "Status and feedback",
+  "meaning": "Support / contact us",
+  "replaces": [
+   "commentQuestion",
+   "commentsQuestion",
+   "lifeRing"
+  ]
+ },
+ {
+  "name": "pending",
+  "section": "Status and feedback",
+  "meaning": "Pending / waiting (clock)",
+  "replaces": [
+   "clock"
+  ]
+ },
+ {
+  "name": "onHold",
+  "section": "Status and feedback",
+  "meaning": "On hold (pause)",
+  "replaces": [
+   "circlePause"
+  ]
+ },
+ {
+  "name": "blocked",
+  "section": "Status and feedback",
+  "meaning": "Blocked / not allowed",
+  "replaces": [
+   "ban"
+  ]
+ },
+ {
+  "name": "notifications",
+  "section": "Status and feedback",
+  "meaning": "Notifications / alerts",
+  "replaces": [
+   "bell"
+  ]
+ },
+ {
+  "name": "health",
+  "section": "Status and feedback",
+  "meaning": "Health / diagnostics",
+  "replaces": [
+   "heartPulse"
+  ]
+ },
+ {
+  "name": "emergency",
+  "section": "Status and feedback",
+  "meaning": "Medical cross / required",
+  "replaces": [
+   "starOfLife"
+  ]
+ },
+ {
+  "name": "dot",
+  "section": "Status and feedback",
+  "meaning": "A status dot",
+  "replaces": [
+   "circle"
+  ]
+ },
+ {
+  "name": "lock",
+  "section": "Status and feedback",
+  "meaning": "Pro-gated / locked",
+  "replaces": [
+   "lock"
+  ]
+ },
+ {
+  "name": "show",
+  "section": "Status and feedback",
+  "meaning": "Show (eye)",
+  "replaces": [
+   "eye"
+  ]
+ },
+ {
+  "name": "hide",
+  "section": "Status and feedback",
+  "meaning": "Hide (eye off)",
+  "replaces": [
+   "eyeSlash"
+  ]
+ },
+ {
+  "name": "note",
+  "section": "Notes and messages",
+  "meaning": "A note / memo",
+  "replaces": [
+   "memo",
+   "noteSticky",
+   "messageLines",
+   "messageCaptions",
+   "messageMiddle"
+  ]
+ },
+ {
+  "name": "noteDone",
+  "section": "Notes and messages",
+  "meaning": "A checked note",
+  "replaces": [
+   "memoCircleCheck"
+  ]
+ },
+ {
+  "name": "noteInfo",
+  "section": "Notes and messages",
+  "meaning": "A note with info",
+  "replaces": [
+   "memoCircleInfo"
+  ]
+ },
+ {
+  "name": "message",
+  "section": "Notes and messages",
+  "meaning": "A message / comment",
+  "replaces": []
+ },
+ {
+  "name": "messageMoney",
+  "section": "Notes and messages",
+  "meaning": "A payment note",
+  "replaces": [
+   "messageDollar"
+  ]
+ },
+ {
+  "name": "messagePlus",
+  "section": "Notes and messages",
+  "meaning": "Add a message",
+  "replaces": [
+   "messagePlus"
+  ]
+ },
+ {
+  "name": "edit",
+  "section": "Notes and messages",
+  "meaning": "Edit",
+  "replaces": [
+   "penToSquare"
+  ]
+ },
+ {
+  "name": "delete",
+  "section": "Notes and messages",
+  "meaning": "Delete / remove",
+  "replaces": [
+   "trash"
+  ]
+ },
+ {
+  "name": "download",
+  "section": "Notes and messages",
+  "meaning": "Download / export",
+  "replaces": [
+   "download"
+  ]
+ },
+ {
+  "name": "merge",
+  "section": "Notes and messages",
+  "meaning": "Merge (e.g. carts, customers)",
+  "replaces": [
+   "merge"
+  ]
+ },
+ {
+  "name": "reports",
+  "section": "Reports, settings and chrome",
+  "meaning": "Reports / analytics",
+  "replaces": [
+   "chartMixedUpCircleDollar"
+  ]
+ },
+ {
+  "name": "settings",
+  "section": "Reports, settings and chrome",
+  "meaning": "Settings",
+  "replaces": [
+   "gear"
+  ]
+ },
+ {
+  "name": "calendar",
+  "section": "Reports, settings and chrome",
+  "meaning": "Date / calendar",
+  "replaces": [
+   "calendar",
+   "calendarDays"
+  ]
+ },
+ {
+  "name": "globe",
+  "section": "Reports, settings and chrome",
+  "meaning": "Language / region / web",
+  "replaces": [
+   "globe"
+  ]
+ },
+ {
+  "name": "desktop",
+  "section": "Reports, settings and chrome",
+  "meaning": "A desktop / this device",
+  "replaces": [
+   "desktop"
+  ]
+ },
+ {
+  "name": "wordpress",
+  "section": "Reports, settings and chrome",
+  "meaning": "WordPress (brand)",
+  "replaces": [
+   "wordpress",
+   "wordpressSimple"
+  ]
+ },
+ {
+  "name": "icons",
+  "section": "Reports, settings and chrome",
+  "meaning": "Icons (this setting)",
+  "replaces": [
+   "icons"
+  ]
+ },
+ {
+  "name": "contrast",
+  "section": "Reports, settings and chrome",
+  "meaning": "Theme: follow the system",
+  "replaces": [
+   "circleHalf",
+   "circleHalfStroke"
+  ]
+ },
+ {
+  "name": "sun",
+  "section": "Reports, settings and chrome",
+  "meaning": "Theme: light",
+  "replaces": [
+   "sunBright"
+  ]
+ },
+ {
+  "name": "moon",
+  "section": "Reports, settings and chrome",
+  "meaning": "Theme: dark",
+  "replaces": [
+   "moon"
+  ]
+ },
+ {
+  "name": "sunset",
+  "section": "Reports, settings and chrome",
+  "meaning": "Theme: sunset",
+  "replaces": [
+   "sunHaze"
+  ]
+ },
+ {
+  "name": "wave",
+  "section": "Reports, settings and chrome",
+  "meaning": "Theme: ocean",
+  "replaces": [
+   "water"
+  ]
+ },
+ {
+  "name": "wcpos",
+  "section": "Reports, settings and chrome",
+  "meaning": "The WCPOS mark (brand; the same glyph in every set)",
+  "replaces": [
+   "wcpos"
+  ]
+ }
+]

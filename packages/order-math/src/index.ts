@@ -59,10 +59,12 @@ export type {
 
 // ===== Payments contract v1 (wcpos/roadmap#97) =====
 export {
+	countsTowardPaid,
 	derive,
 	isCompletingStatus,
 	hasSaleProvenance,
 	hasSaleTime,
+	readCompletions,
 	saleProvenanceMeta,
 	SPLIT_META_KEY,
 	splitPlanMeta,
@@ -71,6 +73,7 @@ export {
 	readLedger,
 	withLedger,
 	upsertPaymentRow,
+	samePaymentId,
 	mintManualPayment,
 	mintServerPayment,
 	mintDevicePayment,

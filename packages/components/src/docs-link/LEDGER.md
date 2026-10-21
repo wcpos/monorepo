@@ -9,3 +9,4 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 ## Lines
 
 1. Documentation links share one visual treatment and route through the system-browser hand-off, including Electron — evidence: `372bebd5ba 2026-08-20 feat(ui): one source of truth for totals, DocsLink component, per-hour request estimate`, code: "onPress={() => openExternalURL(href)}" in `packages/components/src/docs-link/index.tsx:33`.
+2. The code sits one stack gap after the label with no leading space of its own: the `xs` gap already separates them, and a leading space doubled it ("Learn more  · SYNC341" in the gate-screen gallery shoot) — evidence: wcpos/monorepo#2805, 2026-10-21.

@@ -65,7 +65,7 @@ function Display({
 			/>
 			<Input.Right className="pr-1">
 				<IconButton
-					name="deleteLeft"
+					name="backspace"
 					accessibilityLabel={backspaceLabel}
 					onPress={handleBackspacePress}
 				/>

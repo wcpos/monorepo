@@ -7,7 +7,24 @@ import { fromMinor, toMinor } from './money';
 
 import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './types';
 
-const COUNTING_STATUSES = new Set(['authorized', 'captured']);
+// ADR 0040 D6: only captured money counts toward paid; an authorization is a hold, not
+// payment. Mirrors the server's `Ledger::COUNTING_STATUSES`.
+const COUNTING_STATUSES = new Set(['captured']);
+/** Whether a row counts toward paid (ADR 0040 D6): the one predicate `derive()` applies. */
+export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
+	return COUNTING_STATUSES.has(row.status);
+}
+
+/** Σ succeeded refund allocations over every row (wire rows may omit `refunds`). */
+function refunded(payments: readonly PaymentRow[], dp: number): number {
+	return payments.reduce((sum, row) => {
+		const refunds = Array.isArray(row.refunds) ? row.refunds : [];
+		return refunds.reduce(
+			(inner, entry) => (entry?.status === 'succeeded' ? inner + toMinor(entry.amount, dp) : inner),
+			sum
+		);
+	}, 0);
+}
 
 function captureTime(value: string | null): number {
 	if (value === null) return Number.POSITIVE_INFINITY;
@@ -29,9 +46,12 @@ export function derive(
 
 	const counting = payments
 		.map((row) => ({ row, amount: toMinor(row.amount, dp) }))
-		.filter(({ row }) => COUNTING_STATUSES.has(row.status));
+		.filter(({ row }) => countsTowardPaid(row));
 	const totalMinor = toMinor(total, dp);
 	const paidMinor = counting.reduce((sum, { amount }) => sum + amount, 0);
+	// Server `Ledger::signed_balance`: a succeeded refund on a reopened sale is due again. A pending
+	// refund allocation is a reservation, never added.
+	const dueMinor = totalMinor - paidMinor + refunded(payments, dp);
 	const changeMinor = counting.reduce((sum, { row, amount }) => {
 		return row.tendered === null ? sum : sum + Math.max(0, toMinor(row.tendered, dp) - amount);
 	}, 0);
@@ -58,7 +78,7 @@ export function derive(
 	}
 
 	let status: DerivedOrderView['status'];
-	if (totalMinor > 0 && paidMinor >= totalMinor) {
+	if (totalMinor > 0 && dueMinor <= 0) {
 		status = primaryRow
 			? (descriptorById[primaryRow.method_id]?.defaults?.order_status ?? 'completed')
 			: 'completed';
@@ -81,7 +101,7 @@ export function derive(
 
 	return {
 		paid: fromMinor(paidMinor, dp),
-		balance: fromMinor(Math.max(0, totalMinor - paidMinor), dp),
+		balance: fromMinor(Math.max(0, dueMinor), dp),
 		overpaid: fromMinor(Math.max(0, paidMinor - totalMinor), dp),
 		change: fromMinor(changeMinor, dp),
 		status,

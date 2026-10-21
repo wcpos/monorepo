@@ -624,8 +624,9 @@ it.each(['none', 'choose'] as const)(
 	}
 );
 
+// ADR 0040 D6: an authorization, recorded offline or not, is a hold and never paid.
 it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
-	'keeps in-flight authorizations out of completion (%s)',
+	'keeps authorizations out of completion (%s)',
 	async (scenario) => {
 		const order = orderFor('8');
 		const offline = scenario.endsWith('offline');
@@ -674,7 +675,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 					}
 				)
 			);
-			expect(dispatch).toHaveBeenCalledTimes(offline ? 1 : 0);
+			expect(dispatch).not.toHaveBeenCalled();
 		} else {
 			Object.assign(order.payload, data);
 			resolveSession.mockImplementationOnce(async () => {
@@ -684,14 +685,16 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
 				commit(settleAggregate(snapshotFromOrderJSON(order.payload), config), queue)
 			);
-			expect(outcome).toBe(offline ? undefined : 'superseded');
+			expect(outcome).toBe('superseded');
 		}
 		expect(order.payload).toMatchObject({
 			...data,
-			total: offline ? '4' : '10',
-			status: offline ? 'completed' : 'pos-partial',
+			// An offline authorization is not in flight, so the cart write still reprices; the
+			// boundary commit itself is superseded and writes nothing.
+			total: scenario === 'cart-offline' ? '4' : '10',
+			status: 'pos-partial',
 		});
-		expect(complete).toHaveBeenCalledTimes(offline ? 1 : 0);
+		expect(complete).not.toHaveBeenCalled();
 	}
 );
 

@@ -424,7 +424,7 @@ export function QuickFilterEditor({
 								onChange={(value) => updateCondition(index, value)}
 							/>
 							<IconButton
-								name="xmark"
+								name="close"
 								accessibilityLabel={t('common.remove')}
 								testID={`quick-filter-condition-remove-${index}`}
 								onPress={() =>

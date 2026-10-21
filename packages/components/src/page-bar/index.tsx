@@ -55,10 +55,16 @@ export function PageBar({
 		>
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
 			    bar and the ground are one colour and a line would only draw a box around nothing.
-			    Wide widths give the bar room for a full-height field; the phone keeps the control
-			    height because its search has a row of its own. */}
+			    On wide widths the bar is the page's first row, not a box of its own height: its
+			    controls sit the page gutter (16) from the top and the sides, and the row under it
+			    (the chip row, a page body) brings the 16 between them, so search, chips and card
+			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
+			    height because its search has a ruled row of its own. */}
 			<HStack
-				className={cn('bg-background items-center gap-4 pr-2 pl-4', phone ? 'h-ctl gap-2' : 'h-16')}
+				className={cn(
+					'bg-background items-center',
+					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'gap-4 px-4 pt-4'
+				)}
 			>
 				{(phone || onMenu) &&
 					(phone && back ? (
@@ -67,7 +73,7 @@ export function PageBar({
 						<Breadcrumb parents={[back]} testID={id('back')} className="-ml-2" />
 					) : onMenu ? (
 						<IconButton
-							name="bars"
+							name="menu"
 							onPress={onMenu.onPress}
 							accessibilityLabel={onMenu.label}
 							testID={id('menu')}
@@ -75,7 +81,10 @@ export function PageBar({
 						/>
 					) : null)}
 				{title !== undefined ? (
-					<View className="min-w-0 shrink">
+					// The title stands in a control-height box: a bar with only a title is as tall as
+					// one with a control beside it (60 on wide widths), its title sits where it would
+					// next to one, and the row never takes the text's fractional height.
+					<View className="min-h-ctl min-w-0 shrink justify-center">
 						<Text
 							testID={id('title')}
 							className="text-foreground font-semibold"

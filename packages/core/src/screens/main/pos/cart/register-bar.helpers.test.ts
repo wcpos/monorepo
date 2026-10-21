@@ -45,3 +45,11 @@ it('shows approval needed on a refused counting session', () => {
 		describeRegisterBar({ ...base, sessionStatus: 'counting', approvalRequired: true }).pill
 	).toBe('register.approval_needed');
 });
+
+it.each([
+	[{ bindingStatus: 'none' }, 'register.no_register'],
+	[{ bindingStatus: 'none', online: false }, 'register.no_register'],
+	[{ bindingStatus: 'unknown', directoryFailed: true }, 'register.offline'],
+] as const)('directory pill priority %j', (state, pill) => {
+	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
+});

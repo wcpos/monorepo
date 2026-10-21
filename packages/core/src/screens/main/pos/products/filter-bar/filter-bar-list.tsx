@@ -50,7 +50,7 @@ export function FilterBarList({
 		>
 			<DragHandle className="mr-2">
 				<View testID={`filter-bar-drag-${item.id}`}>
-					<Icon name="gripLinesVertical" size="xs" className="cursor-grab" />
+					<Icon name="dragHandleVertical" size="xs" className="cursor-grab" />
 				</View>
 			</DragHandle>
 			{item.type === 'pill' ? (
@@ -73,13 +73,13 @@ export function FilterBarList({
 						</Text>
 					</VStack>
 					<IconButton
-						name="penToSquare"
+						name="edit"
 						accessibilityLabel={t('common.edit')}
 						testID={`filter-bar-edit-${item.id}`}
 						onPress={() => onEdit(item)}
 					/>
 					<IconButton
-						name="trash"
+						name="delete"
 						variant="destructive"
 						accessibilityLabel={t('common.delete')}
 						testID={`filter-bar-delete-${item.id}`}

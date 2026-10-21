@@ -16,7 +16,9 @@ export const stories = [
 	{
 		id: 'row-selected',
 		render: () =>
-			area(<NavItem selected icon="gear" label="General" onPress={onPress} testID="nav-row-on" />),
+			area(
+				<NavItem selected icon="settings" label="General" onPress={onPress} testID="nav-row-on" />
+			),
 	},
 	{
 		id: 'row',
@@ -30,7 +32,7 @@ export const stories = [
 				<NavItem
 					selected
 					size="drawer"
-					icon="cashRegister"
+					icon="register"
 					label="POS"
 					onPress={onPress}
 					testID="nav-drawer-on"
@@ -43,7 +45,7 @@ export const stories = [
 			drawer(
 				<NavItem
 					size="drawer"
-					icon="gifts"
+					icon="gift"
 					label="Products"
 					onPress={onPress}
 					testID="nav-drawer-off"

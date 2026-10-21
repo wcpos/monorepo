@@ -21,9 +21,9 @@ type EmptyStateProps = ViewProps & {
 	autoFocus?: boolean;
 };
 const icons = {
-	empty: 'circleInfo',
-	'no-results': 'magnifyingGlass',
-	failed: 'triangleExclamation',
+	empty: 'info',
+	'no-results': 'search',
+	failed: 'warning',
 } as const;
 
 export function EmptyState({
@@ -83,7 +83,7 @@ export function EmptyState({
 							onPress={action.onPress}
 						>
 							{/* Button truncates a string child; the block's only recovery action wraps instead. */}
-							<ButtonText className="web:whitespace-normal text-center text-clip">
+							<ButtonText numberOfLines={0} className="web:whitespace-normal text-center text-clip">
 								{action.label}
 							</ButtonText>
 						</Button>

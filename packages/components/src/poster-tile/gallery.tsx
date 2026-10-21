@@ -64,7 +64,7 @@ const examples: ({ id: string } & Omit<PosterTileProps, 'onPress' | 'testID'>)[]
 		// Every word slot empty: no scrim, the mark still shows (ledger line 2).
 		id: 'no-words',
 		picture: { kind: 'tint', tint: 5 },
-		mark: { kind: 'glyph', name: 'sliders' },
+		mark: { kind: 'glyph', name: 'filters' },
 		accessibilityLabel: 'Shortcut',
 	},
 ];

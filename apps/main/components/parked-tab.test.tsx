@@ -7,26 +7,34 @@ import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { ParkedTab } from './parked-tab';
 
 jest.mock('@wcpos/core/utils/reload-app', () => ({ reloadApp: jest.fn() }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/button', () => {
-	const { Pressable, Text } = jest.requireActual('react-native');
-	return { Button: Pressable, ButtonText: Text };
-});
-jest.mock('@wcpos/components/empty-state', () => {
-	const { View, Text } = jest.requireActual('react-native');
+// GateScreen's own rendering is covered in packages/components; here the stand-in shows the
+// props ParkedTab chooses: the tone, the copy under GateScreen's derived testIDs, the one primary.
+jest.mock('@wcpos/components/gate-screen', () => {
+	const { View, Text, Pressable } = jest.requireActual('react-native');
 	return {
-		EmptyState: ({
+		GateScreen: ({
+			testID,
+			tone,
 			title,
 			description,
-			testID,
+			primary,
+			secondary,
 		}: {
+			testID: string;
+			tone: string;
 			title: string;
 			description: string;
-			testID: string;
+			primary: { label: string; onPress(): void; testID: string; disabled?: boolean };
+			secondary?: unknown;
 		}) => (
-			<View>
+			<View testID={testID}>
+				<Text testID={`${testID}-tone`}>{tone}</Text>
 				<Text testID={`${testID}-title`}>{title}</Text>
 				<Text testID={`${testID}-description`}>{description}</Text>
+				<Pressable testID={primary.testID} disabled={primary.disabled} onPress={primary.onPress}>
+					<Text>{primary.label}</Text>
+				</Pressable>
+				{secondary ? <Text testID="unexpected-secondary" /> : null}
 			</View>
 		),
 	};
@@ -36,38 +44,46 @@ const cases = [
 		{ kind: 'parked', reason: 'another-tab-live' },
 		'The POS is open in another tab',
 		'Only one tab can run the register.',
+		'muted',
 	],
 	[
 		{ kind: 'taking-over', deferral: null },
 		'Taking over…',
 		'Waiting for the other tab to hand over.',
+		'muted',
 	],
 	[
 		{ kind: 'taking-over', deferral: 'payment' },
 		'Taking over…',
 		'Waiting for the other tab to finish a payment.',
+		'muted',
 	],
 	[
 		{ kind: 'taking-over', deferral: 'write' },
 		'Taking over…',
 		'Waiting for the other tab to finish saving.',
+		'muted',
 	],
 	[
 		{ kind: 'taking-over', deferral: 'no-answer' },
 		"The other tab isn't answering",
 		'Close it, or reload it, to continue here.',
+		'warn',
 	],
 	[
 		{ kind: 'parked', reason: 'worker-lost' },
 		'Local database unavailable',
 		'Reload to keep selling.',
+		'bad',
 	],
 ] as const;
-it.each(cases)('renders %j above providers', async (state, title, description) => {
+it.each(cases)('renders %j above providers', async (state, title, description, tone) => {
 	const takeOver = jest.fn();
 	const screen = await render(<ParkedTab state={state} takeOver={takeOver} />);
 	expect(screen.getByTestId('parked-tab-content-title').props.children).toBe(title);
 	expect(screen.getByTestId('parked-tab-content-description').props.children).toBe(description);
+	expect(screen.getByTestId('parked-tab-content-tone').props.children).toBe(tone);
+	expect(screen.queryByTestId('unexpected-secondary')).toBeNull();
 	const lost = state.kind === 'parked' && state.reason === 'worker-lost';
 	const button = screen.getByTestId(lost ? 'parked-tab-reload' : 'parked-tab-take-over');
 	await fireEvent.press(button);

@@ -29,7 +29,7 @@ import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useTheme } from '../../../../../contexts/theme';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
-import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
+import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
 import { getUuidFromLineItem } from '../../hooks/utils';
 
@@ -50,7 +50,6 @@ export function TenderCheckout({ order }: Props) {
 	const { format: formatCurrency } = useCurrencyFormat({
 		currencySymbol: payload.currency_symbol,
 	});
-	const { storageDegraded } = useStorageMoneyPathGuard();
 	const router = useRouter();
 	const t = useT();
 
@@ -217,13 +216,7 @@ export function TenderCheckout({ order }: Props) {
 								</HStack>
 							) : null}
 							<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
-							{storageDegraded ? (
-								<View className="border-destructive bg-destructive/10 rounded-md border p-3">
-									<Text testID="checkout-storage-unavailable" className="text-destructive">
-										{t('pos_checkout.storage_unavailable')}
-									</Text>
-								</View>
-							) : null}
+							<StorageOutageBanner testID="checkout-storage-unavailable" />
 						</View>
 						{body}
 					</VStack>

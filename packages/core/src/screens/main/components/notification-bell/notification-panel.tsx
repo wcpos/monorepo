@@ -72,7 +72,7 @@ function EmptyState() {
 
 	return (
 		<VStack className="items-center justify-center py-8">
-			<Icon name="bell" size="2xl" variant="muted" />
+			<Icon name="notifications" size="2xl" variant="muted" />
 			<Text className="text-muted-foreground mt-2">{t('common.no_notifications')}</Text>
 		</VStack>
 	);

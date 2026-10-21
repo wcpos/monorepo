@@ -45,8 +45,12 @@ export function TableSurface({
  * The caption row's inset under the card, derived from the same gutter: the card's gutter plus
  * the cell's own 12 (`px-3`), so the footer's text lines up with the cells' — 8 + 12 = 20
  * (`px-5`) in a dense pane, 16 + 12 = 28 (`px-7`) on a page, and 0 + 12 = 12 (`px-3`) on a
- * phone, where the card runs edge to edge whatever the gutter. The mount owns it; a footer
- * component carries no horizontal padding of its own.
+ * phone, where the card runs edge to edge whatever the gutter. The caption row is the pane's
+ * last row, so it also carries the gutter below it (`pb-4` on a page, `pb-2` in a dense pane):
+ * the container insets its last child from its bottom edge as it does its first from the top
+ * (owner, 2026-10-20: "consistent, including at the bottom"). The phone's list runs edge to
+ * edge and its screen already pads the home indicator, so it keeps no bottom gutter. The mount
+ * owns it; a footer component carries no padding of its own.
  */
 export function CaptionRowInset({
 	gutter = 'dense',
@@ -59,7 +63,7 @@ export function CaptionRowInset({
 	return (
 		<View
 			testID="data-table-caption-inset"
-			className={phone ? 'px-3' : gutter === 'page' ? 'px-7' : 'px-5'}
+			className={phone ? 'px-3' : gutter === 'page' ? 'px-7 pb-4' : 'px-5 pb-2'}
 		>
 			{children}
 		</View>

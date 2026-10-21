@@ -61,3 +61,7 @@ it.each([true, false])(
 		expect(refetch).toHaveBeenCalledTimes(1);
 	}
 );
+
+// Notice links out through the native URL boundary; keep that boundary inert in jsdom.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

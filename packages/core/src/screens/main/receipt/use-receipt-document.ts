@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { recordReceiptPrint } from '@wcpos/query/mutations';
+import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
@@ -12,13 +13,16 @@ import { getReceiptPreviewPaperWidth } from './components/receipt-preview-viewpo
 import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
+import { printNeedsLoadedPreview } from './utils/print-needs-loaded-preview';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
 import { classifyPrintFailure, reportPrintFailure } from '../hooks/use-print/print-failure';
+import { usePaymentGateways } from '../hooks/use-payment-gateways';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
+import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
@@ -87,6 +91,7 @@ export function useReceiptDocument({
 		isOffline,
 		isSyncing,
 		hasFinalData,
+		receiptDataIsServer,
 		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
@@ -173,14 +178,24 @@ export function useReceiptDocument({
 		resolvedPrinter,
 		printerSelection,
 		setPrinterSelection,
-		mismatchWarning,
+		mismatch,
 		useSystemDialog,
+		isResolving: isResolvingPrinter,
 	} = useResolvedPrinter({ template: templateInfo });
 
 	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
 	const sessionReport = !!localReport || templateType === 'closure';
 	const reportSystemDialog =
 		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
+	const printerProfile = React.useMemo(
+		() =>
+			useSystemDialog || reportSystemDialog
+				? undefined
+				: resolvedPrinter
+					? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
+					: undefined,
+		[useSystemDialog, reportSystemDialog, resolvedPrinter, sessionReport]
+	);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
@@ -232,12 +247,7 @@ export function useReceiptDocument({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
-		printerProfile:
-			useSystemDialog || reportSystemDialog
-				? undefined
-				: resolvedPrinter
-					? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
-					: undefined,
+		printerProfile,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
@@ -373,13 +383,57 @@ export function useReceiptDocument({
 		iframeLoadedRef.current = { key: '', loaded: false };
 	}, [orderId]);
 
+	// Only a print that reads the preview frame waits for it to load: on a slow site that
+	// frame is a full WordPress page, and a thermal, cloud or pre-rendered print never uses
+	// it. Until the printer is resolved the print path is unknown, so nothing starts.
+	const needsLoadedPreview = React.useMemo(
+		() =>
+			printNeedsLoadedPreview({
+				printerProfile,
+				receiptData: receiptData ?? undefined,
+				html: renderedHtml ?? undefined,
+			}),
+		[printerProfile, receiptData, renderedHtml]
+	);
+	// The receipt is entered before the bounded order refresh lands. If the receipt request
+	// then fails (or the deadline passes), the only data is built from the local order, still
+	// pos-open: printing it would hand the customer an "open / still payable" receipt and
+	// spend the single shot. So the auto-print waits for the server's receipt or for the local
+	// order to settle, by the same rule the pay window uses (the gateway's stored POS order
+	// status, so a gateway that settles at `pending` counts); the manual Print button is not
+	// gated. A missing status is not a settled order either: fail closed and wait for the server.
+	const paymentMethod = orderData?.payment_method || null;
+	const { gateway } = usePaymentGateways(paymentMethod, autoPrintAllowed && !!paymentMethod);
+	const localStatus = orderData?.status;
+	const localOrderSettled =
+		!!localStatus && isSettledOrderStatus(localStatus, gateway?.settled_order_status);
+	// Finishing waits on that too, but never for ever: the post-payment order refresh is
+	// bounded at ORDER_REFRESH_TIMEOUT_MS, so a wait that outlives the same bound means the
+	// local order will not settle from it. Past the deadline the buttons release and nothing
+	// prints (the cashier can still press Print); a settle that lands later still auto-prints.
+	const awaitingSettledData =
+		autoPrintAllowed &&
+		Boolean(uiSettings.autoPrintReceipt) &&
+		hasFinalData &&
+		!receiptDataIsServer &&
+		!localOrderSettled;
+	const [dataWaitExpiredFor, setDataWaitExpiredFor] = React.useState<string | null>(null);
+	const dataWaitExpired = dataWaitExpiredFor === order?.uuid;
+	React.useEffect(() => {
+		if (!awaitingSettledData || dataWaitExpired) return;
+		const uuid = order?.uuid ?? null;
+		const timer = setTimeout(() => setDataWaitExpiredFor(uuid), ORDER_REFRESH_TIMEOUT_MS);
+		return () => clearTimeout(timer);
+	}, [awaitingSettledData, dataWaitExpired, order?.uuid]);
 	const attemptAutoPrint = React.useCallback(() => {
+		const frameLoaded = iframeLoadedRef.current.key === frameKey && iframeLoadedRef.current.loaded;
 		if (
 			uiSettings.autoPrintReceipt &&
 			autoPrintAllowed &&
-			iframeLoadedRef.current.key === frameKey &&
-			iframeLoadedRef.current.loaded &&
+			!isResolvingPrinter &&
+			(!needsLoadedPreview || frameLoaded) &&
 			hasFinalData &&
+			(receiptDataIsServer || localOrderSettled) &&
 			!hasAutoPrintedRef.current &&
 			claimReceiptAutoPrint(order?.uuid ?? '')
 		) {
@@ -393,11 +447,15 @@ export function useReceiptDocument({
 		autoPrintAllowed,
 		hasFinalData,
 		frameKey,
+		isResolvingPrinter,
+		localOrderSettled,
+		needsLoadedPreview,
 		printAndReport,
+		receiptDataIsServer,
 		uiSettings.autoPrintReceipt,
 	]);
 
-	// Final API data can arrive without causing the receipt frame to load again.
+	// Final API data or the resolved printer can arrive without the receipt frame loading again.
 	React.useEffect(() => {
 		attemptAutoPrint();
 	}, [attemptAutoPrint]);
@@ -412,16 +470,20 @@ export function useReceiptDocument({
 	};
 	const handleError = () => setFrame({ key: frameKey, state: 'failed' });
 
-	// True while a configured auto-print is still waiting: on the store round-trip, or on the
-	// preview frame that has a document but has not loaded yet. Settled by the attempt itself,
-	// by the frame failing, or by there being no document to print — never by a timer.
+	// True while a configured auto-print is still waiting: on the store round-trip, on the
+	// printer, on the preview frame that has a document but has not loaded yet, or on settled
+	// data. Settled by the attempt itself, by the frame failing, by there being no document to
+	// print, or (the settled-data wait only) by the order refresh's bound.
 	const hasDocument = renderedHtml != null || Boolean(templateReceiptUrl || baseReceiptURL);
 	const autoPrintPending =
 		autoPrintAllowed &&
 		Boolean(uiSettings.autoPrintReceipt) &&
 		!autoPrintAttempted &&
 		frameState !== 'failed' &&
-		(isSyncing || (hasDocument && frameState !== 'loaded'));
+		(isSyncing ||
+			isResolvingPrinter ||
+			(needsLoadedPreview && hasDocument && frameState !== 'loaded') ||
+			(awaitingSettledData && !dataWaitExpired));
 
 	return {
 		documentError,
@@ -441,7 +503,8 @@ export function useReceiptDocument({
 		printerSelection,
 		setPrinterSelection,
 		resolvedPrinter,
-		mismatchWarning,
+		// A session report on an order-based cloud printer prints through the dialog instead.
+		mismatch: reportSystemDialog ? null : mismatch,
 		print,
 		printAndReport,
 		isPrinting,

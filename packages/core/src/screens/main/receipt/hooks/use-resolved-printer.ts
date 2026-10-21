@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { observeTemplatePrinterOverrides } from '@wcpos/query';
-import type { PrinterProfile, TemplateInfo } from '@wcpos/printer';
+import type { PrinterProfile, PrintMismatch, TemplateInfo } from '@wcpos/printer';
 import { detectMismatch, resolvePrinter } from '@wcpos/printer';
 
 import { useAvailablePrinterProfiles } from '../../settings/printer/use-available-printer-profiles';
@@ -22,8 +22,10 @@ interface UseResolvedPrinterResult {
 	resolvedPrinter: PrinterProfile | null;
 	printerSelection: PrinterSelection;
 	setPrinterSelection: (selection: PrinterSelection) => void;
-	mismatchWarning: string | null;
+	mismatch: PrintMismatch | null;
 	useSystemDialog: boolean;
+	/** Printers or routing overrides are still loading: `resolvedPrinter` may yet change. */
+	isResolving: boolean;
 }
 
 export function useResolvedPrinter({
@@ -50,7 +52,11 @@ export function useResolvedPrinter({
 		[pick, template?.id]
 	);
 
-	const { printers: allPrinters } = useAvailablePrinterProfiles();
+	const {
+		printers: allPrinters,
+		isLoading: printersLoading,
+		cloudPending,
+	} = useAvailablePrinterProfiles();
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
@@ -66,7 +72,14 @@ export function useResolvedPrinter({
 			),
 		[storeDB]
 	);
-	const overrides = useObservableState(overrides$, new Map<string, string>());
+	const loadedOverrides = useObservableState<Map<string, string> | undefined>(
+		overrides$,
+		undefined
+	);
+	const overrides = React.useMemo(
+		() => loadedOverrides ?? new Map<string, string>(),
+		[loadedOverrides]
+	);
 
 	// Resolve printer based on selection type
 	const resolvedPrinter = React.useMemo(() => {
@@ -91,19 +104,35 @@ export function useResolvedPrinter({
 	// Whether to use system dialog (no printer profile)
 	const useSystemDialog = printerSelection.type === 'system';
 
-	// Mismatch detection (only relevant for auto/manual, not system dialog)
-	const mismatchWarning = React.useMemo(() => {
-		if (!template) return null;
-		if (printerSelection.type === 'system') return null;
+	// Two readiness notions: `printersLoading` clears after a 2 s grace so Settings never blanks on
+	// a hung cloud request, but routing must not read that as "no cloud printers". While the cloud
+	// request is still out, keep resolving if nothing matched yet or the template's override names
+	// a printer not in the list yet (it may be a cloud one); a local match proceeds at once.
+	const overrideId = template ? overrides.get(String(template.id)) : undefined;
+	const awaitingCloud =
+		cloudPending &&
+		printerSelection.type !== 'system' &&
+		(resolvedPrinter === null ||
+			(printerSelection.type === 'auto' &&
+				overrideId !== undefined &&
+				!allPrinters.some((p) => p.id === overrideId)));
+	const isResolving = printersLoading || loadedOverrides === undefined || awaitingCloud;
+
+	// What will actually print, given the profile usePrint receives. The 'system' selection and
+	// an auto match that found nothing both leave resolvedPrinter null: the print dialog path.
+	// While printers or overrides are still loading, null is only "not loaded yet", so no verdict.
+	const mismatch = React.useMemo(() => {
+		if (!template || isResolving) return null;
 		return detectMismatch(template, resolvedPrinter);
-	}, [template, resolvedPrinter, printerSelection.type]);
+	}, [template, resolvedPrinter, isResolving]);
 
 	return {
 		allPrinters,
 		resolvedPrinter,
 		printerSelection,
 		setPrinterSelection,
-		mismatchWarning,
+		mismatch,
 		useSystemDialog,
+		isResolving,
 	};
 }

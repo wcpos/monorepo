@@ -27,17 +27,17 @@ jest.mock('../loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it.each([
-	['empty', 'circleInfo'],
-	['no-results', 'magnifyingGlass'],
-	['failed', 'triangleExclamation'],
+	['empty', 'info'],
+	['no-results', 'search'],
+	['failed', 'warning'],
 ] as const)('uses the %s icon and kind attribute', (kind, icon) => {
 	const { container } = render(<EmptyState kind={kind} title="Title" testID="state" />);
 	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', icon);
 	expect(screen.getByTestId('state')).toHaveAttribute('data-kind', kind);
 });
 it('lets a custom icon win', () => {
-	const { container } = render(<EmptyState kind="empty" icon="circleExclamation" title="Title" />);
-	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', 'circleExclamation');
+	const { container } = render(<EmptyState kind="empty" icon="alert" title="Title" />);
+	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', 'alert');
 });
 it('composes title, description, action and real DocsLink with derived IDs', () => {
 	const onPress = jest.fn();
@@ -70,7 +70,7 @@ it('inline omits both icon and description, but keeps action and docs', () => {
 			docs={{ label: 'Help', href: 'https://docs.wcpos.com' }}
 		/>
 	);
-	expect(container.querySelector('[data-icon="triangleExclamation"]')).toBeNull();
+	expect(container.querySelector('[data-icon="warning"]')).toBeNull();
 	expect(screen.queryByTestId('state-description')).toBeNull();
 	expect(screen.getByTestId('state-action')).toBeInTheDocument();
 	expect(screen.getByTestId('state-docs')).toBeInTheDocument();
@@ -110,5 +110,6 @@ it('preserves explicit action and docs IDs without a root ID', () => {
 	expect(screen.queryByTestId('undefined-title')).toBeNull();
 });
 it('does not truncate', () => {
-	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toContain('numberOfLines');
+	// `numberOfLines={0}` lifts ButtonText's one-line default on native; a positive limit truncates.
+	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/numberOfLines=\{[1-9]/);
 });

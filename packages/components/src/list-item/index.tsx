@@ -134,7 +134,7 @@ export function ListItem({
 
 			{removable && (
 				<IconButton
-					name="xmark"
+					name="close"
 					size="xs"
 					variant="destructive"
 					accessibilityLabel={removeLabel}

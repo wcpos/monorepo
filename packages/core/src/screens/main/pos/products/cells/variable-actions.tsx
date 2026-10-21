@@ -46,7 +46,7 @@ export function VariableActions({
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<IconButton
 					testID="variable-product-popover-button"
-					name="circleChevronRight"
+					name="chevronRight"
 					variant="success"
 					size="4xl"
 					accessibilityLabel={t('common.variations')}

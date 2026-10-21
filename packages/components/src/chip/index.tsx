@@ -177,7 +177,7 @@ export function Chip({
 						// over the screen (#2284). Enter/Space already stop at this press's own keydown.
 						onPointerDown={(event) => event.stopPropagation()}
 					>
-						<Icon name="xmark" size="sm" className="text-foreground" />
+						<Icon name="close" size="sm" className="text-foreground" />
 					</Pressable>
 				</>
 			) : (

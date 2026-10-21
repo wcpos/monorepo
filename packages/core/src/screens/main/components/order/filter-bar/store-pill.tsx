@@ -91,7 +91,7 @@ export function StorePill({ resource }: Props) {
 				<Chip
 					clearLabel={t('common.remove')}
 					testID="order-filter-store"
-					icon="shop"
+					icon="store"
 					on={isActive}
 					onPress={() => setOpen(!open)}
 					onClear={isActive ? handleRemove : undefined}

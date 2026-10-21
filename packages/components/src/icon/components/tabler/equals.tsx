@@ -5,18 +5,15 @@ import Svg, { Path } from 'react-native-svg';
 import type { SvgProps } from 'react-native-svg';
 export function SvgEquals(props: SvgProps) {
 	return (
-		<Svg
-			{...props}
-			fill="none"
-			stroke="currentColor"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			strokeWidth={1.5}
-			className="icon icon-tabler icons-tabler-outline icon-tabler-equal"
-			viewBox="0 0 24 24"
-		>
-			<Path stroke="none" d="M0 0h24v24H0z" />
-			<Path d="M5 10h14M5 14h14" />
+		<Svg {...props} viewBox="0 0 24 24">
+			<Path
+				fill="none"
+				stroke="currentColor"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={1.5}
+				d="M5 10h14M5 14h14"
+			/>
 		</Svg>
 	);
 }

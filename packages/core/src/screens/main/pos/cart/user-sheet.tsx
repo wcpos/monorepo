@@ -229,7 +229,7 @@ export function UserSheet({
 												onOpenChange(false);
 												router.push('/settings');
 											}}
-											leading={<Icon name="gear" className="text-muted-foreground" />}
+											leading={<Icon name="settings" className="text-muted-foreground" />}
 											label={t('common.settings')}
 										/>
 										<MenuRow
@@ -238,14 +238,14 @@ export function UserSheet({
 												onOpenChange(false);
 												router.push('/support');
 											}}
-											leading={<Icon name="commentQuestion" className="text-muted-foreground" />}
+											leading={<Icon name="support" className="text-muted-foreground" />}
 											label={t('common.support')}
 										/>
 										{/* Web only, as the header's menu had them: a browser is where these two go. */}
 										{Platform.isWeb && (
 											<MenuRow
 												testID="user-sheet-wp-admin"
-												onPress={() => openExternalURL(`${site.home}/wp-admin`)}
+												onPress={() => openExternalURL(`${site.url}/wp-admin`)}
 												leading={<Icon name="wordpress" className="text-muted-foreground" />}
 												label={t('common.wordpress_admin')}
 											/>
@@ -267,7 +267,7 @@ export function UserSheet({
 												handleResetPress();
 											}}
 											variant="destructive"
-											leading={<Icon name="trash" />}
+											leading={<Icon name="delete" />}
 											label={t('common.clear_all_local_data')}
 										/>
 									</View>

@@ -23,6 +23,14 @@ function passthrough({ children }: React.PropsWithChildren) {
 }
 jest.mock('@wcpos/components/portal', () => ({ Portal: passthrough }));
 jest.mock('@wcpos/components/text', () => ({ Text: passthrough }));
+// GateScreen's rendering is covered in packages/components; the overlay's copy is what matters here.
+jest.mock('@wcpos/components/gate-screen', () => ({
+	GateScreen: ({ title, description }: { title: string; description: string }) => (
+		<div>
+			{title} {description}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <div>{children}</div> : null,
@@ -117,7 +125,9 @@ describe('ClearLocalData', () => {
 
 		await confirmReset();
 
-		expect(screen.getByTestId('clear-local-data-restart-overlay')).toBeTruthy();
+		expect(screen.getByTestId('clear-local-data-restart-overlay').textContent).toBe(
+			'common.clear_all_local_data_restart_required common.clear_all_local_data_restart_required_body'
+		);
 		expect(clearLocalDataNow).not.toHaveBeenCalled();
 	});
 

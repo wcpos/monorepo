@@ -238,6 +238,29 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Touch targets and contrast checked, not assumed.
 - Every interactive element carries a stable `testID`.
 
+#### 11. Settings and admin forms
+Applies to every settings form the owner edits, in the app and in the plugins' WordPress admin
+screens (owner, 2026-10-21: *"what is variance, is it a time? is it money? You need better guidelines on
+UI because this is not intuitive"*). The long form with the cited examples is section 11 of
+`docs/design/ui-design-guidelines.md` in `wcpos/roadmap`.
+
+- **A setting is a sentence the owner would say.** The label is the behaviour in the words used at
+  the counter; the control sits where the value goes in the sentence: *Ask a manager when the count
+  is out by more than [£ 5.00]*.
+- **Every value carries its unit inside the control.** A currency symbol in a money field, a time
+  picker for a time, a suffix for minutes or percent. Never a bare box.
+- **Optional behaviour is a switch, and its value appears when the switch is on.** "Leave blank for
+  none" is a bug: blank is not a choice a person makes on purpose.
+- **The help line says what happens at the till, in one sentence.** Never the format, never the
+  label again.
+- **Plain words.** Float, drawer, count, short or over, close. Never variance, threshold, session,
+  expected.
+- **The common case is one switch.** Everything that only matters when it is on is hidden while it
+  is off.
+- **Inherited or customised is shown on the field, never implied by blank:** *Site default · value ·
+  Customise*, or *Overridden · value · Use site default*.
+- **Defaults are prefilled and visible in the control**, not described in a tip.
+
 ### Components: one answer per element, app-wide
 
 The owner's rule (2026-10-13, Card readers run): *"I don't want a special UI carved out for this
@@ -258,7 +281,7 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 | `link` | Text that behaves as a button: no surface, the size's height | after the content; inline it is `DocsLink`, which drops the padding | *Open docs*, *Reader settings* |
 | `outline-destructive` | Destructive: what loses something (never filled) | never in the same row as a primary | *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
 | `ghost-destructive` | The quiet form of the same, in a dense row | inside a table or list row | *Remove* on a queued email's row |
-| `destructive` (solid red) | Only the confirm inside an `AlertDialog` and the swipe Remove block | the alert's footer, the swipe strip | *Delete* in *Delete this order?* |
+| `destructive` (solid red) | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | *Delete* in *Delete this order?*, *Reset and restart* |
 | any, `disabled` | Unavailable, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
 
 | Size | Height | Where |
@@ -317,25 +340,42 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
   | Container | Gutter | Today |
   |---|---|---|
-  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4`; the list pages' chip row `p-4` and `TableSurface gutter="page"` |
+  | The page: `PageBar`'s controls from the top and the sides, a pane's body, an area page around its card, the phone's screen edge; a card's body | 16, at every width | bar `pt-4 px-4`, `AreaPage` `p-4`, cards `p-4`; the list pages' chip row `p-4`, `TableSurface gutter="page"` and the caption row's `pb-4` |
   | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
-  | A dense strip: the icon rail, the front drawer's items, a chip row, a bar's own controls | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 |
+  | A dense strip: the icon rail, the front drawer's items, a chip row, the POS products column | 8 | drawer `mx-2`, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`), POS column `p-2`, `TableSurface` dense and the caption row's `pb-2` |
   | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
 
-- A container's width follows from its items and its gutter (the icon rail is 48 + 2 × 8 = 64),
+- A container's width follows from its items and its gutter (the icon rail is 12 + 2 + 2 = 16 spacing units, 64 at Regular),
   not the other way round.
 - Nothing sits flush against a container's edge except the container's own border or surface.
   A lifted item (`bg-card` on the ground) that touches the edge reads as the container, not as an
   item; that is the tell that a gutter is missing.
+- The bottom edge is a container edge like the top one: the last row of a page or pane (the
+  table's caption row) sits one gutter above it, as the first row sits one gutter below the top.
+- Between the rows of a page or pane there is exactly one gutter, and the bar is a row: on wide
+  widths `PageBar` has no height of its own, its controls sit the gutter from the top and the
+  sides, and the row under it (the chip row, a page body) brings the gutter between them. A bar
+  that centres a 44 control in a fixed 64 puts 10 above the search and 26 under it; that is the
+  tell (owner, 2026-10-20).
+- One page gutter at every width: a page does not double its inset on `md` while its neighbour
+  keeps 16 (Settings sat at 32 beside Products at 16 until 2026-10-20).
 - A new container takes its gutter from this table. A mockup does not offer padding as an option.
 
 #### Page bars
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
-- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
+- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter (16) from the top and the sides and the row under it brings the 16 between them (Gutters, above); on a phone the bar is 44 and search is its own ruled row under it.
 - The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
-- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
+- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter (16) around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
+
+#### Gate screens
+A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.
+The family has three members: `GateScreen` inside the providers, `FallbackScreen` (`@wcpos/components/error-boundary`) as the fallback of a boundary around a whole route, and `PreThemeGate` (`@wcpos/components/gate-screen/pre-theme`) above the providers, where no className resolves; a boundary around part of a screen keeps the inline bar.
+A new gate is registered in `apps/main/components/gate-screens.test.ts`, which also refuses an `EmptyState` and a `Button` hand-centred in a `View`.
+The title never takes a tone colour: the disc carries it, and `bad` stays the only red surface.
+A coded gate's copy comes from the error registry (`error-registry.json`), one source for the screen, the log row and the docs page.
+The lint refuses a hand-centred `absoluteFill` (`StyleSheet.absoluteFill` with `justifyContent: 'center'`) under `screens/` and `app/`.
 
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 

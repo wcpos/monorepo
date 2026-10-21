@@ -50,7 +50,7 @@ export function OpenOrdersList({
 			<View className="h-ctl border-border flex-row items-center justify-between border-b px-2">
 				<Text>{t('pos_cart.open_orders')}</Text>
 				<IconButton
-					name="xmark"
+					name="close"
 					testID="open-orders-close"
 					accessibilityLabel={t('common.close')}
 					onPress={() => onClose()}
@@ -171,7 +171,7 @@ function OrderRow({
 						{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
 							<HStack space="xs">
 								<Icon
-									name="clock"
+									name="pending"
 									size="xs"
 									className={stale ? 'text-warn-text' : 'text-muted-foreground'}
 								/>

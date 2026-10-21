@@ -99,7 +99,8 @@ async function addTestProductToCart(page: Page) {
 	if (
 		!productsVisible &&
 		(await page
-			.getByTestId('error-boundary-fallback')
+			.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
+			.first()
 			.isVisible()
 			.catch(() => false))
 	) {

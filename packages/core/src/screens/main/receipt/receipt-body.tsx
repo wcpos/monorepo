@@ -43,7 +43,7 @@ export function ReceiptBody({
 		printerSelection,
 		resolvedPrinter,
 		setPrinterSelection,
-		mismatchWarning,
+		mismatch,
 	} = doc;
 	const {
 		previewKey,
@@ -107,7 +107,7 @@ export function ReceiptBody({
 						{printerSwitcher}
 					</>
 				)}
-				<MismatchBadge message={mismatchWarning} />
+				<MismatchBadge mismatch={mismatch} />
 				{renderedHtml == null && !(receiptUrl || baseReceiptURL) ? (
 					// No paper canvas when there is nothing to draw on it: the viewport's
 					// sheet is hard-coded white, so themed text would vanish on it in dark themes.

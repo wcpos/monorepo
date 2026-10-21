@@ -45,7 +45,7 @@ export function getCustomerInitials(customer: CustomerData): string {
  * initials on the accent.
  */
 export function GuestAvatar({ size }: { size?: Size }) {
-	return <Avatar icon="user" variant="muted" size={size} />;
+	return <Avatar icon="customer" variant="muted" size={size} />;
 }
 
 const CUSTOMER_STATE: QueryStateOf<'customers'> = {

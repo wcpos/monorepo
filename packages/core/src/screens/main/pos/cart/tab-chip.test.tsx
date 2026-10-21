@@ -129,6 +129,23 @@ it.each(['pending', 'authorized'] as const)(
 	}
 );
 
+// ADR 0040 D6: an authorization is a hold, not payment, so it never reads as partly paid.
+it('an authorized leg in checkout reads In checkout, not Partly paid', () => {
+	enterCheckout('a');
+	const order = {
+		uuid: 'a',
+		payload: {
+			total: '10.00',
+			currency_symbol: '$',
+			meta_data: withLedger([], [
+				{ id: 'card', status: 'authorized', amount: '4.00', tendered: null },
+			] as PaymentRow[]),
+		},
+	} as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('In checkout');
+});
+
 it('a sent order at its receipt moment reads Invoice sent, not Paid', () => {
 	enterReceipt('a');
 	const order = {

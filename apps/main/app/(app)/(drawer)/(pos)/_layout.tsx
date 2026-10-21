@@ -10,6 +10,7 @@ import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notic
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { readStorePaymentsContract, useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
@@ -126,7 +127,11 @@ export default function POSLayout() {
 	return (
 		<OrderMoneyDivergenceProvider storeContract={storeContract}>
 			<OrderEngineWarningsProvider>
-				<ErrorBoundary onReset={retryOwnedReads} resetKeys={[openOrdersHandle]}>
+				<ErrorBoundary
+					FallbackComponent={FallbackScreen}
+					onReset={retryOwnedReads}
+					resetKeys={[openOrdersHandle]}
+				>
 					<Suspense>
 						<CurrentOrderProvider
 							handle={openOrdersHandle}
@@ -134,7 +139,7 @@ export default function POSLayout() {
 							defaultCustomerResource={defaultCustomerResource}
 							currentOrderUUID={orderId}
 						>
-							<ErrorBoundary>
+							<ErrorBoundary FallbackComponent={FallbackScreen}>
 								{/* Spans both register layouts (tabs, columns): the products screen's query and
 								    browse path live here, so a resize across the phone boundary — which
 								    mounts the screen afresh in the other tree — keeps the cashier's place. */}
@@ -202,7 +207,7 @@ function POSStack() {
 				>
 					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
 					{showUpgrade && (
-						<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
+						<View className="bg-muted" style={{ paddingTop: edgeTop }}>
 							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
 						</View>
 					)}

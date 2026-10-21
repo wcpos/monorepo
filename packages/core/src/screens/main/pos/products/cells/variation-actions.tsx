@@ -43,7 +43,7 @@ export function ProductVariationActions({
 	return (
 		<IconButton
 			testID="add-variation-to-cart-button"
-			name="circlePlus"
+			name="increment"
 			size="4xl"
 			accessibilityLabel={t('common.add_to_cart')}
 			onPress={() => parent && addVariation(variation, parent, metaData)}

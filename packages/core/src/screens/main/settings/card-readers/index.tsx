@@ -207,7 +207,7 @@ export function CardReadersSettings() {
 												void actions.start(method);
 											}}
 											testID={`card-readers-connect-${method.id}`}
-											leading={<Icon name="creditCard" variant="muted" size="lg" />}
+											leading={<Icon name="card" variant="muted" size="lg" />}
 											label={<MenuRow.Label decodeHtml>{method.title}</MenuRow.Label>}
 											trailing={<Icon name="chevronRight" variant="muted" />}
 										/>
@@ -274,7 +274,7 @@ function TapToPayRow({
 		>
 			<HStack className="items-start gap-3">
 				<View className="bg-muted size-10 items-center justify-center rounded-lg">
-					<Icon name="creditCard" variant="muted" size="lg" />
+					<Icon name="card" variant="muted" size="lg" />
 				</View>
 				<VStack className="flex-1 gap-0.5">
 					<HStack className="items-start gap-2">

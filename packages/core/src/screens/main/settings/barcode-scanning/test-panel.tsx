@@ -4,9 +4,10 @@ import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-n
 import { useObservableState } from 'observable-hooks';
 
 import { Badge } from '@wcpos/components/badge';
-import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
@@ -199,61 +200,63 @@ function Verdict({
 	const avg = Math.round(analysis.avgGapMs);
 
 	let headline: string;
-	let boxClass: string;
 	if (analysis.detectedAsScan) {
 		headline = t('settings.barcode_test_detected_scan', {
 			code: analysis.code,
 		});
-		boxClass = 'border-success/40 bg-success/10';
 	} else if (analysis.nearMiss) {
 		headline = t('settings.barcode_test_near_miss', {
 			avg,
 			threshold: settings.threshold,
 		});
-		boxClass = 'border-warning/40 bg-warning/10';
 	} else if (!Number.isFinite(analysis.avgGapMs)) {
 		// A single (or modifier-only) keypress has no gaps — "Infinityms" is not
 		// a number a cashier should ever read.
 		headline = t('settings.barcode_test_single_key');
-		boxClass = 'border-border bg-muted/50';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,
 		});
-		boxClass = 'border-border bg-muted/50';
 	}
 
 	return (
 		<VStack space="sm" testID="barcode-test-verdict">
-			<View className={`rounded-md border p-2 ${boxClass}`}>
-				{/* The tone is the box; its words stay in the foreground, as a tinted Badge's do:
-				    green or amber text on its own wash reads under the 4.5:1 text floor. */}
-				<Text className="text-foreground text-sm font-medium">{headline}</Text>
-				{analysis.detectedAsScan ? (
+			{analysis.detectedAsScan ? (
+				<>
+					<HStack className="min-h-9 items-center gap-2">
+						<Icon name="check" className="text-success" />
+						<Text className="flex-1 text-sm font-medium">{headline}</Text>
+					</HStack>
 					<Text className="text-muted-foreground text-xs">
 						{t('settings.barcode_test_scan_detail', {
 							avg,
 							threshold: settings.threshold,
 						})}
 					</Text>
-				) : null}
-			</View>
+				</>
+			) : analysis.nearMiss ? (
+				<Notice tone="warn" title={headline} />
+			) : (
+				<Text className="text-muted-foreground text-sm">{headline}</Text>
+			)}
 
 			{analysis.suggestions.map((suggestion) => (
-				<HStack key={suggestion.kind} className="border-info/40 bg-info/10 rounded-md border p-2">
-					<Text className="flex-1 text-sm">{suggestionText(t, suggestion, avg)}</Text>
-					<Button size="sm" onPress={() => onApply(suggestion)}>
-						<ButtonText>{t('settings.barcode_test_apply')}</ButtonText>
-					</Button>
-				</HStack>
+				<Notice
+					key={suggestion.kind}
+					tone="info"
+					title={suggestionText(t, suggestion, avg)}
+					actions={[
+						{ label: t('settings.barcode_test_apply'), onPress: () => onApply(suggestion) },
+					]}
+				/>
 			))}
 
 			{analysis.shiftMangled ? (
-				<View className="border-destructive/40 bg-destructive/10 rounded-md border p-2">
-					<Text className="text-destructive text-sm">
-						{t('settings.barcode_test_shift_mangled')}
-					</Text>
-				</View>
+				<Notice
+					tone="warn"
+					title={t('settings.barcode_test_shift_mangled_title')}
+					description={t('settings.barcode_test_shift_mangled_description')}
+				/>
 			) : null}
 
 			{analysis.trailingEnter ? (

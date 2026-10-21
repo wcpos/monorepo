@@ -88,7 +88,12 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 	useObservableRef: (value: unknown) => [{ current: value }, of(value)],
 }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
+}));
+// Notice imports native SVG and external-link runtimes; this band has neither actions nor docs.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -176,7 +181,7 @@ jest.mock('./use-barcode', () => ({
 	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
 		mockUseBarcode(setSearch, clearSearch),
 }));
-jest.mock('./storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
+jest.mock('../components/storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
 jest.mock('./camera-scan-button', () => ({ CameraScanButton: () => null }));
 jest.mock('./camera-scanner-panel', () => ({ CameraScannerPanel: () => null }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
@@ -272,6 +277,9 @@ describe('POSProducts query-state wiring', () => {
 		expect(screen.getByTestId('products-locked-notice').textContent).toBe(
 			'pos_products.price_check_only_until_open'
 		);
+		expect(
+			screen.getByTestId('products-locked-notice').querySelector('[data-testid="icon-lock"]')
+		).toBeTruthy();
 		mockSession = { status: 'open' };
 		rerender(<POSProducts />);
 		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
@@ -286,6 +294,9 @@ describe('POSProducts query-state wiring', () => {
 		mockSession = { status: 'counting' };
 		const { rerender } = render(<POSProducts />);
 		expect(screen.getByText('pos_products.counting_items_after_count')).toBeTruthy();
+		expect(
+			screen.getByTestId('products-locked-notice').querySelector('[data-testid="icon-info"]')
+		).toBeTruthy();
 		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
 		mockSession = { status: 'open' };
 		rerender(<POSProducts />);

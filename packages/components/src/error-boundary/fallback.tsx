@@ -41,7 +41,7 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 			>
 				<Tooltip>
 					<TooltipTrigger>
-						<Icon name="triangleExclamation" size="4xl" className="text-destructive-foreground" />
+						<Icon name="warning" size="4xl" className="text-destructive-foreground" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<VStack className="w-full flex-1 gap-1">
@@ -51,7 +51,7 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 					</TooltipContent>
 				</Tooltip>
 				<IconButton
-					name="xmark"
+					name="close"
 					size="sm"
 					variant="destructive"
 					accessibilityLabel={DISMISS_LABEL}
@@ -70,13 +70,13 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 			className="bg-destructive w-full items-start p-2"
 			onLayout={handleLayout}
 		>
-			<Icon name="triangleExclamation" size="4xl" className="text-destructive-foreground" />
+			<Icon name="warning" size="4xl" className="text-destructive-foreground" />
 			<VStack className="w-full flex-1 gap-1">
 				<Text className="text-destructive-foreground font-bold">Something went wrong:</Text>
 				<Text className="text-destructive-foreground">{errorMessage}</Text>
 			</VStack>
 			<IconButton
-				name="xmark"
+				name="close"
 				size="sm"
 				iconClassName="text-destructive-foreground"
 				accessibilityLabel={DISMISS_LABEL}

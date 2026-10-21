@@ -29,6 +29,7 @@ import {
 } from '@wcpos/query/user-db';
 
 import { useAppState } from '../contexts/app-state';
+import { useReportUpdateRequired } from './use-update-required';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
@@ -107,8 +108,14 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		wpUser,
 	]);
 
+	// The server's protocol-gate refusal (426 wcpos_update_required) latches the
+	// per-site gate under wp_api_url — the key the sync engine and the in-app
+	// UpdateRequiredGate use — so the login card shows the update notice instead
+	// of "Re-authenticate" and "No stores found".
+	const onUpdateRequired = useReportUpdateRequired(wpApiUrl);
+
 	// Create HTTP client with token refresh handler
-	const httpClient = useHttpClient([tokenRefreshHandler]);
+	const httpClient = useHttpClient([tokenRefreshHandler], onUpdateRequired);
 
 	// Add a ref to track if validation is already in progress
 	const validationInProgress = React.useRef(false);

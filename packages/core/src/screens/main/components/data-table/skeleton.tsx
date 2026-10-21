@@ -9,7 +9,7 @@ import { useDocField } from '@wcpos/query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
 import { getColumnStyle } from './column-style';
-import { TableSurface } from './surface';
+import { CaptionRowInset, TableSurface } from './surface';
 
 import type { TableSurfaceGutter } from './surface';
 
@@ -130,7 +130,11 @@ export function DataTableSkeleton({
 					</View>
 				</Table>
 			</TableSurface>
-			<View className="min-h-ctl" />
+			{/* The footer's row sits in the caption row's inset, gutter below it included, so the
+			    card's bottom edge stays put when the table loads (CodeRabbit on #2795). */}
+			<CaptionRowInset gutter={gutter}>
+				<View className="min-h-ctl" />
+			</CaptionRowInset>
 		</View>
 	);
 }

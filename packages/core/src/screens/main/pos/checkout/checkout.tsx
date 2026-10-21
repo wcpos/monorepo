@@ -17,7 +17,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Button, ButtonText } from '@wcpos/components/button';
+import { Button } from '@wcpos/components/button';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WebViewHandle } from '@wcpos/components/webview';
@@ -33,6 +34,7 @@ import { useT } from '../../../../contexts/translations';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
 
 interface Props {
@@ -207,54 +209,47 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						    stand, and the cashier decides. */}
 						<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
 						{storageDegraded && !showStockRejection ? (
-							<VStack
-								space="xs"
-								className="border-destructive bg-destructive/10 rounded-md border p-3"
-							>
-								<Text testID="checkout-storage-unavailable" className="text-destructive">
-									{t('pos_checkout.storage_unavailable')}
-								</Text>
-							</VStack>
+							<StorageOutageBanner testID="checkout-storage-unavailable" />
 						) : null}
 						{(paymentLinkMissing || paymentFrameStalled || paymentFrameFailed) &&
 						!gatewayError &&
 						!showStockRejection ? (
-							<VStack
-								space="xs"
-								className="border-destructive bg-destructive/10 rounded-md border p-3"
-							>
-								<Text testID="checkout-payment-form-unavailable" className="text-destructive">
-									{paymentLinkMissing
+							<Notice
+								tone="bad"
+								title={
+									paymentLinkMissing
 										? t('pos_checkout.payment_form_unavailable')
 										: paymentFrameStalled
 											? t('pos_checkout.payment_form_load_failed_retry')
-											: t('pos_checkout.payment_form_navigation_failed')}
-								</Text>
-								{paymentFrameStalled ? (
-									<Button
-										variant="outline"
-										size="sm"
-										testID="checkout-payment-form-retry"
-										onPress={retryPaymentFrame}
-									>
-										<ButtonText>{t('common.retry')}</ButtonText>
-									</Button>
-								) : null}
-							</VStack>
+											: t('pos_checkout.payment_form_navigation_failed')
+								}
+								actions={
+									paymentFrameStalled
+										? [
+												{
+													label: t('common.retry'),
+													onPress: retryPaymentFrame,
+													testID: 'checkout-payment-form-retry',
+												},
+											]
+										: undefined
+								}
+								testID="checkout-payment-form-unavailable"
+							/>
 						) : null}
 						{gatewayError ? (
-							<VStack className="border-destructive bg-destructive/10 rounded-md border p-3">
-								<Text className="text-destructive">
-									{t('pos_checkout.gateway_catalog_unavailable')}
-								</Text>
-								<Button
-									testID="checkout-gateway-catalog-retry"
-									size="lg"
-									onPress={() => void refetch()}
-								>
-									<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
-								</Button>
-							</VStack>
+							<Notice
+								tone="bad"
+								title={t('pos_checkout.gateway_catalog_unavailable')}
+								actions={[
+									{
+										label: t('pos_checkout.try_again'),
+										onPress: () => void refetch(),
+										testID: 'checkout-gateway-catalog-retry',
+									},
+								]}
+								testID="checkout-gateway-catalog-unavailable"
+							/>
 						) : mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
 								order={order}
@@ -273,17 +268,15 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 									<Text>{t('pos_checkout.amount_to_pay')}</Text>
 								)}
 								{showStockRejection ? (
-									<VStack
-										space="xs"
-										className="border-destructive bg-destructive/10 rounded-md border p-3"
+									<Notice
+										tone="bad"
+										title={t('pos_checkout.insufficient_stock_message')}
+										testID="checkout-stock-rejection"
 									>
-										<Text className="text-destructive font-semibold">
-											{t('pos_checkout.insufficient_stock_message')}
-										</Text>
 										{stockRejection!.items.map((item) => (
 											<Text
 												key={`${item.product_id}-${item.variation_id}`}
-												className="text-destructive text-sm"
+												className="text-muted-foreground text-sm"
 												decodeHtml
 											>
 												{item.available === null
@@ -294,7 +287,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 														})}
 											</Text>
 										))}
-									</VStack>
+									</Notice>
 								) : (
 									error && <Text className="text-destructive">{error}</Text>
 								)}

@@ -36,7 +36,7 @@ export function StatusPill() {
 					clearLabel={t('common.remove')}
 					clearTestID="order-filter-status-remove"
 					testID="order-filter-status"
-					icon="cartCircleCheck"
+					icon="cartDone"
 					on={isActive}
 					onClear={isActive ? () => actions.clearFilter('status') : undefined}
 					label={value?.label || t('common.status')}

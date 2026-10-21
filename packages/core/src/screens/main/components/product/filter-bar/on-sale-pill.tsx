@@ -17,7 +17,7 @@ export function OnSalePill() {
 
 	return (
 		<Chip
-			icon="badgeDollar"
+			icon="currency"
 			on={isActive}
 			onPress={() => actions.setFilter('on_sale', true)}
 			testID="filter-pill-on_sale"

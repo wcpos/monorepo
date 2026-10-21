@@ -42,20 +42,20 @@ it.each([
 	'paints the %s size, lifting the selected row onto the card',
 	(size, shape, on, off) => {
 		const { container, unmount } = render(
-			<NavItem size={size} selected icon="gear" label="General" testID="item" />
+			<NavItem size={size} selected icon="settings" label="General" testID="item" />
 		);
 		expect(classes('item')).toContain(shape);
 		expect(classes('item')).toContain('bg-card');
 		expect(classes('item-label')).toContain(on);
-		expect(icon(container, 'gear')).toContain(on);
+		expect(icon(container, 'settings')).toContain(on);
 		expect(screen.getByTestId('item').getAttribute('aria-selected')).toBe('true');
 		unmount();
 
-		const rest = render(<NavItem size={size} icon="gear" label="General" testID="item" />);
+		const rest = render(<NavItem size={size} icon="settings" label="General" testID="item" />);
 		expect(classes('item').split(' ')).not.toContain('bg-card');
 		expect(classes('item')).toContain('active:bg-card');
 		expect(classes('item-label')).toContain(off);
-		expect(icon(rest.container, 'gear')).toContain(off);
+		expect(icon(rest.container, 'settings')).toContain(off);
 	}
 );
 

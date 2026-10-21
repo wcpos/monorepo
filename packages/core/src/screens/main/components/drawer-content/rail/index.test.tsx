@@ -16,12 +16,16 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 
-import { DrawerContent } from './index';
+import { DrawerContent, RAIL_WIDTH, useRailWidth } from './index';
 import { DrawerPanelVisibilityProvider, DrawerPanelVisibilityReporter } from '../panel-visibility';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
+
+// The live `--spacing`; unset reads as the Regular step's 4.
+let mockSpacing: string | number | undefined;
+jest.mock('uniwind', () => ({ useCSSVariable: () => mockSpacing }));
 
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -33,11 +37,13 @@ jest.mock('expo-router/drawer', () => {
 		DrawerContentScrollView: ({
 			children,
 			testID,
+			className,
 			importantForAccessibility,
 			accessibilityElementsHidden,
 		}: {
 			children?: React.ReactNode;
 			testID?: string;
+			className?: string;
 			importantForAccessibility?: string;
 			accessibilityElementsHidden?: boolean;
 		}) =>
@@ -46,6 +52,7 @@ jest.mock('expo-router/drawer', () => {
 				{
 					'data-testid': 'drawer-scroll',
 					'data-panel': testID,
+					'data-class': className,
 					'data-important': importantForAccessibility,
 					'data-elements-hidden': String(accessibilityElementsHidden),
 				},
@@ -102,6 +109,33 @@ const drawerProps = {
 describe('DrawerContent', () => {
 	it('is the web variant under test', () => {
 		expect(Platform.OS).toBe('web');
+	});
+
+	it('is 64 wide at Regular by the drawer style, and puts no class on the vendored scroll view', () => {
+		// 48 item + 8 each side at Regular (CODING_STANDARDS § Design, Gutters). The layout sets
+		// `useRailWidth()` as `drawerStyle.width`; a `w-16` class here was spread onto the vendored
+		// ScrollView and dropped, so the rail rendered 48 wide with the active square on its edge
+		// (2026-10-20).
+		expect(RAIL_WIDTH).toBe(48 + 2 * 8);
+		const { container } = render(
+			<DrawerPanelVisibilityProvider>
+				<PlainCall {...drawerProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		const scroll = container.querySelector('[data-testid="drawer-scroll"]');
+		expect(scroll).not.toBeNull();
+		expect(scroll?.getAttribute('data-class')).toBeNull();
+	});
+
+	it('is 16 spacing units wide at the live step, and 64 when there is no step', () => {
+		// The items are `size-12`, so a fixed 64 left 2 px beside them at Spacious (Codex, #2795).
+		const width = (spacing: string | number | undefined) => {
+			mockSpacing = spacing;
+			return renderHook(() => useRailWidth()).result.current;
+		};
+		expect(width(5)).toBe(80);
+		expect(width('3.5px')).toBe(56);
+		expect(width(undefined)).toBe(RAIL_WIDTH);
 	});
 
 	it('renders with no drawer context in the tree', () => {

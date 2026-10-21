@@ -36,7 +36,7 @@ export function Connect() {
 					flexGrow: 1,
 					alignItems: 'center',
 					justifyContent: 'center',
-					padding: 8,
+					padding: 16,
 				}}
 				keyboardShouldPersistTaps="handled"
 			>

@@ -123,7 +123,7 @@ export function MetaDataForm({
 										<TooltipTrigger asChild>
 											<IconButton
 												variant="destructive"
-												name="circleMinus"
+												name="decrement"
 												accessibilityLabel={t('common.remove_item')}
 												onPress={() => {
 													const metaData = getValues(name);

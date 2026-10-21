@@ -6,6 +6,7 @@ import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -58,7 +59,9 @@ export default function ResizablePOSColumns() {
 				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
 				<View style={{ flex: 1, display: activeTab === 'products' ? 'flex' : 'none' }}>
 					<Suspense>
-						<ErrorBoundary>
+						{/* The whole Products tab, as in (tabs): a throw replaces it with the gate. The Cart
+						    tab below keeps the inline bar, as (tabs)/cart does. */}
+						<ErrorBoundary FallbackComponent={FallbackScreen}>
 							{/* A resize or phone-width reload of /cart reaches this fallback; keep the same register bar as (tabs). */}
 							<POSProductsPane>
 								{activeTab === 'products' && <ObserveInteractiveMarker />}
@@ -85,7 +88,7 @@ export default function ResizablePOSColumns() {
 						onPress={() => setActiveTab('products')}
 						className="flex-1 items-center gap-1 py-2"
 					>
-						<Icon name="gifts" variant={activeTab === 'products' ? 'primary' : 'muted'} />
+						<Icon name="gift" variant={activeTab === 'products' ? 'primary' : 'muted'} />
 						<Text
 							className={
 								activeTab === 'products' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
@@ -99,7 +102,7 @@ export default function ResizablePOSColumns() {
 						onPress={() => setActiveTab('cart')}
 						className="flex-1 items-center gap-1 py-2"
 					>
-						<Icon name="cartShopping" variant={activeTab === 'cart' ? 'primary' : 'muted'} />
+						<Icon name="cart" variant={activeTab === 'cart' ? 'primary' : 'muted'} />
 						<Text
 							className={
 								activeTab === 'cart' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'

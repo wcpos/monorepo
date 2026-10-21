@@ -45,6 +45,12 @@ export interface PrinterTransport {
 	supportsMarkup?(): Promise<boolean> | boolean;
 
 	/**
+	 * Called by PrinterService at the start of every queued job that uses this transport. A
+	 * transport outlives its jobs (cached per profile), so per-job state is reset here.
+	 */
+	beginJob?(): void;
+
+	/**
 	 * Print HTML content via system print dialog.
 	 * Used as fallback when no direct printer is configured.
 	 */

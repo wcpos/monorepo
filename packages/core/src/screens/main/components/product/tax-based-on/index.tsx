@@ -59,7 +59,7 @@ export function TaxBasedOn() {
 					{rates.length > 0 ? (
 						<Icon name="percent" size="sm" className="text-muted-foreground" />
 					) : (
-						<Icon size="sm" variant="error" name="triangleExclamation" />
+						<Icon size="sm" variant="error" name="warning" />
 					)}
 					<Text
 						className={rates.length > 0 ? 'shrink text-sm' : 'text-destructive shrink text-sm'}

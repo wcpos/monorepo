@@ -243,6 +243,9 @@ it('names the cashier at the till when a capture lands, not the one who started 
 		await import('../../../../../../services/terminal-payments'),
 		'startTerminalPaymentsService'
 	);
+	const original = mockResident.payload.meta_data;
+	// ADR 0040 D6: the resident's balance is zero only through captured money.
+	mockResident.payload.meta_data = withLedger([], [{ ...mockRow, status: 'captured' }]);
 	const hook = renderHook(() => useTerminalPaymentsService());
 	try {
 		const service = getTerminalPaymentsService()!;
@@ -280,6 +283,7 @@ it('names the cashier at the till when a capture lands, not the one who started 
 		hook.unmount();
 		start.mockRestore();
 		mockSession.wpCredentials = { id: 7, display_name: 'Pat' };
+		mockResident.payload.meta_data = original;
 	}
 });
 
@@ -593,7 +597,8 @@ describe('a server capture of the order in checkout', () => {
 		unwatch = watchTender(uuid, autoShowReceipt);
 	};
 
-	it.each(['mirror', 'offline'] as const)(
+	// ADR 0040 D6: an offline authorization is a hold, so only the mirror of a capture completes.
+	it.each(['mirror'] as const)(
 		'%s: nothing is entered at the write; the receipt is entered and selected after it',
 		async (write) => {
 			watch('completed-order');
@@ -689,6 +694,13 @@ describe('a server capture of the order in checkout', () => {
 		enterCheckout('completed-order');
 		enterReceipt('completed-order', { select: false });
 		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
+	});
+
+	it('offline: an authorization completes nothing, so its write enters no receipt', async () => {
+		watch('completed-order');
+		const { after } = await settle('offline');
+		expect(after.receiptOrders.size).toBe(0);
+		expect(after.checkoutOrders.has('completed-order')).toBe(true);
 	});
 
 	it.each(['rejects', 'returns nothing'] as const)(

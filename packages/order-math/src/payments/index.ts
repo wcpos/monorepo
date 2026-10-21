@@ -10,12 +10,14 @@ export {
 	hasSaleTime,
 	withSaleProvenance,
 	withMetaReplaced,
+	readCompletions,
 } from './provenance';
-export { derive, isCompletingStatus } from './derive';
+export { countsTowardPaid, derive, isCompletingStatus } from './derive';
 export {
 	readLedger,
 	withLedger,
 	upsertPaymentRow,
+	samePaymentId,
 	mintManualPayment,
 	mintServerPayment,
 	mintDevicePayment,

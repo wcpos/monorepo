@@ -339,7 +339,7 @@ function StepNode({
 			: state === 'current' || state === 'stopped'
 				? 'text-foreground'
 				: 'text-muted-foreground';
-	const icon = state === 'failed' ? 'xmark' : state === 'stopped' ? 'minus' : 'check';
+	const icon = state === 'failed' ? 'close' : state === 'stopped' ? 'minus' : 'check';
 	return (
 		<View
 			role="listitem"

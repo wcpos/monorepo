@@ -1223,7 +1223,9 @@ export async function hydrateAuthenticatedPage(
 			await expect(page.getByTestId('search-products')).toBeVisible({
 				timeout: 60_000,
 			});
-			const appError = page.getByTestId('error-boundary-fallback').first();
+			const appError = page
+				.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
+				.first();
 			// Intentional one-shot: `search-products` is already visible above, so if the
 			// restored state faulted the error boundary has already rendered. A waiting
 			// check would add its full timeout to every happy-path hydration for a

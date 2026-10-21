@@ -1668,14 +1668,16 @@ it.each([
 	}
 );
 
+// ADR 0040 D6: only a captured leg ever counted, so failing or voiding a captured leg debits it
+// exactly once, and failing or voiding an authorized leg changes nothing.
 it.each([
-	['cash', 'captured', 'voided'],
-	['cash', 'authorized', 'failed'],
-	['cheque', 'authorized', 'voided'],
-	['cheque', 'captured', 'failed'],
+	['cash', 'captured', 'voided', '50.0000', '50'],
+	['cash', 'authorized', 'failed', '100', '100'],
+	['cheque', 'authorized', 'voided', '100', '100'],
+	['cheque', 'captured', 'failed', '50.0000', '50'],
 ])(
-	'debits a snapshotted %s %s leg changed offline to %s exactly once',
-	async (method, before, status) => {
+	'a snapshotted %s %s leg changed offline to %s leaves the till expecting %s',
+	async (method, before, status, tillExpected, serverExpected) => {
 		entries = [];
 		const snapshot = { id: 'card', updated_at_gmt: '2026-09-15T08:00:00', status: before };
 		active = [
@@ -1696,7 +1698,7 @@ it.each([
 		hit.record.local.dirty = true;
 		mockOrders.next([hit]);
 		const result = await settled();
-		expect(result.current.expected).toEqual({ [method]: '50.0000' });
+		expect(result.current.expected).toEqual({ [method]: tillExpected });
 		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
 		jest
 			.mocked(actions.closeSession)
@@ -1706,17 +1708,17 @@ it.each([
 			await result.current.actions.closeSession({ counted: { [method]: '50' } });
 		});
 		expect(actions.writeClosure).toHaveBeenCalledWith(
-			expect.objectContaining({ tillExpected: { [method]: '50.0000' } })
+			expect.objectContaining({ tillExpected: { [method]: tillExpected } })
 		);
 		await act(async () => {
 			Object.assign(active[0], {
-				server_expected: { [method]: '50' },
+				server_expected: { [method]: serverExpected },
 				server_expected_at: '2026-09-15T11:00:00',
 				server_ledger_rows: [{ ...snapshot, status, updated_at_gmt: '2026-09-15T10:00:00' }],
 			});
 			mockSessionChanges.next();
 		});
-		expect(result.current.expected).toEqual({ [method]: '50' });
+		expect(result.current.expected).toEqual({ [method]: serverExpected });
 		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
 	}
 );

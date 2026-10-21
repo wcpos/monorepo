@@ -139,7 +139,7 @@ function EditPrinterDialog({
 
 	const banner = (
 		<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
-			<Icon name="circleInfo" size="sm" className="text-muted-foreground mt-0.5" />
+			<Icon name="info" size="sm" className="text-muted-foreground mt-0.5" />
 			<Text className="text-muted-foreground flex-1 text-sm">
 				{t('settings.web_printer_limitation')}
 			</Text>

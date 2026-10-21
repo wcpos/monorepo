@@ -89,7 +89,7 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 					clearLabel={t('common.remove')}
 					clearTestID="order-filter-customer-remove"
 					testID="order-filter-customer"
-					icon="user"
+					icon="customer"
 					on={isActive}
 					onClear={isActive ? () => actions.clearFilter('customer_id') : undefined}
 					label={
