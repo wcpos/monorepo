@@ -313,6 +313,16 @@ export async function retireSettledChains(
 	}
 }
 
+/** The engine scope the till is in now: one cashier's orders. */
+async function activeScopeId(runtime: QueryRuntime): Promise<string | null> {
+	const scope = runtime.engine.active() ?? (await runtime.engine.whenActive());
+	return scope?.scopeId ?? null;
+}
+/** A command belongs to the scope that sent it; one written before scopes were recorded, to any. */
+function inScope(entry: MoneyCommandEntry, scope: string | null) {
+	return !entry.scope || entry.scope === scope;
+}
+
 /** A re-sent command and the store's 2xx answer to it. */
 export interface ResentCommand {
 	readonly kind: MoneyCommandKind;
@@ -330,7 +340,12 @@ export async function resendOpenCommands(
 	orderUuid: string,
 	deps: { post: Post }
 ): Promise<ResentCommand[]> {
-	const { entries } = await readOrderCommands(storeDB, orderUuid);
+	// Only the active scope's commands: another cashier's order is not resident here, so its
+	// command waits for that cashier's scope (no cross-scope replay).
+	const scope = await activeScopeId(runtime);
+	const entries = (await readOrderCommands(storeDB, orderUuid)).entries.filter((entry) =>
+		inScope(entry, scope)
+	);
 	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post });
 	const answers: ResentCommand[] = [];
 	for (const entry of entries) {
@@ -368,8 +383,9 @@ export async function recoverMoneyCommands(
 	deps: { post: Post }
 ): Promise<RecoveredOrder[]> {
 	const recovered: RecoveredOrder[] = [];
+	const scope = await activeScopeId(runtime);
 	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
-		const sent = entries.filter(({ sentAt }) => sentAt !== null);
+		const sent = entries.filter((entry) => entry.sentAt !== null && inScope(entry, scope));
 		if (sent.length === 0 || sent.some((entry) => claimHeld(entry, null))) continue;
 		try {
 			recovered.push({
@@ -480,6 +496,7 @@ export function moneyCommandPoster(input: {
 		rowId: string | null
 	): Promise<MoneyCommandEntry> => {
 		const { entries } = await readOrderCommands(input.storeDB, input.orderUuid);
+		const scope = await activeScopeId(input.runtime);
 		const provenance = PROVENANCE_KINDS.has(route.kind)
 			? await input.provenance?.({ kind: route.kind, target: route.target, body: frozen })
 			: null;
@@ -496,6 +513,7 @@ export function moneyCommandPoster(input: {
 			),
 			sentAt: null,
 			sentRevision: null,
+			...(scope ? { scope } : {}),
 		};
 	};
 	const poster = async (url: string, body: unknown) => {

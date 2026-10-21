@@ -23,6 +23,7 @@ import {
 	CLAIM_LEASE_MS,
 	claimRoute,
 	journalCommand,
+	markSent,
 	readOrderCommands,
 } from '../src/store-local/money-commands';
 import { createEngineDatabase, createFakeEngine, engineOrder } from '../src/testing';
@@ -919,6 +920,38 @@ it('the recovery never deletes an unsent command another poster has claimed', as
 	});
 	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
 	expect(await entries()).toEqual([expect.objectContaining({ id: 'close-in-preflight' })]);
+});
+
+// The journal is per store, the orders per cashier scope: a command is re-sent only in the scope
+// that sent it, and waits for that scope otherwise (no cross-scope replay).
+it('a command records its scope, and recovery and Try again re-send only the active scope’s', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+	expect((await entries())[0]).toMatchObject({ scope: 'test-scope' });
+	const theirs = {
+		orderUuid: 'order',
+		kind: 'close',
+		path: 'orders/5/close',
+		target: null,
+		id: 'their-close',
+		body: {},
+		approval,
+		sentAt: null,
+		sentRevision: null,
+		scope: 'another-cashier',
+	} as const;
+	await claimRoute(
+		storeDB,
+		{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
+		'x',
+		theirs
+	);
+	await markSent(storeDB, 'order', 'their-close', 'sha256:r1');
+	clock += CLAIM_LEASE_MS;
+	expect(await restart()).toEqual([expect.objectContaining({ kind: 'capture' })]);
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	expect(store.post.mock.calls.map(([url]) => url)).not.toContain('orders/5/close');
+	expect(await entries()).toEqual([expect.objectContaining({ id: 'their-close' })]);
 });
 
 it('the status poll passes through without an envelope', async () => {
