@@ -1080,12 +1080,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
-			const unround = () =>
+			const unround = (ref = paymentId) =>
 				patchFees(
 					withFees(target.getLatest().payload, (fees) =>
 						fees.flatMap((fee) => {
 							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-							if (!paymentId || rounding?.payment_ref !== paymentId) return [fee];
+							if (!ref || rounding?.payment_ref !== ref) return [fee];
 							return fee.id ? [{ ...fee, name: null }] : [];
 						})
 					)
@@ -1104,7 +1104,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				throw error;
 			});
 			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
-			if (paymentId && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
+			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
+			const ref = paymentId ?? (outcome.kind === 'refused' ? outcome.row.id : undefined);
+			if (ref && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround(ref);
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{

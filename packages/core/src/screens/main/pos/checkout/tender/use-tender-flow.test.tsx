@@ -4005,6 +4005,32 @@ describe('cash rounding (#66, #84)', () => {
 		);
 	});
 
+	// Codex 4343139031 on #2832: the replay of a rounded record that went unanswered carries no
+	// fee of its own (the balance is already rounded); a refusal takes back the fee its row carried.
+	it('a refused replay of an unanswered rounded record takes its fee back off: 10.05 returns to 10.03', async () => {
+		mockPayload = sale('10.03');
+		let rowId = '';
+		mockRecordManualPayment.mockImplementationOnce(async (_o, _m, input: { paymentId: string }) => {
+			rowId = input.paymentId;
+			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockPayload).toMatchObject({ total: '10.05' });
+
+		mockRecordManualPayment.mockImplementationOnce(async () => ({
+			kind: 'refused',
+			reason: 'amount_exceeds_balance',
+			row: payment({ id: rowId, amount: '10.05', status: 'failed' }),
+			order: null,
+		}));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
+	});
+
 	it('a synced fee comes back off as a tombstone that no longer counts in the total', async () => {
 		mockPayload = sale('10.03');
 		// The provenance push came back with the fee's server id.
