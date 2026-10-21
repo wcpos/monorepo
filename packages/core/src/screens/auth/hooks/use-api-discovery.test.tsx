@@ -49,7 +49,7 @@ const siteData = {
 };
 
 const siteRequestOptions = {
-	params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0 payments=1.3' },
+	params: { wcpos: 1, wcpos_protocol: 3, wcpos_client: 'web/0.0.0 payments=1.3' },
 	timeout: 15_000,
 };
 const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
