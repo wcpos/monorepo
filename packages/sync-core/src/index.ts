@@ -83,6 +83,7 @@ export {
 	type CloseAnswer,
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
 	MONEY_ANSWER_CODES,
 	type MoneyRefusal,
 	moneyRefusalOf,

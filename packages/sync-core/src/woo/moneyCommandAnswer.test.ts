@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isCloseAnswer, isDefinitiveMoneyRefusal, moneyRefusalOf } from './moneyCommandAnswer';
+import {
+	isCloseAnswer,
+	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
+	moneyRefusalOf,
+} from './moneyCommandAnswer';
 
 const answer = (status: number, data: unknown) => ({ response: { status, data } });
 const wpError = (status: number, code: string) =>
@@ -64,5 +69,37 @@ describe('the close answer rule', () => {
 			{ order, completion: { n: '1', id: 'c1' } },
 		])
 			expect(isCloseAnswer(data)).toBe(false);
+	});
+});
+
+describe('the money answer rule, per kind', () => {
+	const row = { id: 'p1', status: 'captured', amount: '10.00' };
+	const order = { status: 'pos-open' };
+	it.each(['record', 'intent', 'capture', 'void'] as const)(
+		'%s needs the row and the summary',
+		(kind) => {
+			expect(isMoneyAnswer(kind, { payment: row, order, revision: 'r' })).toBe(true);
+			expect(isMoneyAnswer(kind, {})).toBe(false);
+			expect(isMoneyAnswer(kind, { payment: row })).toBe(false);
+			expect(isMoneyAnswer(kind, { order })).toBe(false);
+			expect(isMoneyAnswer(kind, { payment: { id: 'p1', status: 'captured' }, order })).toBe(false);
+			expect(isMoneyAnswer(kind, { payment: row, order: {} })).toBe(false);
+		}
+	);
+	it('refund needs the row', () => {
+		expect(isMoneyAnswer('refund', { payment: row })).toBe(true);
+		expect(isMoneyAnswer('refund', { order })).toBe(false);
+	});
+	it('submit needs its outcome and the summary; cancel the summary', () => {
+		expect(isMoneyAnswer('submit', { outcome: 'sent', payment: null, order })).toBe(true);
+		expect(isMoneyAnswer('submit', { order })).toBe(false);
+		expect(isMoneyAnswer('submit', { outcome: 'sent' })).toBe(false);
+		expect(isMoneyAnswer('cancel', { order })).toBe(true);
+		expect(isMoneyAnswer('cancel', {})).toBe(false);
+	});
+	it('close is the close rule', () => {
+		expect(isMoneyAnswer('close', { order, completion: { n: 1, id: 'c1' } })).toBe(true);
+		expect(isMoneyAnswer('close', { order })).toBe(false);
+		expect(isMoneyAnswer('close', null)).toBe(false);
 	});
 });

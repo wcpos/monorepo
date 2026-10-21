@@ -253,7 +253,21 @@ let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 // One client per test file, as the real hook memoises: a fresh object per render would re-arm
 // every fetch effect keyed on it.
-const mockHttp = { post: mockManualPost, get: mockGatewaysGet };
+//
+// The fixtures below script only the summary a test is about. The store's real record answer
+// also carries the row it stored (sync-core `isMoneyAnswer`, which the record path now requires),
+// so a scripted record answer without one is completed with the posted row here.
+const mockHttp = {
+	post: async (url: string, body: unknown) => {
+		const answer = await mockManualPost(url, body);
+		const data = answer?.data as Record<string, unknown> | undefined;
+		const row = (body as { payment?: unknown } | undefined)?.payment;
+		return /\/payments$/.test(url) && data && !data.payment && row
+			? { ...answer, data: { ...data, payment: row } }
+			: answer;
+	},
+	get: mockGatewaysGet,
+};
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
@@ -4064,7 +4078,9 @@ describe('cash rounding (#66, #84)', () => {
 			fee_lines: [fee],
 			meta_data: withLedger([], [payment({ amount: '10.05' })]),
 		} as typeof mockPayload;
-		mockManualPost.mockResolvedValue({ data: { payment: payment({ status: 'voided' }) } });
+		mockManualPost.mockResolvedValue({
+			data: { payment: payment({ status: 'voided' }), order: { status: 'pos-open' } },
+		});
 		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
 			mockPayload = { ...mockPayload, ...changes };
 		});

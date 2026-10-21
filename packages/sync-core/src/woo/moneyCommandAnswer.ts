@@ -99,6 +99,45 @@ export function isCloseAnswer(data: unknown): data is CloseAnswer {
 	);
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === 'object';
+/** A ledger row as the store puts it on the wire (`Ledger::to_wire`). */
+const isRow = (value: unknown) =>
+	isObject(value) &&
+	typeof value.id === 'string' &&
+	typeof value.status === 'string' &&
+	typeof value.amount === 'string';
+/** The order summary (`Ledger::summary`): its status says what the order is now. */
+const isSummary = (value: unknown) => isObject(value) && typeof value.status === 'string';
+
+/**
+ * Whether a 2xx answer to a money command is the store's own, by kind (free `next`
+ * `API/V2/Payments_Controller.php`): `record`, `intent`, `capture` and `void` answer the row and
+ * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478); `refund`
+ * answers the row alone (:368, :475); `submit` answers its `outcome` with the summary, `cancel`
+ * the summary (:451); `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
+ * `{}`) proves nothing: it never settles the command and never stands in for a row the store did
+ * not send. The command stays journaled and its outcome is unknown until a re-send answers it.
+ */
+export function isMoneyAnswer(
+	kind: 'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close',
+	data: unknown
+): boolean {
+	if (!isObject(data)) return false;
+	switch (kind) {
+		case 'close':
+			return isCloseAnswer(data);
+		case 'refund':
+			return isRow(data.payment);
+		case 'submit':
+			return typeof data.outcome === 'string' && isSummary(data.order);
+		case 'cancel':
+			return isSummary(data.order);
+		default:
+			return isRow(data.payment) && isSummary(data.order);
+	}
+}
+
 /** Whether the answer settles the command (the server decided; a re-send repeats it). */
 export function isDefinitiveMoneyRefusal(refusal: MoneyRefusal | null): boolean {
 	if (!refusal?.code || refusal.status === undefined) return false;

@@ -138,7 +138,12 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('online: the store voids the row, and the sweep after the mirror pushes the fee removal', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
@@ -153,7 +158,12 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('a sweep that cannot write after the store voided returns the void and logs its own row', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		mockLocalPatch.mockResolvedValue(undefined);
 		const { result } = renderHook(() => useVoidPayments());
 		let outcome: unknown;
@@ -220,7 +230,12 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 	it('leaves a null-ref fee alone when no voided row is rounded', async () => {
 		payload = { ...payload, fee_lines: [fees[1]] };
 		mockStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);

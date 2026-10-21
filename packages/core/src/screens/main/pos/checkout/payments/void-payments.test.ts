@@ -59,6 +59,17 @@ function createDeps(online = true): VoidPaymentsDeps & {
 	};
 }
 
+/** The store's answer to a void: its voided row and the order summary. */
+const answered = (url: string) => {
+	const id = url.split('/').at(-2)!;
+	return {
+		data: {
+			payment: { ...payment(id, 'captured'), status: 'voided' },
+			order: { status: 'pos-open' },
+		},
+	};
+};
+
 describe('voidPayments', () => {
 	it('writes nothing when the ledger has no live legs', async () => {
 		const deps = createDeps();
@@ -102,7 +113,7 @@ describe('voidPayments', () => {
 
 	it('a captured row counted in a completion, or an adopted woocommerce tender, is not sent to void', async () => {
 		const deps = createDeps();
-		deps.post.mockResolvedValue({ data: {} });
+		deps.post.mockImplementation(async (url: string) => answered(url));
 		const counted = payment('counted', 'captured');
 		const adopted = { ...payment('adopted', 'captured'), capture_mode: 'server' as const };
 		const open = payment('open', 'captured');
@@ -117,7 +128,7 @@ describe('voidPayments', () => {
 
 	it('a string-encoded completion history still keeps its counted captured row out of a void', async () => {
 		const deps = createDeps();
-		deps.post.mockResolvedValue({ data: {} });
+		deps.post.mockImplementation(async (url: string) => answered(url));
 		const voidable = order([payment('counted', 'captured'), payment('open', 'captured')]);
 		const history = {
 			key: '_wcpos_completions',
@@ -144,8 +155,9 @@ describe('voidPayments', () => {
 			payment_method: '',
 			payment_method_title: '',
 		};
+		const partly = { ...summary, status: 'pos-partial' };
 		deps.post
-			.mockResolvedValueOnce({ data: { payment: serverPending } })
+			.mockResolvedValueOnce({ data: { payment: serverPending, order: partly } })
 			.mockResolvedValueOnce({ data: { payment: serverCaptured, order: summary } });
 
 		const result = await voidPayments(order([pending, payment('old', 'voided'), captured]), deps);
@@ -154,7 +166,7 @@ describe('voidPayments', () => {
 		expect(deps.post).toHaveBeenNthCalledWith(2, 'orders/42/payments/captured/void', {});
 		// One mirror per answer, onto the latest ledger: never a rebuilt snapshot (ADR 0040).
 		expect(deps.mirror.mock.calls).toEqual([
-			[{ payment: serverPending, order: null }],
+			[{ payment: serverPending, order: partly }],
 			[{ payment: serverCaptured, order: summary }],
 		]);
 		expect(result).toEqual({
@@ -172,15 +184,16 @@ describe('voidPayments', () => {
 		const refused = payment('refused', 'captured');
 		const last = payment('last', 'pending');
 		const voidedFirst = { ...first, status: 'voided' as const };
+		const voidedLast = { ...last, status: 'voided' as const };
 		deps.post
-			.mockResolvedValueOnce({ data: { payment: voidedFirst } })
+			.mockResolvedValueOnce({ data: { payment: voidedFirst, order: { status: 'pos-partial' } } })
 			.mockRejectedValueOnce({
 				response: {
 					status: 422,
 					data: { code: 'wcpos_invalid_transition', message: 'Provider refused the void' },
 				},
 			})
-			.mockResolvedValueOnce({ data: {} });
+			.mockResolvedValueOnce({ data: { payment: voidedLast, order: { status: 'pos-partial' } } });
 
 		const result = await voidPayments(order([first, refused, last]), deps);
 		if (result.kind !== 'voided') throw new Error('expected an online void');
@@ -252,4 +265,20 @@ it('cannot void an offline device authorization before it settles', async () => 
 	);
 	expect(result).toMatchObject({ kind: 'voided', failed: [expect.anything()] });
 	expect(deps.post).not.toHaveBeenCalled();
+});
+
+// A malformed 2xx proves nothing: it is never replaced by a locally voided row (sync-core
+// `isMoneyAnswer`). The leg stays live, unknown (never "refund by hand"), and journaled.
+it('a malformed 2xx voids nothing locally and reports the row unknown', async () => {
+	const deps = createDeps();
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await voidPayments(order([payment('held', 'captured')]), deps);
+
+	expect(result).toMatchObject({
+		kind: 'voided',
+		rows: [],
+		failed: [{ paymentId: 'held', refused: false, message: 'money_command_malformed_answer' }],
+	});
+	expect(deps.mirror).not.toHaveBeenCalled();
 });

@@ -1,6 +1,6 @@
 import { isLivePaymentStatus, readCompletions, readLedger } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
+import { isDefinitiveMoneyRefusal, isMoneyAnswer, moneyRefusalOf } from '@wcpos/sync-core';
 
 /**
  * Void the live payment legs when a cashier abandons a half-paid order. Offline a void is
@@ -66,7 +66,6 @@ export async function voidPayments(
 		return { kind: 'voided', via: 'offline', rows: [], failed: [], order: null };
 	}
 
-	const now = deps.now ?? (() => new Date().toISOString());
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
 	// ADR 0040 PR A: a void the server cannot hear is not sent, and nothing is voided locally.
 	if (!online) return { kind: 'offline', paymentIds: liveRows.map(({ id }) => id) };
@@ -90,19 +89,16 @@ export async function voidPayments(
 	const rows: PaymentRow[] = [];
 	const failed: VoidPaymentsFailure[] = [];
 	for (const row of liveRows) {
-		const localVoid = { ...row, status: 'voided' as const, updated_at_gmt: now() };
 		try {
 			const response = await deps.post(`orders/${order.id}/payments/${row.id}/void`, {});
-			const accepted = (response.data ?? {}) as {
-				payment?: PaymentRow;
-				order?: OrderPaymentSummary;
-			};
-			const serverRow = accepted.payment ?? localVoid;
-			answers.push({ payment: serverRow, order: accepted.order ?? null });
-			rows.push(serverRow);
-			// Keep the most recent summary the server DID send: a later response that
-			// omits one must not throw away the order status an earlier one gave us.
-			if (accepted.order) lastOrder = accepted.order;
+			// Only the store's own row and summary say the leg was voided (sync-core
+			// `isMoneyAnswer`): a malformed 2xx is never replaced by a locally voided row. It is an
+			// unknown outcome, and the journal keeps the void for a re-send.
+			if (!isMoneyAnswer('void', response.data)) throw new Error('money_command_malformed_answer');
+			const accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
+			answers.push({ payment: accepted.payment, order: accepted.order });
+			rows.push(accepted.payment);
+			lastOrder = accepted.order;
 		} catch (error) {
 			const refusal = moneyRefusalOf(error);
 			failed.push({

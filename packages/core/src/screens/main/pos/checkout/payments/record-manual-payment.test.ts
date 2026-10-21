@@ -77,6 +77,10 @@ const mintedCard: PaymentRow = {
 	updated_at_gmt: NOW,
 };
 
+/** The store's answer to a record: the row it stored and the order summary. */
+const echo = async (_url: string, body: unknown) => ({
+	data: { payment: (body as { payment: PaymentRow }).payment, order: { status: 'pos-partial' } },
+});
 function createDeps(online = true): RecordManualPaymentDeps & {
 	post: jest.Mock;
 	sleep: jest.Mock;
@@ -392,9 +396,9 @@ it.each(['0.00', '42.50'])(
 				calls.push('persisted');
 			}),
 		};
-		deps.post.mockImplementation(async () => {
+		deps.post.mockImplementation(async (_url: string, body: unknown) => {
 			calls.push('post');
-			return { data: {} };
+			return echo('', body);
 		});
 		const paymentOrder = {
 			...order,
@@ -421,7 +425,7 @@ it.each(['0.00', '42.50'])(
 
 it('does not persist provenance for a partial online leg', async () => {
 	const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
-	deps.post.mockResolvedValue({ data: {} });
+	deps.post.mockImplementation(echo);
 
 	await recordManualPayment(order, cash, { amount: '42.50' }, deps);
 
@@ -436,11 +440,24 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 			throw new Error('save failed');
 		}),
 	};
-	deps.post.mockResolvedValue({ data: {} });
+	deps.post.mockImplementation(echo);
 
 	const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
 
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
+	expect(deps.mirror).not.toHaveBeenCalled();
+});
+
+// A malformed 2xx proves nothing: it is never replaced by the minted row (sync-core
+// `isMoneyAnswer`). It is re-sent like no answer, then ends unknown with the command journaled.
+it('a malformed 2xx records nothing locally and ends unknown after its re-sends', async () => {
+	const deps = createDeps();
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+	expect(result).toMatchObject({ kind: 'unknown' });
+	expect(deps.post).toHaveBeenCalledTimes(4);
 	expect(deps.mirror).not.toHaveBeenCalled();
 });

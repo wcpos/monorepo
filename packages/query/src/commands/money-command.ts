@@ -1,7 +1,7 @@
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import {
-	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
 	MONEY_ANSWER_CODES,
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
@@ -473,11 +473,14 @@ export function moneyCommandPoster(input: {
 			if (isDefinitiveMoneyRefusal(moneyRefusalOf(error))) refusedSinceSettle = true;
 			throw error;
 		});
-		// A close completes only on the store's own summary and completion (sync-core
-		// `isCloseAnswer`), whoever sent it: the first press, Try again or the session recovery.
-		// Anything else is never answered here, so the entry stays journaled for a re-send.
-		if (entry.kind === 'close' && !isCloseAnswer(response.data))
-			throw new Error('close_malformed_response');
+		// A command is answered only by the store's own row, summary or completion for its kind
+		// (sync-core `isMoneyAnswer`), whoever sent it: the first press, Try again or the session
+		// recovery. Anything else is never answered here, so the entry stays journaled, its
+		// outcome unknown until a re-send answers it.
+		if (!isMoneyAnswer(entry.kind, response.data))
+			throw new Error(
+				entry.kind === 'close' ? 'close_malformed_response' : 'money_command_malformed_answer'
+			);
 		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
 		// Answered: the claim narrows to this entry until the settle.
 		const key = idKey(entry.orderUuid, entry.id);

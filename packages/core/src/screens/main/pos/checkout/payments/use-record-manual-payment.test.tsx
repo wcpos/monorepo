@@ -7,6 +7,10 @@ import type { EngineRecord } from '@wcpos/query';
 import { useRecordManualPayment } from './use-record-manual-payment';
 
 const mockPost = jest.fn();
+/** The store's answer to a record: the row it stored and the order summary. */
+const answer = (order: Record<string, unknown>) => async (_url: string, body: unknown) => ({
+	data: { payment: (body as { payment: unknown }).payment, order },
+});
 const mockGet = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
@@ -264,7 +268,7 @@ it.each([null, 'register'])(
 	async (registerId) => {
 		mockBoundRegisterId = registerId;
 		onlineStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+		mockPost.mockImplementation(answer({ status: 'completed', balance: '0.00' }));
 		const { result } = renderHook(() => useRecordManualPayment());
 		const split = {
 			key: '_wcpos_split',
@@ -326,7 +330,7 @@ it('logs the cart-safe error without enqueueing a payment when the provenance pa
 
 it('posts the record through the command poster with the order revision', async () => {
 	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
+	mockPost.mockImplementationOnce(answer({ status: 'pos-partial', balance: '60.00' }));
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 
@@ -356,9 +360,9 @@ it('awaits the provenance push before posting and mirrors only the answered row,
 		await Promise.resolve();
 		calls.push('pushed');
 	});
-	mockPost.mockImplementationOnce(async () => {
+	mockPost.mockImplementationOnce(async (url: string, body: unknown) => {
 		calls.push('post');
-		return { data: { order: { status: 'completed', balance: '0.00' } } };
+		return answer({ status: 'completed', balance: '0.00' })(url, body);
 	});
 	const { result } = renderHook(() => useRecordManualPayment());
 
@@ -457,7 +461,7 @@ it.each([false, true])(
 		// an invitation to take it twice. The caller is told what actually happened instead.
 		onlineStatus = 'online-website-available';
 		mockEngineRequire.mockClear();
-		mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
+		mockPost.mockImplementationOnce(answer({ status: 'completed' }));
 		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
 		else mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useRecordManualPayment());
@@ -484,7 +488,7 @@ beforeEach(() => {
 it('stamps the session on manual payments', async () => {
 	mockSessionsOn = true;
 	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+	mockPost.mockImplementation(answer({ status: 'pending', balance: '60.00' }));
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 	expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
@@ -537,7 +541,7 @@ jest.mock('../hooks/use-sale-context', () => ({
 
 it('does not fallback-stamp an accepted response whose status is still partial', async () => {
 	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
+	mockPost.mockImplementationOnce(answer({ status: 'pos-partial', balance: '60.00' }));
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
@@ -547,7 +551,7 @@ it('does not fallback-stamp an accepted response whose status is still partial',
 
 it('stamps the ids the tender gates handed over', async () => {
 	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+	mockPost.mockImplementation(answer({ status: 'pending', balance: '60.00' }));
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() =>
 		result.current(order, method, {
@@ -573,7 +577,7 @@ it.each([
 		if (orderCurrency) payload.currency = orderCurrency;
 		else delete payload.currency;
 		onlineStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+		mockPost.mockImplementation(answer({ status: 'pending', balance: '60.00' }));
 		const { result } = renderHook(() => useRecordManualPayment());
 		await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 		delete payload.currency;

@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { MoneyCommandError, type MoneyCommandErrorReason } from '@wcpos/query';
 import {
 	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
 	moneyRefusalOf,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
@@ -155,11 +156,16 @@ export async function recordManualPayment(
 	// never as a re-send, which the journal already holds for Try again.
 	// Every attempt is the same call: the poster re-sends the journaled record for this row id,
 	// its frozen body and identity, and the server replays a row it already stored.
-	let accepted: { payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
+	let accepted: { payment: PaymentRow; order: OrderPaymentSummary } | undefined;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
 			const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
-			accepted = (response.data ?? {}) as { payment?: PaymentRow; order?: OrderPaymentSummary };
+			// Only the store's own row and summary record the payment (sync-core `isMoneyAnswer`):
+			// a malformed 2xx proves nothing and is never replaced by the minted row, so it is
+			// handled like no answer at all, and the journal keeps the record for a re-send.
+			if (!isMoneyAnswer('record', response.data))
+				throw new Error('money_command_malformed_answer');
+			accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 		} catch (error) {
 			// Refused before it left the till (the pre-flight failed, no revision, the order
 			// changed): nothing was sent, so it is terminal, never the unknown re-send path.
@@ -224,8 +230,8 @@ export async function recordManualPayment(
 			);
 		}
 
-	const serverRow = accepted.payment ?? minted.row;
-	const serverOrder = accepted.order ?? null;
+	const serverRow = accepted.payment;
+	const serverOrder = accepted.order;
 	const outcome = { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder } as const;
 	try {
 		await deps.mirror(

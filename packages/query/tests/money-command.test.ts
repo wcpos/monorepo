@@ -96,6 +96,13 @@ class FakeStore {
 			payment = { ...(rest.payment as PaymentRow), status: 'captured' };
 			this.rows.set(payment.id, payment);
 		}
+		// The leg routes answer their row too (`payment_response`); a submit its outcome.
+		if (['intent', 'capture', 'void'].includes(route.kind))
+			payment = {
+				...cash(route.target!, '10.00'),
+				status:
+					route.kind === 'void' ? 'voided' : route.kind === 'capture' ? 'captured' : 'pending',
+			} as PaymentRow;
 		if (route.kind === 'intent' || route.kind === 'submit') this.legs += 1;
 		if (route.kind === 'close') {
 			this.completions += 1;
@@ -104,6 +111,7 @@ class FakeStore {
 		this.n += 1;
 		const answer = {
 			...(payment ? { payment } : {}),
+			...(route.kind === 'submit' ? { outcome: 'sent' } : {}),
 			order: this.summary(),
 			...(route.kind === 'close'
 				? { completion: { n: this.completions, id: `c${this.completions}` } }
@@ -806,6 +814,20 @@ it('the session recovery never settles a close on a malformed 2xx; the next reco
 		{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
 	]);
 	expect(await entries()).toEqual([]);
+});
+
+it.each([
+	['record', 'orders/5/payments', { payment: cash() }],
+	['intent', 'orders/5/payments/leg/intent', { payment: cash('leg') }],
+	['capture', 'orders/5/payments/leg/capture', {}],
+	['void', 'orders/5/payments/leg/void', {}],
+	['submit', 'orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} }],
+	['cancel', 'orders/5/payment-methods/g/cancel', { attempt_id: 'a-1' }],
+])('a malformed 2xx to a %s is never answered: the entry stays journaled', async (_, url, body) => {
+	store.modes = ['malformed'];
+	await expect(poster()(url, body)).rejects.toThrow('money_command_malformed_answer');
+	expect(await entries()).toHaveLength(1);
+	expect((await entries())[0].sentAt).not.toBeNull();
 });
 
 it('the status poll passes through without an envelope', async () => {
