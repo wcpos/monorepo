@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { Button } from '@wcpos/components/button';
+import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -18,9 +19,14 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 	const openPro = () => openExternalURL('https://wcpos.com/pro');
 
 	return (
+		// The row under the wide bar: it carries the page gutter (16) above it, as the wide bar
+		// ends at its controls (CODING_STANDARDS § Design, Gutters). The phone strip is unchanged.
 		<HStack
 			testID="upgrade-notice-banner"
-			className="bg-warn-bg border-warning/45 min-h-10 items-center gap-2.5 border-b pr-2 pl-4"
+			className={cn(
+				'bg-warn-bg border-warning/45 min-h-10 items-center gap-2.5 border-b pr-2 pl-4',
+				!isPhone && 'mt-4'
+			)}
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
 			    assistive tech and its contrast is not load-bearing. */}
