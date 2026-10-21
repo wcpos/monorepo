@@ -157,6 +157,10 @@ describe('submitGatewayPayment', () => {
 		['paid', 'completed', 'settled'],
 		// A merchant's settle status can be `pending` (pay by invoice): still settled.
 		['settled', 'pending', 'settled'],
+		['settled', 'on-hold', 'settled'],
+		// A failed or cancelled order is no finished sale, whatever the stored outcome.
+		['settled', 'failed', 'reopened'],
+		['settled', 'cancelled', 'reopened'],
 	])('a replayed %s answer with a %s summary is %s', async (outcome, status, kind) => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({ data: { outcome, payment: null, order: summary(status) } });

@@ -92,12 +92,13 @@ function errorResponse(error: unknown): ErrorResponse | undefined {
 /**
  * Whether a `settled` or `paid` submit answer still describes a finished sale. A replay answers
  * the attempt's stored outcome with the order as it now stands, so another till's reopen shows
- * as an open order. `paid` needs a paid status; `settled` only an order that is not open again,
- * since a merchant's settle status can be `pending` (pay by invoice).
+ * as an open order. `paid` needs a paid status; `settled` a paid status or `pending`, which a
+ * merchant can store as a gateway's settle status (pay by invoice). An open, failed or cancelled
+ * order is no finished sale.
  */
 export function submitStillDone(outcome: unknown, status: unknown): boolean {
 	if (outcome === 'paid') return isPaidStatus(status);
-	return outcome === 'settled' && status !== 'pos-open' && status !== 'pos-partial';
+	return outcome === 'settled' && (status === 'pending' || isPaidStatus(status));
 }
 
 export async function submitGatewayPayment(
