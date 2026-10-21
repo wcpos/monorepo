@@ -129,7 +129,7 @@ function GateButton({
 			onPress={action.onPress}
 		>
 			{/* A gate's label wraps rather than truncates: a long translation keeps every word. */}
-			<ButtonText className="web:whitespace-normal text-center text-clip">
+			<ButtonText numberOfLines={0} className="web:whitespace-normal text-center text-clip">
 				{action.label}
 			</ButtonText>
 		</Button>

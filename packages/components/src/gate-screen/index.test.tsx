@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -131,4 +133,10 @@ it.each([
 	expect(card()).toHaveClass(inset, 'w-full', 'max-w-md');
 	expect(card()).not.toHaveClass(other);
 	expect(container.querySelector('[data-logo]')).toHaveAttribute('data-logo', mark);
+});
+
+it('lets an action label wrap on native: no positive numberOfLines, the one-line default lifted', () => {
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).not.toMatch(/numberOfLines=\{[1-9]/);
+	expect(source).toContain('numberOfLines={0}');
 });

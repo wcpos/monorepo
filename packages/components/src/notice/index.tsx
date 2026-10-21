@@ -78,7 +78,9 @@ export function Notice({
 							testID={action.testID ?? id(`action-${index}`)}
 							onPress={action.onPress}
 						>
-							<ButtonText className="web:whitespace-normal text-clip">{action.label}</ButtonText>
+							<ButtonText numberOfLines={0} className="web:whitespace-normal text-clip">
+								{action.label}
+							</ButtonText>
 						</Button>
 					))}
 					{docs && (
