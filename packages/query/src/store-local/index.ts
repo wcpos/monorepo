@@ -5,6 +5,18 @@ export {
 	resolveCompletionAttempt,
 } from './completion-journal';
 export {
+	CLAIM_LEASE_MS,
+	claimHeld,
+	claimRoute,
+	markSent,
+	nextClaimExpiry,
+	observeMoneyJournal,
+	observeOrderCommands,
+	readOrderCommands,
+	releaseClaim,
+	type MoneyCommandEntry,
+} from './money-commands';
+export {
 	customerLinkChanges,
 	dropCustomerLink,
 	pendingCustomerLinks,
