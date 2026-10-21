@@ -386,16 +386,15 @@ async function refreshAdopts(
 }
 
 /** The engine scope the till is in now: one cashier's orders. */
-async function activeScopeId(runtime: QueryRuntime): Promise<string | null> {
-	const scope = runtime.engine.active() ?? (await runtime.engine.whenActive());
-	return scope?.scopeId ?? null;
+async function activeScopeId(runtime: QueryRuntime): Promise<string> {
+	return (runtime.engine.active() ?? (await runtime.engine.whenActive())).scopeId;
 }
 /**
  * A command is re-sent only in the scope that sent it (Codex 4333124076, 4333445290 on #2798):
- * another cashier's order is not resident here. An entry frozen with no active scope, to any.
+ * another cashier's order is not resident here.
  */
-function inScope(entry: MoneyCommandEntry, scope: string | null) {
-	return !entry.scope || entry.scope === scope;
+function inScope(entry: MoneyCommandEntry, scope: string) {
+	return entry.scope === scope;
 }
 
 /** A re-sent command and the store's 2xx answer to it. */
@@ -494,7 +493,7 @@ export async function recoverMoneyCommands(
 	const scope = await activeScopeId(runtime);
 	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
 		const sent = entries.filter((entry) => entry.sentAt !== null && inScope(entry, scope));
-		if (sent.length === 0 || sent.some((entry) => claimHeld(entry, null))) continue;
+		if (sent.length === 0) continue;
 		try {
 			recovered.push({
 				orderUuid,
@@ -509,6 +508,7 @@ export async function recoverMoneyCommands(
 			if (left.length > 0) recovered.push({ orderUuid, answers: [], unanswered: true });
 		}
 	}
+	// Housekeeping bounded by CHAIN_RETENTION_MS; the next run retries it; never fail a replay.
 	await retireSettledChains(runtime, storeDB).catch(() => undefined);
 	return recovered;
 }
@@ -523,7 +523,8 @@ export async function recoverMoneyCommands(
 async function retireSettledChains(runtime: QueryRuntime, storeDB: StoreLocalDatabase) {
 	for (const [orderUuid, { entries, chain }] of Object.entries(await readMoneyJournal(storeDB))) {
 		if (!chain || entries.length > 0) continue;
-		const resident = await findEngineResident(runtime, 'orders', orderUuid).catch(() => null);
+		// A thrown read is not an absence: it propagates; only a null result is not resident.
+		const resident = await findEngineResident(runtime, 'orders', orderUuid);
 		if (!resident) continue;
 		const { adopted } = (resident.getLatest().toJSON() as unknown as ResidentOrder).sync ?? {};
 		if (
@@ -576,6 +577,7 @@ export function moneyCommandPoster(input: {
 	// deletes the entry. A send that throws gives the claim up at once (the entry stays, for Try
 	// again or the recovery); a caller that never settles an answer loses it to `CLAIM_LEASE_MS`.
 	const claimant = mintUuid();
+	// A failed release is harmless: the 30 s lease (`CLAIM_LEASE_MS`) frees the claim.
 	const release = (id: string) =>
 		releaseClaim(input.storeDB, input.orderUuid, id, claimant).catch(() => undefined);
 	// A definitive refusal settled its own entry, so it is not an answer with a chain; it still
@@ -642,7 +644,7 @@ export function moneyCommandPoster(input: {
 			),
 			sentAt: null,
 			sentRevision: null,
-			...(scope ? { scope } : {}),
+			scope,
 		};
 	};
 	const poster = async (url: string, body: unknown) => {

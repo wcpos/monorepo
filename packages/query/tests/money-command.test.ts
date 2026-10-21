@@ -18,6 +18,7 @@ import {
 	settleMoneyCommand,
 } from '../src/commands/money-command';
 import { pushRecord } from '../src/mutations/push-record';
+import * as residents from '../src/mutations/resident';
 import {
 	CLAIM_LEASE_MS,
 	claimRoute,
@@ -296,6 +297,7 @@ async function claim(
 		approval: over.approval ?? approval,
 		sentAt: null,
 		sentRevision: null,
+		scope: 'test-scope',
 	};
 	const route = { orderUuid: 'order', kind, target, rowId };
 	const claimed = await claimRoute(storeDB, route, over.claimant ?? 'poster', candidate);
@@ -386,6 +388,7 @@ describe('sendMoneyCommand: the pre-flight', () => {
 			approval,
 			sentAt: null,
 			sentRevision: null,
+			scope: 'test-scope',
 		};
 		const error = await sendMoneyCommand(runtime, storeDB, entry, { post: store.post }).catch(
 			(e: unknown) => e
@@ -1120,6 +1123,25 @@ describe('the store-session recovery', () => {
 		expect(await entries()).toEqual([]);
 	});
 
+	// A thrown read is not an absence: the command stays journaled and the run reports it
+	// unanswered, so the session retries it on RECOVERY_RETRY_DELAYS_MS.
+	it('a resident lookup that rejects leaves the command journaled and asks for a retry', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+		const lookup = jest
+			.spyOn(residents, 'findEngineResident')
+			.mockRejectedValue(new Error('storage read failed'));
+		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(await entries()).toEqual([
+			expect.objectContaining({ kind: 'capture', claimedBy: null }),
+		]);
+		expect(store.post).toHaveBeenCalledTimes(1);
+		lookup.mockRestore();
+		expect(await recover()).toEqual([
+			{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'capture' })] },
+		]);
+	});
+
 	// A poster's new command is unsent and claimed while its pre-flight runs (CodeRabbit 4332935302).
 	it('never deletes an unsent command another poster has claimed', async () => {
 		store.modes = ['lose'];
@@ -1134,6 +1156,7 @@ describe('the store-session recovery', () => {
 			approval,
 			sentAt: null,
 			sentRevision: null,
+			scope: 'test-scope',
 		};
 		const route = { orderUuid: 'order', kind: 'close', target: null, rowId: null } as const;
 		expect(await claimRoute(storeDB, route, 'cashier-tab', fresh)).toMatchObject({
