@@ -1,4 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
+import { MoneyCommandError } from '@wcpos/query';
 import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
@@ -294,6 +295,25 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
+		// The poster refused the command before it left the till: the order changed since the
+		// cashier approved it, or its pre-flight failed. Nothing reached the store and the journal
+		// holds nothing; a retry would only re-create it under the stale approval. The leg ends
+		// here with the reason, and the cashier chooses again.
+		if (
+			error instanceof MoneyCommandError &&
+			(error.reason === 'order_changed' || error.reason === 'preflight_failed')
+		) {
+			pendingCancel = null;
+			unansweredIntent = null;
+			const reason = { code: error.reason, message: error.message };
+			event(error.reason, 'error');
+			await applyResponse(
+				{ payment: { ...state.row, status: 'failed' as const, failure_reason: error.reason } },
+				seq,
+				{ error: reason }
+			);
+			return;
+		}
 		const response = errorResponse(error);
 		const body = response?.data;
 		const code = body?.code;
@@ -420,6 +440,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// An intent the cashier already cancelled is not retried: the server may or may
 		// not hold the row, and the void answers that either way (200, or "not found").
 		if (route === 'intent' && (await voidAfterIntent())) return;
+		// An intent that keeps failing in transit is not retried past the leg's deadline: it is
+		// cancelled, as the status path cancels at the deadline (the void answers either way).
+		if (route === 'intent' && !state.cancelRequested && deps.now() >= state.deadlineAt) {
+			setState({ phase: 'creating', capturing: false });
+			await cancel('deadline');
+			return;
+		}
 		const count = state.consecutiveErrors + 1;
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).

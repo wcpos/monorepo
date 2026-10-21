@@ -2,6 +2,7 @@ import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import { MoneyCommandError } from '@wcpos/query';
 
 import { createServerLeg } from './server-leg';
 
@@ -604,6 +605,41 @@ it('a cancelled intent lost in transit is retired once its void ends the leg', a
 	expect(retire).toHaveBeenCalledWith('intent', 'leg');
 	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
 	expect(retire.mock.invocationCallOrder[0]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
+});
+
+// The poster refused the intent before it left the till: the order changed since the cashier
+// approved it (or its pre-flight failed). Nothing reached the store; the leg ends at once with
+// the reason, so the cashier chooses again, never an endless retry of a stale approval.
+it.each(['order_changed', 'preflight_failed'] as const)(
+	'an intent the poster refuses with %s ends the leg locally, without a retry',
+	async (reason) => {
+		const c = setup();
+		c.fail('intent', new MoneyCommandError(reason, { id: 'command', sentAt: null } as never));
+		await c.leg.start();
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'final',
+			outcome: 'failed',
+			error: { code: reason },
+		});
+		await tick(60_000);
+		expect(c.count('intent')).toBe(1);
+	}
+);
+
+// An intent that keeps failing in transit is not retried past the leg's deadline: the cancel the
+// status path would make at the deadline goes out instead.
+it('an intent retried in transit stops at the deadline and cancels', async () => {
+	const c = setup();
+	for (let i = 0; i < 200; i++) c.fail('intent');
+	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
+	await c.leg.start();
+	// Past the five minutes, and the next retry (at most 15 s apart) is the last.
+	await tick(320_000);
+	const intents = c.count('intent');
+	expect(c.count('void')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	await tick(60_000);
+	expect(c.count('intent')).toBe(intents);
 });
 
 it('a locked capture is re-sent after retry_after, then settles', async () => {
