@@ -805,6 +805,24 @@ it('an auth 4xx on intent is still retried like a dropped connection', async () 
 	expect(c.leg.getState().phase).toBe('polling');
 	expect(c.count('intent')).toBe(2);
 });
+// The journal keeps these intents for a re-send (sync-core's money answer rule), so the leg must
+// not end failed: the cashier would move on while a re-send could still authorize.
+it.each([
+	['a 426 wcpos_update_required', refusal(426, 'wcpos_update_required')],
+	['a non-JSON 404', { response: { status: 404, data: '<html>proxy</html>' } }],
+	['a non-JSON 400', { response: { status: 400, data: '' } }],
+])('an intent answered with %s stays live and is retried', async (_, error) => {
+	const c = setup();
+	c.fail('intent', error);
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'creating',
+		outcome: null,
+		consecutiveErrors: 1,
+	});
+	await tick(2000);
+	expect(c.count('intent')).toBe(2);
+});
 it('a void the server never saw is a local void, not a failure', async () => {
 	const c = setup(true);
 	c.fail('void', refusal(404, 'wcpos_payment_not_found'));

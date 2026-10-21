@@ -1,4 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -381,7 +382,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			route === 'intent' &&
 			response?.status !== undefined &&
 			INTENT_REFUSAL_STATUSES.has(response.status);
+		// A money command (intent, capture, void) ends the leg only on the store's own decision,
+		// the rule its journal uses (sync-core `isDefinitiveMoneyRefusal`): an answer the journal
+		// keeps for a re-send (a 426, a proxy's bare 4xx) must not end the leg, or a later re-send
+		// could authorize after the cashier was told it failed. A status read is no command.
+		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 		if (
+			definitive &&
 			(code?.startsWith('wcpos_') || refusedIntent) &&
 			response?.status !== undefined &&
 			response.status >= 400 &&
