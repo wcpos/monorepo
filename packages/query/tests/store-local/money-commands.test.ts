@@ -102,7 +102,7 @@ it('a claim stamped in the future is expired, and schedules no lapse', async () 
 	const now = jest.spyOn(Date, 'now').mockReturnValue(5_000_000);
 	try {
 		await claimRoute(tab, route, 'tab-a', candidate('command-a'));
-		await markSent(tab, 'order', 'command-a', 'sha256:r1');
+		await markSent(tab, 'order', 'command-a', 'sha256:r1', 'tab-a');
 		now.mockReturnValue(1_000_000); // the clock stepped back
 		const [entry] = (await readOrderCommands(tab, 'order')).entries;
 		expect(claimHeld(entry, null)).toBe(false);

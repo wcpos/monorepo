@@ -251,13 +251,16 @@ export async function sendMoneyCommand(
 		} catch (error) {
 			if (!fresh) throw error;
 			// Never dispatched: nothing can be on the server, so the outcome is terminal and typed.
-			await settleCommand(storeDB, entry.orderUuid, entry.id);
+			// Only this sender's own entry goes: a poster that replaced it after the lease keeps its.
+			await dropUnsent(storeDB, entry.orderUuid, entry.id, entry.claimedBy ?? null);
 			throw error instanceof MoneyCommandError
 				? error
 				: new MoneyCommandError('preflight_failed', entry, undefined, { cause: error });
 		}
 	for (let stale = false; ; stale = true) {
-		await markSent(storeDB, entry.orderUuid, entry.id, revision);
+		// Fenced on this sender's claim: a sender another poster displaced never posts.
+		if (!(await markSent(storeDB, entry.orderUuid, entry.id, revision, entry.claimedBy ?? null)))
+			throw new MoneyCommandError('in_flight', entry);
 		try {
 			const command = entry.kind === 'record' ? {} : { command_id: entry.id };
 			const { data } = await deps.post(entry.path, { ...entry.body, ...command, revision });

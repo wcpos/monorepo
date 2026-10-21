@@ -955,7 +955,7 @@ it('a command records its scope, and recovery and Try again re-send only the act
 		'x',
 		theirs
 	);
-	await markSent(storeDB, 'order', 'their-close', 'sha256:r1');
+	await markSent(storeDB, 'order', 'their-close', 'sha256:r1', 'x');
 	clock += CLAIM_LEASE_MS;
 	expect(await restart()).toEqual([expect.objectContaining({ kind: 'capture' })]);
 	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
@@ -1076,4 +1076,40 @@ it('the status poll passes through without an envelope', async () => {
 	expect(post).toHaveBeenCalledWith('payment-methods/stripe/bootstrap', { a: 1 });
 	expect(classifyMoneyRoute('orders/5/payments/leg-1/status')).toBeNull();
 	expect(await entries()).toEqual([]);
+});
+
+// A pre-flight can outlast the claim lease (a push of pending work may wait 45 s). Another poster
+// then replaces the still-unsent command; the displaced sender must never post its own id, or an
+// executed command would have no journal entry for recovery to replay.
+it('a sender displaced while its pre-flight outlasts the lease never posts', async () => {
+	await writeResident((doc) => ({ ...doc, local: { dirty: true, pendingMutationIds: ['m'] } }));
+	let entered!: () => void;
+	const inPush = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	let releasePush!: () => void;
+	const pushHeld = new Promise<void>((resolve) => {
+		releasePush = resolve;
+	});
+	const clean = async () => {
+		await writeResident((doc) => ({ ...doc, local: { dirty: false, pendingMutationIds: [] } }));
+		return (await resident()) as never;
+	};
+	jest
+		.mocked(pushRecord)
+		.mockImplementationOnce(async () => {
+			entered();
+			await pushHeld;
+			return clean();
+		})
+		.mockImplementation(clean);
+	const slow = poster()('orders/5/close', {});
+	await inPush;
+	clock += CLAIM_LEASE_MS;
+	await poster()('orders/5/close', {});
+	const [replacement] = await entries();
+	releasePush();
+	await expect(slow).rejects.toMatchObject({ reason: 'in_flight' });
+	expect(sentBodies().map(({ command_id }) => command_id)).toEqual([replacement.id]);
+	expect(await entries()).toEqual([expect.objectContaining({ id: replacement.id })]);
 });

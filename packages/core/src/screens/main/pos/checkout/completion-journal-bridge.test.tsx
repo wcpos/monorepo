@@ -301,7 +301,7 @@ async function claimLapsingIn(ms: number) {
 			sentRevision: null,
 		}
 	);
-	await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1');
+	await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'crashed-tab');
 	now.mockRestore();
 }
 
@@ -391,7 +391,7 @@ it('schedules the recovery for a command journaled and left unanswered after the
 				sentRevision: null,
 			}
 		);
-		await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1');
+		await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'tender');
 		await journal.releaseClaim(mockContext.storeDB, 'order', 'close-1', 'tender');
 		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2));
 		expect(delays).toContain(30_000);

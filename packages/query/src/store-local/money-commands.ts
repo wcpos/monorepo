@@ -223,23 +223,33 @@ export function journalCommand(storeDB: StoreLocalDatabase, entry: MoneyCommandE
 	});
 }
 
-export function markSent(
+/**
+ * Mark the entry sent, fenced on its sender's claim, in one journal write: `false` when the entry
+ * is gone or another poster claimed it since (a pre-flight that outlasted `CLAIM_LEASE_MS`), and
+ * then the sender must not post. A dispatched command always has its own journal entry, so a lost
+ * answer can be replayed. A send renews its sender's claim.
+ */
+export async function markSent(
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	id: string,
-	sentRevision: string
-) {
-	return modifyOrder(storeDB, orderUuid, (order) => {
+	sentRevision: string,
+	claimant: string | null
+): Promise<boolean> {
+	let held = false;
+	await modifyOrder(storeDB, orderUuid, (order) => {
+		held = false;
 		const entry = order.entries[id];
-		// A send renews its sender's claim (`CLAIM_LEASE_MS`).
-		if (entry)
-			order.entries[id] = {
-				...entry,
-				sentAt: new Date().toISOString(),
-				sentRevision,
-				...(entry.claimedBy ? { claimedAt: Date.now() } : {}),
-			};
+		if (!entry || (claimant ? entry.claimedBy !== claimant : claimHeld(entry, null))) return;
+		held = true;
+		order.entries[id] = {
+			...entry,
+			sentAt: new Date().toISOString(),
+			sentRevision,
+			...(entry.claimedBy ? { claimedAt: Date.now() } : {}),
+		};
 	});
+	return held;
 }
 
 /** Deletes the entry; a 2xx answer also records the order's revision chain. */
