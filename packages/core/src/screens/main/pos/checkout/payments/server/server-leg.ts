@@ -1,5 +1,4 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
-import { MoneyCommandError } from '@wcpos/query';
 import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
@@ -10,6 +9,8 @@ import type {
 	PaymentRefusalBody,
 	PaymentRow,
 } from '@wcpos/order-math';
+
+import { legFinality, refusedBeforeSend, terminalBeforeSend } from '../leg-finality';
 
 const POLL_CADENCE_MS = 2000; // Wait after each response, not on a fixed interval.
 const BACKOFF_MS = [2000, 4000, 8000, 15000]; // Bound transport pressure without giving up.
@@ -47,7 +48,7 @@ export interface ServerLegDeps {
 	now: () => number;
 	mirror: (response: ServerLegResponse) => Promise<void>;
 	onFinal?: (state: ServerLegState) => void;
-	/** Retire a journaled command that is known never to have run (see `cancelledLockedIntent`). */
+	/** Retire a journaled intent known not to stand (`legFinality`). */
 	retire?: (kind: 'intent', target: string) => Promise<void>;
 }
 export interface ServerLegInput {
@@ -102,12 +103,15 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	let captureAttempted = false;
 	let deadlineRead = false;
 	let awaitingRejoinedStatus = false;
-	const active = () => !stopped && state.phase !== 'final';
+	const active = () => !stopped && !finality.settling && state.phase !== 'final';
 	const current = (seq: number) => active() && seq === sequence;
 	const setState = (changes: Partial<ServerLegState>) => {
 		state = { ...state, ...changes };
 		listeners.forEach((listener) => listener());
 	};
+	// The intent stays unanswered until the store answers it; a resumed leg's was answered before.
+	const finality = legFinality(deps, () => (stopped ? null : state), setState);
+	if (!input.resume) finality.intent = input.row.id;
 	const event = (message: string, level: PaymentEvent['level'] = 'info') => {
 		setState({
 			clientEvents: [
@@ -120,16 +124,11 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (timer !== null) deps.clearTimeout(timer);
 		timer = null;
 	};
-	// The row id of this leg's intent while the store has not answered it (a lock, a transport
-	// failure, a cancel that overtook it). If the leg then ends voided (its void answered `voided`
-	// or not found), that intent is retired from the journal: a later recovery or Try again must
-	// never re-send it and authorize a sale the cashier cancelled. A resumed leg's intent was
-	// answered before.
-	let unansweredIntent: string | null = input.resume ? null : input.row.id;
-	const finish = (outcome: ServerLegState['outcome']) => {
-		unansweredIntent = null;
+	const finish = async (outcome: ServerLegState['outcome']) => {
+		if (!active()) return;
 		clearTimer();
 		sequence++;
+		if (!(await finality.settle())) return;
 		setState({ phase: 'final', outcome, capturing: false, releaseAvailable: false });
 		deps.onFinal?.(state);
 	};
@@ -183,27 +182,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			awaitingRejoinedStatus = false;
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
-		const status = data.payment.status;
-		if (status === 'voided' && unansweredIntent !== null) {
-			// The retirement is awaited before the leg is final: a failed journal write keeps the
-			// leg live with its reason and the next status read retires again, so a voided leg never
-			// leaves a re-sendable intent behind.
-			try {
-				await deps.retire?.('intent', unansweredIntent);
-			} catch (error) {
-				if (!current(seq)) return false;
-				setState({
-					error: {
-						code: 'retire_failed',
-						message: error instanceof Error ? error.message : 'retire_failed',
-					},
-				});
-				schedule(POLL_CADENCE_MS);
-				return false;
-			}
-			if (!current(seq)) return false;
-		}
-		if (isFinalPaymentStatus(status)) finish(status);
+		if (isFinalPaymentStatus(data.payment.status)) void finish(data.payment.status);
 		return current(seq);
 	};
 	const afterResponse = async (route: Route) => {
@@ -280,7 +259,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		intentInFlight = false;
 		// Answered: the poster settles the intent's journal entry with this answer.
-		if (route === 'intent') unansweredIntent = null;
+		if (route === 'intent') finality.intent = null;
 		if (!current(seq)) return;
 		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route))) return;
 		setState({
@@ -295,44 +274,17 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
-		// The poster refused the command before it left the till: the order changed since the
-		// cashier approved it, or its pre-flight failed. Nothing reached the store and the journal
-		// holds nothing.
-		if (
-			error instanceof MoneyCommandError &&
-			(error.reason === 'order_changed' || error.reason === 'preflight_failed')
-		) {
-			const reason = { code: error.reason, message: error.message };
-			event(error.reason, 'error');
-			// An intent that never ran: a retry would only re-create it under the stale approval.
-			// The leg ends here with the reason, and the cashier chooses again.
-			if (route === 'intent') {
-				pendingCancel = null;
-				unansweredIntent = null;
-				await applyResponse(
-					{ payment: { ...state.row, status: 'failed' as const, failure_reason: error.reason } },
-					seq,
-					{ error: reason }
-				);
-				return;
-			}
-			// A capture or void after the intent ran is no outcome: the authorization is live on the
-			// store. The leg stays live with the reason. A void goes out again after the backoff (a
-			// status read would capture the authorization the cashier cancelled); a capture falls
-			// through to the transport retry, and the next status read issues it again.
-			setState({ error: reason });
-			if (route === 'void') {
-				const count = state.consecutiveErrors + 1;
-				setState({
-					phase: 'cancelling',
-					capturing: false,
-					consecutiveErrors: count,
-					unstable: count >= UNSTABLE_AFTER,
-				});
-				schedule(BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)], 'void');
-				return;
-			}
+		// A command the poster refused before it left the till shows its reason. Only an intent so
+		// refused ends the leg, for the cashier to choose again; a capture or void retries below.
+		const refused = refusedBeforeSend(error);
+		if (refused) event(refused.code, 'error');
+		if (refused && terminalBeforeSend(route, error)) {
+			pendingCancel = null;
+			const payment = { ...state.row, status: 'failed' as const, failure_reason: refused.code };
+			await applyResponse({ payment }, seq, { error: refused });
+			return;
 		}
+		if (refused) setState({ error: refused });
 		const response = errorResponse(error);
 		const body = response?.data;
 		const code = body?.code;
@@ -363,7 +315,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			typeof body?.data?.payment_id === 'string'
 		) {
 			// A definitive answer (the poster settled this intent): the leg follows the live one.
-			unansweredIntent = null;
+			finality.intent = null;
 			awaitingRejoinedStatus = true;
 			setState({
 				row: { ...state.row, id: body.data.payment_id },
@@ -442,7 +394,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			if (!localVoid)
 				event(changes.error?.message ?? body?.message ?? `HTTP ${response.status}`, 'error');
 			if (awaitingRejoinedStatus) {
-				finish(localVoid ? 'voided' : 'failed');
+				await finish(localVoid ? 'voided' : 'failed');
 				return;
 			}
 			const row = localVoid
@@ -470,11 +422,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).
 		if (route === 'capture') captureAttempted = false;
+		// An intent, or a void refused before it left the till, is re-sent: a status read cannot
+		// answer it, and would capture the authorization the cashier cancelled.
+		const resend = route === 'intent' || (route === 'void' && refused !== null);
 		setState({
 			capturing: false,
 			consecutiveErrors: count,
 			unstable: count >= UNSTABLE_AFTER,
-			phase: route === 'intent' ? 'creating' : 'polling',
+			phase: route === 'intent' ? 'creating' : resend ? 'cancelling' : 'polling',
 		});
 		if (count === UNSTABLE_AFTER) event('Connection unstable', 'warning');
 		if (deadlineRead && !state.cancelRequested) {
@@ -482,10 +437,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			await cancel('deadline');
 			return;
 		}
-		schedule(
-			BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)],
-			route === 'intent' ? 'intent' : 'status'
-		);
+		schedule(BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)], resend ? route : 'status');
 	}
 	async function tick() {
 		if (!active()) return;
@@ -575,12 +527,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!current(seq)) return;
 		event('Leg released', 'warning');
 		setState({ row });
-		finish('released');
+		await finish('released');
 	}
 	function stop() {
 		stopped = true;
 		sequence++;
 		clearTimer();
+		finality.stop();
 	}
 	if (input.resume) schedule(0);
 	return {

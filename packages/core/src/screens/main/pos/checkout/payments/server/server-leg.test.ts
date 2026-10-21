@@ -4,6 +4,7 @@ import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { MoneyCommandError } from '@wcpos/query';
 
+import { RETIRE_RETRY_MS } from '../leg-finality';
 import { createServerLeg } from './server-leg';
 
 jest.mock('@wcpos/database/live-tab', () => ({
@@ -1063,3 +1064,27 @@ it.each(['order_changed', 'preflight_failed'] as const)(
 		expect(v.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
 	}
 );
+
+// A retirement that fails is retried by the finality gate itself, never left to the next status
+// read: the store reads not-found for an intent that never ran, and the leg would end failed with
+// the intent still journaled for a recovery to re-send.
+it('a failed retirement is retried by the finality gate, not abandoned to a status read', async () => {
+	const retire = jest
+		.fn(async (_kind: 'intent', _target: string) => undefined)
+		.mockRejectedValueOnce(new Error('journal write failed'));
+	const c = setup(false, {}, { retire });
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
+	c.fail('status', refusal(404, 'wcpos_payment_not_found'));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	await started;
+	await tick(0);
+	expect(c.leg.getState()).toMatchObject({ outcome: null, error: { code: 'retire_failed' } });
+	await tick(RETIRE_RETRY_MS);
+	expect(retire).toHaveBeenCalledTimes(2);
+	expect(c.count('status')).toBe(0);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});

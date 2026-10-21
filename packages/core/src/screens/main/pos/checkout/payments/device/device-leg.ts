@@ -1,8 +1,11 @@
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { isFinalPaymentStatus, toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
+
+import { legFinality, RETIRE_RETRY_MS, terminalBeforeSend } from '../leg-finality';
 
 import type {
 	CollectInput,
@@ -17,6 +20,7 @@ export type DeviceLegState = Omit<ServerLegState, 'phase'> & {
 	resumed: boolean;
 	failureReason: string | null;
 };
+type Outcome = DeviceLegState['outcome'];
 export type DeviceLegInput = Omit<CollectInput, 'handoff' | 'method'> & {
 	orderId: number;
 	resume: boolean;
@@ -35,9 +39,6 @@ export const DEVICE_LEG_DEADLINE_MS = 120000;
 // result is seconds away) or the SDK was re-initialised under the leg and nothing will ever
 // come. This is how long the leg waits for that result before treating the reader as gone.
 export const CANCEL_GRACE_MS = 30000;
-// How long a leg waits before retrying a failed retirement of its unanswered intent. The leg stays
-// live until the journal write lands; the server leg retries on its status cadence, the same 2 s.
-export const RETIRE_RETRY_MS = 2000;
 /** Offline rows must satisfy the ledger wire contract, not silently drop opaque refs. */
 export function offlineProviderRefs(refs: Record<string, unknown>): PaymentRow['provider_refs'] {
 	const result: PaymentRow['provider_refs'] = {};
@@ -72,7 +73,6 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let graceTimer: ReturnType<typeof setTimeout> | undefined;
-	let retireTimer: ReturnType<typeof setTimeout> | undefined;
 	// The live-tab hold taken around collect(); released on finality as well as when collect
 	// settles, because a leg the cancel path ends may outlive a collect that never answers.
 	let collectHold: (() => void) | undefined;
@@ -84,14 +84,16 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let cancelReason = 'cashier';
 	// The store refused to mint the intent: a void that follows is bookkeeping, not an outcome.
 	let intentRefused = false;
-	const active = () => !stopped && state.phase !== 'final';
+	const active = () => !stopped && !finality.settling && state.phase !== 'final';
 	const set = (changes: Partial<DeviceLegState>) => {
 		state = { ...state, ...changes };
 		listeners.forEach((fn) => fn());
 	};
-	const finish = (outcome: DeviceLegState['outcome'], changes: Partial<DeviceLegState> = {}) => {
+	const finality = legFinality(deps, () => (stopped ? null : state), set);
+	const finish = async (outcome: Outcome, changes: Partial<DeviceLegState> = {}) => {
 		if (!active()) return;
 		deps.clearTimeout(timer!);
+		if (!(await finality.settle())) return;
 		set({ ...changes, phase: 'final', outcome, capturing: false });
 		collectHold?.();
 		collectHold = undefined;
@@ -125,7 +127,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		// Publish finality with the mirrored row, not after returning through another await:
 		// checkout can unmount when the paid row lands, before it consumes the outcome.
 		if (isFinalPaymentStatus(status)) {
-			finish(
+			await finish(
 				status === 'voided' && (result?.outcome === 'declined' || intentRefused)
 					? 'failed'
 					: status,
@@ -187,7 +189,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				await deps.mirror({ payment: row });
 				if (active()) {
 					set({ row });
-					finish('failed');
+					await finish('failed');
 				}
 			} else if (input.offline) {
 				if (!result) return;
@@ -223,7 +225,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				const order = await deps.patchAndEnqueue(row);
 				if (active()) {
 					set({ row, ...(order ? { order } : {}) });
-					finish(authorized ? 'captured' : (row.status as 'failed' | 'voided'));
+					await finish(authorized ? 'captured' : (row.status as 'failed' | 'voided'));
 				}
 			} else {
 				if (result?.outcome === 'declined') {
@@ -296,7 +298,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		}
 		if (!deps.driver || !input.method) {
 			set({ error: { code: 'device_driver_missing', message: 'Device driver or method missing' } });
-			finish('failed');
+			await finish('failed');
 			return;
 		}
 		set({ phase: 'creating', deadlineAt: deps.now() + DEVICE_LEG_DEADLINE_MS });
@@ -311,66 +313,41 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		let handoff: CollectInput['handoff'] = null;
 		if (!input.offline) {
 			try {
+				finality.intent = input.row.id;
 				const response = await deps.post(url('intent'), {
 					payment: input.row,
 					context: { transport: input.transport },
 				});
+				finality.intent = null;
 				const data = response.data as ServerLegResponse & { handoff?: CollectInput['handoff'] };
 				await apply(data);
 				if (!active()) return;
 				handoff = data.handoff ?? null;
 			} catch (error) {
 				if (!active()) return;
+				const refused = terminalBeforeSend('intent', error);
+				if (refused) return finish('failed', { error: refused });
 				const body = errorState(error);
 				intentRefused = true;
 				if (body?.data?.payment)
 					await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
-				// Nothing reached the reader. Void whatever the store may have minted, but the leg
-				// ends failed where it stood and the cashier reads the store's refusal of the intent,
-				// not the void's bookkeeping (a 400 here once showed as "Approved · payment not
-				// found", three steps along — WisePad 3 run, 2026-10-06).
-				// The void's answer also settles the intent: voided, or not found, means no live
-				// intent stands, so the intent (journaled unanswered after a held lock or a transport
-				// failure) is retired before the leg is final. A later recovery must never re-send it
-				// into a pending device payment no reader collects (ADR 0040 §1.3).
-				// A failed journal write keeps the leg live with its reason and retries, as the server
-				// leg does: the leg is never final while its intent can still be re-sent.
-				const refusal = state.error;
-				const retireIntent = async (): Promise<boolean> => {
-					for (;;) {
-						try {
-							await deps.retire?.('intent', input.row.id);
-							if (!active()) return false;
-							set({ error: refusal });
-							return true;
-						} catch (retireError) {
-							if (!active()) return false;
-							set({
-								error: {
-									code: 'retire_failed',
-									message: retireError instanceof Error ? retireError.message : 'retire_failed',
-								},
-							});
-							await new Promise<void>((resolve) => {
-								retireTimer = deps.setTimeout(resolve, RETIRE_RETRY_MS);
-							});
-							if (!active()) return false;
-						}
+				// Nothing reached the reader. Void whatever the store may have minted, re-sent until the
+				// store decides it; the leg then ends failed where it stood, with the store's refusal of
+				// the intent, not the void's bookkeeping (a 400 here once showed as "Approved · payment
+				// not found" — WisePad 3 run, 2026-10-06).
+				for (;;) {
+					try {
+						const voided = await deps.post(url('void'), { reason: 'intent_refused' });
+						await apply(voided.data as ServerLegResponse);
+						break;
+					} catch (voidError) {
+						if (isDefinitiveMoneyRefusal(moneyRefusalOf(voidError))) break;
+						await finality.wait(RETIRE_RETRY_MS);
+						if (!active()) return;
 					}
-				};
-				try {
-					const response = await deps.post(url('void'), { reason: 'intent_refused' });
-					const answer = response.data as ServerLegResponse;
-					if (answer?.payment?.status === 'voided' && !(await retireIntent())) return;
-					await apply(answer);
-				} catch (voidError) {
-					// A row the store never created needs no void.
-					const code = (voidError as { response?: { data?: { code?: string } } })?.response?.data
-						?.code;
-					if (code === 'wcpos_payment_not_found' && !(await retireIntent())) return;
 				}
-				if (active()) finish('failed');
+				await finish('failed');
 				return;
 			}
 		}
@@ -470,7 +447,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		stopped = true;
 		if (timer) deps.clearTimeout(timer);
 		if (graceTimer) deps.clearTimeout(graceTimer);
-		if (retireTimer) deps.clearTimeout(retireTimer);
+		finality.stop();
 	}
 	return {
 		start,
