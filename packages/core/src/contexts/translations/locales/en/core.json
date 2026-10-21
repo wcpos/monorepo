@@ -708,7 +708,7 @@
 	"receipt.fiscal_receipt": "Fiscal receipt",
 	"receipt.mismatch_html_template_cloud_thermal_only": "This cloud printer only prints thermal templates, so nothing will print. Choose a thermal template.",
 	"receipt.mismatch_html_template_prints_default_layout": "This receipt printer can’t print HTML templates, so it will print the built-in receipt layout instead. Choose a thermal template to print your own design.",
-	"receipt.mismatch_thermal_template_prints_preview": "No receipt printer is set up for this thermal template, so the print dialog will print its preview. Add a receipt printer in Settings > Printing, or choose an HTML template.",
+	"receipt.mismatch_thermal_template_prints_preview": "This thermal template will print its on-screen preview through the print dialog. To print it as designed, choose a receipt printer (add one in Settings > Printing) or an HTML template.",
 	"receipt.open_cash_drawer": "Open Cash Drawer on Print",
 	"receipt.output_type": "Receipt Output Type",
 	"receipt.pdf_downloaded": "PDF downloaded",
