@@ -325,6 +325,8 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				handoff = data.handoff ?? null;
 			} catch (error) {
 				if (!active()) return;
+				// terminalBeforeSend (leg-finality.ts): a refusal before send means nothing reached the
+				// store, so the intent ends here and the cashier chooses again (Codex 4338931660 on #2798).
 				const refused = terminalBeforeSend('intent', error);
 				if (refused) return finish('failed', { error: refused });
 				const body = errorState(error);

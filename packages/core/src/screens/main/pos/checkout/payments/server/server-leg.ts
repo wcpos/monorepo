@@ -125,6 +125,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		timer = null;
 	};
 	const finish = async (outcome: ServerLegState['outcome']) => {
+		// finish() can be entered twice, from the gate's retry and from a late answer; the second
+		// entry must not publish a second final state.
 		if (!active()) return;
 		clearTimer();
 		sequence++;
@@ -411,8 +413,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// An intent the cashier already cancelled is not retried: the server may or may
 		// not hold the row, and the void answers that either way (200, or "not found").
 		if (route === 'intent' && (await voidAfterIntent())) return;
-		// An intent that keeps failing in transit is not retried past the leg's deadline: it is
-		// cancelled, as the status path cancels at the deadline (the void answers either way).
+		// Codex 4338931660 on #2798: an intent failing in transit is not retried past the leg's
+		// deadline; the void answers either way.
 		if (route === 'intent' && !state.cancelRequested && deps.now() >= state.deadlineAt) {
 			setState({ phase: 'creating', capturing: false });
 			await cancel('deadline');

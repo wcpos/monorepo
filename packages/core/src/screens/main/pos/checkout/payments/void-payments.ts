@@ -4,7 +4,7 @@ import { isDefinitiveMoneyRefusal, isMoneyAnswer, moneyRefusalOf } from '@wcpos/
 
 /**
  * Void the live payment legs when a cashier abandons a half-paid order. Offline a void is
- * refused (ADR 0040 PR A); online voids stay sequential because each response recomputes
+ * refused (ADR 0040 §offline); online voids stay sequential because each response recomputes
  * the server's order status.
  */
 
@@ -64,7 +64,9 @@ export async function voidPayments(
 	}
 
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
-	// ADR 0040 PR A: a void the server cannot hear is not sent, and nothing is voided locally.
+	// A void the server cannot hear is not sent, and nothing is voided locally: offline tenders do
+	// not queue (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
+	// (ADR 0040 §offline).
 	// Unknown, not refused: the legs are still held on the store, never to be refunded by hand.
 	if (!online)
 		return {

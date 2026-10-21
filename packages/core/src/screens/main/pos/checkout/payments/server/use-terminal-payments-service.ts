@@ -128,8 +128,9 @@ export function useTerminalPaymentsService(): void {
 				const resident = await readResidentOrder(manager, orderUuid);
 				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
 			},
-			// ADR 0040 PR A: an offline authorization is never written locally (device tiles are
-			// disabled offline); PR B queues it as a record command.
+			// An offline authorization is never written locally: offline tenders do not queue
+			// (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
+			// (ADR 0040 §offline).
 			patchAndEnqueue: async () => {
 				throw new Error('offline_unavailable');
 			},
