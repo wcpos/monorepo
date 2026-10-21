@@ -74,6 +74,7 @@ import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
 import {
+	RecordManualPaymentError,
 	RecordManualPaymentMirrorError,
 	useRecordManualPayment,
 	useVoidPayments,
@@ -1100,7 +1101,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}).catch(async (error: unknown) => {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
-				if (paymentId && !landed) await unround().catch(() => undefined);
+				// A thrown refusal of a replay takes back its row's fee, as a returned one does.
+				const ref =
+					paymentId ?? (error instanceof RecordManualPaymentError ? error.rowId : undefined);
+				if (ref && !landed) await unround(ref).catch(() => undefined);
 				throw error;
 			});
 			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.

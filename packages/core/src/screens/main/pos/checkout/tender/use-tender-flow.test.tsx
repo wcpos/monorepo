@@ -263,6 +263,8 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('../payments', () => ({
 	RecordManualPaymentMirrorError: jest.requireActual('../payments/record-manual-payment')
 		.RecordManualPaymentMirrorError,
+	RecordManualPaymentError: jest.requireActual('../payments/record-manual-payment')
+		.RecordManualPaymentError,
 	useRecordManualPayment: (options: unknown) => {
 		mockRecordOptions(options);
 		if (mockUseRealManual)
@@ -4025,6 +4027,28 @@ describe('cash rounding (#66, #84)', () => {
 			row: payment({ id: rowId, amount: '10.05', status: 'failed' }),
 			order: null,
 		}));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
+	});
+
+	it('a replay refused by a thrown payment conflict takes its fee back off: 10.05 returns to 10.03', async () => {
+		const { RecordManualPaymentError } = jest.requireActual('../payments/record-manual-payment');
+		mockPayload = sale('10.03');
+		let rowId = '';
+		mockRecordManualPayment.mockImplementationOnce(async (_o, _m, input: { paymentId: string }) => {
+			rowId = input.paymentId;
+			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockPayload).toMatchObject({ total: '10.05' });
+
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			throw new RecordManualPaymentError('conflict', 'wcpos_payment_conflict', 409, rowId);
+		});
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 

@@ -303,6 +303,7 @@ describe('recordManualPayment', () => {
 			code: 'wcpos_payment_conflict',
 			status: 409,
 			message: 'Server refused',
+			rowId: UUID.toLowerCase(),
 		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
