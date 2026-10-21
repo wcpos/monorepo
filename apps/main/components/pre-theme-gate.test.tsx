@@ -57,7 +57,7 @@ it('stacks the primary before the secondary, fires each, and holds a disabled on
 	expect(screen.getByTestId('pre-theme-gate-secondary')).toBeDisabled();
 });
 
-it('fills a destructive primary bad, and outlines the secondary whatever its flag', async () => {
+it('fills a destructive primary with the destructive token, and outlines the secondary whatever its flag', async () => {
 	const screen = await render(
 		<PreThemeGate
 			tone="bad"
@@ -67,7 +67,7 @@ it('fills a destructive primary bad, and outlines the secondary whatever its fla
 		/>
 	);
 	expect(flat(screen.getByTestId('pre-theme-gate-primary')).backgroundColor).toBe(
-		PRE_THEME_COLOURS.bad
+		PRE_THEME_COLOURS.destructive
 	);
 	expect(flat(screen.getByTestId('pre-theme-gate-secondary')).backgroundColor).toBe(
 		PRE_THEME_COLOURS.card

@@ -131,15 +131,18 @@ export function PreThemeGate({
 	);
 }
 
-/** GateScreen's slots: the primary filled (red when it confirms a loss), the secondary outlined. */
+/**
+ * GateScreen's slots: the primary filled, the secondary outlined. A primary that confirms a loss
+ * takes the Button's `destructive` fill and ink, as GateScreen's does.
+ */
 const fills = {
 	primary: {
 		button: { backgroundColor: C.primary },
 		label: { color: C.primaryForeground, fontWeight: '600' },
 	},
 	destructive: {
-		button: { backgroundColor: C.bad },
-		label: { color: C.badForeground, fontWeight: '600' },
+		button: { backgroundColor: C.destructive },
+		label: { color: C.destructiveForeground, fontWeight: '600' },
 	},
 	outline: {
 		button: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1 },

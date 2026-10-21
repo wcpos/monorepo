@@ -59,7 +59,7 @@ describe('reset', () => {
 		// The confirm is the destructive fill; Cancel is the outline.
 		const fill = (testID: string) =>
 			StyleSheet.flatten(screen.getByTestId(testID).props.style).backgroundColor;
-		expect(fill('root-error-reset-confirm')).toBe(PRE_THEME_COLOURS.bad);
+		expect(fill('root-error-reset-confirm')).toBe(PRE_THEME_COLOURS.destructive);
 		expect(fill('root-error-reset-cancel')).toBe(PRE_THEME_COLOURS.card);
 		expect(scheduleClearLocalDataOnNextLoad).not.toHaveBeenCalled();
 
