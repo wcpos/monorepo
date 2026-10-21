@@ -280,6 +280,34 @@ it('a reconnect re-sends what the outage left unanswered and finishes only the o
 	expect((await pendingCompletions(mockContext.storeDB)).other).toMatchObject({ unpaidStarts: 1 });
 });
 
+// A claim persisted by a process that crashed after its send holds the command for the lease:
+// the recovery skips it, and is run again when that lease lapses, while the till stays online.
+it('re-runs the recovery when a skipped claim lapses, without a reconnect', async () => {
+	const real = Date.now();
+	const now = jest.spyOn(Date, 'now').mockReturnValue(real - journal.CLAIM_LEASE_MS + 400);
+	await journal.claimRoute(
+		mockContext.storeDB,
+		{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
+		'crashed-tab',
+		{
+			orderUuid: 'order',
+			kind: 'close',
+			path: 'orders/42/close',
+			target: null,
+			id: 'close-1',
+			body: {},
+			approval: { total: '0.00', currency: 'USD' },
+			sentAt: null,
+			sentRevision: null,
+		}
+	);
+	await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1');
+	now.mockRestore();
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
+});
+
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));

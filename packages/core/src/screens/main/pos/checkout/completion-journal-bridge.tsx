@@ -13,6 +13,7 @@ import {
 } from '@wcpos/utils/unsent-changes';
 import {
 	failCompletionAttempt,
+	nextClaimExpiry,
 	pendingCompletions,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
@@ -158,12 +159,23 @@ export function SaleCompletionBridge(): null {
 				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) => await readResidentOrder(manager, uuid);
+		// A command the recovery skipped because a live claim held it is tried again when that claim
+		// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
+		let lapse: ReturnType<typeof setTimeout> | undefined;
+		const recoverWhenClaimsLapse = async () => {
+			const expiry = await nextClaimExpiry(storeDB).catch(() => null);
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
+			if (expiry === null || current.stopped) return;
+			lapse = setTimeout(() => current.reconnect(), Math.max(0, expiry - Date.now()) + 1);
+		};
 		/** The orders whose unanswered commands a re-send has now answered. */
 		const recover = async (): Promise<ReadonlySet<string>> => {
 			try {
 				const recovered = await recoverMoneyCommands(manager, storeDB, {
 					post: (url, body) => httpRef.current.post(url, body),
 				});
+				await recoverWhenClaimsLapse();
 				return new Set(
 					recovered.filter(({ answers }) => answers.length > 0).map(({ orderUuid }) => orderUuid)
 				);
@@ -309,6 +321,7 @@ export function SaleCompletionBridge(): null {
 			});
 		return () => {
 			current.stopped = true;
+			if (lapse !== undefined) clearTimeout(lapse);
 		};
 	}, [storeDB, manager, ctx, version]);
 	return null;

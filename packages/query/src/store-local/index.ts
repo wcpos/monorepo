@@ -7,6 +7,7 @@ export {
 export {
 	journalCommand,
 	markSent,
+	nextClaimExpiry,
 	observeOrderCommands,
 	claimHeld,
 	claimRoute,
