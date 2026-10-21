@@ -1157,3 +1157,27 @@ it('a replaying poster never freezes a new command when the journaled one is gon
 	expect(store.post).not.toHaveBeenCalled();
 	expect(await entries()).toEqual([]);
 });
+
+// Only an adoption the post-answer refresh itself made confirms a replayed submit: a background
+// read taken before the submit, adopting its older document while the refresh fails, is not one.
+it('a replayed submit is not confirmed by an older adoption landing while its refresh fails', async () => {
+	store.modes = ['lose'];
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+	).rejects.toThrow('Network Error');
+	Object.assign(runtime.engine, {
+		require: () => ({
+			ready: (async () => {
+				await writeResident((doc) => ({
+					...doc,
+					sync: { ...doc.sync, adopted: { revision: doc.sync.revision, at: Date.now() } },
+				}));
+				throw new Error('offline');
+			})(),
+			release: () => undefined,
+			queryKey: '',
+		}),
+	});
+	await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+	expect(await entries()).toHaveLength(1);
+});

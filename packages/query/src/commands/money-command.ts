@@ -164,19 +164,15 @@ async function readopt(
 	const { resident, order } = await readOrder(runtime, orderUuid);
 	const { chain } = await readOrderCommands(storeDB, orderUuid);
 	const adopted = order.sync?.adopted;
-	const adoptedNow =
-		!!adopted &&
-		adopted.revision === order.sync.revision &&
-		(adopted.at !== before?.at || adopted.revision !== before?.revision);
-	// This refresh adopted: a whole document under its own stamp, written since the refresh began
-	// (a new adoption, or the resident rewritten by a refresh that succeeded). Never inferred from
-	// time alone: a pull in the same millisecond is indistinguishable by its stamp.
+	// This refresh adopted: it succeeded, and a whole document under its own stamp was written
+	// since it began (a new adoption, or the resident rewritten). An older read landing while a
+	// failed refresh ran never counts, nor does time alone: a pull in the same millisecond is
+	// indistinguishable by its stamp.
+	const whole = refreshed && !!adopted && adopted.revision === order.sync.revision;
+	const adoptedNow = whole && (adopted.at !== before?.at || adopted.revision !== before?.revision);
 	const refreshAdopted =
 		adoptedNow ||
-		(refreshed &&
-			!!adopted &&
-			adopted.revision === order.sync.revision &&
-			(resident.getLatest() as { revision?: string }).revision !== priorWrite);
+		(whole && (resident.getLatest() as { revision?: string }).revision !== priorWrite);
 	if (!chain || !adoptedNow || (adopted.at ?? 0) > chain.answeredAt)
 		return { order, chain, refreshAdopted };
 	const recorded = { ...chain, answeredAt: (adopted.at ?? 0) - 1 };
@@ -324,8 +320,12 @@ export async function settleMoneyCommand(
 ): Promise<void> {
 	const { order } = await readOrder(runtime, orderUuid);
 	if (!order.payload.id) return;
-	const { order: after, chain } = await readopt(runtime, storeDB, orderUuid, order.payload.id);
-	if (chain && holdsAuthority(after, chain))
+	const {
+		order: after,
+		chain,
+		refreshAdopted,
+	} = await readopt(runtime, storeDB, orderUuid, order.payload.id);
+	if (chain && refreshAdopted && holdsAuthority(after, chain))
 		await settleCommand(storeDB, orderUuid, null, {
 			...chain,
 			adoptedAfterAnswer: true,
