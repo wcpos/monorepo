@@ -104,6 +104,11 @@ export function SessionHoldProvider({ children }: { children: React.ReactNode })
 	return <SessionHoldContext.Provider value={value}>{children}</SessionHoldContext.Provider>;
 }
 
+/** Whether a session hold is showing: the row after the banner spaces itself from it. */
+export function useSessionHeld(): boolean {
+	return React.useContext(SessionHoldContext) != null;
+}
+
 /**
  * The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`.
  * On wide widths it is the row under the bar, so it carries the container's gutter above and

@@ -13,7 +13,7 @@ import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-
 import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { ManagementBar } from '../management-bar';
-import { SessionHoldBanner } from '../session-hold-banner';
+import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 
 import type { Href } from 'expo-router';
 
@@ -101,6 +101,7 @@ export function NavigationAreaLayout({
 	const pathname = usePathname();
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
+	const held = useSessionHeld();
 	if (screenSize === 'sm') {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
@@ -132,7 +133,9 @@ export function NavigationAreaLayout({
 	return (
 		<View className="bg-background flex-1" style={{ paddingTop: insets.top }}>
 			<SessionHoldBanner />
-			{barNotice}
+			{/* First row of the column: flush with the top it pads; after the hold banner it is the
+			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
+			{barNotice != null && <View className={held ? 'mt-4' : undefined}>{barNotice}</View>}
 			<View testID={testID} className="flex-1 flex-row">
 				<View
 					testID={`${testID}-rail`}
