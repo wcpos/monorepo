@@ -12,6 +12,8 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
@@ -273,6 +275,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 
 function ReportsShell() {
 	const t = useT();
+	const phone = useIsPhone();
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -325,7 +328,13 @@ function ReportsShell() {
 							/>
 							<View
 								testID="reports-scope-row"
-								className="flex-row items-center justify-between gap-2 px-4 py-2"
+								// The row under the wide bar brings the page gutter (16) between the bar's
+								// controls and its own; the Closures body's `p-4` brings the 16 below. The
+								// phone keeps its 8 under its control-height bar.
+								className={cn(
+									'flex-row items-center justify-between gap-2 px-4',
+									phone ? 'py-2' : 'pt-4'
+								)}
 							>
 								<DateButton
 									scope={scope}
