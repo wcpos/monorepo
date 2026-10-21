@@ -92,11 +92,33 @@ describe('detectMismatch', () => {
 	});
 
 	it.each(['epson-sdp', 'printnode', 'star-cloudprnt'] as const)(
-		'returns null for any template on an order-based cloud printer (%s renders server-side)',
+		'returns null for a thermal template on an order-based cloud printer (%s renders server-side)',
 		(cloudProvider) => {
 			const cloud: PrinterProfile = { ...thermalPrinter, connectionType: 'cloud', cloudProvider };
 			expect(detectMismatch(thermal, cloud)).toBeNull();
-			expect(detectMismatch(html, cloud)).toBeNull();
 		}
 	);
+
+	it.each(['epson-sdp', 'star-cloudprnt'] as const)(
+		'flags an HTML template on a thermal-only cloud printer (%s prints nothing)',
+		(cloudProvider) => {
+			const cloud: PrinterProfile = { ...thermalPrinter, connectionType: 'cloud', cloudProvider };
+			expect(detectMismatch(html, cloud)).toBe('html-template-cloud-thermal-only');
+		}
+	);
+
+	it('returns null for an HTML template on PrintNode (the server renders it to PDF)', () => {
+		const cloud: PrinterProfile = {
+			...thermalPrinter,
+			connectionType: 'cloud',
+			cloudProvider: 'printnode',
+		};
+		expect(detectMismatch(html, cloud)).toBeNull();
+	});
+
+	it('treats a cloud profile with no provider as a raw upload of the built-in layout', () => {
+		const cloud: PrinterProfile = { ...thermalPrinter, connectionType: 'cloud' };
+		expect(detectMismatch(html, cloud)).toBe('html-template-prints-default-layout');
+		expect(detectMismatch(thermal, cloud)).toBeNull();
+	});
 });

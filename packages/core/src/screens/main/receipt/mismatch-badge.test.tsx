@@ -38,4 +38,11 @@ describe('MismatchBadge', () => {
 			en['receipt.mismatch_html_template_prints_default_layout']
 		);
 	});
+
+	it('explains that a thermal-only cloud printer prints nothing for an HTML template', () => {
+		render(<MismatchBadge mismatch="html-template-cloud-thermal-only" />);
+		expect(screen.getByTestId('receipt-printer-mismatch').textContent).toBe(
+			en['receipt.mismatch_html_template_cloud_thermal_only']
+		);
+	});
 });
