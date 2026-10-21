@@ -422,6 +422,11 @@ export async function resendOpenCommands(
 export interface RecoveredOrder {
 	readonly orderUuid: string;
 	readonly answers: ResentCommand[];
+	/**
+	 * The re-send failed without a definitive answer (a 429, a 5xx, no answer) and the command is
+	 * still journaled and unclaimed: nothing but another recovery will re-send it while online.
+	 */
+	readonly unanswered?: true;
 }
 
 /**
@@ -448,7 +453,12 @@ export async function recoverMoneyCommands(
 				answers: await resendOpenCommands(runtime, storeDB, orderUuid, deps),
 			});
 		} catch {
-			// Not definitive, or refused: the poster kept or settled the entry accordingly.
+			// Not definitive, or refused: the poster kept or settled the entry accordingly. One
+			// still sent, unclaimed and ours is unanswered, for the caller to try again later.
+			const left = (await readOrderCommands(storeDB, orderUuid)).entries.filter(
+				(entry) => entry.sentAt !== null && inScope(entry, scope) && !claimHeld(entry, null)
+			);
+			if (left.length > 0) recovered.push({ orderUuid, answers: [], unanswered: true });
 		}
 	}
 	await retireSettledChains(runtime, storeDB).catch(() => undefined);

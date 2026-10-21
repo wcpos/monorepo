@@ -41,6 +41,15 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
 const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
 /**
+ * When the store-session recovery runs again after a re-send that failed without a definitive
+ * answer (a 429, a 5xx, no answer), while the till stays online. Half a minute rides out a
+ * rate limit or a proxy restart; two and then ten minutes stop a store that is down from being
+ * hammered, and the last step repeats until a run answers. A reconnect, a restart and Try again
+ * still re-send at once.
+ */
+export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 600_000];
+
+/**
  * Replays outstanding finishes at store-session start, never collecting money. First, at start
  * and on every reconnect, it re-sends the money commands that were sent and never answered
  * (ADR 0040 §1.3): a pull can adopt a sale completed by such a command and take it out of the
@@ -177,18 +186,41 @@ export function SaleCompletionBridge(): null {
 		// A command the recovery skipped because a live claim held it is tried again when that claim
 		// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
 		let lapse: ReturnType<typeof setTimeout> | undefined;
+		// The backoff re-run after an unanswered re-send (`RECOVERY_RETRY_DELAYS_MS`).
+		let retry: ReturnType<typeof setTimeout> | undefined;
+		let retries = 0;
+		let retryPending = false;
 		const disarm = () => {
 			if (lapse !== undefined) clearTimeout(lapse);
 			lapse = undefined;
+			if (retry !== undefined) clearTimeout(retry);
+			retry = undefined;
+		};
+		const armRetry = () => {
+			if (retry !== undefined) clearTimeout(retry);
+			retry = undefined;
+			if (!retryPending || current.stopped) return;
+			const delay =
+				RECOVERY_RETRY_DELAYS_MS[Math.min(retries, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+			retries += 1;
+			retry = setTimeout(() => {
+				retry = undefined;
+				// Offline, the reconnect re-runs it.
+				if (onlineRef.current) current.reconnect();
+			}, delay);
 		};
 		const recoverWhenClaimsLapse = async () => {
 			const expiry = await nextClaimExpiry(storeDB).catch(() => null);
-			disarm();
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
 			if (expiry === null || current.stopped) return;
 			lapse = setTimeout(() => current.reconnect(), Math.max(0, expiry - Date.now()) + 1);
 		};
 		current.disarm = disarm;
-		current.arm = () => void recoverWhenClaimsLapse();
+		current.arm = () => {
+			void recoverWhenClaimsLapse();
+			armRetry();
+		};
 		/** The orders whose unanswered commands a re-send has now answered. */
 		const recover = async (): Promise<ReadonlySet<string>> => {
 			try {
@@ -196,6 +228,9 @@ export function SaleCompletionBridge(): null {
 					post: (url, body) => httpRef.current.post(url, body),
 				});
 				await recoverWhenClaimsLapse();
+				retryPending = recovered.some(({ unanswered }) => unanswered);
+				if (!retryPending) retries = 0;
+				armRetry();
 				return new Set(
 					recovered.filter(({ answers }) => answers.length > 0).map(({ orderUuid }) => orderUuid)
 				);

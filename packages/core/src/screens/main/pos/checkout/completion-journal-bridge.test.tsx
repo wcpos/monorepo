@@ -324,6 +324,35 @@ it('keeps the lapse re-run across an effect re-run of the same session', async (
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
 });
 
+// A re-send that fails transiently (429, 5xx, no answer) leaves the command journaled and
+// unclaimed: while the till stays online nothing else would re-run the recovery, so it backs off.
+it('backs off and re-runs a recovery whose re-send failed, until one answers', async () => {
+	const realSetTimeout = global.setTimeout;
+	const delays: number[] = [];
+	const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
+		callback: () => void,
+		ms?: number
+	) => {
+		if ((ms ?? 0) >= 30_000) {
+			delays.push(ms!);
+			return realSetTimeout(callback, 0);
+		}
+		return realSetTimeout(callback, ms);
+	}) as never);
+	try {
+		mockRecover
+			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
+			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
+			.mockResolvedValue([]);
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
+		await drain();
+		expect(delays).toEqual([30_000, 120_000]);
+	} finally {
+		timers.mockRestore();
+	}
+});
+
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));

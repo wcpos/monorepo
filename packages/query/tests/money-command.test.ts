@@ -832,7 +832,10 @@ it('the session recovery never settles a close on a malformed 2xx; the next reco
 	store.modes = ['lose'];
 	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
 	store.modes = ['malformed'];
-	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	// Still journaled and reported unanswered, so the session tries again later.
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([
+		{ orderUuid: 'order', answers: [], unanswered: true },
+	]);
 	expect(await entries()).toHaveLength(1);
 	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([
 		{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
