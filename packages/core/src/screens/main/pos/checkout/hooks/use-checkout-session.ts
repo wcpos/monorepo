@@ -28,6 +28,7 @@ import {
 	setStockRejection,
 	stockRejection$,
 } from '../../hooks/stock-rejection';
+import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
 import { refreshOrderBounded } from '../bounded-order-refresh';
 
@@ -173,6 +174,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();
+	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const t = useT();
@@ -225,7 +227,10 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 		// Route FIRST; the local refresh is catch-up, never a gate (#1685). The
 		// receipt binds the order by uuid and fetches its own receipt data, so it
-		// does not need the refresh to have landed.
+		// does not need the refresh to have landed. Drop the paid order from the
+		// cart first: until the refresh lands it is still pos-open locally, and the
+		// cart would keep adding items to it.
+		setCurrentOrderID('');
 		if (uiSettings.autoShowReceipt) {
 			router.replace({
 				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
@@ -244,7 +249,15 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			)
 		);
 		stockAdjustment(reducedStockItems);
-	}, [runtime, order, orderId, router, stockAdjustment, uiSettings.autoShowReceipt]);
+	}, [
+		runtime,
+		order,
+		orderId,
+		router,
+		setCurrentOrderID,
+		stockAdjustment,
+		uiSettings.autoShowReceipt,
+	]);
 
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {

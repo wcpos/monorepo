@@ -39,6 +39,10 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
+const mockSetCurrentOrderID = jest.fn();
+jest.mock('../../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+}));
 jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
@@ -290,6 +294,12 @@ describe('useCheckoutSession', () => {
 		});
 
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		// The paid order is still pos-open locally until the refresh lands, so the cart
+		// must drop it BEFORE routing or new items would be added to the paid sale.
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockSetCurrentOrderID.mock.invocationCallOrder[0]).toBeLessThan(
+			mockReplace.mock.invocationCallOrder[0]
+		);
 		expect(release).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
 
