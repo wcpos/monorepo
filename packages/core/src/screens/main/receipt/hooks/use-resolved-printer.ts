@@ -52,7 +52,11 @@ export function useResolvedPrinter({
 		[pick, template?.id]
 	);
 
-	const { printers: allPrinters, isLoading: printersLoading } = useAvailablePrinterProfiles();
+	const {
+		printers: allPrinters,
+		isLoading: printersLoading,
+		cloudPending,
+	} = useAvailablePrinterProfiles();
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
@@ -100,7 +104,19 @@ export function useResolvedPrinter({
 	// Whether to use system dialog (no printer profile)
 	const useSystemDialog = printerSelection.type === 'system';
 
-	const isResolving = printersLoading || loadedOverrides === undefined;
+	// Two readiness notions: `printersLoading` clears after a 2 s grace so Settings never blanks on
+	// a hung cloud request, but routing must not read that as "no cloud printers". While the cloud
+	// request is still out, keep resolving if nothing matched yet or the template's override names
+	// a printer not in the list yet (it may be a cloud one); a local match proceeds at once.
+	const overrideId = template ? overrides.get(String(template.id)) : undefined;
+	const awaitingCloud =
+		cloudPending &&
+		printerSelection.type !== 'system' &&
+		(resolvedPrinter === null ||
+			(printerSelection.type === 'auto' &&
+				overrideId !== undefined &&
+				!allPrinters.some((p) => p.id === overrideId)));
+	const isResolving = printersLoading || loadedOverrides === undefined || awaitingCloud;
 
 	// What will actually print, given the profile usePrint receives. The 'system' selection and
 	// an auto match that found nothing both leave resolvedPrinter null: the print dialog path.

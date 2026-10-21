@@ -28,6 +28,9 @@ export function useAvailablePrinterProfiles() {
 	// The page must not show its empty state while cloud printers are still being fetched; a hung
 	// request must not blank the page either, so the wait is capped.
 	const [cloudSettled, setCloudSettled] = React.useState(false);
+	// Routing needs the real answer, not the capped wait: a receipt routed to a cloud printer
+	// must not fall back to another target just because the request took longer than the grace.
+	const [cloudPending, setCloudPending] = React.useState(true);
 
 	const profiles$ = React.useMemo(
 		() =>
@@ -48,6 +51,7 @@ export function useAvailablePrinterProfiles() {
 				const data = (response as { data?: CloudPrintResponse })?.data;
 				setCloudPayload(data ?? null);
 				setCloudSettled(true);
+				setCloudPending(false);
 			})
 			.catch((error) => {
 				if (cancelled) return;
@@ -61,6 +65,7 @@ export function useAvailablePrinterProfiles() {
 				);
 				setCloudPayload(null);
 				setCloudSettled(true);
+				setCloudPending(false);
 			});
 		const grace = setTimeout(() => {
 			if (!cancelled) setCloudSettled(true);
@@ -75,8 +80,11 @@ export function useAvailablePrinterProfiles() {
 	return React.useMemo(
 		() => ({
 			printers: mergeAvailablePrinterProfiles(localProfiles ?? [], cloudPayload),
+			/** The list can be shown: local profiles loaded and the cloud request settled or graced. */
 			isLoading: localProfiles === undefined || !cloudSettled,
+			/** The cloud request has not answered yet (uncapped; the http client times out at 30 s). */
+			cloudPending,
 		}),
-		[localProfiles, cloudPayload, cloudSettled]
+		[localProfiles, cloudPayload, cloudSettled, cloudPending]
 	);
 }
