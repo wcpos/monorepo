@@ -59,3 +59,5 @@ export function ErrorBoundary({ FallbackComponent = DefaultFallback, onError, ..
 
 	return <Boundary FallbackComponent={FallbackComponent} onError={handleError} {...props} />;
 }
+
+export { FallbackScreen } from './fallback-screen';

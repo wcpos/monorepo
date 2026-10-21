@@ -16,6 +16,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 // The default fallback renders icons, tooltips and uniwind classes, none of
 // which matter here.
 jest.mock('./fallback', () => ({ Fallback: () => null }));
+jest.mock('./fallback-screen', () => ({ FallbackScreen: () => null }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import { ErrorBoundary } from './index';

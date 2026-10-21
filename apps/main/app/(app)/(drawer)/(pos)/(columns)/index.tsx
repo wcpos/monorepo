@@ -5,7 +5,7 @@ import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { ErrorBoundary, FallbackScreen } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -58,7 +58,9 @@ export default function ResizablePOSColumns() {
 				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
 				<View style={{ flex: 1, display: activeTab === 'products' ? 'flex' : 'none' }}>
 					<Suspense>
-						<ErrorBoundary>
+						{/* The whole Products tab, as in (tabs): a throw replaces it with the gate. The Cart
+						    tab below keeps the inline bar, as (tabs)/cart does. */}
+						<ErrorBoundary FallbackComponent={FallbackScreen}>
 							{/* A resize or phone-width reload of /cart reaches this fallback; keep the same register bar as (tabs). */}
 							<POSProductsPane>
 								{activeTab === 'products' && <ObserveInteractiveMarker />}
