@@ -51,6 +51,12 @@ export interface RecordManualPaymentDeps {
 	currency: string;
 	dp: number;
 	sleep?: (ms: number) => Promise<void>;
+	/**
+	 * A record the store may hold but never answered (the journal keeps it sent): the press
+	 * replays it, same row id and frozen body, instead of minting a second payment for the same
+	 * cash (Codex 4342921641 on #2832).
+	 */
+	unansweredRecord?: () => Promise<PaymentRow | null>;
 	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
 	mirror: (
 		answer: { payment: PaymentRow; status?: string },
@@ -144,9 +150,10 @@ export async function recordManualPayment(
 	// tender taken offline is money the store cannot see until reconnect, and the offline tender
 	// outbox is a separate change (ADR 0040 §offline).
 	if (!online) return { kind: 'failed', reason: 'offline_unavailable' };
+	const row = (await deps.unansweredRecord?.()) ?? minted.row;
 
 	const { balance } = derive(order.total, readLedger(order.meta_data), [method], { dp: deps.dp });
-	if (toMinor(minted.row.amount, deps.dp) === toMinor(balance, deps.dp)) {
+	if (toMinor(row.amount, deps.dp) === toMinor(balance, deps.dp)) {
 		try {
 			await deps.persistProvenance?.();
 		} catch {
@@ -162,7 +169,7 @@ export async function recordManualPayment(
 	let accepted: { payment: PaymentRow; order: OrderPaymentSummary } | undefined;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
-			const response = await deps.post(`orders/${order.id}/payments`, { payment: minted.row });
+			const response = await deps.post(`orders/${order.id}/payments`, { payment: row });
 			// Only the store's own row and summary record the payment (sync-core `isMoneyAnswer`):
 			// a malformed 2xx proves nothing and is never replaced by the minted row, so it is
 			// handled like no answer at all, and the journal keeps the record for a re-send.
@@ -184,7 +191,7 @@ export async function recordManualPayment(
 				// The server STORED the refused row as `failed`; put the order in front of the
 				// cashier independently, then mirror the server's copy into the ledger.
 				const failedRow = refused?.payment ?? {
-					...minted.row,
+					...row,
 					status: 'failed',
 					failure_reason: reason,
 				};
@@ -226,8 +233,7 @@ export async function recordManualPayment(
 			}
 			// No answer, a 5xx, a held lock, a session or proxy answer proves nothing: re-send the
 			// same journaled record.
-			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
-				return { kind: 'unknown', row: minted.row };
+			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length) return { kind: 'unknown', row };
 			await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
 				RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
 			);

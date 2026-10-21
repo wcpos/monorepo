@@ -10,7 +10,9 @@ import {
 	hasSaleProvenance,
 	isCompletingStatus,
 	type PaymentMethodDescriptor,
+	type PaymentRow,
 } from '@wcpos/order-math';
+import { readOrderCommands } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -89,6 +91,11 @@ export function useRecordManualPayment(
 			});
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
+				unansweredRecord: async () => {
+					const { entries } = await readOrderCommands(storeDB, order.uuid);
+					const sent = entries.find(({ kind, sentAt }) => kind === 'record' && sentAt !== null);
+					return (sent?.body.payment as PaymentRow | undefined) ?? null;
+				},
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,

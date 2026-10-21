@@ -2712,6 +2712,7 @@ jest.mock('@wcpos/query/store-local', () => ({
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
+	readOrderCommands: jest.fn(async () => ({ entries: [], chain: null })),
 }));
 
 describe('gateway capture mode (contract 1.2)', () => {
@@ -3978,6 +3979,24 @@ describe('cash rounding (#66, #84)', () => {
 		expect(fee.total).toBe('10.05');
 		expect(unround).toEqual({ fee_lines: [], total: '10.03' });
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	});
+
+	// Codex 4342982186 on #2832: a record whose answers were all lost stays journaled at its rounded
+	// amount, so its rounding stays too: the re-send lands 10.00 on a 10.00 total.
+	it('a leg the store never answered keeps its rounding fee: 10.02 stays rounded to 10.00', async () => {
+		mockPayload = sale('10.02');
+		mockRecordManualPayment.mockImplementationOnce(async () => ({
+			kind: 'unknown',
+			row: payment({ amount: '10.00' }),
+		}));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		const [fee, ...rest] = patches();
+		expect(fee.total).toBe('10.00');
+		expect(rest).toEqual([]);
+		expect(mockPayload).toMatchObject({ total: '10.00' });
 	});
 
 	it('a synced fee comes back off as a tombstone that no longer counts in the total', async () => {

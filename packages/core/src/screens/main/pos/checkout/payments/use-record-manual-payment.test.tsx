@@ -26,6 +26,11 @@ const manager = { engine: { require: (input: unknown) => mockEngineRequire(input
 let onlineStatus = 'offline';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
+// The order's journaled money commands; the journal itself is pinned in the query suites.
+let mockJournal: { kind: string; sentAt: string | null; body: Record<string, unknown> }[] = [];
+jest.mock('@wcpos/query/store-local', () => ({
+	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
+}));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost, get: mockGet }),
 }));
@@ -139,6 +144,7 @@ beforeEach(() => {
 		return { document: order };
 	});
 	onlineStatus = 'offline';
+	mockJournal = [];
 });
 
 // ADR 0040 PR A: a tender the server cannot hear is refused (CHECKOUT101); PR B queues it.
@@ -345,6 +351,23 @@ it('posts the record through the command poster with the order revision', async 
 		expect.objectContaining({ changes: expect.objectContaining({ sentRevision: 'sha256:sent' }) })
 	);
 	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
+
+// Codex 4342921641 on #2832: a record sent and never answered may be on the store; the press
+// re-sends that row, so the poster replays its journaled command instead of creating a second.
+it('replays the journaled unanswered record instead of minting a new row', async () => {
+	onlineStatus = 'online-website-available';
+	const journaled = { id: 'lost-row', method_id: 'pos_cash', amount: '25.00', status: 'captured' };
+	mockJournal = [
+		{ kind: 'close', sentAt: null, body: {} },
+		{ kind: 'record', sentAt: '2026-10-22T00:00:00Z', body: { payment: journaled } },
+	];
+	mockPost.mockImplementationOnce(answer({ status: 'pos-partial', balance: '75.00' }));
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
+
+	expect(mockPost).toHaveBeenCalledTimes(1);
+	expect(mockPost.mock.calls[0][1].payment).toEqual(journaled);
 });
 
 it('awaits the provenance push before posting and mirrors only the answered row, never pre-command meta', async () => {

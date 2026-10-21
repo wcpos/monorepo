@@ -332,6 +332,31 @@ describe('recordManualPayment', () => {
 		}
 	);
 
+	// Codex 4342921641 on #2832: a record whose answers were all lost may be on the store. The next
+	// press replays it (same row id, so the poster re-sends the same journaled command) instead of
+	// minting a second payment for the same cash.
+	it('a press after an unanswered record replays that row, never a new one', async () => {
+		const deps = createDeps();
+		let journaled: PaymentRow | null = null;
+		deps.unansweredRecord = async () => journaled;
+		deps.post.mockRejectedValue(new Error('network'));
+		const first = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		expect(first.kind).toBe('unknown');
+		journaled = (first as { row: PaymentRow }).row;
+
+		deps.post.mockReset();
+		deps.post.mockImplementation(echo);
+		deps.uuid = () => 'ABCDEF00-0000-4000-8000-000000000002';
+		const second = await recordManualPayment(order, card, { amount: '10.00' }, deps);
+
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.post.mock.calls[0][1]).toEqual({ payment: journaled });
+		expect(second).toMatchObject({
+			kind: 'recorded',
+			row: { id: UUID.toLowerCase(), amount: '42.50' },
+		});
+	});
+
 	it('a pre-flight failure is terminal: a typed failed outcome, never re-sent', async () => {
 		const deps = createDeps();
 		const refused = responseError(401, 'rest_not_logged_in');

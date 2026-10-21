@@ -1103,7 +1103,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (paymentId && !landed) await unround().catch(() => undefined);
 				throw error;
 			});
-			if (paymentId && outcome.kind !== 'recorded') await unround();
+			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
+			if (paymentId && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{
