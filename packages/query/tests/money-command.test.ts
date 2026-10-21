@@ -49,7 +49,8 @@ type Mode =
 	| 'provider'
 	| 'outstanding'
 	| 'malformed'
-	| 'unstamped';
+	| 'unstamped'
+	| 'otherRow';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -85,6 +86,11 @@ class FakeStore {
 		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
 		// A plugin filter or proxy answering 2xx with nothing the store said.
 		if (mode === 'malformed') return { data: {} };
+		// A well-formed answer about another payment (a proxy, a filter, a wrong handler).
+		if (mode === 'otherRow')
+			return {
+				data: { payment: cash('other-row'), order: this.summary(), revision: this.revision },
+			};
 		// A close whose stamp could not persist: the order's summary, no completion (SPEC §4.3).
 		if (mode === 'unstamped')
 			return { data: { order: this.summary(), completion: null, revision: this.revision } };
@@ -972,6 +978,33 @@ it.each([
 		expect(await entries()).toEqual([]);
 	}
 );
+
+// The answer must be about this command: its row id is the record's own id, the leg's target,
+// or the submitted attempt. Another payment's row never settles it.
+it.each([
+	['record', 'orders/5/payments', { payment: cash() }],
+	['capture', 'orders/5/payments/leg/capture', {}],
+	['void', 'orders/5/payments/leg/void', {}],
+])('a %s answered with another payment’s row is never answered', async (_, url, body) => {
+	store.modes = ['otherRow'];
+	await expect(poster()(url, body)).rejects.toThrow('money_command_malformed_answer');
+	expect(await entries()).toHaveLength(1);
+});
+
+it('a recorded submit answered with another attempt’s row is never answered', async () => {
+	store.post.mockImplementationOnce(async () => ({
+		data: {
+			outcome: 'recorded',
+			payment: cash('other-attempt'),
+			order: store.summary(),
+			revision: store.revision,
+		},
+	}));
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+	).rejects.toThrow('money_command_malformed_answer');
+	expect(await entries()).toHaveLength(1);
+});
 
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));

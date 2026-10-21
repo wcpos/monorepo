@@ -315,6 +315,32 @@ export async function retireSettledChains(
 	}
 }
 
+/**
+ * Whether a well-formed answer is about THIS command: the row it carries is the record's own
+ * row, the leg the route names, or, for a recorded submit, the submitted attempt (whose id the
+ * row takes). A proxy, a filter or a wrong handler answering with another payment's row never
+ * settles the command, so its retry is never lost.
+ */
+function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>): boolean {
+	// The store lowercases the ids it is given (`strtolower` on route uuids and attempt ids).
+	const row = (data.payment as { id?: unknown } | null | undefined)?.id;
+	const is = (id: unknown) =>
+		typeof row === 'string' && typeof id === 'string' && row.toLowerCase() === id.toLowerCase();
+	switch (entry.kind) {
+		case 'record':
+			return is(entry.id);
+		case 'intent':
+		case 'capture':
+		case 'void':
+		case 'refund':
+			return is(entry.target);
+		case 'submit':
+			return data.outcome !== 'recorded' || is(entry.body.attempt_id);
+		default:
+			return true;
+	}
+}
+
 /** Whether the forced refresh adopts the order's whole document, stamped at or after `since`. */
 async function adoptedSince(
 	runtime: QueryRuntime,
@@ -489,7 +515,7 @@ export function moneyCommandPoster(input: {
 			// kind (sync-core `isMoneyAnswer`), whoever sent it: the first press, Try again or the
 			// session recovery. Anything else is never answered here, so the entry stays
 			// journaled, its outcome unknown until a re-send answers it.
-			if (!isMoneyAnswer(entry.kind, response.data))
+			if (!isMoneyAnswer(entry.kind, response.data) || !answersCommand(entry, response.data))
 				throw new Error(
 					entry.kind === 'close' ? 'close_malformed_response' : 'money_command_malformed_answer'
 				);
