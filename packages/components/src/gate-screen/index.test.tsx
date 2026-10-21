@@ -106,6 +106,21 @@ it('renders one button when there is no secondary', () => {
 	expect(screen.queryByTestId('gate-screen-secondary')).toBeNull();
 });
 
+it('disables an action in its slot: the button stays, the press does nothing', () => {
+	const onPress = jest.fn();
+	render(
+		<GateScreen
+			tone="muted"
+			title="Title"
+			primary={{ label: 'Taking over…', onPress, disabled: true }}
+		/>
+	);
+	const button = screen.getByTestId('gate-screen-primary');
+	expect(button).toHaveAttribute('aria-disabled', 'true');
+	fireEvent.click(button);
+	expect(onPress).not.toHaveBeenCalled();
+});
+
 it('shows the docs code on the link and opens the docs', () => {
 	render(
 		<GateScreen

@@ -11,8 +11,9 @@ import { Logo } from '../logo';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
-type GateAction = { label: string; onPress: () => void; testID?: string };
-type GateScreenProps = {
+/** `disabled` keeps the slot while its state changes (Take over → Taking over…), never empties it. */
+type GateAction = { label: string; onPress: () => void; testID?: string; disabled?: boolean };
+export type GateScreenProps = {
 	tone: 'warn' | 'bad' | 'muted';
 	/** Overrides the tone's default glyph: warn → warning, bad → alert, muted → info. */
 	icon?: IconName;
@@ -126,6 +127,7 @@ function GateButton({
 			variant={variant}
 			className="min-h-ctl h-auto w-full"
 			testID={action.testID ?? testID}
+			disabled={action.disabled}
 			onPress={action.onPress}
 		>
 			{/* A gate's label wraps rather than truncates: a long translation keeps every word. */}
