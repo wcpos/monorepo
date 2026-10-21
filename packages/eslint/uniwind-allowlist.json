@@ -2,12 +2,6 @@
   "apps/main/app/(app)/(drawer)/(pos)/(columns)/index.tsx": {
     "raw-pressable": 1
   },
-  "apps/main/components/clear-local-data-on-startup.tsx": {
-    "raw-pressable": 1
-  },
-  "apps/main/components/root-error.tsx": {
-    "raw-pressable": 1
-  },
   "packages/components/src/accordion/index.tsx": {
     "duration-literal": 2,
     "focus-visible:": 3

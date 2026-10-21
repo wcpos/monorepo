@@ -78,6 +78,7 @@ module.exports = {
 		'^react-native-reanimated$': '<rootDir>/jest/__mocks__/react-native-reanimated.js',
 		'^expo-modules-core$': '<rootDir>/jest/__mocks__/expo-modules-core.js',
 		'^react-native$': 'react-native-web',
+		'^react-native-svg$': '<rootDir>/jest/__mocks__/react-native-svg.js',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
 		'^@wcpos/scanner$': '<rootDir>/../scanner/src/index.ts',
 		'^@wcpos/scanner/(.*)$': '<rootDir>/../scanner/src/$1',

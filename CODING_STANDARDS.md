@@ -281,7 +281,7 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 | `link` | Text that behaves as a button: no surface, the size's height | after the content; inline it is `DocsLink`, which drops the padding | *Open docs*, *Reader settings* |
 | `outline-destructive` | Destructive: what loses something (never filled) | never in the same row as a primary | *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
 | `ghost-destructive` | The quiet form of the same, in a dense row | inside a table or list row | *Remove* on a queued email's row |
-| `destructive` (solid red) | Only the confirm inside an `AlertDialog` and the swipe Remove block | the alert's footer, the swipe strip | *Delete* in *Delete this order?* |
+| `destructive` (solid red) | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | *Delete* in *Delete this order?*, *Reset and restart* |
 | any, `disabled` | Unavailable, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
 
 | Size | Height | Where |
@@ -371,6 +371,8 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
 #### Gate screens
 A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.
+The family has three members: `GateScreen` inside the providers, `FallbackScreen` (`@wcpos/components/error-boundary`) as the fallback of a boundary around a whole route, and `PreThemeGate` (`@wcpos/components/gate-screen/pre-theme`) above the providers, where no className resolves; a boundary around part of a screen keeps the inline bar.
+A new gate is registered in `apps/main/components/gate-screens.test.ts`, which also refuses an `EmptyState` and a `Button` hand-centred in a `View`.
 The title never takes a tone colour: the disc carries it, and `bad` stays the only red surface.
 A coded gate's copy comes from the error registry (`error-registry.json`), one source for the screen, the log row and the docs page.
 The lint refuses a hand-centred `absoluteFill` (`StyleSheet.absoluteFill` with `justifyContent: 'center'`) under `screens/` and `app/`.

@@ -184,6 +184,9 @@ jest.mock('@wcpos/core/screens/main/components/session-hold-banner', () => ({
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@wcpos/components/error-boundary/fallback-screen', () => ({
+	FallbackScreen: () => null,
+}));
 jest.mock('@wcpos/components/suspense', () => {
 	const react = jest.requireActual('react');
 	const { View } = jest.requireActual('react-native');

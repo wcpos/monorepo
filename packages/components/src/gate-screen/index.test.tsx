@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
+import { Button } from '../button';
 import { DeviceScope } from '../lib/device';
 import { GateScreen } from './index';
 
@@ -38,6 +39,11 @@ jest.mock('../logo', () => ({
 	Logo: ({ width }: { width: number }) => React.createElement('span', { 'data-logo': width }),
 }));
 jest.mock('../loader', () => ({ Loader: () => null }));
+// The real Button, spied so a test can read the variant a slot chose (RN-web drops the class).
+jest.mock('../button', () => {
+	const actual = jest.requireActual('../button');
+	return { ...actual, Button: jest.fn(actual.Button) };
+});
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 const disc = (container: HTMLElement) => container.querySelector('[data-icon]')!.parentElement!;
@@ -104,6 +110,36 @@ it('renders one button when there is no secondary', () => {
 	render(<GateScreen tone="muted" title="Title" primary={{ label: 'Go', onPress: jest.fn() }} />);
 	expect(screen.getAllByRole('button')).toHaveLength(1);
 	expect(screen.queryByTestId('gate-screen-secondary')).toBeNull();
+});
+
+it('disables an action in its slot: the button stays, the press does nothing', () => {
+	const onPress = jest.fn();
+	render(
+		<GateScreen
+			tone="muted"
+			title="Title"
+			primary={{ label: 'Taking over…', onPress, disabled: true }}
+		/>
+	);
+	const button = screen.getByTestId('gate-screen-primary');
+	expect(button).toHaveAttribute('aria-disabled', 'true');
+	fireEvent.click(button);
+	expect(onPress).not.toHaveBeenCalled();
+});
+
+it('fills a destructive primary red and ignores the flag on a secondary', () => {
+	render(
+		<GateScreen
+			tone="bad"
+			title="Reset app data and restart?"
+			primary={{ label: 'Reset and restart', onPress: jest.fn(), destructive: true }}
+			secondary={{ label: 'Cancel', onPress: jest.fn(), destructive: true }}
+		/>
+	);
+	const variantOf = (testID: string) =>
+		jest.mocked(Button).mock.calls.findLast(([props]) => props.testID === testID)?.[0].variant;
+	expect(variantOf('gate-screen-primary')).toBe('destructive');
+	expect(variantOf('gate-screen-secondary')).toBe('outline');
 });
 
 it('shows the docs code on the link and opens the docs', () => {

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Suspense } from '@wcpos/components/suspense';
 import { DialogLabelsProvider } from '@wcpos/components/dialog';
 
@@ -39,7 +40,8 @@ export function HydrationProviders({ children }: HydrationProvidersProps) {
 				fallback={<Splash />}
 			>
 				<AppStateProvider>
-					<ErrorBoundary>
+					{/* Around the whole app: a throw here replaces it, so the fallback is the gate. */}
+					<ErrorBoundary FallbackComponent={FallbackScreen}>
 						<ThemeProvider>
 							<TranslationProvider>
 								<TranslatedDialogLabels>

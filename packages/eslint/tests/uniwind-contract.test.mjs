@@ -298,7 +298,7 @@ test('a hex colour in any string is a site, outside the design system and the na
 	assert.deepEqual(countSites(scanSource(source, 'apps/main/components/x.tsx')), {
 		'apps/main/components/x.tsx': { 'hex-colour': 3 },
 	});
-	assert.deepEqual(scanSource(source, 'apps/main/components/pre-theme-colours.ts'), []);
+	assert.deepEqual(scanSource(source, 'apps/main/app.config.ts'), []);
 	assert.deepEqual(scanSource(source, 'packages/components/src/x.tsx'), []);
 });
 
