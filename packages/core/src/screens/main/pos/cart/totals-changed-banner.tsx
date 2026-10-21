@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -128,7 +127,7 @@ function partitionFields(fields: OrderMoneyDivergenceField[]) {
  * the merchant does something different about each, but they answer the SAME
  * cashier question this banner already exists to answer: is the money on this
  * sale right? A second banner would make the cashier hold two places on screen
- * to answer one question, so the two render as sibling notices here instead.
+ * to answer one question, so the two render inside one Notice here instead.
  * Every choice above holds for both — inline, not modal, not dismissible.
  *
  * `orderId` is explicit rather than read from the current-order context because
@@ -145,11 +144,28 @@ export function TotalsChangedBanner({
 }) {
 	const { divergence, divergedOrderCount } = useOrderMoneyDivergence(orderId);
 	const engineWarnings = useOrderEngineWarnings(orderId);
+	const t = useT();
 
 	if (!divergence && engineWarnings.length === 0) return null;
 
 	return (
-		<View testID={testID} className="border-attention/50 bg-attention/10 m-2 rounded-md border p-2">
+		<Notice
+			tone="warn"
+			className="m-2"
+			testID={testID}
+			title={divergence ? t('pos_cart.totals_changed_title') : t('pos_cart.engine_warnings_title')}
+			description={divergence ? t('pos_cart.totals_changed_body') : undefined}
+			// The docs explain server disagreement, not unreadable engine inputs.
+			docs={
+				divergence
+					? {
+							label: t('pos_cart.totals_disagree_docs_link'),
+							href: DOCS_URL,
+							testID: `${testID}-docs-link`,
+						}
+					: undefined
+			}
+		>
 			<VStack className="gap-1">
 				{divergence ? (
 					<DivergenceNotice
@@ -166,7 +182,7 @@ export function TotalsChangedBanner({
 					/>
 				) : null}
 			</VStack>
-		</View>
+		</Notice>
 	);
 }
 
@@ -189,9 +205,6 @@ function DivergenceNotice({
 
 	return (
 		<>
-			<Text className="text-sm font-medium">{t('pos_cart.totals_changed_title')}</Text>
-			<Text className="text-muted-foreground text-sm">{t('pos_cart.totals_changed_body')}</Text>
-
 			{named.map((entry) => (
 				<HStack key={entry.field} testID={`${testID}-field-${entry.field}`} className="gap-2">
 					<Text className="text-muted-foreground text-sm">{t(entry.labelKey)}</Text>
@@ -223,25 +236,6 @@ function DivergenceNotice({
 					</Text>
 				</VStack>
 			) : null}
-
-			{/*
-			 * The link is shown on EVERY divergence, not only at store-level
-			 * escalation. The first time a cashier meets this banner is the most
-			 * confusing moment, and it is the one that used to have nothing to
-			 * click: the "why totals disagree" explanation only appeared once three
-			 * sales had diverged. A quiet, standing link answers "what is this?" on
-			 * encounter one without pulling the cashier off the sale — the loud
-			 * "show this to whoever manages your store" call-to-action stays gated
-			 * on escalation above, where it belongs.
-			 *
-			 * It belongs to THIS notice, not to the banner: the page explains why the
-			 * store's arithmetic and the POS's differ, which says nothing about an
-			 * engine warning. Pointing an unreadable price basis at it would answer a
-			 * question the cashier did not ask with one they cannot act on.
-			 */}
-			<DocsLink testID={`${testID}-docs-link`} href={DOCS_URL}>
-				{t('pos_cart.totals_disagree_docs_link')}
-			</DocsLink>
 		</>
 	);
 }
@@ -252,7 +246,7 @@ function DivergenceNotice({
  *
  * It shares the banner rather than getting a surface of its own — same slot,
  * same "check this before handing over goods" job, and the two can be true at
- * once. `separated` draws the rule between them when they are, so the cashier
+ * once. `separated` adds space between them when they are, so the cashier
  * reads two findings rather than one run-on paragraph.
  */
 function EngineWarningNotice({
@@ -267,11 +261,10 @@ function EngineWarningNotice({
 	const t = useT();
 
 	return (
-		<VStack
-			testID={`${testID}-engine-warnings`}
-			className={separated ? 'border-attention/30 gap-1 border-t pt-1' : 'gap-1'}
-		>
-			<Text className="text-sm font-medium">{t('pos_cart.engine_warnings_title')}</Text>
+		<VStack testID={`${testID}-engine-warnings`} className={separated ? 'mt-2 gap-1' : 'gap-1'}>
+			{separated && (
+				<Text className="text-sm font-medium">{t('pos_cart.engine_warnings_title')}</Text>
+			)}
 			{warnings.map((code) => (
 				<Text
 					key={code}

@@ -49,6 +49,9 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
 }));
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+
 jest.mock('@wcpos/components/text', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Text };
@@ -132,7 +135,7 @@ describe('TotalsChangedBanner', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 
-		expect(screen.getByTestId('order-totals-changed-banner').textContent).toContain(
+		expect(screen.getByTestId('order-totals-changed-banner-title').textContent).toContain(
 			"Your store changed this order's totals"
 		);
 		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(

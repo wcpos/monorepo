@@ -8,6 +8,7 @@ import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/regi
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
@@ -180,7 +181,7 @@ it('requires manager over threshold', () => {
 	varianceThreshold = '5';
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('463.30');
-	expect(screen.getByTestId('count-manager-line').textContent).toContain('£5.00');
+	expect(screen.getByTestId('count-manager-line-title').textContent).toContain('£5.00');
 	expect(screen.getByTestId('count-close').textContent).toBe('Approve & close');
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
@@ -201,7 +202,7 @@ it('server refusal requires approval even for an exact blind count', () => {
 	approval_required = true;
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('480.80');
-	expect(screen.getByTestId('count-manager-line').textContent).toBe('Approval needed');
+	expect(screen.getByTestId('count-manager-line-title').textContent).toBe('Approval needed');
 	expect(screen.queryByTestId('count-variance')).toBeNull();
 });
 it('closes with other tenders and reports the snapshot; blank cash is disabled', async () => {
