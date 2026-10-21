@@ -185,6 +185,8 @@ export async function cancelGatewayInvoice(
 	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
 ): Promise<
 	| { kind: 'cancelled'; order: OrderPaymentSummary }
+	/** Answered, but the order is not open again: the invoice was not cancelled. */
+	| { kind: 'unchanged'; order: OrderPaymentSummary }
 	| { kind: 'refused'; code: string; message: string }
 > {
 	let summary: OrderPaymentSummary;
@@ -205,10 +207,14 @@ export async function cancelGatewayInvoice(
 			return { kind: 'refused', code, message: refusalMessage(response, code) };
 		throw error;
 	}
+	// A cancel reopens the order (`pos-open`, or `pos-partial` beside earlier legs). An answer
+	// with the order anywhere else did not cancel the invoice: the summary is mirrored with the
+	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
+	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
 	try {
-		await deps.mirror({ order: summary, awaiting: null });
+		await deps.mirror({ order: summary, awaiting: reopened ? null : stamp });
 	} catch (mirrorError) {
 		throw new GatewayCancelMirrorError(summary, mirrorError);
 	}
-	return { kind: 'cancelled', order: summary };
+	return reopened ? { kind: 'cancelled', order: summary } : { kind: 'unchanged', order: summary };
 }

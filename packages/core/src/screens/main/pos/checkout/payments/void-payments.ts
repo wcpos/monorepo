@@ -111,8 +111,12 @@ export async function voidPayments(
 		// entry of a void whose row is already mirrored, so a failed refresh or a crash between
 		// two voids leaves the next one journaled, never live with no entry.
 		await deps.mirror(accepted);
-		rows.push(accepted.payment);
 		lastOrder = accepted.order;
+		// The store's answer is mirrored and settled either way (a re-send would replay the same
+		// stored reply), but a row it still holds live was not voided: reported unknown, never
+		// voided, so the cashier is never told the money went back.
+		if (accepted.payment.status === 'voided') rows.push(accepted.payment);
+		else failed.push({ paymentId: row.id, message: 'void_not_applied', refused: false });
 	}
 	if (rows.length === 0) {
 		return { kind: 'voided', via: 'online', rows, failed, order: null };

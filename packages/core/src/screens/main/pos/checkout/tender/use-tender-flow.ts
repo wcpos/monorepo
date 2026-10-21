@@ -1559,6 +1559,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				return;
 			}
+			// Answered, but the order is not open again: the invoice stands (it may have been paid).
+			if (outcome.kind === 'unchanged') {
+				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
+					showToast: true,
+					context: { ...orderContext, method: invoiceSent.method_id, status: outcome.order.status },
+				});
+				return;
+			}
 			logger.info(t('pos_checkout.invoice_cancelled'), {
 				actor,
 				showToast: true,

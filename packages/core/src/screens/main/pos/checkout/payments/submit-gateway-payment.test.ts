@@ -264,6 +264,17 @@ describe('cancelGatewayInvoice', () => {
 		expect(error).toBeInstanceOf(GatewayCancelMirrorError);
 		expect((error as GatewayCancelMirrorError).order.status).toBe('pos-open');
 	});
+	// A cancel whose answer shows the order not reopened did not cancel the invoice: the summary
+	// is mirrored with the stamp kept, and the outcome says so (never "cancelled").
+	it('a cancel answered with an order that is not open again keeps the stamp', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { order: summary('completed') } });
+		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
+			kind: 'unchanged',
+			order: summary('completed'),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: stamp });
+	});
 	it('a refusal leaves the order alone', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockRejectedValue(refusal(409, 'wcpos_payment_conflict'));

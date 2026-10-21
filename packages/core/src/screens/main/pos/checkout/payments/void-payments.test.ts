@@ -296,3 +296,21 @@ it('mirrors each void before sending the next one', async () => {
 	expect(firstMirror).toBeLessThan(secondPost);
 	expect(secondPost).toBeLessThan(secondMirror);
 });
+
+// A void answered with the row still live did not happen: the answer is mirrored (it is the
+// store's truth, and its stored reply would replay the same) but the row is reported unknown,
+// never voided, so the cashier is never told the money went back.
+it('a void answered with the row still captured is mirrored and reported unknown', async () => {
+	const deps = createDeps();
+	const held = payment('held', 'captured');
+	deps.post.mockResolvedValue({ data: { payment: held, order: { status: 'pos-partial' } } });
+
+	const result = await voidPayments(order([held]), deps);
+
+	expect(result).toMatchObject({
+		kind: 'voided',
+		rows: [],
+		failed: [{ paymentId: 'held', refused: false, message: 'void_not_applied' }],
+	});
+	expect(deps.mirror).toHaveBeenCalledTimes(1);
+});
