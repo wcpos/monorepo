@@ -120,6 +120,9 @@ it('skeleton follows visible columns, with a capped row count', () => {
 	// A line of text in a real cell, not a bar the height of a row: the skeleton row is as
 	// tall as its cells make it, which is what keeps it the size of the row that replaces it.
 	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('line');
+	// The footer's row stands in the caption row's inset, so the card's bottom edge does not
+	// move when the table loads and the real caption row (also inset) takes its place.
+	expect(screen.getByTestId('data-table-caption-inset')).toBeTruthy();
 });
 
 // The screens' tables read the query handle (roadmap#423).
