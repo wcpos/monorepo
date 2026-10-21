@@ -107,7 +107,7 @@ it('a reopen refused with wcpos_money_in_motion names the leg and offers Cancel 
 		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
 	mockOnDrain = () => emit(moneyInMotion());
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 
 	// Never a silent local pos-open: the till stays where it is and says why.
 	expect(mockPush).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ it("prefers the server's own sentence for the leg", async () => {
 		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
 	mockOnDrain = () => emit(moneyInMotion('Card payment pay-1 is still being captured.'));
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	expect(reportedToast()).toMatchObject({ title: 'Card payment pay-1 is still being captured.' });
 });
 
@@ -140,7 +140,7 @@ it('a reopen refused for another reason says the store refused it and stays put'
 		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
 	mockOnDrain = () => emit(moneyInMotion('Not allowed.', 'rest_forbidden'));
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	expect(mockPush).not.toHaveBeenCalled();
 	expect(reportedToast()).toMatchObject({
 		title: 'pos_checkout.order_refused',
@@ -155,7 +155,7 @@ it('an offline reopen stays queued and reports the refusal when it drains', asyn
 		.mocked(applyLocalPatch)
 		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	// Offline the reopen is queued as before: the cashier goes on to the cart.
 	expect(mockPush).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
@@ -173,14 +173,14 @@ it('an offline reopen stays queued and reports the refusal when it drains', asyn
 it('does not navigate when the local write resolves undefined', async () => {
 	jest.mocked(applyLocalPatch).mockResolvedValueOnce(undefined as never);
 	const { result } = renderHook(() => useReopenOrder(order));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	expect(mockPush).not.toHaveBeenCalled();
 });
 
 it('keeps the local mutation failure toast and does not navigate', async () => {
 	jest.mocked(applyLocalPatch).mockRejectedValueOnce(new Error('write failed'));
 	const { result } = renderHook(() => useReopenOrder(order));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	expect(log.error).toHaveBeenCalledWith(
 		'Local mutation failed',
 		expect.objectContaining({ showToast: true })
@@ -191,9 +191,34 @@ it('keeps the local mutation failure toast and does not navigate', async () => {
 it('navigates to the order cart after a successful local write', async () => {
 	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
 	const { result } = renderHook(() => useReopenOrder(order));
-	await act(async () => result.current());
+	await act(async () => result.current.reopen());
 	expect(mockPush).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
+});
+
+it('a second press while the reopen awaits the store is ignored and never bypasses the refusal', async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never)
+		// The resident already reads pos-open: a second write would queue nothing.
+		.mockResolvedValueOnce({ document: paidOrder } as never);
+	const { result } = renderHook(() => useReopenOrder(paidOrder));
+	let first!: Promise<unknown>;
+	await act(async () => {
+		first = Promise.resolve(result.current.reopen());
+	});
+	expect(result.current.reopening).toBe(true);
+	await act(async () => result.current.reopen());
+	expect(mockPush).not.toHaveBeenCalled();
+	expect(applyLocalPatch).toHaveBeenCalledTimes(1);
+
+	await act(async () => {
+		emit(moneyInMotion());
+		await first;
+	});
+	expect(result.current.reopening).toBe(false);
+	expect(mockPush).not.toHaveBeenCalled();
+	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
 });

@@ -17,7 +17,10 @@ const mockError = jest.fn();
 jest.mock('../pos/checkout/payments/use-gateway-payment', () => ({
 	useGatewayPayment: () => ({ submit: jest.fn(), cancel: mockCancel }),
 }));
-jest.mock('./use-reopen-order', () => ({ useReopenOrder: () => mockReopen }));
+let mockReopening = false;
+jest.mock('./use-reopen-order', () => ({
+	useReopenOrder: () => ({ reopen: mockReopen, reopening: mockReopening }),
+}));
 let mockOnline = 'online-website-available';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline }),
@@ -61,6 +64,13 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	resetCheckoutMode();
 	mockOnline = 'online-website-available';
+	mockReopening = false;
+});
+
+it('Send again is disabled while a reopen of the order awaits the store', () => {
+	mockReopening = true;
+	render(<InvoiceActions order={order} stamp={stamp} />);
+	expect(screen.getByTestId('orders-send-again').hasAttribute('disabled')).toBe(true);
 });
 
 it('Cancel invoice needs the store: offline it is disabled, Send again is not', () => {

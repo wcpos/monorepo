@@ -87,7 +87,7 @@ export function OrderActionsMenu({
 		});
 	}, [runtime, orderID, t]);
 
-	const handleOpen = useReopenOrder(order);
+	const { reopen: handleOpen, reopening } = useReopenOrder(order);
 
 	/**
 	 * Handle delete button click
@@ -162,7 +162,7 @@ export function OrderActionsMenu({
 					<DropdownMenuItem
 						testID="order-reopen-menu-item"
 						onPress={handleOpen}
-						disabled={storageDegraded}
+						disabled={storageDegraded || reopening}
 					>
 						<Icon name="cartShopping" />
 						<Text>{t('orders.re-open')}</Text>

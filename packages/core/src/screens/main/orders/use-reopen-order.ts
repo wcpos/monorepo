@@ -24,6 +24,26 @@ const logger = getLogger(['wcpos', 'orders', 'reopen']);
 /** Where the order's existing Cancel payment action lives. */
 const CHECKOUT_ROUTE = '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout';
 
+/**
+ * Orders with a reopen awaiting the store's verdict. Module-wide, so every surface that can
+ * reopen the order (the order menu, the invoice's Send again) sees one reopen in flight: a
+ * second press would find the resident already `pos-open`, queue nothing, and walk into the
+ * cart before the first one's refusal arrives.
+ */
+const reopensInFlight = new Set<string>();
+const inFlightListeners = new Set<() => void>();
+function setReopenInFlight(orderUuid: string, inFlight: boolean) {
+	if (inFlight) reopensInFlight.add(orderUuid);
+	else reopensInFlight.delete(orderUuid);
+	inFlightListeners.forEach((listener) => listener());
+}
+function subscribeReopensInFlight(listener: () => void) {
+	inFlightListeners.add(listener);
+	return () => {
+		inFlightListeners.delete(listener);
+	};
+}
+
 /** A leg's amount in the leg's own currency; the bare amount when Intl does not know it. */
 function legAmount(row: { amount: string; currency: string }): string {
 	try {
@@ -39,6 +59,7 @@ function legAmount(row: { amount: string; currency: string }): string {
  * Re-open an order at this till: status back to pos-open, cashier and store stamped on it,
  * then the cart once the store accepts it (or, offline, once it is queued). #163 ruling R5: with the worker dead that write cannot be recorded, and the
  * cart it lands in could not be checked out anyway, so a degraded store refuses at the door.
+ * `reopening` is true while a reopen of this order awaits the store; callers disable on it.
  */
 export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const router = useRouter();
@@ -98,7 +119,12 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		[order, router, t]
 	);
 
-	return React.useCallback(async () => {
+	const inFlightKey = order.uuid ?? '';
+	const reopening = React.useSyncExternalStore(subscribeReopensInFlight, () =>
+		reopensInFlight.has(inFlightKey)
+	);
+
+	const run = React.useCallback(async () => {
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		const existingMeta = order.payload.meta_data ?? [];
 		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
@@ -142,4 +168,17 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		register,
 		site.uuid,
 	]);
+
+	/** One reopen per order at a time; a call while one awaits the store is ignored. */
+	const reopen = React.useCallback(async () => {
+		if (reopensInFlight.has(inFlightKey)) return;
+		setReopenInFlight(inFlightKey, true);
+		try {
+			await run();
+		} finally {
+			setReopenInFlight(inFlightKey, false);
+		}
+	}, [inFlightKey, run]);
+
+	return { reopen, reopening };
 }
