@@ -21,6 +21,7 @@ import { pushRecord } from '../src/mutations/push-record';
 import {
 	CHAIN_RETENTION_MS,
 	CLAIM_LEASE_MS,
+	claimRoute,
 	journalCommand,
 	readOrderCommands,
 } from '../src/store-local/money-commands';
@@ -894,6 +895,30 @@ it.each([
 			{ kind: 'close', data: expect.objectContaining({ completion: null }) },
 		]);
 	expect(await entries()).toHaveLength(kept);
+});
+
+// A poster's new command is unsent and claimed while its pre-flight runs: the recovery re-sends
+// the order's other, lost command and leaves this one to its poster (never a crash leftover).
+it('the recovery never deletes an unsent command another poster has claimed', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+	const fresh = {
+		orderUuid: 'order',
+		kind: 'close',
+		path: 'orders/5/close',
+		target: null,
+		id: 'close-in-preflight',
+		body: {},
+		approval,
+		sentAt: null,
+		sentRevision: null,
+	} as const;
+	const route = { orderUuid: 'order', kind: 'close', target: null, rowId: null } as const;
+	expect(await claimRoute(storeDB, route, 'cashier-tab', fresh)).toMatchObject({
+		status: 'created',
+	});
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
+	expect(await entries()).toEqual([expect.objectContaining({ id: 'close-in-preflight' })]);
 });
 
 it('the status poll passes through without an envelope', async () => {

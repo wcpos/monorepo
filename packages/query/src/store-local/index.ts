@@ -10,6 +10,7 @@ export {
 	observeOrderCommands,
 	claimHeld,
 	claimRoute,
+	dropUnsent,
 	CLAIM_LEASE_MS,
 	readMoneyJournal,
 	releaseClaim,

@@ -149,6 +149,23 @@ export async function claimRoute(
 	return claim;
 }
 
+/**
+ * Drop a never-dispatched entry (a crash before it was sent put nothing on the server), unless a
+ * live claim holds it: then a poster is still in its pre-flight and the entry is its own. The
+ * check and the delete are one journal write.
+ */
+export function dropUnsent(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	id: string,
+	claimant: string | null
+) {
+	return modifyOrder(storeDB, orderUuid, (order) => {
+		const entry = order.entries[id];
+		if (entry && entry.sentAt === null && !claimHeld(entry, claimant)) delete order.entries[id];
+	});
+}
+
 /** Give the claim up, keeping the entry: another poster, Try again or the recovery may send it. */
 export function releaseClaim(
 	storeDB: StoreLocalDatabase,

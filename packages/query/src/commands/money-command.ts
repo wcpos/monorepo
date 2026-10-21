@@ -14,6 +14,7 @@ import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
 	claimHeld,
 	claimRoute,
+	dropUnsent,
 	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
@@ -334,7 +335,7 @@ export async function resendOpenCommands(
 	const answers: ResentCommand[] = [];
 	for (const entry of entries) {
 		if (entry.sentAt === null) {
-			await settleCommand(storeDB, orderUuid, entry.id);
+			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
 		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
