@@ -109,10 +109,18 @@ export function PreThemeGate({
 						{primary || secondary ? (
 							<View style={styles.actions}>
 								{primary ? (
-									<PreThemeButton action={primary} primary testID={`${testID}-primary`} />
+									<PreThemeButton
+										action={primary}
+										fill={primary.destructive ? 'destructive' : 'primary'}
+										testID={`${testID}-primary`}
+									/>
 								) : null}
 								{secondary ? (
-									<PreThemeButton action={secondary} testID={`${testID}-secondary`} />
+									<PreThemeButton
+										action={secondary}
+										fill="outline"
+										testID={`${testID}-secondary`}
+									/>
 								) : null}
 							</View>
 						) : null}
@@ -123,13 +131,29 @@ export function PreThemeGate({
 	);
 }
 
+/** GateScreen's slots: the primary filled (red when it confirms a loss), the secondary outlined. */
+const fills = {
+	primary: {
+		button: { backgroundColor: C.primary },
+		label: { color: C.primaryForeground, fontWeight: '600' },
+	},
+	destructive: {
+		button: { backgroundColor: C.bad },
+		label: { color: C.badForeground, fontWeight: '600' },
+	},
+	outline: {
+		button: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1 },
+		label: { color: C.foreground, fontWeight: '500' },
+	},
+} as const;
+
 function PreThemeButton({
 	action,
-	primary = false,
+	fill,
 	testID,
 }: {
 	action: Action;
-	primary?: boolean;
+	fill: keyof typeof fills;
 	testID: string;
 }) {
 	return (
@@ -139,16 +163,10 @@ function PreThemeButton({
 			accessibilityState={{ disabled: !!action.disabled }}
 			disabled={action.disabled}
 			onPress={action.onPress}
-			style={[
-				styles.button,
-				primary ? styles.buttonPrimary : styles.buttonOutline,
-				action.disabled ? styles.disabled : null,
-			]}
+			style={[styles.button, fills[fill].button, action.disabled ? styles.disabled : null]}
 		>
 			{/* A gate's label wraps rather than truncates, as GateScreen's does. */}
-			<Text style={[styles.label, primary ? styles.labelPrimary : styles.labelOutline]}>
-				{action.label}
-			</Text>
+			<Text style={[styles.label, fills[fill].label]}>{action.label}</Text>
 		</TouchableOpacity>
 	);
 }
@@ -209,10 +227,6 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
-	buttonPrimary: { backgroundColor: C.primary },
-	buttonOutline: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1 },
 	disabled: { opacity: 0.45 },
 	label: { fontSize: BASE, textAlign: 'center' },
-	labelPrimary: { color: C.primaryForeground, fontWeight: '600' },
-	labelOutline: { color: C.foreground, fontWeight: '500' },
 });

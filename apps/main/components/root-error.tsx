@@ -136,6 +136,8 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 				primary={{
 					label: COPY.confirm,
 					testID: 'root-error-reset-confirm',
+					// Confirming a loss: the one filled red control (CODING_STANDARDS § Buttons).
+					destructive: true,
 					onPress: () => {
 						void handleConfirmReset();
 					},

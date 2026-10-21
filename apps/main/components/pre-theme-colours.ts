@@ -18,6 +18,9 @@ export const PRE_THEME_COLOURS = {
 	warnText: '#915200', // --warn-text
 	badBg: '#fff0ee', // --bad-bg
 	bad: '#d73337', // --bad
+	// The ink on a filled `bad` (a destructive confirm). The token sheet has no `--bad-foreground`,
+	// so this is `--primary-foreground`, the near-white the other filled controls carry.
+	badForeground: '#f6fdff', // --primary-foreground
 } as const;
 
 /** The token sheet's one radius (`--radius: 8px`, `rounded-lg`). */

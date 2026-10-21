@@ -57,6 +57,23 @@ it('stacks the primary before the secondary, fires each, and holds a disabled on
 	expect(screen.getByTestId('pre-theme-gate-secondary')).toBeDisabled();
 });
 
+it('fills a destructive primary bad, and outlines the secondary whatever its flag', async () => {
+	const screen = await render(
+		<PreThemeGate
+			tone="bad"
+			title="T"
+			primary={{ label: 'Reset', onPress: jest.fn(), destructive: true }}
+			secondary={{ label: 'Cancel', onPress: jest.fn(), destructive: true }}
+		/>
+	);
+	expect(flat(screen.getByTestId('pre-theme-gate-primary')).backgroundColor).toBe(
+		PRE_THEME_COLOURS.bad
+	);
+	expect(flat(screen.getByTestId('pre-theme-gate-secondary')).backgroundColor).toBe(
+		PRE_THEME_COLOURS.card
+	);
+});
+
 it('draws the default icon set’s glyphs, so the pre-theme disc matches GateScreen’s', () => {
 	const source = readFileSync(join(__dirname, 'pre-theme-gate.tsx'), 'utf8');
 	const tabler = join(__dirname, '../../../packages/components/src/icon/components/tabler');

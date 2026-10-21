@@ -11,8 +11,18 @@ import { Logo } from '../logo';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
-/** `disabled` keeps the slot while its state changes (Take over → Taking over…), never empties it. */
-type GateAction = { label: string; onPress: () => void; testID?: string; disabled?: boolean };
+/**
+ * `disabled` keeps the slot while its state changes (Take over → Taking over…), never empties it.
+ * `destructive` is for the primary only, confirming a loss: the filled red Button. A secondary
+ * ignores it.
+ */
+type GateAction = {
+	label: string;
+	onPress: () => void;
+	testID?: string;
+	disabled?: boolean;
+	destructive?: boolean;
+};
 export type GateScreenProps = {
 	tone: 'warn' | 'bad' | 'muted';
 	/** Overrides the tone's default glyph: warn → warning, bad → alert, muted → info. */
@@ -89,7 +99,11 @@ export function GateScreen({
 						{primary || secondary ? (
 							<VStack className="w-full gap-2">
 								{primary ? (
-									<GateButton action={primary} variant="default" testID={`${testID}-primary`} />
+									<GateButton
+										action={primary}
+										variant={primary.destructive ? 'destructive' : 'default'}
+										testID={`${testID}-primary`}
+									/>
 								) : null}
 								{secondary ? (
 									<GateButton action={secondary} variant="outline" testID={`${testID}-secondary`} />
@@ -119,7 +133,7 @@ function GateButton({
 	testID,
 }: {
 	action: GateAction;
-	variant: 'default' | 'outline';
+	variant: 'default' | 'destructive' | 'outline';
 	testID: string;
 }) {
 	return (

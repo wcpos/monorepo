@@ -1,9 +1,11 @@
 import * as React from 'react';
+import { StyleSheet } from 'react-native';
 
 import { fireEvent, render } from '@testing-library/react-native';
 
 import { resetHydration } from '@wcpos/core/contexts/app-state/use-hydration-suspense';
 
+import { PRE_THEME_COLOURS } from './pre-theme-colours';
 import { RootError } from './root-error';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -54,6 +56,11 @@ describe('reset', () => {
 		await fireEvent.press(screen.getByTestId('root-error-reset'));
 
 		expect(screen.getByTestId('root-error-reset-warning').props.children).toContain('2 changes');
+		// The confirm is the destructive fill; Cancel is the outline.
+		const fill = (testID: string) =>
+			StyleSheet.flatten(screen.getByTestId(testID).props.style).backgroundColor;
+		expect(fill('root-error-reset-confirm')).toBe(PRE_THEME_COLOURS.bad);
+		expect(fill('root-error-reset-cancel')).toBe(PRE_THEME_COLOURS.card);
 		expect(scheduleClearLocalDataOnNextLoad).not.toHaveBeenCalled();
 
 		await fireEvent.press(screen.getByTestId('root-error-reset-cancel'));

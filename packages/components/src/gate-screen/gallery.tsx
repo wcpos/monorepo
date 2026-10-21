@@ -48,6 +48,13 @@ const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 		primary: { label: 'Take over here', onPress: noop, disabled: true },
 	},
 	{
+		id: 'destructive-confirm',
+		tone: 'bad',
+		title: 'Reset app data and restart?',
+		primary: { label: 'Reset and restart', onPress: noop, destructive: true },
+		secondary: { label: 'Cancel', onPress: noop },
+	},
+	{
 		id: 'not-found',
 		tone: 'muted',
 		icon: 'help',

@@ -20,6 +20,7 @@ const TOKEN: Record<keyof typeof PRE_THEME_COLOURS, string> = {
 	warnText: '--warn-text',
 	badBg: '--bad-bg',
 	bad: '--bad',
+	badForeground: '--primary-foreground', // no --bad-foreground in the sheet; see pre-theme-colours.ts
 };
 
 /** OKLCH → sRGB hex (Björn Ottosson's OKLab matrices), clipped to the sRGB gamut. */
