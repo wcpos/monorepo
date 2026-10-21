@@ -216,11 +216,9 @@ function expectSent(state: Awaited<ReturnType<typeof stored>>, applied: Applied)
 			...order.stored,
 			remoteId: String(server.id),
 			remoteKey: String(server.id),
-			sync: {
-				...(order.stored.sync as Json),
-				revision: server.revision,
-				adopted: { revision: server.revision, at: expect.any(Number) },
-			},
+			// The fake server acknowledges with the pushed (stripped) payload: a trimmed ack is
+			// adopted for what it carries, and its revision is recorded without `adopted`.
+			sync: { ...(order.stored.sync as Json), revision: server.revision },
 			local: { dirty: false, pendingMutationIds: [] },
 			payload,
 			number: String(payload.number ?? ''),

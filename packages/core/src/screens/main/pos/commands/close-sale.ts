@@ -12,7 +12,12 @@ import {
 } from '@wcpos/query';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
+import {
+	isCloseAnswer,
+	isDefinitiveMoneyRefusal,
+	MONEY_ANSWER_CODES,
+	moneyRefusalOf,
+} from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
@@ -54,13 +59,13 @@ export async function closeSale(
 	const post = moneyCommandPoster({ runtime, storeDB, orderUuid: order.uuid, ...deps });
 	try {
 		const { data } = await post(`orders/${id}/close`, {});
-		const answer = data as { order?: OrderPaymentSummary; completion?: { n: number; id: string } };
-		await post.mirror({ order: answer.order });
-		return {
-			kind: 'completed',
-			order: answer.order ?? null,
-			completion: answer.completion ?? null,
-		};
+		// Only the store's own summary and completion say the sale closed (sync-core
+		// `isCloseAnswer`, the poster's rule too). A 2xx without them (a proxy page, a plugin
+		// filter) proves nothing: the entry stays journaled for a re-send.
+		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
+		const order = data.order as unknown as OrderPaymentSummary;
+		await post.mirror({ order });
+		return { kind: 'completed', order, completion: data.completion };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };
@@ -71,9 +76,12 @@ export async function closeSale(
 			return { kind: 'outstanding', order: summary ?? null };
 		}
 		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
-		// rule): the cashier reads its sentence. Anything else stays journaled for a re-send.
-		if (refusal?.code && isDefinitiveMoneyRefusal(refusal))
+		// rule): the cashier reads its sentence, and the resident is refreshed, since the refusal
+		// says the till's view of the sale is stale. Anything else stays journaled for a re-send.
+		if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
+			await post.settle();
 			return { kind: 'refused', code: refusal.code, message: refusal.message ?? refusal.code };
+		}
 		throw error;
 	}
 }

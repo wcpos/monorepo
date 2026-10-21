@@ -24,6 +24,8 @@ export type SettlementDiagnostic = { type: string; uuid: string; at: number; err
 interface Deps {
 	inputs$: Observable<CartConfigInputs>;
 	completionChanges$?: Observable<unknown>;
+	/** Emits when the till reconnects: a boundary deferred offline is tried again. */
+	reconnected$?: Observable<unknown>;
 	// null is a rebind: discard old records AND queued work before accepting the new scope.
 	openOrders$: Observable<CurrentOrderRecord[] | null>;
 	ratesReady$: Observable<RatesReady>;
@@ -128,6 +130,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				  'reason' in outcome
 				? outcome.reason
 				: undefined;
+		// A boundary that could not close offline is retried on the next reconnect, whatever else
+		// changed: connectivity is not part of the fingerprint.
+		if (outcome && typeof outcome === 'object' && 'kind' in outcome && outcome.kind === 'offline')
+			seen.delete(args[0]);
 		// Do not lose catalog or checkout-exit emissions consumed while a pass awaited its guards.
 		if (
 			typeof reason === 'string' &&
@@ -269,6 +275,12 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	subscription.add(
 		deps.completionChanges$?.subscribe(() => {
 			completionGeneration++;
+			dirty = true;
+			void drain();
+		})
+	);
+	subscription.add(
+		deps.reconnected$?.subscribe(() => {
 			dirty = true;
 			void drain();
 		})

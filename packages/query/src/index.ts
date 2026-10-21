@@ -172,7 +172,10 @@ export { setTemplatePrinterOverride } from './commands/template-printer-override
 export {
 	MoneyCommandError,
 	moneyCommandPoster,
+	recoverMoneyCommands,
 	resendOpenCommands,
+	retireSettledChains,
+	type RecoveredOrder,
 	type ResentCommand,
 	type CommandProvenance,
 	type MoneyCommandEntry,

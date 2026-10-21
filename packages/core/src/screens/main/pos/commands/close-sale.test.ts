@@ -83,6 +83,37 @@ it('a 2xx with a completion completes, mirroring the summary under the sent revi
 	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+	['no body', null],
+	['no summary', { completion: { n: 1, id: 'c1' } }],
+	['a summary without a status', { order: { total: '0.00' }, completion: { n: 1, id: 'c1' } }],
+	['no completion', { order: { status: 'completed' } }],
+	['a null completion on an open summary', { order: { status: 'pos-open' }, completion: null }],
+	['a completion without its number', { order: { status: 'completed' }, completion: { id: 'c1' } }],
+])(
+	'a 2xx with %s is not a close: nothing is mirrored or settled and the entry stays',
+	async (_, data) => {
+		const post = jest.fn(async () => ({ data }));
+
+		await expect(closeSale({} as never, {} as never, order, deps(post))).rejects.toThrow(
+			'close_malformed_response'
+		);
+		expect(mockMirror).not.toHaveBeenCalled();
+		expect(mockSettle).not.toHaveBeenCalled();
+	}
+);
+
+// Server SPEC §4.3: a paid sale whose completion stamp could not persist answers no completion.
+it('a paid summary with a null completion completes, without a completion number', async () => {
+	const summary = { status: 'completed' };
+	const post = jest.fn(async () => ({ data: { order: summary, completion: null } }));
+
+	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+
+	expect(outcome).toEqual({ kind: 'completed', order: summary, completion: null });
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
+
 it('balance outstanding mirrors the summary and says what is due', async () => {
 	const summary = { status: 'pos-partial', balance: '4.00' };
 	const post = jest.fn(async () => {
@@ -114,6 +145,9 @@ it.each([
 		message: `${code} says`,
 	});
 	expect(post).toHaveBeenCalledTimes(1);
+	// The refusal says the till's view is stale: the corrective refresh runs, nothing is mirrored.
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+	expect(mockMirror).not.toHaveBeenCalled();
 });
 
 it('an order the store has never seen sends nothing (connectivity is the caller’s check)', async () => {

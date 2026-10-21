@@ -15,8 +15,26 @@ export const RESENDABLE_MONEY_CODES: readonly string[] = [
 	'wcpos_payment_locked',
 	'wcpos_revision_stale',
 ];
-/** A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. */
-export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 408, 426, 429];
+/**
+ * A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. 407 is an
+ * authenticating proxy (the terminal leg reads it the same way, `server-leg.ts` INTENT_REFUSAL).
+ */
+export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408, 426, 429];
+/**
+ * The 5xx answers the store documents as its own decision with no money moved, so a re-send
+ * cannot take money and the journal must let the cashier move on. Free `next`
+ * `Payments/Contract/Gateway_Submission.php`: 501 `wcpos_capture_mode_unsupported` is answered
+ * before anything runs (:54); 502 `wcpos_provider_error` is the gateway's own refusal, after
+ * which the store restores the previous method, marks the attempt `cancelled` and forgets the
+ * command (`restore_method`, :266-281, :517-530), so a re-send of it is refused 409
+ * `wcpos_payment_conflict` (:87). The one exception the server names, a gateway that throws
+ * AFTER dispatch, leaves its attempt `sent` (:266) behind the same 502; a re-send would only
+ * replay that `sent`, and the store's log names the attempt for the operator.
+ */
+export const DEFINITIVE_SERVER_ERROR_CODES: readonly string[] = [
+	'wcpos_capture_mode_unsupported',
+	'wcpos_provider_error',
+];
 
 /** Refusals for which the server STORED the record as a `failed` row, and what they mean. */
 export const PAYMENT_ROW_REFUSALS = {
@@ -59,10 +77,109 @@ export function moneyRefusalOf(error: unknown): MoneyRefusal | null {
 	};
 }
 
+/** The store's answer to a `close` that completed the sale. */
+export interface CloseAnswer {
+	readonly order: { readonly status: string } & Record<string, unknown>;
+	/** null: the sale is paid but its completion stamp could not persist (server SPEC §4.3). */
+	readonly completion: { readonly n: number; readonly id: string } | null;
+}
+
+/**
+ * Statuses that are not a paid sale: the open POS carts, an unpaid or failed order, and an order
+ * that is gone. The client's own paid rule is this blocklist too (core `sale-completion.ts`,
+ * `UNPAID_STATUSES`): any other status, on-hold and a merchant's custom paid status included,
+ * is a sale the store completed.
+ */
+const UNPAID_CLOSE_STATUSES: readonly string[] = [
+	'pos-open',
+	'pos-partial',
+	'pending',
+	'failed',
+	'cancelled',
+	'refunded',
+	'trash',
+];
+
+/** Whether an order status is a sale the store completed (the blocklist above). */
+export function isPaidStatus(status: unknown): boolean {
+	return typeof status === 'string' && !UNPAID_CLOSE_STATUSES.includes(status);
+}
+
+/**
+ * Whether a 2xx `close` answer is the store's own (ADR 0040 D2): a summary with a status and the
+ * completion it stamped. A paid summary with `completion: null` is a close whose stamp could not
+ * persist (server SPEC §4.3; a replay after a crash between its two saves answers the same,
+ * `API/V2/Payments_Controller.php:452-468`): the sale is completed, with no completion number
+ * (the receipt prints none). Anything else, `completion: null` on an open summary included, a
+ * proxy page or a plugin filter's `{}`, proves nothing: it never settles the journaled close or
+ * finishes the sale, and the close is re-sent. One rule for the first answer, Try again and the
+ * store-session recovery.
+ */
+export function isCloseAnswer(data: unknown): data is CloseAnswer {
+	const { order, completion } = (data ?? {}) as { order?: unknown; completion?: unknown };
+	if (!order || typeof order !== 'object') return false;
+	const status = (order as { status?: unknown }).status;
+	if (typeof status !== 'string') return false;
+	if (completion === null) return isPaidStatus(status);
+	return (
+		!!completion &&
+		typeof completion === 'object' &&
+		typeof (completion as { n?: unknown }).n === 'number' &&
+		typeof (completion as { id?: unknown }).id === 'string'
+	);
+}
+
+/** What a gateway `submit` can answer, first time or replayed. */
+export const SUBMIT_OUTCOMES: readonly string[] = ['sent', 'settled', 'recorded', 'paid'];
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === 'object';
+/** A ledger row as the store puts it on the wire (`Ledger::to_wire`). */
+const isRow = (value: unknown) =>
+	isObject(value) &&
+	typeof value.id === 'string' &&
+	typeof value.status === 'string' &&
+	typeof value.amount === 'string';
+/** The order summary (`Ledger::summary`): its status says what the order is now. */
+const isSummary = (value: unknown) => isObject(value) && typeof value.status === 'string';
+
+/**
+ * Whether a 2xx answer to a money command is the store's own, by kind (free `next`
+ * `API/V2/Payments_Controller.php`): `record`, `intent`, `capture` and `void` answer the row and
+ * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478); `refund`
+ * answers the row alone (:368, :475); `submit` answers a known `outcome` with the summary (and
+ * the row for `recorded`), `cancel`
+ * the summary (:451); `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
+ * `{}`) proves nothing: it never settles the command and never stands in for a row the store did
+ * not send. The command stays journaled and its outcome is unknown until a re-send answers it.
+ */
+export function isMoneyAnswer(
+	kind: 'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close',
+	data: unknown
+): boolean {
+	if (!isObject(data)) return false;
+	switch (kind) {
+		case 'close':
+			return isCloseAnswer(data);
+		case 'refund':
+			return isRow(data.payment);
+		case 'submit':
+			// The server's vocabulary (`Gateway_Submission.php:71, 77-83, 370`): `recorded` carries
+			// the row it recorded; `sent`, `settled` and a replayed `paid` the summary alone.
+			if (!SUBMIT_OUTCOMES.includes(data.outcome as string) || !isSummary(data.order)) return false;
+			return data.outcome !== 'recorded' || isRow(data.payment);
+		case 'cancel':
+			return isSummary(data.order);
+		default:
+			return isRow(data.payment) && isSummary(data.order);
+	}
+}
+
 /** Whether the answer settles the command (the server decided; a re-send repeats it). */
 export function isDefinitiveMoneyRefusal(refusal: MoneyRefusal | null): boolean {
 	if (!refusal?.code || refusal.status === undefined) return false;
-	if (refusal.status < 400 || refusal.status >= 500) return false;
+	if (refusal.status >= 500) return DEFINITIVE_SERVER_ERROR_CODES.includes(refusal.code);
+	if (refusal.status < 400) return false;
 	if (RESENDABLE_MONEY_CODES.includes(refusal.code)) return false;
 	// A 403 that names a contract code is the store's decision, not a session wall: the store
 	// refuses a disabled method with 403 `wcpos_payment_method_disabled` on submit and on record

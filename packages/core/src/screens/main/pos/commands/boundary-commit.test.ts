@@ -196,6 +196,35 @@ it.each(['4', '3'])(
 		}
 	}
 );
+// ADR 0040 PR A: a system pass offline sends nothing; its completion attempt is resolved, and
+// the offline outcome is what the coordinator retries on reconnect.
+it('an offline boundary returns offline and leaves no completion attempt behind', async () => {
+	const order = orderFor();
+	closeSale.online.mockReturnValueOnce(false);
+	const complete = jest.fn();
+	const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+		commitAtBoundary(
+			{
+				...ctx,
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+				bindingStatus: 'bound',
+				complete,
+			},
+			{
+				order,
+				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+				queue,
+				write: (changes) => write({ document: order, changes }),
+			}
+		)
+	);
+	expect(outcome).toEqual({ kind: 'offline' });
+	expect(closeSale.close).not.toHaveBeenCalled();
+	expect(complete).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+
 it.each(['session', 'register'])(
 	'a refused %s leaves money, status and journal untouched',
 	async (gate) => {

@@ -168,7 +168,9 @@ let mockUseRealCompletion = false;
 const mockSetCurrentOrderID = jest.fn();
 const mockRequire = jest.fn();
 const mockAdjustStock = jest.fn();
-const mockRuntime = { engine: { require: mockRequire, db$: () => () => {} } };
+const mockRuntime = {
+	engine: { require: mockRequire, db$: () => () => {}, events: () => () => {} },
+};
 let mockAutoShowReceipt = true;
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../contexts/ui-settings', () => ({
@@ -253,7 +255,21 @@ let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 // One client per test file, as the real hook memoises: a fresh object per render would re-arm
 // every fetch effect keyed on it.
-const mockHttp = { post: mockManualPost, get: mockGatewaysGet };
+//
+// The fixtures below script only the summary a test is about. The store's real record answer
+// also carries the row it stored (sync-core `isMoneyAnswer`, which the record path now requires),
+// so a scripted record answer without one is completed with the posted row here.
+const mockHttp = {
+	post: async (url: string, body: unknown) => {
+		const answer = await mockManualPost(url, body);
+		const data = answer?.data as Record<string, unknown> | undefined;
+		const row = (body as { payment?: unknown } | undefined)?.payment;
+		return /\/payments$/.test(url) && data && !data.payment && row
+			? { ...answer, data: { ...data, payment: row } }
+			: answer;
+	},
+	get: mockGatewaysGet,
+};
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
@@ -508,6 +524,67 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	// A close replayed after a remote reopen answers its stored completion with the order as it
+	// now stands (`Payments_Controller.php:452-468`): settled, but the sale is open, so Try again
+	// never finishes it.
+	it.each([
+		['a paid', 'completed', 1],
+		['a reopened', 'pos-open', 0],
+	])(
+		'a replayed close with %s summary finishes the sale only when paid',
+		async (_, status, finished) => {
+			mockResend.mockResolvedValueOnce([
+				{ kind: 'close', data: { order: { status }, completion: { n: 1, id: 'c1' } } },
+			]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+		}
+	);
+
+	// A replayed gateway submit answers its stored outcome with the order as it now stands.
+	it.each([
+		['paid', 'completed', 1],
+		['paid', 'pos-open', 0],
+		['settled', 'pending', 1],
+		['settled', 'pos-partial', 0],
+	])(
+		'a replayed %s submit with a %s summary finishes the sale only while done',
+		async (outcome, status, finished) => {
+			mockResend.mockResolvedValueOnce([{ kind: 'submit', data: { outcome, order: { status } } }]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+		}
+	);
+
+	// A recovered gateway submit answered `sent` finishes as a sent sale, from the stamp the
+	// refresh adopted with the store's document.
+	it('a Try again answered sent finishes the sale through the sent path', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		mockPayload = {
+			...mockPayload,
+			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+		} as typeof mockPayload;
+		const summary = { status: 'pending' };
+		mockResend.mockResolvedValueOnce([
+			{ kind: 'submit', data: { outcome: 'sent', order: summary } },
+		]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
+			source: 'gateway',
+			order: summary,
+			stamp,
+		});
+	});
+
 	it('a Try again the store answers finishes the sale like a first answer', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
@@ -749,7 +826,7 @@ describe('useTenderFlow', () => {
 	it('completes a zero-balance order without recording a payment row', async () => {
 		mockPayload = { id: 42, total: '0.00', meta_data: [] };
 		mockManualPost.mockResolvedValue({
-			data: { order: { status: 'completed' }, completion: null },
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
 
@@ -1159,6 +1236,20 @@ describe('useTenderFlow', () => {
 				context: expect.objectContaining({ type: 'payment.void-unknown' }),
 			})
 		);
+	});
+
+	it('an offline cancel says it needs the store and never promises a hand refund', async () => {
+		mockVoidPayments.mockResolvedValue({ kind: 'offline', paymentIds: ['payment-1'] });
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.void_needs_connection',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
 	});
 
 	it('does not record when the storage money-path guard blocks the take', async () => {
@@ -1953,7 +2044,9 @@ describe('device tender', () => {
 		expect(mockInfo).toHaveBeenCalled();
 	});
 });
-it('reopens a device tile via its queued transport when the selected transport needs a connection', async () => {
+// ADR 0040 PR A: offline tenders do not queue yet (OFFLINE_TENDERS_QUEUE), so a device tile whose
+// transport would queue is not reopened offline; PR B reopens it via the queued transport.
+it('does not reopen an offline device tile via a queued transport until offline tenders queue', async () => {
 	jest.clearAllMocks();
 	mockLeg = null;
 	mockRealService = null;
@@ -1974,8 +2067,7 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].reason).toBe('offline');
 	act(() => result.current.dispatch({ type: 'back' }));
 	act(() => result.current.pickMethod(deviceMethod.id));
-	expect(result.current.deviceTransport).toBe('bluetooth');
-	// ADR 0040 PR A: the queued transport is refused offline too, until PR B queues it.
+	expect(result.current.state.methodId).toBeNull();
 	expect(result.current.tiles[0]).toMatchObject({ disabled: true, reason: 'offline' });
 });
 
@@ -1997,7 +2089,9 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 it('zero balance writes its provenance once, then closes', async () => {
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockPayload = { id: 42, total: '0.00', meta_data: [] };
-	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed' }, completion: null } });
+	mockManualPost.mockResolvedValue({
+		data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+	});
 	mockLocalPatch.mockClear();
 	mockLocalPatch.mockResolvedValue({ document: order });
 	mockBlockIfDegraded.mockReturnValue(false);
@@ -4047,7 +4141,9 @@ describe('cash rounding (#66, #84)', () => {
 			fee_lines: [fee],
 			meta_data: withLedger([], [payment({ amount: '10.05' })]),
 		} as typeof mockPayload;
-		mockManualPost.mockResolvedValue({ data: { payment: payment({ status: 'voided' }) } });
+		mockManualPost.mockResolvedValue({
+			data: { payment: payment({ status: 'voided' }), order: { status: 'pos-open' } },
+		});
 		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
 			mockPayload = { ...mockPayload, ...changes };
 		});

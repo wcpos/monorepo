@@ -294,6 +294,28 @@ type AckDoc = {
 	remove(): Promise<unknown>;
 };
 
+/**
+ * What an order acknowledgement must carry for its adoption to certify the resident (ADR 0040
+ * §1.3, `sync.adopted`): the cashier's approval is checked against `total` and `currency` (query
+ * `approvalHolds`), and authority, the mirror and the receipt read `status`, the ledger and
+ * completions in `meta_data`, `date_paid` and `payment_method`. The push contract allows a
+ * trimmed ack, and the orders adoption keeps the local value for every key it omits, so stamping
+ * a trimmed ack would certify the till's own money as the server's: its revision is recorded
+ * without `adopted`, exactly as a naked revision write.
+ */
+export const ORDER_ADOPTION_FIELDS = [
+	'total',
+	'currency',
+	'status',
+	'meta_data',
+	'date_paid',
+	'payment_method',
+] as const;
+
+function carriesWholeOrder(document: Record<string, unknown> | null | undefined): boolean {
+	return !!document && ORDER_ADOPTION_FIELDS.every((field) => field in document);
+}
+
 function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
 	remoteIdField: CollectionWriteFacet['remoteIdField'];
@@ -394,7 +416,10 @@ function ackBookkeeping(options: {
 						...sync,
 						revision: ack.currentRevision ?? sync.revision,
 						// Only an ack that adopts the whole document certifies it (ADR 0040 §1.3).
-						...(adopting && collection === 'orders' && ack.currentRevision
+						...(adopting &&
+						collection === 'orders' &&
+						ack.currentRevision &&
+						carriesWholeOrder(ack.document)
 							? { adopted: { revision: ack.currentRevision, at: Date.now() } }
 							: {}),
 						...(ack.mutation.operation === 'create' && createAckSource
@@ -670,19 +695,29 @@ const ordersWriteFacet = createWriteFacet({
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
 	// cart. Editable values stay local; server-owned money facts replace local meta.
 	// The display-field strip re-applies for payloads predating it (#885/#890).
-	graftAckIdentity: (payload, source, options) =>
-		stripNonStringMetaDisplayFields({
+	graftAckIdentity: (payload, source, options) => {
+		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+			SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
+		);
+		// A whole document's server-owned set replaces the resident's, deletions included. A
+		// trimmed acknowledgement (the push contract allows a bare `{ id }`) says nothing about a
+		// key it omits: only the keys it carries are replaced, and the rest stay as the resident
+		// holds them until a whole document adopts. Otherwise an ordinary note or line push would
+		// strip the ledger and make a paid order read unpaid (ADR 0040).
+		const whole = carriesWholeOrder(source);
+		const carried = new Set(sourceMeta.map(({ key }) => key));
+		return stripNonStringMetaDisplayFields({
 			...graftServerLineIdentity(payload, source, options),
 			// Even with a successor, the server owns these facts; editable intent stays local.
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
-					(entry) => !SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
+					(entry) =>
+						!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || (!whole && !carried.has(entry.key))
 				),
-				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
-					SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
-				),
+				...sourceMeta,
 			],
-		}),
+		});
+	},
 	upsert: async (db, document, context) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany(
 			[document as never],

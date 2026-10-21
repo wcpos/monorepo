@@ -53,8 +53,10 @@ function start(records = [order()], ready = true) {
 	const references$ = new BehaviorSubject({ ready: false, generation: '0:0' });
 	const readCoupons = jest.fn<Promise<CouponContext>, [OrderPayload]>(async () => emptyContext);
 	const observe = jest.fn();
+	const reconnected$ = new Subject<void>();
 	const deps = {
 		inputs$,
+		reconnected$,
 		openOrders$,
 		ratesReady$,
 		settle,
@@ -209,6 +211,22 @@ it.each(['completed', 'cancelled'])(
 		expect(h.settle).not.toHaveBeenCalled();
 	}
 );
+
+// A boundary close refused offline resolves its journal and is tried again when the till
+// reconnects; connectivity is not part of the fingerprint, so nothing else would bring it back.
+it('retries a boundary that could not close offline when the till reconnects, and only that one', async () => {
+	const h = start([order('a'), order('b')]);
+	h.settle.mockImplementation(async (uuid) => (uuid === 'a' ? { kind: 'offline' } : undefined));
+	await flush();
+	expect(h.settle.mock.calls.map(([uuid]) => uuid)).toEqual(['a', 'b']);
+	h.settle.mockImplementation(async () => undefined);
+	h.reconnected$.next();
+	await flush();
+	expect(h.settle.mock.calls.map(([uuid]) => uuid)).toEqual(['a', 'b', 'a']);
+	h.reconnected$.next();
+	await flush();
+	expect(h.settle).toHaveBeenCalledTimes(3);
+});
 
 it('clears per-order memory on rebind and stops every subscription and queued write', async () => {
 	const h = start();

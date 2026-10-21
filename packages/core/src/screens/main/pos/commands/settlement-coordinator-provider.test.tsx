@@ -63,6 +63,9 @@ jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => s
 // Stable, like the hook's memoised value: the coordinator's effect keys on it.
 const mockCloseSale = { close: jest.fn(), online: () => true };
 jest.mock('./close-sale', () => ({ useCloseSale: () => mockCloseSale }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('./boundary-commit', () => ({
 	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
 		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };

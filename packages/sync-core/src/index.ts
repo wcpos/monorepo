@@ -80,12 +80,17 @@ export {
 	toOrderWirePayload,
 } from './woo/orderWriteContract';
 export {
+	type CloseAnswer,
+	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
+	isPaidStatus,
 	MONEY_ANSWER_CODES,
 	type MoneyRefusal,
 	moneyRefusalOf,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
+	DEFINITIVE_SERVER_ERROR_CODES,
 	RESENDABLE_MONEY_CODES,
 	RESENDABLE_MONEY_STATUSES,
 } from './woo/moneyCommandAnswer';

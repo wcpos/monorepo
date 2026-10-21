@@ -20,6 +20,7 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readAwaitingCustomer,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -36,7 +37,7 @@ import {
 } from '@wcpos/query';
 import { observeOrderCommands } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { isPaidStatus, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -87,7 +88,11 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
-import { GatewayCancelMirrorError, GatewayMirrorError } from '../payments/submit-gateway-payment';
+import {
+	GatewayCancelMirrorError,
+	GatewayMirrorError,
+	submitStillDone,
+} from '../payments/submit-gateway-payment';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
 	declaredValues,
@@ -118,6 +123,7 @@ import {
 	deviceTransports,
 	initialReaderId,
 	legacyPaymentMethods,
+	OFFLINE_TENDERS_QUEUE,
 	queuesOffline,
 	selectableReaders,
 	type TenderTile,
@@ -590,7 +596,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
 			const offlineTransport =
-				tile.method.capture.mode === 'device' && tile.reason === 'offline'
+				OFFLINE_TENDERS_QUEUE && tile.method.capture.mode === 'device' && tile.reason === 'offline'
 					? deviceTransports(tile.method).find((item) => queuesOffline(tile.method, item))
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;
@@ -708,8 +714,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			for (const { kind, data } of answers) {
 				const row = data.payment as PaymentRow | undefined;
 				const summary = (data.order ?? null) as OrderPaymentSummary | null;
-				if (kind === 'close') await completeOrderFlow({ source: 'zero-balance' });
-				else if (row && (kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))) {
+				// A replayed close answers its stored completion with the order as it now stands: after
+				// a remote reopen that is open again, and the sale is not finished here.
+				if (kind === 'close') {
+					if (isPaidStatus(summary?.status)) await completeOrderFlow({ source: 'zero-balance' });
+				} else if (
+					row &&
+					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
+				) {
 					const amountMinor = toMinor(row.amount, dp);
 					await completeOrderFlow({
 						source: 'manual',
@@ -721,7 +733,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						preLegBalanceMinor: balanceMinor,
 						amountMinor,
 					}).finally(() => tenderRecorded(row, 'online'));
-				} else if (kind === 'submit' && data.outcome === 'settled' && summary)
+				} else if (kind === 'submit' && data.outcome === 'sent' && summary) {
+					// A recovered send: a sent sale, from the stamp the refresh adopted with the
+					// store's document (the replay settles only once that refresh adopted it).
+					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
+					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
+				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}
 		} catch (error) {
@@ -1131,6 +1148,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
+				if (outcome.kind === 'reopened') {
+					// A replayed attempt whose sale another till reopened since: nothing to finish.
+					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+						showToast: true,
+						context: { ...orderContext, method: method.id, status: outcome.order.status },
+					});
+					return;
+				}
 				if (outcome.kind === 'settled') {
 					// No money, no stamp: the gateway landed the order on the status the merchant
 					// stored for it, which is the sale finishing (§3.1) — the paid completion, as is.
@@ -1295,6 +1320,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
+				} else if (outcome.kind === 'reopened') {
+					// Reopened elsewhere since: nothing to finish here.
 				} else {
 					await completeOrderFlow({
 						source: 'gateway',
@@ -1548,6 +1575,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				return;
 			}
+			// Answered, but the order is not open again: the invoice stands (it may have been paid).
+			if (outcome.kind === 'unchanged') {
+				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
+					showToast: true,
+					context: { ...orderContext, method: invoiceSent.method_id, status: outcome.order.status },
+				});
+				return;
+			}
 			logger.info(t('pos_checkout.invoice_cancelled'), {
 				actor,
 				showToast: true,
@@ -1619,6 +1654,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			const outcome = await voidPayments(order);
+			// Nothing reached the store: no leg was voided and none was refused, so the cashier is
+			// told the cancel needs a connection, never to refund by hand (the legs are still held).
+			if (outcome.kind === 'offline') {
+				logger.info(t('pos_checkout.void_needs_connection'), {
+					showToast: true,
+					context: { ...orderContext, paymentId: outcome.paymentIds.join(', ') },
+				});
+				return;
+			}
 			for (const row of outcome.rows) {
 				logger.info('Payment voided', {
 					actor,

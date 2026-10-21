@@ -74,7 +74,11 @@ function deferred<T>() {
 	});
 	return { promise, resolve, reject };
 }
-function setup(resume = false, changes: Partial<PaymentRow> = {}) {
+function setup(
+	resume = false,
+	changes: Partial<PaymentRow> = {},
+	extra: { retire?: (kind: 'intent', target: string) => Promise<void> } = {}
+) {
 	const scripts: Record<string, (() => Promise<{ data: unknown }>)[]> = {};
 	const calls: { route: string; body?: unknown; at: number }[] = [];
 	const request = async (url: string, body?: unknown) => {
@@ -95,6 +99,7 @@ function setup(resume = false, changes: Partial<PaymentRow> = {}) {
 			now: Date.now,
 			setTimeout: timer,
 			clearTimeout,
+			...extra,
 		},
 		{ orderId: 42, row: { ...row, ...changes }, reader: 'reader', resume }
 	);
@@ -246,9 +251,10 @@ it.each(['locked', 'accepted'] as const)(
 	async (voidResult) => {
 		const c = setupRejoin();
 		c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+		// A held lock ran nothing: the same void is re-sent after retry_after (ADR 0040 §1.3).
 		if (voidResult === 'locked')
 			c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
-		else c.post.mockResolvedValueOnce({ data: response({ id: 'live-1' }) });
+		c.post.mockResolvedValueOnce({ data: response({ id: 'live-1' }) });
 		c.post.mockResolvedValue({ data: response({ id: 'live-1', status: 'captured' }) });
 		c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'authorized' }) });
 		c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'voided' }) });
@@ -257,22 +263,27 @@ it.each(['locked', 'accepted'] as const)(
 		expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/live-1/void', {
 			reason: 'cashier',
 		});
-		await tick(voidResult === 'locked' ? 1000 : 2000);
+		if (voidResult === 'locked') await tick(1000);
+		const voids = voidResult === 'locked' ? 2 : 1;
 		expect(c.post.mock.calls.map(([url]) => url)).toEqual([
 			'orders/42/payments/leg/intent',
-			'orders/42/payments/live-1/void',
+			...Array(voids).fill('orders/42/payments/live-1/void'),
 		]);
+		expect(c.post.mock.calls.slice(1).map(([, body]) => body)).toEqual(
+			Array(voids).fill({ reason: 'cashier' })
+		);
+		await tick(2000);
 		expect(c.leg.getState()).toMatchObject({
 			phase: 'polling',
 			outcome: null,
 			cancelRequested: true,
-			releaseAvailable: voidResult === 'accepted',
+			releaseAvailable: true,
 		});
 		await tick(2000);
 		expect(c.get).toHaveBeenCalledTimes(2);
 		expect(c.get).toHaveBeenLastCalledWith('orders/42/payments/live-1/status');
 		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
-		expect(c.post).toHaveBeenCalledTimes(2);
+		expect(c.post).toHaveBeenCalledTimes(1 + voids);
 	}
 );
 
@@ -518,6 +529,95 @@ it.each([7, undefined])(
 		expect(c.count('status')).toBe(3);
 	}
 );
+// ADR 0040 §1.3: a held lock means nothing ran, and the journal keeps the command. The leg
+// re-sends the same command after `retry_after`; a status read cannot answer it.
+it('a locked intent is re-sent after retry_after, never polled', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'wcpos_payment_locked', { retry_after: 3 }));
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({ phase: 'creating', error: null, consecutiveErrors: 0 });
+	await tick(2999);
+	expect(c.count('intent')).toBe(1);
+	await tick(1);
+	expect(c.count('intent')).toBe(2);
+	expect(c.calls[1].body).toEqual(c.calls[0].body);
+	expect(c.calls.slice(0, 2).map(({ route }) => route)).toEqual(['intent', 'intent']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
+});
+// The lock ran nothing, so a cancel pressed while that intent was out goes out now as the void
+// (answered 200 or not-found either way); the intent is never re-sent to the reader.
+it('a cancel pending over a locked intent is resolved as the void, never an intent re-send', async () => {
+	const c = setup();
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.answer('void', response({ status: 'voided' }));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	await started;
+	await tick(5000);
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('void')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+// The retirement of the cancelled locked intent is awaited before the leg is final: a failed
+// journal write keeps the leg live with the reason, never final with a re-sendable intent left.
+it.each([
+	['succeeds', true],
+	['fails', false],
+])('a cancelled locked intent whose retirement %s', async (_, retired) => {
+	const retire = jest.fn(async () => {
+		if (!retired) throw new Error('journal write failed');
+	});
+	const c = setup(false, {}, { retire });
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.answer('void', response({ status: 'voided' }));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	await started;
+	await tick(0);
+	expect(retire).toHaveBeenCalledWith('intent', 'leg');
+	if (retired) expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	else
+		expect(c.leg.getState()).toMatchObject({
+			outcome: null,
+			error: { code: 'retire_failed' },
+		});
+});
+it('a locked capture is re-sent after retry_after, then settles', async () => {
+	const c = setup(true);
+	c.answer('status', response({ status: 'authorized' }));
+	c.fail('capture', refusal(409, 'wcpos_payment_locked', { retry_after: 2 }));
+	c.answer('capture', response({ status: 'captured' }));
+	await tick();
+	expect(c.count('capture')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ capturing: true, outcome: null });
+	await tick(2000);
+	expect(c.count('capture')).toBe(2);
+	expect(c.count('status')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'captured' });
+});
+it('a locked void is re-sent with its reason after retry_after', async () => {
+	const c = setup(true);
+	c.answer('status', response({ status: 'pending' }));
+	await tick();
+	c.fail('void', refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	c.answer('void', response({ status: 'voided' }));
+	await c.leg.cancel();
+	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
+	const reads = c.count('status');
+	await tick(1000);
+	expect(c.count('void')).toBe(2);
+	expect(c.calls.filter(({ route }) => route === 'void').map(({ body }) => body)).toEqual([
+		{ reason: 'cashier' },
+		{ reason: 'cashier' },
+	]);
+	expect(c.count('status')).toBe(reads);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
 it('authorized automatically captures once and mirrors both rows', async () => {
 	const c = setup(true);
 	c.answer('status', response({ status: 'authorized' }));
@@ -703,6 +803,24 @@ it('an auth 4xx on intent is still retried like a dropped connection', async () 
 	});
 	await tick(2000);
 	expect(c.leg.getState().phase).toBe('polling');
+	expect(c.count('intent')).toBe(2);
+});
+// The journal keeps these intents for a re-send (sync-core's money answer rule), so the leg must
+// not end failed: the cashier would move on while a re-send could still authorize.
+it.each([
+	['a 426 wcpos_update_required', refusal(426, 'wcpos_update_required')],
+	['a non-JSON 404', { response: { status: 404, data: '<html>proxy</html>' } }],
+	['a non-JSON 400', { response: { status: 400, data: '' } }],
+])('an intent answered with %s stays live and is retried', async (_, error) => {
+	const c = setup();
+	c.fail('intent', error);
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'creating',
+		outcome: null,
+		consecutiveErrors: 1,
+	});
+	await tick(2000);
 	expect(c.count('intent')).toBe(2);
 });
 it('a void the server never saw is a local void, not a failure', async () => {

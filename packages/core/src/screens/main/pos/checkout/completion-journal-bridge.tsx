@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { type OrderPaymentSummary, readAwaitingCustomer } from '@wcpos/order-math';
+import { recoverMoneyCommands, type ResentCommand, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -11,12 +13,16 @@ import {
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 import {
+	claimHeld,
 	failCompletionAttempt,
+	nextClaimExpiry,
+	observeMoneyJournal,
 	pendingCompletions,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	getTerminalPaymentsServiceStartVersion,
 	subscribeTerminalPaymentsServiceStart,
@@ -37,11 +43,33 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
  */
 const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
-/** Replays outstanding finishes at store-session start, never collecting or pushing money. */
+/**
+ * When the store-session recovery runs again after a re-send that failed without a definitive
+ * answer (a 429, a 5xx, no answer), while the till stays online. Half a minute rides out a
+ * rate limit or a proxy restart; two and then ten minutes stop a store that is down from being
+ * hammered, and the last step repeats until a run answers. A reconnect, a restart and Try again
+ * still re-send at once.
+ */
+export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 600_000];
+
+/**
+ * Replays outstanding finishes at store-session start, never collecting money. First, at start
+ * and on every reconnect, it re-sends the money commands that were sent and never answered
+ * (ADR 0040 §1.3): a pull can adopt a sale completed by such a command and take it out of the
+ * open orders, so no tender is left to press Try again. An answer that completes the sale then
+ * finishes it here (receipt and audit) through the completion journal.
+ */
 export function SaleCompletionBridge(): null {
 	const { storeDB } = useStoreSession();
 	const manager = useQueryRuntime();
 	const ctx = useSaleContext();
+	const http = useRestHttpClient();
+	const httpRef = React.useRef(http);
+	const online = useOnlineStatus().status === 'online-website-available';
+	const onlineRef = React.useRef(online);
+	React.useLayoutEffect(() => {
+		httpRef.current = http;
+	}, [http]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -53,7 +81,20 @@ export function SaleCompletionBridge(): null {
 		ctx: typeof ctx;
 		startVersion: number;
 		stopped: boolean;
+		reconnect: () => void;
+		/** Schedule the re-run for the earliest live claim's lapse; `disarm` cancels it. */
+		arm: () => void;
+		disarm: () => void;
+		/** Watch the journal for commands left unanswered (see `observeMoneyJournal`). */
+		watch: () => void;
 	} | null>(null);
+
+	// A reconnect re-sends what the outage left unanswered, then finishes what it completed.
+	React.useEffect(() => {
+		const was = onlineRef.current;
+		onlineRef.current = online;
+		if (online && !was) session.current?.reconnect();
+	}, [online]);
 
 	// The journal belongs to the external store session, not a checkout screen.
 	React.useEffect(() => {
@@ -68,11 +109,25 @@ export function SaleCompletionBridge(): null {
 			// Context changes and StrictMode reconnect the same run, never start another.
 			previous.ctx = ctx;
 			previous.stopped = false;
+			// The cleanup that ran before this disarmed the timers and the journal watch: restore them.
+			previous.watch();
+			if (onlineRef.current) previous.arm();
 			return () => {
 				previous.stopped = true;
+				previous.disarm();
 			};
 		}
-		const current = { storeDB, manager, ctx, startVersion, stopped: false };
+		const current = {
+			storeDB,
+			manager,
+			ctx,
+			startVersion,
+			stopped: false,
+			reconnect: () => {},
+			arm: () => {},
+			disarm: () => {},
+			watch: () => {},
+		};
 		session.current = current;
 		/**
 		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
@@ -135,10 +190,113 @@ export function SaleCompletionBridge(): null {
 				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) => await readResidentOrder(manager, uuid);
-		const replay = async () => {
+		// A command the recovery skipped because a live claim held it is tried again when that claim
+		// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
+		let lapse: ReturnType<typeof setTimeout> | undefined;
+		// The backoff re-run after an unanswered re-send (`RECOVERY_RETRY_DELAYS_MS`).
+		let retry: ReturnType<typeof setTimeout> | undefined;
+		let retries = 0;
+		let retryPending = false;
+		// Declared here so `disarm` can end it; `watch` (below) starts it.
+		let journalWatch: { unsubscribe: () => void } | undefined;
+		const disarm = () => {
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
+			if (retry !== undefined) clearTimeout(retry);
+			retry = undefined;
+			journalWatch?.unsubscribe();
+			journalWatch = undefined;
+		};
+		const armRetry = () => {
+			if (retry !== undefined) clearTimeout(retry);
+			retry = undefined;
+			if (!retryPending || current.stopped) return;
+			const delay =
+				RECOVERY_RETRY_DELAYS_MS[Math.min(retries, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+			retries += 1;
+			retry = setTimeout(() => {
+				retry = undefined;
+				// Offline, the reconnect re-runs it.
+				if (onlineRef.current) current.reconnect();
+			}, delay);
+		};
+		const recoverWhenClaimsLapse = async () => {
+			const expiry = await nextClaimExpiry(storeDB).catch(() => null);
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
+			if (expiry === null || current.stopped) return;
+			lapse = setTimeout(() => current.reconnect(), Math.max(0, expiry - Date.now()) + 1);
+		};
+		current.disarm = disarm;
+		current.arm = () => {
+			void recoverWhenClaimsLapse();
+			armRetry();
+		};
+		/** The orders whose unanswered commands a re-send has now answered. */
+		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
+		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
+			try {
+				const recovered = await recoverMoneyCommands(manager, storeDB, {
+					post: (url, body) => httpRef.current.post(url, body),
+				});
+				await recoverWhenClaimsLapse();
+				retryPending = recovered.some(({ unanswered }) => unanswered);
+				if (!retryPending) retries = 0;
+				armRetry();
+				return new Map(
+					recovered
+						.filter(({ answers }) => answers.length > 0)
+						.map(({ orderUuid, answers }) => [orderUuid, answers])
+				);
+			} catch (error) {
+				logger.debug('Could not re-send unanswered money commands', {
+					context: { error: String(error) },
+				});
+				return new Map();
+			}
+		};
+		/**
+		 * A recovered gateway submit answered `sent` finishes as a sent sale (its `checkout.sent`
+		 * audit, the attempt resolved), from the stamp the refresh adopted with the store's
+		 * document: never the unpaid replay, which would count starts and abandon it. Returns the
+		 * orders finished this way; the rest go through the completion replay.
+		 */
+		const finishRecovered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
+			const finished = new Set<string>();
+			if (answered.size === 0) return finished;
+			const pending = await pendingCompletions(storeDB);
+			for (const [uuid, answers] of answered) {
+				if (current.stopped) break;
+				const sent = answers.find(({ kind, data }) => kind === 'submit' && data.outcome === 'sent');
+				const attempt = pending[uuid];
+				const summary = sent?.data.order as OrderPaymentSummary | undefined;
+				if (!sent || !attempt || typeof summary?.status !== 'string') continue;
+				const resident = await findOrder(uuid);
+				const stamp = resident
+					? readAwaitingCustomer(resident.getLatest().payload.meta_data)
+					: null;
+				if (!resident || !stamp) continue;
+				try {
+					await completeSale(
+						{ ...current.ctx, actor: attempt.actor },
+						resident,
+						{ source: 'gateway', order: summary, stamp },
+						{ host: 'background' }
+					);
+					finished.add(uuid);
+				} catch (error) {
+					logger.debug('Recovered sent sale not finished', {
+						context: { orderUUID: uuid, error: String(error) },
+					});
+				}
+			}
+			return finished;
+		};
+		const replay = async (only?: ReadonlySet<string>, skip?: ReadonlySet<string>) => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {
 				if (current.stopped) return;
+				if ((only && !only.has(uuid)) || skip?.has(uuid)) continue;
 				try {
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
@@ -248,13 +406,57 @@ export function SaleCompletionBridge(): null {
 				}
 			}
 		};
-		void replay().catch((error: unknown) => {
-			logger.debug('Could not read pending sale completions', {
-				context: { error: String(error) },
+		// One run at a time: a reconnect during the start's replay waits for it.
+		let queue: Promise<void> = Promise.resolve();
+		const run = (task: () => Promise<void>) => {
+			queue = queue.then(task).catch((error: unknown) => {
+				logger.debug('Could not read pending sale completions', {
+					context: { error: String(error) },
+				});
 			});
+		};
+		run(async () => {
+			const answered = onlineRef.current ? await recover() : new Map<string, ResentCommand[]>();
+			const sent = await finishRecovered(answered);
+			if (!current.stopped) await replay(undefined, sent);
 		});
+		current.reconnect = () =>
+			run(async () => {
+				if (current.stopped) return;
+				const answered = await recover();
+				const sent = await finishRecovered(answered);
+				const rest = new Set([...answered.keys()].filter((uuid) => !sent.has(uuid)));
+				if (rest.size > 0 && !current.stopped) await replay(rest);
+			});
+		// A command whose answers are lost after this session's first recovery, while the till
+		// stays online: no reconnect will come for it, and a pull may close its tender. Watching
+		// the journal schedules its recovery: a sent command nobody holds arms the first backoff
+		// step, a live claim its lapse. Another scope's command waits for that scope.
+		const watch = () => {
+			journalWatch ??= observeMoneyJournal(storeDB).subscribe({
+				next: (entries) => {
+					if (current.stopped) return;
+					const scope = manager.engine?.active()?.scopeId ?? null;
+					const unanswered = entries.some(
+						(entry) =>
+							entry.sentAt !== null &&
+							(!entry.scope || entry.scope === scope) &&
+							!claimHeld(entry, null)
+					);
+					if (unanswered && retry === undefined) {
+						retryPending = true;
+						armRetry();
+					}
+					void recoverWhenClaimsLapse();
+				},
+				error: () => undefined,
+			});
+		};
+		current.watch = watch;
+		watch();
 		return () => {
 			current.stopped = true;
+			disarm();
 		};
 	}, [storeDB, manager, ctx, version]);
 	return null;

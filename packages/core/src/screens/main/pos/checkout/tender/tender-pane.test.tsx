@@ -369,7 +369,9 @@ it('selects methods without committing and folds unavailable reasons', () => {
 	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
 });
 
-it('keeps an offline queue-capable device method selectable', () => {
+// ADR 0040 PR A: offline tenders do not queue yet (OFFLINE_TENDERS_QUEUE), so a queue-capable
+// device tile offline is listed as unavailable, never a pill whose commit button stays dead.
+it('lists an offline queue-capable device method as unavailable until offline tenders queue', () => {
 	const flow: TenderFlow = {
 		...makeFlow(),
 		saveState: null,
@@ -383,9 +385,12 @@ it('keeps an offline queue-capable device method selectable', () => {
 		],
 	};
 	render(<TenderPane flow={flow} format={String} />);
-	fireEvent.click(screen.getByTestId('checkout-method-device'));
-	expect(flow.pickMethod).toHaveBeenCalledWith('device');
-	expect(screen.queryByTestId('checkout-unavailable-toggle')).toBeNull();
+	expect(screen.queryByTestId('checkout-method-device')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.getByTestId('checkout-unavailable-device').textContent).toContain(
+		'Needs a connection'
+	);
+	expect(flow.pickMethod).not.toHaveBeenCalled();
 });
 
 it.each([

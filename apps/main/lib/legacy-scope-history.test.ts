@@ -1,10 +1,12 @@
-import { scopeDatabaseName } from '@wcpos/sync-core';
+import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 
 import { recordScopeOpened, type ScopeHistoryDatabase } from './legacy-scope-history';
 
 const A = { site: 'https://a.example.test', storeId: 1, cashierId: 2 };
 const B = { site: 'https://b.example.test', storeId: 3, cashierId: 4 };
-const v5 = (scope: typeof A) => scopeDatabaseName(scope, { generation: 5 });
+/** The drainable generation's database name, the one a scope may have left behind. */
+const drainable = (scope: typeof A) =>
+	scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION });
 
 /**
  * A user database fake: local documents in a map, and its storage token — created by THIS database
@@ -59,7 +61,7 @@ describe('the scope history', () => {
 	it('is complete when the app database was created in this run (a fresh install)', async () => {
 		const { db } = userDatabase('this');
 		const history = await recordScopeOpened(db, A);
-		expect(history).toMatchObject({ names: [v5(A)], complete: true, settled: false });
+		expect(history).toMatchObject({ names: [drainable(A)], complete: true, settled: false });
 	});
 
 	it('is incomplete when the app database predates this run, and stays so', async () => {
@@ -67,7 +69,7 @@ describe('the scope history', () => {
 		expect(await recordScopeOpened(db, A)).toMatchObject({ complete: false });
 		// Later scopes join it; completeness was decided once, at the first record.
 		expect(await recordScopeOpened(db, B)).toMatchObject({
-			names: [v5(A), v5(B)],
+			names: [drainable(A), drainable(B)],
 			complete: false,
 		});
 	});
@@ -83,11 +85,11 @@ describe('the scope history', () => {
 		const history = await recordScopeOpened(db, B);
 		expect(history.settled).toBe(false);
 		await recordScopeOpened(db, A);
-		await history.markCleared([v5(A), v5(B)]);
+		await history.markCleared([drainable(A), drainable(B)]);
 		expect(locals.get('legacy-scope-history')).toEqual({
-			names: [v5(A), v5(B)],
+			names: [drainable(A), drainable(B)],
 			complete: true,
-			cleared: [v5(A), v5(B)],
+			cleared: [drainable(A), drainable(B)],
 		});
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
 	});
@@ -96,18 +98,18 @@ describe('the scope history', () => {
 		const C = { site: 'https://c.example.test', storeId: 5, cashierId: 6 };
 		const { db } = userDatabase('this');
 		const first = await recordScopeOpened(db, A);
-		await first.markCleared([v5(A)]);
+		await first.markCleared([drainable(A)]);
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
 		const reopened = await recordScopeOpened(db, C);
-		expect(reopened).toMatchObject({ settled: false, cleared: [v5(A)] });
-		await reopened.markCleared([v5(C)]);
+		expect(reopened).toMatchObject({ settled: false, cleared: [drainable(A)] });
+		await reopened.markCleared([drainable(C)]);
 		expect(await recordScopeOpened(db, C)).toMatchObject({ settled: true });
 	});
 
 	it('an incomplete history is never settled, however much is cleared', async () => {
 		const { db } = userDatabase('other');
 		const history = await recordScopeOpened(db, A);
-		await history.markCleared([v5(A)]);
+		await history.markCleared([drainable(A)]);
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: false });
 	});
 
@@ -115,7 +117,7 @@ describe('the scope history', () => {
 		const { db, locals } = userDatabase('this');
 		await Promise.all([recordScopeOpened(db, A), recordScopeOpened(db, B)]);
 		expect([...((locals.get('legacy-scope-history')?.names as string[]) ?? [])].sort()).toEqual(
-			[v5(A), v5(B)].sort()
+			[drainable(A), drainable(B)].sort()
 		);
 	});
 
@@ -123,10 +125,10 @@ describe('the scope history', () => {
 		const C = { site: 'https://c.example.test', storeId: 5, cashierId: 6 };
 		const { db, locals } = userDatabase('this');
 		const history = await recordScopeOpened(db, A);
-		await Promise.all([history.markCleared([v5(A)]), recordScopeOpened(db, C)]);
+		await Promise.all([history.markCleared([drainable(A)]), recordScopeOpened(db, C)]);
 		expect(locals.get('legacy-scope-history')).toMatchObject({
-			names: [v5(A), v5(C)],
-			cleared: [v5(A)],
+			names: [drainable(A), drainable(C)],
+			cleared: [drainable(A)],
 		});
 	});
 

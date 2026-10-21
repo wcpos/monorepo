@@ -467,6 +467,7 @@ export class TerminalPaymentsService {
 		const deps = {
 			get: this.options.http.get,
 			post: poster,
+			retire: (kind: 'intent', target: string) => poster.retire(kind, target),
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"
@@ -560,6 +561,18 @@ export class TerminalPaymentsService {
 		if (!entry || entry.leg.getState().phase !== 'final') return;
 		entry.leg.dispose();
 		this.legs.delete(orderUuid);
+		this.publish();
+	}
+	/**
+	 * Stop and drop every live leg, keeping the service: the till moved to another scope (a
+	 * cashier switch), where these legs' orders are not resident, so their reads, captures and
+	 * voids cannot run (ADR 0040, one scope per command). A command already sent stays in the
+	 * journal and re-sends through the scope-bound recovery when that scope is active again, and
+	 * the leg itself resumes from its row then.
+	 */
+	suspendLegs(): void {
+		this.legs.forEach(({ leg }) => leg.dispose());
+		this.legs.clear();
 		this.publish();
 	}
 	readersInUse(): Map<string, { orderUuid: string; orderNumber: string }> {

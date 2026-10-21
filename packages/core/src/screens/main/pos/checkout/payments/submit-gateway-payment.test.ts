@@ -138,6 +138,38 @@ describe('submitGatewayPayment', () => {
 		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
 		expect(mirror).toHaveBeenCalledWith({ order: summary('pending'), awaiting: null });
 	});
+	it('a replayed paid answer is settled: no row, the stamp is cleared, the summary is the truth', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({
+			data: { outcome: 'paid', payment: null, order: summary('completed') },
+		});
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind: 'settled',
+			order: summary('completed'),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: null });
+	});
+	// A replay answers the attempt's stored outcome with the order as it now stands: after another
+	// till reopened the sale, that is open again. Mirrored, but never reported finished.
+	it.each([
+		['paid', 'pos-open', 'reopened'],
+		['settled', 'pos-partial', 'reopened'],
+		['paid', 'completed', 'settled'],
+		// A merchant's settle status can be `pending` (pay by invoice): still settled.
+		['settled', 'pending', 'settled'],
+		['settled', 'on-hold', 'settled'],
+		// A failed or cancelled order is no finished sale, whatever the stored outcome.
+		['settled', 'failed', 'reopened'],
+		['settled', 'cancelled', 'reopened'],
+	])('a replayed %s answer with a %s summary is %s', async (outcome, status, kind) => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { outcome, payment: null, order: summary(status) } });
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind,
+			order: summary(status),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary(status), awaiting: null });
+	});
 	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({
@@ -252,6 +284,17 @@ describe('cancelGatewayInvoice', () => {
 		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
 		expect(error).toBeInstanceOf(GatewayCancelMirrorError);
 		expect((error as GatewayCancelMirrorError).order.status).toBe('pos-open');
+	});
+	// A cancel whose answer shows the order not reopened did not cancel the invoice: the summary
+	// is mirrored with the stamp kept, and the outcome says so (never "cancelled").
+	it('a cancel answered with an order that is not open again keeps the stamp', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { order: summary('completed') } });
+		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
+			kind: 'unchanged',
+			order: summary('completed'),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: stamp });
 	});
 	it('a refusal leaves the order alone', async () => {
 		const { post, mirror, order, deps } = harness();

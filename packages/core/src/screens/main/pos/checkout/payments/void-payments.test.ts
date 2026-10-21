@@ -59,6 +59,17 @@ function createDeps(online = true): VoidPaymentsDeps & {
 	};
 }
 
+/** The store's answer to a void: its voided row and the order summary. */
+const answered = (url: string) => {
+	const id = url.split('/').at(-2)!;
+	return {
+		data: {
+			payment: { ...payment(id, 'captured'), status: 'voided' },
+			order: { status: 'pos-open' },
+		},
+	};
+};
+
 describe('voidPayments', () => {
 	it('writes nothing when the ledger has no live legs', async () => {
 		const deps = createDeps();
@@ -79,8 +90,9 @@ describe('voidPayments', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
-	// ADR 0040 PR A: a void the server cannot hear is refused; nothing is voided locally.
-	it('offline voids nothing and reports every row refused', async () => {
+	// ADR 0040 PR A: a void the server cannot hear is not sent; nothing is voided locally, and
+	// no row is reported refused (the store never answered, so no hand refund is promised).
+	it('offline voids nothing and reports its own outcome, never a refusal', async () => {
 		const deps = createDeps(false);
 		const rows = [
 			payment('pending', 'pending'),
@@ -92,15 +104,8 @@ describe('voidPayments', () => {
 		const result = await voidPayments(order(rows), deps);
 
 		expect(result).toEqual({
-			kind: 'voided',
-			via: 'offline',
-			rows: [],
-			failed: ['pending', 'authorized', 'captured'].map((paymentId) => ({
-				paymentId,
-				message: 'offline_unavailable',
-				refused: true,
-			})),
-			order: null,
+			kind: 'offline',
+			paymentIds: ['pending', 'authorized', 'captured'],
 		});
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
@@ -108,7 +113,7 @@ describe('voidPayments', () => {
 
 	it('a captured row counted in a completion, or an adopted woocommerce tender, is not sent to void', async () => {
 		const deps = createDeps();
-		deps.post.mockResolvedValue({ data: {} });
+		deps.post.mockImplementation(async (url: string) => answered(url));
 		const counted = payment('counted', 'captured');
 		const adopted = { ...payment('adopted', 'captured'), capture_mode: 'server' as const };
 		const open = payment('open', 'captured');
@@ -123,7 +128,7 @@ describe('voidPayments', () => {
 
 	it('a string-encoded completion history still keeps its counted captured row out of a void', async () => {
 		const deps = createDeps();
-		deps.post.mockResolvedValue({ data: {} });
+		deps.post.mockImplementation(async (url: string) => answered(url));
 		const voidable = order([payment('counted', 'captured'), payment('open', 'captured')]);
 		const history = {
 			key: '_wcpos_completions',
@@ -150,8 +155,9 @@ describe('voidPayments', () => {
 			payment_method: '',
 			payment_method_title: '',
 		};
+		const partly = { ...summary, status: 'pos-partial' };
 		deps.post
-			.mockResolvedValueOnce({ data: { payment: serverPending } })
+			.mockResolvedValueOnce({ data: { payment: serverPending, order: partly } })
 			.mockResolvedValueOnce({ data: { payment: serverCaptured, order: summary } });
 
 		const result = await voidPayments(order([pending, payment('old', 'voided'), captured]), deps);
@@ -160,7 +166,7 @@ describe('voidPayments', () => {
 		expect(deps.post).toHaveBeenNthCalledWith(2, 'orders/42/payments/captured/void', {});
 		// One mirror per answer, onto the latest ledger: never a rebuilt snapshot (ADR 0040).
 		expect(deps.mirror.mock.calls).toEqual([
-			[{ payment: serverPending, order: null }],
+			[{ payment: serverPending, order: partly }],
 			[{ payment: serverCaptured, order: summary }],
 		]);
 		expect(result).toEqual({
@@ -178,12 +184,19 @@ describe('voidPayments', () => {
 		const refused = payment('refused', 'captured');
 		const last = payment('last', 'pending');
 		const voidedFirst = { ...first, status: 'voided' as const };
+		const voidedLast = { ...last, status: 'voided' as const };
 		deps.post
-			.mockResolvedValueOnce({ data: { payment: voidedFirst } })
-			.mockRejectedValueOnce({ response: { data: { message: 'Provider refused the void' } } })
-			.mockResolvedValueOnce({ data: {} });
+			.mockResolvedValueOnce({ data: { payment: voidedFirst, order: { status: 'pos-partial' } } })
+			.mockRejectedValueOnce({
+				response: {
+					status: 422,
+					data: { code: 'wcpos_invalid_transition', message: 'Provider refused the void' },
+				},
+			})
+			.mockResolvedValueOnce({ data: { payment: voidedLast, order: { status: 'pos-partial' } } });
 
 		const result = await voidPayments(order([first, refused, last]), deps);
+		if (result.kind !== 'voided') throw new Error('expected an online void');
 		const written = deps.mirror.mock.calls.map(([answer]) => answer.payment);
 
 		expect(written[0]).toEqual(voidedFirst);
@@ -221,6 +234,28 @@ describe('voidPayments', () => {
 		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
+
+	// The journal keeps each of these for a re-send (sync-core's money answer rule): the void may
+	// yet apply, so none is a refusal and the cashier is never told to refund by hand.
+	it.each([
+		[409, 'wcpos_payment_locked'],
+		[401, 'rest_not_logged_in'],
+		[403, 'rest_forbidden'],
+		[408, 'request_timeout'],
+		[426, 'wcpos_update_required'],
+		[429, 'too_many_requests'],
+		[503, 'http_service_unavailable'],
+	])('a %i %s is unknown, never refused', async (status, code) => {
+		const deps = createDeps();
+		deps.post.mockRejectedValueOnce({ response: { status, data: { code, message: code } } });
+
+		const result = await voidPayments(order([payment('held', 'captured')]), deps);
+
+		expect(result).toMatchObject({
+			kind: 'voided',
+			failed: [{ paymentId: 'held', message: code, refused: false }],
+		});
+	});
 });
 it('cannot void an offline device authorization before it settles', async () => {
 	const deps = createDeps();
@@ -228,6 +263,54 @@ it('cannot void an offline device authorization before it settles', async () => 
 		order([{ ...payment('device', 'authorized'), capture_mode: 'device', recorded_offline: true }]),
 		deps
 	);
-	expect(result.failed).toHaveLength(1);
+	expect(result).toMatchObject({ kind: 'voided', failed: [expect.anything()] });
 	expect(deps.post).not.toHaveBeenCalled();
+});
+
+// A malformed 2xx proves nothing: it is never replaced by a locally voided row (sync-core
+// `isMoneyAnswer`). The leg stays live, unknown (never "refund by hand"), and journaled.
+it('a malformed 2xx voids nothing locally and reports the row unknown', async () => {
+	const deps = createDeps();
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await voidPayments(order([payment('held', 'captured')]), deps);
+
+	expect(result).toMatchObject({
+		kind: 'voided',
+		rows: [],
+		failed: [{ paymentId: 'held', refused: false, message: 'money_command_malformed_answer' }],
+	});
+	expect(deps.mirror).not.toHaveBeenCalled();
+});
+
+// One poster journals every void of the sale, and a mirror settles what that poster has answered:
+// each void is mirrored before the next is sent, so a settle never deletes the entry of a void
+// whose row is not mirrored yet (a failed refresh or a crash would leave it live with no entry).
+it('mirrors each void before sending the next one', async () => {
+	const deps = createDeps();
+	deps.post.mockImplementation(async (url: string) => answered(url));
+	await voidPayments(order([payment('first', 'captured'), payment('second', 'captured')]), deps);
+	const [firstPost, secondPost] = deps.post.mock.invocationCallOrder;
+	const [firstMirror, secondMirror] = deps.mirror.mock.invocationCallOrder;
+	expect(firstPost).toBeLessThan(firstMirror);
+	expect(firstMirror).toBeLessThan(secondPost);
+	expect(secondPost).toBeLessThan(secondMirror);
+});
+
+// A void answered with the row still live did not happen: the answer is mirrored (it is the
+// store's truth, and its stored reply would replay the same) but the row is reported unknown,
+// never voided, so the cashier is never told the money went back.
+it('a void answered with the row still captured is mirrored and reported unknown', async () => {
+	const deps = createDeps();
+	const held = payment('held', 'captured');
+	deps.post.mockResolvedValue({ data: { payment: held, order: { status: 'pos-partial' } } });
+
+	const result = await voidPayments(order([held]), deps);
+
+	expect(result).toMatchObject({
+		kind: 'voided',
+		rows: [],
+		failed: [{ paymentId: 'held', refused: false, message: 'void_not_applied' }],
+	});
+	expect(deps.mirror).toHaveBeenCalledTimes(1);
 });

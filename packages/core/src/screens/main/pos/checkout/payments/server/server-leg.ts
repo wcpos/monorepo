@@ -1,4 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -45,6 +46,8 @@ export interface ServerLegDeps {
 	now: () => number;
 	mirror: (response: ServerLegResponse) => Promise<void>;
 	onFinal?: (state: ServerLegState) => void;
+	/** Retire a journaled command that is known never to have run (see `cancelledLockedIntent`). */
+	retire?: (kind: 'intent', target: string) => Promise<void>;
 }
 export interface ServerLegInput {
 	orderId: number;
@@ -116,7 +119,12 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (timer !== null) deps.clearTimeout(timer);
 		timer = null;
 	};
+	// The row id of an intent answered by the lock (nothing ran) whose pending cancel then went
+	// out as the void. Once the leg is voided, that intent is retired from the journal: a later
+	// recovery or Try again must never re-send it and authorize a sale the cashier cancelled.
+	let cancelledLockedIntent: string | null = null;
 	const finish = (outcome: ServerLegState['outcome']) => {
+		cancelledLockedIntent = null;
 		clearTimer();
 		sequence++;
 		setState({ phase: 'final', outcome, capturing: false, releaseAvailable: false });
@@ -136,12 +144,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			});
 		}
 	};
-	const schedule = (delay: number, route: 'intent' | 'status' = 'status') => {
+	// The reason the last void went out with, so a re-send after a held lock carries it again.
+	let voidReason: string | undefined;
+	const schedule = (delay: number, route: Route = 'status') => {
 		clearTimer();
 		if (active())
 			timer = deps.setTimeout(() => {
 				timer = null;
-				void (route === 'intent' ? request('intent') : tick());
+				void (route === 'status' ? tick() : request(route, voidReason));
 			}, delay);
 	};
 	const applyResponse = async (
@@ -171,6 +181,25 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
 		const status = data.payment.status;
+		if (status === 'voided' && cancelledLockedIntent !== null) {
+			// The retirement is awaited before the leg is final: a failed journal write keeps the
+			// leg live with its reason and the next status read retires again, so a voided leg never
+			// leaves a re-sendable intent behind.
+			try {
+				await deps.retire?.('intent', cancelledLockedIntent);
+			} catch (error) {
+				if (!current(seq)) return false;
+				setState({
+					error: {
+						code: 'retire_failed',
+						message: error instanceof Error ? error.message : 'retire_failed',
+					},
+				});
+				schedule(POLL_CADENCE_MS);
+				return false;
+			}
+			if (!current(seq)) return false;
+		}
 		if (isFinalPaymentStatus(status)) finish(status);
 		return current(seq);
 	};
@@ -214,6 +243,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		clearTimer();
 		const seq = ++sequence;
 		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
+		if (route === 'void') voidReason = reason;
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
@@ -306,8 +336,28 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		if (code === 'wcpos_payment_locked') {
-			setState({ capturing: false, phase: 'polling' });
-			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
+			const delay = (body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000;
+			// The lock was held and nothing ran (ADR 0040 §1.3): the money command stays journaled,
+			// and only a re-send of it answers it. A status read cannot: an intent that never ran
+			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
+			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
+			// intent was out wins: nothing ran, so the void goes out now instead.
+			if (route === 'intent') {
+				const intent = state.row.id;
+				if (pendingCancel !== null) cancelledLockedIntent = intent;
+				if (await voidAfterIntent()) return;
+				cancelledLockedIntent = null;
+			}
+			if (route === 'status') setState({ capturing: false, phase: 'polling' });
+			else
+				setState(
+					route === 'intent'
+						? { phase: 'creating' }
+						: route === 'void'
+							? { phase: 'cancelling', capturing: false }
+							: { phase: 'polling', capturing: true }
+				);
+			schedule(delay, route);
 			return;
 		}
 		if (code === 'wcpos_invalid_transition' && (route === 'capture' || route === 'void')) {
@@ -332,7 +382,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			route === 'intent' &&
 			response?.status !== undefined &&
 			INTENT_REFUSAL_STATUSES.has(response.status);
+		// A money command (intent, capture, void) ends the leg only on the store's own decision,
+		// the rule its journal uses (sync-core `isDefinitiveMoneyRefusal`): an answer the journal
+		// keeps for a re-send (a 426, a proxy's bare 4xx) must not end the leg, or a later re-send
+		// could authorize after the cashier was told it failed. A status read is no command.
+		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 		if (
+			definitive &&
 			(code?.startsWith('wcpos_') || refusedIntent) &&
 			response?.status !== undefined &&
 			response.status >= 400 &&

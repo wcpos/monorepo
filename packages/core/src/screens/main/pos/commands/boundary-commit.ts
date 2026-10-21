@@ -169,7 +169,8 @@ export async function commitAtBoundary(
 					return patch;
 				},
 			});
-			// A system pass that cannot close (offline, refused) leaves the order pos-partial.
+			// A system pass that cannot close (offline, refused) leaves the order pos-partial; the
+			// coordinator retries an offline one when the till reconnects.
 			if (completion && typeof completion === 'object' && 'kind' in completion) {
 				logger.debug('settlement.boundary-not-closed', {
 					context: { orderId: order.uuid, outcome: completion.kind },

@@ -107,6 +107,25 @@ it('begin starts one intent and refuses another live leg for the order', async (
 	expect(c.http.post).toHaveBeenCalledTimes(1);
 	expect(c.mirror).toHaveBeenCalledWith('order', { payment: row }, expect.anything());
 });
+// A cashier switch moves the till to another scope, where the leg's order is not resident: the
+// leg stops (no poll, no capture, no void) and is dropped; its journaled command re-sends through
+// the scope-bound recovery, and the leg resumes when that cashier's scope is active again.
+it('suspendLegs stops and drops every live leg without ending the service', async () => {
+	const c = setup();
+	c.service.resume(input);
+	await jest.advanceTimersByTimeAsync(0);
+	const reads = c.http.get.mock.calls.length;
+	c.service.suspendLegs();
+	expect(c.service.get('order')).toBeNull();
+	expect(c.service.leg('order')).toBeUndefined();
+	await jest.advanceTimersByTimeAsync(60_000);
+	expect(c.http.get).toHaveBeenCalledTimes(reads);
+	expect(c.http.post).not.toHaveBeenCalled();
+	// The service still takes legs: the order resumes when its scope is active again.
+	expect(c.service.resume(input)).toBeDefined();
+	c.service.stop();
+});
+
 it('the leg’s command poster carries the session its row was minted under', () => {
 	const c = setup();
 	const commandPoster = jest.fn((_uuid: string, _options: unknown) =>
