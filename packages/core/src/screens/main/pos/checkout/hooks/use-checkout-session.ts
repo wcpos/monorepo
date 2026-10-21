@@ -28,7 +28,9 @@ import {
 	setStockRejection,
 	stockRejection$,
 } from '../../hooks/stock-rejection';
+import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
+import { refreshOrderBounded } from '../bounded-order-refresh';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -172,6 +174,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();
+	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const t = useT();
@@ -222,27 +225,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		if (!orderId) {
 			throw new Error('checkout_refresh_requires_persisted_order');
 		}
-		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${orderId}`,
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		try {
-			await handle.ready;
-		} finally {
-			handle.release();
-		}
-
-		const latest = order.getLatest().payload;
-		const reducedStockItems = (latest.line_items || []).filter((item) =>
-			(item.meta_data as { key: string }[] | undefined)?.some(
-				(meta) => meta.key === '_reduced_stock'
-			)
-		);
-		stockAdjustment(reducedStockItems);
-
+		// Route FIRST; the local refresh is catch-up, never a gate (#1685). The
+		// receipt binds the order by uuid and fetches its own receipt data, so it
+		// does not need the refresh to have landed. Drop the paid order from the
+		// cart first: until the refresh lands it is still pos-open locally, and the
+		// cart would keep adding items to it.
+		setCurrentOrderID('');
 		if (uiSettings.autoShowReceipt) {
 			router.replace({
 				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
@@ -251,7 +239,25 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		} else {
 			router.replace({ pathname: '/cart' });
 		}
-	}, [runtime, order, orderId, router, stockAdjustment, uiSettings.autoShowReceipt]);
+
+		await refreshOrderBounded(runtime.engine, orderId);
+
+		const latest = order.getLatest().payload;
+		const reducedStockItems = (latest.line_items || []).filter((item) =>
+			(item.meta_data as { key: string }[] | undefined)?.some(
+				(meta) => meta.key === '_reduced_stock'
+			)
+		);
+		stockAdjustment(reducedStockItems);
+	}, [
+		runtime,
+		order,
+		orderId,
+		router,
+		setCurrentOrderID,
+		stockAdjustment,
+		uiSettings.autoShowReceipt,
+	]);
 
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {

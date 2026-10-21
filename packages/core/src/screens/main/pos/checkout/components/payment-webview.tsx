@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
+import { isRecordUuid } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -15,12 +15,7 @@ import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
-
-// Upper bound on the post-payment local refresh. The cart and receipt are
-// already routed by then; this only decides how long a queued-but-stalled
-// require may hold its handle before it is released. 10 s covers a slow store
-// round-trip without keeping a handle open across a whole cashier shift.
-const ORDER_REFRESH_TIMEOUT_MS = 10_000;
+import { refreshOrderBounded } from '../bounded-order-refresh';
 
 // A pre-hardening store or an async gateway can report "not paid yet" while the
 // provider's confirmation is still in flight. Re-read server truth on a short
@@ -267,35 +262,15 @@ export function PaymentWebview({
 	}, [paymentURL, jwt]);
 
 	/**
-	 * Best-effort local catch-up after a payment: pull the paid order so the
-	 * cart/receipt reflect the server's status. Bounded, because a require's
-	 * `ready` is not guaranteed to settle (a queued plane, dirty-row protection)
-	 * and nothing that the cashier is waiting on may depend on it — see
-	 * handlePaymentReceived.
+	 * Best-effort local catch-up after a payment, bounded (see
+	 * refreshOrderBounded) — nothing the cashier is waiting on may depend on it;
+	 * see handlePaymentReceived.
 	 */
 	const refreshOrder = React.useCallback(async () => {
 		if (!orderId) {
 			throw new Error('payment_refresh_requires_persisted_order');
 		}
-		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${orderId}`,
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		try {
-			await Promise.race([
-				handle.ready,
-				new Promise<void>((resolve) => {
-					timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
-				}),
-			]);
-		} finally {
-			if (timer) clearTimeout(timer);
-			handle.release();
-		}
+		await refreshOrderBounded(runtime.engine, orderId);
 	}, [runtime, orderId]);
 	const adoptSnapshot = React.useCallback(
 		(snapshot: OrderSnapshot | Record<string, unknown>, warnOnOutcome: boolean) => {
