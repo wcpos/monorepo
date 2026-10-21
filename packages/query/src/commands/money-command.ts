@@ -220,8 +220,17 @@ export async function sendMoneyCommand(
 	// it adopts before it re-sends once. A re-send never borrows a newer revision the cashier did
 	// not approve against: a remote reopen, then a restart, must not close the reopened sale.
 	let revision: string;
-	if (!fresh && APPROVED_KINDS.has(entry.kind) && entry.sentRevision) revision = entry.sentRevision;
-	else
+	if (!fresh && APPROVED_KINDS.has(entry.kind) && entry.sentRevision) {
+		// Local edits made since the first send go to the store first, under their own push: if the
+		// store never stored this command, its revision has then moved, the re-send is answered
+		// stale, and the stale path re-checks the approval against the edited order. A stored
+		// command replays before the revision is checked, so pushing first costs it nothing. A
+		// push that fails leaves the command journaled, unsent this time.
+		const { resident, order } = await readOrder(runtime, entry.orderUuid);
+		if (order.local?.dirty || (order.local?.pendingMutationIds?.length ?? 0) > 0)
+			await pushRecord(runtime, resident as never);
+		revision = entry.sentRevision;
+	} else
 		try {
 			revision = await chooseRevision(runtime, storeDB, entry, orderId, fresh);
 		} catch (error) {

@@ -1009,6 +1009,31 @@ it('a recorded submit answered with another attempt’s row is never answered', 
 	expect(await entries()).toHaveLength(1);
 });
 
+// A close lost before the store saw it, then a cart edit the cashier made meanwhile: the re-send
+// pushes that edit first (keeping its own revision), so the store answers stale and the changed
+// sale is re-approved instead of closing at the pre-edit total.
+it('an approved re-send pushes pending local work first, so an edit made after a lost close is re-approved', async () => {
+	store.modes = ['drop'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	await writeResident((doc) => ({
+		...doc,
+		local: { ...doc.local, dirty: true, pendingMutationIds: ['edit'] },
+	}));
+	jest.mocked(pushRecord).mockImplementation(async () => {
+		store.total = '120.00';
+		store.n += 1;
+		await writeResident((doc) => ({
+			...doc,
+			local: { ...doc.local, dirty: false, pendingMutationIds: [] },
+		}));
+		return undefined as never;
+	});
+	await expect(restart()).rejects.toMatchObject({ reason: 'order_changed' });
+	expect(pushRecord).toHaveBeenCalledTimes(1);
+	expect(store.completions).toBe(0);
+	expect(await entries()).toEqual([]);
+});
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });
