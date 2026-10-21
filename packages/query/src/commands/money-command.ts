@@ -166,10 +166,9 @@ async function readopt(
 	const { resident, order } = await readOrder(runtime, orderUuid);
 	const { chain } = await readOrderCommands(storeDB, orderUuid);
 	const adopted = order.sync?.adopted;
-	// This refresh adopted: it succeeded, and a whole document under its own stamp was written
-	// since it began (a new adoption, or the resident rewritten). An older read landing while a
-	// failed refresh ran never counts, nor does time alone: a pull in the same millisecond is
-	// indistinguishable by its stamp.
+	// This refresh adopted: it succeeded and a whole document under its own stamp was written since
+	// it began. Never an older read landing while it failed, nor time alone (a pull in the same
+	// millisecond is indistinguishable by its stamp).
 	const whole = refreshed && !!adopted && adopted.revision === order.sync.revision;
 	const adoptedNow = whole && (adopted.at !== before?.at || adopted.revision !== before?.revision);
 	const refreshAdopted =
@@ -332,16 +331,12 @@ export async function settleMoneyCommand(
 ): Promise<void> {
 	const { order } = await readOrder(runtime, orderUuid);
 	if (!order.payload.id) return;
-	const {
-		order: after,
-		chain,
-		refreshAdopted,
-	} = await readopt(runtime, storeDB, orderUuid, order.payload.id);
-	if (chain && refreshAdopted && holdsAuthority(after, chain))
+	const read = await readopt(runtime, storeDB, orderUuid, order.payload.id);
+	if (read.chain && read.refreshAdopted && holdsAuthority(read.order, read.chain))
 		await settleCommand(storeDB, orderUuid, null, {
-			...chain,
+			...read.chain,
 			adoptedAfterAnswer: true,
-			adoptedRevision: after.sync.revision,
+			adoptedRevision: read.order.sync.revision,
 		});
 }
 
@@ -447,12 +442,10 @@ export async function resendOpenCommands(
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
-		// Settled since the snapshot (by its own sender): nothing is left to replay.
-		const sent = await poster(entry.path, entry.body).catch((error: Error) => {
-			if (error.message === 'money_command_unclaimed') return null;
-			throw error;
-		});
-		if (!sent) continue;
+		const sent = await poster(entry.path, entry.body).catch((error: Error) =>
+			error.message === 'money_command_unclaimed' ? null : Promise.reject(error)
+		);
+		if (!sent) continue; // settled since the snapshot by its own sender: nothing to replay
 		const { data } = sent as { data: Record<string, unknown> };
 		// Only the refresh run after the answer confirms it: a pull adopted while the re-send was in
 		// flight, or in the answer's own millisecond, never carries the stamp change.
