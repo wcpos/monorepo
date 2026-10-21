@@ -31,6 +31,7 @@ describe('the money command answer rule', () => {
 		[409, 'wcpos_revision_stale'],
 		[401, 'rest_not_logged_in'],
 		[403, 'rest_forbidden'],
+		[407, 'proxy_authentication_required'],
 		[408, 'request_timeout'],
 		[426, 'wcpos_update_required'],
 		[429, 'too_many_requests'],

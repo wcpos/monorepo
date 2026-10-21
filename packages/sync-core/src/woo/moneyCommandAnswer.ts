@@ -15,8 +15,11 @@ export const RESENDABLE_MONEY_CODES: readonly string[] = [
 	'wcpos_payment_locked',
 	'wcpos_revision_stale',
 ];
-/** A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. */
-export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 408, 426, 429];
+/**
+ * A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. 407 is an
+ * authenticating proxy (the terminal leg reads it the same way, `server-leg.ts` INTENT_REFUSAL).
+ */
+export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408, 426, 429];
 /**
  * The 5xx answers the store documents as its own decision with no money moved, so a re-send
  * cannot take money and the journal must let the cashier move on. Free `next`
