@@ -108,7 +108,7 @@ describe('purgeLegacyDatabases native', () => {
 	});
 
 	it('never reaches a kept drainable scope database, by name or by directory', async () => {
-		const drainable = 'pos_v5_0123456789ab_s1_c2';
+		const drainable = 'pos_v6_0123456789ab_s1_c2';
 		const older = 'pos_v4_0123456789ab_s1_c2';
 		const added = [drainable, `${drainable}-wal`, older].map((name) => ({
 			name,

@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
-import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
+import { toOrderWirePayload } from '@wcpos/sync-core';
 
 import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
@@ -47,10 +47,10 @@ it('settles the latest post-intent payload in one write, without changing outbou
 		cart_tax: '0',
 		tax_lines: [],
 	});
-	expect(stripServerAuthoredOrderMoney(patch)).toEqual(data);
+	expect(toOrderWirePayload(patch)).toEqual(data);
 	expect(
 		compareOrderMoney({
-			pushed: stripServerAuthoredOrderMoney(patch),
+			pushed: toOrderWirePayload(patch),
 			acked: { ...patch, total: '100' },
 		})
 	).toBeNull();

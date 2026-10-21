@@ -48,6 +48,7 @@ import {
 import {
 	assertBulkSuccess,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	FIRST_PROTOCOL_3_SCOPE_GENERATION,
 	isInternalRow,
 	type QueuedMutation,
 	remoteIdOrNull,
@@ -528,6 +529,40 @@ async function carryPosLocalState(
 	}
 }
 
+/** The `kept` reason of a queue written before protocol 3: parked, never sent (ADR 0040). */
+export const WRITTEN_BEFORE_PROTOCOL_3 = 'written-before-protocol-3';
+
+/**
+ * Park a protocol-2 queue (Paul's ruling, ADR 0040 PR A): nothing is pushed and no cart is carried
+ * over, but the receipt print counts are, so an order printed on this till still prints a COPY
+ * after the re-sync. A failed carry is retried (only the carry); parking is final once it landed.
+ */
+async function park(
+	ports: LegacyScopeDrainPorts,
+	identity: StoreScopeIdentity,
+	databaseName: string,
+	database: RxDatabase,
+	before: Classified
+): Promise<LegacyScopeDrainOutcome> {
+	const localState = await carryPosLocalState(ports, identity, database);
+	const retryable = localState.error !== null;
+	const reportDue = retryable || (await unsendableReportDue(database, (ports.now ?? Date.now)()));
+	await database.close();
+	return {
+		status: 'kept',
+		databaseName,
+		reason: retryable
+			? `receipt print counts not carried over: ${localState.error}`
+			: WRITTEN_BEFORE_PROTOCOL_3,
+		retryable,
+		pushed: 0,
+		carried: 0,
+		remaining: before.remaining,
+		keptOrderUuids: before.orderUuids,
+		reportDue,
+	};
+}
+
 /** True when the kept database's un-sendable work has not been reported within the interval; stamps it. */
 async function unsendableReportDue(database: RxDatabase, nowMs: number): Promise<boolean> {
 	// The queue: the one collection every drain opens, with local documents in the drainable recipe.
@@ -765,6 +800,10 @@ export async function drainLegacyScopeDatabase(
 			...(stored.has('orders') ? { orders: creators.orders as never } : {}),
 		});
 		before = await classify(probe);
+		// A protocol-2 queue (ADR 0040): parked before any push or carry-over; `probe` stays set,
+		// so a failure part-way closes it below (closing twice is a no-op).
+		if (before.total > 0 && DRAINABLE_SCOPE_DATABASE_GENERATION < FIRST_PROTOCOL_3_SCOPE_GENERATION)
+			return await park(ports, identity, databaseName, probe, before);
 		const blocked =
 			ports.connectivity?.() === 'offline'
 				? 'write-drain skipped: offline'

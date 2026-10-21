@@ -49,9 +49,14 @@ export async function enqueueRecordWrite(runtime: QueryManager, document: AnyRxD
 			? (resident.toMutableJSON().payload ?? {})
 			: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
 	) as Record<string, unknown>;
+	const operation = remoteId == null ? 'create' : 'update';
+	// Status is an intent, never an echo (ADR 0040): an order update re-sending the
+	// resident's status would reopen a paid order from a stale copy. A queued write that
+	// named the status carries it; this row coalesces into it. A create keeps its status.
+	if (collectionName === 'orders' && operation === 'update') delete payload.status;
 	const receipt = await runtime.engine.write({
 		collection: collectionName,
-		operation: remoteId == null ? 'create' : 'update',
+		operation,
 		recordId,
 		payload,
 		...(collectionName === 'orders' ? { explicit: true } : {}),

@@ -1,5 +1,7 @@
 import 'whatwg-fetch';
 
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
+
 import { createTokenRefreshHandler, refreshAccessToken } from './create-token-refresh-handler';
 import { resetRefreshCooldown } from './refresh-access-token';
 import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
@@ -207,7 +209,7 @@ describe('createTokenRefreshHandler', () => {
 			await handler.handle(ctx);
 
 			expect(mockPost).toHaveBeenCalledWith(
-				'https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3',
+				`https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
 				expect.any(Object),
 				expect.any(Object)
 			);

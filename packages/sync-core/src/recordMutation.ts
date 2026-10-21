@@ -29,7 +29,7 @@ import {
 export type MutationOperation = 'create' | 'update' | 'delete';
 
 export type RecordMutation = {
-	/** The order money epoch observed at enqueue; absent for legacy queued work. */
+	/** Unread since ADR 0040 removed the money epoch; the queue schema keeps it until its next version. */
 	expectedEpoch?: number;
 	/** Idempotency key — a fresh uuid per enqueue; the server dedupes retries on it. */
 	mutationId: string;

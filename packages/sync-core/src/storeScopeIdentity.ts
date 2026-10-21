@@ -63,7 +63,16 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
  * have drained.
  */
 // 6: products promoted `tagIds` (promoted membership, not index-backed) — every resident re-ingests.
-export const SCOPE_DATABASE_GENERATION = 6;
+// 7: protocol 3 (ADR 0040) — a protocol-2 queue is parked, never drained. No schema moved.
+export const SCOPE_DATABASE_GENERATION = 7;
+
+/**
+ * The first scope generation whose queue was written by a protocol-3 till (ADR 0040). A drainable
+ * generation below it is PARKED: never pushed, its open carts never carried over (its rows hold
+ * offline tenders and copied statuses protocol 3 would erase or replay); only its receipt print
+ * counts are carried. Paul's ruling, 2026-10-20: no shipped client has the payments ledger.
+ */
+export const FIRST_PROTOCOL_3_SCOPE_GENERATION = 7;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,

@@ -1,6 +1,5 @@
 import {
 	type QueuedMutation,
-	readMoneyEpoch,
 	type RecordMutationQueue,
 	type RemoteId,
 	remoteIdOrNull,
@@ -368,9 +367,6 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								await queue.replace({
 									...intact,
 									payload: reconcile(entry.payload),
-									...(entry.collectionName === 'orders' && entry.operation === 'update'
-										? { expectedEpoch: readMoneyEpoch(entry.conflictDocument?.meta_data) }
-										: {}),
 									baseRevision: serverBase ?? entry.baseRevision,
 									status: 'pending',
 								});

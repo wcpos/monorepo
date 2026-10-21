@@ -4,6 +4,7 @@ import { isNonRetryable } from './drainMutationQueue';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
 import { mapCouponExpiryToPayload } from './couponWirePayload';
+import { toOrderWirePayload } from './woo/orderWriteContract';
 import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
 import type { RecordMutation } from './recordMutation';
@@ -127,8 +128,6 @@ const OUTCOME_BY_OP: Record<RecordMutation['operation'], Exclude<PushOutcome, 'c
 
 export async function pushRecordMutation(input: {
 	mutation: RecordMutation;
-	expectedEpoch?: number;
-	tillAggregate?: Record<string, unknown>;
 	resolveEndpoint: EndpointResolver;
 	/**
 	 * The transport port — REQUIRED, never defaulted to the global `fetch`. A silent
@@ -192,13 +191,15 @@ export async function pushRecordMutation(input: {
 		recordId: mutation.recordId,
 		baseRevision: mutation.baseRevision,
 	};
-	if (input.expectedEpoch !== undefined) envelope.expectedEpoch = input.expectedEpoch;
-	if (input.tillAggregate !== undefined) envelope.tillAggregate = input.tillAggregate;
 	if (mutation.operation !== 'delete') {
 		if (mutation.collectionName === 'products' || mutation.collectionName === 'variations') {
 			envelope.payload = mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? []);
 		} else if (mutation.collectionName === 'coupons') {
 			envelope.payload = mapCouponExpiryToPayload(mutation.payload);
+		} else if (mutation.collectionName === 'orders') {
+			// The second seam (ADR 0040): a row queued before the strip, or one that slipped
+			// past the enqueue sanitizer, still carries no money and no refused status.
+			envelope.payload = toOrderWirePayload(mutation.payload);
 		} else {
 			envelope.payload = mutation.payload;
 		}

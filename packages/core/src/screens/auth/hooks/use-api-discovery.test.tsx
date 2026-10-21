@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 import { useApiDiscovery } from './use-api-discovery';
 
@@ -49,7 +50,11 @@ const siteData = {
 };
 
 const siteRequestOptions = {
-	params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0 payments=1.3' },
+	params: {
+		wcpos: 1,
+		wcpos_protocol: SYNC_PROTOCOL_VERSION,
+		wcpos_client: 'web/0.0.0 payments=1.3',
+	},
 	timeout: 15_000,
 };
 const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
@@ -119,6 +124,68 @@ describe('useApiDiscovery', () => {
 			expect(mockGet).not.toHaveBeenCalledWith(wpApiUrl, expect.anything());
 		}
 	);
+
+	it('a wcpos_update_required body during discovery reports SYNC341 with the update message, not AUTH_UNEXPECTED', async () => {
+		const wpApiUrl = 'https://example.com/wp-json/';
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 426'), {
+				response: {
+					status: 426,
+					headers: { 'content-type': 'application/json' },
+					data: {
+						code: 'wcpos_update_required',
+						message: 'This store requires a newer version of WCPOS.',
+						data: { status: 426, min_protocol: 4, server_protocol: 4 },
+					},
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			// The code rides the rejection: the connect screen links SYNC341's docs from it.
+			await expect(result.current.discoverApiEndpoints(wpApiUrl)).rejects.toMatchObject({
+				name: 'ApiDiscoveryError',
+				message: 'This store needs a newer version of WCPOS.',
+				errorCode: ERROR_CODES.APP_UPDATE_REQUIRED,
+			});
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledTimes(1);
+		const [message, options] = mockLoggerError.mock.calls[0] as [
+			string,
+			{ code?: string; showToast?: boolean; context?: Record<string, unknown> },
+		];
+		expect(message).toBe('This store needs a newer version of WCPOS.');
+		expect(options.code).toBe(ERROR_CODES.APP_UPDATE_REQUIRED);
+		expect(options.code).not.toBe(ERROR_CODES.AUTH_UNEXPECTED);
+		expect(options.showToast).toBe(true);
+		expect(options.context).toEqual({ wpApiUrl, minProtocol: 4, serverProtocol: 4 });
+		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+
+	it('a REST API blocked by a security plugin rejects with AUTH_PLUGIN_CONFLICT for the connect screen', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 401'), {
+				response: {
+					status: 401,
+					headers: { 'content-type': 'application/json' },
+					data: { code: 'rest_forbidden', message: 'Only logged in users can access the API.' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({
+				name: 'ApiDiscoveryError',
+				message: 'Only logged in users can access the API.',
+				errorCode: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
+			});
+		});
+	});
 
 	it('reports a bot challenge blocking the API', async () => {
 		mockGet.mockRejectedValue(

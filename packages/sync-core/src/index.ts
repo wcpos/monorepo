@@ -45,6 +45,7 @@ export {
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	FIRST_PROTOCOL_3_SCOPE_GENERATION,
 	isScopeDatabaseName,
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
@@ -69,9 +70,14 @@ export {
 	referenceDocumentId, taxRateDocumentId, refundDocumentId, variationDocumentId,
 } from './woo/documentKeys';
 export {
+	isPushableOrderStatus,
 	orderChangesAssertIntent,
+	PUSHABLE_ORDER_STATUSES,
+	type PushableOrderStatus,
 	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
-	stripServerAuthoredOrderMoney,
+	SERVER_OWNED_ORDER_FIELDS,
+	SERVER_OWNED_ORDER_META_KEYS,
+	toOrderWirePayload,
 } from './woo/orderWriteContract';
 export {
 	isCloseAnswer,
@@ -98,7 +104,6 @@ export {
 	identityColumnFilter,
 	POS_META_KEYS,
 	PROTECTED_ORDER_META_KEYS,
-	SERVER_ORDER_MONEY_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';
 export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';
@@ -129,8 +134,4 @@ export { hasPosRefundStamp } from './refund-provenance';
 
 export { readServerSentence, readWpFatalDetail, SERVER_SENTENCE_MAX_CHARS } from './serverSentence';
 
-export {
-	parsePaymentsContract,
-	paymentsContractAtLeast,
-	readMoneyEpoch,
-} from './payments-contract';
+export { parsePaymentsContract } from './payments-contract';

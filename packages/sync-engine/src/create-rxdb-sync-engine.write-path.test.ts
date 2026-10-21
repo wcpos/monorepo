@@ -720,7 +720,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				explicit: true,
 			} as never);
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
@@ -1080,8 +1080,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				});
 				await engine.sync('write-drain');
 				const pushed = server.received.find((envelope) => envelope.operation === operation);
+				// The push-time strip (ADR 0040) also drops the server-authored aggregate.
+				const { tax_lines: _aggregate, ...wire } = payload;
 				expect(pushed?.payload).toEqual({
-					...payload,
+					...wire,
 					...Object.fromEntries(
 						fields.map((field) => [
 							field,
@@ -1325,11 +1327,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			// the push carries no aggregate, so this fake — which stores what it is
 			// given rather than recalculating from the lines the way WooCommerce
 			// does — answers with the money it was SEEDED with. What the POS asserts,
-			// and what has to survive the round trip, is the status and the line.
+			// and what has to survive the round trip, is the line. The discarded create's
+			// status is not re-asserted (ADR 0040): the server's stands.
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
 				payload: {
-					status: 'pos-open',
+					status: 'processing',
 					line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
 				},
 				sync: { revision: server.applied.get(UUID_A)?.revision },
@@ -1557,10 +1560,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		try {
 			await engine.ready;
 			const payload = {
-				status: 'completed',
+				status: 'cancelled',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			};
-			await insertBornLocalOrder(engine, UUID_A, payload, 'completed');
+			await insertBornLocalOrder(engine, UUID_A, payload, 'cancelled');
 			await engine.write({ collection: 'orders', operation: 'create', recordId: UUID_A, payload });
 			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
 			expect(engine.status().writeSessionHeld).toBe(!inFlight);
@@ -2286,7 +2289,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
@@ -2930,7 +2933,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			nowMs += 10 * 60_000;
@@ -2963,7 +2966,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			// Two failed pushes, then the clash parks (two 409s outlive the recovery).
 			await engine.sync('write-drain');
@@ -3023,7 +3026,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			expect(second.mutationId).not.toBe(first.mutationId); // a coalesced entry NEVER reuses a mutationId with a different payload
 			expect(engine.status().queueDepth).toBe(1); // coalesced, not stacked
@@ -3057,7 +3060,7 @@ describe('#507 offline write flows through the public handle', () => {
 				mutationId: second.mutationId,
 				baseRevision: 'sha256:base-r1',
 			});
-			expect((server.received[0].payload as { status?: string }).status).toBe('completed');
+			expect((server.received[0].payload as { status?: string }).status).toBe('cancelled');
 			// Ack re-anchored the record to the server's advanced revision; nothing dirty remains.
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
@@ -3101,7 +3104,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			expect((await queueRows(engine)).length).toBe(2);
 			gateOpen!();
@@ -3142,7 +3145,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -3187,7 +3190,7 @@ describe('#507 offline write flows through the public handle', () => {
 				conflicts: 0,
 			});
 			expect(await engine.conflicts()).toEqual([]);
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('completed');
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('cancelled');
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
 				server.applied.get(UUID_A)?.revision
@@ -3219,7 +3222,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);
@@ -3257,7 +3260,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
@@ -3355,7 +3358,7 @@ describe('#507 offline write flows through the public handle', () => {
 			// The order as it stands on this device TODAY: a guest sale (email stored
 			// locally as ''), edited to 25.00 after the create was rejected.
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				customer_note: 'edited after the rejection',
 				billing: { first_name: 'Guest', email: '' },
@@ -3373,7 +3376,7 @@ describe('#507 offline write flows through the public handle', () => {
 				recordId: UUID_A,
 				origin: 'minted',
 				payload: {
-					status: 'pos-paid',
+					status: 'pending',
 					total: '10.00',
 					customer_note: 'as it stood when the create was refused',
 					billing: { first_name: 'Guest', email: '' },
@@ -3456,7 +3459,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3464,7 +3467,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
 
@@ -3525,7 +3528,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);
@@ -3545,7 +3548,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_MINT,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3575,7 +3578,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3603,7 +3606,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3646,8 +3649,9 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0].operation).toBe('create');
+			// The status is the dead letter's own (ADR 0040), never the resident's.
 			expect(server.received[0].payload).toMatchObject({
-				status: 'pos-paid',
+				status: 'pos-open',
 				customer_note: 'gift wrap',
 			});
 			// The readonly aggregate never reaches the wire (#1507), whichever layer
@@ -3690,7 +3694,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3738,7 +3742,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3816,7 +3820,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed', customer_note: 'gift wrap' },
+				payload: { status: 'cancelled', customer_note: 'gift wrap' },
 			});
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
 
@@ -3847,7 +3851,7 @@ describe('#507 offline write flows through the public handle', () => {
 				requeueCount: 1,
 			});
 			expect(requeued.payload).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'gift wrap',
 				number: '1042',
 			});
@@ -3869,7 +3873,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			const sent = server.received.at(-1)?.payload as Record<string, unknown>;
 			expect(sent).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'gift wrap',
 				number: '1042',
 			});
@@ -3895,7 +3899,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed', customer_note: 'refused note' },
+				payload: { status: 'cancelled', customer_note: 'refused note' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3921,7 +3925,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(survivor?.payload).toMatchObject({ customer_note: 'newer edit' });
 			expect(recovery).toBeDefined();
 			// The recovery carries the field the live row does NOT own…
-			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			expect(recovery?.payload).toMatchObject({ status: 'cancelled' });
 			// …and none that it does — keeping 'refused note' would overwrite the live
 			// edit, because the recovery is ordered behind it.
 			expect(recovery?.payload).not.toHaveProperty('customer_note');
@@ -3965,7 +3969,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed', customer_note: 'refused note' },
+				payload: { status: 'cancelled', customer_note: 'refused note' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:01.000Z',
 			});
@@ -3977,7 +3981,7 @@ describe('#507 offline write flows through the public handle', () => {
 			const recovery = (await queueRows(engine)).find(
 				(row) => row.requeuedFrom === 'refused-update'
 			);
-			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			expect(recovery?.payload).toMatchObject({ status: 'cancelled' });
 			expect(recovery?.payload).not.toHaveProperty('customer_note');
 		} finally {
 			await engine.dispose();
@@ -4006,7 +4010,7 @@ describe('#507 offline write flows through the public handle', () => {
 				recordId: UUID_A,
 				origin: 'existing',
 				payload: {
-					status: 'completed',
+					status: 'cancelled',
 					meta_data: [
 						{ key: '_woocommerce_pos_uuid', value: UUID_A },
 						{ key: '_pos_stale', value: 'from the refused push' },
@@ -4020,7 +4024,7 @@ describe('#507 offline write flows through the public handle', () => {
 			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
 
 			const [recovery] = await queueRows(engine);
-			expect(recovery.payload).toMatchObject({ status: 'completed' });
+			expect(recovery.payload).toMatchObject({ status: 'cancelled' });
 			const meta = (recovery.payload as { meta_data?: { key: string }[] }).meta_data ?? [];
 			expect(meta.some((item) => item.key === '_pos_stale')).toBe(false);
 			expect(meta.some((item) => item.key === '_woocommerce_pos_uuid')).toBe(true);
@@ -4042,7 +4046,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4055,7 +4059,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid', total: '25.00' },
+				payload: { status: 'pending', total: '25.00' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4098,7 +4102,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4132,7 +4136,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4145,7 +4149,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4187,7 +4191,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4235,7 +4239,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4285,7 +4289,7 @@ describe('#507 offline write flows through the public handle', () => {
 			try {
 				await engine.ready;
 				await insertBornLocalOrder(engine, UUID_A, {
-					status: 'pos-paid',
+					status: 'pending',
 					total: '25.00',
 					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 				});
@@ -4298,7 +4302,7 @@ describe('#507 offline write flows through the public handle', () => {
 					operation: 'create',
 					recordId: UUID_A,
 					origin: 'minted',
-					payload: { status: 'pos-paid', total: '25.00' },
+					payload: { status: 'pending', total: '25.00' },
 					baseRevision: null,
 					queuedAt: '2026-01-05T00:00:00.000Z',
 				});
@@ -4338,7 +4342,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4351,7 +4355,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4400,7 +4404,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4413,7 +4417,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4483,7 +4487,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4496,7 +4500,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4541,7 +4545,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4554,7 +4558,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4599,7 +4603,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -4612,7 +4616,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -4674,7 +4678,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -4690,7 +4694,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				mutationId: second.mutationId,
 			});
-			expect((server.received[0].payload as { status?: string }).status).toBe('pos-paid');
+			expect((server.received[0].payload as { status?: string }).status).toBe('pending');
 			const order = await orderJson(engine, UUID_A);
 			expect(order?.remoteId).toBe(remoteId(900_000_500));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
@@ -4786,7 +4790,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			const del = await engine.write({
 				collection: 'orders',
@@ -4909,7 +4913,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.write({
 				collection: 'orders',
@@ -4929,7 +4933,7 @@ describe('#507 offline write flows through the public handle', () => {
 				status?: string;
 				customer_note?: string;
 			};
-			expect(pushedPayload.status).toBe('completed'); // the FIRST edit survives the coalesce
+			expect(pushedPayload.status).toBe('cancelled'); // the FIRST edit survives the coalesce
 			expect(pushedPayload.customer_note).toBe('ring twice'); // and the second lands with it
 		} finally {
 			await engine.dispose();
@@ -4954,7 +4958,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -4966,7 +4970,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0].operation).toBe('create');
 			const pushedPayload = server.received[0].payload as { status?: string; currency?: string };
-			expect(pushedPayload.status).toBe('pos-paid');
+			expect(pushedPayload.status).toBe('pending');
 			expect(pushedPayload.currency).toBe('AUD'); // the create's own field is NOT dropped
 		} finally {
 			await engine.dispose();
@@ -5044,7 +5048,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			// Two racing writes read the SAME pending row: the CAS lets exactly one
 			// consume it; the loser re-reads and coalesces onto the winner's replacement.
@@ -5059,7 +5063,7 @@ describe('#507 offline write flows through the public handle', () => {
 					collection: 'orders',
 					operation: 'update',
 					recordId: UUID_A,
-					payload: { transaction_id: 'txn-7' },
+					payload: { currency: 'NZD' },
 				}),
 			]);
 
@@ -5082,12 +5086,12 @@ describe('#507 offline write flows through the public handle', () => {
 			const pushedPayload = server.received[0].payload as {
 				status?: string;
 				customer_note?: string;
-				transaction_id?: string;
+				currency?: string;
 			};
 			expect(pushedPayload).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'ring twice',
-				transaction_id: 'txn-7',
+				currency: 'NZD',
 			}); // every edit kept
 		} finally {
 			await engine.dispose();
@@ -5164,18 +5168,21 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending', customer_note: 'gift wrap' },
 			});
 			expect((await engine.sync('write-drain')).failed).toBe(1);
 			nowMs = 120_000;
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
 			expect(events.some((event) => event.type === 'queue.write.born-twice-requeue')).toBe(true);
-			expect(await queueRows(engine)).toEqual([
+			const rows = await queueRows(engine);
+			expect(rows).toEqual([
 				expect.objectContaining({
 					operation: 'update',
-					payload: expect.objectContaining({ status: 'pos-paid' }),
+					payload: expect.objectContaining({ customer_note: 'gift wrap' }),
 				}),
 			]);
+			// The create's status never becomes an update intent (ADR 0040).
+			expect(rows[0]!.payload).not.toHaveProperty('status');
 		} finally {
 			await engine.dispose();
 		}
@@ -5212,14 +5219,14 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 
 			// The user edits. Pre-fix this coalesced INTO the pending create under a
 			// FRESH mutationId — the replay then hit the born-twice guard, which
-			// returned the EXISTING document and silently discarded 'pos-paid'.
+			// returned the EXISTING document and silently discarded 'pending'.
 			// Post-fix: the ever-pushed row (attempts > 0) never coalesces; the edit
 			// queues BEHIND as a separate update.
 			const edit = await engine.write({
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 			const rows = (await queueRows(engine)).sort((a, b) => (a.seq as number) - (b.seq as number));
 			expect(rows.map((row) => [row.operation, row.mutationId])).toEqual([
@@ -5242,8 +5249,8 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				['create', create.mutationId], // the replay — same id, not a fresh one
 				['update', edit.mutationId],
 			]);
-			// The truth the executed repro proved lost: the server DID apply 'pos-paid'.
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pos-paid');
+			// The truth the executed repro proved lost: the server DID apply 'pending'.
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pending');
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
 				server.applied.get(UUID_A)?.revision
@@ -5326,7 +5333,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 			});
 
 			// Drain 1: the create acks (200 returned-existing) — pre-fix the client
@@ -5343,10 +5350,9 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			expect(rows).toHaveLength(1);
 			expect(rows[0]).toMatchObject({ operation: 'update', baseRevision: 'sha256:existing-r1' });
 			expect(rows[0]?.mutationId).not.toBe(create.mutationId);
-			expect(rows[0]?.payload as { status?: string; currency?: string }).toMatchObject({
-				status: 'pos-paid',
-				currency: 'AUD',
-			});
+			// The snapshot re-lands without the create's status (ADR 0040: never an update intent).
+			expect(rows[0]?.payload).toMatchObject({ currency: 'AUD' });
+			expect(rows[0]?.payload).not.toHaveProperty('status');
 			const afterAck = await orderJson(engine, UUID_A);
 			expect(afterAck?.remoteId).toBe(remoteId(900_120_777)); // the existing server identity was adopted
 			expect((afterAck?.local as { dirty?: boolean }).dirty).toBe(true); // NOT posing as synced
@@ -5359,7 +5365,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				rejected: 0,
 			});
 			expect(server.received.map((env) => env.operation)).toEqual(['create', 'update']);
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pos-paid');
+			expect((server.received.at(-1)?.payload as { currency?: string }).currency).toBe('AUD');
 			expect(server.applied.get(UUID_A)?.revision).not.toBe('sha256:existing-r1'); // the edit really landed
 			expect((await orderJson(engine, UUID_A))?.local).toMatchObject({
 				dirty: false,
@@ -5385,7 +5391,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'create' as const,
 				recordId: UUID_A,
 				origin: 'minted' as const,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 				baseRevision: null,
 				queuedAt: '2026-07-10T00:00:00.000Z',
 			};
@@ -5400,7 +5406,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 					operation: 'update',
 					recordId: UUID_A,
 					origin: 'existing',
-					payload: { status: 'completed' }, // the NEWER edit — it must win
+					payload: { status: 'cancelled' }, // the NEWER edit — it must win
 					baseRevision: null,
 					queuedAt: '2026-07-10T00:00:01.000Z',
 				});
@@ -5418,14 +5424,14 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 
 			// Pre-fix: the tail append was unconditional, so the OLDER snapshot
 			// slotted at a HIGHER seq than the concurrent edit (and without its
-			// fields) — 'completed' was overwritten server-side. Post-fix: the
+			// fields) — 'cancelled' was overwritten server-side. Post-fix: the
 			// conditional append refuses, the decision re-runs, and the snapshot
 			// merges UNDER the newer edit.
 			expect(result).not.toBeNull();
 			const rows = await queueRows(engine);
 			expect(rows).toHaveLength(1);
 			expect(rows[0]?.mutationId).toBe(result?.mutationId);
-			expect(rows[0]?.payload).toMatchObject({ status: 'completed', currency: 'AUD' }); // newer edit wins on overlap; snapshot fields kept
+			expect(rows[0]?.payload).toMatchObject({ status: 'cancelled', currency: 'AUD' }); // newer edit wins on overlap; snapshot fields kept
 		} finally {
 			await engine.dispose();
 		}
@@ -5448,7 +5454,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 			});
 
 			// The hot writer: every queue read while hot is immediately followed by a
@@ -5530,7 +5536,6 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			expect(await queueRows(engine)).toEqual([]);
 			expect(server.received.at(-1)?.operation).toBe('update');
 			expect(server.received.at(-1)?.payload).toMatchObject({
-				status: 'pos-paid',
 				currency: 'AUD',
 				note: 'hot',
 			}); // both the snapshot and the hot edit landed
@@ -5689,7 +5694,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collectionName: 'orders',
 				operation: 'update',
 				origin: 'existing',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-07-10T00:00:01.000Z',
 				seq: 2,
@@ -5855,7 +5860,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			// The refresh finds nothing (server returns an empty pull) → the honest
@@ -5889,7 +5894,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				conflicts: 0,
 				rejected: 0,
 			});
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('completed');
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('cancelled');
 			expect(await engine.conflicts()).toEqual([]);
 			expect((await orderJson(engine, UUID_A))?.local).toMatchObject({
 				dirty: false,
@@ -6012,7 +6017,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);

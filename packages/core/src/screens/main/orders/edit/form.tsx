@@ -28,7 +28,13 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, type OrderPayload, useRecordField } from '@wcpos/query';
-import { GUEST_CUSTOMER_ID, isGuestCustomer, PROTECTED_ORDER_META_KEYS } from '@wcpos/sync-core';
+import {
+	GUEST_CUSTOMER_ID,
+	isGuestCustomer,
+	isPushableOrderStatus,
+	PROTECTED_ORDER_META_KEYS,
+	PUSHABLE_ORDER_STATUSES,
+} from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
@@ -145,7 +151,18 @@ export function EditOrderForm({ order }: Props) {
 
 			setLoading(true);
 			try {
-				const patched = await saveOrderFields(order, data as unknown as Partial<OrderPayload>);
+				// ADR 0040: the payment fields are the server's (read-only here), and a status is
+				// written only when the cashier changed it — re-sending it would be a reopen.
+				const {
+					status,
+					payment_method: _method,
+					payment_method_title: _title,
+					transaction_id: _transaction,
+					...fields
+				} = data;
+				const changes =
+					status === order.getLatest().payload.status ? fields : { ...fields, status };
+				const patched = await saveOrderFields(order, changes as unknown as Partial<OrderPayload>);
 				// localPatch reports its own failure (row + toast) and resolves undefined.
 				// Pushing anyway would sync the unchanged resident and report success;
 				// reporting it again would put a second row and toast on one failure.
@@ -282,6 +299,12 @@ export function EditOrderForm({ order }: Props) {
 		return format({ id: customer_id, billing, shipping });
 	}, [customer_id, billing, shipping, format]);
 
+	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
+	const statusPushable = isPushableOrderStatus(formData.status);
+	const allowedStatuses = statusPushable
+		? PUSHABLE_ORDER_STATUSES
+		: [...PUSHABLE_ORDER_STATUSES, ...(formData.status ? [formData.status] : [])];
+
 	/**
 	 *
 	 */
@@ -299,6 +322,8 @@ export function EditOrderForm({ order }: Props) {
 									<FormSelect
 										label={t('common.status')}
 										customComponent={OrderStatusSelect}
+										allowed={allowedStatuses}
+										disabled={!statusPushable}
 										value={value}
 										{...fieldRest}
 									/>
@@ -370,7 +395,7 @@ export function EditOrderForm({ order }: Props) {
 							name="payment_method"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('orders.payment_method_id')} {...field} />
+									<FormInput label={t('orders.payment_method_id')} editable={false} {...field} />
 								</View>
 							)}
 						/>
@@ -379,7 +404,7 @@ export function EditOrderForm({ order }: Props) {
 							name="payment_method_title"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('orders.payment_method_title')} {...field} />
+									<FormInput label={t('orders.payment_method_title')} editable={false} {...field} />
 								</View>
 							)}
 						/>
@@ -404,7 +429,7 @@ export function EditOrderForm({ order }: Props) {
 							name="transaction_id"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('common.transaction_id')} {...field} />
+									<FormInput label={t('common.transaction_id')} editable={false} {...field} />
 								</View>
 							)}
 						/>

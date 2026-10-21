@@ -2,7 +2,7 @@ import {
 	type MetaDataEntry,
 	POS_META_KEYS,
 	PROTECTED_ORDER_META_KEYS,
-	SERVER_ORDER_MONEY_META_KEYS,
+	SERVER_OWNED_ORDER_META_KEYS,
 } from '@wcpos/sync-core';
 
 /** POS identity and money-ownership metadata whose resident values survive server adoption. */
@@ -36,7 +36,7 @@ export function mergeProtectedOrderMeta(
 				: serverMeta.length;
 		serverMeta = serverMeta.filter((meta) => meta?.key !== key);
 
-		if (SERVER_ORDER_MONEY_META_KEYS.includes(key)) {
+		if (SERVER_OWNED_ORDER_META_KEYS.includes(key)) {
 			if (localEntry) serverMeta.splice(index, 0, localEntry);
 			continue;
 		}
