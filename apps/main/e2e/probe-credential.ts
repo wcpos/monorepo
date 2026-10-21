@@ -47,7 +47,7 @@ export function storeRequestOptions(authorization: StoreAuthorization | null): {
 			// The plugin's protocol gate (Free `Protocol_Gate`, stores on `next`) refuses a
 			// marked request that carries no client protocol with 426; the probe speaks
 			// the same protocol as the app it drives.
-			'X-WCPOS-Protocol': '2',
+			'X-WCPOS-Protocol': '3',
 			...(authorization?.transport === 'header' ? { Authorization: authorization.value } : {}),
 		},
 		params: authorization?.transport === 'query' ? { authorization: authorization.value } : {},

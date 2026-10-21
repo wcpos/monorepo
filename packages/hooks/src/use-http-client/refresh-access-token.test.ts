@@ -80,7 +80,7 @@ describe('refreshAccessToken', () => {
 			{ headers: { 'x-wcpos': '1' } }
 		);
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
-		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe('2');
+		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe('3');
 		expect(new URL(refreshUrl).searchParams.get('wcpos_client')).toBe(
 			`web/${AppInfo.version} payments=1.3`
 		);
@@ -112,7 +112,7 @@ describe('refreshAccessToken', () => {
 				{
 					headers: {
 						'x-wcpos': '1',
-						'x-wcpos-protocol': '2',
+						'x-wcpos-protocol': '3',
 						'x-wcpos-client': `android/${AppInfo.version} payments=1.3`,
 						'user-agent': 'WCPOS/1.2.3 (android; build 45)',
 					},
@@ -139,7 +139,7 @@ describe('refreshAccessToken', () => {
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
 		expect(new URL(refreshUrl).searchParams.has('wcpos_protocol')).toBe(false);
 		expect(new URL(refreshUrl).searchParams.has('wcpos_client')).toBe(false);
-		expect(requestConfig.headers['x-wcpos-protocol']).toBe('2');
+		expect(requestConfig.headers['x-wcpos-protocol']).toBe('3');
 		expect(requestConfig.headers['x-wcpos-client']).toBe(`web/${AppInfo.version} payments=1.3`);
 	});
 
@@ -263,7 +263,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -280,7 +280,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -297,7 +297,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -316,7 +316,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post.mock.calls[0]?.[0]).toBe(
-			'https://example.test/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh&wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3'
+			'https://example.test/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh&wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3'
 		);
 	});
 
@@ -332,7 +332,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post.mock.calls[0]?.[0]).toBe(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3'
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3'
 		);
 	});
 
@@ -617,14 +617,14 @@ describe('refreshAccessToken', () => {
 // Headers are normalized as HTTP fields, not compared as JS dictionary casing/order.
 describe('refresh wire fixtures', () => {
 	it.each([
-		['web', false, false, '?wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3'],
+		['web', false, false, '?wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3'],
 		['web', true, false, ''],
-		['web', false, true, '&wcpos_protocol=2&wcpos_client=web%2F0.0.0+payments%3D1.3'],
+		['web', false, true, '&wcpos_protocol=3&wcpos_client=web%2F0.0.0+payments%3D1.3'],
 		['web', true, true, ''],
-		['android', false, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0+payments%3D1.3'],
-		['android', true, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0+payments%3D1.3'],
-		['android', false, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0+payments%3D1.3'],
-		['android', true, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0+payments%3D1.3'],
+		['android', false, false, '?wcpos_protocol=3&wcpos_client=android%2F0.0.0+payments%3D1.3'],
+		['android', true, false, '?wcpos_protocol=3&wcpos_client=android%2F0.0.0+payments%3D1.3'],
+		['android', false, true, '&wcpos_protocol=3&wcpos_client=android%2F0.0.0+payments%3D1.3'],
+		['android', true, true, '&wcpos_protocol=3&wcpos_client=android%2F0.0.0+payments%3D1.3'],
 	] as const)('%s capability=%s query=%s', async (platform, capability, query, suffix) => {
 		const previous = { ...AppInfo };
 		Object.assign(AppInfo, {
@@ -656,14 +656,14 @@ describe('refresh wire fixtures', () => {
 					platform === 'android'
 						? {
 								'x-wcpos': '1',
-								'x-wcpos-protocol': '2',
+								'x-wcpos-protocol': '3',
 								'x-wcpos-client': 'android/0.0.0 payments=1.3',
 								'user-agent': 'WCPOS/test (android)',
 							}
 						: capability
 							? {
 									'x-wcpos': '1',
-									'x-wcpos-protocol': '2',
+									'x-wcpos-protocol': '3',
 									'x-wcpos-client': 'web/0.0.0 payments=1.3',
 								}
 							: { 'x-wcpos': '1' },

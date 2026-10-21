@@ -89,14 +89,14 @@ test('every sync request uses the protocol transport proven by the store echo', 
 
 	for (const { url, headers } of syncRequests) {
 		if (supportsProtocolHeaders) {
-			expect(headers['x-wcpos-protocol'], `missing X-WCPOS-Protocol on ${url}`).toBe('2');
+			expect(headers['x-wcpos-protocol'], `missing X-WCPOS-Protocol on ${url}`).toBe('3');
 			expect(headers['x-wcpos-client'], `missing/malformed X-WCPOS-Client on ${url}`).toMatch(
 				/^web\/.+/
 			);
 			expect(url.searchParams.has('wcpos_protocol'), `sent wcpos_protocol on ${url}`).toBe(false);
 			expect(url.searchParams.has('wcpos_client'), `sent wcpos_client on ${url}`).toBe(false);
 		} else {
-			expect(url.searchParams.get('wcpos_protocol'), `missing wcpos_protocol on ${url}`).toBe('2');
+			expect(url.searchParams.get('wcpos_protocol'), `missing wcpos_protocol on ${url}`).toBe('3');
 			expect(
 				url.searchParams.get('wcpos_client'),
 				`missing/malformed wcpos_client on ${url}`

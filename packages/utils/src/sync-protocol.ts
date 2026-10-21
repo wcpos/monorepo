@@ -1,10 +1,13 @@
 import { APP_PAYMENTS_CONTRACT } from './payments-contract';
 
 /**
- * Sending this value is the client's claim that it tolerates the 2.0.0 boundary
- * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
+ * Sending this value is the client's claim that it speaks this sync protocol; the
+ * server gates the sync surface on it (wcpos/woocommerce-pos#1752) and refuses a
+ * lower one with 426 `wcpos_update_required`. Protocol 3 is the 2.0.0 floor
+ * (woocommerce-pos ADR 0040, rule D1): the push lane carries no money, so no
+ * `set_paid`, payment or paid status rides on it (payments contract 1.3).
  */
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
 
 export const PROTOCOL_HEADER = 'X-WCPOS-Protocol';
 export const CLIENT_HEADER = 'X-WCPOS-Client';
