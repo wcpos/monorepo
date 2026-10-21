@@ -274,3 +274,67 @@ test('enforces variant ownership in apps/main under per-package lint', async () 
 
 	assert.equal(messages.length, 1);
 });
+
+// A screen that replaces the whole app is a GateScreen; the hand-rolled shape it replaced is
+// refused under screens/ and app/. The fixture is the old update-required.tsx root.
+const HAND_CENTRED = `
+	export function UpdateRequired() {
+		return (
+			<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+				<Text>Update</Text>
+			</View>
+		);
+	}
+`;
+const SCRIM = `
+	export function Scrim() {
+		return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'black', opacity: 0.4 }]} />;
+	}
+`;
+const GATE = 'never a hand-centred absoluteFill';
+
+test('rejects a hand-centred absoluteFill on a core screen (the old update-required shape)', async () => {
+	const perPackage = await lint(
+		HAND_CENTRED,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+	const fromRoot = await lint(HAND_CENTRED, IN_APP, 'no-restricted-syntax');
+
+	assert.equal(restrictedSyntax(perPackage, GATE).length, 1);
+	assert.equal(restrictedSyntax(fromRoot, GATE).length, 1);
+});
+
+test('rejects the object form of a hand-centred absoluteFill in apps/main/app', async () => {
+	const messages = await lint(
+		`export default function Gone() {
+			return <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center' }} />;
+		}`,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, GATE).length, 1);
+});
+
+test('allows an absoluteFill scrim without justifyContent', async () => {
+	const messages = await lint(SCRIM, IN_APP, 'no-restricted-syntax', coreConfig, CORE_ROOT);
+
+	assert.deepEqual(restrictedSyntax(messages, GATE), []);
+});
+
+test('keeps variant ownership firing beside the gate guard in apps/main/app', async () => {
+	const messages = await lint(
+		PAINTED_BUTTON,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
+});

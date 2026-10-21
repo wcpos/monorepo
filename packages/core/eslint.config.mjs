@@ -2,13 +2,19 @@ import {
 	config,
 	designSystemOwnershipFiles,
 	designSystemOwnershipSelectors,
+	gateScreenFiles,
+	gateScreenSelector,
 } from '../eslint/index.js';
 
 export default [
 	// The shared ownership globs are repo-root-relative, but `pnpm lint` runs ESLint from
 	// packages/core, where they match nothing. Rebase that block onto this package's tree.
 	...config.map((entry) =>
-		entry.files === designSystemOwnershipFiles ? { ...entry, files: ['src/**/*.tsx'] } : entry
+		entry.files === designSystemOwnershipFiles
+			? { ...entry, files: ['src/**/*.tsx'] }
+			: entry.files === gateScreenFiles
+				? { ...entry, files: ['src/screens/**/*.tsx'] }
+				: entry
 	),
 
 	// #1093 guardrail: `engine.write({ operation: 'delete' })` is a durable
@@ -24,9 +30,11 @@ export default [
 			// This block REPLACES the shared `no-restricted-syntax` for src/screens/** (flat config
 			// does not merge a rule's options), so the design-system ownership selectors are
 			// restated beside the #1093 one, or the ownership rule stops applying under src/screens.
+			// The gate-screen guard is restated for the same reason.
 			'no-restricted-syntax': [
 				'error',
 				...designSystemOwnershipSelectors,
+				gateScreenSelector,
 				{
 					selector: "Property[key.name='operation'] > Literal[value='delete']",
 					message:
