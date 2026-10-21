@@ -52,7 +52,11 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	if (flow.hasLiveLeg) {
 		return (
 			<VStack space="sm" className="p-4">
-				<Notice tone="warn" title={t('pos_checkout.legacy_not_with_split')} />
+				<Notice
+					tone="warn"
+					title={t('pos_checkout.legacy_not_with_split_title')}
+					description={t('pos_checkout.legacy_not_with_split_description')}
+				/>
 				{flow.legacyMethods.map((method) => (
 					<Text
 						key={method.id}
