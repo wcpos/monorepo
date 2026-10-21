@@ -67,16 +67,18 @@ beforeEach(async () => {
 afterEach(async () => {
 	await mockDB.remove();
 });
-const rows = ['a', 'b', 'c'].map((id) => ({ id, name: id, status: 'active' }));
+// Rows as the plugin sends them on `next`: no status column (woocommerce-pos#2350).
+const rows = ['a', 'b', 'c'].map((id) => ({ id, name: id }));
 function mount() {
 	return renderHook(() => {
 		useRegisterBindingSession();
 		return useRegisterBinding();
 	});
 }
-it('silently binds the sole active register and filters by store', async () => {
+// The server lists live registers only (a retired one is gone from the list on the plugin side).
+it('silently binds the sole register the store lists and filters by store', async () => {
 	mockHttp.get.mockResolvedValue({
-		data: [rows[0], { id: 'retired', name: 'Old', status: 'inactive' }],
+		data: [rows[0]],
 	});
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
@@ -327,8 +329,8 @@ it('reads the default-store directory without rebinding the physical till', asyn
 	await bindRegister(mockDB, mockSite, { id: 'physical', name: 'Physical' }, 2);
 	mockHttp.get.mockResolvedValue({
 		data: [
-			{ id: 'remote', name: 'Remote', status: 'active', store_id: null },
-			{ id: 'physical', name: 'Physical', status: 'active', store_id: 2 },
+			{ id: 'remote', name: 'Remote', store_id: null },
+			{ id: 'physical', name: 'Physical', store_id: 2 },
 		],
 	});
 	const { result } = renderHook(() => useRegisterDirectory(0));
@@ -349,4 +351,63 @@ it('reloads the directory on remount after a rejected request', async () => {
 	await waitFor(() => expect(second.result.current.registers).toEqual(rows));
 	expect(second.result.current.failed).toBe(false);
 	expect(mockHttp.get).toHaveBeenCalledTimes(2);
+});
+
+it('retries an empty directory and binds the newly available register', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
+	mockHttp.get
+		.mockResolvedValueOnce({ data: [] })
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+		.mockResolvedValueOnce({ data: rows[0] });
+	const view = mount();
+	await waitFor(() => expect(view.result.current.status).toBe('none'));
+	expect(view.result.current.retrying).toBe(false);
+	let retried: Promise<void> = Promise.resolve();
+	act(() => {
+		retried = view.result.current.retry();
+	});
+	// While the second request is in flight the gate stays: `retrying` carries the retried state.
+	await waitFor(() => expect(view.result.current.retrying).toBe('none'));
+	await act(async () => {
+		answer({ data: [rows[0]] });
+		await retried;
+	});
+	expect(view.result.current.retrying).toBe(false);
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toEqual([
+		['registers', { params: { store_id: 2 } }],
+		['registers', { params: { store_id: 2 } }],
+	]);
+	expect(view.result.current.status).toBe('bound');
+	expect(view.result.current.registerId).toBe('a');
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
+});
+
+it('retries a failed directory read and binds once for a double tap', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
+	// Both mount-time reads (the directory hook's and the session hook's) fail, so the state settles.
+	mockHttp.get
+		.mockRejectedValueOnce(new Error('offline'))
+		.mockRejectedValueOnce(new Error('offline'))
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+		.mockResolvedValueOnce({ data: rows[0] });
+	const view = mount();
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(2));
+	await waitFor(() => expect(view.result.current.failed).toBe(true));
+	expect(view.result.current.status).toBe('unknown');
+	let first: Promise<void> = Promise.resolve();
+	let second: Promise<void> = Promise.resolve();
+	act(() => {
+		first = view.result.current.retry();
+		second = view.result.current.retry();
+	});
+	expect(second).toBe(first);
+	await waitFor(() => expect(view.result.current.retrying).toBe('failed'));
+	await act(async () => {
+		answer({ data: [rows[0]] });
+		await first;
+	});
+	expect(view.result.current.failed).toBe(false);
+	expect(view.result.current.status).toBe('bound');
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toHaveLength(3);
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers/a')).toHaveLength(1);
 });

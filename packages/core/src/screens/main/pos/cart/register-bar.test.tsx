@@ -32,8 +32,13 @@ jest.mock('../../../../contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+let mockBinding: Record<string, unknown> = {
+	status: 'bound',
+	registerName: 'Front',
+	registers: [{ id: 'r' }],
+};
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] }),
+	useRegisterBinding: () => mockBinding,
 }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
@@ -65,7 +70,11 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: ({ label, testID }: { label: string; testID?: string }) => (
+		<span data-testid={testID}>{label}</span>
+	),
+}));
 jest.mock('../../components/user-avatar', () => ({ UserAvatar: () => null }));
 jest.mock('./switch-store-sheet', () => ({ SwitchStoreSheet: () => null }));
 jest.mock('./user-sheet', () => ({
@@ -75,6 +84,19 @@ jest.mock('./user-sheet', () => ({
 beforeEach(() => {
 	mockRedirectUrl = null;
 	mockIsPhone = true;
+	mockBinding = { status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] };
+});
+
+// Try again republishes `unknown` while it runs; the pill keeps the state being retried.
+it.each([
+	['none', 'register.no_register'],
+	['failed', 'register.offline'],
+] as const)('keeps the %s pill while a retry is in flight', (retrying, pill) => {
+	mockBinding = { status: 'unknown', failed: false, retrying, registerName: null, registers: [] };
+	render(
+		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
+	);
+	expect(screen.getByTestId('register-bar-pill').textContent).toBe(pill);
 });
 it('opens the user sheet from the bar avatar', () => {
 	render(

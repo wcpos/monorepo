@@ -245,7 +245,7 @@ export function UserSheet({
 										{Platform.isWeb && (
 											<MenuRow
 												testID="user-sheet-wp-admin"
-												onPress={() => openExternalURL(`${site.home}/wp-admin`)}
+												onPress={() => openExternalURL(`${site.url}/wp-admin`)}
 												leading={<Icon name="wordpress" className="text-muted-foreground" />}
 												label={t('common.wordpress_admin')}
 											/>

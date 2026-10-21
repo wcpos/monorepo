@@ -30,7 +30,7 @@ it('a failed directory request leaves the names empty and lets the next reader r
 	const hook = renderHook(() => useRegisterNames());
 	await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
 	expect(hook.result.current).toEqual({});
-	mockGet.mockResolvedValueOnce({ data: [{ id: 'a', name: 'Back', status: 'active' }] });
+	mockGet.mockResolvedValueOnce({ data: [{ id: 'a', name: 'Back' }] });
 	const again = renderHook(() => useRegisterNames());
 	await waitFor(() => expect(again.result.current).toEqual({ a: 'Back' }));
 });

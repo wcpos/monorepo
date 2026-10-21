@@ -20,7 +20,6 @@ import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client
 type Register = {
 	id: string;
 	name: string;
-	status: string;
 	store_id?: number | null;
 	default_float?: string | null;
 	counters?: RegisterCounters;
@@ -34,10 +33,17 @@ type Binding = {
 	loaded: boolean;
 	/** The last list request failed; nothing more will arrive until the next attempt. */
 	failed: boolean;
+	/**
+	 * A `retry()` is in flight, carrying the state it retries: the sync republishes `unknown` and
+	 * clears `failed` before the answer, so the gate card and the pill read this instead.
+	 */
+	retrying: false | 'none' | 'failed';
 };
 type Directory = {
 	value: Binding;
 	request?: Promise<void>;
+	/** The `retry()` in flight, so a second tap joins it instead of binding twice. */
+	retry?: Promise<void>;
 	loaded: boolean;
 	listeners: Set<() => void>;
 };
@@ -59,6 +65,7 @@ function directory(siteUuid: string, storeId: number | undefined): Directory {
 				registers: [],
 				loaded: false,
 				failed: false,
+				retrying: false,
 			},
 		});
 	}
@@ -86,9 +93,11 @@ function loadDirectory(
 			publish(entry, {
 				loaded: true,
 				failed: false,
-				registers: (response.data as Register[]).filter(
-					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
-				),
+				// The list holds live registers only (a retired one leaves it and keeps its name for
+				// history on the plugin side), so there is no status to filter on; the one-register
+				// Free model dropped the column (woocommerce-pos#2350) and a stale `status === 'active'`
+				// filter here read every store as having no register.
+				registers: (response.data as Register[]).filter((row) => storeId !== 0 || !row.store_id),
 			});
 		})
 		.catch(() => {
@@ -139,6 +148,56 @@ async function adoptFromServer(
 	}
 }
 
+async function syncBinding(
+	entry: Directory,
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	userDB: Parameters<typeof adoptCounters>[0],
+	siteUuid: string,
+	storeId: number | undefined,
+	online: boolean
+): Promise<void> {
+	const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, siteUuid, id);
+	const bound = await readBoundRegister(userDB, siteUuid, storeId);
+	publish(entry, {
+		status: bound ? 'bound' : 'unknown',
+		registerId: bound?.id ?? null,
+		registerName: bound?.name ?? null,
+	});
+	if (!online) return;
+	await loadDirectory(entry, http, storeId);
+	if (!entry.loaded) return;
+	const registers = entry.value.registers;
+	if (bound && registers.some(({ id }) => id === bound.id)) {
+		await adoptServerCounters(bound.id);
+		return;
+	}
+	if (registers.length === 1) {
+		await adoptServerCounters(registers[0].id);
+		await bindRegister(userDB, siteUuid, registers[0], storeId);
+		recordRegisterFact({
+			kind: 'binding-changed',
+			source: 'automatic',
+			registerId: registers[0].id,
+			previousRegisterId: bound?.id ?? null,
+		});
+		publish(entry, {
+			status: 'bound',
+			registerId: registers[0].id,
+			registerName: registers[0].name,
+		});
+	} else {
+		if (bound) {
+			await unbindRegister(userDB, siteUuid, storeId);
+			recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
+		}
+		publish(entry, {
+			status: registers.length ? 'choose' : 'none',
+			registerId: null,
+			registerName: null,
+		});
+	}
+}
+
 export function useRegisterBindingSession(): void {
 	const { userDB, site, store } = useStoreSession();
 	const http = useRestHttpClient();
@@ -146,50 +205,8 @@ export function useRegisterBindingSession(): void {
 	const entry = directory(site.uuid!, store.id);
 	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
 	React.useEffect(() => {
-		const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, site.uuid!, id);
-		const load = async () => {
-			const bound = await readBoundRegister(userDB, site.uuid!, store.id);
-			publish(entry, {
-				status: bound ? 'bound' : 'unknown',
-				registerId: bound?.id ?? null,
-				registerName: bound?.name ?? null,
-			});
-			if (!online) return;
-			await loadDirectory(entry, http, store.id);
-			if (!entry.loaded) return;
-			const registers = entry.value.registers;
-			if (bound && registers.some(({ id }) => id === bound.id)) {
-				await adoptServerCounters(bound.id);
-				return;
-			}
-			if (registers.length === 1) {
-				await adoptServerCounters(registers[0].id);
-				await bindRegister(userDB, site.uuid!, registers[0], store.id);
-				recordRegisterFact({
-					kind: 'binding-changed',
-					source: 'automatic',
-					registerId: registers[0].id,
-					previousRegisterId: bound?.id ?? null,
-				});
-				publish(entry, {
-					status: 'bound',
-					registerId: registers[0].id,
-					registerName: registers[0].name,
-				});
-			} else {
-				if (bound) {
-					await unbindRegister(userDB, site.uuid!, store.id);
-					recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
-				}
-				publish(entry, {
-					status: registers.length ? 'choose' : 'none',
-					registerId: null,
-					registerName: null,
-				});
-			}
-		};
 		// A failed list request leaves the pointer/status unchanged; no retries.
-		void load().catch(() => {});
+		void syncBinding(entry, http, userDB, site.uuid!, store.id, online).catch(() => {});
 	}, [entry, http, online, site.uuid, store.id, userDB]);
 }
 
@@ -220,6 +237,7 @@ export function useRegisterDirectory(storeId: number | undefined) {
 export function useRegisterBinding() {
 	const { userDB, site, store } = useStoreSession();
 	const actor = useRegisterActor();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const http = useRestHttpClient();
 	const value = useRegisterDirectory(store.id);
 	const entry = directory(site.uuid!, store.id);
@@ -244,5 +262,23 @@ export function useRegisterBinding() {
 		},
 		[actor, entry, http, site.uuid, store.id, userDB]
 	);
-	return { ...value, bind };
+	const retry = React.useCallback(() => {
+		// Looked up inside the callback: the React compiler refuses a mutation of a render-scope
+		// value, and the directory is the same module-level entry either way.
+		const current = directory(site.uuid!, store.id);
+		if (current.retry) return current.retry;
+		current.request = undefined;
+		current.loaded = false;
+		// The sync republishes `unknown` and clears `failed` before the request answers; the
+		// flag keeps the gate card up for that whole stretch instead of flashing the cart.
+		publish(current, { retrying: current.value.failed ? 'failed' : 'none' });
+		current.retry = syncBinding(current, http, userDB, site.uuid!, store.id, online)
+			.catch(() => {})
+			.finally(() => {
+				current.retry = undefined;
+				publish(current, { retrying: false });
+			});
+		return current.retry;
+	}, [http, online, site.uuid, store.id, userDB]);
+	return { ...value, bind, retry };
 }

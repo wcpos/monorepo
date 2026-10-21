@@ -10,7 +10,6 @@ import { Skeleton } from '@wcpos/components/skeleton';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
-import { Text } from '@wcpos/components/text';
 import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useRegisterSurface } from '../../../../extensions/commands/use-register-surface';
@@ -36,6 +35,7 @@ import { SessionHoldBanner } from '../../components/session-hold-banner';
 import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
 import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';
+import { RegisterGateCard } from './register-gate-card';
 import {
 	consumeRegisterPickerRequest,
 	useRegisterPickerRequested,
@@ -70,7 +70,7 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
-	const { status: bindingStatus } = useRegisterBinding();
+	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
@@ -113,12 +113,18 @@ function CartColumn({
 	);
 	// The open-order tabs belong to the cart: while the column shows the register picker, the
 	// Open register card or the count instead, the tabs go with it (Paul, 2026-09-29).
+	// No register answered for this store, or the directory could not be read while unbound:
+	// the column is the gate card (board 2A, 2026-10-21). The open-order tabs stay: open carts are allowed.
+	const gateFailed = (bindingStatus === 'unknown' && failed) || retrying === 'failed';
+	const gateShown = bindingStatus === 'none' || retrying === 'none' || gateFailed;
 	const cartShown =
+		!gateShown &&
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
 		!sessionLoading &&
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
 		!(session && session.status !== 'open');
-	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
+	const cartBar =
+		cartShown || gateShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
 	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
 	// the count too, and a key must not void or switch an order the cashier cannot see (#428).
 	// Shown AND not covered by the open-orders list (inert, out of the accessibility tree).
@@ -175,7 +181,6 @@ function CartColumn({
 					).CartAddTimingReadout
 				)}
 			{position === 'top' && cartBar}
-			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
 			<View
 				testID="cart-column-body"
 				className="min-h-0 flex-1"
@@ -184,7 +189,9 @@ function CartColumn({
 				{...(cartCovered ? { inert: true } : {})}
 			>
 				<ErrorBoundary>
-					{bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
+					{gateShown ? (
+						<RegisterGateCard failed={gateFailed} retry={retry} />
+					) : bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
 						<RegisterPicker
 							onBound={() => {
 								setPickingRegister(false);
