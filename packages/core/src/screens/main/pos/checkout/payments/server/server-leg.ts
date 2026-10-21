@@ -313,7 +313,9 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			// The lock was held and nothing ran (ADR 0040 §1.3): the money command stays journaled,
 			// and only a re-send of it answers it. A status read cannot: an intent that never ran
 			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
-			// again after `retry_after`, in the phase it was sent from.
+			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
+			// intent was out wins: nothing ran, so the void goes out now instead.
+			if (route === 'intent' && (await voidAfterIntent())) return;
 			if (route === 'status') setState({ capturing: false, phase: 'polling' });
 			else
 				setState(

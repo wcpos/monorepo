@@ -539,6 +539,22 @@ it('a locked intent is re-sent after retry_after, never polled', async () => {
 	expect(c.calls.slice(0, 2).map(({ route }) => route)).toEqual(['intent', 'intent']);
 	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
 });
+// The lock ran nothing, so a cancel pressed while that intent was out goes out now as the void
+// (answered 200 or not-found either way); the intent is never re-sent to the reader.
+it('a cancel pending over a locked intent is resolved as the void, never an intent re-send', async () => {
+	const c = setup();
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.answer('void', response({ status: 'voided' }));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	await started;
+	await tick(5000);
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('void')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
 it('a locked capture is re-sent after retry_after, then settles', async () => {
 	const c = setup(true);
 	c.answer('status', response({ status: 'authorized' }));
