@@ -149,6 +149,23 @@ describe('submitGatewayPayment', () => {
 		});
 		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: null });
 	});
+	// A replay answers the attempt's stored outcome with the order as it now stands: after another
+	// till reopened the sale, that is open again. Mirrored, but never reported finished.
+	it.each([
+		['paid', 'pos-open', 'reopened'],
+		['settled', 'pos-partial', 'reopened'],
+		['paid', 'completed', 'settled'],
+		// A merchant's settle status can be `pending` (pay by invoice): still settled.
+		['settled', 'pending', 'settled'],
+	])('a replayed %s answer with a %s summary is %s', async (outcome, status, kind) => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { outcome, payment: null, order: summary(status) } });
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind,
+			order: summary(status),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary(status), awaiting: null });
+	});
 	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({

@@ -542,6 +542,22 @@ describe('useTenderFlow', () => {
 		}
 	);
 
+	// A replayed gateway submit answers its stored outcome with the order as it now stands.
+	it.each([
+		['paid', 'completed', 1],
+		['paid', 'pos-open', 0],
+		['settled', 'pending', 1],
+		['settled', 'pos-partial', 0],
+	])(
+		'a replayed %s submit with a %s summary finishes the sale only while done',
+		async (outcome, status, finished) => {
+			mockResend.mockResolvedValueOnce([{ kind: 'submit', data: { outcome, order: { status } } }]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+		}
+	);
+
 	it('a Try again the store answers finishes the sale like a first answer', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };

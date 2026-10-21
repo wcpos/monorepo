@@ -6,7 +6,7 @@ import {
 	type OrderPaymentSummary,
 	type PaymentRow,
 } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
+import { isDefinitiveMoneyRefusal, isPaidStatus, moneyRefusalOf } from '@wcpos/sync-core';
 
 /**
  * Submit a `gateway` capture-mode method (Payments Contract 1.2 §2, roadmap#415 R2/R4):
@@ -41,6 +41,8 @@ export type SubmitGatewayPaymentOutcome =
 	| { kind: 'recorded'; row: PaymentRow; order: OrderPaymentSummary }
 	| { kind: 'sent'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
 	| { kind: 'settled'; order: OrderPaymentSummary }
+	/** A replayed `settled`/`paid` whose order was reopened since: mirrored, never finished. */
+	| { kind: 'reopened'; order: OrderPaymentSummary }
 	/** `wcpos_fields_invalid`: a message per component id, `_form` for the gateway's own line. */
 	| { kind: 'fields_invalid'; errors: Record<string, string> }
 	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
@@ -49,7 +51,10 @@ export type SubmitGatewayPaymentOutcome =
 /** The server answered 2xx and the till's copy could not be written: the outcome stands. */
 export class GatewayMirrorError extends Error {
 	public constructor(
-		public outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' | 'settled' }>,
+		public outcome: Extract<
+			SubmitGatewayPaymentOutcome,
+			{ kind: 'recorded' | 'sent' | 'settled' | 'reopened' }
+		>,
 		public cause: unknown
 	) {
 		super('Gateway outcome could not be mirrored locally.', { cause });
@@ -82,6 +87,17 @@ function errorResponse(error: unknown): ErrorResponse | undefined {
 	if (!error || typeof error !== 'object') return undefined;
 	const response = (error as { response?: unknown }).response;
 	return response && typeof response === 'object' ? (response as ErrorResponse) : undefined;
+}
+
+/**
+ * Whether a `settled` or `paid` submit answer still describes a finished sale. A replay answers
+ * the attempt's stored outcome with the order as it now stands, so another till's reopen shows
+ * as an open order. `paid` needs a paid status; `settled` only an order that is not open again,
+ * since a merchant's settle status can be `pending` (pay by invoice).
+ */
+export function submitStillDone(outcome: unknown, status: unknown): boolean {
+	if (outcome === 'paid') return isPaidStatus(status);
+	return outcome === 'settled' && status !== 'pos-open' && status !== 'pos-partial';
 }
 
 export async function submitGatewayPayment(
@@ -135,7 +151,10 @@ export async function submitGatewayPayment(
 	// Only the request is inside the try above: once the server has answered 2xx the outcome
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
 	const mirror = async (
-		outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' | 'settled' }>,
+		outcome: Extract<
+			SubmitGatewayPaymentOutcome,
+			{ kind: 'recorded' | 'sent' | 'settled' | 'reopened' }
+		>,
 		awaiting: AwaitingCustomerStamp | null
 	) => {
 		try {
@@ -155,6 +174,11 @@ export async function submitGatewayPayment(
 	}
 	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
 	// the summary as the truth and no receipt number assumed.
+	if (
+		(data.outcome === 'settled' || data.outcome === 'paid') &&
+		!submitStillDone(data.outcome, data.order.status)
+	)
+		return mirror({ kind: 'reopened', order: data.order }, null);
 	if (data.outcome === 'settled' || data.outcome === 'paid') {
 		// The store settled the sale on the merchant's stored status and cleared any stamp an
 		// earlier send left (§3.1); the till's copy follows, with the summary's status.

@@ -87,7 +87,11 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
-import { GatewayCancelMirrorError, GatewayMirrorError } from '../payments/submit-gateway-payment';
+import {
+	GatewayCancelMirrorError,
+	GatewayMirrorError,
+	submitStillDone,
+} from '../payments/submit-gateway-payment';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
 	declaredValues,
@@ -728,11 +732,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						preLegBalanceMinor: balanceMinor,
 						amountMinor,
 					}).finally(() => tenderRecorded(row, 'online'));
-				} else if (
-					kind === 'submit' &&
-					(data.outcome === 'settled' || data.outcome === 'paid') &&
-					summary
-				)
+				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}
 		} catch (error) {
@@ -1142,6 +1142,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
+				if (outcome.kind === 'reopened') {
+					// A replayed attempt whose sale another till reopened since: nothing to finish.
+					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+						showToast: true,
+						context: { ...orderContext, method: method.id, status: outcome.order.status },
+					});
+					return;
+				}
 				if (outcome.kind === 'settled') {
 					// No money, no stamp: the gateway landed the order on the status the merchant
 					// stored for it, which is the sale finishing (§3.1) — the paid completion, as is.
@@ -1306,6 +1314,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
+				} else if (outcome.kind === 'reopened') {
+					// Reopened elsewhere since: nothing to finish here.
 				} else {
 					await completeOrderFlow({
 						source: 'gateway',
