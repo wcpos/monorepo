@@ -36,7 +36,8 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 }
 
 /** `lose`: stored, answer lost. `drop`: lost before the store saw it. `503`: refused unstored. */
-type Mode = 'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider' | 'outstanding';
+type Mode =
+	'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider' | 'outstanding' | 'malformed';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -70,6 +71,8 @@ class FakeStore {
 		if (mode === '403') throw httpError(403, 'rest_forbidden');
 		if (mode === '503') throw httpError(503, 'http_service_unavailable');
 		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
+		// A plugin filter or proxy answering 2xx with nothing the store said.
+		if (mode === 'malformed') return { data: {} };
 		if (mode === 'outstanding')
 			throw httpError(409, 'wcpos_balance_outstanding', { order: this.summary() });
 		if (mode === 'drop') throw new Error('Network Error');
@@ -102,6 +105,9 @@ class FakeStore {
 		const answer = {
 			...(payment ? { payment } : {}),
 			order: this.summary(),
+			...(route.kind === 'close'
+				? { completion: { n: this.completions, id: `c${this.completions}` } }
+				: {}),
 			revision: this.revision,
 		};
 		this.commands.set(key, { fingerprint, answer });
@@ -776,6 +782,30 @@ it('a recovery fired mid-send is a no-op during a stale adoption and its re-send
 	adopting();
 	await sending;
 	expect(store.post).toHaveBeenCalledTimes(2);
+});
+
+// A malformed 2xx never settles a close, whoever re-sends it (sync-core `isCloseAnswer`).
+it('Try again never settles a close on a malformed 2xx; the next re-send answers it', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	store.modes = ['malformed'];
+	await expect(restart()).rejects.toThrow('close_malformed_response');
+	expect(await entries()).toHaveLength(1);
+	expect(await restart()).toEqual([expect.objectContaining({ kind: 'close' })]);
+	expect(await entries()).toEqual([]);
+	expect(store.completions).toBe(1);
+});
+
+it('the session recovery never settles a close on a malformed 2xx; the next recovery answers it', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	store.modes = ['malformed'];
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	expect(await entries()).toHaveLength(1);
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([
+		{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
+	]);
+	expect(await entries()).toEqual([]);
 });
 
 it('the status poll passes through without an envelope', async () => {

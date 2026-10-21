@@ -12,7 +12,12 @@ import {
 } from '@wcpos/query';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
+import {
+	isCloseAnswer,
+	isDefinitiveMoneyRefusal,
+	MONEY_ANSWER_CODES,
+	moneyRefusalOf,
+} from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
@@ -30,24 +35,6 @@ export type CloseOutcome =
 	| { kind: 'refused'; code: string; message: string }
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
-
-/** The store's summary, read as the gateway answers are: a status says what the order is now. */
-function isSummary(value: unknown): value is OrderPaymentSummary {
-	return (
-		!!value &&
-		typeof value === 'object' &&
-		typeof (value as { status?: unknown }).status === 'string'
-	);
-}
-function isCompletion(value: unknown): value is { n: number; id: string } {
-	const completion = value as { n?: unknown; id?: unknown } | null | undefined;
-	return (
-		!!completion &&
-		typeof completion === 'object' &&
-		typeof completion.n === 'number' &&
-		typeof completion.id === 'string'
-	);
-}
 
 /**
  * Complete a covered sale through `POST orders/{id}/close` (ADR 0040 D2): the till never writes
@@ -72,13 +59,13 @@ export async function closeSale(
 	const post = moneyCommandPoster({ runtime, storeDB, orderUuid: order.uuid, ...deps });
 	try {
 		const { data } = await post(`orders/${id}/close`, {});
-		// Only the store's own summary and completion say the sale closed. A 2xx without them (a
-		// proxy page, a plugin filter) proves nothing: the entry stays journaled for a re-send.
-		const answer = (data ?? {}) as { order?: unknown; completion?: unknown };
-		if (!isSummary(answer.order) || !isCompletion(answer.completion))
-			throw new Error('close_malformed_response');
-		await post.mirror({ order: answer.order });
-		return { kind: 'completed', order: answer.order, completion: answer.completion };
+		// Only the store's own summary and completion say the sale closed (sync-core
+		// `isCloseAnswer`, the poster's rule too). A 2xx without them (a proxy page, a plugin
+		// filter) proves nothing: the entry stays journaled for a re-send.
+		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
+		const order = data.order as unknown as OrderPaymentSummary;
+		await post.mirror({ order });
+		return { kind: 'completed', order, completion: data.completion };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };

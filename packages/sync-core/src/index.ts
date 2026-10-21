@@ -80,6 +80,8 @@ export {
 	toOrderWirePayload,
 } from './woo/orderWriteContract';
 export {
+	type CloseAnswer,
+	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
 	MONEY_ANSWER_CODES,
 	type MoneyRefusal,

@@ -74,6 +74,31 @@ export function moneyRefusalOf(error: unknown): MoneyRefusal | null {
 	};
 }
 
+/** The store's answer to a `close` that completed the sale. */
+export interface CloseAnswer {
+	readonly order: { readonly status: string } & Record<string, unknown>;
+	readonly completion: { readonly n: number; readonly id: string };
+}
+
+/**
+ * Whether a 2xx `close` answer is the store's own (ADR 0040 D2): a summary with a status and the
+ * completion it stamped. Anything else (a proxy page, a plugin filter's `{}`) proves nothing, so
+ * it never settles the journaled close or finishes the sale; the close is re-sent. One rule for
+ * the first answer, Try again and the store-session recovery.
+ */
+export function isCloseAnswer(data: unknown): data is CloseAnswer {
+	const { order, completion } = (data ?? {}) as { order?: unknown; completion?: unknown };
+	return (
+		!!order &&
+		typeof order === 'object' &&
+		typeof (order as { status?: unknown }).status === 'string' &&
+		!!completion &&
+		typeof completion === 'object' &&
+		typeof (completion as { n?: unknown }).n === 'number' &&
+		typeof (completion as { id?: unknown }).id === 'string'
+	);
+}
+
 /** Whether the answer settles the command (the server decided; a re-send repeats it). */
 export function isDefinitiveMoneyRefusal(refusal: MoneyRefusal | null): boolean {
 	if (!refusal?.code || refusal.status === undefined) return false;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isDefinitiveMoneyRefusal, moneyRefusalOf } from './moneyCommandAnswer';
+import { isCloseAnswer, isDefinitiveMoneyRefusal, moneyRefusalOf } from './moneyCommandAnswer';
 
 const answer = (status: number, data: unknown) => ({ response: { status, data } });
 const wpError = (status: number, code: string) =>
@@ -46,5 +46,23 @@ describe('the money command answer rule', () => {
 		expect(
 			moneyRefusalOf(answer(422, { code: 'c', message: 'm', data: { payment_id: 'p' } }))
 		).toEqual({ status: 422, code: 'c', message: 'm', data: { payment_id: 'p' } });
+	});
+});
+
+describe('the close answer rule', () => {
+	it('accepts only a summary with a status and the completion it stamped', () => {
+		const order = { status: 'completed' };
+		expect(isCloseAnswer({ order, completion: { n: 2, id: 'c2' } })).toBe(true);
+		for (const data of [
+			null,
+			{},
+			'<html>proxy</html>',
+			{ completion: { n: 1, id: 'c1' } },
+			{ order: { total: '0.00' }, completion: { n: 1, id: 'c1' } },
+			{ order },
+			{ order, completion: { id: 'c1' } },
+			{ order, completion: { n: '1', id: 'c1' } },
+		])
+			expect(isCloseAnswer(data)).toBe(false);
 	});
 });

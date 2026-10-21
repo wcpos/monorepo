@@ -1,5 +1,10 @@
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, MONEY_ANSWER_CODES, moneyRefusalOf } from '@wcpos/sync-core';
+import {
+	isCloseAnswer,
+	isDefinitiveMoneyRefusal,
+	MONEY_ANSWER_CODES,
+	moneyRefusalOf,
+} from '@wcpos/sync-core';
 
 import { mintUuid } from '../mint-uuid';
 import { mirrorServerOrder, type MoneyAnswer } from '../mutations/mirror-server-order';
@@ -468,6 +473,11 @@ export function moneyCommandPoster(input: {
 			if (isDefinitiveMoneyRefusal(moneyRefusalOf(error))) refusedSinceSettle = true;
 			throw error;
 		});
+		// A close completes only on the store's own summary and completion (sync-core
+		// `isCloseAnswer`), whoever sent it: the first press, Try again or the session recovery.
+		// Anything else is never answered here, so the entry stays journaled for a re-send.
+		if (entry.kind === 'close' && !isCloseAnswer(response.data))
+			throw new Error('close_malformed_response');
 		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
 		// Answered: the claim narrows to this entry until the settle.
 		const key = idKey(entry.orderUuid, entry.id);
