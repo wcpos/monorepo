@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import { View } from 'react-native';
 
+import { FallbackScreen } from '../error-boundary/fallback-screen';
 import { GateScreen } from './index';
 
 const noop = () => {};
@@ -33,6 +34,20 @@ const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 		docs: { label: 'Learn more', href: 'https://docs.wcpos.com', code: 'CLIENT151' },
 	},
 	{
+		id: 'parked',
+		tone: 'muted',
+		title: 'The POS is open in another tab',
+		description: 'Only one tab can run the register.',
+		primary: { label: 'Take over here', onPress: noop },
+	},
+	{
+		id: 'taking-over',
+		tone: 'muted',
+		title: 'Taking over…',
+		description: 'Waiting for the other tab to finish a payment.',
+		primary: { label: 'Take over here', onPress: noop, disabled: true },
+	},
+	{
 		id: 'not-found',
 		tone: 'muted',
 		icon: 'help',
@@ -42,11 +57,25 @@ const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 	},
 ];
 // A gate owns the whole screen (`flex-1`), so each cell gives it a screen-sized stage.
-export const stories = examples.map(({ id, ...props }) => ({
-	id,
-	render: () => (
-		<View className="h-160 w-full">
-			<GateScreen {...props} testID={`gallery-gate-screen-${id}`} />
-		</View>
-	),
-}));
+export const stories = [
+	...examples.map(({ id, ...props }) => ({
+		id,
+		render: () => (
+			<View className="h-160 w-full">
+				<GateScreen {...props} testID={`gallery-gate-screen-${id}`} />
+			</View>
+		),
+	})),
+	{
+		// A route boundary's fallback: the same gate, the thrown message clipped in the detail.
+		id: 'fallback-screen',
+		render: () => (
+			<View className="h-160 w-full">
+				<FallbackScreen
+					error={new TypeError("Cannot read properties of undefined (reading 'line_items')")}
+					resetErrorBoundary={noop}
+				/>
+			</View>
+		),
+	},
+];
