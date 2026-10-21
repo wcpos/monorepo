@@ -1,7 +1,26 @@
 import type { UnsentChanges } from '@wcpos/utils/unsent-changes';
 
 /**
- * The root error screen's reset-confirm copy (#1098).
+ * Every other string on the root error screen, English for the reason below. The crash title is
+ * the route fallback's (`FallbackScreen`), so the two last-resort screens say the same thing.
+ */
+export const ROOT_ERROR_COPY = {
+	crashTitle: 'Something went wrong',
+	crashLine: 'Try again keeps everything on this device.',
+	tryAgain: 'Try again',
+	reset: 'Reset app data and restart',
+	resetting: 'Resetting…',
+	resetFailed: 'Could not schedule the reset. Close the app completely, open it again, and retry.',
+	confirmTitle: 'Reset app data and restart?',
+	confirm: 'Reset and restart',
+	cancel: 'Cancel',
+	restartTitle: 'Restart required',
+	restartLine:
+		'Local data will be cleared the next time the app starts. Close the app completely and open it again.',
+} as const;
+
+/**
+ * The root error screen's copy; the reset confirm's body is the branch below (#1098).
  *
  * There is no translation provider above that screen — it renders above every
  * provider, which is the whole reason it can render at all when the app is

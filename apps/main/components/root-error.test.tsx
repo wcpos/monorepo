@@ -36,3 +36,42 @@ it('Try again resets hydration before resetting the boundary', async () => {
 		resetErrorBoundary.mock.invocationCallOrder[0]
 	);
 });
+
+describe('reset', () => {
+	const { readUnsentChanges } = jest.requireMock('@wcpos/utils/unsent-changes');
+	const { scheduleClearLocalDataOnNextLoad } = jest.requireMock('@wcpos/database');
+	const { reloadApp } = jest.requireMock('@wcpos/core/utils/reload-app');
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		readUnsentChanges.mockReturnValue({ status: 'some', count: 2 });
+	});
+
+	it('confirms with the unsent count before anything is cleared, and Cancel goes back', async () => {
+		const screen = await render(
+			<RootError error={new Error('boom')} resetErrorBoundary={jest.fn()} />
+		);
+		await fireEvent.press(screen.getByTestId('root-error-reset'));
+
+		expect(screen.getByTestId('root-error-reset-warning').props.children).toContain('2 changes');
+		expect(scheduleClearLocalDataOnNextLoad).not.toHaveBeenCalled();
+
+		await fireEvent.press(screen.getByTestId('root-error-reset-cancel'));
+		expect(screen.queryByTestId('root-error-reset-panel')).toBeNull();
+		expect(screen.getByTestId('root-error-try-again')).toBeTruthy();
+	});
+
+	it('ends on a restart-required gate with no way back when the build cannot reload', async () => {
+		scheduleClearLocalDataOnNextLoad.mockReturnValue(true);
+		reloadApp.mockReturnValue(false);
+		const screen = await render(
+			<RootError error={new Error('boom')} resetErrorBoundary={jest.fn()} />
+		);
+		await fireEvent.press(screen.getByTestId('root-error-reset'));
+		await fireEvent.press(screen.getByTestId('root-error-reset-confirm'));
+
+		expect(screen.getByTestId('root-error-restart-required')).toBeTruthy();
+		expect(screen.queryByTestId('root-error-try-again')).toBeNull();
+		expect(screen.queryByTestId('root-error-reset')).toBeNull();
+	});
+});

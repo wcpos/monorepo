@@ -1,7 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 
 import { resetHydration } from '@wcpos/core/contexts/app-state/use-hydration-suspense';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
@@ -14,104 +12,12 @@ import {
 	type UnsentChanges,
 } from '@wcpos/utils/unsent-changes';
 
-import { PRE_THEME_COLOURS, PRE_THEME_RADIUS } from './pre-theme-colours';
-import { resetConfirmBody } from './root-error-copy';
+import { PreThemeGate, PreThemeParagraph } from './pre-theme-gate';
+import { ROOT_ERROR_COPY as COPY, resetConfirmBody } from './root-error-copy';
 
 import type { FallbackProps } from 'react-error-boundary';
 
 const appLogger = getLogger(['wcpos', 'app', 'error']);
-
-/**
- * No theme here (this renders above every provider), so no className resolves: the colours and
- * the radius are the light theme's, from `pre-theme-colours.ts`.
- */
-const styles: any = StyleSheet.create({
-	container: {
-		backgroundColor: PRE_THEME_COLOURS.background,
-		flex: 1,
-		justifyContent: 'center',
-	},
-	content: {
-		marginHorizontal: 16,
-	},
-	title: {
-		fontSize: 48,
-		fontWeight: '300',
-		paddingBottom: 16,
-		color: PRE_THEME_COLOURS.foreground,
-	},
-	subtitle: {
-		fontSize: 32,
-		fontWeight: '800',
-		color: PRE_THEME_COLOURS.foreground,
-	},
-	error: {
-		paddingVertical: 16,
-	},
-	button: {
-		backgroundColor: PRE_THEME_COLOURS.primary,
-		borderRadius: PRE_THEME_RADIUS,
-		padding: 16,
-	},
-	buttonText: {
-		color: PRE_THEME_COLOURS.primaryForeground,
-		fontWeight: '600',
-		textAlign: 'center',
-	},
-	resetButton: {
-		marginTop: 8,
-		padding: 16,
-	},
-	resetButtonText: {
-		color: PRE_THEME_COLOURS.destructive,
-		fontWeight: '600',
-		textAlign: 'center',
-	},
-	confirm: {
-		marginTop: 8,
-		backgroundColor: PRE_THEME_COLOURS.card,
-		borderColor: PRE_THEME_COLOURS.destructive,
-		borderRadius: PRE_THEME_RADIUS,
-		borderWidth: 1,
-		padding: 16,
-	},
-	confirmTitle: {
-		color: PRE_THEME_COLOURS.destructive,
-		fontSize: 16,
-		fontWeight: '700',
-		paddingBottom: 8,
-	},
-	confirmBody: {
-		color: PRE_THEME_COLOURS.foreground,
-		paddingBottom: 16,
-	},
-	confirmActions: {
-		flexDirection: 'row',
-		gap: 8,
-		justifyContent: 'flex-end',
-	},
-	confirmCancel: {
-		padding: 12,
-	},
-	confirmCancelText: {
-		color: PRE_THEME_COLOURS.foreground,
-		fontWeight: '600',
-	},
-	confirmAction: {
-		backgroundColor: PRE_THEME_COLOURS.destructive,
-		borderRadius: PRE_THEME_RADIUS,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-	},
-	confirmActionText: {
-		color: PRE_THEME_COLOURS.destructiveForeground,
-		fontWeight: '600',
-	},
-	resetFailedText: {
-		color: PRE_THEME_COLOURS.destructive,
-		paddingTop: 16,
-	},
-});
 
 /**
  * The last-resort screen: it renders above every provider, which is why it can
@@ -210,77 +116,66 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 		reloadApp();
 	};
 
+	if (restartRequired) {
+		return (
+			<PreThemeGate
+				testID="root-error-restart-required"
+				tone="warn"
+				title={COPY.restartTitle}
+				description={COPY.restartLine}
+			/>
+		);
+	}
+
+	if (confirming !== null) {
+		return (
+			<PreThemeGate
+				testID="root-error-reset-panel"
+				tone="bad"
+				title={COPY.confirmTitle}
+				primary={{
+					label: COPY.confirm,
+					testID: 'root-error-reset-confirm',
+					onPress: () => {
+						void handleConfirmReset();
+					},
+				}}
+				secondary={{
+					label: COPY.cancel,
+					testID: 'root-error-reset-cancel',
+					onPress: () => setConfirming(null),
+				}}
+			>
+				<PreThemeParagraph testID="root-error-reset-warning">
+					{resetConfirmBody(confirming)}
+				</PreThemeParagraph>
+			</PreThemeGate>
+		);
+	}
+
 	return (
-		<SafeAreaView style={styles.container}>
-			<ScrollView>
-				<View style={styles.content}>
-					<Text style={styles.title}>Oops!</Text>
-					<Text style={styles.subtitle}>{"There's an error"}</Text>
-					<Text style={styles.error}>{String(error)}</Text>
-					{restartRequired ? (
-						<View testID="root-error-restart-required" style={styles.confirm}>
-							<Text style={styles.confirmTitle}>Restart required</Text>
-							<Text style={styles.confirmBody}>
-								Local data will be cleared the next time the app starts. Close the app completely
-								and open it again.
-							</Text>
-						</View>
-					) : (
-						<>
-							<TouchableOpacity
-								testID="root-error-try-again"
-								style={[styles.button, isResetting ? { opacity: 0.5 } : null]}
-								onPress={handleTryAgain}
-								disabled={isResetting}
-							>
-								<Text style={styles.buttonText}>Try again</Text>
-							</TouchableOpacity>
-							{confirming === null ? (
-								<TouchableOpacity
-									testID="root-error-reset"
-									style={[styles.resetButton, isResetting ? { opacity: 0.5 } : null]}
-									onPress={handleResetPress}
-									disabled={isResetting}
-								>
-									<Text style={styles.resetButtonText}>
-										{isResetting ? 'Resetting…' : 'Reset app data and restart'}
-									</Text>
-								</TouchableOpacity>
-							) : (
-								<View testID="root-error-reset-panel" style={styles.confirm}>
-									<Text style={styles.confirmTitle}>Reset app data and restart?</Text>
-									<Text testID="root-error-reset-warning" style={styles.confirmBody}>
-										{resetConfirmBody(confirming)}
-									</Text>
-									<View style={styles.confirmActions}>
-										<TouchableOpacity
-											testID="root-error-reset-cancel"
-											style={styles.confirmCancel}
-											onPress={() => setConfirming(null)}
-										>
-											<Text style={styles.confirmCancelText}>Cancel</Text>
-										</TouchableOpacity>
-										<TouchableOpacity
-											testID="root-error-reset-confirm"
-											style={styles.confirmAction}
-											onPress={() => {
-												void handleConfirmReset();
-											}}
-										>
-											<Text style={styles.confirmActionText}>Reset and restart</Text>
-										</TouchableOpacity>
-									</View>
-								</View>
-							)}
-							{resetFailed ? (
-								<Text testID="root-error-reset-failed" style={styles.resetFailedText}>
-									Could not schedule the reset. Close the app completely, open it again, and retry.
-								</Text>
-							) : null}
-						</>
-					)}
-				</View>
-			</ScrollView>
-		</SafeAreaView>
+		<PreThemeGate
+			testID="root-error"
+			tone="bad"
+			title={COPY.crashTitle}
+			description={COPY.crashLine}
+			detail={String(error)}
+			primary={{
+				label: COPY.tryAgain,
+				testID: 'root-error-try-again',
+				onPress: handleTryAgain,
+				disabled: isResetting,
+			}}
+			secondary={{
+				label: isResetting ? COPY.resetting : COPY.reset,
+				testID: 'root-error-reset',
+				onPress: handleResetPress,
+				disabled: isResetting,
+			}}
+		>
+			{resetFailed ? (
+				<PreThemeParagraph testID="root-error-reset-failed">{COPY.resetFailed}</PreThemeParagraph>
+			) : null}
+		</PreThemeGate>
 	);
 }
