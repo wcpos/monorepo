@@ -143,9 +143,11 @@ describe('useApiDiscovery', () => {
 
 		const { result } = renderHook(() => useApiDiscovery());
 		await act(async () => {
+			// The code rides the rejection: the connect screen links SYNC341's docs from it.
 			await expect(result.current.discoverApiEndpoints(wpApiUrl)).rejects.toMatchObject({
 				name: 'ApiDiscoveryError',
 				message: 'This store needs a newer version of WCPOS.',
+				errorCode: ERROR_CODES.APP_UPDATE_REQUIRED,
 			});
 		});
 
@@ -160,6 +162,29 @@ describe('useApiDiscovery', () => {
 		expect(options.showToast).toBe(true);
 		expect(options.context).toEqual({ wpApiUrl, minProtocol: 4, serverProtocol: 4 });
 		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+
+	it('a REST API blocked by a security plugin rejects with AUTH_PLUGIN_CONFLICT for the connect screen', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 401'), {
+				response: {
+					status: 401,
+					headers: { 'content-type': 'application/json' },
+					data: { code: 'rest_forbidden', message: 'Only logged in users can access the API.' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({
+				name: 'ApiDiscoveryError',
+				message: 'Only logged in users can access the API.',
+				errorCode: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
+			});
+		});
 	});
 
 	it('reports a bot challenge blocking the API', async () => {

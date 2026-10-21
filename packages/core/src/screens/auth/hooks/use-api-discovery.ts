@@ -50,6 +50,11 @@ function errorWithCode(message: string, code: ErrorCode): Error {
 	return Object.assign(new Error(message), { errorCode: code });
 }
 
+/** The same tag on a discovery refusal, which the outer catch re-throws as it stands. */
+function discoveryErrorWithCode(message: string, code: ErrorCode): ApiDiscoveryError {
+	return Object.assign(new ApiDiscoveryError(message), { errorCode: code });
+}
+
 export type ApiDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
 
 interface WpJsonResponse {
@@ -152,7 +157,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						code: ERROR_CODES.APP_UPDATE_REQUIRED,
 						context: { wpApiUrl, ...updateRequired },
 					});
-					throw new ApiDiscoveryError(message);
+					throw discoveryErrorWithCode(message, ERROR_CODES.APP_UPDATE_REQUIRED);
 				}
 
 				const status = get(errorResponse, 'status');
@@ -174,7 +179,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 						context: { wpApiUrl, httpStatus: status },
 					});
-					throw new ApiDiscoveryError(errorMsg);
+					throw discoveryErrorWithCode(errorMsg, ERROR_CODES.AUTH_PLUGIN_CONFLICT);
 				}
 
 				// Server responded but not with the expected WP REST API format
