@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -51,9 +52,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	if (flow.hasLiveLeg) {
 		return (
 			<VStack space="sm" className="p-4">
-				<View className="border-warning bg-warning/10 rounded-md border p-3">
-					<Text className="text-warn-text text-sm">{t('pos_checkout.legacy_not_with_split')}</Text>
-				</View>
+				<Notice tone="warn" title={t('pos_checkout.legacy_not_with_split')} />
 				{flow.legacyMethods.map((method) => (
 					<Text
 						key={method.id}
@@ -90,32 +89,39 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	}
 	if (gatewayError) {
 		return (
-			<VStack className="border-destructive bg-destructive/10 m-4 rounded-md border p-3">
-				<Text className="text-destructive">{t('pos_checkout.gateway_catalog_unavailable')}</Text>
-				<Button testID="checkout-gateway-catalog-retry" size="lg" onPress={() => void refetch()}>
-					<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
-				</Button>
-			</VStack>
+			<Notice
+				tone="bad"
+				className="m-4"
+				title={t('pos_checkout.gateway_catalog_unavailable')}
+				actions={[
+					{
+						label: t('pos_checkout.try_again'),
+						onPress: () => void refetch(),
+						testID: 'checkout-gateway-catalog-retry',
+					},
+				]}
+			/>
 		);
 	}
 	if (!paymentURL) {
 		return (
-			<View className="border-destructive bg-destructive/10 m-4 rounded-md border p-3">
-				<Text testID="checkout-payment-form-unavailable" className="text-destructive">
-					{t('pos_checkout.payment_form_unavailable')}
-				</Text>
-			</View>
+			<Notice
+				tone="bad"
+				className="m-4"
+				title={t('pos_checkout.payment_form_unavailable')}
+				testID="checkout-payment-form-unavailable"
+			/>
 		);
 	}
 
 	return (
 		<VStack space="sm" className="flex-1 p-4">
 			{frameStatus === 'failed' ? (
-				<View className="border-destructive bg-destructive/10 rounded-md border p-3">
-					<Text testID="checkout-payment-form-load-failed" className="text-destructive">
-						{t('pos_checkout.payment_form_load_failed')}
-					</Text>
-				</View>
+				<Notice
+					tone="bad"
+					title={t('pos_checkout.payment_form_load_failed')}
+					testID="checkout-payment-form-load-failed"
+				/>
 			) : null}
 			<PaymentWebview
 				order={order}
