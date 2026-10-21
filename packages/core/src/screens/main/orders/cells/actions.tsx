@@ -15,7 +15,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			trigger={
 				<IconButton
 					testID="order-actions-button"
-					name="ellipsisVertical"
+					name="more"
 					accessibilityLabel={t('orders.order_actions')}
 				/>
 			}

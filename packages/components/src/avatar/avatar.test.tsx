@@ -49,9 +49,9 @@ it("puts a person's initials on the primary accent at the xs ramp size", () => {
 });
 
 it('keeps a muted surface for a non-person and draws an icon instead of initials', () => {
-	const { container } = render(<Avatar icon="user" variant="muted" fallback="GU" />);
+	const { container } = render(<Avatar icon="customer" variant="muted" fallback="GU" />);
 	expect(container.firstChild).toHaveClass('bg-muted');
-	expect(container.querySelector('[data-icon="user"]')).not.toBeNull();
+	expect(container.querySelector('[data-icon="customer"]')).not.toBeNull();
 	expect(container.textContent).toBe('');
 });
 
@@ -137,7 +137,9 @@ it('names the picture by its initials, hides the fallback beneath, and derives n
 	);
 	expect(container.querySelector('img')!.getAttribute('data-label')).toBe('PK');
 	expect(container.querySelector('span')!.parentElement!.getAttribute('aria-hidden')).toBe('true');
-	rerender(<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="PK" icon="user" />);
+	rerender(
+		<Avatar source={{ uri: 'https://shop.example/me.jpg' }} fallback="PK" icon="customer" />
+	);
 	expect(container.querySelector('img')!.getAttribute('data-label')).toBeNull();
 	rerender(
 		<Avatar

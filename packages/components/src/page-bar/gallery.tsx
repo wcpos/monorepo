@@ -17,13 +17,13 @@ export const stories = [
 				status={{ label: 'Offline', variant: 'warning' }}
 			>
 				<IconButton
-					name="sliders"
+					name="filters"
 					accessibilityLabel="Filters"
 					testID="filters"
 					onPress={onPress}
 				/>
 				<IconButton
-					name="bell"
+					name="notifications"
 					accessibilityLabel="Notifications"
 					testID="bell"
 					onPress={onPress}
@@ -38,7 +38,7 @@ export const stories = [
 				<View className="w-80">
 					<PageBar testID="phone-menu" title="Products" onMenu={{ label: 'Menu', onPress }}>
 						<IconButton
-							name="bell"
+							name="notifications"
 							accessibilityLabel="Notifications"
 							testID="phone-bell"
 							onPress={onPress}

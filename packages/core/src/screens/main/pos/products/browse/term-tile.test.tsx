@@ -111,7 +111,7 @@ describe('TermTile', () => {
 		expect(screen.getByText('12 products')).toBeTruthy();
 		expect(screen.getByTestId('browse-term-7-image')).toBeTruthy();
 		// A photo category never reads as a photo product: the folder sits on it.
-		expect(screen.getByTestId('icon-folder')).toBeTruthy();
+		expect(screen.getByTestId('icon-category')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('browse-term-7'));
 		expect(onPress).toHaveBeenCalledWith(drinks, expect.anything());
 	});
@@ -122,7 +122,7 @@ describe('TermTile', () => {
 		expect(screen.getByText('Snacks')).toBeTruthy();
 		// tintOf(8): 8 % 6 = 2.
 		expect(squareClasses('browse-term-8')).toContain('bg-tile-tint-2');
-		expect(screen.getByTestId('icon-folder')).toBeTruthy();
+		expect(screen.getByTestId('icon-category')).toBeTruthy();
 	});
 	it('shows no count on a term the storefront counts as empty (kept for its POS-only products)', () => {
 		render(<TermTile term={{ ...snacks, count: 0 }} onPress={jest.fn()} />);
@@ -133,13 +133,13 @@ describe('TermTile', () => {
 	it('renders All products with its grid glyph on the last tint, and no count', () => {
 		render(<TermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
 		expect(screen.getByTestId('browse-all-products')).toHaveAttribute('aria-label', 'All products');
-		expect(screen.getByTestId('icon-grid')).toBeTruthy();
+		expect(screen.getByTestId('icon-viewGrid')).toBeTruthy();
 		expect(squareClasses('browse-all-products')).toContain('bg-tile-tint-5');
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
 	it('renders a shortcut with its sliders glyph and its description under the name', () => {
 		render(<TermTile term={breakfast} onPress={jest.fn()} />);
-		expect(screen.getByTestId('icon-sliders')).toBeTruthy();
+		expect(screen.getByTestId('icon-filters')).toBeTruthy();
 		expect(squareClasses('browse-shortcut-qf-1')).toContain('bg-tile-tint-5');
 		expect(screen.getByTestId('poster-words').textContent).toBe('BreakfastHot Food + Bakery');
 		// Read at arm's length on the register: the default size, not the row's small print.
@@ -210,7 +210,7 @@ describe('ParentTermTile', () => {
 	it('composes All products as slot 0 without assuming a term', () => {
 		render(<ParentTermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
 		expect(screen.getByText('All products')).toBeTruthy();
-		expect(screen.getByTestId('icon-grid')).toBeTruthy();
+		expect(screen.getByTestId('icon-viewGrid')).toBeTruthy();
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 		const classes = screen.getByTestId('browse-parent').getAttribute('data-class-name')!.split(' ');
 		expect(classes).toContain('grow');

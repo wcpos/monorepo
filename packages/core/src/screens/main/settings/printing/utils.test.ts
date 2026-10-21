@@ -8,19 +8,17 @@ describe('printerIconName', () => {
 		expect(printerIconName({ connectionType: 'system', address: '' })).toBe('desktop');
 	});
 
-	it('returns "printer" for a winspool queue', () => {
-		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe(
-			'printer'
-		);
+	it('returns "print" for a winspool queue', () => {
+		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe('print');
 	});
 
-	it('returns "printer" for a network profile', () => {
-		expect(printerIconName({ connectionType: 'network' })).toBe('printer');
+	it('returns "print" for a network profile', () => {
+		expect(printerIconName({ connectionType: 'network' })).toBe('print');
 	});
 
-	it('returns "printer" for bluetooth and usb profiles', () => {
-		expect(printerIconName({ connectionType: 'bluetooth' })).toBe('printer');
-		expect(printerIconName({ connectionType: 'usb' })).toBe('printer');
+	it('returns "print" for bluetooth and usb profiles', () => {
+		expect(printerIconName({ connectionType: 'bluetooth' })).toBe('print');
+		expect(printerIconName({ connectionType: 'usb' })).toBe('print');
 	});
 });
 

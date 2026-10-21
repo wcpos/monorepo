@@ -19,7 +19,7 @@ export function CameraScanButton({ open, onToggle }: CameraScanButtonProps) {
 		<Tooltip>
 			<TooltipTrigger asChild>
 				<IconButton
-					name="barcodeRead"
+					name="scan"
 					variant={open ? 'primary' : 'default'}
 					iconClassName={open ? 'text-primary' : undefined}
 					accessibilityLabel={

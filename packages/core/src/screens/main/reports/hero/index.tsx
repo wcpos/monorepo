@@ -119,7 +119,7 @@ function CashierChip() {
 	return (
 		<MenuChip
 			name="cashier"
-			icon="user"
+			icon="cashier"
 			scroll
 			value={value === undefined ? 'all' : String(value)}
 			defaultValue="all"
@@ -301,7 +301,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 			)}
 			<IconButton
 				testID="hero-print"
-				name="printer"
+				name="print"
 				accessibilityLabel={t('reports.print')}
 				onPress={print}
 				loading={isPrinting}
@@ -349,7 +349,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			</React.Suspense>
 			<MenuChip
 				name="status"
-				icon="cartCircleCheck"
+				icon="cartDone"
 				value={statusMode}
 				defaultValue="done"
 				onChange={(next) => setStatusMode(next as typeof statusMode)}
@@ -361,7 +361,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			{period === 'day' ? (
 				<MenuChip
 					name="compare"
-					icon="rightLeft"
+					icon="swap"
 					value={cmp}
 					defaultValue="yesterday"
 					onChange={(next) => setCmp(next as typeof cmp)}
@@ -369,12 +369,12 @@ export function Hero({ title }: { title: React.ReactNode }) {
 					hint={t('reports.compare_live_hint')}
 				/>
 			) : (
-				<Chip testID="hero-chip-compare" icon="rightLeft" label={label} disabled dimmed />
+				<Chip testID="hero-chip-compare" icon="swap" label={label} disabled dimmed />
 			)}
 			{leftOut > 0 && (
 				<Chip
 					testID="hero-chip-left-out"
-					icon="cartShopping"
+					icon="cart"
 					on
 					label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
 					onClear={() => setUnselectedRowIds({})}
@@ -443,9 +443,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				<View className="flex-row items-center gap-2">
 					{!phone && toggle}
 					<React.Suspense
-						fallback={
-							<IconButton name="printer" accessibilityLabel={t('reports.print')} disabled />
-						}
+						fallback={<IconButton name="print" accessibilityLabel={t('reports.print')} disabled />}
 					>
 						<HeroPrint storeId={storeId} />
 					</React.Suspense>

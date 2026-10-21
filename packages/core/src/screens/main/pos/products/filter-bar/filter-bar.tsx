@@ -108,7 +108,7 @@ function SetChip({
 	const chip = (
 		<Chip
 			label={selected[0]?.payload.name ?? label}
-			icon="folder"
+			icon="category"
 			on={ids.length > 0}
 			count={ids.length > 1 ? ids.length - 1 : undefined}
 			dimmed={dimmed}
@@ -186,7 +186,7 @@ function StockChip({ touched }: { touched: () => void }) {
 			<SelectPrimitiveTrigger asChild>
 				<Chip
 					label={value.label || t('common.stock_status')}
-					icon="warehouseFull"
+					icon="warehouse"
 					on={!!selected}
 					testID="filter-pill-stock_status"
 					clearTestID="filter-pill-remove-stock_status"
@@ -239,12 +239,12 @@ function DimmedChip({ item }: { item: FilterBarItem }) {
 							: t('common.stock_status');
 	const icon =
 		item.id === 'featured'
-			? 'star'
+			? 'featured'
 			: item.id === 'on_sale'
-				? 'badgeDollar'
+				? 'currency'
 				: item.id === 'stock_status'
-					? 'warehouseFull'
-					: 'folder';
+					? 'warehouse'
+					: 'category';
 	return <Chip testID={`filter-pill-${item.id}`} label={label} icon={icon} on={on} dimmed />;
 }
 export function POSFilterBar({
@@ -303,7 +303,7 @@ export function POSFilterBar({
 				) : item.id === 'featured' || item.id === 'on_sale' ? (
 					<Chip
 						label={item.id === 'featured' ? t('common.featured') : t('common.on_sale')}
-						icon={item.id === 'featured' ? 'star' : 'badgeDollar'}
+						icon={item.id === 'featured' ? 'featured' : 'currency'}
 						on={!!state.filters[item.id]}
 						dimmed={dimmed}
 						testID={`filter-pill-${item.id}`}

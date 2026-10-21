@@ -187,7 +187,7 @@ it('floors the drawer control and lets the subtitle yield before the title', () 
 	// own name first (Codex review on #2188).
 	// Per class, not as one string: the formatter sorts class lists (see the breadcrumb test).
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	const menu = source.match(/name="bars"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	const menu = source.match(/name="menu"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
 	expect(menu).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
 	const subtitle =
 		source.match(/id\('subtitle'\)[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];

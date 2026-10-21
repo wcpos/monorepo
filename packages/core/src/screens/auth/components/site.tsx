@@ -92,7 +92,7 @@ export function Site({ user, site }: Props) {
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton
-								name="ellipsisVertical"
+								name="more"
 								testID={`auth-site-menu-${site.uuid}`}
 								accessibilityLabel={t('common.actions')}
 							/>
@@ -103,7 +103,7 @@ export function Site({ user, site }: Props) {
 								testID={`auth-site-remove-${site.uuid}`}
 								onPress={() => setDeleteDialogOpened(true)}
 							>
-								<Icon name="trash" className="fill-destructive" />
+								<Icon name="delete" className="fill-destructive" />
 								<Text>{t('auth.remove_site')}</Text>
 							</DropdownMenuItem>
 						</DropdownMenuContent>

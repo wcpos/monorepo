@@ -37,7 +37,7 @@ export function CartConditionsNotice() {
 							index > 0 && 'border-attention/30 border-t'
 						)}
 					>
-						<Icon name="box" variant="attention" />
+						<Icon name="product" variant="attention" />
 						<Text className="flex-1 text-sm font-medium" numberOfLines={1}>
 							{reasonKey === 'pos_cart.only_n_available'
 								? t('pos_cart.only_n_available', params)

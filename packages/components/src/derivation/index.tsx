@@ -68,7 +68,7 @@ function DerivationStep({
 		<View role="listitem" className={cn('flex-row gap-3', className)} {...props}>
 			<View className="w-4 items-center">
 				<View testID="derivation-bead" className={cn('size-4 rounded-full', BEAD[state])}>
-					{state === 'failed' ? <Icon name="xmark" className="text-card size-2.5" /> : null}
+					{state === 'failed' ? <Icon name="close" className="text-card size-2.5" /> : null}
 				</View>
 				{last ? null : (
 					<View

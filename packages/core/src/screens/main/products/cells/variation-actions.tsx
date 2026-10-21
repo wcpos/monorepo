@@ -100,7 +100,7 @@ export function VariationActions({
 				    as the product row's own menu is: a bare Icon had no press state or target. */}
 				<DropdownMenuTrigger asChild>
 					<IconButton
-						name="ellipsisVertical"
+						name="more"
 						accessibilityLabel={t('common.actions')}
 						testID="variation-actions-menu"
 					/>
@@ -116,13 +116,13 @@ export function VariationActions({
 								})
 							}
 						>
-							<Icon name="penToSquare" />
+							<Icon name="edit" />
 							<Text>{t('common.edit')}</Text>
 						</DropdownMenuItem>
 					</CapabilityTooltip>
 					{variation.id && (
 						<DropdownMenuItem onPress={handleRefresh}>
-							<Icon name="arrowRotateRight" />
+							<Icon name="refresh" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
@@ -131,7 +131,7 @@ export function VariationActions({
 							<DropdownMenuSeparator />
 							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
 								<Icon
-									name="trash"
+									name="delete"
 									className="fill-destructive web:group-focus:fill-accent-foreground"
 								/>
 								<Text>{t('common.delete')}</Text>

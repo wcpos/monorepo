@@ -35,7 +35,7 @@ it('lights the border and one-pixel ring only while focused', () => {
 });
 
 it('a tap on the leading glyph focuses the field: the glyph is part of the field, not a dead strip', () => {
-	render(<Input testID="field" leftIcon="magnifyingGlass" />);
+	render(<Input testID="field" leftIcon="search" />);
 	const field = screen.getByTestId('field');
 	expect(document.activeElement).not.toBe(field);
 	fireEvent.click(screen.getByTestId('field-icon'));

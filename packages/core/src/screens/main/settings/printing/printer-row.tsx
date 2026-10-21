@@ -117,7 +117,7 @@ export function PrinterRow({
 					<Button
 						variant="outline"
 						size="sm"
-						leftIcon="penToSquare"
+						leftIcon="edit"
 						onPress={() => onEdit(profile)}
 						testID={`printer-row-${profile.id}-edit`}
 					>
@@ -128,7 +128,7 @@ export function PrinterRow({
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton
-								name="ellipsisVertical"
+								name="more"
 								accessibilityLabel={t('common.more_actions')}
 								testID={`printer-row-${profile.id}-menu`}
 							/>
@@ -151,7 +151,7 @@ export function PrinterRow({
 								}
 								testID={`printer-row-${profile.id}-copy-report`}
 							>
-								<Icon name="circleInfo" />
+								<Icon name="info" />
 								<Text>{t('settings.setup_copy_report')}</Text>
 							</DropdownMenuItem>
 							{canSetDefault && (
@@ -159,7 +159,7 @@ export function PrinterRow({
 									onPress={() => onSetDefault(profile.id)}
 									testID={`printer-row-${profile.id}-set-default`}
 								>
-									<Icon name="star" />
+									<Icon name="featured" />
 									<Text>{t('settings.set_default')}</Text>
 								</DropdownMenuItem>
 							)}
@@ -174,7 +174,7 @@ export function PrinterRow({
 									testID={`printer-row-${profile.id}-delete`}
 								>
 									<Icon
-										name="trash"
+										name="delete"
 										className="fill-destructive web:group-focus:fill-accent-foreground"
 									/>
 									<Text>{t('common.delete')}</Text>

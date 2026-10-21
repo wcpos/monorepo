@@ -21,9 +21,9 @@ type EmptyStateProps = ViewProps & {
 	autoFocus?: boolean;
 };
 const icons = {
-	empty: 'circleInfo',
-	'no-results': 'magnifyingGlass',
-	failed: 'triangleExclamation',
+	empty: 'info',
+	'no-results': 'search',
+	failed: 'warning',
 } as const;
 
 export function EmptyState({

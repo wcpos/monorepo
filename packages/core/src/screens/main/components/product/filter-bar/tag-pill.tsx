@@ -44,7 +44,7 @@ export function TagPill({ resource, selectedID }: Props) {
 		<Combobox onValueChange={handleSelect}>
 			<ComboboxTrigger asChild>
 				<Chip
-					icon="folder"
+					icon="category"
 					on={isActive}
 					testID="filter-pill-tags"
 					clearTestID="filter-pill-remove-tags"

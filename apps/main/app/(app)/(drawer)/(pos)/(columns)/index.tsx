@@ -85,7 +85,7 @@ export default function ResizablePOSColumns() {
 						onPress={() => setActiveTab('products')}
 						className="flex-1 items-center gap-1 py-2"
 					>
-						<Icon name="gifts" variant={activeTab === 'products' ? 'primary' : 'muted'} />
+						<Icon name="gift" variant={activeTab === 'products' ? 'primary' : 'muted'} />
 						<Text
 							className={
 								activeTab === 'products' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
@@ -99,7 +99,7 @@ export default function ResizablePOSColumns() {
 						onPress={() => setActiveTab('cart')}
 						className="flex-1 items-center gap-1 py-2"
 					>
-						<Icon name="cartShopping" variant={activeTab === 'cart' ? 'primary' : 'muted'} />
+						<Icon name="cart" variant={activeTab === 'cart' ? 'primary' : 'muted'} />
 						<Text
 							className={
 								activeTab === 'cart' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'

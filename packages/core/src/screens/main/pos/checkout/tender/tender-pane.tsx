@@ -152,7 +152,7 @@ const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDes
 		{ value: '0', label: '0', testID: 'checkout-key-0' },
 		{
 			value: 'backspace',
-			icon: 'deleteLeft',
+			icon: 'backspace',
 			accessibilityLabel,
 			testID: 'checkout-key-backspace',
 		},
@@ -620,7 +620,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 }
 
 function methodIcon(method: TenderTile['method']) {
-	return method.kind === 'cash' ? 'cashRegister' : 'creditCard';
+	return method.kind === 'cash' ? 'register' : 'card';
 }
 
 /**
@@ -637,7 +637,7 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 			testID="checkout-invoice-sent"
 			className="bg-muted w-full max-w-md flex-row flex-wrap items-center gap-2 rounded-md px-3 py-2"
 		>
-			<Icon name="clock" size="xs" className="text-muted-foreground" />
+			<Icon name="pending" size="xs" className="text-muted-foreground" />
 			<Text className="text-foreground flex-1 text-sm" decodeHtml>
 				{stamp.destination
 					? t('pos_checkout.invoice_sent_to_on', {

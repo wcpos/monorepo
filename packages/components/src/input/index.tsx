@@ -267,7 +267,7 @@ function Input({
 			{clearable && value !== undefined && value.length > 0 && (
 				<Right>
 					<IconButton
-						name="xmark"
+						name="close"
 						size="sm"
 						onPress={handleClear}
 						accessibilityLabel="Clear text"

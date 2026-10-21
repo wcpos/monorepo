@@ -242,7 +242,7 @@ export function RejectedMutationsPanel() {
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
 									<IconButton
-										name="ellipsisVertical"
+										name="more"
 										testID={`db-rejected-menu-${row.mutationId}`}
 										accessibilityLabel={t('common.actions')}
 									/>
@@ -259,7 +259,7 @@ export function RejectedMutationsPanel() {
 										disabled={busyId !== null || row.residentUnknown}
 										onPress={() => setDiscarding(row)}
 									>
-										<Icon name="trash" className="fill-destructive" />
+										<Icon name="delete" className="fill-destructive" />
 										<Text>{t('health.database.rejected.discard')}</Text>
 									</DropdownMenuItem>
 								</DropdownMenuContent>

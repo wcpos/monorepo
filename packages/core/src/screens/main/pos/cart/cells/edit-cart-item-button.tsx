@@ -42,7 +42,7 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 				) : (
 					<Tooltip>
 						<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-							<IconButton name="ellipsisVertical" accessibilityLabel={t('pos_cart.edit_line')} />
+							<IconButton name="more" accessibilityLabel={t('pos_cart.edit_line')} />
 						</TooltipTrigger>
 						{/* Every caller builds this title from a server-supplied name — a product,
 					    a fee, a shipping method — so both places it renders decode. */}

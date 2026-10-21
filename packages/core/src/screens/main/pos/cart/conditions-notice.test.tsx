@@ -65,9 +65,9 @@ it('one row per unmet line: icon, message, verb at the edge', () => {
 		'cart-condition-row-scarf',
 	]);
 	expect(rows.map((row) => row.textContent)).toEqual([
-		'[box]pos_cart.only_n_available {"quantity":2,"name":"Belt"}pos_cart.reduce_line[chevronRight]',
-		'[box]pos_products.out_of_stock {"name":"Beanie"}pos_cart.remove_line[chevronRight]',
-		'[box]pos_products.out_of_stock {"name":"Scarf"}pos_cart.remove_line[chevronRight]',
+		'[product]pos_cart.only_n_available {"quantity":2,"name":"Belt"}pos_cart.reduce_line[chevronRight]',
+		'[product]pos_products.out_of_stock {"name":"Beanie"}pos_cart.remove_line[chevronRight]',
+		'[product]pos_products.out_of_stock {"name":"Scarf"}pos_cart.remove_line[chevronRight]',
 	]);
 });
 
@@ -97,8 +97,8 @@ it('a line without a POS uuid (made outside the POS) gets a row and no verb; its
 	// No uuid: the id falls back to the row's index.
 	expect(screen.getByTestId('cart-condition-row-0')).toBe(rows[0]);
 	expect(rows.map((row) => row.textContent)).toEqual([
-		'[box]pos_products.out_of_stock {"name":"Beanie"}',
-		'[box]pos_cart.only_n_available {"quantity":2,"name":"Belt"}',
+		'[product]pos_products.out_of_stock {"name":"Beanie"}',
+		'[product]pos_cart.only_n_available {"quantity":2,"name":"Belt"}',
 	]);
 	rows.forEach((row) => fireEvent.click(row));
 	expect(mockRemoveLineItem).not.toHaveBeenCalled();

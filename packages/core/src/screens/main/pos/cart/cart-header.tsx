@@ -134,7 +134,7 @@ function LiveCartHeader() {
 								<ComboboxTrigger ref={triggerRef} asChild>
 									<Chip
 										testID="cart-customer-select"
-										icon="user"
+										icon="customer"
 										label={t('common.select_customer')}
 									/>
 								</ComboboxTrigger>

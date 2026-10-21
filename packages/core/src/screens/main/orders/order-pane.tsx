@@ -81,7 +81,7 @@ function OrderPaneContent({
 	}, []);
 	const close = (
 		<IconButton
-			name="xmark"
+			name="close"
 			testID="order-pane-close"
 			accessibilityLabel={t('orders.close_order')}
 			{...{ ref: focusClose }}
@@ -130,7 +130,7 @@ function OrderPaneContent({
 						onDeleted={onClose}
 						trigger={
 							<IconButton
-								name="ellipsisVertical"
+								name="more"
 								iconClassName="rotate-90"
 								testID="order-actions-button"
 								accessibilityLabel={t('orders.order_actions')}

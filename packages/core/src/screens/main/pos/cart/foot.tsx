@@ -33,7 +33,7 @@ export function CartFoot({
 			<NoteRow order={currentOrderRecord} onPress={onOpenSheet} />
 			<HStack className="gap-2 p-2">
 				<IconButton
-					name="ellipsisVertical"
+					name="more"
 					variant="outline"
 					testID="order-meta-button"
 					accessibilityLabel={t('pos_cart.order_details')}

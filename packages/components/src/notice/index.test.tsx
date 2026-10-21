@@ -27,9 +27,9 @@ jest.mock('../loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it.each([
-	['warn', 'border-warn/45 bg-warn-bg', 'triangleExclamation', 'status', 'polite'],
-	['info', 'border-border bg-card', 'circleInfo', 'status', 'polite'],
-	['bad', 'border-bad/45 bg-bad-bg', 'circleExclamation', 'alert', 'assertive'],
+	['warn', 'border-warn/45 bg-warn-bg', 'warning', 'status', 'polite'],
+	['info', 'border-border bg-card', 'info', 'status', 'polite'],
+	['bad', 'border-bad/45 bg-bad-bg', 'alert', 'alert', 'assertive'],
 ] as const)('renders the %s tone and live region', (tone, classes, icon, role, live) => {
 	const { container } = render(<Notice tone={tone} title="Title" testID="notice" />);
 	expect(screen.getByTestId('notice')).toHaveClass(...classes.split(' '));

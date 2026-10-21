@@ -256,7 +256,7 @@ it('shows one All checks passed row for a clean register and no check rows', () 
 		'All checks passedNumbers 41–45 in order'
 	);
 	expect(
-		screen.getByTestId('health-register-clean').querySelector('[data-icon="circleCheck"]')
+		screen.getByTestId('health-register-clean').querySelector('[data-icon="confirmed"]')
 	).not.toBeNull();
 	expect(screen.queryByTestId('health-register-clean-trigger')).toBeNull();
 });
@@ -363,7 +363,7 @@ it('names each till that restarted its counter once the duplicates check is open
 	expect(check.textContent).toContain(
 		'The same receipt number is on more than one sale. Nothing is lost.'
 	);
-	expect(check.querySelector('[data-icon="triangleExclamation"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="warning"]')).not.toBeNull();
 	expect(screen.queryAllByTestId('health-register-duplicate')).toHaveLength(0);
 	open('duplicates');
 	const rows = screen.getAllByTestId('health-register-duplicate');
@@ -564,7 +564,7 @@ it('passes the clock check on behind-only sales without claiming the clocks agre
 	expect(check.textContent).toBe(
 		"No till clock runs ahead1 sale was received later than its till's time, usually an offline sale synced later."
 	);
-	expect(check.querySelector('[data-icon="circleCheck"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="confirmed"]')).not.toBeNull();
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew')).toHaveLength(1);
 });
@@ -592,9 +592,9 @@ it('shows an older plugin’s behind-only skew sample as a neutral row', () => {
 	expect(check.textContent).toBe(
 		"Till clocks: only a sample was checkedUpdate the POS plugin to check every sale's clock."
 	);
-	expect(check.querySelector('[data-icon="circleInfo"]')).not.toBeNull();
-	expect(check.querySelector('[data-icon="circleCheck"]')).toBeNull();
-	expect(check.querySelector('[data-icon="triangleExclamation"]')).toBeNull();
+	expect(check.querySelector('[data-icon="info"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="confirmed"]')).toBeNull();
+	expect(check.querySelector('[data-icon="warning"]')).toBeNull();
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
 		'Order 1040: device 2026-09-11 00:42 +02:00, received 2026-09-10 22:42 UTC — 119 min behind',
@@ -608,8 +608,8 @@ it('fails an older plugin’s sample on an ahead row, with the amber running-ahe
 	expect(checkIds()[0]).toBe('health-register-check-clock');
 	const check = screen.getByTestId('health-register-check-clock');
 	expect(check.textContent).toContain('At least 1 sale stamped by a clock running ahead');
-	expect(check.querySelector('[data-icon="triangleExclamation"]')).not.toBeNull();
-	expect(check.querySelector('[data-icon="circleInfo"]')).toBeNull();
+	expect(check.querySelector('[data-icon="warning"]')).not.toBeNull();
+	expect(check.querySelector('[data-icon="info"]')).toBeNull();
 	open('clock');
 	expect(screen.getAllByTestId('health-register-skew').map((row) => row.textContent)).toEqual([
 		'Order 1041: device 2026-09-11 03:00 +02:00, received 2026-09-10 23:00 UTC — 2.0 h ahead',

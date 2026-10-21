@@ -17,7 +17,7 @@ export function FeaturedPill() {
 
 	return (
 		<Chip
-			icon="star"
+			icon="featured"
 			on={isActive}
 			onPress={() => actions.setFilter('featured', true)}
 			testID="filter-pill-featured"

@@ -35,7 +35,7 @@ import type { PosterMark } from './index';
 			testID={testID}
 		>
 			<Icon
-				name={mark.kind === 'folder' ? 'folder' : mark.name}
+				name={mark.kind === 'folder' ? 'category' : mark.name}
 				size={bare ? 'lg' : compact ? 'xs' : 'sm'}
 				className="text-muted-foreground"
 			/>

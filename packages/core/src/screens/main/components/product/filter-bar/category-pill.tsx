@@ -61,7 +61,7 @@ export function CategoryPill() {
 		<TreeCombobox options={options} multiple value={selected} onValueChange={handleChange}>
 			<TreeComboboxTrigger asChild>
 				<Chip
-					icon="folder"
+					icon="category"
 					on={isActive}
 					testID="filter-pill-categories"
 					clearTestID="filter-pill-remove-categories"

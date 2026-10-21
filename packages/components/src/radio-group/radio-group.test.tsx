@@ -31,6 +31,38 @@ jest.mock('@rn-primitives/radio-group', () => ({
 }));
 
 describe('RadioGroupOption', () => {
+	it('selects the option when its trailing slot is pressed, and not when already selected', () => {
+		const onValueChange = jest.fn();
+
+		const { rerender } = render(
+			<RadioGroup value="default" onValueChange={onValueChange}>
+				<RadioGroupOption
+					value="comfortable"
+					label="Comfortable"
+					testID="comfortable-radio"
+					right={<span>preview</span>}
+				/>
+			</RadioGroup>
+		);
+
+		fireEvent.click(screen.getByTestId('comfortable-radio-right'));
+		expect(onValueChange).toHaveBeenCalledWith('comfortable');
+
+		rerender(
+			<RadioGroup value="comfortable" onValueChange={onValueChange}>
+				<RadioGroupOption
+					value="comfortable"
+					label="Comfortable"
+					testID="comfortable-radio"
+					right={<span>preview</span>}
+				/>
+			</RadioGroup>
+		);
+		onValueChange.mockClear();
+		fireEvent.click(screen.getByTestId('comfortable-radio-right'));
+		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
 	it('does not emit onValueChange when pressing the already-selected option label', () => {
 		const onValueChange = jest.fn();
 

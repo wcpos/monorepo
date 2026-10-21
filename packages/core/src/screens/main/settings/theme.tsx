@@ -3,8 +3,15 @@ import { View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
-import { Icon, IconName } from '@wcpos/components/icon';
+import {
+	Icon,
+	ICON_SET_IDS,
+	IconName,
+	type IconSetId,
+	IconSetProvider,
+} from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
@@ -16,6 +23,7 @@ import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
+import { resolveIconSet } from '../../../contexts/icon-set';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -187,6 +195,81 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	);
 }
 
+/** Six glyphs met on every screen, enough to judge a family at a glance. */
+const ICON_SAMPLES: IconName[] = [
+	'cart',
+	'search',
+	'viewGrid',
+	'viewList',
+	'settings',
+	'confirmed',
+];
+
+/**
+ * The Icons section: one row per candidate family, its samples drawn in that
+ * family. The choice reaches the screens through `IconSetSettingProvider`.
+ */
+function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
+	const { store } = useStoreSession();
+	const markSaved = useMarkSaved();
+	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
+
+	const handleIconsChange = React.useCallback(
+		async (value: IconSetId) => {
+			try {
+				const result = await patchStoreSettings(store, { icons: value }, t);
+				if (result) markSaved(['icons']);
+			} catch (error) {
+				console.error('Failed to persist selected icons', error);
+			}
+		},
+		[t, store, markSaved]
+	);
+
+	return (
+		<SettingsSection title={t('settings.icons')}>
+			<View className="relative self-start">
+				<Text className="text-muted-foreground text-xs">{t('settings.icons.description')}</Text>
+				{/* Out of flow beside the description, like the theme's: the rows never move. */}
+				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
+					<SavedMark name="icons" />
+				</View>
+			</View>
+			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
+			    and Space selects; the radio dot is the selected state. */}
+			<RadioGroup
+				value={icons}
+				onValueChange={(value) => {
+					void handleIconsChange(value as IconSetId);
+				}}
+				aria-label={t('settings.icons')}
+				className="gap-0 pt-2"
+			>
+				{ICON_SET_IDS.map((id) => (
+					<RadioGroupOption
+						key={id}
+						value={id}
+						testID={`settings-icons-${id}`}
+						label={t(`settings.icons.${id}`)}
+						className="items-center py-2"
+						labelClassName="text-sm font-medium"
+						// One line at every width: radio, label and a 160 px strip fit a phone.
+						right={
+							<IconSetProvider set={id}>
+								<HStack className="ml-auto gap-2" testID={`settings-icons-${id}-samples`}>
+									{ICON_SAMPLES.map((name) => (
+										<Icon key={name} name={name} size="lg" className="text-foreground" />
+									))}
+								</HStack>
+							</IconSetProvider>
+						}
+					/>
+				))}
+			</RadioGroup>
+		</SettingsSection>
+	);
+}
+
 /**
  * Theme Settings Component
  *
@@ -216,13 +299,13 @@ function ThemeSettingsContent() {
 			{
 				name: 'system',
 				labelKey: 'settings.theme.system',
-				icon: 'circleHalfStroke',
+				icon: 'desktop',
 				descriptionKey: 'settings.theme.system_description',
 			},
 			{
 				name: 'light',
 				labelKey: 'settings.theme.light',
-				icon: 'sunBright',
+				icon: 'sun',
 				descriptionKey: 'settings.theme.light_description',
 			},
 			{
@@ -234,19 +317,19 @@ function ThemeSettingsContent() {
 			{
 				name: 'ocean',
 				labelKey: 'settings.theme.ocean',
-				icon: 'water',
+				icon: 'wave',
 				descriptionKey: 'settings.theme.ocean_description',
 			},
 			{
 				name: 'sunset',
 				labelKey: 'settings.theme.sunset',
-				icon: 'sunHaze',
+				icon: 'sunset',
 				descriptionKey: 'settings.theme.sunset_description',
 			},
 			{
 				name: 'monochrome',
 				labelKey: 'settings.theme.monochrome',
-				icon: 'circleHalf',
+				icon: 'contrast',
 				descriptionKey: 'settings.theme.monochrome_description',
 			},
 		],
@@ -284,6 +367,7 @@ function ThemeSettingsContent() {
 			<SettingsSection>
 				<ScaleRow t={t} />
 			</SettingsSection>
+			<IconsSection t={t} />
 		</VStack>
 	);
 }

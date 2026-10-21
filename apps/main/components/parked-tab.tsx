@@ -42,7 +42,7 @@ export function ParkedTab({
 			<EmptyState
 				testID="parked-tab-content"
 				kind={lost ? 'failed' : 'empty'}
-				icon={lost ? undefined : 'circleInfo'}
+				icon={lost ? undefined : 'info'}
 				size="surface"
 				className="flex-none"
 				title={title}

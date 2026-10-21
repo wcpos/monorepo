@@ -38,7 +38,7 @@ export function StatusPill() {
 				<Chip
 					testID="filter-pill-status"
 					clearTestID="filter-pill-remove-status"
-					icon="circleInfo"
+					icon="info"
 					label={value?.label || t('common.status')}
 					on={isActive}
 					clearLabel={t('common.remove')}

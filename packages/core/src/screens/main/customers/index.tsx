@@ -219,7 +219,7 @@ function CustomersScreenContent() {
 					<CapabilityTooltipTrigger>
 						<IconButton
 							testID="customers-add-button"
-							name="userPlus"
+							name="addCustomer"
 							accessibilityLabel={t('common.add_new_customer')}
 							onPress={() => router.push({ pathname: '/customers/add' })}
 							disabled={readOnly || !caps.canCreateCustomers}

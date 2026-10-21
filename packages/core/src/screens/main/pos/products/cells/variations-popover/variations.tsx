@@ -194,12 +194,12 @@ export function Variations({
 			) : result.count === 0 ? (
 				loading ? (
 					<HStack testID="variation-popover-syncing" space="xs" className="justify-center">
-						<Icon name="arrowRotateRight" loading size="sm" />
+						<Icon name="refresh" loading size="sm" />
 						<Text className="text-muted-foreground text-xs">{t('pos_products.syncing')}</Text>
 					</HStack>
 				) : (
 					<HStack testID="variation-popover-unavailable" space="xs" className="justify-center">
-						<Icon name="circleExclamation" size="sm" />
+						<Icon name="alert" size="sm" />
 						<Text className="text-muted-foreground text-xs">
 							{t('pos_products.combination_unavailable')}
 						</Text>

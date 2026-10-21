@@ -52,14 +52,14 @@ export function AddCartItemsMenu() {
 				<DropdownMenuContent align="end" portalHost="pos">
 					{isPro && caps.canCreateCustomers ? (
 						<DropdownMenuItem testID="menu-add-customer" onPress={() => setOpenDialog('customer')}>
-							<Icon name="userPlus" />
+							<Icon name="addCustomer" />
 							<Text>{t('common.add_new_customer')}</Text>
 						</DropdownMenuItem>
 					) : (
 						<Tooltip showOnNative>
 							<CapabilityTooltipTrigger>
 								<DropdownMenuItem testID="menu-add-customer" disabled>
-									<Icon name="userPlus" />
+									<Icon name="addCustomer" />
 									<Text>{t('common.add_new_customer')}</Text>
 								</DropdownMenuItem>
 							</CapabilityTooltipTrigger>
@@ -77,11 +77,11 @@ export function AddCartItemsMenu() {
 						testID="menu-add-misc-product"
 						onPress={() => setOpenDialog('misc-product')}
 					>
-						<Icon name="box" />
+						<Icon name="product" />
 						<Text>{t('pos_cart.add_miscellaneous_product')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-fee" onPress={() => setOpenDialog('fee')}>
-						<Icon name="fileInvoiceDollar" />
+						<Icon name="invoice" />
 						<Text>{t('pos_cart.add_fee')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-discount" onPress={() => setOpenDialog('discount')}>
@@ -89,11 +89,11 @@ export function AddCartItemsMenu() {
 						<Text>{t('pos_cart.add_discount')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-shipping" onPress={() => setOpenDialog('shipping')}>
-						<Icon name="truck" />
+						<Icon name="shipping" />
 						<Text>{t('pos_cart.add_shipping')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
-						<Icon name="badgePercent" />
+						<Icon name="discount" />
 						<Text>{t('pos_cart.add_coupon')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>

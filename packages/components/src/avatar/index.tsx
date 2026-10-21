@@ -33,7 +33,7 @@ import { Text } from '../text';
  * <Avatar fallback="JD" variant="warning" />
  *
  * // The Guest customer: a generic person glyph, neutral
- * <Avatar icon="user" variant="muted" />
+ * <Avatar icon="customer" variant="muted" />
  */
 
 const avatarVariants = cva('items-center justify-center overflow-hidden', {

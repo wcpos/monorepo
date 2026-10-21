@@ -47,7 +47,7 @@ it('puts a folder bare in a tint, without a circle', () => {
 	const { container } = render(
 		<PosterThumb picture={{ kind: 'tint', tint: 2 }} mark={{ kind: 'folder' }} />
 	);
-	expect(container.querySelector('[data-icon="folder"]')).not.toBeNull();
+	expect(container.querySelector('[data-icon="category"]')).not.toBeNull();
 	expect(container.querySelector('[data-classes*="rounded-full"]')).toBeNull();
 });
 
@@ -60,7 +60,7 @@ it('puts a folder in a circle over a picture', () => {
 	);
 	expect(screen.getByTestId('picture')).toBeTruthy();
 	expect(
-		container.querySelector('[data-classes*="rounded-full"] [data-icon="folder"]')
+		container.querySelector('[data-classes*="rounded-full"] [data-icon="category"]')
 	).not.toBeNull();
 });
 

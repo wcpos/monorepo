@@ -44,7 +44,7 @@ export function BrandsPill({ resource, selectedID }: Props) {
 		<Combobox onValueChange={handleSelect}>
 			<ComboboxTrigger asChild>
 				<Chip
-					icon="folder"
+					icon="category"
 					on={isActive}
 					testID="filter-pill-brands"
 					clearTestID="filter-pill-remove-brands"

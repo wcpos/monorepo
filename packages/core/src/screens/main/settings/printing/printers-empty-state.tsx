@@ -25,7 +25,7 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 		<View className="border-border items-center rounded-lg border border-dashed p-8">
 			<VStack className="max-w-sm items-center gap-3">
 				<View className="bg-muted rounded-lg p-3">
-					<Icon name="printer" variant="muted" size="2xl" />
+					<Icon name="print" variant="muted" size="2xl" />
 				</View>
 				<Text className="text-center font-medium">{t('settings.no_printers_configured')}</Text>
 				<Text className="text-muted-foreground text-center text-sm">

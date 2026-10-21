@@ -106,7 +106,7 @@ function useTermWords(term: BrowseTerm) {
 	const mark: PosterMark =
 		term.kind === 'term'
 			? { kind: 'folder' }
-			: { kind: 'glyph', name: term.kind === 'all' ? 'grid' : 'sliders' };
+			: { kind: 'glyph', name: term.kind === 'all' ? 'viewGrid' : 'filters' };
 	const sub =
 		term.kind === 'shortcut' ? (
 			<Text className="text-foreground/70" numberOfLines={2} decodeHtml>

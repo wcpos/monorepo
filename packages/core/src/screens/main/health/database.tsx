@@ -339,7 +339,7 @@ function CollectionRowView({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<IconButton
-					name="ellipsisVertical"
+					name="more"
 					accessibilityLabel={t('common.more_actions')}
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
@@ -348,7 +348,7 @@ function CollectionRowView({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
-					<Icon name="arrowRotateRight" />
+					<Icon name="refresh" />
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
@@ -357,7 +357,7 @@ function CollectionRowView({
 					variant="destructive"
 					onPress={() => setConfirming(true)}
 				>
-					<Icon name="trash" className="text-destructive" />
+					<Icon name="delete" className="text-destructive" />
 					<Text>{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>

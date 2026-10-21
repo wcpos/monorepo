@@ -18,7 +18,7 @@ stories.push({
 	render: () => (
 		<Input.Root>
 			<Input.Left>
-				<Icon name="magnifyingGlass" />
+				<Icon name="search" />
 			</Input.Left>
 			<Input.InputField value="Canvas tote" testID="gallery-input-left" />
 		</Input.Root>

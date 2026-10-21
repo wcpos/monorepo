@@ -2,10 +2,9 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
-import map from '../../scripts/icons/tabler-map.json';
-import * as FontAwesome from './components/fontawesome/solid';
-import * as Tabler from './components/tabler';
-import { Icon } from './index';
+import { Icon, type IconName, IconSetProvider } from './index';
+import { ICON_NAMES } from './names';
+import { ICON_SET_IDS, ICON_SETS } from './sets';
 
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false, isElectron: false } }));
 const { Platform: mockPlatform } = jest.requireMock('@wcpos/utils/platform');
@@ -17,46 +16,58 @@ jest.mock('react-native-svg', () => {
 	return { ...elements, default: elements.Svg, __esModule: true };
 });
 
+it('resolves the same name through the provider-selected filled set', () => {
+	const { container, rerender } = render(<Icon name="check" fill="#abcdef" />);
+	const defaultPath = container.querySelector('path')?.getAttribute('d');
+	rerender(
+		<IconSetProvider set="phosphor">
+			<Icon name="check" fill="#abcdef" />
+		</IconSetProvider>
+	);
+	expect(container.querySelector('path')).toHaveAttribute('fill', 'currentColor');
+	expect(container.querySelector('svg')).toHaveAttribute('color', '#abcdef');
+	expect(container.querySelector('path')?.getAttribute('d')).not.toBe(defaultPath);
+});
+
 it('colours Tabler strokes without filling their outlines', () => {
 	const { container } = render(<Icon name="check" variant="primary" fill="#abcdef" />);
 	const svg = container.querySelector('svg');
-	expect(svg).toHaveAttribute('stroke', 'currentColor');
+	expect(container.querySelector('[stroke]')).toHaveAttribute('stroke', 'currentColor');
 	expect(svg).toHaveAttribute('color', '#abcdef');
-	expect(svg).toHaveAttribute('fill', 'none');
+	expect(container.querySelector('path')).toHaveAttribute('fill', 'none');
 	expect(svg).toHaveAttribute('viewBox', '0 0 24 24');
 	expect(svg).toHaveAttribute('width', '100%');
 	expect(svg).toHaveAttribute('height', '100%');
-	expect(svg).toHaveAttribute('stroke-width', '1.5');
+	expect(container.querySelector('[stroke-width]')).toHaveAttribute('stroke-width', '1.5');
 });
 
 it('passes the resolved native theme colour to the stroke currentColor', () => {
 	const { container } = render(<Icon name="check" variant="primary" />);
 	expect(container.querySelector('svg')).toHaveAttribute('color', '#123456');
-	expect(container.querySelector('svg')).toHaveAttribute('stroke', 'currentColor');
+	expect(container.querySelector('[stroke]')).toHaveAttribute('stroke', 'currentColor');
 });
 
-it.each(['manhole', 'wcpos', 'lock'] as const)('keeps the unmapped %s glyph', (name) => {
-	const { container } = render(<Icon name={name} fill="#abcdef" />);
-	expect(container.querySelector('svg')).toHaveAttribute('fill', '#abcdef');
-	expect(container.querySelector('path')).toHaveAttribute('d');
-	if (name !== 'lock') {
-		const original = render(
-			React.createElement(name === 'manhole' ? FontAwesome.manhole : FontAwesome.wcpos)
-		);
-		expect(container.querySelector('path')?.getAttribute('d')).toBe(
-			original.container.querySelector('path')?.getAttribute('d')
-		);
+it.each(ICON_SET_IDS)('%s provides every vocabulary glyph', (set) => {
+	expect(Object.keys(ICON_SETS[set]).sort()).toEqual([...ICON_NAMES].sort());
+	for (const name of ICON_NAMES) {
+		expect(typeof ICON_SETS[set][name]).toBe('function');
 	}
 });
 
-it('generates every mapped name and preserves the existing name set', () => {
-	const mapped = Object.keys(map).map((name) =>
-		name.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase())
+it.each(ICON_SET_IDS)('falls back to the active %s alert for an unknown dynamic name', (set) => {
+	const { container, rerender } = render(
+		<IconSetProvider set={set}>
+			<Icon name={'unknown-dynamic-icon' as IconName} />
+		</IconSetProvider>
 	);
-	expect(Object.keys(Tabler).sort()).toEqual(mapped.sort());
-	expect(Object.keys({ ...FontAwesome, ...Tabler }).sort()).toEqual(
-		Object.keys(FontAwesome).sort()
+	const fallback = container.querySelector('svg')?.innerHTML;
+	expect(container.querySelector('path')).not.toBeNull();
+	rerender(
+		<IconSetProvider set={set}>
+			<Icon name="alert" />
+		</IconSetProvider>
 	);
+	expect(container.querySelector('svg')?.innerHTML).toBe(fallback);
 });
 
 it('keeps CSS currentColor inheritance on web', () => {
@@ -64,7 +75,7 @@ it('keeps CSS currentColor inheritance on web', () => {
 	try {
 		const { container } = render(<Icon name="check" />);
 		expect(container.querySelector('svg')).toHaveAttribute('color', 'currentColor');
-		expect(container.querySelector('svg')).toHaveAttribute('stroke', 'currentColor');
+		expect(container.querySelector('[stroke]')).toHaveAttribute('stroke', 'currentColor');
 	} finally {
 		mockPlatform.isWeb = false;
 	}

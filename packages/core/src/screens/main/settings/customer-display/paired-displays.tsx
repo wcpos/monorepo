@@ -74,7 +74,7 @@ function DisplayRow({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<IconButton
-							name="ellipsisVertical"
+							name="more"
 							testID={`customer-display-menu-${display.id}`}
 							accessibilityLabel={t('common.actions')}
 						/>
@@ -85,7 +85,7 @@ function DisplayRow({
 							testID={`customer-display-forget-${display.id}`}
 							onPress={() => onForget(display)}
 						>
-							<Icon name="trash" className="fill-destructive" />
+							<Icon name="delete" className="fill-destructive" />
 							<Text>{t('settings.customer_display.forget')}</Text>
 						</DropdownMenuItem>
 					</DropdownMenuContent>

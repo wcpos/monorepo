@@ -93,11 +93,11 @@ function CheckRow({
 	children?: React.ReactNode;
 }) {
 	const glyph = attention ? (
-		<Icon name="triangleExclamation" variant="warning" />
+		<Icon name="warning" variant="warning" />
 	) : neutral ? (
-		<Icon name="circleInfo" variant="muted" />
+		<Icon name="info" variant="muted" />
 	) : (
-		<Icon name="circleCheck" variant="success" />
+		<Icon name="confirmed" variant="success" />
 	);
 	const lines = (
 		<VStack className="flex-1 gap-0.5">

@@ -44,7 +44,7 @@ function DocsLink({ href, children, code, testID, className }: DocsLinkProps) {
 						{` · ${code}`}
 					</ButtonText>
 				) : null}
-				<Icon name="arrowUpRight" size="xs" />
+				<Icon name="openExternal" size="xs" />
 			</HStack>
 		</Button>
 	);

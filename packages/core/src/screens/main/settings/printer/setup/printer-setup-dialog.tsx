@@ -370,7 +370,7 @@ export function PrinterSetupDialog({
 		selectedPrintable &&
 		action('setup_print_test', () => void flow.testPrint(), {
 			variant: 'default',
-			icon: 'printer',
+			icon: 'print',
 			full: true,
 			label:
 				printable.length > 1
@@ -606,7 +606,7 @@ export function PrinterSetupDialog({
 											{printable.length === 0 &&
 												action('setup_scan_again', startOver, {
 													variant: 'ghost',
-													icon: 'arrowRotateRight',
+													icon: 'refresh',
 												})}
 										</View>
 									)}
@@ -639,7 +639,7 @@ export function PrinterSetupDialog({
 											full: true,
 										})}
 										{action('setup_short', answer('short'), { full: true })}
-										{action('setup_nothing', answer('none'), { icon: 'xmark', full: true })}
+										{action('setup_nothing', answer('none'), { icon: 'close', full: true })}
 									</VStack>
 									<Text testID="printer-setup-footer" className="text-muted-foreground text-xs">
 										{t('settings.setup_footer', { n: testPages, columns })}
@@ -678,7 +678,7 @@ export function PrinterSetupDialog({
 									{row(
 										action('setup_retry', () => void flow.retry(), {
 											variant: 'default',
-											icon: 'arrowRotateRight',
+											icon: 'refresh',
 										}),
 										action('save_anyway', answer('ok'))
 									)}
@@ -698,7 +698,7 @@ export function PrinterSetupDialog({
 									{row(
 										action('setup_retry', answer('ok'), {
 											variant: 'default',
-											icon: 'arrowRotateRight',
+											icon: 'refresh',
 										})
 									)}
 									{links(link('setup_start_over', startOver, false), guide)}

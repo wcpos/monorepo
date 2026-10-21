@@ -46,7 +46,7 @@ export function OrderRow({
 				<Text className="min-w-0 shrink" numberOfLines={1}>
 					· {format({ id: order.customer_id, billing: order.billing, shipping: order.shipping })}
 				</Text>
-				{order.customer_note ? <Icon name="messageLines" size="sm" /> : null}
+				{order.customer_note ? <Icon name="note" size="sm" /> : null}
 			</View>
 			<View className="flex-row items-center gap-1">
 				<OrderStatusBadge status={order.status} />

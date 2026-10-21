@@ -48,7 +48,7 @@ export function NotificationBell({
 						label={t('common.notifications')}
 						icon={
 							<View>
-								<Icon name="bell" size="xl" className="text-sidebar-foreground" />
+								<Icon name="notifications" size="xl" className="text-sidebar-foreground" />
 								{/* Always mounted: the badge has to be there to show the first one arrive. */}
 								<View className="absolute -top-1 -right-0.5">
 									<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
@@ -61,7 +61,7 @@ export function NotificationBell({
 				<View>
 					<PopoverTrigger asChild>
 						<IconButton
-							name="bell"
+							name="notifications"
 							testID={testID}
 							accessibilityLabel={t('common.notifications')}
 						/>

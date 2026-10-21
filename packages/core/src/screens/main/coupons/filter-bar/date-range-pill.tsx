@@ -79,7 +79,7 @@ export function DateRangePill() {
 				<Chip
 					testID="filter-pill-date_expires_gmt"
 					clearTestID="filter-pill-remove-date_expires_gmt"
-					icon="calendarDays"
+					icon="calendar"
 					label={label}
 					on={isActive}
 					clearLabel={t('common.remove')}

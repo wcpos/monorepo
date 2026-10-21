@@ -86,7 +86,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" accessibilityLabel={t('common.more_actions')} />
+					<IconButton name="more" accessibilityLabel={t('common.more_actions')} />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<CapabilityTooltip show={!caps.canEditCoupons} hint="editCoupons">
@@ -99,13 +99,13 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 								})
 							}
 						>
-							<Icon name="penToSquare" />
+							<Icon name="edit" />
 							<Text>{t('common.edit')}</Text>
 						</DropdownMenuItem>
 					</CapabilityTooltip>
 					{fields.id && (
 						<DropdownMenuItem onPress={handleRefresh}>
-							<Icon name="arrowRotateRight" />
+							<Icon name="refresh" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
@@ -114,7 +114,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 							<DropdownMenuSeparator />
 							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
 								<Icon
-									name="trash"
+									name="delete"
 									className="fill-destructive web:group-focus:fill-accent-foreground"
 								/>
 								<Text>{t('common.delete')}</Text>
