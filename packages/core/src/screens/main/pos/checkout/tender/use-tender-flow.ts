@@ -36,7 +36,7 @@ import {
 } from '@wcpos/query';
 import { observeOrderCommands } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { isPaidStatus, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -709,8 +709,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			for (const { kind, data } of answers) {
 				const row = data.payment as PaymentRow | undefined;
 				const summary = (data.order ?? null) as OrderPaymentSummary | null;
-				if (kind === 'close') await completeOrderFlow({ source: 'zero-balance' });
-				else if (row && (kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))) {
+				// A replayed close answers its stored completion with the order as it now stands: after
+				// a remote reopen that is open again, and the sale is not finished here.
+				if (kind === 'close') {
+					if (isPaidStatus(summary?.status)) await completeOrderFlow({ source: 'zero-balance' });
+				} else if (
+					row &&
+					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
+				) {
 					const amountMinor = toMinor(row.amount, dp);
 					await completeOrderFlow({
 						source: 'manual',

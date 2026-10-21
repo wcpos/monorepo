@@ -84,6 +84,7 @@ export {
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
 	isMoneyAnswer,
+	isPaidStatus,
 	MONEY_ANSWER_CODES,
 	type MoneyRefusal,
 	moneyRefusalOf,

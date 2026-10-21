@@ -100,6 +100,11 @@ const UNPAID_CLOSE_STATUSES: readonly string[] = [
 	'trash',
 ];
 
+/** Whether an order status is a sale the store completed (the blocklist above). */
+export function isPaidStatus(status: unknown): boolean {
+	return typeof status === 'string' && !UNPAID_CLOSE_STATUSES.includes(status);
+}
+
 /**
  * Whether a 2xx `close` answer is the store's own (ADR 0040 D2): a summary with a status and the
  * completion it stamped. A paid summary with `completion: null` is a close whose stamp could not
@@ -115,7 +120,7 @@ export function isCloseAnswer(data: unknown): data is CloseAnswer {
 	if (!order || typeof order !== 'object') return false;
 	const status = (order as { status?: unknown }).status;
 	if (typeof status !== 'string') return false;
-	if (completion === null) return !UNPAID_CLOSE_STATUSES.includes(status);
+	if (completion === null) return isPaidStatus(status);
 	return (
 		!!completion &&
 		typeof completion === 'object' &&

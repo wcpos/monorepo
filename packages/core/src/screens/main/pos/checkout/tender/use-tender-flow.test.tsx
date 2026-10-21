@@ -524,6 +524,24 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	// A close replayed after a remote reopen answers its stored completion with the order as it
+	// now stands (`Payments_Controller.php:452-468`): settled, but the sale is open, so Try again
+	// never finishes it.
+	it.each([
+		['a paid', 'completed', 1],
+		['a reopened', 'pos-open', 0],
+	])(
+		'a replayed close with %s summary finishes the sale only when paid',
+		async (_, status, finished) => {
+			mockResend.mockResolvedValueOnce([
+				{ kind: 'close', data: { order: { status }, completion: { n: 1, id: 'c1' } } },
+			]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+		}
+	);
+
 	it('a Try again the store answers finishes the sale like a first answer', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
