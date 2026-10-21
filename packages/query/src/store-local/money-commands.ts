@@ -29,6 +29,9 @@ export interface MoneyCommandEntry {
 	/** null = never dispatched. */
 	readonly sentAt: string | null;
 	readonly sentRevision: string | null;
+	/** The poster working on this command (see `claimRoute`), and when it claimed it. */
+	readonly claimedBy?: string | null;
+	readonly claimedAt?: number | null;
 }
 export interface RevisionChain {
 	readonly answerRevision: string;
@@ -73,6 +76,94 @@ function modifyOrder(
 }
 
 /**
+ * How long a poster's claim on a command holds against every other poster, tab and the session
+ * recovery. Longer than one command's round trip with its stale re-send (seconds); short enough
+ * that the claim of a tab that crashed mid-send frees its command for Try again or the recovery
+ * within half a minute. A live sender renews it at each send; a settle deletes the entry with it.
+ */
+export const CLAIM_LEASE_MS = 30_000;
+
+/** Whether another poster holds a live claim on the entry. */
+export function claimHeld(entry: MoneyCommandEntry, claimant: string | null, now = Date.now()) {
+	return (
+		!!entry.claimedBy &&
+		entry.claimedBy !== claimant &&
+		now - (entry.claimedAt ?? 0) < CLAIM_LEASE_MS
+	);
+}
+
+/** A command route: its kind and target, or for `record` the row id that is its identity. */
+export interface CommandRoute {
+	readonly orderUuid: string;
+	readonly kind: MoneyCommandKind;
+	readonly target: string | null;
+	readonly rowId: string | null;
+}
+export type RouteClaim =
+	| { status: 'busy'; entry: MoneyCommandEntry }
+	| { status: 'open'; entry: MoneyCommandEntry }
+	| { status: 'created'; entry: MoneyCommandEntry }
+	| { status: 'none' };
+
+/**
+ * Get or create the route's command and claim it, in ONE journal write. The store database's
+ * local-document write serialises every writer of the journal, in this tab and every other tab
+ * on the same database, so two posters for one route can never both create a command: the first
+ * write creates and claims it, the second sees it. Outcomes: another live claim → `busy`; a sent
+ * entry → claimed and `open` (a re-send); none (or an unsent leftover of a crash, which put
+ * nothing on the server) → the `candidate` is written, claimed, as `created`; no candidate →
+ * `none` (the caller freezes one and asks again).
+ */
+export async function claimRoute(
+	storeDB: StoreLocalDatabase,
+	route: CommandRoute,
+	claimant: string,
+	candidate: MoneyCommandEntry | null
+): Promise<RouteClaim> {
+	let claim: RouteClaim = { status: 'none' };
+	await modifyJournal(storeDB, (data) => {
+		claim = { status: 'none' };
+		const now = Date.now();
+		const order = (data.orders[route.orderUuid] ??= { entries: {}, chain: null });
+		const same = Object.values(order.entries).filter(
+			(entry) =>
+				entry.kind === route.kind &&
+				(route.rowId === null ? entry.target === route.target : entry.id === route.rowId)
+		);
+		const held = same.find((entry) => claimHeld(entry, claimant, now));
+		if (held) {
+			claim = { status: 'busy', entry: held };
+			return;
+		}
+		const sent = same.find((entry) => entry.sentAt !== null);
+		if (sent) {
+			order.entries[sent.id] = { ...sent, claimedBy: claimant, claimedAt: now };
+			claim = { status: 'open', entry: order.entries[sent.id] };
+			return;
+		}
+		if (!candidate) return;
+		for (const unsent of same) delete order.entries[unsent.id];
+		order.entries[candidate.id] = { ...candidate, claimedBy: claimant, claimedAt: now };
+		claim = { status: 'created', entry: order.entries[candidate.id] };
+	});
+	return claim;
+}
+
+/** Give the claim up, keeping the entry: another poster, Try again or the recovery may send it. */
+export function releaseClaim(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	id: string,
+	claimant: string
+) {
+	return modifyOrder(storeDB, orderUuid, (order) => {
+		const entry = order.entries[id];
+		if (entry?.claimedBy === claimant)
+			order.entries[id] = { ...entry, claimedBy: null, claimedAt: null };
+	});
+}
+
+/**
  * Retire a settled order's chain: no entry is open and the caller saw a later adoption move the
  * resident past it, so it neither picks a revision nor guards a receipt any more. A chain an
  * answer replaced meanwhile (another `answeredAt`) is kept.
@@ -99,7 +190,14 @@ export function markSent(
 ) {
 	return modifyOrder(storeDB, orderUuid, (order) => {
 		const entry = order.entries[id];
-		if (entry) order.entries[id] = { ...entry, sentAt: new Date().toISOString(), sentRevision };
+		// A send renews its sender's claim (`CLAIM_LEASE_MS`).
+		if (entry)
+			order.entries[id] = {
+				...entry,
+				sentAt: new Date().toISOString(),
+				sentRevision,
+				...(entry.claimedBy ? { claimedAt: Date.now() } : {}),
+			};
 	});
 }
 

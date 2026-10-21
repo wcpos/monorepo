@@ -20,6 +20,7 @@ import {
 import { pushRecord } from '../src/mutations/push-record';
 import {
 	CHAIN_RETENTION_MS,
+	CLAIM_LEASE_MS,
 	journalCommand,
 	readOrderCommands,
 } from '../src/store-local/money-commands';
@@ -303,6 +304,9 @@ it('a crash after the 2xx and before the mirror keeps the entry; the re-send rep
 	const post = poster();
 	await post('orders/5/payments/leg-1/void', {}); // answered; the process dies before settle()
 	const [entry] = await entries();
+	// The dead process's claim lapses with its lease; until then a live sender may still settle it.
+	await expect(restart()).rejects.toMatchObject({ reason: 'in_flight' });
+	clock += CLAIM_LEASE_MS;
 	await restart();
 	expect(sentBodies()[1].command_id).toBe(entry.id);
 	expect(store.commands.size).toBe(1);
@@ -828,6 +832,38 @@ it.each([
 	await expect(poster()(url, body)).rejects.toThrow('money_command_malformed_answer');
 	expect(await entries()).toHaveLength(1);
 	expect((await entries())[0].sentAt).not.toBeNull();
+});
+
+// Get-or-create and claim happen in one serialised journal write (`claimRoute`): two posters
+// for one route never mint two commands.
+it('two posters racing one route in one tab send one command id; the other is told it is in flight', async () => {
+	const results = await Promise.allSettled([
+		poster()('orders/5/close', {}),
+		poster()('orders/5/close', {}),
+	]);
+	const ids = new Set(sentBodies().map(({ command_id }) => command_id));
+	expect(ids.size).toBe(1);
+	expect(store.completions).toBe(1);
+	expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+	expect(results.find(({ status }) => status === 'rejected')).toMatchObject({
+		reason: { reason: 'in_flight' },
+	});
+});
+
+// A send that throws gives its claim up at once (the entry stays); a caller that throws after
+// its answer and never settles loses the claim to the lease, and then the recovery re-sends.
+it('a send that throws frees its claim at once, and an abandoned answer frees it after the lease', async () => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+	expect((await entries())[0].claimedBy).toBeNull();
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
+	expect(await entries()).toEqual([]);
+
+	await poster()('orders/5/payments/leg-2/void', {}); // answered; the caller throws, never settles
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	clock += CLAIM_LEASE_MS;
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
+	expect(await entries()).toEqual([]);
 });
 
 it('the status poll passes through without an envelope', async () => {
