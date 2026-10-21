@@ -1181,3 +1181,18 @@ it('a replayed submit is not confirmed by an older adoption landing while its re
 	await expect(restart()).rejects.toThrow('money_command_unconfirmed');
 	expect(await entries()).toHaveLength(1);
 });
+
+// A pending edit is refused (`wcpos_money_in_motion`) while a payment is in motion, so the
+// commands that end that payment (its capture, its void, a gateway cancel) never push it first:
+// they would wait forever on the edit only they can unblock.
+it.each([
+	['void', 'orders/5/payments/leg/void', { reason: 'cashier' }],
+	['capture', 'orders/5/payments/leg/capture', { context: {} }],
+	['cancel', 'orders/5/payment-methods/g/cancel', { attempt_id: 'a-1' }],
+])('a %s never waits on a pending edit the payment in motion blocks', async (_, url, body) => {
+	await writeResident((doc) => ({ ...doc, local: { dirty: true, pendingMutationIds: ['m'] } }));
+	jest.mocked(pushRecord).mockRejectedValue(httpError(422, 'wcpos_money_in_motion'));
+	await poster()(url, body);
+	expect(pushRecord).not.toHaveBeenCalled();
+	expect(store.post).toHaveBeenCalledTimes(1);
+});

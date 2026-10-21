@@ -93,6 +93,8 @@ export type MoneyCommandPoster = Post & {
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
 const APPROVED_KINDS = new Set<MoneyCommandKind>(['intent', 'submit', 'close']);
+/** End a payment in motion: a pending edit is refused until they land, so they never push it. */
+const ENDS_MOTION = new Set<MoneyCommandKind>(['capture', 'void', 'cancel']);
 const PROVENANCE_KINDS = new Set<MoneyCommandKind>([
 	'record',
 	'intent',
@@ -189,7 +191,8 @@ async function chooseRevision(
 	fresh: boolean
 ): Promise<string> {
 	let { resident, order } = await readOrder(runtime, entry.orderUuid);
-	if (fresh && (order.local?.dirty || (order.local?.pendingMutationIds?.length ?? 0) > 0)) {
+	const pending = order.local?.dirty || (order.local?.pendingMutationIds?.length ?? 0) > 0;
+	if (fresh && pending && !ENDS_MOTION.has(entry.kind)) {
 		await pushRecord(runtime, resident as never);
 		({ resident, order } = await readOrder(runtime, entry.orderUuid));
 	}
