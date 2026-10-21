@@ -5,35 +5,23 @@
  * Pre-GA a schema edit moves the scope generation instead of the schema
  * version (see `productSchema`), so the previous generation's database holds
  * collections whose schema differs from today's at the SAME version — opening
- * it with today's recipe throws DB6. Its unsent sales still have to be sent
- * (`drainLegacyScopeDatabase`), so the drain opens it with exactly the schemas
- * that generation shipped: today's recipe with each moved schema put back.
+ * it with today's recipe throws DB6. The drain therefore opens it with exactly
+ * the schemas that generation shipped: today's recipe with each moved schema put back.
  *
- * v5 → v6 moved one schema: products promoted `tagIds`. When the generation
- * moves again, this file becomes the schemas the NEW previous generation
- * shipped — and `DRAINABLE_SCHEMAS_GENERATION` below moves with it.
- * `schema-behaviour.test.ts` pins its digests as a literal map beside the
- * current ones, keyed by generation, and fails a bump that forgot this file.
+ * v6 → v7 moved NO schema: the bump is protocol 3 (ADR 0040), and a protocol-2 queue is
+ * parked, never drained (`FIRST_PROTOCOL_3_SCOPE_GENERATION`). So generation 6's recipe is
+ * today's creators. When the generation moves again, this file becomes the schemas the NEW
+ * previous generation shipped — and `DRAINABLE_SCHEMAS_GENERATION` below moves with it.
+ * `schema-behaviour.test.ts` pins its digests as a literal map beside the current ones,
+ * keyed by generation, and fails a bump that forgot this file.
  */
 
-import {
-	recordMutationQueueMigrationStrategies,
-	recordMutationQueueSchema,
-} from '@wcpos/sync-core';
-
-import {
-	type CollectionWriteFacet,
-	productDocument,
-	productsWriteFacetProjectedBy,
-	type RecordProjection,
-	writeFacetFor,
-} from './collection-descriptors';
+import { type CollectionWriteFacet, writeFacetFor } from './collection-descriptors';
 import {
 	type CollectionCreator,
 	engineCollectionCreators,
 	MUTATION_QUEUE_RXDB_COLLECTION,
 } from './engine-collections';
-import { productSchema } from './product-schema';
 
 /**
  * The scope-database generation whose schemas this file reproduces. The engine
@@ -42,84 +30,24 @@ import { productSchema } from './product-schema';
  * fails closed (the drain reports `failed`) instead of opening a database with
  * the wrong schemas.
  */
-export const DRAINABLE_SCHEMAS_GENERATION = 5;
-
-// Keep the shipped v5 queue: its pre-upgrade rows have no expectedEpoch.
-// The drain opens it as-is; adding the field would force a legacy database migration.
-const {
-	expectedEpoch: _moneyEpoch,
-	supersededBy: _voidMark,
-	markedAt: _markedAt,
-	expiresAt: _expiresAt,
-	admittedBy: _admittedBy,
-	admittedAt: _admittedAt,
-	admissionReleased: _admissionReleased,
-	mutationId: _mutationId,
-	...drainableQueueProperties
-} = recordMutationQueueSchema.properties;
-
-const {
-	6: _voidMarkMigration,
-	7: _voidFenceMigration,
-	8: _moneyEpochMigration,
-	...drainableQueueMigrations
-} = recordMutationQueueMigrationStrategies;
-
-const { tagIds: _promotedAtV6, ...drainableProductProperties } = productSchema.properties;
-
-/** The product schema v5 shipped: today's minus the `tagIds` column v6 promoted. */
-export const drainableGenerationProductSchema = {
-	...productSchema,
-	properties: drainableProductProperties,
-	required: productSchema.required.filter((field) => field !== 'tagIds'),
-};
+export const DRAINABLE_SCHEMAS_GENERATION = 6;
 
 /** The full addCollections() argument for a drainable-generation scope database. */
 export function drainableGenerationCollectionCreators(): Record<string, CollectionCreator> {
 	const creators = engineCollectionCreators();
 	return {
 		...creators,
-		products: { ...creators.products, schema: drainableGenerationProductSchema },
 		// The drain keeps its once-a-day report stamp in the queue's local documents: the queue is
-		// the one collection every drain opens (a v5 database need not hold orders). Local
-		// documents live beside the collection, not in its schema, so no digest moves.
+		// the one collection every drain opens. Local documents live beside the collection, not in
+		// its schema, so no digest moves.
 		[MUTATION_QUEUE_RXDB_COLLECTION]: {
 			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
 			localDocuments: true,
-			schema: {
-				...recordMutationQueueSchema,
-				version: 5,
-				properties: {
-					...drainableQueueProperties,
-					mutationId: { type: 'string', maxLength: 64 },
-					status: {
-						type: 'string',
-						enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
-					},
-				},
-			},
-			migrationStrategies: drainableQueueMigrations,
 		},
 	};
 }
 
-/**
- * The stored product document v5 wrote: today's projection without the
- * `tagIds` column v6 promoted. An acknowledgment the drain writes into a v5
- * database goes through this, so it fits `drainableGenerationProductSchema`
- * (today's projection would add `tagIds`, which that schema forbids).
- * `schema-behaviour.test.ts` pins it against the drainable schema.
- */
-export const drainableGenerationProductDocument: RecordProjection = (payload, barcodeSelectors) => {
-	const { tagIds: _promotedAtV6, ...document } = productDocument(payload, barcodeSelectors);
-	return document;
-};
-
-const drainableProductsWriteFacet = productsWriteFacetProjectedBy(
-	drainableGenerationProductDocument
-);
-
-/** The write facets a drainable-generation engine uses: today's, with each moved projection put back. */
+/** The write facets a drainable-generation engine uses: generation 6 shipped today's projections. */
 export function drainableGenerationWriteFacetFor(collection: string): CollectionWriteFacet | null {
-	return collection === 'products' ? drainableProductsWriteFacet : writeFacetFor(collection);
+	return writeFacetFor(collection);
 }

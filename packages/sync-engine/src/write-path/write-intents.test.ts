@@ -8,7 +8,12 @@ import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-cor
 
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { withoutLocallyProtected } from './local-work-guard';
-import { enqueueWriteIntent, queueFor, requeueBornTwiceSnapshot } from './write-intents';
+import {
+	enqueueWriteIntent,
+	queueFor,
+	requeueBornTwiceSnapshot,
+	requeueRejectedMutation,
+} from './write-intents';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -1327,10 +1332,11 @@ describe('enqueueWriteIntent', () => {
 		expect([...queued.values()]).toHaveLength(1);
 		const payload = [...queued.values()][0]!.payload;
 		expect(payload).toMatchObject({
-			status: 'pos-open',
 			customer_note: 'ring twice',
 			line_items: [{ id: 3, quantity: 2 }],
 		});
+		// Neither write named the status; the resident's is never echoed (ADR 0040).
+		expect(payload).not.toHaveProperty('status');
 		for (const field of [
 			'total',
 			'total_tax',
@@ -1437,15 +1443,13 @@ describe('enqueueWriteIntent', () => {
 
 		// The aggregate the original create carried is gone: the requeue passes
 		// through the same outbound sanitizer (#1507), so a rebuilt payload cannot
-		// smuggle back money the server discards unread.
+		// smuggle back money the server discards unread. Nor does the create's status
+		// become an update intent (ADR 0040).
 		expect([...queued.values()]).toEqual([
 			expect.objectContaining({
 				mutationId: 'follow-up-1',
 				explicit: true,
-				payload: {
-					status: 'pos-open',
-					customer_note: 'ring twice',
-				},
+				payload: { customer_note: 'ring twice' },
 			}),
 		]);
 	});
@@ -1767,5 +1771,91 @@ describe('admission crash recovery', () => {
 		const pull = [{ uuid: 'order' }];
 		const source = { findByIds: () => ({ exec: async () => new Map([['order', resident]]) }) };
 		expect(await withoutLocallyProtected(source, pull)).toEqual(pull);
+	});
+});
+
+// ADR 0040: a stale pushable status re-sent against a paid order is a reopen, so
+// neither recovery builder may put one on the wire that the cashier did not name.
+describe('status is an intent, never an echo (ADR 0040)', () => {
+	it("recovering a rejected note edit does not re-send the resident's stale pending status", async () => {
+		const rejected: QueuedMutation = {
+			mutationId: 'rejected-1',
+			collectionName: 'orders',
+			operation: 'update',
+			recordId: 'order-1',
+			origin: 'existing',
+			payload: { customer_note: 'ring twice' },
+			baseRevision: 'sha256:server-r1',
+			queuedAt: '2026-10-20T00:00:00.000Z',
+			seq: 1,
+			status: 'rejected',
+		};
+		const queued = new Map<string, QueuedMutation>([[rejected.mutationId, rejected]]);
+		let residentData: Record<string, unknown> = {
+			payload: { id: 42, status: 'pending', customer_note: 'old', meta_data: [] },
+			sync: { revision: 'sha256:server-r2' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const resident = {
+			incrementalModify: async (
+				modify: (data: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				residentData = modify(residentData);
+			},
+			remove: async () => undefined,
+			toJSON: () => residentData,
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: revCollectionOverMap(queued),
+			},
+		} as unknown as RxDatabase;
+		let minted = 0;
+
+		await requeueRejectedMutation({
+			db,
+			entry: rejected,
+			mintUuid: () => `recovered-${++minted}`,
+			now: () => '2026-10-20T00:00:01.000Z',
+		});
+
+		const recovered = [...queued.values()].filter((row) => row.status !== 'rejected');
+		expect(recovered).toHaveLength(1);
+		expect(recovered[0]!.payload).toMatchObject({ customer_note: 'ring twice' });
+		expect(recovered[0]!.payload).not.toHaveProperty('status');
+	});
+
+	it('born-twice recovery against a paid server order carries no create status', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => null }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation: {
+				mutationId: 'create-1',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				origin: 'minted',
+				payload: { status: 'pos-open', customer_note: 'keep me' },
+				baseRevision: null,
+				queuedAt: '2026-10-20T00:00:00.000Z',
+				explicit: true,
+			} as never,
+			ackRevision: 'sha256:server-paid',
+			mintUuid: () => 'follow-up-1',
+			now: () => '2026-10-20T00:00:01.000Z',
+		});
+
+		const rows = [...mutationCollection.store.values()].map((entry) => entry.mutation);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]!.operation).toBe('update');
+		expect(rows[0]!.payload).toEqual({ customer_note: 'keep me' });
 	});
 });

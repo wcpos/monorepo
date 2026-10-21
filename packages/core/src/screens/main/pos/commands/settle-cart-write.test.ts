@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
-import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
+import { toOrderWirePayload } from '@wcpos/sync-core';
 
 import {
 	OrderMoneyDivergenceProvider,
@@ -66,10 +66,10 @@ it('settles the latest post-intent payload in one write, without changing outbou
 		cart_tax: '0',
 		tax_lines: [],
 	});
-	expect(stripServerAuthoredOrderMoney(patch)).toEqual(data);
+	expect(toOrderWirePayload(patch)).toEqual(data);
 	expect(
 		compareOrderMoney({
-			pushed: stripServerAuthoredOrderMoney(patch),
+			pushed: toOrderWirePayload(patch),
 			acked: { ...patch, total: '100' },
 		})
 	).toBeNull();

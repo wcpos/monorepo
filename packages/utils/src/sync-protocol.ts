@@ -1,10 +1,13 @@
 import { APP_PAYMENTS_CONTRACT } from './payments-contract';
 
 /**
- * Sending this value is the client's claim that it tolerates the 2.0.0 boundary
- * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
+ * Sending this value is the client's claim that it tolerates the server's wire
+ * shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
+ * 3 is the ADR 0040 D1 break: the server derives paid from its own payment rows
+ * and refuses client-written money, and the `next` plugin's
+ * `Protocol_Gate::MIN_PROTOCOL = 3` since wcpos/woocommerce-pos#2349.
  */
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
 
 export const PROTOCOL_HEADER = 'X-WCPOS-Protocol';
 export const CLIENT_HEADER = 'X-WCPOS-Client';

@@ -44,12 +44,3 @@ it('server adoption replaces the stamp, while retaining the local hint', () => {
 	]);
 	expect(mergeProtectedOrderMeta([stamp], [], 'mutation')).toEqual([stamp]);
 });
-
-it('server adoption replaces a protected epoch', () => {
-	expect(
-		mergeProtectedOrderMeta(
-			[{ key: '_wcpos_money_epoch', value: '1' }],
-			[{ key: '_wcpos_money_epoch', value: '2' }]
-		)
-	).toEqual([{ key: '_wcpos_money_epoch', value: '2' }]);
-});

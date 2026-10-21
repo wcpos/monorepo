@@ -152,13 +152,7 @@ it.each([true, false])(
 			const db = engine.active()!.database;
 			const facet = writeFacetFor('orders')!;
 			const previous = stamped ? 'old' : 'server';
-			const keys = [
-				'_wcpos_money_owner',
-				'_wcpos_money_epoch',
-				'_wcpos_completed_at',
-				'_wcpos_completed_epoch',
-				'_wcpos_reopened_at',
-			];
+			const keys = ['_wcpos_completed_at', '_wcpos_completions'];
 			await facet.upsertServerDocument(
 				db,
 				facet.documentFromServerPayload({
@@ -173,11 +167,16 @@ it.each([true, false])(
 				recordId: UUID,
 				payload: { customer_note: 'successor' },
 			});
-			const serverMeta = stamped
-				? keys.map((key) => ({ key, value: key === '_wcpos_money_owner' ? 'server' : '2' }))
-				: [];
+			const serverMeta = stamped ? keys.map((key) => ({ key, value: '2' })) : [];
+			// A whole document: its server-owned set replaces the resident's, deletions included
+			// (a trimmed acknowledgement replaces only the keys it carries).
 			const server = {
 				...truth,
+				total: '0.00',
+				currency: 'USD',
+				status: 'pos-open',
+				date_paid: null,
+				payment_method: '',
 				customer_note: 'old note',
 				meta_data: [...meta_data, ...serverMeta],
 			};
@@ -193,65 +192,6 @@ it.each([true, false])(
 			expect(doc!.toJSON().payload).toMatchObject({
 				customer_note: 'successor',
 				meta_data: [...meta_data, ...serverMeta],
-			});
-		} finally {
-			await engine.dispose();
-		}
-	}
-);
-
-it.each(['1', undefined])(
-	'manual rebase replaces the queued epoch with server epoch %s',
-	async (epoch) => {
-		const current = {
-			...truth,
-			meta_data: [
-				...meta_data,
-				...(epoch === undefined ? [] : [{ key: '_wcpos_money_epoch', value: epoch }]),
-			],
-		};
-		const { engine } = await createEngineHarness({
-			mode: 'manual',
-			fetch: async () =>
-				new Response(
-					JSON.stringify({
-						code: 'woo_rxdb_sync_conflict',
-						currentRevision: 'server-base',
-						current,
-					}),
-					{ status: 409 }
-				),
-		});
-		try {
-			await engine.ready;
-			const db = engine.active()!.database;
-			const facet = writeFacetFor('orders')!;
-			await facet.upsertServerDocument(
-				db,
-				facet.documentFromServerPayload({
-					...truth,
-					meta_data: [
-						...meta_data,
-						{ key: '_wcpos_money_epoch', value: epoch === undefined ? '2' : '0' },
-					],
-				})
-			);
-			const receipt = await engine.write({
-				collection: 'orders',
-				operation: 'update',
-				recordId: UUID,
-				payload: { customer_note: 'keep my edit' },
-			});
-			await engine.sync('write-drain');
-			expect(await engine.conflicts()).toEqual([
-				expect.objectContaining({ mutationId: receipt.mutationId }),
-			]);
-			await engine.resolveConflict(receipt.mutationId, 'retry-with-server-base');
-			const row = await db.collections.recordMutations.findOne(receipt.mutationId).exec();
-			expect(row!.toJSON()).toMatchObject({
-				status: 'pending',
-				expectedEpoch: epoch === undefined ? 0 : 1,
-				payload: { customer_note: 'keep my edit' },
 			});
 		} finally {
 			await engine.dispose();

@@ -25,11 +25,11 @@ it.each([
 		site: { use_protocol_headers: capability },
 	});
 	expect(new URL(result.url).searchParams.has('_wcpos_nocache')).toBe(false);
-	expect(result.headers.get('X-WCPOS-Protocol')).toBe(headers ? '2' : null);
+	expect(result.headers.get('X-WCPOS-Protocol')).toBe(headers ? '3' : null);
 	expect(result.headers.get('X-WCPOS-Client')).toBe(
 		headers ? `${platform}/test payments=1.3` : null
 	);
-	expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe(params ? '2' : null);
+	expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe(params ? '3' : null);
 	expect(new URL(result.url).searchParams.get('wcpos_client')).toBe(
 		params ? `${platform}/test payments=1.3` : null
 	);
@@ -62,7 +62,7 @@ it.each([{ method: 'HEAD' }, { wcposHeaders: false }])(
 		const result = buildRequestPreamble({ ...context, purpose: 'rest' }, { url, ...flags });
 		expect(result.headers.has('X-WCPOS')).toBe(false);
 		expect(result.headers.get('Authorization')).toBe('Bearer token');
-		expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe('2');
+		expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe('3');
 	}
 );
 

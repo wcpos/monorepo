@@ -62,6 +62,8 @@ describe('database name helpers', () => {
 		// Scope databases of an older generation, including rxdb's derived store names.
 		'pos_v4_0123456789ab_s1_c2',
 		'rxdb-pos_v4_0123456789ab_s1_c2--0--orders',
+		'pos_v5_0123456789ab_s1_c2',
+		'rxdb-pos_v5_0123456789ab_s1_c2--0--orders',
 		'pos_v3_0123456789ab_s1_c2_run7',
 	])('classifies %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(true);
@@ -72,12 +74,12 @@ describe('database name helpers', () => {
 		'wcposusers_v8-sites-0',
 		'store_v8_abc123',
 		'fast_store_v8_abc123',
+		'pos_v7_0123456789ab_s1_c2',
+		'rxdb-pos_v7_0123456789ab_s1_c2--0--orders',
+		// The DRAINABLE generation: it may hold unsent sales, and only the drain removes it.
 		'pos_v6_0123456789ab_s1_c2',
 		'rxdb-pos_v6_0123456789ab_s1_c2--0--orders',
-		// The DRAINABLE generation: it may hold unsent sales, and only the drain removes it.
-		'pos_v5_0123456789ab_s1_c2',
-		'rxdb-pos_v5_0123456789ab_s1_c2--0--orders',
-		'pos_v5_0123456789ab_s1_c2-wal',
+		'pos_v6_0123456789ab_s1_c2-wal',
 		'temporary',
 	])('does not classify %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(false);

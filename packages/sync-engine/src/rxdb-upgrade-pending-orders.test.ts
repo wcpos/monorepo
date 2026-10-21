@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRxDatabase, RXDB_VERSION, type RxStorage } from 'rxdb';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { getRxStorageSQLite, getSQLiteBasicsNodeNative } from 'rxdb-premium/plugins/storage-sqlite';
@@ -42,6 +42,7 @@ import {
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	type StoreScopeIdentity,
+	toOrderWirePayload,
 } from '@wcpos/sync-core';
 
 import { drainableGenerationCollectionCreators } from './collections/drainable-generation';
@@ -56,6 +57,28 @@ import {
 } from './write-path/legacy-scope-drain';
 
 import type { EngineConnectivity } from './create-rxdb-sync-engine';
+
+// The fixture is a generation-5 database, and this suite pins the drain MACHINERY: generation 7
+// parks a protocol-2 queue instead (ADR 0040; `rxdb-upgrade-protocol-3-parking.test.ts`), and PR B
+// drains generation 7 again. So the suite runs this build as it stood at generation 6: drainable 5,
+// no protocol-3 floor, the generation-5 recipe.
+vi.mock('@wcpos/sync-core', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@wcpos/sync-core')>();
+	return {
+		...actual,
+		SCOPE_DATABASE_GENERATION: 6,
+		DRAINABLE_SCOPE_DATABASE_GENERATION: 5,
+		FIRST_PROTOCOL_3_SCOPE_GENERATION: 5,
+		scopeDatabaseName: (
+			identity: Parameters<typeof actual.scopeDatabaseName>[0],
+			options?: Parameters<typeof actual.scopeDatabaseName>[1]
+		) => actual.scopeDatabaseName(identity, { generation: 6, ...options }),
+	};
+});
+vi.mock('./collections/drainable-generation', async () => {
+	const recipe = await import('./upgrade-fixtures/generation-5-recipe.test-utils');
+	return { ...recipe, DRAINABLE_SCHEMAS_GENERATION: 5 };
+});
 
 const require = createRequire(import.meta.url);
 const { getRxStorageFilesystemNode } =
@@ -166,7 +189,11 @@ const ACK_MAY_CHANGE = [
 ];
 
 function withoutAckFields(order: Json | undefined): Json {
-	const rest: Json = { ...order, sync: { ...(order?.sync as Json), revision: undefined } };
+	// An adopting ack stamps the revision and, for orders, the adoption it certifies (ADR 0040).
+	const rest: Json = {
+		...order,
+		sync: { ...(order?.sync as Json), revision: undefined, adopted: undefined },
+	};
 	for (const field of ACK_MAY_CHANGE) delete rest[field];
 	return rest;
 }
@@ -180,12 +207,17 @@ function expectSent(state: Awaited<ReturnType<typeof stored>>, applied: Applied)
 		const after = state.orders.get(order.uuid);
 		expect(withoutAckFields(after), order.case).toEqual(withoutAckFields(order.stored));
 		const server = applied.get(order.uuid)!;
-		const pushed = sendOnce.find((row) => row.uuid === order.uuid)!.stored.payload as Json;
+		// The push-time strip (ADR 0040) leaves a pre-upgrade row's refused status off the wire.
+		const pushed = toOrderWirePayload(
+			sendOnce.find((row) => row.uuid === order.uuid)!.stored.payload as Json
+		);
 		const payload: Json = { ...(order.stored.payload as Json), ...pushed, id: server.id };
 		expect(after, order.case).toEqual({
 			...order.stored,
 			remoteId: String(server.id),
 			remoteKey: String(server.id),
+			// The fake server acknowledges with the pushed (stripped) payload: a trimmed ack is
+			// adopted for what it carries, and its revision is recorded without `adopted`.
 			sync: { ...(order.stored.sync as Json), revision: server.revision },
 			local: { dirty: false, pendingMutationIds: [] },
 			payload,

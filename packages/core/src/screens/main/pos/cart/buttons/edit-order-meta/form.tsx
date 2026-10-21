@@ -43,7 +43,13 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
-import { NO_STORE, PROTECTED_ORDER_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	isPushableOrderStatus,
+	NO_STORE,
+	PROTECTED_ORDER_META_KEYS,
+	PUSHABLE_ORDER_STATUSES,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -102,7 +108,8 @@ export function EditOrderMetaForm({
 	const { store, wpCredentials } = useStoreSession();
 	const storeID = useDocField(store, (value) => value.id);
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
-	const [pending, setPending] = React.useState<FormValues | null>(null);
+	// The staged hand-off, with whether the cashier changed the status (judged when staged).
+	const [pending, setPending] = React.useState<(FormValues & { statusEdit: boolean }) | null>(null);
 	const [loading, setLoading] = React.useState(false);
 	const cashierSelect = useSearchSelect('cashier');
 
@@ -116,6 +123,11 @@ export function EditOrderMetaForm({
 	});
 
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
+	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
+	const statusPushable = isPushableOrderStatus(formData.status);
+	const allowedStatuses = statusPushable
+		? PUSHABLE_ORDER_STATUSES
+		: [...PUSHABLE_ORDER_STATUSES, formData.status];
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
 	/**
@@ -126,12 +138,20 @@ export function EditOrderMetaForm({
 	async function applySave(data: FormValues, { close }: { close: boolean }): Promise<boolean> {
 		const payload = order.getLatest().payload;
 		const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
-		const identityChanged = data.status !== payload.status || data.cashier_id !== currentCashierId;
-		if (identityChanged) {
-			setPending(data);
+		const statusEdit = data.status !== payload.status;
+		if (statusEdit || data.cashier_id !== currentCashierId) {
+			setPending({ ...data, statusEdit });
 			return false;
 		}
-		const { cashier_id: _cashierId, ...patch } = data;
+		// Status is an intent, never an echo (ADR 0040): it is unchanged here (a change goes
+		// through the send below), and re-writing it would queue a reopen from a stale copy.
+		// transaction_id is the server's (stripped on the wire), shown read-only.
+		const {
+			cashier_id: _cashierId,
+			status: _unchanged,
+			transaction_id: _transaction,
+			...patch
+		} = data;
 		const written = await writeOrderFields(order, () => patch);
 		if (written && close) closeDialog();
 		return written;
@@ -145,9 +165,15 @@ export function EditOrderMetaForm({
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, ...fields } = pending;
+		const { cashier_id, transaction_id: _transaction, status, ...rest } = pending;
+		const { statusEdit: statusChanged, ...fields } = rest;
+		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
+		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
+		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till
+		// completed, and its rollback restores the cashier alone.
 		const patch = () => ({
 			...fields,
+			...(statusChanged ? { status } : {}),
 			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
@@ -164,7 +190,7 @@ export function EditOrderMetaForm({
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
 			if (
-				!(OPEN_ORDER_STATUSES as readonly string[]).includes(fields.status) ||
+				!(OPEN_ORDER_STATUSES as readonly string[]).includes(status) ||
 				cashier_id !== String(cashierID)
 			) {
 				setCurrentOrderID('');
@@ -172,7 +198,7 @@ export function EditOrderMetaForm({
 		} catch (error) {
 			if (patched) {
 				const reverted = await writeOrderFields(order, () => ({
-					status: previous.status,
+					...(statusChanged ? { status: previous.status } : {}),
 					meta_data: previous.meta_data ?? [],
 				}));
 				// The failed send may still land: a timed-out outcome is unknown and a queued
@@ -240,6 +266,8 @@ export function EditOrderMetaForm({
 								<FormSelect
 									label={t('common.status')}
 									customComponent={OrderStatusSelect}
+									allowed={allowedStatuses}
+									disabled={!statusPushable}
 									{...field}
 								/>
 							</View>
@@ -318,6 +346,8 @@ export function EditOrderMetaForm({
 							<View className="flex-1">
 								<FormInput
 									label={t('common.transaction_id')}
+									testID="order-meta-transaction-id"
+									editable={false}
 									onChange={onChange}
 									value={value ?? ''}
 									{...rest}

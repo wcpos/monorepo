@@ -1,4 +1,4 @@
-import { scopeDatabaseName } from '@wcpos/sync-core';
+import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 import type { LegacyScopeDrainOutcome, LegacyScopeDrainPorts } from '@wcpos/sync-engine';
 import {
 	awaitLegacyUnsentReport,
@@ -8,6 +8,7 @@ import {
 	legacyUnsentReportOutstanding,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
@@ -145,7 +146,7 @@ function loadCreateAppEngine(
 			scope: ScopeIdentity
 		): Promise<LegacyScopeDrainOutcome> => ({
 			status: 'absent',
-			databaseName: scopeDatabaseName(scope, { generation: 5 }),
+			databaseName: scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION }),
 		})
 	);
 	jest.doMock('@wcpos/database/scope-database-files', () => ({ scopeDatabaseFiles }));
@@ -153,6 +154,7 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
 		drainLegacyScopeDatabase,
+		WRITTEN_BEFORE_PROTOCOL_3: 'written-before-protocol-3',
 		setSyncEngineLogger,
 		// The engine fetcher hydrates 2xx responses through this seam (B9); an
 		// identity stub keeps these engine-lifecycle tests transport-free.
@@ -355,10 +357,10 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`
 		);
 		expect(fetch.mock.calls[1]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1`
 		);
 		fetch.mockRestore();
 	});
@@ -1638,7 +1640,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1',
+			`https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.objectContaining({}) })
 		);
 		const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
@@ -1660,7 +1662,7 @@ describe('createAppSyncEngine scope cache', () => {
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(fetch.mock.calls[0]?.[0]).toBe(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1'
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1&_wcpos_envelope=1`
 		);
 		fetch.mockRestore();
 	});
@@ -2010,7 +2012,9 @@ describe('legacy database purge', () => {
 });
 
 describe('previous-generation database drain', () => {
-	const LEGACY = scopeDatabaseName(BASE_OPTIONS.scope, { generation: 5 });
+	const LEGACY = scopeDatabaseName(BASE_OPTIONS.scope, {
+		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+	});
 	const keptRetryable: LegacyScopeDrainOutcome = {
 		status: 'kept',
 		databaseName: LEGACY,
@@ -2034,6 +2038,51 @@ describe('previous-generation database drain', () => {
 		reportDue: true,
 	};
 	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
+
+	// ADR 0040 PR A (Paul's ruling): a protocol-2 queue is parked in generation 6, never sent.
+	it('a row written before protocol 3 is never sent and is visible in Store health', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkError, networkWarn } =
+			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'kept',
+			databaseName: scopeDatabaseName(BASE_OPTIONS.scope, {
+				generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+			}),
+			reason: 'written-before-protocol-3',
+			retryable: false,
+			pushed: 0,
+			carried: 0,
+			remaining: { unsent: 1, held: 1 },
+			keptOrderUuids: ['order-cash', 'order-cart'],
+			reportDue: false,
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		const parked = networkError.mock.calls.filter(([, options]) => options?.code === 'PAYMENT201');
+		expect(parked).toEqual([
+			[
+				'2 changes from before this update were never sent and will not be',
+				expect.objectContaining({
+					context: expect.objectContaining({
+						reason: 'written-before-protocol-3',
+						unsent: 2,
+						orders: ['order-cash', 'order-cart'],
+					}),
+				}),
+			],
+		]);
+		expect(networkWarn).not.toHaveBeenCalledWith(
+			'Unsent changes from the previous database version are kept until they can be sent',
+			expect.anything()
+		);
+		// Not retryable: no later attempt re-arms it in this process.
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+	});
 	/** Discovery completes and names nothing beyond the visited scope (a settled history). */
 	const discoveryFindsNothingElse = (loaded: ReturnType<typeof loadCreateAppEngine>) =>
 		loaded.inventoryLegacyScopeDatabases({
@@ -2060,7 +2109,10 @@ describe('previous-generation database drain', () => {
 		const order: string[] = [];
 		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
 			order.push('drain');
-			return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+			return {
+				status: 'absent',
+				databaseName: scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION }),
+			};
 		});
 		purgeLegacyDatabases.mockImplementation(async () => {
 			order.push('purge');
@@ -2234,7 +2286,12 @@ describe('previous-generation database drain', () => {
 		let finishFirst!: (outcome: LegacyScopeDrainOutcome) => void;
 		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
 			if (scope.storeId === target.storeId) {
-				return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+				return {
+					status: 'absent',
+					databaseName: scopeDatabaseName(scope, {
+						generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+					}),
+				};
 			}
 			if (drainLegacyScopeDatabase.mock.calls.length === 1) {
 				return new Promise<LegacyScopeDrainOutcome>((resolve) => {
@@ -2351,7 +2408,9 @@ describe('previous-generation database drain', () => {
 
 	describe('the boot inventory: an unvisited previous-generation database keeps the reset count unknown', () => {
 		const TARGET = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
-		const TARGET_LEGACY = scopeDatabaseName(TARGET, { generation: 5 });
+		const TARGET_LEGACY = scopeDatabaseName(TARGET, {
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		});
 		const session = (identity: ScopeIdentity) => ({
 			site: { wp_api_url: identity.site },
 			wpCredentials: { id: identity.cashierId },
@@ -2360,7 +2419,7 @@ describe('previous-generation database drain', () => {
 		const drainsAbsent = async (_ports: unknown, scope: ScopeIdentity) =>
 			({
 				status: 'absent',
-				databaseName: scopeDatabaseName(scope, { generation: 5 }),
+				databaseName: scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION }),
 			}) as LegacyScopeDrainOutcome;
 
 		/** A web/Electron scope history; `markCleared` records names that reported nothing kept. */
@@ -2504,7 +2563,7 @@ describe('previous-generation database drain', () => {
 			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
 			const removedSite = scopeDatabaseName(
 				{ site: 'https://removed.example.test', storeId: 1, cashierId: 1 },
-				{ generation: 5 }
+				{ generation: DRAINABLE_SCOPE_DATABASE_GENERATION }
 			);
 			const opened = history([LEGACY, removedSite], true);
 			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
@@ -2526,7 +2585,7 @@ describe('previous-generation database drain', () => {
 			// opened for the first time.
 			const older = scopeDatabaseName(
 				{ ...BASE_OPTIONS.scope, storeId: 'store-old' },
-				{ generation: 5 }
+				{ generation: DRAINABLE_SCOPE_DATABASE_GENERATION }
 			);
 			const reopened = history([LEGACY, older, TARGET_LEGACY], true, [LEGACY, older]);
 			expect(reopened.settled).toBe(false);
@@ -2617,7 +2676,12 @@ describe('previous-generation database drain', () => {
 		let finish!: (outcome: LegacyScopeDrainOutcome) => void;
 		loaded.drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) =>
 			scope.storeId === target.storeId
-				? { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) }
+				? {
+						status: 'absent',
+						databaseName: scopeDatabaseName(scope, {
+							generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+						}),
+					}
 				: new Promise<LegacyScopeDrainOutcome>((resolve) => {
 						finish = resolve;
 					})
@@ -2743,7 +2807,8 @@ describe('previous-generation database drain', () => {
 	const assertRealDrain = async (
 		platform: 'ios' | 'web',
 		useInstanceHeader: boolean | undefined,
-		expectedHeader: string | null
+		// The drain's transport header is pinned again when PR B drains generation 7.
+		_expectedHeader: string | null
 	) => {
 		const { getRxStorageMemory } = jest.requireActual<typeof import('rxdb/plugins/storage-memory')>(
 			'rxdb/plugins/storage-memory'
@@ -2839,27 +2904,20 @@ describe('previous-generation database drain', () => {
 			for (
 				let turn = 0;
 				turn < 200 &&
-				!loaded.networkInfo.mock.calls.some(([message]) => String(message).startsWith('Sent ')) &&
 				loaded.networkWarn.mock.calls.length === 0 &&
 				loaded.networkError.mock.calls.length === 0;
 				turn += 1
 			) {
 				await new Promise((resolve) => setTimeout(resolve, 10));
 			}
-			expect([loaded.networkWarn.mock.calls, loaded.networkError.mock.calls]).toEqual([[], []]);
-			expect(server.received.map((envelope) => envelope.mutationId)).toEqual([mutationId]);
-			expect([...server.applied.keys()]).toEqual([recordId]);
-			expect(loaded.networkInfo).toHaveBeenCalledWith(
-				'Sent 1 unsent changes from the previous database version and dropped its tables (its file remains)',
-				expect.anything()
+			// ADR 0040 PR A: the protocol-2 sale is parked in its own generation, never sent.
+			expect(loaded.networkWarn.mock.calls).toEqual([]);
+			expect(loaded.networkError).toHaveBeenCalledWith(
+				'1 changes from before this update were never sent and will not be',
+				expect.objectContaining({ code: 'PAYMENT201' })
 			);
-			// Pinned to the drained scope's store: the push carries that store's id on the wire.
-			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
-			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
-			expect(wire).toContain('store-1');
-			expect(new Headers(pushInit?.headers).get('X-WCPOS-Instance')).toBe(expectedHeader);
-			await discoveryFindsNothingElse(loaded);
-			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+			expect(server.received).toEqual([]);
+			expect(fetch.mock.calls.some(([url]) => String(url).includes('/push/'))).toBe(false);
 		} finally {
 			fetch.mockRestore();
 			appPlatform.restore();
@@ -2871,7 +2929,7 @@ describe('previous-generation database drain', () => {
 		['web', true, 'host-instance'],
 		['web', undefined, null],
 	] as const)(
-		'with the REAL drain: %s verdict %s sends a closed v5 sale with instance header %s',
+		'with the REAL drain: %s verdict %s parks a closed protocol-2 sale, sending nothing (header %s)',
 		assertRealDrain,
 		30_000
 	);
@@ -2903,26 +2961,4 @@ describe('previous-generation database drain', () => {
 			})
 		);
 	});
-});
-
-it('reads the current store contract through the host port, including an awaited scope switch', async () => {
-	const { createAppSyncEngine, createRxdbSyncEngine, switchAppEngineScope } = loadCreateAppEngine();
-	let contract = '1.2';
-	const options = { ...BASE_OPTIONS, paymentsContract: () => contract };
-	createAppSyncEngine(options);
-	const ports = createRxdbSyncEngine.mock.calls[0]![0] as {
-		paymentsContract?: () => string | null;
-	};
-	expect(ports.paymentsContract?.()).toBe('1.2');
-	contract = '1.3';
-	expect(ports.paymentsContract?.()).toBe('1.3');
-	await switchAppEngineScope(
-		{
-			site: { wp_api_url: BASE_OPTIONS.scope.site },
-			store: { id: 'store-2' },
-			wpCredentials: { id: 'cashier-1' },
-		},
-		{ ...options, paymentsContract: () => null }
-	);
-	expect(ports.paymentsContract?.()).toBeNull();
 });
