@@ -20,7 +20,7 @@ interface PrintInputs {
  *    falling back to fetching the receipt URL only when the frame is unreadable.
  *
  * Only case 3 without HTML needs the frame: on a slow site that frame is a full
- * WordPress page, and waiting for it delayed prints that never use it by 20-30 s.
+ * WordPress page, and prints that never use it must not wait for it.
  */
 export function printNeedsLoadedPreview({ printerProfile, receiptData, html }: PrintInputs) {
 	if (printerProfile && isOrderBasedCloudProfile(printerProfile)) return false;
