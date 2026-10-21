@@ -6,17 +6,21 @@ import {
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
 
-import { mirrorMoneyAnswer } from '../mutations/mirror-server-order';
+import { mintUuid } from '../mint-uuid';
+import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/mirror-server-order';
 import { pushRecord } from '../mutations/push-record';
 import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
+	claimRoute,
 	dropUnsent,
 	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
 	readOrderCommands,
+	releaseClaim,
+	retireRoute,
 	type RevisionChain,
 	settleCommand,
 } from '../store-local/money-commands';
@@ -31,6 +35,19 @@ import type { StoreLocalDatabase } from '../reads/store-local';
  * body under its own id, which the server replays. There is no resolution by reading.
  */
 export type Post = (url: string, body: unknown) => Promise<{ data: unknown }>;
+export interface CommandProvenance {
+	register_id?: string;
+	session_id?: string;
+	sale_time?: string;
+	sale_tz?: string;
+	sale_counter?: string;
+}
+/** The command a provenance is frozen for: whether it completes the sale decides the counter. */
+export interface ProvenanceCommand {
+	readonly kind: MoneyCommandKind;
+	readonly target: string | null;
+	readonly body: Readonly<Record<string, unknown>>;
+}
 /**
  * Why a command ended before (or without) an answer that settles it. `preflight_failed`: the
  * pre-flight itself failed (the push of pending work was refused, the resident could not be
@@ -49,11 +66,42 @@ export class MoneyCommandError extends Error {
 		this.name = 'MoneyCommandError';
 	}
 }
+export type MoneyCommandPoster = Post & {
+	/**
+	 * Mirror an answer onto the LATEST resident under the revision the last command was sent
+	 * with (the summary's status lands only while the resident still carries it), then settle:
+	 * delete the answered entries and run the forced refresh.
+	 */
+	mirror(answer: Omit<MoneyAnswer, 'sentRevision'>): Promise<void>;
+	/**
+	 * Delete the answered entries, then the forced refresh (what `mirror` ends with). A definitive
+	 * refusal since the last settle also earns the refresh, never an answer chain.
+	 */
+	settle(): Promise<void>;
+	/** Give up the answered entries' claims without settling them: they stay for a re-send. */
+	abandon(): Promise<void>;
+	/**
+	 * Retire the order's command for a route, unanswered, because another answer proved it never
+	 * ran (a locked intent whose cancel's void found no row, or voided it): never re-send it.
+	 */
+	retire(kind: MoneyCommandKind, target: string | null): Promise<void>;
+};
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
 const APPROVED_KINDS = new Set<MoneyCommandKind>(['intent', 'submit', 'close']);
 /** End a payment in motion: a pending edit is refused until they land, so they never push it. */
 const ENDS_MOTION = new Set<MoneyCommandKind>(['capture', 'void', 'cancel']);
+/**
+ * The kinds whose body carries the till's provenance: the store wraps exactly these five handlers
+ * in its provenance context (`Payments_Controller`, `Completion_Stamp::with_provenance`).
+ */
+const PROVENANCE_KINDS = new Set<MoneyCommandKind>([
+	'record',
+	'intent',
+	'capture',
+	'submit',
+	'close',
+]);
 const ROUTE =
 	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
 
@@ -321,4 +369,170 @@ function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>)
 		default:
 			return true;
 	}
+}
+
+/** The engine scope the till is in now: one cashier's orders. */
+async function activeScopeId(runtime: QueryRuntime): Promise<string | null> {
+	const scope = runtime.engine.active() ?? (await runtime.engine.whenActive());
+	return scope?.scopeId ?? null;
+}
+function answerChain(revision: unknown, at: number): RevisionChain | undefined {
+	return typeof revision === 'string' ? { answerRevision: revision, answeredAt: at } : undefined;
+}
+
+/**
+ * A drop-in `post` for the money routes: classifies the path, freezes the body (provenance for
+ * the completion-capable kinds, minted once here), journals it, and sends it through the
+ * envelope. Any other path passes through untouched (the status poll, bootstraps).
+ *
+ * A retry is a re-send: a call for a command the journal already holds as dispatched (the same
+ * kind and target, or for `record` the same row id) re-sends that entry, with its id, frozen
+ * body, provenance and approval, whichever poster or process sent it first. A leg's retry, a
+ * fresh poster per settlement attempt and Try again all land on the one command the server
+ * replays.
+ */
+export function moneyCommandPoster(input: {
+	runtime: QueryRuntime;
+	storeDB: StoreLocalDatabase;
+	orderUuid: string;
+	post: Post;
+	/**
+	 * The order's total and currency as the cashier approved them at the press. Absent (a void,
+	 * a cancel, a record, a resumed leg with no press), the command is frozen with an open journal
+	 * entry's approval when the order has one, else the resident's total and currency.
+	 */
+	approval?: OrderApproval;
+	/** Called once, when the command is frozen; it sees the command it describes. */
+	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
+	/**
+	 * Recovery and Try again: re-send only a command the journal holds, never freeze a new one
+	 * (adversarial 2 on #2798): that would run a command nobody pressed for, on a sale reopened
+	 * since.
+	 */
+	replay?: true;
+}): MoneyCommandPoster {
+	let answered: { id: string; chain?: RevisionChain }[] = [];
+	// This poster's claim on its commands (see `claimRoute`): taken in the journal write that gets
+	// or creates the command, held through the send and its answer, and ended by the settle that
+	// deletes the entry. A send that throws gives the claim up at once (the entry stays, for Try
+	// again or the recovery); a caller that never settles an answer loses it to `CLAIM_LEASE_MS`.
+	const claimant = mintUuid();
+	const release = (id: string) =>
+		releaseClaim(input.storeDB, input.orderUuid, id, claimant).catch(() => undefined);
+	// A definitive refusal settled its own entry, so it is not an answer with a chain; it still
+	// says the resident's money is stale (`wcpos_balance_outstanding`,
+	// `wcpos_amount_exceeds_balance`), so the next settle runs the corrective refresh for it.
+	let refusedSinceSettle = false;
+	// The revision the last command went out under, read off the body the envelope sends.
+	let sentRevision: string | null = null;
+	const send: Post = (url, body) => {
+		sentRevision = (body as { revision?: string }).revision ?? null;
+		return input.post(url, body);
+	};
+	/** Send through the envelope, which alone decides what answers the command. */
+	const dispatch = async (entry: MoneyCommandEntry) => {
+		try {
+			const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, { post: send });
+			answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
+			return response;
+		} catch (error) {
+			if (isDefinitiveMoneyRefusal(moneyRefusalOf(error))) refusedSinceSettle = true;
+			await release(entry.id);
+			throw error;
+		}
+	};
+	const freezeApproval = async (entries: readonly MoneyCommandEntry[], target: string | null) => {
+		if (input.approval) return input.approval;
+		const journaled = entries.find((entry) => entry.target === target) ?? entries[0];
+		if (journaled) return journaled.approval;
+		const { payload } = (await readOrder(input.runtime, input.orderUuid)).order;
+		return { total: String(payload.total ?? ''), currency: String(payload.currency ?? '') };
+	};
+	const settle = async () => {
+		const done = answered;
+		const refused = refusedSinceSettle;
+		answered = [];
+		refusedSinceSettle = false;
+		for (const { id, chain } of done)
+			await settleCommand(input.storeDB, input.orderUuid, id, chain);
+		if (done.length || refused)
+			await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
+	};
+	/** Freeze a new command for the route: provenance (minted once here), id, approval, scope. */
+	const freeze = async (
+		url: string,
+		route: NonNullable<ReturnType<typeof classifyMoneyRoute>>,
+		frozen: Record<string, unknown>,
+		rowId: string | null
+	): Promise<MoneyCommandEntry> => {
+		const { entries } = await readOrderCommands(input.storeDB, input.orderUuid);
+		const scope = await activeScopeId(input.runtime);
+		const provenance = PROVENANCE_KINDS.has(route.kind)
+			? await input.provenance?.({ kind: route.kind, target: route.target, body: frozen })
+			: null;
+		return {
+			orderUuid: input.orderUuid,
+			kind: route.kind,
+			path: url,
+			target: route.target,
+			id: rowId ?? mintUuid(),
+			body: provenance ? { ...frozen, provenance } : frozen,
+			approval: await freezeApproval(
+				entries.filter(({ sentAt }) => sentAt !== null),
+				route.target
+			),
+			sentAt: null,
+			sentRevision: null,
+			...(scope ? { scope } : {}),
+		};
+	};
+	const poster = async (url: string, body: unknown) => {
+		const route = classifyMoneyRoute(url);
+		if (!route) return input.post(url, body);
+		const frozen = { ...(body as Record<string, unknown>) };
+		const rowId =
+			route.kind === 'record'
+				? String((frozen.payment as { id?: unknown } | undefined)?.id ?? '')
+				: null;
+		const commandRoute = {
+			orderUuid: input.orderUuid,
+			kind: route.kind,
+			target: route.target,
+			rowId,
+		};
+		// Get or create, and claim, in one serialised journal write (`claimRoute`): two posters
+		// for one route, in this tab or another, always land on one command id. A sent command is
+		// re-sent under its own id; a new one is frozen only when the journal holds none.
+		let claim = await claimRoute(input.storeDB, commandRoute, claimant, null);
+		if (claim.status === 'none' && !input.replay)
+			claim = await claimRoute(
+				input.storeDB,
+				commandRoute,
+				claimant,
+				await freeze(url, route, frozen, rowId)
+			);
+		if (claim.status === 'busy') throw new MoneyCommandError('in_flight', claim.entry);
+		if (claim.status === 'none') throw new Error('money_command_unclaimed');
+		return dispatch(claim.entry);
+	};
+	return Object.assign(poster, {
+		mirror: async (answer: Omit<MoneyAnswer, 'sentRevision'>) => {
+			try {
+				await mirrorMoneyAnswer(input.runtime, input.orderUuid, { ...answer, sentRevision });
+			} catch (error) {
+				// Not settled: the entries stay journaled, their claims given up for a re-send.
+				for (const { id } of answered) await release(id);
+				throw error;
+			}
+			await settle();
+		},
+		settle,
+		retire: (kind: MoneyCommandKind, target: string | null) =>
+			retireRoute(input.storeDB, input.orderUuid, kind, target),
+		abandon: async () => {
+			const open = answered;
+			answered = [];
+			for (const { id } of open) await release(id);
+		},
+	});
 }

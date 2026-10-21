@@ -11,6 +11,7 @@ import type { StoreDatabase } from '@wcpos/database';
 
 import {
 	MoneyCommandError,
+	moneyCommandPoster,
 	sendMoneyCommand,
 	settleMoneyCommand,
 } from '../src/commands/money-command';
@@ -757,5 +758,92 @@ describe('the answer chain and the post-answer refresh', () => {
 			adoptedAfterAnswer: true,
 			adoptedRevision: store.revision,
 		});
+	});
+});
+
+function poster(over: Partial<Parameters<typeof moneyCommandPoster>[0]> = {}) {
+	return moneyCommandPoster({
+		runtime,
+		storeDB,
+		orderUuid: 'order',
+		post: store.post,
+		approval,
+		...over,
+	});
+}
+const chain = async () => (await readOrderCommands(storeDB, 'order')).chain;
+
+describe('moneyCommandPoster', () => {
+	it('a capture retried through a fresh poster re-sends the journaled command, never a new one', async () => {
+		store.modes = ['503'];
+		await expect(poster()('orders/5/payments/leg-1/capture', { context: {} })).rejects.toThrow();
+		const post = poster();
+		await post('orders/5/payments/leg-1/capture', { context: {} });
+		await post.settle();
+		const [first, second] = sentBodies();
+		expect(second.command_id).toBe(first.command_id);
+		expect({ ...second, revision: null }).toEqual({ ...first, revision: null });
+		expect(await entries()).toEqual([]);
+	});
+
+	// Get-or-create and claim happen in one serialised journal write (`claimRoute`).
+	it('two posters racing one route send one command id; the other is told it is in flight', async () => {
+		const results = await Promise.allSettled([
+			poster()('orders/5/close', {}),
+			poster()('orders/5/close', {}),
+		]);
+		expect(new Set(sentBodies().map(({ command_id }) => command_id)).size).toBe(1);
+		expect(store.completions).toBe(1);
+		expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+		expect(results.find(({ status }) => status === 'rejected')).toMatchObject({
+			reason: { reason: 'in_flight' },
+		});
+	});
+
+	it('with no approval a command freezes an open entry’s approval, else the resident’s total and currency', async () => {
+		await writeResident((doc) => ({ ...doc, payload: { ...doc.payload, total: '77.00' } }));
+		store.modes = ['drop'];
+		await expect(
+			poster({ approval: undefined })('orders/5/payments/leg-2/void', {})
+		).rejects.toThrow();
+		expect((await entries())[0].approval).toEqual({ total: '77.00', currency: 'USD' });
+		// A resumed leg (no press) captures a leg whose intent is still journaled: its approval.
+		store.modes = ['drop'];
+		await expect(
+			poster({ approval: { total: '77.00', currency: 'USD' } })(
+				'orders/5/payments/leg-1/intent',
+				{}
+			)
+		).rejects.toThrow();
+		await writeResident((doc) => ({ ...doc, payload: { ...doc.payload, total: '55.00' } }));
+		store.modes = ['drop'];
+		await expect(
+			poster({ approval: undefined })('orders/5/payments/leg-1/capture', {})
+		).rejects.toThrow();
+		const capture = (await entries()).find(({ kind }) => kind === 'capture')!;
+		expect(capture.approval).toEqual({ total: '77.00', currency: 'USD' });
+	});
+
+	it('a path that is not a money route passes through without an envelope or a journal entry', async () => {
+		const post = jest.fn(async () => ({ data: { ok: true } }));
+		await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });
+		await poster({ post })('orders/5/payments/leg-1/status', {});
+		expect(post).toHaveBeenNthCalledWith(1, 'payment-methods/stripe/bootstrap', { a: 1 });
+		expect(post).toHaveBeenNthCalledWith(2, 'orders/5/payments/leg-1/status', {});
+		expect(await entries()).toEqual([]);
+	});
+
+	// `wcpos_balance_outstanding`: another till recorded money the resident has not seen.
+	it('a definitive refusal earns the next settle the corrective refresh, and records no answer chain', async () => {
+		store.post.mockRejectedValueOnce(
+			httpError(409, 'wcpos_balance_outstanding', { order: store.summary() })
+		);
+		const post = poster();
+		await expect(post('orders/5/close', {})).rejects.toThrow('wcpos_balance_outstanding');
+		expect(await entries()).toEqual([]);
+		requires = [];
+		await post.mirror({ order: store.summary() as never });
+		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
+		expect(await chain()).toBeNull();
 	});
 });
