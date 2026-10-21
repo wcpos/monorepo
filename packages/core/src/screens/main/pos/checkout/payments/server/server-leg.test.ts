@@ -586,6 +586,26 @@ it.each([
 			error: { code: 'retire_failed' },
 		});
 });
+// A cancel pressed while the intent was out, whose POST then failed in transit (outcome unknown),
+// goes out as the void; once that void ends the leg voided (here the store never saw the intent),
+// the intent is retired from the journal, so no recovery or Try again re-sends it after the cancel.
+it('a cancelled intent lost in transit is retired once its void ends the leg', async () => {
+	const retire = jest.fn(async () => undefined);
+	const c = setup(false, {}, { retire });
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(new Error('Network Error'));
+	await started;
+	await tick(0);
+	expect(c.count('intent')).toBe(1);
+	expect(retire).toHaveBeenCalledWith('intent', 'leg');
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	expect(retire.mock.invocationCallOrder[0]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
+});
+
 it('a locked capture is re-sent after retry_after, then settles', async () => {
 	const c = setup(true);
 	c.answer('status', response({ status: 'authorized' }));
