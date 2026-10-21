@@ -1142,3 +1142,37 @@ it('reads the service version in the effect after the preceding bridge starts, w
 	expect(readPending).toHaveBeenCalledTimes(1);
 	expect(owner.completeSale).toHaveBeenCalledTimes(1);
 });
+
+// A sale the store took but the till could not confirm (`unconfirmed`) keeps its attempt; the
+// bridge finishes its receipt and completion audit once the paid order is adopted.
+it('an unconfirmed sale is finished by the bridge once the paid order is adopted', async () => {
+	await recordCompletionAttempt(mockContext.storeDB, { orderUuid: 'order', source: 'manual' });
+	mockCatchUp.mockRejectedValueOnce(new Error('offline'));
+	const answer = {
+		source: 'manual',
+		via: 'online',
+		row: { id: 'row-1', amount: '10.00' },
+		order: { status: 'completed', balance: '0.00' },
+		mirrorFailed: false,
+		preparedCompleting: true,
+		preLegBalanceMinor: 1000,
+		amountMinor: 1000,
+	} as unknown as Parameters<typeof owner.completeSale>[2];
+	expect(
+		await owner.completeSale(mockContext, resident('order', 'pos-open') as never, answer, {
+			host: 'stage',
+			autoShowReceipt: true,
+		})
+	).toBe('unconfirmed');
+	expect(await pendingCompletions(mockContext.storeDB)).toHaveProperty('order');
+	mockFind.mockResolvedValue(resident()); // the paid order is adopted
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
+		})
+	);
+});

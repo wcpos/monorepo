@@ -3,8 +3,10 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { type EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useTheme } from '../../../../../contexts/theme';
+import { useT } from '../../../../../contexts/translations';
 import { getCheckoutModeSnapshot, leaveCheckout, selectReceipt } from '../checkout-mode';
 import { returnToTill } from '../till-route';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -13,6 +15,8 @@ import { completeSale, type SaleOutcome } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
+
+const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
@@ -29,6 +33,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
+	const t = useT();
 	const { setCurrentOrderID, getCurrentOrderID } = useCurrentOrderActions();
 
 	return React.useCallback(
@@ -52,8 +57,22 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 					: { host: 'modal' },
 				queue
 			);
-			// A sent sale leaves the till exactly as a completed one does (spec §4.2).
-			if (result !== 'completed' && result !== 'sent') return;
+			switch (result) {
+				case 'unconfirmed': // The store took it; the bridge finishes the sale when it confirms.
+					logger.info(t('pos_checkout.payment_confirming'), {
+						showToast: true,
+						context: { orderUUID: order.uuid },
+					});
+					return;
+				case 'partial':
+				case 'not-completed':
+					return;
+				case 'completed':
+				case 'sent': // A sent sale leaves the till exactly as a completed one does (spec §4.2).
+					break;
+				default:
+					return result satisfies never;
+			}
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
 			if (getCurrentOrderID() !== order.uuid) {
@@ -90,6 +109,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			setCurrentOrderID,
 			getCurrentOrderID,
 			uiSettings.autoShowReceipt,
+			t,
 		]
 	);
 }

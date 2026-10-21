@@ -1098,3 +1098,21 @@ it('a gateway settled after a reopen was adopted is not completed: no receipt', 
 	);
 	expect(mockReceipt).not.toHaveBeenCalled();
 });
+
+// The store took the money (its answer reads paid) but the resident does not read paid yet and
+// no refresh confirmed it: `unconfirmed`. No receipt, and the completion attempt stays for the
+// bridge, which finishes it once the paid order is adopted.
+it('an unconfirmed paid answer keeps its completion attempt and enters no receipt', async () => {
+	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status: 'pos-open' } }),
+	} as never;
+	mockRefresh.mockRejectedValueOnce(new Error('offline'));
+	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
+	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
+		'unconfirmed'
+	);
+	expect(mockReceipt).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+});

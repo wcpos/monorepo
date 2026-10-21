@@ -10,6 +10,7 @@ export const auditSaleCompleted: ActionHook<typeof CHECKOUT_COMPLETE_EVENT> = as
 	next
 ) => {
 	const result = await next(e);
+	// Only a completed sale is audited; an `unconfirmed` one is, when the bridge finishes it.
 	if (result.outcome !== 'completed' || !result.summary) return result;
 	ctx.log('info', `Sale ${result.summary.orderUUID} completed`, {
 		category: ['wcpos', 'pos', 'checkout'],

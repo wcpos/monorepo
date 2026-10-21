@@ -367,6 +367,7 @@ async function finishSale(
 		return { outcome: await finishSent(ctx, order, outcome, presentation), summary: null };
 	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
 		const latest = order.getLatest().payload;
+		let confirmed = false;
 		if (
 			latest.id &&
 			((outcome.source === 'manual' &&
@@ -381,7 +382,9 @@ async function finishSale(
 			const logger = getLogger(['wcpos', 'pos', 'checkout']);
 			const refreshed = refreshOrderRecord(ctx.runtime, latest.id);
 			try {
-				if ((await refreshed) === 'timed-out')
+				const result = await refreshed;
+				confirmed = result === 'refreshed';
+				if (result === 'timed-out')
 					logger.debug('Post-payment order refresh timed out; keeping sale open', {
 						terminal: { outcome: 'recovered', operationId: String(latest.id) },
 						context: { orderId: order.uuid },
@@ -398,10 +401,14 @@ async function finishSale(
 		}
 		if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload))
 			return {
+				// The store took the money but no refresh confirmed the resident: the attempt stays
+				// for the bridge, which finishes the sale once the paid order is adopted.
 				outcome:
-					outcome.source === 'manual' || outcome.source === 'terminal'
-						? 'partial'
-						: 'not-completed',
+					!confirmed && isSaleComplete(outcome, ctx.dp)
+						? 'unconfirmed'
+						: outcome.source === 'manual' || outcome.source === 'terminal'
+							? 'partial'
+							: 'not-completed',
 				summary: null,
 			};
 	}
@@ -510,8 +517,11 @@ export async function completeSale(
 		if (isActionRefusal(result))
 			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
-		if (outcome.source !== 'replay' || result.outcome === 'completed')
-			await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+		// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
+		const kept =
+			result.outcome === 'unconfirmed' ||
+			(outcome.source === 'replay' && result.outcome !== 'completed');
+		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return result.outcome;
 	} catch (error) {
 		try {
