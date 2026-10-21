@@ -76,6 +76,17 @@ it('composes a real DocsLink', () => {
 	fireEvent.click(screen.getByTestId('notice-docs'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com');
 });
+it('renders children inside the text column under the description', () => {
+	render(
+		<Notice tone="warn" title="Title" description="Description" testID="notice">
+			<span data-testid="body">Engine warning</span>
+		</Notice>
+	);
+	const description = screen.getByTestId('notice-description');
+	const body = screen.getByTestId('body');
+	expect(screen.getByTestId('notice')).toContainElement(body);
+	expect(description.nextElementSibling).toBe(body);
+});
 it('has no internal dismissal or timer', () => {
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/onDismiss|xmark|setTimeout/);
 });

@@ -15,6 +15,7 @@ type NoticeProps = ViewProps & {
 	icon?: IconName;
 	title: string;
 	description?: string;
+	children?: React.ReactNode;
 	actions?: readonly [NoticeAction] | readonly [NoticeAction, NoticeAction];
 	docs?: { label: string; href: string; testID?: string };
 };
@@ -29,6 +30,7 @@ export function Notice({
 	icon,
 	title,
 	description,
+	children,
 	actions,
 	docs,
 	testID,
@@ -66,6 +68,7 @@ export function Notice({
 						{description}
 					</Text>
 				)}
+				{children}
 			</VStack>
 			{(actions || docs) && (
 				<HStack className="flex-wrap gap-2">

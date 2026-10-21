@@ -49,6 +49,9 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
 }));
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+
 jest.mock('@wcpos/components/text', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Text };
@@ -132,7 +135,7 @@ describe('TotalsChangedBanner', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 
-		expect(screen.getByTestId('order-totals-changed-banner').textContent).toContain(
+		expect(screen.getByTestId('order-totals-changed-banner-title').textContent).toContain(
 			"Your store changed this order's totals"
 		);
 		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
@@ -637,6 +640,10 @@ describe('the engine-warning half', () => {
 		expect(screen.getByTestId('order-totals-changed-banner').textContent).not.toContain(
 			"Your store changed this order's totals"
 		);
+		// The engine warning is the band's own title when it stands alone.
+		expect(screen.getByTestId('order-totals-changed-banner-title').textContent).toBe(
+			"Check this order's amounts before taking payment"
+		);
 	});
 
 	it('shows both findings in one banner when both are true', () => {
@@ -648,6 +655,13 @@ describe('the engine-warning half', () => {
 			'Total36.68 → 50.07'
 		);
 		expect(screen.getByTestId('order-totals-changed-banner-engine-warnings')).toBeTruthy();
+		// Both findings: the divergence owns the band's title, the engine warning keeps its own.
+		expect(screen.getByTestId('order-totals-changed-banner-title').textContent).toBe(
+			"Your store changed this order's totals"
+		);
+		expect(screen.getByTestId('order-totals-changed-banner-engine-warnings').textContent).toContain(
+			"Check this order's amounts before taking payment"
+		);
 		// The "why totals disagree" page explains the SERVER disagreement and says
 		// nothing about an unreadable price basis, so it belongs to that half.
 		expect(screen.getByTestId('order-totals-changed-banner-docs-link')).toBeTruthy();

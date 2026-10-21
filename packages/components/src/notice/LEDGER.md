@@ -16,3 +16,4 @@ Seeded 2026-09-18 by wcpos/roadmap#358 from the feedback-states page (wcpos/road
 6. The icon takes the foreground colour; the tone lives on the surface and its border, never on an icon that would fall under 3:1 against the tinted surface — evidence: `.claude/rules/design.mdc` §7 (icon contrast 3:1); the prototype's `.notice` colours no icon; Codex review on wcpos/monorepo#2182.
 7. A `bad` notice is announced on iOS when it mounts, because iOS has no live region; Android and web use the live region — evidence: Codex review on wcpos/monorepo#2182.
 8. Copy at the base size and action labels that wrap, as `empty-state` lines 5–6 — evidence: `.claude/rules/design.mdc` §3; Codex review on wcpos/monorepo#2182.
+9. Optional children render in the text column under the description — evidence: wcpos/roadmap#465, board section 5: the totals-changed banner keeps its body text.

@@ -202,7 +202,7 @@ function POSStack() {
 				>
 					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
 					{showUpgrade && (
-						<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
+						<View className="bg-muted" style={{ paddingTop: edgeTop }}>
 							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
 						</View>
 					)}

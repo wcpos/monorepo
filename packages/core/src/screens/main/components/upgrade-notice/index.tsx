@@ -35,13 +35,13 @@ export function UpgradeNotice({
 		<HStack
 			testID="upgrade-notice-banner"
 			className={cn(
-				'bg-warn-bg border-warning/45 min-h-10 items-center gap-2.5 border-b pr-2 pl-4',
+				'bg-muted border-border min-h-10 items-center gap-2.5 border-b pr-2 pl-4',
 				underBar && !isPhone && 'mt-4'
 			)}
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
 			    assistive tech and its contrast is not load-bearing. */}
-			<Icon name="featured" size="sm" className="text-warn-text" aria-hidden />
+			<Icon name="featured" size="sm" className="text-muted-foreground" aria-hidden />
 			<Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
 				<Text className="font-semibold">{t('pro.strip_title')}</Text>
 				{!isPhone && <> {t('pro.strip_body')}</>}
@@ -49,7 +49,7 @@ export function UpgradeNotice({
 			{!isPhone && (
 				<Text
 					testID="upgrade-notice-more"
-					className="text-muted-foreground text-sm underline"
+					className="text-primary text-sm"
 					variant="link"
 					onPress={openPro}
 				>

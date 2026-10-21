@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
-import { Text } from '@wcpos/components/text';
+import { Notice } from '@wcpos/components/notice';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -123,23 +122,21 @@ export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dens
 	const { syncBacklogSales, login } = hold;
 
 	return (
-		<View
+		<Notice
+			tone="bad"
+			title={
+				syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync_title', { count: syncBacklogSales })
+					: t('auth.session_expired_title')
+			}
+			description={
+				syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync_description')
+					: t('auth.session_expired_description')
+			}
+			actions={[{ label: t('auth.log_in'), onPress: login, testID: 'session-hold-login' }]}
+			className={cn(!phone && (gutter === 'page' ? 'mx-4 mt-4' : 'mx-2 mt-2'))}
 			testID="session-hold-banner"
-			className={cn(
-				'border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2',
-				!phone && (gutter === 'page' ? 'mx-4 mt-4' : 'mx-2 mt-2')
-			)}
-		>
-			<Text className="text-destructive flex-1 text-sm">
-				{syncBacklogSales > 0
-					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
-					: t('auth.session_expired')}
-			</Text>
-			<Pressable testID="session-hold-login" onPress={login}>
-				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
-					{t('auth.log_in')}
-				</Text>
-			</Pressable>
-		</View>
+		/>
 	);
 }
