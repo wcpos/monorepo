@@ -298,3 +298,11 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   data URI, so a blank logo box means the printer, never the network — which also tells a
   cross-origin store logo (2026-09-03, still open) apart from a printer that cannot raster at all
   (wcpos/monorepo#TBD).
+- **2026-10-21 · Electron, Epson on a non-ePOS port · no printer involved.** A missing ePOS endpoint
+  was probed twice per receipt: the service asks `supportsMarkup()` and then prints, and "never
+  remember a miss" also discarded the miss between those two calls — up to ~32 s of 4 s probe
+  timeouts (443, 8043, 80, 8008, twice) before raw bytes left. The rule's scope is the **job**, not
+  the call: a miss is held until that job prints or the next job begins (`PrinterTransport.beginJob`,
+  called by `getTransport` at the start of every queued job, because the transport is cached per
+  profile and outlives its jobs), so every job still probes afresh. Reuse logs `Reusing this job’s
+  ePOS probe miss`. Lane order, probe order, timeouts and the per-host success cache are unchanged.

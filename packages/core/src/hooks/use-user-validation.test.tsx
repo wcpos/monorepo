@@ -35,6 +35,13 @@ const mockBaseHttpClient = {};
 const mockAuthenticatedHttpClient = { get: mockGet };
 const mockRefreshHandler = jest.fn();
 const mockWakeCallbacks: (() => void)[] = [];
+// The update-required handler the hook hands its authenticated client.
+let mockOnUpdateRequired: ((details: never) => void) | undefined;
+const mockReportUpdateRequired = jest.fn();
+
+jest.mock('@wcpos/utils/update-required-gate', () => ({
+	reportUpdateRequired: (...args: unknown[]) => mockReportUpdateRequired(...args),
+}));
 
 jest.mock('@wcpos/utils/logger', () => ({
 	...jest.requireActual('@wcpos/utils/logger'),
@@ -50,8 +57,11 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	createTokenRefreshHandler: () => mockRefreshHandler,
-	useHttpClient: (handlers?: unknown[]) =>
-		handlers ? mockAuthenticatedHttpClient : mockBaseHttpClient,
+	useHttpClient: (handlers?: unknown[], onUpdateRequired?: (details: never) => void) => {
+		if (!handlers) return mockBaseHttpClient;
+		mockOnUpdateRequired = onUpdateRequired;
+		return mockAuthenticatedHttpClient;
+	},
 	// The real predicate — a hand-written stub here would ratify the test instead
 	// of checking the guard the hook actually uses.
 	isAsleepBlock: jest.requireActual('@wcpos/hooks/use-http-client/request-state-manager')
@@ -307,5 +317,72 @@ describe('useUserValidation while the app is asleep', () => {
 		// The validation-key guard skips the re-run — nothing was deferred.
 		await waitFor(() => expect(result.current.isLoading).toBe(false));
 		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('useUserValidation when the server refuses this app version', () => {
+	const site = {
+		uuid: 'site-1',
+		url: 'https://example.com',
+		wp_api_url: 'https://example.com/wp-json/',
+		wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+		use_jwt_as_param: false,
+	};
+
+	const makeWpUser = () => ({
+		uuid: 'cashier-1',
+		id$: { value: 7 },
+		access_token$: { value: 'access-token' },
+		refresh_token$: { value: 'refresh-token' },
+		incrementalPatch: mockIncrementalPatch,
+		getLatest: () => ({ stores: [], incrementalModify: mockIncrementalModify }),
+	});
+
+	beforeEach(() => {
+		mockGet.mockReset();
+		mockReportUpdateRequired.mockClear();
+		mockIncrementalPatch.mockClear();
+		mockWakeCallbacks.length = 0;
+		mockOnUpdateRequired = undefined;
+	});
+
+	it('reports the 426 refusal under the engine site key and stays invalid', async () => {
+		// The cashier GET goes through the REAL shared wrapper, built with the
+		// handler the hook passed — so the refusal is parsed exactly as in the app.
+		sharedHttp.request.mockRejectedValueOnce(
+			Object.assign(new Error('Request failed with status code 426'), {
+				isAxiosError: true,
+				response: {
+					status: 426,
+					data: {
+						code: 'wcpos_update_required',
+						message: 'Update the app',
+						data: { status: 426, min_protocol: 3, server_protocol: 3, plugin_version: '2.0.0' },
+					},
+				},
+			})
+		);
+		const { result: shared } = renderHook(() =>
+			useSharedHttpClient(undefined, (details) => mockOnUpdateRequired?.(details as never))
+		);
+		mockGet.mockImplementation((url, config) => shared.current.get(url, config));
+		const wpUser = makeWpUser();
+
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+		expect(mockReportUpdateRequired).toHaveBeenCalledTimes(1);
+		// wp_api_url — the key the engine and the in-app UpdateRequiredGate use.
+		expect(mockReportUpdateRequired).toHaveBeenCalledWith(site.wp_api_url, {
+			minProtocol: 3,
+			serverProtocol: 3,
+			pluginVersion: '2.0.0',
+			status: 426,
+		});
+		expect(result.current.isValid).toBe(false);
+		expect(mockIncrementalPatch).not.toHaveBeenCalled();
 	});
 });

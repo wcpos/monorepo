@@ -93,6 +93,8 @@ interface TemplateRendererResult {
 		html?: string;
 		commit?: () => Promise<ClosurePrintMarker | undefined>;
 	}>;
+	/** `receiptData` is the server's receipt, not the local fallback built from the order. */
+	receiptDataIsServer: boolean;
 }
 
 export function useTemplateRenderer({
@@ -417,5 +419,6 @@ export function useTemplateRenderer({
 		isOffline,
 		isSyncing,
 		hasFinalData,
+		receiptDataIsServer: !isOffline && apiReceiptData != null,
 	};
 }

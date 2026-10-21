@@ -94,6 +94,24 @@ vi.mock('../transport/star-native-adapter', () => ({
 	},
 }));
 
+const { networkBeginJobMock, networkCtorMock } = vi.hoisted(() => ({
+	networkBeginJobMock: vi.fn(),
+	networkCtorMock: vi.fn(),
+}));
+
+vi.mock('../transport/network-adapter', () => ({
+	NetworkAdapter: class {
+		constructor(...args: [host: string, port?: number, vendor?: string]) {
+			networkCtorMock(...args);
+		}
+
+		name = 'network-test';
+		beginJob = networkBeginJobMock;
+		printRaw = vi.fn().mockResolvedValue(undefined);
+		printHtml = vi.fn().mockResolvedValue(undefined);
+	},
+}));
+
 function networkProfile(overrides: Partial<PrinterProfile> = {}): PrinterProfile {
 	return {
 		id: 'markup-printer',
@@ -1023,5 +1041,20 @@ describe('PrinterService', () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it('tells a reused transport that a new job has begun, so per-job state never leaks', async () => {
+		networkBeginJobMock.mockClear();
+		networkCtorMock.mockClear();
+		const service = new PrinterService();
+		const profile = networkProfile({ id: 'reused-network', port: 9100 });
+
+		await service.printRaw(new Uint8Array([1]), profile);
+		await service.printRaw(new Uint8Array([2]), profile);
+		await service.printRaw(new Uint8Array([3]), profile);
+
+		// One transport lives across the profile's jobs, so it has to hear where each job starts.
+		expect(networkCtorMock).toHaveBeenCalledTimes(1);
+		expect(networkBeginJobMock).toHaveBeenCalledTimes(3);
 	});
 });
