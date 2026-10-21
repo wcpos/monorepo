@@ -427,9 +427,15 @@ export async function resendOpenCommands(
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
-		const sent = await poster(entry.path, entry.body).catch((error: Error) =>
-			error.message === 'money_command_unclaimed' ? null : Promise.reject(error)
-		);
+		const sent = await poster(entry.path, entry.body).catch(async (error: Error) => {
+			if (error.message === 'money_command_unclaimed') return null;
+			// A definitive refusal settled its entry and says the resident's money is stale: the
+			// poster's settle runs the corrective refresh before the refusal propagates (Codex
+			// 4342609024 on #2831). The refusal is what the caller acts on, so a refresh that fails
+			// leaves the resident to the next adoption instead of replacing it.
+			await poster.settle().catch(() => undefined);
+			throw error;
+		});
 		// Settled since the snapshot by its own sender: nothing to replay (adversarial 2 on #2798).
 		if (!sent) continue;
 		const { data } = sent as { data: Record<string, unknown> };

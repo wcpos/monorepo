@@ -879,6 +879,23 @@ describe('Try again: resendOpenCommands', () => {
 		expect(store.post).toHaveBeenCalledTimes(1);
 	});
 
+	// Codex 4342609024 on #2831: the refusal settles the entry, so nothing else would correct the
+	// resident's stale money.
+	it('a replay refused as outstanding runs the corrective refresh before the refusal propagates', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		store.total = '120.00'; // another till recorded money the resident has not seen
+		store.n += 1;
+		store.post.mockRejectedValueOnce(
+			httpError(409, 'wcpos_balance_outstanding', { order: store.summary() })
+		);
+		requires = [];
+		await expect(restart()).rejects.toThrow('wcpos_balance_outstanding');
+		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
+		expect((await residentJSON()).payload.total).toBe('120.00');
+		expect(await entries()).toEqual([]);
+	});
+
 	it('an accepted cash record whose answer is lost is re-sent from the journal and makes no second row', async () => {
 		store.modes = ['lose'];
 		await expect(poster()('orders/5/payments', { payment: cash() })).rejects.toThrow();
