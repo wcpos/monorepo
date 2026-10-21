@@ -225,7 +225,7 @@ function Verdict({
 				<>
 					<HStack className="min-h-9 items-center gap-2">
 						<Icon name="check" className="text-success" />
-						<Text className="text-sm font-medium">{headline}</Text>
+						<Text className="flex-1 text-sm font-medium">{headline}</Text>
 					</HStack>
 					<Text className="text-muted-foreground text-xs">
 						{t('settings.barcode_test_scan_detail', {
