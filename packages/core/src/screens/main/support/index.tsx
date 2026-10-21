@@ -45,7 +45,7 @@ export function Support() {
 			style={{ paddingBottom: bottom || undefined }}
 		>
 			<ManagementBar title={t('common.support')} testID="support-bar" />
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 			<View testID="support-frame" className="min-h-0 flex-1 p-4" onLayout={handleLayout}>
 				<Discord
 					dom={{
