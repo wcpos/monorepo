@@ -274,9 +274,12 @@ function unpaidOnStore(order: OrderPaymentSummary | null, dp: number, payload?: 
 	return reopenedSince(order, dp) || residentUnpaid(payload);
 }
 
-/** The resident after the mirror reads unpaid (a resident with no status is unknown, not unpaid). */
-export function residentUnpaid(payload?: { status?: string | null }) {
-	return !!payload?.status && !isPaidStatus(payload.status);
+/**
+ * The resident after the mirror reads unpaid: neither paid nor the status the store settled on
+ * (`settled`, a gateway's stored one). A resident with no status is unknown, not unpaid.
+ */
+export function residentUnpaid(payload?: { status?: string | null }, settled?: string) {
+	return !!payload?.status && !isPaidStatus(payload.status) && payload.status !== settled;
 }
 
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
@@ -302,8 +305,8 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
-		case 'gateway-settled': // The store judged the stored status reached (§3.1); the till does not re-judge.
-			return true;
+		case 'gateway-settled': // The store judged the stored status reached (§3.1), and the resident agrees.
+			return !residentUnpaid(payload, outcome.order.status);
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
 		case 'gateway-snapshot': // The blocklist, plus the status the merchant stored for the gateway.

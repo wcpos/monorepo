@@ -1082,3 +1082,19 @@ it.each([
 	if (result === 'partial') expect(mockReceipt).not.toHaveBeenCalled();
 	else expect(mockReceipt).toHaveBeenCalled();
 });
+
+// The gateway's settled answer follows the same rule as the cash and close paths: the resident
+// after the mirror must read the settled status (paid, or the merchant's stored one) too.
+it('a gateway settled after a reopen was adopted is not completed: no receipt', async () => {
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status: 'pos-open' } }),
+	} as never;
+	mockRefresh.mockResolvedValueOnce('refreshed'); // the refresh confirms the reopen
+	const settled = { source: 'gateway-settled', order: { status: 'pending' } } as SaleOutcome;
+	expect(isSaleComplete(settled, 2, { ...payload, status: 'pending' } as never)).toBe(true);
+	expect(await completeSale(ctx, resident, settled, { host: 'stage', autoShowReceipt: true })).toBe(
+		'not-completed'
+	);
+	expect(mockReceipt).not.toHaveBeenCalled();
+});
