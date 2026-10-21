@@ -1,8 +1,10 @@
 import { log } from '@wcpos/utils/logger';
+import { MoneyCommandError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { createLiveTab, holdLiveTab as holdWebTab } from '@wcpos/database/live-tab/live-tab.web';
 
+import { RETIRE_RETRY_MS } from '../leg-finality';
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
 
@@ -35,7 +37,13 @@ function deferred<T>() {
 	});
 	return { promise, resolve };
 }
-function setup(offline = false, resume = false, missing?: 'driver' | 'method', pendingRow = row) {
+function setup(
+	offline = false,
+	resume = false,
+	missing?: 'driver' | 'method',
+	pendingRow = row,
+	retire?: (kind: 'intent', target: string) => Promise<void>
+) {
 	const collection = deferred<CollectResult>();
 	const driver: PaymentDriver = {
 		provider: 'simulated',
@@ -76,6 +84,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method', p
 			setTimeout,
 			clearTimeout,
 			onFinal,
+			...(retire ? { retire } : {}),
 		},
 		{
 			dp: 3,
@@ -384,7 +393,10 @@ it.each([
 		});
 		if (voidFails)
 			c.post.mockRejectedValueOnce({
-				response: { data: { code: 'wcpos_payment_not_found', message: 'Payment not found' } },
+				response: {
+					status: 404,
+					data: { code: 'wcpos_payment_not_found', message: 'Payment not found' },
+				},
 			});
 		const states: DeviceLegState['phase'][] = [];
 		c.leg.subscribe(() => states.push(c.leg.getState().phase));
@@ -825,3 +837,85 @@ it.each(['collect', 'capture'])(
 		c.leg.dispose();
 	}
 );
+
+// An intent the store never confirmed (a held lock, a transport failure) whose cleanup void then
+// shows no live intent (voided, or not found) is retired from the journal before the leg is
+// final: a later recovery must never re-send it into a pending device payment no reader collects.
+it.each([
+	['not found', 'not_found'],
+	['voided', 'voided'],
+])(
+	'an unanswered intent whose cleanup void shows it %s is retired before the leg ends',
+	async (_, voidAnswer) => {
+		const retire = jest.fn(async () => undefined);
+		const c = setup(false, false, undefined, row, retire);
+		c.post.mockRejectedValueOnce({
+			response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
+		});
+		if (voidAnswer === 'not_found')
+			c.post.mockRejectedValueOnce({
+				response: { status: 404, data: { code: 'wcpos_payment_not_found', data: { status: 404 } } },
+			});
+		await c.leg.start();
+		expect(retire).toHaveBeenCalledWith('intent', row.id);
+		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'failed' });
+		expect(retire.mock.invocationCallOrder[0]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
+	}
+);
+
+// A retirement whose journal write fails keeps the leg live and retries: a final leg with its
+// intent still journaled would let recovery mint a pending device payment no reader collects.
+it('a failed intent retirement keeps the leg live and retries before the leg ends', async () => {
+	const retire = jest
+		.fn(async (_kind: 'intent', _target: string) => undefined)
+		.mockRejectedValueOnce(new Error('journal write failed'));
+	const c = setup(false, false, undefined, row, retire);
+	c.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
+	});
+	c.post.mockRejectedValueOnce({
+		response: { status: 404, data: { code: 'wcpos_payment_not_found', data: { status: 404 } } },
+	});
+	const started = c.leg.start();
+	await jest.advanceTimersByTimeAsync(0);
+	expect(retire).toHaveBeenCalledTimes(1);
+	expect(c.leg.getState().phase).not.toBe('final');
+	expect(c.leg.getState().error?.code).toBe('retire_failed');
+	expect(c.onFinal).not.toHaveBeenCalled();
+	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS);
+	await started;
+	expect(retire).toHaveBeenCalledTimes(2);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'failed' });
+	// The cashier reads the store's refusal of the intent, not the journal's bookkeeping.
+	expect(c.leg.getState().error?.code).toBe('wcpos_payment_locked');
+	expect(retire.mock.invocationCallOrder[1]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
+});
+
+// The cleanup void of an unanswered intent is re-sent until the store decides it. A void lost in
+// transit, rate-limited, failing on the store, locked, or refused before it left the till proves
+// nothing, so the leg stays live; once the void lands, the intent is retired and the leg ends.
+it.each([
+	['lost in transit', new Error('Network Error')],
+	['rate-limited', { response: { status: 429, data: { code: 'rest_limited', data: {} } } }],
+	['failing on the store', { response: { status: 503, data: {} } }],
+	['locked', { response: { status: 409, data: { code: 'wcpos_payment_locked', data: {} } } }],
+	['refused before it left the till', new MoneyCommandError('preflight_failed', {} as never)],
+])('a cleanup void %s is re-sent until the store decides it', async (_, voidFailure) => {
+	const retire = jest.fn(async (_kind: 'intent', _target: string) => undefined);
+	const c = setup(false, false, undefined, row, retire);
+	c.post.mockRejectedValueOnce(new Error('Network Error')); // the intent's answer is lost
+	c.post.mockRejectedValueOnce(voidFailure);
+	const started = c.leg.start();
+	await jest.advanceTimersByTimeAsync(0);
+	expect(c.leg.getState().phase).not.toBe('final');
+	expect(retire).not.toHaveBeenCalled();
+	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS);
+	await started;
+	expect(c.post.mock.calls.map(([url]) => url.split('/').pop())).toEqual([
+		'intent',
+		'void',
+		'void',
+	]);
+	expect(retire).toHaveBeenCalledWith('intent', row.id);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'failed' });
+});

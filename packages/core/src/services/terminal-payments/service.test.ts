@@ -10,6 +10,7 @@ import {
 } from '../../screens/main/pos/checkout/payments/device/fixtures.test-utils';
 import { registerDriver } from '../payment-drivers/registry';
 import { createSimulatedDriver } from '../payment-drivers/simulated-driver';
+import { passThroughPoster } from './pass-through-poster.test-utils';
 import { TerminalPaymentsService } from './service';
 import {
 	getTerminalPaymentsService,
@@ -64,9 +65,12 @@ function setup() {
 		get: jest.fn(async (_url: string) => ({ data: { payment: row, order: summary } })),
 		post: jest.fn(async (_url: string, _body: unknown) => ({ data: { payment: row } })),
 	};
-	const mirror = jest.fn(async (_uuid: string, _response: unknown) => {});
+	const mirror = jest.fn(async (_uuid: string, _response: unknown, _poster?: unknown) => {});
 	const completeOrder = jest.fn(async () => {});
-	const options = { http, mirror, completeOrder };
+	// The leg posts through the poster; this one goes straight to `http.post`.
+	const commandPoster = () =>
+		passThroughPoster((url: string, body: unknown) => http.post(url, body));
+	const options = { http, mirror, completeOrder, commandPoster };
 	return {
 		service: new TerminalPaymentsService(options),
 		options,
@@ -98,7 +102,37 @@ it('begin starts one intent and refuses another live leg for the order', async (
 	expect(() => c.service.resume({ ...input, row: { ...row, id: 'another' } })).toThrow();
 	await jest.advanceTimersByTimeAsync(0);
 	expect(c.http.post).toHaveBeenCalledTimes(1);
-	expect(c.mirror).toHaveBeenCalledWith('order', { payment: row });
+	expect(c.mirror).toHaveBeenCalledWith('order', { payment: row }, expect.anything());
+});
+// A cashier switch moves the till to another scope, where the leg's order is not resident: the
+// leg stops (no poll, no capture, no void) and is dropped; its journaled command re-sends through
+// the scope-bound recovery, and the leg resumes when that cashier's scope is active again.
+it('suspendLegs stops and drops every live leg without ending the service', async () => {
+	const c = setup();
+	c.service.resume(input);
+	await jest.advanceTimersByTimeAsync(0);
+	const reads = c.http.get.mock.calls.length;
+	c.service.suspendLegs();
+	expect(c.service.get('order')).toBeNull();
+	expect(c.service.leg('order')).toBeUndefined();
+	await jest.advanceTimersByTimeAsync(60_000);
+	expect(c.http.get).toHaveBeenCalledTimes(reads);
+	expect(c.http.post).not.toHaveBeenCalled();
+	// The service still takes legs: the order resumes when its scope is active again.
+	expect(c.service.resume(input)).toBeDefined();
+	c.service.stop();
+});
+
+it('the leg’s command poster carries the session its row was minted under', () => {
+	const c = setup();
+	const commandPoster = jest.fn((_uuid: string, _options: unknown) =>
+		passThroughPoster((url: string, body: unknown) => c.http.post(url, body))
+	);
+	const service = new TerminalPaymentsService({ ...c.options, commandPoster });
+	const approval = { total: '10.00', currency: 'USD' };
+	service.begin({ ...input, row: { ...row, session_id: 'session-7' }, approval });
+	expect(commandPoster).toHaveBeenCalledWith('order', { approval, sessionId: 'session-7' });
+	service.stop();
 });
 it('resume is idempotent for the row, polls without intent and leaves unknown reader unclaimed', async () => {
 	const c = setup();
@@ -466,9 +500,11 @@ it('tracks offline settlement after dismissal and only sends it while online', a
 	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
 		context: { provider_refs: { payment_intent: 'sim_pi_leg' } },
 	});
-	expect(c.mirror).toHaveBeenLastCalledWith('order', {
-		payment: { ...deviceRow, status: 'captured' },
-	});
+	expect(c.mirror).toHaveBeenLastCalledWith(
+		'order',
+		{ payment: { ...deviceRow, status: 'captured' } },
+		expect.anything()
+	);
 	service.stop();
 });
 it('authorized offline rows never occupy a live leg on resume', async () => {
@@ -656,6 +692,7 @@ it.each([{ token: 'reader-token', method_id: 'wrong' }, null, undefined])(
 		const post = jest.fn(async () => ({ data: { handoff } }));
 		const service = new TerminalPaymentsService({
 			http: { post, get: jest.fn() },
+			commandPoster: () => passThroughPoster(post),
 			mirror: async () => {},
 		});
 		expect(await service.bootstrap('device', { transport: 'bluetooth' })).toEqual(
@@ -849,7 +886,8 @@ it('narrates offline authorization once and completes without refresh, not again
 	await service.flushOffline();
 	expect(c.mirror).toHaveBeenCalledWith(
 		'order',
-		expect.objectContaining({ payment: expect.objectContaining({ status: 'captured' }) })
+		expect.objectContaining({ payment: expect.objectContaining({ status: 'captured' }) }),
+		expect.anything()
 	);
 	expect(c.completeOrder).toHaveBeenCalledTimes(1);
 	expect(

@@ -1,4 +1,5 @@
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import type { MoneyCommandPoster, OrderApproval } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
@@ -46,7 +47,21 @@ export interface TerminalPaymentsServiceOptions {
 	isOnline?: () => boolean;
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
-	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
+	/**
+	 * The money command poster for one order (ADR 0040): journal, revision, approval. `sessionId`
+	 * is the session the leg's gates approved (the one its row was minted under): a re-completion's
+	 * provenance names it.
+	 */
+	commandPoster: (
+		orderUuid: string,
+		options: { approval?: OrderApproval; sessionId: string | null }
+	) => MoneyCommandPoster;
+	/** Mirror a leg's answer through the poster that sent its command (journal, revision guard). */
+	mirror: (
+		orderUuid: string,
+		response: ServerLegResponse,
+		poster: MoneyCommandPoster
+	) => Promise<void>;
 	getBalance?: (orderUuid: string) => Promise<string>;
 	getActor?: () => { id: string; name: string };
 	completeOrder?: (
@@ -76,6 +91,8 @@ interface BeginInput extends ResumeInput {
 	transport?: PaymentTransport;
 	offline?: boolean;
 	tipEligibleMinor?: number | null;
+	/** The order's total and currency as the cashier approved them at the press. */
+	approval?: OrderApproval;
 }
 type TerminalLeg = ServerLeg | DeviceLeg;
 export interface TerminalSettlement extends ServerLegResponse {
@@ -214,8 +231,12 @@ export class TerminalPaymentsService {
 				if (this.stopped || !id) continue;
 				let response: { data: unknown };
 				const release = holdLiveTab('payment');
+				// A money route never skips the journal: the capture re-sends its open command.
+				const poster = this.options.commandPoster(orderUuid, {
+					sessionId: row.session_id ?? null,
+				});
 				try {
-					response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
+					response = await poster(`orders/${id}/payments/${row.id}/capture`, {
 						context: { provider_refs: refs },
 					});
 				} finally {
@@ -223,7 +244,7 @@ export class TerminalPaymentsService {
 				}
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
-				await this.options.mirror(orderUuid, data);
+				await this.options.mirror(orderUuid, data, poster);
 				if (entry.reportedFailure) {
 					entry.reportedFailure = false;
 					// Clears the stuck row this payment wrote when its retries ran out. It has
@@ -439,8 +460,14 @@ export class TerminalPaymentsService {
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
+		const poster = this.options.commandPoster(input.orderUuid, {
+			approval: input.approval,
+			sessionId: input.row.session_id ?? null,
+		});
 		const deps = {
-			...this.options.http,
+			get: this.options.http.get,
+			post: poster,
+			retire: (kind: 'intent', target: string) => poster.retire(kind, target),
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"
@@ -452,7 +479,7 @@ export class TerminalPaymentsService {
 				((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
 			mirror: async (response: ServerLegResponse) => {
 				try {
-					await this.options.mirror(input.orderUuid, response);
+					await this.options.mirror(input.orderUuid, response, poster);
 					finishingError = undefined;
 				} catch (error) {
 					finishingError = getErrorMessage(error);
@@ -534,6 +561,18 @@ export class TerminalPaymentsService {
 		if (!entry || entry.leg.getState().phase !== 'final') return;
 		entry.leg.dispose();
 		this.legs.delete(orderUuid);
+		this.publish();
+	}
+	/**
+	 * Stop and drop every live leg, keeping the service: the till moved to another scope (a
+	 * cashier switch), where these legs' orders are not resident, so their reads, captures and
+	 * voids cannot run (ADR 0040, one scope per command). A command already sent stays in the
+	 * journal and re-sends through the scope-bound recovery when that scope is active again, and
+	 * the leg itself resumes from its row then.
+	 */
+	suspendLegs(): void {
+		this.legs.forEach(({ leg }) => leg.dispose());
+		this.legs.clear();
 		this.publish();
 	}
 	readersInUse(): Map<string, { orderUuid: string; orderNumber: string }> {

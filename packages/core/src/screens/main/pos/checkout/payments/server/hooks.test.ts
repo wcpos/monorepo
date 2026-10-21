@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
-import { readLedger, withLedger } from '@wcpos/order-math';
+import { withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -10,12 +10,18 @@ import {
 	startTerminalPaymentsService,
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
+import { passThroughPoster } from '../../../../../../services/terminal-payments/pass-through-poster.test-utils';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
 import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 
 const mockManager = {
-	engine: { active: () => null, ready: new Promise(() => {}), db$: () => () => {} },
+	engine: {
+		active: () => null,
+		ready: new Promise(() => {}),
+		db$: () => () => {},
+		events: () => () => {},
+	},
 };
 let mockSession = {
 	store: { id: 1 },
@@ -33,6 +39,22 @@ jest.mock('../../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('@wcpos/query', () => ({
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
+			settle: async () => undefined,
+		}),
 	engineCollection: () => null,
 	useQueryRuntime: () => mockManager,
 	useRecordField: (
@@ -121,10 +143,11 @@ it.each(['0.00', '4.00'])(
 		});
 		await act(() => jest.advanceTimersByTimeAsync(0));
 		expect(mockFind).toHaveBeenCalledWith(mockManager, 'order');
+		// The answer, never a rebuilt meta array: the mirror upserts it onto the latest order.
 		const changes = mockPatch.mock.calls[0][0].changes;
-		expect(changes.status).toBe('completed');
-		expect(changes.meta_data[0]).toEqual({ key: 'other', value: 7 });
-		expect(readLedger(changes.meta_data)).toEqual([{ ...row, status: 'captured' }]);
+		expect(changes.order.status).toBe('completed');
+		expect(changes).not.toHaveProperty('meta_data');
+		expect(changes.payment).toEqual({ ...row, status: 'captured' });
 		expect(mockReceipt.mock.calls).toEqual(
 			balance === '0.00' ? [['order', { select: false }]] : []
 		);
@@ -258,7 +281,11 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	expect(view.result.current).toBeNull();
 	let service!: ReturnType<typeof startTerminalPaymentsService>;
 	act(() => {
-		service = startTerminalPaymentsService({ http: mockHttp, mirror: async () => {} });
+		service = startTerminalPaymentsService({
+			http: mockHttp,
+			commandPoster: () => passThroughPoster((url, body) => mockHttp.post(url, body)),
+			mirror: async () => {},
+		});
 	});
 	expect(service.getSnapshot().size).toBe(2);
 	expect(view.result.current?.phase).toBe('polling');
