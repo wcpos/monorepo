@@ -28,6 +28,11 @@
  * again. `settled` is DERIVED, never stored: a complete history whose every name
  * is cleared. Opening a new scope adds an uncleared name, which un-settles the
  * history until that one name reports (the others stay cleared).
+ *
+ * `generation`: the drainable generation the names describe. A history written under another
+ * (or none, before this field) is translated when read: each name moves to this build's drainable
+ * generation, and every cleared marker is dropped, because a cleared older database says nothing
+ * about the newer one a scope may have left behind since.
  */
 import { STORAGE_TOKEN_DOCUMENT_ID } from 'rxdb';
 
@@ -58,9 +63,9 @@ const PROCESS_STARTED_AT_MS = (() => {
 	return typeof origin === 'number' && origin > PLAUSIBLE_EPOCH_MS ? origin : Date.now();
 })();
 
-type HistoryData = { names: string[]; complete: boolean; cleared: string[] };
+type HistoryData = { names: string[]; complete: boolean; cleared: string[]; generation: number };
 
-export type LegacyScopeHistory = Readonly<HistoryData> & {
+export type LegacyScopeHistory = Readonly<Omit<HistoryData, 'generation'>> & {
 	/** Complete, and every name cleared: later boots count exactly without an inventory. */
 	readonly settled: boolean;
 	/** Record that these names reported nothing kept. */
@@ -108,11 +113,22 @@ function strings(value: unknown): string[] {
 		: [];
 }
 
+const SCOPE_NAME_GENERATION_PREFIX = /^pos_v\d+_/;
+
 function normalized(data: Partial<HistoryData> | undefined): HistoryData {
+	const generation = DRAINABLE_SCOPE_DATABASE_GENERATION;
+	const names = strings(data?.names);
+	if (data?.generation === generation)
+		return { names, complete: data.complete === true, cleared: strings(data.cleared), generation };
 	return {
-		names: strings(data?.names),
+		names: [
+			...new Set(
+				names.map((name) => name.replace(SCOPE_NAME_GENERATION_PREFIX, `pos_v${generation}_`))
+			),
+		],
 		complete: data?.complete === true,
-		cleared: strings(data?.cleared),
+		cleared: [],
+		generation,
 	};
 }
 
@@ -141,6 +157,7 @@ async function modifyHistory(
 			names: [],
 			complete: await appDatabaseCreatedInThisRun(db),
 			cleared: [],
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 		});
 		try {
 			await db.insertLocal(HISTORY_LOCAL_ID, created);

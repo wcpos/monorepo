@@ -90,6 +90,7 @@ describe('the scope history', () => {
 			names: [drainable(A), drainable(B)],
 			complete: true,
 			cleared: [drainable(A), drainable(B)],
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 		});
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
 	});
@@ -147,4 +148,32 @@ describe('the scope history', () => {
 			complete: true,
 		});
 	});
+});
+
+// A generation bump: a history written for the previous drainable generation names databases
+// this build never drains. Its names move to today's generation and its cleared markers go, so
+// clearing A's new database cannot settle the history while B's is unchecked.
+it('translates a history written at the previous generation and drops its cleared markers', async () => {
+	const { db, locals } = userDatabase('this');
+	const previous = (scope: typeof A) =>
+		scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION - 1 });
+	locals.set('legacy-scope-history', {
+		names: [previous(A), previous(B)],
+		complete: true,
+		cleared: [previous(A), previous(B)],
+	});
+	const history = await recordScopeOpened(db, A);
+	expect(history).toMatchObject({
+		names: [drainable(A), drainable(B)],
+		cleared: [],
+		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		settled: false,
+	});
+	await history.markCleared([drainable(A)]);
+	expect(await recordScopeOpened(db, A)).toMatchObject({
+		cleared: [drainable(A)],
+		settled: false,
+	});
+	await (await recordScopeOpened(db, B)).markCleared([drainable(B)]);
+	expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
 });
