@@ -87,6 +87,7 @@ jobs:
       sha: ${{ steps.monorepo-sha.outputs.sha }}
       app_version: ${{ steps.build-version.outputs.app_version }}
       web_bundle_commit: ${{ steps.web-bundle.outputs.commit }}
+      already: ${{ steps.published.outputs.already }}
       cdn_configured: ${{ steps.cdn-config.outputs.configured }}
       cdn_lane: ${{ steps.build-version.outputs.cdn_lane }}
     steps:
@@ -436,7 +437,18 @@ jobs:
   cdn:
     name: ☁️ Publish to cdn.wcpos.com
     needs: publish
-    if: needs.publish.outputs.cdn_configured == 'true' && needs.publish.outputs.cdn_lane == 'true'
+    # The page loads from cdn.wcpos.com; jsDelivr is the loader's fallback. The publish job
+    # pushes the bundle and uploads the build before it re-verifies jsDelivr, and that verify
+    # fails whenever jsDelivr throttles a purge (two publishes inside ~15 min: 2026-10-21 run
+    # 39689280758 left dev-next one merge behind with the cdn job skipped). A pushed bundle is
+    # enough to register here; the red publish job still reports the fallback's lag. A same-SHA
+    # re-dispatch skips the push (`already=true`) and resolves the bundle from the branch below,
+    # so it qualifies too (Codex review, #2833).
+    if: >-
+      always() && needs.publish.result != 'cancelled'
+      && needs.publish.outputs.cdn_configured == 'true'
+      && needs.publish.outputs.cdn_lane == 'true'
+      && (needs.publish.outputs.web_bundle_commit != '' || needs.publish.outputs.already == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
