@@ -2,6 +2,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { insertEngineResident, mirrorServerOrder } from '../../src/mutations';
+import { mergeAnsweredRow } from '../../src/mutations/mirror-server-order';
 import { createEngineDatabase, createFakeEngine } from '../../src/testing';
 
 import type { QueryRuntime } from '../../src/provider';
@@ -128,4 +129,24 @@ it('an authorized answer arriving after a tipped capture with the same updated_a
 		sentRevision: 'sha256:sent',
 	});
 	expect((await ledger())[0].status).toBe('voided');
+});
+
+// The app stamps rows to the millisecond with `Z`, the store to the second with `+00:00`
+// (`gmdate('c')`): timestamps are compared as instants at the store's granularity, and within one
+// second the more advanced state wins, whatever the strings' spelling.
+it('a captured answer stamped +00:00 replaces a pending app row from the same second', () => {
+	const pending = {
+		id: 'row',
+		status: 'pending',
+		amount: '10.00',
+		updated_at_gmt: '2026-10-20T10:00:00.123Z',
+		refunds: [],
+		refunded_amount: '0.00',
+		provider_refs: {},
+	} as unknown as PaymentRow;
+	const captured = { ...pending, status: 'captured', updated_at_gmt: '2026-10-20T10:00:00+00:00' };
+	expect(mergeAnsweredRow(pending, captured as PaymentRow).status).toBe('captured');
+	// An answer a whole second older still loses, in either spelling.
+	const older = { ...captured, updated_at_gmt: '2026-10-20T09:59:59+00:00' };
+	expect(mergeAnsweredRow(pending, older as PaymentRow).status).toBe('pending');
 });

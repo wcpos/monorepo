@@ -46,13 +46,26 @@ function unionBy<T>(
 	return [...merged.values()];
 }
 
+/**
+ * A row stamp as the whole second it denotes. The app stamps to the millisecond with `Z`, the
+ * store to the second with `+00:00` (`gmdate('c')`), so strings never compare: the instant is
+ * compared at the store's granularity, and within one second the state rank decides. An
+ * unparseable stamp counts as the earliest.
+ */
+function stampSecond(stamp: string | null | undefined): number {
+	// A `_gmt` stamp written without a zone (legacy rows) is GMT, never local time.
+	const zoned = stamp && !/(?:Z|[+-]\d\d:?\d\d)$/i.test(stamp) ? `${stamp}Z` : stamp;
+	const instant = Date.parse(zoned ?? '');
+	return Number.isNaN(instant) ? -Infinity : Math.floor(instant / 1000);
+}
+
 /** The answered row replaces the resident's whole, or the resident's stays whole; arrays union. */
 export function mergeAnsweredRow(resident: PaymentRow | undefined, answer: PaymentRow): PaymentRow {
 	if (!resident) return answer;
+	const answered = stampSecond(answer.updated_at_gmt);
+	const held = stampSecond(resident.updated_at_gmt);
 	const replace =
-		answer.updated_at_gmt > resident.updated_at_gmt ||
-		(answer.updated_at_gmt === resident.updated_at_gmt &&
-			rank(answer.status) > rank(resident.status));
+		answered > held || (answered === held && rank(answer.status) > rank(resident.status));
 	const [kept, other] = replace ? [answer, resident] : [resident, answer];
 	const refunds = unionBy<PaymentRefundEntry>(
 		kept.refunds,
