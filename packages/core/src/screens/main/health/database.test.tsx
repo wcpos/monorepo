@@ -318,7 +318,6 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	useMutationCounts: () => mockMutationCounts,
 }));
 jest.mock('./components', () => ({
-	Callout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CoverageBar: ({ percent }: { percent: number }) => <div>{percent}</div>,
 	Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 	Stat: () => null,

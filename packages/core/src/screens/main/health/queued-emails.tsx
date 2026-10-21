@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -20,7 +21,6 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { useAppState } from '../../../contexts/app-state';
-import { Callout } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type QueuedEmail, useQueuedEmails } from './use-queued-emails';
 
@@ -119,18 +119,16 @@ export function QueuedEmailsPanel() {
 
 	return (
 		<VStack testID="db-queued-emails" className="gap-2">
-			<Callout tone={failedCount > 0 ? 'destructive' : 'warning'} testID="db-queued-emails-callout">
-				<VStack className="gap-0.5">
-					<Text className="text-sm font-semibold">
-						{t('health.database.emails.title', { count: rows.length })}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{failedCount > 0
-							? t('health.database.emails.body_failed', { count: failedCount })
-							: t('health.database.emails.body_pending')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone={failedCount > 0 ? 'bad' : 'warn'}
+				testID="db-queued-emails-callout"
+				title={t('health.database.emails.title', { count: rows.length })}
+				description={
+					failedCount > 0
+						? t('health.database.emails.body_failed', { count: failedCount })
+						: t('health.database.emails.body_pending')
+				}
+			/>
 
 			<VStack className="gap-0">
 				{rows.map((row) => (
