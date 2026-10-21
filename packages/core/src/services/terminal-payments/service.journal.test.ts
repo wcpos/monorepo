@@ -8,7 +8,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { moneyCommandPoster, type useQueryRuntime } from '@wcpos/query';
+import { moneyCommandPoster, recoverMoneyCommands, type useQueryRuntime } from '@wcpos/query';
 import { readOrderCommands } from '@wcpos/query/store-local';
 import { createEngineDatabase, createFakeEngine, engineOrder } from '@wcpos/query/testing';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
@@ -68,6 +68,10 @@ class FakeStore {
 	commands = new Map<string, { fingerprint: string; answer: Record<string, unknown> }>();
 	captures = 0;
 	captureModes: CaptureMode[] = [];
+	/** Holds the intent's answer until released, then answers it `wcpos_payment_locked`. */
+	intentLocked: Promise<void> | null = null;
+	/** The void finds no row: the locked intent never ran. */
+	voidNotFound = false;
 	get revision() {
 		return `sha256:r${this.n}`;
 	}
@@ -88,6 +92,17 @@ class FakeStore {
 	get = jest.fn(async (_url: string) => ({ data: { payment: this.leg, order: this.summary() } }));
 	post = jest.fn(async (url: string, sent: unknown) => {
 		const { revision, command_id, ...rest } = sent as Record<string, unknown>;
+		const refuse = (status: number, code: string) =>
+			Object.assign(new Error(code), {
+				response: { status, data: { code, data: { status, retry_after: 1 } } },
+			});
+		if (url.endsWith('/intent') && this.intentLocked) {
+			const gate = this.intentLocked;
+			this.intentLocked = null;
+			await gate;
+			throw refuse(409, 'wcpos_payment_locked');
+		}
+		if (url.endsWith('/void') && this.voidNotFound) throw refuse(404, 'wcpos_payment_not_found');
 		const capture = url.endsWith('/capture');
 		const mode = capture ? this.captureModes.shift() : undefined;
 		if (mode === '503')
@@ -278,5 +293,28 @@ it('a locked capture is re-sent with the same command_id after its backoff, then
 	expect({ ...second, revision: null }).toEqual({ ...first, revision: null });
 	expect(store.captures).toBe(1);
 	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
+	terminal.stop();
+});
+
+// A cancel pressed while the intent was out, answered by the lock (nothing ran), goes out as the
+// void; when the void finds no row the leg is voided, and the intent's journal entry is retired:
+// a later recovery or Try again must never re-send it and authorize a cancelled sale.
+it('a locked intent whose cancel voids a missing row is retired: recovery sends nothing', async () => {
+	let release!: () => void;
+	store.intentLocked = new Promise<void>((resolve) => (release = resolve));
+	store.voidNotFound = true;
+	const timers = scheduler();
+	const terminal = service(timers);
+	begin(terminal);
+	await timers.drain(() => store.post.mock.calls.length > 0);
+	await terminal.leg('order')!.cancel();
+	release();
+	await timers.drain(() => terminal.get('order')?.phase === 'final');
+	expect(terminal.get('order')).toMatchObject({ outcome: 'voided' });
+	await timers.drain(() => false);
+	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
+	const posts = store.post.mock.calls.length;
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	expect(store.post).toHaveBeenCalledTimes(posts);
 	terminal.stop();
 });

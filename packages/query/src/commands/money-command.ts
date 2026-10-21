@@ -23,6 +23,7 @@ import {
 	readOrderCommands,
 	releaseClaim,
 	retireChain,
+	retireRoute,
 	type RevisionChain,
 	settleCommand,
 } from '../store-local/money-commands';
@@ -83,6 +84,11 @@ export type MoneyCommandPoster = Post & {
 	settle(): Promise<void>;
 	/** Give up the answered entries' claims without settling them: they stay for a re-send. */
 	abandon(): Promise<void>;
+	/**
+	 * Retire the order's command for a route, unanswered, because another answer proved it never
+	 * ran (a locked intent whose cancel's void found no row, or voided it): never re-send it.
+	 */
+	retire(kind: MoneyCommandKind, target: string | null): Promise<void>;
 };
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
@@ -622,6 +628,8 @@ export function moneyCommandPoster(input: {
 			await settle();
 		},
 		settle,
+		retire: (kind: MoneyCommandKind, target: string | null) =>
+			retireRoute(input.storeDB, input.orderUuid, kind, target),
 		abandon: async () => {
 			const open = answered;
 			answered = [];

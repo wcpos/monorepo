@@ -173,6 +173,23 @@ export function dropUnsent(
 	});
 }
 
+/**
+ * Retire a route's command outright, sent or not: its outcome is known to be "nothing happened"
+ * from another answer (a locked intent whose cancel then found no row to void), so it must never
+ * be re-sent.
+ */
+export function retireRoute(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	kind: MoneyCommandKind,
+	target: string | null
+) {
+	return modifyOrder(storeDB, orderUuid, (order) => {
+		for (const entry of Object.values(order.entries))
+			if (entry.kind === kind && entry.target === target) delete order.entries[entry.id];
+	});
+}
+
 /** Give the claim up, keeping the entry: another poster, Try again or the recovery may send it. */
 export function releaseClaim(
 	storeDB: StoreLocalDatabase,

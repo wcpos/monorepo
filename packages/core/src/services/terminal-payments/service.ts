@@ -467,6 +467,7 @@ export class TerminalPaymentsService {
 		const deps = {
 			get: this.options.http.get,
 			post: poster,
+			retire: (kind: 'intent', target: string) => poster.retire(kind, target),
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"

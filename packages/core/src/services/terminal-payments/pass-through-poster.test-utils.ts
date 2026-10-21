@@ -13,5 +13,6 @@ export function passThroughPoster(
 		mirror: async () => undefined,
 		settle: async () => undefined,
 		abandon: async () => undefined,
+		retire: async () => undefined,
 	});
 }

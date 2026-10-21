@@ -15,6 +15,7 @@ export {
 	CLAIM_LEASE_MS,
 	readMoneyJournal,
 	releaseClaim,
+	retireRoute,
 	readOrderCommands,
 	retireChain,
 	settleCommand,

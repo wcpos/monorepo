@@ -45,6 +45,8 @@ export interface ServerLegDeps {
 	now: () => number;
 	mirror: (response: ServerLegResponse) => Promise<void>;
 	onFinal?: (state: ServerLegState) => void;
+	/** Retire a journaled command that is known never to have run (see `cancelledLockedIntent`). */
+	retire?: (kind: 'intent', target: string) => Promise<void>;
 }
 export interface ServerLegInput {
 	orderId: number;
@@ -116,7 +118,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (timer !== null) deps.clearTimeout(timer);
 		timer = null;
 	};
+	// The row id of an intent answered by the lock (nothing ran) whose pending cancel then went
+	// out as the void. Once the leg is voided, that intent is retired from the journal: a later
+	// recovery or Try again must never re-send it and authorize a sale the cashier cancelled.
+	let cancelledLockedIntent: string | null = null;
 	const finish = (outcome: ServerLegState['outcome']) => {
+		if (outcome === 'voided' && cancelledLockedIntent !== null)
+			void deps.retire?.('intent', cancelledLockedIntent).catch(() => undefined);
+		cancelledLockedIntent = null;
 		clearTimer();
 		sequence++;
 		setState({ phase: 'final', outcome, capturing: false, releaseAvailable: false });
@@ -315,7 +324,12 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
 			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
 			// intent was out wins: nothing ran, so the void goes out now instead.
-			if (route === 'intent' && (await voidAfterIntent())) return;
+			if (route === 'intent') {
+				const intent = state.row.id;
+				if (pendingCancel !== null) cancelledLockedIntent = intent;
+				if (await voidAfterIntent()) return;
+				cancelledLockedIntent = null;
+			}
 			if (route === 'status') setState({ capturing: false, phase: 'polling' });
 			else
 				setState(
