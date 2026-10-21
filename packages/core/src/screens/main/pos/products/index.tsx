@@ -23,7 +23,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
-import { StorageOutageBanner } from './storage-outage-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 import { ProductGrid } from './tiles/product-grid';
 import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';

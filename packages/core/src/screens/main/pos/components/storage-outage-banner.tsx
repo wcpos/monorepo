@@ -21,7 +21,7 @@ const bannerLogger = getLogger(['wcpos', 'pos', 'outage-banner']);
  * local scanning keeps working through them, so the cashier only hears about
  * them from the scan toast when a lookup actually needs the store.
  */
-export function StorageOutageBanner() {
+export function StorageOutageBanner({ testID = 'storage-outage-banner' }: { testID?: string }) {
 	const storageDegraded = useStorageDegraded();
 	const router = useRouter();
 	const t = useT();
@@ -49,7 +49,7 @@ export function StorageOutageBanner() {
 		<Notice
 			tone="bad"
 			title={t('pos_products.scan_storage_outage_banner')}
-			testID="storage-outage-banner"
+			testID={testID}
 			actions={[
 				{
 					label: t('pos_products.scan_storage_outage_reload'),

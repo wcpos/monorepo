@@ -17,7 +17,7 @@ import { CancelPaymentView } from '../tender/cancel-payment-view';
 import { LegacyTab } from '../tender/legacy-tab';
 import { TenderPane } from '../tender/tender-pane';
 import { useT } from '../../../../../contexts/translations';
-import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
+import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
 
 export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
@@ -28,7 +28,6 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		(minor: number) => formatCurrency(Number(fromMinor(minor, flow.dp))),
 		[formatCurrency, flow.dp]
 	);
-	const { storageDegraded } = useStorageMoneyPathGuard();
 	const t = useT();
 	const back = React.useCallback(() => {
 		if (flow.state.splitView) flow.dispatch({ type: 'close-split' });
@@ -105,13 +104,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 			</HStack>
 			<View className="px-3">
 				<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
-				{storageDegraded ? (
-					<View className="border-destructive bg-destructive/10 rounded-md border p-3">
-						<Text testID="checkout-storage-unavailable" className="text-destructive">
-							{t('pos_checkout.storage_unavailable')}
-						</Text>
-					</View>
-				) : null}
+				<StorageOutageBanner testID="checkout-storage-unavailable" />
 			</View>
 			<View className="flex-1 p-4">{body}</View>
 		</View>

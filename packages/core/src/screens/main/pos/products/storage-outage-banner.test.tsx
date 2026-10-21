@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { StorageOutageBanner } from './storage-outage-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 
 const mockPush = jest.fn();
 const mockReloadApp = jest.fn();

@@ -1,7 +1,7 @@
 import { ScrollView, View } from 'react-native';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { DocsLink } from '@wcpos/components/docs-link';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -12,7 +12,16 @@ export function CapturedUnfinishedNotice({ finishingError }: { finishingError: s
 	const t = useT();
 	return (
 		<View testID="checkout-terminal-finishing-error" className="gap-4 p-4">
-			<Text className="text-destructive">{t('pos_checkout.paid_but_order_not_finished')}</Text>
+			<Notice
+				tone="bad"
+				title={t('pos_checkout.paid_but_order_not_finished')}
+				description={t('pos_checkout.paid_but_order_not_finished_description')}
+				docs={{
+					label: t('settings.having_trouble'),
+					href: getErrorCodeDocURL(ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED),
+					testID: 'checkout-terminal-finishing-help',
+				}}
+			/>
 			<Collapsible>
 				<CollapsibleTrigger
 					testID="checkout-terminal-finishing-details-toggle"
@@ -29,13 +38,6 @@ export function CapturedUnfinishedNotice({ finishingError }: { finishingError: s
 					</ScrollView>
 				</CollapsibleContent>
 			</Collapsible>
-			<DocsLink
-				testID="checkout-terminal-finishing-help"
-				className="min-h-12"
-				href={getErrorCodeDocURL(ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED)}
-			>
-				{t('settings.having_trouble')}
-			</DocsLink>
 		</View>
 	);
 }

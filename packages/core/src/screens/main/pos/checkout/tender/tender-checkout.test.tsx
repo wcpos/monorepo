@@ -66,6 +66,7 @@ jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 jest.mock('../../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => false,
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: () => false }),
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
@@ -411,3 +412,6 @@ it('the single default reader is a locked line, not a chip', () => {
 	expect(screen.getByTestId('checkout-reader-locked').textContent).toBe('pos_checkout.reader_line');
 	expect(screen.queryByTestId('checkout-reader-reader')).toBeNull();
 });
+
+// Notice links out through the native URL boundary; keep that boundary inert in jsdom.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
