@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import type { PrinterProfile, TemplateInfo } from '@wcpos/printer';
+import type { PrinterProfile, PrintMismatch, TemplateInfo } from '@wcpos/printer';
 import { detectMismatch, resolvePrinter } from '@wcpos/printer';
 import type { TemplatePrinterOverrideDocument } from '@wcpos/database';
 
@@ -22,7 +22,7 @@ interface UseResolvedPrinterResult {
 	resolvedPrinter: PrinterProfile | null;
 	printerSelection: PrinterSelection;
 	setPrinterSelection: (selection: PrinterSelection) => void;
-	mismatchWarning: string | null;
+	mismatch: PrintMismatch | null;
 	useSystemDialog: boolean;
 	/** Printers or routing overrides are still loading: `resolvedPrinter` may yet change. */
 	isResolving: boolean;
@@ -100,19 +100,19 @@ export function useResolvedPrinter({
 	// Whether to use system dialog (no printer profile)
 	const useSystemDialog = printerSelection.type === 'system';
 
-	// Mismatch detection (only relevant for auto/manual, not system dialog)
-	const mismatchWarning = React.useMemo(() => {
+	// What will actually print, given the profile usePrint receives. The 'system' selection and
+	// an auto match that found nothing both leave resolvedPrinter null: the print dialog path.
+	const mismatch = React.useMemo(() => {
 		if (!template) return null;
-		if (printerSelection.type === 'system') return null;
 		return detectMismatch(template, resolvedPrinter);
-	}, [template, resolvedPrinter, printerSelection.type]);
+	}, [template, resolvedPrinter]);
 
 	return {
 		allPrinters,
 		resolvedPrinter,
 		printerSelection,
 		setPrinterSelection,
-		mismatchWarning,
+		mismatch,
 		useSystemDialog,
 		isResolving: printersLoading || loadedOverrides === undefined,
 	};

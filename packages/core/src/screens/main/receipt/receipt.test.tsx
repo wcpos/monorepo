@@ -155,7 +155,7 @@ const mockSystemDialogPrinter = {
 	resolvedPrinter: null,
 	printerSelection: null,
 	setPrinterSelection: jest.fn(),
-	mismatchWarning: null,
+	mismatch: null,
 	useSystemDialog: true,
 	isResolving: false,
 };
