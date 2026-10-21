@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { ObserveInteractiveMarker } from 'expo-observe';
 
-import { ErrorBoundary, FallbackScreen } from '@wcpos/components/error-boundary';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Suspense } from '@wcpos/components/suspense';
 
 import { POSProductsPane } from '../../../../../components/pos-products-pane';

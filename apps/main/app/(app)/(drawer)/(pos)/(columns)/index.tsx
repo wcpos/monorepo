@@ -5,7 +5,8 @@ import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ErrorBoundary, FallbackScreen } from '@wcpos/components/error-boundary';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
