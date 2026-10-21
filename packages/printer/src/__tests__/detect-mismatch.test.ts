@@ -47,7 +47,7 @@ describe('detectMismatch', () => {
 		detectMismatch = mod.detectMismatch;
 	});
 
-	it('accepts a 48-column winspool queue for an 80mm ESC/POS template', () => {
+	it('returns null for a thermal template on a 48-column winspool queue (raw bytes)', () => {
 		expect(
 			detectMismatch(thermal, {
 				...thermalPrinter,
@@ -57,27 +57,46 @@ describe('detectMismatch', () => {
 		).toBeNull();
 	});
 
-	it('returns null when escpos template matches thermal printer', () => {
+	it('returns null when a thermal template goes to a raw receipt printer', () => {
 		expect(detectMismatch(thermal, thermalPrinter)).toBeNull();
 	});
 
-	it('returns null when html template matches system printer', () => {
+	it('returns null when an HTML template goes to the print dialog profile', () => {
 		expect(detectMismatch(html, systemPrinter)).toBeNull();
 	});
 
-	it('returns null when no printer is selected (system dialog fallback)', () => {
-		expect(detectMismatch(thermal, null)).toBeNull();
+	it('returns null when an HTML template has no printer (print dialog)', () => {
+		expect(detectMismatch(html, null)).toBeNull();
 	});
 
-	it('detects escpos template sent to system printer', () => {
-		const result = detectMismatch(thermal, systemPrinter);
-		expect(result).toBeTruthy();
-		expect(typeof result).toBe('string');
+	it('flags a thermal template with no printer: the dialog prints its preview', () => {
+		expect(detectMismatch(thermal, null)).toBe('thermal-template-prints-preview');
 	});
 
-	it('detects html template sent to thermal printer', () => {
-		const result = detectMismatch(html, thermalPrinter);
-		expect(result).toBeTruthy();
-		expect(typeof result).toBe('string');
+	it('flags a thermal template on the print dialog profile: the dialog prints its preview', () => {
+		expect(detectMismatch(thermal, systemPrinter)).toBe('thermal-template-prints-preview');
 	});
+
+	it('flags an HTML template on a raw printer: the built-in layout prints instead', () => {
+		expect(detectMismatch(html, thermalPrinter)).toBe('html-template-prints-default-layout');
+	});
+
+	it('flags an HTML template on a winspool queue (raw bytes)', () => {
+		expect(
+			detectMismatch(html, {
+				...thermalPrinter,
+				connectionType: 'system',
+				address: 'winspool:POS-80',
+			})
+		).toBe('html-template-prints-default-layout');
+	});
+
+	it.each(['epson-sdp', 'printnode', 'star-cloudprnt'] as const)(
+		'returns null for any template on an order-based cloud printer (%s renders server-side)',
+		(cloudProvider) => {
+			const cloud: PrinterProfile = { ...thermalPrinter, connectionType: 'cloud', cloudProvider };
+			expect(detectMismatch(thermal, cloud)).toBeNull();
+			expect(detectMismatch(html, cloud)).toBeNull();
+		}
+	);
 });

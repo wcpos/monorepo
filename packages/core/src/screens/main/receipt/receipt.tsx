@@ -184,7 +184,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		resolvedPrinter,
 		printerSelection,
 		setPrinterSelection,
-		mismatchWarning,
+		mismatch,
 		useSystemDialog,
 	} = useResolvedPrinter({ template: templateInfo });
 
@@ -306,7 +306,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 								resolvedPrinterId={resolvedPrinter?.id ?? null}
 								onSelect={setPrinterSelection}
 							/>
-							<MismatchBadge message={mismatchWarning} />
+							<MismatchBadge mismatch={mismatch} />
 							{renderedHtml == null && !(templateReceiptUrl || baseReceiptURL) ? (
 								// No paper canvas when there is nothing to draw on it: the viewport's
 								// sheet is hard-coded white, so themed text would vanish on it in dark themes.

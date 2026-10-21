@@ -156,7 +156,7 @@ jest.mock('./hooks/use-resolved-printer', () => ({
 		resolvedPrinter: null,
 		printerSelection: null,
 		setPrinterSelection: jest.fn(),
-		mismatchWarning: null,
+		mismatch: null,
 		useSystemDialog: true,
 	}),
 }));
