@@ -492,6 +492,17 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('<div>Hello</div>');
 	});
 
+	it('wraps preview text at word boundaries, like the ESC/POS encoder', () => {
+		const html = renderHtml(
+			parseXml('<receipt><text>devoluciones de los artículos</text></receipt>')
+		);
+
+		// break-all splits words at any character ("devolucione / s") on every print of the
+		// preview; overflow-wrap only splits a word that is wider than its box on its own.
+		expect(html).not.toContain('break-all');
+		expect(html).toContain('overflow-wrap: anywhere');
+	});
+
 	it('falls back to defaults when numeric XML attributes are invalid', () => {
 		const ast = parseXml(
 			'<receipt paper-width="12px"><feed lines="3.5" /><qrcode size="1e3">code</qrcode></receipt>'
