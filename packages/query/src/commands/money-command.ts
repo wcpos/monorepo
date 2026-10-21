@@ -269,7 +269,17 @@ export async function sendMoneyCommand(
 			return { data: data as Record<string, unknown>, sentRevision: revision };
 		} catch (error) {
 			const failure = moneyRefusalOf(error);
-			if (failure?.code === MONEY_ANSWER_CODES.revisionStale && !stale) {
+			const stalled = failure?.code === MONEY_ANSWER_CODES.revisionStale && !stale;
+			// A sender whose lease lapsed while its answer was on the way, and whose command another
+			// poster has claimed since, leaves it to that poster: no adoption, re-send or settle.
+			const claimant = entry.claimedBy ?? null;
+			const held = async () =>
+				(await readOrderCommands(storeDB, entry.orderUuid)).entries.some(
+					({ id, claimedBy }) => id === entry.id && claimedBy === claimant
+				);
+			if ((stalled || isDefinitiveMoneyRefusal(failure)) && !(await held()))
+				throw new MoneyCommandError('in_flight', entry);
+			if (stalled) {
 				const current = failure.data?.current as Record<string, unknown> | undefined;
 				const currentRevision = failure.data?.currentRevision;
 				const adopted = current
@@ -280,7 +290,7 @@ export async function sendMoneyCommand(
 					APPROVED_KINDS.has(entry.kind) &&
 					(adopted !== 'applied' || !approvalHolds(entry.approval, current!))
 				) {
-					await settleCommand(storeDB, entry.orderUuid, entry.id);
+					await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
 					throw new MoneyCommandError(
 						'order_changed',
 						entry,
@@ -296,7 +306,7 @@ export async function sendMoneyCommand(
 				const payment = failure?.data?.payment as PaymentRow | undefined;
 				if (payment)
 					await mirrorServerOrder(runtime, entry.orderUuid, { payment, sentRevision: revision });
-				await settleCommand(storeDB, entry.orderUuid, entry.id);
+				await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
 			}
 			throw error;
 		}

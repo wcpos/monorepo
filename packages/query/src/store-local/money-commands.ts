@@ -252,15 +252,20 @@ export async function markSent(
 	return held;
 }
 
-/** Deletes the entry; a 2xx answer also records the order's revision chain. */
+/**
+ * Deletes the entry; a 2xx answer also records the order's revision chain. With `claimant`, only
+ * while that sender still holds it: a displaced sender never deletes another poster's command.
+ */
 export function settleCommand(
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	id: string | null,
-	chain?: RevisionChain
+	chain?: RevisionChain,
+	claimant?: string | null
 ) {
 	return modifyOrder(storeDB, orderUuid, (order) => {
-		if (id !== null) delete order.entries[id];
+		const held = claimant === undefined || order.entries[id ?? '']?.claimedBy === claimant;
+		if (id !== null && held) delete order.entries[id];
 		if (chain) order.chain = chain;
 	});
 }

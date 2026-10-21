@@ -1113,3 +1113,36 @@ it('a sender displaced while its pre-flight outlasts the lease never posts', asy
 	expect(sentBodies().map(({ command_id }) => command_id)).toEqual([replacement.id]);
 	expect(await entries()).toEqual([expect.objectContaining({ id: replacement.id })]);
 });
+
+// A sender whose answer arrives after its lease lapsed, once another poster has claimed and
+// executed the same command, must not adopt that answer or delete the entry: it is the other
+// poster's now, and the only record of an executed command a lost answer leaves.
+it('a displaced sender never settles the command another claimant executed', async () => {
+	let entered!: () => void;
+	const sent = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	let answerLate!: (error: unknown) => void;
+	store.post.mockImplementationOnce(
+		() =>
+			new Promise((_, reject) => {
+				answerLate = reject;
+				entered();
+			})
+	);
+	const slow = poster()('orders/5/close', {});
+	await sent;
+	clock += CLAIM_LEASE_MS;
+	store.modes = ['lose'];
+	await expect(restart()).rejects.toThrow('Network Error');
+	expect(store.completions).toBe(1);
+	answerLate(
+		httpError(409, 'wcpos_revision_stale', {
+			current: { ...store.document(), total: '120.00' },
+			currentRevision: 'sha256:r9',
+		})
+	);
+	await expect(slow).rejects.toMatchObject({ reason: 'in_flight' });
+	expect(await entries()).toEqual([expect.objectContaining({ kind: 'close' })]);
+	expect((await residentJSON()).payload.total).toBe('100.00');
+});
