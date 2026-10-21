@@ -45,6 +45,7 @@
     "./lib/scale": "./src/lib/scale.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",
+    "./lib/use-spacing-unit": "./src/lib/use-spacing-unit.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./list-item": "./src/list-item/index.tsx",
     "./list-row": "./src/list-row/index.tsx",

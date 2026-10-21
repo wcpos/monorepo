@@ -319,10 +319,10 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   |---|---|---|
   | The page: `PageBar`'s controls from the top and the sides, a pane's body, an area page around its card, the phone's screen edge; a card's body | 16, at every width | bar `pt-4 px-4`, `AreaPage` `p-4`, cards `p-4`; the list pages' chip row `p-4`, `TableSurface gutter="page"` and the caption row's `pb-4` |
   | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
-  | A dense strip: the icon rail, the front drawer's items, a chip row, the POS products column | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 (`RAIL_WIDTH`, set as the drawer's width), POS column `p-2`, `TableSurface` dense and the caption row's `pb-2` |
+  | A dense strip: the icon rail, the front drawer's items, a chip row, the POS products column | 8 | drawer `mx-2`, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`), POS column `p-2`, `TableSurface` dense and the caption row's `pb-2` |
   | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
 
-- A container's width follows from its items and its gutter (the icon rail is 48 + 2 × 8 = 64),
+- A container's width follows from its items and its gutter (the icon rail is 12 + 2 + 2 = 16 spacing units, 64 at Regular),
   not the other way round.
 - Nothing sits flush against a container's edge except the container's own border or surface.
   A lifted item (`bg-card` on the ground) that touches the edge reads as the container, not as an

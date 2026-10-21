@@ -6,6 +6,7 @@ import { CommonActions, DrawerActions } from 'expo-router/react-navigation';
 import { DrawerContentScrollView, getDrawerStatusFromState } from 'expo-router/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -18,20 +19,33 @@ import { Version } from '../version';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
-/** A rail item: the 48 control, the same square the front drawer's items are. */
+/** A rail item: the 48 control (`size-12`) at Regular, the same square the front drawer's items are. */
 const RAIL_ITEM = 48;
-/** The dense-strip gutter of the gutter table (CODING_STANDARDS § Design): 8. */
+/** The dense-strip gutter of the gutter table (CODING_STANDARDS § Design) at Regular: 8. */
 const RAIL_GUTTER = 8;
 /**
  * The rail's width follows from its items and its gutter, not the other way round: 48 + 2 × 8
- * = 64, so the active square has 8 px of rail on both sides (owner, 2026-10-18; at 56 it
- * touched the sides). The drawer layout (`apps/main/app/(app)/(drawer)/_layout.tsx`) sets it
- * as the permanent drawer's `drawerStyle.width`: a `w-16` class on `DrawerContentScrollView`
- * never reaches the vendored `ScrollView` (it spreads unknown props onto a component the
- * Uniwind transform does not see), which is how the rail rendered 48 wide with the active
- * square on its edge until 2026-10-20.
+ * = 64 at Regular, so the active square has 8 px of rail on both sides (owner, 2026-10-18; at
+ * 56 it touched the sides). This is the Regular number; the drawer reads `useRailWidth`, which
+ * follows the live step. A `w-16` class on `DrawerContentScrollView` never reaches the vendored
+ * `ScrollView` (it spreads unknown props onto a component the Uniwind transform does not see),
+ * which is how the rail rendered 48 wide with the active square on its edge until 2026-10-20.
  */
 export const RAIL_WIDTH = RAIL_ITEM + 2 * RAIL_GUTTER;
+
+/** The same width in spacing units: the `size-12` item plus `2` (8 at Regular) each side. */
+const RAIL_WIDTH_UNITS = 12 + 2 * 2;
+
+/**
+ * The rail's width at the active spacing step: 56 Compact, 64 Regular, 80 Spacious. The items
+ * are `size-12`, so they scale with `--spacing`; a fixed 64 left 2 px beside them at Spacious.
+ * The drawer layout (`apps/main/app/(app)/(drawer)/_layout.tsx`) sets it as the permanent
+ * drawer's `drawerStyle.width`. A hook for that layout, not for `DrawerContent` (see the note
+ * on hooks below): the layout is a rendered component.
+ */
+export function useRailWidth(): number {
+	return RAIL_WIDTH_UNITS * useSpacingUnit();
+}
 
 /**
  * NOTE ON HOOKS IN THIS COMPONENT.

@@ -12,7 +12,7 @@ import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import {
 	DrawerContent as DrawerRail,
-	RAIL_WIDTH,
+	useRailWidth,
 } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
@@ -66,6 +66,8 @@ function ThemedDrawer({
 		'--color-sidebar',
 		'--color-sidebar-border',
 	]) as string[];
+	// Read on every width (a hook is never conditional); only the permanent rail uses it.
+	const railWidth = useRailWidth();
 
 	return (
 		<Drawer
@@ -80,8 +82,9 @@ function ThemedDrawer({
 					...(hideDrawerPanel ? ({ display: 'none' } as const) : null),
 					backgroundColor: sidebarColor,
 					// The rail's width is set here, not by a class on its scroll view (which the
-					// vendored view drops): 64 = the 48 item + 8 each side, from the gutter table.
-					width: screenSize === 'lg' ? RAIL_WIDTH : 200,
+					// vendored view drops): 16 spacing units, the `size-12` item + 2 each side from
+					// the gutter table, so 64 at Regular and the live step's value at the others.
+					width: screenSize === 'lg' ? railWidth : 200,
 					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
