@@ -3997,6 +3997,12 @@ describe('cash rounding (#66, #84)', () => {
 		expect(fee.total).toBe('10.00');
 		expect(rest).toEqual([]);
 		expect(mockPayload).toMatchObject({ total: '10.00' });
+		// The record hook already said the store has not answered: back to the methods, no second toast.
+		expect(result.current.state.methodId).toBeNull();
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
 	});
 
 	it('a synced fee comes back off as a tombstone that no longer counts in the total', async () => {

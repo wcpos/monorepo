@@ -1122,7 +1122,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				setTenderMethod(order.uuid, null);
 				return;
 			}
-			if (outcome.kind === 'failed') {
+			// An unanswered record was already reported (PAYMENT_OUTCOME_UNKNOWN); no second toast.
+			if (outcome.kind === 'failed' || outcome.kind === 'unknown') {
 				reducerDispatch({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
