@@ -5,7 +5,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
+import { type MetaDataEntry, type OrderPaymentSummary, withLedger } from '@wcpos/order-math';
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -190,6 +190,28 @@ it.each([
 	['gateway settled is a finished sale', { source: 'gateway-settled', order: sent.order }, true],
 ] as [string, SaleOutcome, boolean][])('%s', (_, outcome, expected) =>
 	expect(isSaleComplete(outcome, 2)).toBe(expected)
+);
+// A captured leg that covers the balance completes the order on the store, so a store answer at
+// a zero balance whose order is open again was reopened since (another till): the first answer,
+// an automatic re-send and Try again alike never finish that sale. A till-derived summary (an
+// offline leg) carries no store status and is judged by its balance as before.
+const reopened = { status: 'pos-open', balance: '0.00' } as OrderPaymentSummary;
+it.each([
+	['a manual store answer', { ...manual, amountMinor: 50, order: reopened }, false],
+	['a terminal store answer', { source: 'terminal', row, order: reopened }, false],
+	[
+		'an offline terminal leg',
+		{ source: 'terminal', row: { ...row, recorded_offline: true }, order: reopened },
+		true,
+	],
+	[
+		'a manual store answer that completed the sale',
+		{ ...manual, amountMinor: 50, order: { ...reopened, status: 'completed' } },
+		true,
+	],
+] as [string, SaleOutcome, boolean][])(
+	'a reopened sale at a zero balance: %s',
+	(_, outcome, done) => expect(isSaleComplete(outcome, 2)).toBe(done)
 );
 it.each([
 	['pending at the stored status settles', 'pending', 'pending', [], true],

@@ -53,7 +53,7 @@ import {
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { returnToTill } from '../till-route';
-import { persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
+import { persistSaleProvenance, recordSaleAttempt, reopenedSince } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -726,12 +726,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					// A replay answers the stored row with the order as it now stands: an open order at
 					// a zero balance was reopened since (another till), so it is not finished here.
 					// A partial leg (a balance still due) runs the flow as a first answer would.
-					if (
-						summary &&
-						!isPaidStatus(summary.status) &&
-						typeof summary.balance === 'string' &&
-						toMinor(summary.balance, dp) === 0
-					) {
+					if (reopenedSince(summary, dp)) {
 						tenderRecorded(row, 'online');
 						logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
 							showToast: true,

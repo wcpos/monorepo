@@ -252,6 +252,19 @@ function replayStoredStatus(
 	return typeof method === 'string' ? (outcome.settledOrderStatuses[method] ?? null) : null;
 }
 
+/**
+ * A store answer at a zero balance whose order is open: the sale was reopened since (another
+ * till), as a captured leg that covers the balance completes the order (`payment_complete`).
+ */
+export function reopenedSince(
+	order: OrderPaymentSummary | null | undefined,
+	dp: number
+): order is OrderPaymentSummary {
+	return (
+		!!order?.status && UNPAID_STATUSES.includes(order.status) && toMinor(order.balance, dp) === 0
+	);
+}
+
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
@@ -264,12 +277,14 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				activeAwaitingCustomer(payload.meta_data) === null
 			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
+			if (outcome.via === 'online' && reopenedSince(outcome.order, dp)) return false;
 			return typeof outcome.order?.balance === 'string' &&
 				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&
 				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
 				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
+			if (!outcome.row.recorded_offline && reopenedSince(outcome.order, dp)) return false;
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
