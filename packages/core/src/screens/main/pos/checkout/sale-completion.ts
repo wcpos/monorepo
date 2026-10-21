@@ -271,7 +271,12 @@ export function reopenedSince(
  * never landed. The refresh decides then, never the answer alone.
  */
 function unpaidOnStore(order: OrderPaymentSummary | null, dp: number, payload?: OrderPayload) {
-	return reopenedSince(order, dp) || (!!payload?.status && !isPaidStatus(payload.status));
+	return reopenedSince(order, dp) || residentUnpaid(payload);
+}
+
+/** The resident after the mirror reads unpaid (a resident with no status is unknown, not unpaid). */
+export function residentUnpaid(payload?: { status?: string | null }) {
+	return !!payload?.status && !isPaidStatus(payload.status);
 }
 
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {

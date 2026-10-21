@@ -224,6 +224,7 @@ function closeMessage(
 ): string {
 	if (closed.kind === 'refused') return closed.message;
 	if (closed.kind === 'order_changed') return t('pos_checkout.order_changed_retry');
+	if (closed.kind === 'reopened') return t('pos_checkout.sale_reopened_elsewhere');
 	if (closed.kind === 'outstanding')
 		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
 	return t('pos_checkout.close_needs_connection');
@@ -789,7 +790,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const reportClose = React.useCallback(
 		(closed: Exclude<CloseOutcome, { kind: 'completed' }>) => {
 			const context = { orderId: payload.id ?? null, orderUUID: order.uuid, close: closed.kind };
-			if (closed.kind === 'outstanding' || closed.kind === 'order_changed')
+			if (
+				closed.kind === 'outstanding' ||
+				closed.kind === 'order_changed' ||
+				closed.kind === 'reopened'
+			)
 				logger.info(closeMessage(closed, t), { showToast: true, context });
 			else
 				logger.error(closeMessage(closed, t), {

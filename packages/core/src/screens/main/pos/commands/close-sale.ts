@@ -15,6 +15,7 @@ import type { OrderPaymentSummary } from '@wcpos/order-math';
 import {
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
+	isPaidStatus,
 	MONEY_ANSWER_CODES,
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
@@ -22,8 +23,7 @@ import {
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
-
-import type { SaleContext } from '../checkout/sale-completion';
+import { residentUnpaid, type SaleContext } from '../checkout/sale-completion';
 
 export type CloseOutcome =
 	| {
@@ -32,6 +32,8 @@ export type CloseOutcome =
 			completion: { n: number; id: string } | null;
 	  }
 	| { kind: 'outstanding'; order: OrderPaymentSummary | null }
+	/** Closed on the store, but the resident after the mirror reads a reopen adopted since. */
+	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'refused'; code: string; message: string }
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
@@ -63,9 +65,12 @@ export async function closeSale(
 		// `isCloseAnswer`, the poster's rule too). A 2xx without them (a proxy page, a plugin
 		// filter) proves nothing: the entry stays journaled for a re-send.
 		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
-		const order = data.order as unknown as OrderPaymentSummary;
-		await post.mirror({ order });
-		return { kind: 'completed', order, completion: data.completion };
+		const summary = data.order as unknown as OrderPaymentSummary;
+		await post.mirror({ order: summary });
+		// Completed only when the answer and the resident after the mirror both read paid.
+		if (!isPaidStatus(summary.status) || residentUnpaid(order.getLatest().payload))
+			return { kind: 'reopened', order: summary };
+		return { kind: 'completed', order: summary, completion: data.completion };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };

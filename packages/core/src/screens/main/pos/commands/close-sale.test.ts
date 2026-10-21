@@ -162,3 +162,25 @@ it('an order the store has never seen sends nothing (connectivity is the callerâ
 	expect(post).not.toHaveBeenCalled();
 	expect(mockPosterInput).not.toHaveBeenCalled();
 });
+
+// The resident after the mirror decides, as for every leg: a close answered after another till's
+// reopen was adopted settles its journal entry and mirrors, but is not reported completed, so the
+// zero-balance flow shows the reopened cart and prints no receipt.
+it('a close answered after another tillâ€™s reopen was adopted is reopened, settled, no receipt', async () => {
+	let status = 'pos-partial';
+	const resident = {
+		uuid: 'order-1',
+		getLatest: () => ({ payload: { id: 42, total: '0.00', currency: 'EUR', status } }),
+	} as unknown as EngineRecord<'orders'>;
+	const summary = { status: 'completed' };
+	const post = jest.fn(async () => {
+		status = 'pos-open'; // the reopen is adopted while the close is in flight
+		return { data: { order: summary, completion: { n: 1, id: 'c1' } } };
+	});
+
+	const outcome = await closeSale({} as never, {} as never, resident, deps(post));
+
+	expect(outcome).toEqual({ kind: 'reopened', order: summary });
+	expect(mockMirror).toHaveBeenCalledTimes(1);
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
