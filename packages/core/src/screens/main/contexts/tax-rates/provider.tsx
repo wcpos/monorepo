@@ -252,11 +252,13 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	const basePostcode = addressValue(baseLocation.postcode);
 
 	/**
-	 * The tax rates causes a render and recalculates the all the tax in the app,
-	 * so we want to make sure we only emit rates when they have actually changed
+	 * Mirror WooCommerce's `get_tax_location()`: shipping without a country uses billing,
+	 * and an address without a country uses the shop base location.
 	 */
 	const location = React.useMemo<TaxLocation>(() => {
-		if (!hasOrder || taxBasedOn === 'base') {
+		const address =
+			taxBasedOn === 'shipping' && addressValue(shipping?.country) ? shipping : billing;
+		if (!hasOrder || taxBasedOn === 'base' || !addressValue(address?.country)) {
 			return {
 				country: baseCountry,
 				state: baseState,
@@ -264,7 +266,6 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 				postcode: basePostcode,
 			};
 		}
-		const address = taxBasedOn === 'billing' ? billing : shipping;
 		return {
 			country: addressValue(address?.country),
 			state: addressValue(address?.state),
