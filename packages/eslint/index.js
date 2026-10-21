@@ -381,6 +381,19 @@ const appCodeFiles = cwd.endsWith('/packages/core')
 		? ['**/*.{js,jsx,ts,tsx}']
 		: ['**/packages/core/src/**/*.{ts,tsx}', '**/apps/main/**/*.{js,jsx,ts,tsx}'];
 
+// Shared by the broad ratchet and the ownership blocks that replace its rule.
+export const tintedAlertSelector = {
+	selector:
+		// Status icon tiles (size-10 + red/green tint) and highlighted register rows (border-b + green) are not alerts.
+		'JSXAttribute[name.name="className"]' +
+		':not(:has(Literal[value=/^size-10 items-center justify-center rounded-lg$/]):has(Literal[value=/^bg-(destructive|success)\\u002F10$/]))' +
+		':not(:has(TemplateElement[value.raw=/^border-border rounded-none border-b $/]):has(Literal[value="bg-success/10"])):has(:matches(' +
+		'Literal[value=/bg-(destructive|warning|attention|info|success)\\u002F10(\\s|$)/], ' +
+		'TemplateElement[value.raw=/bg-(destructive|warning|attention|info|success)\\u002F10(\\s|$)/]))',
+	message:
+		'A tinted alert box is the Notice component (@wcpos/components/notice); success is a line with a check, never a green band (CODING_STANDARDS § Design, wcpos/roadmap#465).',
+};
+
 /**
  * A component that models an axis as a variant OWNS that axis. Setting it from
  * a className gives one pixel two sources of truth, and the winner is decided by
@@ -395,6 +408,7 @@ const appCodeFiles = cwd.endsWith('/packages/core')
  * beside its own selector, or this rule silently stops applying there.
  */
 export const designSystemOwnershipSelectors = [
+	tintedAlertSelector,
 	{
 		// `>` (direct child) deliberately limits this to the STATIC form,
 		// className="…". A cn(…, selected && 'text-primary') is conditional
@@ -615,6 +629,11 @@ export const config = [
 		},
 	},
 
+	// Every workspace inherits this; narrower ownership blocks restate the selector.
+	{
+		files: ['**/*.{js,jsx,ts,tsx}'],
+		rules: { 'no-restricted-syntax': ['error', tintedAlertSelector] },
+	},
 	// The design-system ownership rule (see `designSystemOwnershipSelectors`).
 	// NOTE: `no-restricted-syntax` blocks OVERRIDE rather than merge in flat config.
 	// This block and the e2e block below must never share a `files` glob, or one
@@ -652,6 +671,7 @@ export const config = [
 	{
 		files: ['**/packages/components/**/*.{js,jsx,ts,tsx}'],
 		rules: {
+			'no-restricted-syntax': 'off',
 			'no-restricted-imports': [
 				'error',
 				{
@@ -683,6 +703,7 @@ export const config = [
 		rules: {
 			'no-restricted-syntax': [
 				'error',
+				tintedAlertSelector,
 				{
 					selector: "CallExpression[callee.property.name='getByText']",
 					message: 'E2E tests must use getByTestId(), not localized visible text.',

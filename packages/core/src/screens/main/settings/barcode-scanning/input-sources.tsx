@@ -15,6 +15,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -465,12 +466,13 @@ export function InputSources() {
 				<ScannerDeviceChooser />
 
 				{registration.available && registration.candidate ? (
-					<VStack space="sm" className="border-info/40 bg-info/10 rounded-md border p-2">
-						<Text className="text-sm">
-							{t('settings.scanner_detected', {
+					<VStack space="sm">
+						<Notice
+							tone="info"
+							title={t('settings.scanner_detected', {
 								deviceName: registration.candidate.deviceName,
 							})}
-						</Text>
+						/>
 						<Input
 							value={name}
 							onChangeText={setName}
@@ -487,14 +489,11 @@ export function InputSources() {
 						</HStack>
 					</VStack>
 				) : registration.capturing ? (
-					<View className="border-info/40 bg-info/10 rounded-md border p-2">
-						<HStack>
-							<Text className="flex-1 text-sm">{t('settings.scanner_capture_prompt')}</Text>
-							<Button variant="outline" size="sm" onPress={registration.stop}>
-								<ButtonText>{t('common.cancel')}</ButtonText>
-							</Button>
-						</HStack>
-					</View>
+					<Notice
+						tone="info"
+						title={t('settings.scanner_capture_prompt')}
+						actions={[{ label: t('common.cancel'), onPress: registration.stop }]}
+					/>
 				) : null}
 			</VStack>
 		</SettingsSection>

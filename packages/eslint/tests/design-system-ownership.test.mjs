@@ -338,3 +338,67 @@ test('keeps variant ownership firing beside the gate guard in apps/main/app', as
 
 	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
 });
+
+const NOTICE = 'A tinted alert box is the Notice component';
+const TINTS = `export function Bad({ active }) { return <>
+	<View className="border bg-destructive/10" />
+	<View className={'bg-warning/10 p-2'} />
+	<View className={\`p-2 bg-attention/10 \${active}\`} />
+	<View className={\`\${active} bg-info/10\`} />
+	<View className={cn('p-2', active && 'bg-success/10')} />
+</>; }`;
+
+test('rejects every hand-rolled notice tint in literal and template classNames', async () => {
+	assert.equal(restrictedSyntax(await variantOwnership(TINTS), NOTICE).length, 5);
+});
+
+test('keeps the notice ratchet under core screen and app config overrides', async () => {
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(CORE_ROOT, 'src/contexts/theme/index.tsx'), coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'app/+not-found.tsx'), mainConfig, MAIN_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(TINTS, file, 'no-restricted-syntax', base, cwd);
+		assert.equal(restrictedSyntax(messages, NOTICE).length, 5, file);
+	}
+});
+
+test('enforces the notice ratchet in other packages too', async () => {
+	const messages = await lint(
+		'export const Bad = () => <View className="bg-info/10" />;',
+		join(REPO_ROOT, 'packages/hooks/notice-fixture.jsx'),
+		'no-restricted-syntax'
+	);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 1);
+});
+
+test('allows the design system to own notice surfaces from root and package lint', async () => {
+	for (const [base, cwd] of [
+		[config, REPO_ROOT],
+		[componentsConfig, COMPONENTS_ROOT],
+	]) {
+		const messages = await lint(TINTS, IN_DESIGN_SYSTEM, 'no-restricted-syntax', base, cwd);
+		assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+	}
+});
+
+test('does not mistake prose, other opacities or Notice for a tinted alert box', async () => {
+	const messages = await variantOwnership(`export const Fine = () => <>
+		<Notice tone="warn" title="bg-warning/10" />
+		<View className="bg-info/100" />
+		<View className="bg-info/20" />
+	</>;`);
+	assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+});
+
+test('allows only the reader icon and highlighted-row class pairs, not generic tint boxes', async () => {
+	const messages =
+		await variantOwnership(`export const Fine = ({ error, connected, highlight }) => <>
+		<View className={cn('size-10 items-center justify-center rounded-lg', error ? 'bg-destructive/10' : connected ? 'bg-success/10' : 'bg-muted')} />
+		<ListItem className={\`border-border rounded-none border-b \${highlight ? 'bg-success/10' : ''}\`} />
+		<View className="rounded-lg bg-destructive/10" />
+		<View className={\`border-border rounded-none border-b \${highlight ? 'bg-warning/10' : ''}\`} />
+	</>;`);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 2);
+});

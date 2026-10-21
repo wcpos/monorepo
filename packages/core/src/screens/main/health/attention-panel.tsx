@@ -1,13 +1,13 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import { decode } from 'html-entities';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
+import { Notice } from '@wcpos/components/notice';
 
 import { useT } from '../../../contexts/translations';
-import { Callout } from './components';
 import { useRecordEditRoute } from './record-edit-route';
 import { useManualSync } from './use-manual-sync';
 import { useRecordLabel } from './use-record-label';
@@ -39,41 +39,24 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const displayName = label?.handle ?? label?.text ?? collectionName;
 
 	return (
-		<Callout tone="destructive" testID="db-attention-panel">
-			<HStack className="flex-wrap items-baseline gap-x-3 gap-y-1">
-				<Text className="font-semibold">
-					{/* `count` selects the plural form, `n` fills the placeholder — the
-					    published catalogues interpolate {n}, and passing only `count`
-					    renders a literal "{n}" to every non-English user. Asking for a
-					    suffixed key by hand (the old `=== 1` branch) reached at most two
-					    entries, so locales with more CLDR categories — ru's _few for 2–4,
-					    ar's _zero/_two — could never render theirs. */}
-					{t('health.database.attention', { count: stuck.length, n: stuck.length })}
-				</Text>
-				{/* Both interpolations are server-supplied and arrive HTML-encoded: the
-				    record's own name ("Men&#8217;s T-shirt") and the server's refusal
-				    sentence. Decoding here is the same treatment every other
-				    server-sourced string gets before a cashier reads it. */}
-				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm" decodeHtml>
-					{/* A pull-direction record never left the till in the first place —
-					    saying "can't upload" told cashiers their sales were stranded
-					    when the engine was only re-checking the catalogue. Only a push
-					    is an upload. */}
-					{first.status === 'deleted'
-						? t('health.database.attention_reason_delete', {
-								name: displayName,
-								reason: first.reason,
-							})
+		<Notice
+			tone="bad"
+			testID="db-attention-panel"
+			// count selects the plural; n fills the published catalogues' placeholder.
+			title={t('health.database.attention', { count: stuck.length, n: stuck.length })}
+			// Decode both server-supplied interpolations; only a push is an upload.
+			description={decode(
+				t(
+					first.status === 'deleted'
+						? 'health.database.attention_reason_delete'
 						: first.direction === 'pull'
-							? t('health.database.attention_reason_pull', {
-									name: displayName,
-									reason: first.reason,
-								})
-							: t('health.database.attention_reason', {
-									name: displayName,
-									reason: first.reason,
-								})}
-				</Text>
+							? 'health.database.attention_reason_pull'
+							: 'health.database.attention_reason',
+					{ name: displayName, reason: first.reason }
+				)
+			)}
+		>
+			<HStack className="flex-wrap items-baseline gap-x-3 gap-y-1">
 				<HStack className="items-center gap-1">
 					{fixRoute ? (
 						<Button
@@ -107,6 +90,6 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 					</Button>
 				</HStack>
 			</HStack>
-		</Callout>
+		</Notice>
 	);
 }

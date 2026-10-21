@@ -18,6 +18,7 @@ let rows: QueuedEmail[] = [];
 type Kids = { children?: React.ReactNode };
 type PressProps = Kids & { testID?: string; disabled?: boolean; onPress?: () => void };
 
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID, disabled, onPress }: PressProps) => (
 		<button data-testid={testID} disabled={disabled} onClick={onPress} type="button">
@@ -42,8 +43,8 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: Kids) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('./components', () => ({
-	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
 }));
 jest.mock('@wcpos/utils/logger', () => ({

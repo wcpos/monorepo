@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
-import { DocsLink } from '@wcpos/components/docs-link';
+import { Notice } from '@wcpos/components/notice';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -72,13 +72,21 @@ export function TestPrintError({ error, hideGuide = false }: TestPrintErrorProps
 	const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
 
 	return (
-		<VStack
-			testID="add-printer-test-error"
-			className="border-destructive/50 bg-destructive/10 gap-2 rounded-md border p-3"
-		>
-			<Text testID="add-printer-test-error-line" className="text-destructive text-sm">
-				{t(describePrinterError(error.message).key)}
-			</Text>
+		<VStack className="gap-2">
+			<Notice
+				tone="bad"
+				testID="add-printer-test-error"
+				title={t(describePrinterError(error.message).key)}
+				docs={
+					hideGuide
+						? undefined
+						: {
+								label: t('settings.having_trouble'),
+								href: PRINTER_DOCS_URL,
+								testID: 'add-printer-having-trouble',
+							}
+				}
+			/>
 			<Collapsible>
 				<CollapsibleTrigger testID="add-printer-support-details-toggle">
 					<Text className="text-muted-foreground text-xs font-medium">
@@ -103,11 +111,6 @@ export function TestPrintError({ error, hideGuide = false }: TestPrintErrorProps
 					</VStack>
 				</CollapsibleContent>
 			</Collapsible>
-			{!hideGuide && (
-				<DocsLink testID="add-printer-having-trouble" href={PRINTER_DOCS_URL}>
-					{t('settings.having_trouble')}
-				</DocsLink>
-			)}
 		</VStack>
 	);
 }

@@ -71,9 +71,6 @@
   "packages/core/src/screens/main/customers/edit/index.tsx": {
     "bare-Suspense": 1
   },
-  "packages/core/src/screens/main/health/components/callout.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/core/src/screens/main/health/components/code-chip.tsx": {
     "raw-pressable": 1
   },

@@ -1,4 +1,3 @@
-export { Callout, type CalloutTone } from './callout';
 export { CodeChip } from './code-chip';
 export { CoverageBar } from './coverage-bar';
 export { KVGrid, type KVEntry } from './kv-grid';
