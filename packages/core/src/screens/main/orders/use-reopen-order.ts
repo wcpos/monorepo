@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { readLedger } from '@wcpos/order-math';
+import { readAwaitingCustomer, readLedger } from '@wcpos/order-math';
 import {
 	awaitTerminalWriteOutcome,
 	awaitWriteSettlement,
@@ -79,14 +79,27 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const reportRefusal = React.useCallback(
 		(error: unknown) => {
 			if (!(error instanceof WriteOutcomeError)) return;
+			// The refusal names the work in motion by its ledger row or by its gateway attempt.
 			const paymentId = error.data?.payment_id;
+			const attemptId = error.data?.attempt_id;
 			const payload = order.getLatest?.().payload ?? order.payload;
-			const row = readLedger(payload.meta_data).find(({ id }) => id === paymentId);
-			const method =
-				row?.method_id === payload.payment_method ? payload.payment_method_title : row?.method_id;
+			const methodName = (methodId: string) =>
+				methodId === payload.payment_method ? payload.payment_method_title : methodId;
+			const row =
+				paymentId === undefined
+					? undefined
+					: readLedger(payload.meta_data).find(({ id }) => id === paymentId);
+			const stamp = readAwaitingCustomer(payload.meta_data);
+			const attempt =
+				attemptId !== undefined && stamp?.attempt_id === attemptId ? stamp : undefined;
 			const leg = row
-				? t('orders.reopen_money_in_motion', { method, amount: legAmount(row) })
-				: t('orders.reopen_money_in_motion_unknown');
+				? t('orders.reopen_money_in_motion', {
+						method: methodName(row.method_id),
+						amount: legAmount(row),
+					})
+				: attempt
+					? t('orders.reopen_money_in_motion_attempt', { method: methodName(attempt.method_id) })
+					: t('orders.reopen_money_in_motion_unknown');
 			logger.debug('Reopen refused', {
 				showToast: true,
 				toast:
@@ -114,6 +127,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 					orderId: order.uuid,
 					reason: error.reason ?? null,
 					paymentId: paymentId ?? null,
+					attemptId: attemptId ?? null,
 				},
 			});
 		},

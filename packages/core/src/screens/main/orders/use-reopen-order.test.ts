@@ -279,3 +279,49 @@ it("a refused reopen whose store copy cannot be fetched puts the order's status 
 	);
 	expect(mockPush).not.toHaveBeenCalled();
 });
+
+it('a refusal that names an attempt resolves it through the awaiting-customer stamp', async () => {
+	const invoicedOrder = {
+		uuid: 'order-1',
+		payload: {
+			id: 42,
+			status: 'pending',
+			payment_method: 'wcpos_email_invoice',
+			payment_method_title: 'Email invoice',
+			meta_data: [
+				{
+					key: '_wcpos_awaiting_customer',
+					value: {
+						method_id: 'wcpos_email_invoice',
+						destination: 'buyer@example.com',
+						attempt_id: 'attempt-7',
+						sent_at_gmt: '2026-10-08T10:00:00.000Z',
+						cashier_id: 7,
+					},
+				},
+			],
+		},
+	} as unknown as EngineRecord<'orders'>;
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: invoicedOrder, mutationId: 'm-reopen' } as never);
+	mockOnDrain = () =>
+		emit({ ...moneyInMotion(), data: { status: 422, attempt_id: 'attempt-7' } } as EngineEvent);
+	const { result } = renderHook(() => useReopenOrder(invoicedOrder));
+	await act(async () => result.current.reopen());
+	expect(reportedToast()).toMatchObject({
+		title: 'orders.reopen_money_in_motion_attempt {"method":"Email invoice"}',
+		action: { label: 'pos_checkout.cancel_payment' },
+	});
+});
+
+it('an attempt the order does not hold falls back to the unnamed copy', async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
+	mockOnDrain = () =>
+		emit({ ...moneyInMotion(), data: { status: 422, attempt_id: 'attempt-x' } } as EngineEvent);
+	const { result } = renderHook(() => useReopenOrder(paidOrder));
+	await act(async () => result.current.reopen());
+	expect(reportedToast()).toMatchObject({ title: 'orders.reopen_money_in_motion_unknown' });
+});

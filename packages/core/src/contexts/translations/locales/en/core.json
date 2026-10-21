@@ -971,6 +971,7 @@
 	"orders.process_refund": "Process Refund",
 	"orders.re-open": "Re-open",
 	"orders.reopen_money_in_motion": "Payment {method} {amount} is still in motion; cancel it before reopening",
+	"orders.reopen_money_in_motion_attempt": "Payment {method} is still in motion; cancel it before reopening",
 	"orders.reopen_money_in_motion_unknown": "A payment on this order is still in motion; cancel it before reopening",
 	"orders.refund": "Refund",
 	"orders.refund_amount": "Refund Amount",
