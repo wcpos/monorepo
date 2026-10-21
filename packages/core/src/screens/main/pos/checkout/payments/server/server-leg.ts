@@ -136,12 +136,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			});
 		}
 	};
-	const schedule = (delay: number, route: 'intent' | 'status' = 'status') => {
+	// The reason the last void went out with, so a re-send after a held lock carries it again.
+	let voidReason: string | undefined;
+	const schedule = (delay: number, route: Route = 'status') => {
 		clearTimer();
 		if (active())
 			timer = deps.setTimeout(() => {
 				timer = null;
-				void (route === 'intent' ? request('intent') : tick());
+				void (route === 'status' ? tick() : request(route, voidReason));
 			}, delay);
 	};
 	const applyResponse = async (
@@ -214,6 +216,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		clearTimer();
 		const seq = ++sequence;
 		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
+		if (route === 'void') voidReason = reason;
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
@@ -306,8 +309,21 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		if (code === 'wcpos_payment_locked') {
-			setState({ capturing: false, phase: 'polling' });
-			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
+			const delay = (body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000;
+			// The lock was held and nothing ran (ADR 0040 §1.3): the money command stays journaled,
+			// and only a re-send of it answers it. A status read cannot: an intent that never ran
+			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
+			// again after `retry_after`, in the phase it was sent from.
+			if (route === 'status') setState({ capturing: false, phase: 'polling' });
+			else
+				setState(
+					route === 'intent'
+						? { phase: 'creating' }
+						: route === 'void'
+							? { phase: 'cancelling', capturing: false }
+							: { phase: 'polling', capturing: true }
+				);
+			schedule(delay, route);
 			return;
 		}
 		if (code === 'wcpos_invalid_transition' && (route === 'capture' || route === 'void')) {

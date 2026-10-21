@@ -246,9 +246,10 @@ it.each(['locked', 'accepted'] as const)(
 	async (voidResult) => {
 		const c = setupRejoin();
 		c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+		// A held lock ran nothing: the same void is re-sent after retry_after (ADR 0040 §1.3).
 		if (voidResult === 'locked')
 			c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
-		else c.post.mockResolvedValueOnce({ data: response({ id: 'live-1' }) });
+		c.post.mockResolvedValueOnce({ data: response({ id: 'live-1' }) });
 		c.post.mockResolvedValue({ data: response({ id: 'live-1', status: 'captured' }) });
 		c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'authorized' }) });
 		c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'voided' }) });
@@ -257,22 +258,27 @@ it.each(['locked', 'accepted'] as const)(
 		expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/live-1/void', {
 			reason: 'cashier',
 		});
-		await tick(voidResult === 'locked' ? 1000 : 2000);
+		if (voidResult === 'locked') await tick(1000);
+		const voids = voidResult === 'locked' ? 2 : 1;
 		expect(c.post.mock.calls.map(([url]) => url)).toEqual([
 			'orders/42/payments/leg/intent',
-			'orders/42/payments/live-1/void',
+			...Array(voids).fill('orders/42/payments/live-1/void'),
 		]);
+		expect(c.post.mock.calls.slice(1).map(([, body]) => body)).toEqual(
+			Array(voids).fill({ reason: 'cashier' })
+		);
+		await tick(2000);
 		expect(c.leg.getState()).toMatchObject({
 			phase: 'polling',
 			outcome: null,
 			cancelRequested: true,
-			releaseAvailable: voidResult === 'accepted',
+			releaseAvailable: true,
 		});
 		await tick(2000);
 		expect(c.get).toHaveBeenCalledTimes(2);
 		expect(c.get).toHaveBeenLastCalledWith('orders/42/payments/live-1/status');
 		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
-		expect(c.post).toHaveBeenCalledTimes(2);
+		expect(c.post).toHaveBeenCalledTimes(1 + voids);
 	}
 );
 
@@ -518,6 +524,53 @@ it.each([7, undefined])(
 		expect(c.count('status')).toBe(3);
 	}
 );
+// ADR 0040 §1.3: a held lock means nothing ran, and the journal keeps the command. The leg
+// re-sends the same command after `retry_after`; a status read cannot answer it.
+it('a locked intent is re-sent after retry_after, never polled', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'wcpos_payment_locked', { retry_after: 3 }));
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({ phase: 'creating', error: null, consecutiveErrors: 0 });
+	await tick(2999);
+	expect(c.count('intent')).toBe(1);
+	await tick(1);
+	expect(c.count('intent')).toBe(2);
+	expect(c.calls[1].body).toEqual(c.calls[0].body);
+	expect(c.calls.slice(0, 2).map(({ route }) => route)).toEqual(['intent', 'intent']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
+});
+it('a locked capture is re-sent after retry_after, then settles', async () => {
+	const c = setup(true);
+	c.answer('status', response({ status: 'authorized' }));
+	c.fail('capture', refusal(409, 'wcpos_payment_locked', { retry_after: 2 }));
+	c.answer('capture', response({ status: 'captured' }));
+	await tick();
+	expect(c.count('capture')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ capturing: true, outcome: null });
+	await tick(2000);
+	expect(c.count('capture')).toBe(2);
+	expect(c.count('status')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'captured' });
+});
+it('a locked void is re-sent with its reason after retry_after', async () => {
+	const c = setup(true);
+	c.answer('status', response({ status: 'pending' }));
+	await tick();
+	c.fail('void', refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	c.answer('void', response({ status: 'voided' }));
+	await c.leg.cancel();
+	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
+	const reads = c.count('status');
+	await tick(1000);
+	expect(c.count('void')).toBe(2);
+	expect(c.calls.filter(({ route }) => route === 'void').map(({ body }) => body)).toEqual([
+		{ reason: 'cashier' },
+		{ reason: 'cashier' },
+	]);
+	expect(c.count('status')).toBe(reads);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
 it('authorized automatically captures once and mirrors both rows', async () => {
 	const c = setup(true);
 	c.answer('status', response({ status: 'authorized' }));

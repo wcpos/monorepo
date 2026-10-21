@@ -61,7 +61,7 @@ const row: PaymentRow = {
 };
 
 /** `drop`: lost on the wire, so the next status read still shows the leg authorized. */
-type CaptureMode = 'drop' | '503';
+type CaptureMode = 'drop' | '503' | 'locked';
 class FakeStore {
 	n = 1;
 	leg: PaymentRow = row;
@@ -93,6 +93,14 @@ class FakeStore {
 		if (mode === '503')
 			throw Object.assign(new Error('503'), { response: { status: 503, data: {} } });
 		if (mode === 'drop') throw new Error('Network Error');
+		// The order lock was held: nothing ran and nothing was stored for this command.
+		if (mode === 'locked')
+			throw Object.assign(new Error('locked'), {
+				response: {
+					status: 409,
+					data: { code: 'wcpos_payment_locked', data: { status: 409, retry_after: 1 } },
+				},
+			});
 		const fingerprint = JSON.stringify([url, rest]);
 		const stored = this.commands.get(command_id as string);
 		if (stored) {
@@ -253,6 +261,21 @@ it('after a 5xx capture and a successful retry no journal entry stays open', asy
 	await timers.drain(() => settledCaptures > 0);
 	const [first, second] = captureCalls();
 	expect(second.command_id).toBe(first.command_id);
+	expect(store.captures).toBe(1);
+	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
+	terminal.stop();
+});
+
+it('a locked capture is re-sent with the same command_id after its backoff, then settles', async () => {
+	store.captureModes = ['locked'];
+	const timers = scheduler();
+	const terminal = service(timers);
+	begin(terminal);
+	await timers.drain(() => settledCaptures > 0);
+	const [first, second] = captureCalls();
+	expect(captureCalls()).toHaveLength(2);
+	expect(second.command_id).toBe(first.command_id);
+	expect({ ...second, revision: null }).toEqual({ ...first, revision: null });
 	expect(store.captures).toBe(1);
 	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
 	terminal.stop();
