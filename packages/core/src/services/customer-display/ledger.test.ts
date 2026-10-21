@@ -34,9 +34,9 @@ const row = (overrides: Partial<PaymentRow> = {}): PaymentRow => ({
 });
 
 describe('buildLedger', () => {
-	test('formats raw totals, counts authorized rows, includes voided rows and resolves titles', () => {
+	test('formats raw totals, counts captured rows, includes voided rows and resolves titles', () => {
 		const rows = [
-			row({ id: 'authorized', status: 'authorized', amount: '40.00', change: '5.00' }),
+			row({ id: 'captured', status: 'captured', amount: '40.00', change: '5.00' }),
 			row({ id: 'voided', method_id: 'unknown', status: 'voided', amount: '20.00' }),
 		];
 		const result = buildLedger(rows, 100, 'EUR', 'en-IE', new Map([['cod', 'Cash']]), 2);
@@ -61,6 +61,38 @@ describe('buildLedger', () => {
 			tendered_raw: 50,
 		});
 		expect(result.payments[1]).toMatchObject({ method: 'unknown', status: 'voided' });
+	});
+
+	// ADR 0040 D6: an authorization is a hold, not money taken.
+	test('an authorized row shows the balance still due on the customer display', () => {
+		const result = buildLedger(
+			[row({ status: 'authorized', amount: '50.00', change: null })],
+			50,
+			'EUR',
+			'en-IE',
+			new Map(),
+			2
+		);
+		expect(result).toMatchObject({ status: 'unpaid', paid_raw: 0, due_raw: 50 });
+		const next = [row({ status: 'authorized', amount: '50.00' })];
+		expect(
+			derivePaymentEvent([row({ status: 'pending' })], next, 'pos-open', 'pos-open', result)
+		).toMatchObject({ state: 'approved' });
+	});
+
+	test('a succeeded refund on a reopened sale shows the balance due again', () => {
+		const refunds: PaymentRow['refunds'] = [
+			{ id: 1, amount: '10.00', status: 'succeeded', provider_ref: null },
+		];
+		const result = buildLedger(
+			[row({ amount: '50.00', change: null, refunds })],
+			50,
+			'EUR',
+			'en-IE',
+			new Map(),
+			2
+		);
+		expect(result).toMatchObject({ status: 'partial', paid_raw: 50, due_raw: 10 });
 	});
 
 	test.each([

@@ -172,9 +172,18 @@ export {
 export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
 export {
 	MoneyCommandError,
+	moneyCommandPoster,
+	RECOVERY_RETRY_DELAYS_MS,
+	recoverMoneyCommands,
+	resendOpenCommands,
+	type CommandProvenance,
 	type MoneyCommandErrorReason,
+	type MoneyCommandPoster,
 	type Post,
+	type ProvenanceCommand,
+	type ResentCommand,
 } from './commands/money-command';
+export type { OrderApproval } from './store-local/money-commands';
 
 export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';
 export {

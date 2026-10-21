@@ -458,6 +458,23 @@ describe('drawer terms anchored to the server terms', () => {
 		expect(split.cashSales.count).toBe(3);
 	});
 
+	// ADR 0040 D6: the server's session figures count captured rows only, so an authorization
+	// voided here was never in the baseline and must not be debited from it.
+	it('a baseline-authorized leg voided here leaves the expected totals alone', () => {
+		const card = { ...leg('auth1', 'o2', '30.0000', 'voided'), kind: 'card', method_id: 'card' };
+		const input = {
+			session: {
+				...session,
+				server_expected: { cash: '724.0000', card: '0.0000' },
+				server_ledger_rows: [...session.server_ledger_rows, { id: 'auth1', status: 'authorized' }],
+			},
+			movements: [outMilk],
+			ledgerRowsBySession: [leg('leg1', 'o1', '79.0000'), card],
+		};
+		const has = (id: string | number | null | undefined) => id === 'auth1' || baselineHas(id);
+		expect(deriveExpected(input, has)).toEqual({ cash: '724.0000', card: '0.0000' });
+	});
+
 	it('counts a void-and-retender on one baseline order as the server counted it', () => {
 		const input = {
 			session,

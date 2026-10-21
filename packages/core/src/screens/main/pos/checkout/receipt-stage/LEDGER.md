@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{button,hstack,text}`.
 
+2026-10-21: line 2's "recorded-offline authorized rows" is superseded by ADR 0040 D6: the settled paid amount is `derive()`'s, which counts captured rows only, as the store does (`Ledger::COUNTING_STATUSES`); an authorization is a hold.
+
 ## Lines
 
 1. Resolve the receipt’s selected order independently of the new/current cart and clear a selection whose order disappears — switching stores or purging an order must not strand the receipt host — evidence: `receipt-stage.tsx:114`, “A receipt selection that outlives its order (a store switch, a purge) must not strand the”; `c28f97b32b 2026-09-07 fix(checkout): review round on the column swap` — platform: all.

@@ -8,6 +8,8 @@ Stage 4 accounting. Paths are relative to `pos/cart`. Source lines and evidence 
 
 Accounting mismatches: cart line 10 belongs to the stilled cart (`stilled-cart.tsx` and the read-only cells; `checkout-ledger.tsx` was deleted 2026-10-17, pos/cart line 81), not the editable table; line 16 is also carried by the v2 table. Cart line 19’s historical phone-bottom-sheet wording was superseded by Stage 1 / R2’s phone page rule; Stage 4 leaves those dialog owners alone. Totals 2–3 are n/a for v2 only; the old inline-note implementation remains until the switch.
 
+2026-10-21: line 7's "authorized legs count as paid" is superseded by ADR 0040 D6: only captured money counts toward paid, and an authorization is a hold, as the store counts it (`Ledger::COUNTING_STATUSES`). `tab-chip.tsx` reads Partly paid from captured rows only, the same set `derive()` counts.
+
 ## pos/cart
 
 1. Mount settlement once above cart consumers and retain it during checkout — separate table/totals subscriptions must not create competing writers or remove settlement during the column swap — evidence: `pos/cart/index.tsx:49–52`, “Keep it mounted in checkout too: swapping the cart”; `6167850c60 2026-08-23 refactor(pos): make settleCart the cart's reactive writer (#1472) (#1505)` — platform: all. **Status: preserved — index.tsx, untouched.**

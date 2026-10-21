@@ -8,6 +8,7 @@ test('public value surface is exactly the spec', () => {
 	).toEqual([
 		'activeAwaitingCustomer',
 		'calculateCartLine',
+		'countsTowardPaid',
 		'createCartConfig',
 		'derive',
 		'fromMinor',
@@ -30,6 +31,7 @@ test('public value surface is exactly the spec', () => {
 		'parsePaymentsContract',
 		'paymentsContractAtLeast',
 		'readAwaitingCustomer',
+		'readCompletions',
 		'readLedger',
 		'readMoneyEpoch',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then

@@ -10,6 +10,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 2026-10-14: the v1 `table.tsx`, `tabs.tsx`, `tab-chip.tsx` and `cart-header.tsx` files cited as evidence in lines 4–7, 11, 13, 15, 17 and 79 were deleted; those behaviours are carried by the `v2/` owners named for the same line numbers in `v2/LEDGER.md`, except line 79, which names `v2/tab-chip.tsx` here.
 
+2026-10-21: line 7's "authorized legs count as paid" is superseded by ADR 0040 D6: only captured money counts toward paid, and an authorization is a hold, as the store counts it (`Ledger::COUNTING_STATUSES`). `tab-chip.tsx` reads Partly paid from captured rows only, the same set `derive()` counts.
+
 ## Lines
 
 1. Mount settlement once above cart consumers and retain it during checkout — separate table/totals subscriptions must not create competing writers or remove settlement during the column swap — evidence: `pos/cart/index.tsx:49–52`, “Keep it mounted in checkout too: swapping the cart”; `6167850c60 2026-08-23 refactor(pos): make settleCart the cart's reactive writer (#1472) (#1505)` — platform: all.

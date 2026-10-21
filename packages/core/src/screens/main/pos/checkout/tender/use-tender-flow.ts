@@ -9,11 +9,11 @@ import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	calculateCartLine,
+	countsTowardPaid,
 	type DeclaredValues,
 	derive,
 	fromMinor,
 	isLivePaymentStatus,
-	isSettledPaymentRow,
 	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
@@ -281,9 +281,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const methodId = stored?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
 		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
+		// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
 		const planRows = rows
 			.slice(storedPlan?.from ?? rows.length)
-			.filter(isSettledPaymentRow)
+			.filter(countsTowardPaid)
 			.map((row) => ({
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -422,9 +423,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
+	// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
 	const rowsSinceFrom = rows
 		.slice(state.plan?.from ?? rows.length)
-		.filter(isSettledPaymentRow)
+		.filter(countsTowardPaid)
 		.map((row) => ({
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -630,15 +632,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
 			else latest[index] = row;
-			const paidAfter = latest
-				.filter(isSettledPaymentRow)
-				.reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			// The balance the summary shows (`derive()`): captured money only (ADR 0040 D6), and a
+			// succeeded refund on a reopened sale due again (Codex 4342609028 on #2831).
+			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
 			const action: TenderAction = {
 				type: 'tender-recorded',
-				balanceMinor: Math.max(0, toMinor(order.getLatest().payload.total, dp) - paidAfter),
+				balanceMinor: toMinor(balance, dp),
+				// The legs the plan has taken: the money `derive()` counts, so an offline device
+				// authorization (a hold) never advances it.
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
-					.filter(isSettledPaymentRow)
+					.filter(countsTowardPaid)
 					.map((candidate) => ({
 						amountMinor: toMinor(candidate.amount, dp),
 						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,

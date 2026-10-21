@@ -336,16 +336,15 @@ export function deriveDrawerTerms(
 
 /**
  * Baseline-held legs this device has voided or failed since the snapshot counted them: the
- * baseline view keeps their local status, so the full view must debit them itself.
+ * baseline view keeps their local status, so the full view must debit them itself. The server's
+ * session figures count captured rows only (ADR 0040 D6), so an authorization was never counted.
  */
 function voidedBaselineLegs(input: Parameters<typeof deriveExpected>[0], baselineHas: BaselineHas) {
 	return input.ledgerRowsBySession.filter((row) => {
 		if (row.session_id !== input.session.id || !baselineHas(row.id)) return false;
 		const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
 		return (
-			['voided', 'failed'].includes(row.status) &&
-			!!snapshot &&
-			['captured', 'authorized'].includes(snapshot.status ?? '')
+			['voided', 'failed'].includes(row.status) && !!snapshot && snapshot.status === 'captured'
 		);
 	});
 }

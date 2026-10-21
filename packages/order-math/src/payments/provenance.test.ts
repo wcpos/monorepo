@@ -1,6 +1,7 @@
 import {
 	hasSaleProvenance,
 	hasSaleTime,
+	readCompletions,
 	saleProvenanceMeta,
 	splitPlanMeta,
 	withMetaReplaced,
@@ -133,4 +134,15 @@ it('omits the register and the counter for a sale outside the numbered sequence'
 	expect(hasSaleProvenance(entries)).toBe(false);
 	expect(hasSaleTime(entries)).toBe(true);
 	expect(hasSaleTime([])).toBe(false);
+});
+
+it('reads the completion history as an array or a JSON string, and anything else as none', () => {
+	const history = [{ id: 'c1', n: 1, payment_ids: ['a'] }];
+	const key = '_wcpos_completions';
+	expect(readCompletions([{ key, value: history }])).toEqual(history);
+	expect(readCompletions([{ key, value: JSON.stringify(history) }])).toEqual(history);
+	expect(readCompletions([{ key, value: 'not json' }])).toEqual([]);
+	expect(readCompletions([{ key, value: '' }])).toEqual([]);
+	expect(readCompletions([{ key, value: [null, 'x', ...history] }])).toEqual(history);
+	expect(readCompletions([])).toEqual([]);
 });

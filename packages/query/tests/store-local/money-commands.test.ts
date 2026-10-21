@@ -66,6 +66,7 @@ const candidate = (id: string): MoneyCommandEntry => ({
 	approval: { total: '0.00', currency: 'USD' },
 	sentAt: null,
 	sentRevision: null,
+	scope: 'test-scope',
 });
 
 // ADR 0040 §1.3: get-or-create and claim happen in ONE write of the shared journal, which the
