@@ -121,6 +121,9 @@ export function isCloseAnswer(data: unknown): data is CloseAnswer {
 	);
 }
 
+/** What a gateway `submit` can answer, first time or replayed. */
+export const SUBMIT_OUTCOMES: readonly string[] = ['sent', 'settled', 'recorded', 'paid'];
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
 	!!value && typeof value === 'object';
 /** A ledger row as the store puts it on the wire (`Ledger::to_wire`). */
@@ -136,7 +139,8 @@ const isSummary = (value: unknown) => isObject(value) && typeof value.status ===
  * Whether a 2xx answer to a money command is the store's own, by kind (free `next`
  * `API/V2/Payments_Controller.php`): `record`, `intent`, `capture` and `void` answer the row and
  * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478); `refund`
- * answers the row alone (:368, :475); `submit` answers its `outcome` with the summary, `cancel`
+ * answers the row alone (:368, :475); `submit` answers a known `outcome` with the summary (and
+ * the row for `recorded`), `cancel`
  * the summary (:451); `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
  * `{}`) proves nothing: it never settles the command and never stands in for a row the store did
  * not send. The command stays journaled and its outcome is unknown until a re-send answers it.
@@ -152,7 +156,10 @@ export function isMoneyAnswer(
 		case 'refund':
 			return isRow(data.payment);
 		case 'submit':
-			return typeof data.outcome === 'string' && isSummary(data.order);
+			// The server's vocabulary (`Gateway_Submission.php:71, 77-83, 370`): `recorded` carries
+			// the row it recorded; `sent`, `settled` and a replayed `paid` the summary alone.
+			if (!SUBMIT_OUTCOMES.includes(data.outcome as string) || !isSummary(data.order)) return false;
+			return data.outcome !== 'recorded' || isRow(data.payment);
 		case 'cancel':
 			return isSummary(data.order);
 		default:

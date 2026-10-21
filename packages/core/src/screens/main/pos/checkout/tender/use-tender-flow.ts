@@ -722,7 +722,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						preLegBalanceMinor: balanceMinor,
 						amountMinor,
 					}).finally(() => tenderRecorded(row, 'online'));
-				} else if (kind === 'submit' && data.outcome === 'settled' && summary)
+				} else if (
+					kind === 'submit' &&
+					(data.outcome === 'settled' || data.outcome === 'paid') &&
+					summary
+				)
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}
 		} catch (error) {

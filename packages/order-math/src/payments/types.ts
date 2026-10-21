@@ -219,7 +219,8 @@ export interface PaymentRouteResponse {
  * and no stamp: the gateway landed the order on the status the merchant stored for it (§3.1).
  */
 export interface GatewaySubmitResponse {
-	outcome: 'recorded' | 'sent' | 'settled';
+	/** `paid` is a replay's word for a submit that completed the sale (read as `settled`). */
+	outcome: 'recorded' | 'sent' | 'settled' | 'paid';
 	payment: PaymentRow | null;
 	order: OrderPaymentSummary;
 }

@@ -125,3 +125,24 @@ describe('a close answered without a completion', () => {
 		expect(isCloseAnswer({ order: { status: 'completed' } })).toBe(false);
 	});
 });
+
+// The server's submit vocabulary (`Gateway_Submission.php:71, 77-83, 370`): `recorded` carries
+// the row it recorded; `sent`, `settled` and a replayed `paid` carry the summary alone.
+describe('a submit answer', () => {
+	const order = { status: 'pos-open' };
+	const row = { id: 'a-1', status: 'captured', amount: '10.00' };
+	it.each(['sent', 'settled', 'paid'])('%s needs the summary', (outcome) => {
+		expect(isMoneyAnswer('submit', { outcome, payment: null, order })).toBe(true);
+	});
+	it('recorded needs its row', () => {
+		expect(isMoneyAnswer('submit', { outcome: 'recorded', payment: row, order })).toBe(true);
+		expect(isMoneyAnswer('submit', { outcome: 'recorded', payment: null, order })).toBe(false);
+		expect(isMoneyAnswer('submit', { outcome: 'recorded', order: { status: 'completed' } })).toBe(
+			false
+		);
+	});
+	it('an outcome outside the vocabulary is malformed', () => {
+		expect(isMoneyAnswer('submit', { outcome: 'charged', order })).toBe(false);
+		expect(isMoneyAnswer('submit', { outcome: '', order })).toBe(false);
+	});
+});

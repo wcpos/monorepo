@@ -138,6 +138,17 @@ describe('submitGatewayPayment', () => {
 		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
 		expect(mirror).toHaveBeenCalledWith({ order: summary('pending'), awaiting: null });
 	});
+	it('a replayed paid answer is settled: no row, the stamp is cleared, the summary is the truth', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({
+			data: { outcome: 'paid', payment: null, order: summary('completed') },
+		});
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind: 'settled',
+			order: summary('completed'),
+		});
+		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: null });
+	});
 	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({

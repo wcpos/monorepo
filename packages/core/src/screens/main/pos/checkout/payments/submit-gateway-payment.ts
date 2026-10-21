@@ -153,7 +153,9 @@ export async function submitGatewayPayment(
 		const row = data.payment;
 		return mirror({ kind: 'recorded', row, order: data.order }, null);
 	}
-	if (data.outcome === 'settled') {
+	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
+	// the summary as the truth and no receipt number assumed.
+	if (data.outcome === 'settled' || data.outcome === 'paid') {
 		// The store settled the sale on the merchant's stored status and cleared any stamp an
 		// earlier send left (§3.1); the till's copy follows, with the summary's status.
 		return mirror({ kind: 'settled', order: data.order }, null);
