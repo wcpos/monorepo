@@ -85,7 +85,11 @@ test.describe('#2112 incomplete store session recovery', () => {
 		//    never the POS and never the boundary's "Something went wrong" banner.
 		await expect(recoveryPage.getByTestId('toast-AUTH131')).toBeVisible({ timeout: 90_000 });
 		await expect(recoveryPage.getByTestId('store-url-input')).toBeVisible({ timeout: 30_000 });
-		await expect(recoveryPage.getByTestId('error-boundary-fallback')).toHaveCount(0);
+		await expect(
+			recoveryPage.locator(
+				'[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]'
+			)
+		).toHaveCount(0);
 		await expect(recoveryPage.getByTestId('search-products')).toHaveCount(0);
 
 		// 5. The pointer was cleared, so a second launch is an ordinary signed-out

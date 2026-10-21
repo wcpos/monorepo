@@ -238,7 +238,7 @@ async function reuseValidAuthState(
 		}
 		if (
 			await page
-				.getByTestId('error-boundary-fallback')
+				.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
 				.first()
 				.isVisible()
 				.catch(() => false)
