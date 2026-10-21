@@ -1,23 +1,19 @@
-import { View } from 'react-native';
+import { router, Stack } from 'expo-router';
 
-import { Link, Stack } from 'expo-router';
-
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { GateScreen } from '@wcpos/components/gate-screen';
 
 export default function NotFoundScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ title: 'Oops!' }} />
-			<View testID="not-found-screen">
-				<VStack>
-					<Text>{"This screen doesn't exist."}</Text>
-
-					<Link href="/">
-						<Text>Go to home screen!</Text>
-					</Link>
-				</VStack>
-			</View>
+			<GateScreen
+				tone="muted"
+				icon="help"
+				testID="not-found-screen"
+				title="This screen doesn't exist."
+				description="The address may be out of date."
+				primary={{ label: 'Go to the register', onPress: () => router.replace('/') }}
+			/>
 		</>
 	);
 }

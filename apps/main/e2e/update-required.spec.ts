@@ -94,6 +94,8 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	await expect(page.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
 	// Web offers the reload CTA (the web bundle auto-updates on reload).
 	await expect(page.getByTestId('update-required-reload')).toBeVisible();
+	// Logout is offered on every platform, stacked under the primary.
+	await expect(page.getByTestId('update-required-logout')).toBeVisible();
 
 	// Politeness: the transport latch replays the refusal locally, so once the
 	// screen is up the store must see (almost) no further sync traffic. A
