@@ -101,7 +101,7 @@ const { networkBeginJobMock, networkCtorMock } = vi.hoisted(() => ({
 
 vi.mock('../transport/network-adapter', () => ({
 	NetworkAdapter: class {
-		constructor(...args: any[]) {
+		constructor(...args: [host: string, port?: number, vendor?: string]) {
 			networkCtorMock(...args);
 		}
 

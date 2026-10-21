@@ -15,7 +15,11 @@ let mockFinal = true;
 let mockAutoPrint = true;
 let mockServerData = true;
 let mockReceiptData: object | undefined;
-let mockPrinter: { resolvedPrinter: object; isResolving?: boolean } = {
+let mockGateway: { settled_order_status?: string | null } | null = null;
+jest.mock('../hooks/use-payment-gateways', () => ({
+	usePaymentGateways: () => ({ gateway: mockGateway }),
+}));
+let mockPrinter: { resolvedPrinter: object; isResolving?: boolean; mismatch?: string | null } = {
 	resolvedPrinter: { name: 'Till printer' },
 };
 const order = { uuid: 'paid', payload: { id: 42, currency: 'USD' } } as never;
@@ -137,6 +141,7 @@ beforeEach(() => {
 	mockAutoPrint = true;
 	mockServerData = true;
 	mockReceiptData = undefined;
+	mockGateway = null;
 	mockPrinter = { resolvedPrinter: { name: 'Till printer' } };
 });
 
@@ -181,6 +186,36 @@ it('does not auto-print a local pos-open fallback; prints once the order settles
 	expect(mockPrint).not.toHaveBeenCalled();
 	await act(async () => rerender({ doc: { ...open, payload: { id: 43, status: 'completed' } } }));
 	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it.each([
+	['pending', true],
+	['processing', false],
+])(
+	'a local fallback at pending auto-prints only for a gateway settling at %s (%s)',
+	async (settled, prints) => {
+		mockServerData = false;
+		mockGateway = { settled_order_status: settled };
+		const open = { uuid: 'p', payload: { id: 44, status: 'pos-open', payment_method: 'bacs' } };
+		const { result, rerender } = renderHook(
+			({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }),
+			{ initialProps: { doc: open } }
+		);
+		await act(async () => result.current.previewProps.handleLoad());
+		const pending = { ...open, payload: { ...open.payload, status: 'pending' } };
+		await act(async () => rerender({ doc: pending }));
+		expect(mockPrint).toHaveBeenCalledTimes(prints ? 1 : 0);
+	}
+);
+it('reports no printer mismatch for a session report the cloud printer hands to the dialog', () => {
+	const cloud = { id: 'cloud:1', connectionType: 'cloud', cloudProvider: 'star-cloudprnt' };
+	mockPrinter = { resolvedPrinter: cloud, mismatch: 'html-template-cloud-thermal-only' };
+	const report = renderHook(() =>
+		useReceiptDocument({ autoPrintAllowed: false, templateType: 'report', localReport: {} })
+	);
+	expect(report.result.current.mismatch).toBeNull();
+	// A sale receipt on the same printer goes to the cloud job: the warning stands.
+	const sale = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	expect(sale.result.current.mismatch).toBe('html-template-cloud-thermal-only');
 });
 it.each([false, true])(
 	'does not auto-print with allowed=%s and auto-print disabled',

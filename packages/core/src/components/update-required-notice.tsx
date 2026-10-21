@@ -40,7 +40,7 @@ export function UpdateRequiredNotice({ onRetry, align = 'center', testID, childr
 	// Web: a reload picks up the updated bundle and clears the in-memory latch.
 	const showReload = Platform.isWeb;
 	const showRetry = !showReload && onRetry !== undefined;
-	const hasActions = showReload || showRetry || React.Children.count(children) > 0;
+	const hasActions = showReload || showRetry || React.Children.toArray(children).length > 0;
 
 	return (
 		<VStack testID={testID} className={centered ? 'max-w-md items-center' : undefined}>

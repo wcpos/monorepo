@@ -15,11 +15,13 @@ import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { printNeedsLoadedPreview } from './utils/print-needs-loaded-preview';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
 import { classifyPrintFailure, reportPrintFailure } from '../hooks/use-print/print-failure';
+import { usePaymentGateways } from '../hooks/use-payment-gateways';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
+import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
@@ -184,12 +186,15 @@ export function useReceiptDocument({
 	const sessionReport = !!localReport || templateType === 'closure';
 	const reportSystemDialog =
 		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
-	const printerProfile =
-		useSystemDialog || reportSystemDialog
-			? undefined
-			: resolvedPrinter
-				? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
-				: undefined;
+	const printerProfile = React.useMemo(
+		() =>
+			useSystemDialog || reportSystemDialog
+				? undefined
+				: resolvedPrinter
+					? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
+					: undefined,
+		[useSystemDialog, reportSystemDialog, resolvedPrinter, sessionReport]
+	);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
@@ -393,9 +398,14 @@ export function useReceiptDocument({
 	// then fails (or the deadline passes), the only data is built from the local order, still
 	// pos-open: printing it would hand the customer an "open / still payable" receipt and
 	// spend the single shot. So the auto-print waits for the server's receipt or for the local
-	// order to settle; the manual Print button is not gated.
-	// A missing status is not a settled order either: fail closed and wait for the server.
-	const localOrderSettled = Boolean(orderData?.status) && orderData?.status !== 'pos-open';
+	// order to settle, by the same rule the pay window uses (the gateway's stored POS order
+	// status, so a gateway that settles at `pending` counts); the manual Print button is not
+	// gated. A missing status is not a settled order either: fail closed and wait for the server.
+	const paymentMethod = orderData?.payment_method || null;
+	const { gateway } = usePaymentGateways(paymentMethod, autoPrintAllowed && !!paymentMethod);
+	const localStatus = orderData?.status;
+	const localOrderSettled =
+		!!localStatus && isSettledOrderStatus(localStatus, gateway?.settled_order_status);
 	const attemptAutoPrint = React.useCallback(() => {
 		const frameLoaded = iframeLoadedRef.current.key === frameKey && iframeLoadedRef.current.loaded;
 		if (
@@ -472,7 +482,8 @@ export function useReceiptDocument({
 		printerSelection,
 		setPrinterSelection,
 		resolvedPrinter,
-		mismatch,
+		// A session report on an order-based cloud printer prints through the dialog instead.
+		mismatch: reportSystemDialog ? null : mismatch,
 		print,
 		printAndReport,
 		isPrinting,
