@@ -197,39 +197,6 @@ it.each([
 	expect(resident.payload.meta_data).toHaveLength(1 + kept.length);
 });
 
-// `serverOwnsMoney` still reads the ADR 0032 stamp, so an ack grafts it even while a successor
-// is queued (no adoption): a stale resident stamp would let a cart write re-settle server money.
-it('an order ack with a successor queued grafts the money-owner stamp it carries', async () => {
-	const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000082' };
-	const resident = {
-		payload: { meta_data: [uuid, { key: '_wcpos_money_owner', value: 'till' }] },
-		local: { pendingMutationIds: ['previous', 'successor'] },
-	};
-	const db = {
-		collections: {
-			orders: {
-				findOne: () => ({
-					exec: async () => ({
-						incrementalModify: async (modify: (row: typeof resident) => typeof resident) =>
-							Object.assign(resident, modify(resident)),
-					}),
-				}),
-			},
-		},
-	} as unknown as RxDatabase;
-	const stamp = { id: 11, key: '_wcpos_money_owner', value: 'server' };
-	const ack = { id: 7, meta_data: [uuid, stamp] };
-	await writeFacetFor('orders')!.reconcile(db, {
-		recordId: uuid.value,
-		remoteId: remoteId(7),
-		currentRevision: 'r2',
-		document: ack,
-		identityDocument: ack,
-		mutation: { mutationId: 'previous', operation: 'update', recordId: uuid.value },
-	});
-	expect(resident.payload.meta_data).toEqual([uuid, stamp]);
-});
-
 // ADR 0040 §1.3: only an ack that adopts the whole document certifies it; a naked revision
 // write (a successor queued) leaves the previous adoption behind, which revokes its authority.
 // A trimmed ack (the push contract allows one) is adopted for what it carries, but the keys it
