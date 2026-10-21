@@ -1,4 +1,4 @@
-import { fromMinor, type PaymentRow, type PaymentStatus, toMinor } from '@wcpos/order-math';
+import { derive, fromMinor, type PaymentRow, type PaymentStatus, toMinor } from '@wcpos/order-math';
 import { formatMoney } from '@wcpos/printer/encoder/format-money';
 
 export interface LedgerPayment {
@@ -38,10 +38,12 @@ export function buildLedger(
 	methodTitles: ReadonlyMap<string, string>,
 	dp: number
 ): DisplayLedger {
-	const approved = rows.filter(({ status }) => status === 'captured' || status === 'authorized');
-	const paidMinor = approved.reduce((sum, payment) => sum + toMinor(payment.amount, dp), 0);
+	// ADR 0040 D6: the same paid and signed balance as `derive()`; an authorization is a hold.
+	const approved = rows.filter(({ status }) => status === 'captured');
+	const view = derive(total, rows, [], { dp });
+	const paidMinor = toMinor(view.paid, dp);
 	const changeMinor = approved.reduce((sum, payment) => sum + toMinor(payment.change, dp), 0);
-	const dueMinor = Math.max(toMinor(total, dp) - paidMinor, 0);
+	const dueMinor = toMinor(view.balance, dp);
 	const paid = Number(fromMinor(paidMinor, dp));
 	const change = Number(fromMinor(changeMinor, dp));
 	const due = Number(fromMinor(dueMinor, dp));
@@ -86,9 +88,7 @@ export function derivePaymentEvent(
 	declinedMessage?: string
 ): PaymentEvent | null {
 	if (prevOrderStatus !== 'completed' && orderStatus === 'completed') {
-		const leg = ledger.payments.findLast(
-			({ status }) => status === 'captured' || status === 'authorized'
-		);
+		const leg = ledger.payments.findLast(({ status }) => status === 'captured');
 		return { state: 'complete', ...(leg ? { leg } : {}) };
 	}
 	const previous = new Map(prevRows.map((row) => [row.id, row]));
@@ -96,7 +96,7 @@ export function derivePaymentEvent(
 	if (changed.length === 0) return null;
 	const row = changed.at(-1)!;
 	const leg = ledger.payments.find(({ id }) => id === row.id)!;
-	if (ledger.due_raw === 0 && (row.status === 'captured' || row.status === 'authorized')) {
+	if (ledger.due_raw === 0 && row.status === 'captured') {
 		return { state: 'complete', leg };
 	}
 	if (row.status === 'failed' || row.status === 'voided') {
@@ -106,6 +106,7 @@ export function derivePaymentEvent(
 			...(declinedMessage === undefined ? {} : { message: declinedMessage }),
 		};
 	}
+	// The reader approved the card: shown as approved, never as paid (ADR 0040 D6).
 	if (row.status === 'authorized' || row.status === 'captured') {
 		return { state: 'approved', leg };
 	}

@@ -63,6 +63,7 @@ export {
 	isCompletingStatus,
 	hasSaleProvenance,
 	hasSaleTime,
+	readCompletions,
 	saleProvenanceMeta,
 	SPLIT_META_KEY,
 	splitPlanMeta,

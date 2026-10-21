@@ -697,8 +697,9 @@ it.each([
 	}
 );
 
+// ADR 0040 D6: an authorization, recorded offline or not, is a hold and never paid.
 it.each([true, false])(
-	'settles offline authorization=%s after a tax reduction',
+	'does not settle on an authorization (offline=%s) after a tax reduction',
 	async (recorded_offline) => {
 		const rates = [{ id: 1, rate: '20', class: 'standard', shipping: true, priority: 1 }];
 		currentConfig = createCartConfig({ ...config, calcTaxes: true, rates, allRates: rates });
@@ -727,9 +728,10 @@ it.each([true, false])(
 			mockInputs = { ...mockInputs, rates: reduced };
 			view.rerender(<SettlementCoordinatorProvider />);
 			await flush();
-			expect(a.payload.status).toBe(recorded_offline ? 'completed' : 'pos-partial');
+			expect(a.payload.status).toBe('pos-partial');
+			// An offline authorization is not in flight, so the cart still reprices.
 			expect(a.payload.total).toBe(recorded_offline ? '11' : '12');
-			expect(commitAtBoundary).toHaveBeenCalledTimes(recorded_offline ? 1 : 0);
+			expect(commitAtBoundary).not.toHaveBeenCalled();
 		} finally {
 			view.unmount();
 		}

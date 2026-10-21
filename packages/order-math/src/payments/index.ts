@@ -10,6 +10,7 @@ export {
 	hasSaleTime,
 	withSaleProvenance,
 	withMetaReplaced,
+	readCompletions,
 } from './provenance';
 export { derive, isCompletingStatus } from './derive';
 export {
