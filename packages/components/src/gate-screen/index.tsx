@@ -54,7 +54,7 @@ export function GateScreen({
 	return (
 		<ScrollView
 			className="bg-background flex-1"
-			contentContainerClassName="grow items-center justify-center p-2"
+			contentContainerClassName="grow items-center justify-center p-4"
 			keyboardShouldPersistTaps="handled"
 		>
 			<VStack testID={testID} className="w-full items-center gap-4">

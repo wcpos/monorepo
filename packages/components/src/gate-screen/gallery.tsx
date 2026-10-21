@@ -38,7 +38,7 @@ const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 		icon: 'help',
 		title: "This screen doesn't exist.",
 		description: 'The address may be out of date.',
-		primary: { label: 'Go to the register', onPress: noop },
+		primary: { label: 'Back to the start', onPress: noop },
 	},
 ];
 // A gate owns the whole screen (`flex-1`), so each cell gives it a screen-sized stage.

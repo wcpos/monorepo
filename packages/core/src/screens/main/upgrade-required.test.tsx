@@ -11,8 +11,15 @@ jest.mock('@wcpos/components/button', () => {
 	const { Pressable, Text } = jest.requireActual('react-native');
 	return { Button: Pressable, ButtonText: Text };
 });
-// The docs link's system-browser hand-off (expo-linking) is outside this test; the gate has no docs.
-jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
+// The docs link's system-browser hand-off (expo-linking) is outside this test.
+jest.mock('@wcpos/components/docs-link', () => {
+	const { Text } = jest.requireActual('react-native');
+	return {
+		DocsLink: ({ testID, href, code }: { testID?: string; href: string; code?: string }) => (
+			<Text testID={testID}>{`${href} ${code}`}</Text>
+		),
+	};
+});
 // SVG runtimes (the mark and the glyph) are outside this composition test.
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/logo', () => ({ Logo: () => null }));
@@ -24,7 +31,7 @@ jest.mock('../../contexts/translations', () => {
 });
 
 describe('UpgradeRequired', () => {
-	it('is the gate screen naming the plugin, with logout as its only action', () => {
+	it('is the gate screen naming the plugin, with logout as its only action and the AUTH331 docs link', () => {
 		render(<UpgradeRequired />);
 
 		expect(screen.getByTestId('upgrade-required-screen')).toBeTruthy();
@@ -33,5 +40,8 @@ describe('UpgradeRequired', () => {
 		);
 		expect(screen.getByTestId('upgrade-required-logout')).toBeTruthy();
 		expect(screen.queryByTestId('upgrade-required-screen-primary')).toBeNull();
+		expect(screen.getByTestId('upgrade-required-docs-link-AUTH331').textContent).toBe(
+			'https://docs.wcpos.com/error-codes/AUTH331 AUTH331'
+		);
 	});
 });
