@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, type Observable, Subject } from 'rxjs';
 
 import type { PrinterProfile, TemplateInfo } from '@wcpos/printer';
 
@@ -23,8 +23,9 @@ jest.mock('../../settings/printer/use-available-printer-profiles', () => ({
 // One stable storeDB: the hook memoises its overrides stream on it, and a fresh object per
 // render would resubscribe every render.
 const overrides$ = new BehaviorSubject<unknown[]>([]);
+let overrideStream: Observable<unknown[]> = overrides$;
 const storeDB = {
-	collections: { template_printer_overrides: { find: () => ({ $: overrides$ }) } },
+	collections: { template_printer_overrides: { find: () => ({ $: overrideStream }) } },
 };
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB }),
@@ -61,6 +62,21 @@ describe('useResolvedPrinter mismatch', () => {
 		expect(result.current.isResolving).toBe(false);
 		expect(result.current.resolvedPrinter?.id).toBe('p1');
 		expect(result.current.mismatch).toBeNull();
+	});
+
+	it('gives no verdict while the overrides stream has not emitted, even with no printers', () => {
+		// Printers loaded and empty would read as "will print its preview"; the overrides
+		// are the other half of routing and must have answered too.
+		overrideStream = new Subject<unknown[]>();
+		try {
+			mockAvailable.mockReturnValue(none);
+			const { result } = renderHook(() => useResolvedPrinter({ template: thermalTemplate }));
+
+			expect(result.current.isResolving).toBe(true);
+			expect(result.current.mismatch).toBeNull();
+		} finally {
+			overrideStream = overrides$;
+		}
 	});
 
 	it('warns once loading is done and no raw printer matched the thermal template', () => {
