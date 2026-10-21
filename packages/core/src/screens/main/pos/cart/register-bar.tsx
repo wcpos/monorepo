@@ -64,6 +64,7 @@ function RegisterBarContent({
 		registerCount: binding.registers.length,
 		storeName,
 		bindingStatus: binding.status,
+		directoryFailed: binding.failed,
 		online,
 		sessionsOn,
 		sessionStatus: session?.status,

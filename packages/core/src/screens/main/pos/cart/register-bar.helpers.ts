@@ -4,6 +4,7 @@ export function describeRegisterBar({
 	storeName,
 	bindingStatus,
 	online,
+	directoryFailed = false,
 	sessionsOn = false,
 	sessionStatus = null,
 	overdue = false,
@@ -14,6 +15,7 @@ export function describeRegisterBar({
 	storeName: string;
 	bindingStatus: 'bound' | 'choose' | 'none' | 'unknown';
 	online: boolean;
+	directoryFailed?: boolean;
 	sessionsOn?: boolean;
 	sessionStatus?: string | null;
 	overdue?: boolean;
@@ -24,16 +26,18 @@ export function describeRegisterBar({
 		pill:
 			bindingStatus === 'choose'
 				? ('register.choose_register' as const)
-				: !online
-					? ('register.offline' as const)
-					: sessionStatus === 'counting' && !approvalRequired
-						? ('register.counting' as const)
-						: approvalRequired
-							? ('register.approval_needed' as const)
-							: sessionStatus === 'open' && overdue
-								? ('register.overdue' as const)
-								: sessionsOn && !sessionStatus
-									? ('register.closed' as const)
-									: null,
+				: bindingStatus === 'none'
+					? ('register.no_register' as const)
+					: !online || directoryFailed
+						? ('register.offline' as const)
+						: sessionStatus === 'counting' && !approvalRequired
+							? ('register.counting' as const)
+							: approvalRequired
+								? ('register.approval_needed' as const)
+								: sessionStatus === 'open' && overdue
+									? ('register.overdue' as const)
+									: sessionsOn && !sessionStatus
+										? ('register.closed' as const)
+										: null,
 	};
 }

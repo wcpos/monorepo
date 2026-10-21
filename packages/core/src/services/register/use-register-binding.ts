@@ -139,6 +139,56 @@ async function adoptFromServer(
 	}
 }
 
+async function syncBinding(
+	entry: Directory,
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	userDB: Parameters<typeof adoptCounters>[0],
+	siteUuid: string,
+	storeId: number | undefined,
+	online: boolean
+): Promise<void> {
+	const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, siteUuid, id);
+	const bound = await readBoundRegister(userDB, siteUuid, storeId);
+	publish(entry, {
+		status: bound ? 'bound' : 'unknown',
+		registerId: bound?.id ?? null,
+		registerName: bound?.name ?? null,
+	});
+	if (!online) return;
+	await loadDirectory(entry, http, storeId);
+	if (!entry.loaded) return;
+	const registers = entry.value.registers;
+	if (bound && registers.some(({ id }) => id === bound.id)) {
+		await adoptServerCounters(bound.id);
+		return;
+	}
+	if (registers.length === 1) {
+		await adoptServerCounters(registers[0].id);
+		await bindRegister(userDB, siteUuid, registers[0], storeId);
+		recordRegisterFact({
+			kind: 'binding-changed',
+			source: 'automatic',
+			registerId: registers[0].id,
+			previousRegisterId: bound?.id ?? null,
+		});
+		publish(entry, {
+			status: 'bound',
+			registerId: registers[0].id,
+			registerName: registers[0].name,
+		});
+	} else {
+		if (bound) {
+			await unbindRegister(userDB, siteUuid, storeId);
+			recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
+		}
+		publish(entry, {
+			status: registers.length ? 'choose' : 'none',
+			registerId: null,
+			registerName: null,
+		});
+	}
+}
+
 export function useRegisterBindingSession(): void {
 	const { userDB, site, store } = useStoreSession();
 	const http = useRestHttpClient();
@@ -146,50 +196,8 @@ export function useRegisterBindingSession(): void {
 	const entry = directory(site.uuid!, store.id);
 	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
 	React.useEffect(() => {
-		const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, site.uuid!, id);
-		const load = async () => {
-			const bound = await readBoundRegister(userDB, site.uuid!, store.id);
-			publish(entry, {
-				status: bound ? 'bound' : 'unknown',
-				registerId: bound?.id ?? null,
-				registerName: bound?.name ?? null,
-			});
-			if (!online) return;
-			await loadDirectory(entry, http, store.id);
-			if (!entry.loaded) return;
-			const registers = entry.value.registers;
-			if (bound && registers.some(({ id }) => id === bound.id)) {
-				await adoptServerCounters(bound.id);
-				return;
-			}
-			if (registers.length === 1) {
-				await adoptServerCounters(registers[0].id);
-				await bindRegister(userDB, site.uuid!, registers[0], store.id);
-				recordRegisterFact({
-					kind: 'binding-changed',
-					source: 'automatic',
-					registerId: registers[0].id,
-					previousRegisterId: bound?.id ?? null,
-				});
-				publish(entry, {
-					status: 'bound',
-					registerId: registers[0].id,
-					registerName: registers[0].name,
-				});
-			} else {
-				if (bound) {
-					await unbindRegister(userDB, site.uuid!, store.id);
-					recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
-				}
-				publish(entry, {
-					status: registers.length ? 'choose' : 'none',
-					registerId: null,
-					registerName: null,
-				});
-			}
-		};
 		// A failed list request leaves the pointer/status unchanged; no retries.
-		void load().catch(() => {});
+		void syncBinding(entry, http, userDB, site.uuid!, store.id, online).catch(() => {});
 	}, [entry, http, online, site.uuid, store.id, userDB]);
 }
 
@@ -220,6 +228,7 @@ export function useRegisterDirectory(storeId: number | undefined) {
 export function useRegisterBinding() {
 	const { userDB, site, store } = useStoreSession();
 	const actor = useRegisterActor();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const http = useRestHttpClient();
 	const value = useRegisterDirectory(store.id);
 	const entry = directory(site.uuid!, store.id);
@@ -244,5 +253,11 @@ export function useRegisterBinding() {
 		},
 		[actor, entry, http, site.uuid, store.id, userDB]
 	);
-	return { ...value, bind };
+	const retry = React.useCallback(() => {
+		const entry = directory(site.uuid!, store.id);
+		entry.request = undefined;
+		entry.loaded = false;
+		return syncBinding(entry, http, userDB, site.uuid!, store.id, online).catch(() => {});
+	}, [http, online, site.uuid, store.id, userDB]);
+	return { ...value, bind, retry };
 }

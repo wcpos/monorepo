@@ -350,3 +350,20 @@ it('reloads the directory on remount after a rejected request', async () => {
 	expect(second.result.current.failed).toBe(false);
 	expect(mockHttp.get).toHaveBeenCalledTimes(2);
 });
+
+it('retries an empty directory and binds the newly available register', async () => {
+	mockHttp.get
+		.mockResolvedValueOnce({ data: [] })
+		.mockResolvedValueOnce({ data: [rows[0]] })
+		.mockResolvedValueOnce({ data: rows[0] });
+	const view = mount();
+	await waitFor(() => expect(view.result.current.status).toBe('none'));
+	await act(() => view.result.current.retry());
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toEqual([
+		['registers', { params: { store_id: 2 } }],
+		['registers', { params: { store_id: 2 } }],
+	]);
+	expect(view.result.current.status).toBe('bound');
+	expect(view.result.current.registerId).toBe('a');
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
+});

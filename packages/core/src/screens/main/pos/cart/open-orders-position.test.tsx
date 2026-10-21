@@ -15,10 +15,15 @@ import {
 let mockPosition = 'bottom';
 let mockIsNew = false;
 let mockStage = 'cart';
+let mockBindingStatus = 'bound';
+let mockDirectoryFailed = false;
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
 jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+jest.mock('./register-gate-card', () => ({
+	RegisterGateCard: () => null,
+}));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,
@@ -26,7 +31,11 @@ jest.mock('./open-register-card', () => ({
 jest.mock('./register-count', () => ({ RegisterCount: () => null }));
 jest.mock('./closure-sheet', () => ({ ClosureSheet: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ status: 'bound', registers: [] }),
+	useRegisterBinding: () => ({
+		status: mockBindingStatus,
+		failed: mockDirectoryFailed,
+		registers: [],
+	}),
 }));
 let mockSession: { session: unknown; sessionsOn: boolean; loaded?: boolean } = {
 	session: null,
@@ -243,5 +252,26 @@ it('registers the cart surface only while the column shows the cart (roadmap#428
 		expect(hasSurface('cart')).toBe(false);
 	} finally {
 		mockSession = { session: null, sessionsOn: false };
+	}
+});
+
+it.each([
+	['none', false],
+	['unknown', true],
+])('keeps open-order tabs but hides cart content and commands at the %s gate', (status, failed) => {
+	mockBindingStatus = status;
+	mockDirectoryFailed = failed;
+	mockStage = 'cart';
+	mockIsNew = false;
+	try {
+		render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('open-orders')).toBeTruthy();
+		expect(screen.queryByTestId('cart-header')).toBeNull();
+		expect(screen.queryByTestId('cart-table')).toBeNull();
+		expect(screen.queryByTestId('checkout-button')).toBeNull();
+		expect(hasSurface('cart')).toBe(false);
+	} finally {
+		mockBindingStatus = 'bound';
+		mockDirectoryFailed = false;
 	}
 });

@@ -89,6 +89,9 @@ jest.mock('observable-hooks', () => ({
 	useObservableRef: (value: unknown) => [{ current: value }, of(value)],
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// Notice imports native SVG and external-link runtimes; this band has neither actions nor docs.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
