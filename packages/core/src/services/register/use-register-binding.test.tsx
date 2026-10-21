@@ -366,8 +366,8 @@ it('retries an empty directory and binds the newly available register', async ()
 	act(() => {
 		retried = view.result.current.retry();
 	});
-	// While the second request is in flight the gate stays: `retrying` holds it up.
-	await waitFor(() => expect(view.result.current.retrying).toBe(true));
+	// While the second request is in flight the gate stays: `retrying` carries the retried state.
+	await waitFor(() => expect(view.result.current.retrying).toBe('none'));
 	await act(async () => {
 		answer({ data: [rows[0]] });
 		await retried;
@@ -401,7 +401,7 @@ it('retries a failed directory read and binds once for a double tap', async () =
 		second = view.result.current.retry();
 	});
 	expect(second).toBe(first);
-	await waitFor(() => expect(view.result.current.retrying).toBe(true));
+	await waitFor(() => expect(view.result.current.retrying).toBe('failed'));
 	await act(async () => {
 		answer({ data: [rows[0]] });
 		await first;

@@ -115,8 +115,8 @@ function CartColumn({
 	// Open register card or the count instead, the tabs go with it (Paul, 2026-09-29).
 	// No register answered for this store, or the directory could not be read while unbound:
 	// the column is the gate card (board 2A, 2026-10-21). The open-order tabs stay: open carts are allowed.
-	const gateShown =
-		bindingStatus === 'none' || (bindingStatus === 'unknown' && (failed || retrying));
+	const gateFailed = (bindingStatus === 'unknown' && failed) || retrying === 'failed';
+	const gateShown = bindingStatus === 'none' || retrying === 'none' || gateFailed;
 	const cartShown =
 		!gateShown &&
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
@@ -190,7 +190,7 @@ function CartColumn({
 			>
 				<ErrorBoundary>
 					{gateShown ? (
-						<RegisterGateCard failed={bindingStatus === 'unknown' && failed} retry={retry} />
+						<RegisterGateCard failed={gateFailed} retry={retry} />
 					) : bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
 						<RegisterPicker
 							onBound={() => {

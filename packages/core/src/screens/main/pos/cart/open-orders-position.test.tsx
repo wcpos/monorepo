@@ -17,6 +17,7 @@ let mockIsNew = false;
 let mockStage = 'cart';
 let mockBindingStatus = 'bound';
 let mockDirectoryFailed = false;
+let mockRetrying: false | 'none' | 'failed' = false;
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
@@ -36,6 +37,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({
 		status: mockBindingStatus,
 		failed: mockDirectoryFailed,
+		retrying: mockRetrying,
 		registers: [],
 	}),
 }));
@@ -258,25 +260,33 @@ it('registers the cart surface only while the column shows the cart (roadmap#428
 });
 
 it.each([
-	['none', false],
-	['unknown', true],
-])('keeps open-order tabs but hides cart content and commands at the %s gate', (status, failed) => {
-	mockBindingStatus = status;
-	mockDirectoryFailed = failed;
-	mockStage = 'cart';
-	mockIsNew = false;
-	try {
-		render(<OpenOrders isColumn />);
-		expect(screen.getByTestId('open-orders')).toBeTruthy();
-		expect(screen.getByTestId('register-gate-card').getAttribute('data-failed')).toBe(
-			String(failed)
-		);
-		expect(screen.queryByTestId('cart-header')).toBeNull();
-		expect(screen.queryByTestId('cart-table')).toBeNull();
-		expect(screen.queryByTestId('checkout-button')).toBeNull();
-		expect(hasSurface('cart')).toBe(false);
-	} finally {
-		mockBindingStatus = 'bound';
-		mockDirectoryFailed = false;
+	['none', false, false, false],
+	['unknown', true, false, true],
+	// Try again in flight: the directory reads `unknown` again, the gate keeps its state.
+	['unknown', false, 'none', false],
+	['unknown', false, 'failed', true],
+] as const)(
+	'keeps open-order tabs but hides cart content and commands at the %s gate (failed %s, retrying %s)',
+	(status, failed, retrying, cardFailed) => {
+		mockBindingStatus = status;
+		mockDirectoryFailed = failed;
+		mockRetrying = retrying;
+		mockStage = 'cart';
+		mockIsNew = false;
+		try {
+			render(<OpenOrders isColumn />);
+			expect(screen.getByTestId('open-orders')).toBeTruthy();
+			expect(screen.getByTestId('register-gate-card').getAttribute('data-failed')).toBe(
+				String(cardFailed)
+			);
+			expect(screen.queryByTestId('cart-header')).toBeNull();
+			expect(screen.queryByTestId('cart-table')).toBeNull();
+			expect(screen.queryByTestId('checkout-button')).toBeNull();
+			expect(hasSurface('cart')).toBe(false);
+		} finally {
+			mockBindingStatus = 'bound';
+			mockDirectoryFailed = false;
+			mockRetrying = false;
+		}
 	}
-});
+);

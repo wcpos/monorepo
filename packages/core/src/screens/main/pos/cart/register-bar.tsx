@@ -63,10 +63,12 @@ function RegisterBarContent({
 		registerName: binding.registerName,
 		registerCount: binding.registers.length,
 		storeName,
-		bindingStatus: binding.status,
+		// While Try again runs the directory reads `unknown`; the pill keeps the state being retried.
+		bindingStatus: binding.retrying === 'none' ? 'none' : binding.status,
 		// Only an unbound till reads Offline for a failed directory read (the gate's twin); a bound
 		// till keeps its session pills, or one 5xx at boot would hide Overdue all day.
-		directoryFailed: binding.status === 'unknown' && binding.failed,
+		directoryFailed:
+			(binding.status === 'unknown' && binding.failed) || binding.retrying === 'failed',
 		online,
 		sessionsOn,
 		sessionStatus: session?.status,

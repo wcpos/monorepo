@@ -33,8 +33,11 @@ type Binding = {
 	loaded: boolean;
 	/** The last list request failed; nothing more will arrive until the next attempt. */
 	failed: boolean;
-	/** A `retry()` is in flight: the gate stays up until the directory answers again. */
-	retrying: boolean;
+	/**
+	 * A `retry()` is in flight, carrying the state it retries: the sync republishes `unknown` and
+	 * clears `failed` before the answer, so the gate card and the pill read this instead.
+	 */
+	retrying: false | 'none' | 'failed';
 };
 type Directory = {
 	value: Binding;
@@ -268,7 +271,7 @@ export function useRegisterBinding() {
 		current.loaded = false;
 		// The sync republishes `unknown` and clears `failed` before the request answers; the
 		// flag keeps the gate card up for that whole stretch instead of flashing the cart.
-		publish(current, { retrying: true });
+		publish(current, { retrying: current.value.failed ? 'failed' : 'none' });
 		current.retry = syncBinding(current, http, userDB, site.uuid!, store.id, online)
 			.catch(() => {})
 			.finally(() => {
