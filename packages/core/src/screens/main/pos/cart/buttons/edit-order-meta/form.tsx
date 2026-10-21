@@ -164,9 +164,14 @@ export function EditOrderMetaForm({
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, transaction_id: _transaction, ...fields } = pending;
+		const { cashier_id, transaction_id: _transaction, status, ...fields } = pending;
+		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
+		// out. A cashier-only hand-off sends none, so a stale open copy cannot reopen a sale
+		// another till completed, and its rollback restores the cashier alone.
+		const statusChanged = status !== previous.status;
 		const patch = () => ({
 			...fields,
+			...(statusChanged ? { status } : {}),
 			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
@@ -183,7 +188,7 @@ export function EditOrderMetaForm({
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
 			if (
-				!(OPEN_ORDER_STATUSES as readonly string[]).includes(fields.status) ||
+				!(OPEN_ORDER_STATUSES as readonly string[]).includes(status) ||
 				cashier_id !== String(cashierID)
 			) {
 				setCurrentOrderID('');
@@ -191,7 +196,7 @@ export function EditOrderMetaForm({
 		} catch (error) {
 			if (patched) {
 				const reverted = await writeOrderFields(order, () => ({
-					status: previous.status,
+					...(statusChanged ? { status: previous.status } : {}),
 					meta_data: previous.meta_data ?? [],
 				}));
 				// The failed send may still land: a timed-out outcome is unknown and a queued

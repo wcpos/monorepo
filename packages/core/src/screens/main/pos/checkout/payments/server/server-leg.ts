@@ -1,4 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
+import { MoneyCommandError } from '@wcpos/query';
 import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
@@ -119,12 +120,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (timer !== null) deps.clearTimeout(timer);
 		timer = null;
 	};
-	// The row id of an intent answered by the lock (nothing ran) whose pending cancel then went
-	// out as the void. Once the leg is voided, that intent is retired from the journal: a later
-	// recovery or Try again must never re-send it and authorize a sale the cashier cancelled.
-	let cancelledLockedIntent: string | null = null;
+	// The row id of this leg's intent while the store has not answered it (a lock, a transport
+	// failure, a cancel that overtook it). If the leg then ends voided (its void answered `voided`
+	// or not found), that intent is retired from the journal: a later recovery or Try again must
+	// never re-send it and authorize a sale the cashier cancelled. A resumed leg's intent was
+	// answered before.
+	let unansweredIntent: string | null = input.resume ? null : input.row.id;
 	const finish = (outcome: ServerLegState['outcome']) => {
-		cancelledLockedIntent = null;
+		unansweredIntent = null;
 		clearTimer();
 		sequence++;
 		setState({ phase: 'final', outcome, capturing: false, releaseAvailable: false });
@@ -181,12 +184,12 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
 		const status = data.payment.status;
-		if (status === 'voided' && cancelledLockedIntent !== null) {
+		if (status === 'voided' && unansweredIntent !== null) {
 			// The retirement is awaited before the leg is final: a failed journal write keeps the
 			// leg live with its reason and the next status read retires again, so a voided leg never
 			// leaves a re-sendable intent behind.
 			try {
-				await deps.retire?.('intent', cancelledLockedIntent);
+				await deps.retire?.('intent', unansweredIntent);
 			} catch (error) {
 				if (!current(seq)) return false;
 				setState({
@@ -276,6 +279,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		intentInFlight = false;
+		// Answered: the poster settles the intent's journal entry with this answer.
+		if (route === 'intent') unansweredIntent = null;
 		if (!current(seq)) return;
 		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route))) return;
 		setState({
@@ -290,6 +295,25 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
+		// The poster refused the command before it left the till: the order changed since the
+		// cashier approved it, or its pre-flight failed. Nothing reached the store and the journal
+		// holds nothing; a retry would only re-create it under the stale approval. The leg ends
+		// here with the reason, and the cashier chooses again.
+		if (
+			error instanceof MoneyCommandError &&
+			(error.reason === 'order_changed' || error.reason === 'preflight_failed')
+		) {
+			pendingCancel = null;
+			unansweredIntent = null;
+			const reason = { code: error.reason, message: error.message };
+			event(error.reason, 'error');
+			await applyResponse(
+				{ payment: { ...state.row, status: 'failed' as const, failure_reason: error.reason } },
+				seq,
+				{ error: reason }
+			);
+			return;
+		}
 		const response = errorResponse(error);
 		const body = response?.data;
 		const code = body?.code;
@@ -319,6 +343,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			code === 'wcpos_payment_in_flight' &&
 			typeof body?.data?.payment_id === 'string'
 		) {
+			// A definitive answer (the poster settled this intent): the leg follows the live one.
+			unansweredIntent = null;
 			awaitingRejoinedStatus = true;
 			setState({
 				row: { ...state.row, id: body.data.payment_id },
@@ -342,12 +368,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
 			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
 			// intent was out wins: nothing ran, so the void goes out now instead.
-			if (route === 'intent') {
-				const intent = state.row.id;
-				if (pendingCancel !== null) cancelledLockedIntent = intent;
-				if (await voidAfterIntent()) return;
-				cancelledLockedIntent = null;
-			}
+			if (route === 'intent' && (await voidAfterIntent())) return;
 			if (route === 'status') setState({ capturing: false, phase: 'polling' });
 			else
 				setState(
@@ -419,6 +440,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// An intent the cashier already cancelled is not retried: the server may or may
 		// not hold the row, and the void answers that either way (200, or "not found").
 		if (route === 'intent' && (await voidAfterIntent())) return;
+		// An intent that keeps failing in transit is not retried past the leg's deadline: it is
+		// cancelled, as the status path cancels at the deadline (the void answers either way).
+		if (route === 'intent' && !state.cancelRequested && deps.now() >= state.deadlineAt) {
+			setState({ phase: 'creating', capturing: false });
+			await cancel('deadline');
+			return;
+		}
 		const count = state.consecutiveErrors + 1;
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).

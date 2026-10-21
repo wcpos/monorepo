@@ -426,3 +426,19 @@ it('shows transaction_id read-only and never writes it', async () => {
 	await confirm();
 	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
 });
+
+// Status is an intent, never an echo (ADR 0040): a hand-off that changes only the cashier pushes
+// no status, so a stale `pos-open` copy cannot reopen a sale another till completed, and its
+// rollback restores the cashier alone.
+it('a cashier-only hand-off writes and rolls back no status', async () => {
+	mockPush.mockRejectedValueOnce(new Error('offline'));
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(mockPatch).toHaveBeenCalledTimes(2);
+	const [[handOff], [rollback]] = mockPatch.mock.calls as [[{ data: object }], [{ data: object }]];
+	expect(handOff.data).not.toHaveProperty('status');
+	expect(rollback.data).not.toHaveProperty('status');
+	expect(rollback.data).toEqual({ meta_data: meta });
+});
