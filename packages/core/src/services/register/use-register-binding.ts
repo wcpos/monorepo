@@ -34,10 +34,14 @@ type Binding = {
 	loaded: boolean;
 	/** The last list request failed; nothing more will arrive until the next attempt. */
 	failed: boolean;
+	/** A `retry()` is in flight: the gate stays up until the directory answers again. */
+	retrying: boolean;
 };
 type Directory = {
 	value: Binding;
 	request?: Promise<void>;
+	/** The `retry()` in flight, so a second tap joins it instead of binding twice. */
+	retry?: Promise<void>;
 	loaded: boolean;
 	listeners: Set<() => void>;
 };
@@ -59,6 +63,7 @@ function directory(siteUuid: string, storeId: number | undefined): Directory {
 				registers: [],
 				loaded: false,
 				failed: false,
+				retrying: false,
 			},
 		});
 	}
@@ -254,10 +259,22 @@ export function useRegisterBinding() {
 		[actor, entry, http, site.uuid, store.id, userDB]
 	);
 	const retry = React.useCallback(() => {
-		const entry = directory(site.uuid!, store.id);
-		entry.request = undefined;
-		entry.loaded = false;
-		return syncBinding(entry, http, userDB, site.uuid!, store.id, online).catch(() => {});
+		// Looked up inside the callback: the React compiler refuses a mutation of a render-scope
+		// value, and the directory is the same module-level entry either way.
+		const current = directory(site.uuid!, store.id);
+		if (current.retry) return current.retry;
+		current.request = undefined;
+		current.loaded = false;
+		// The sync republishes `unknown` and clears `failed` before the request answers; the
+		// flag keeps the gate card up for that whole stretch instead of flashing the cart.
+		publish(current, { retrying: true });
+		current.retry = syncBinding(current, http, userDB, site.uuid!, store.id, online)
+			.catch(() => {})
+			.finally(() => {
+				current.retry = undefined;
+				publish(current, { retrying: false });
+			});
+		return current.retry;
 	}, [http, online, site.uuid, store.id, userDB]);
 	return { ...value, bind, retry };
 }

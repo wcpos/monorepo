@@ -352,13 +352,25 @@ it('reloads the directory on remount after a rejected request', async () => {
 });
 
 it('retries an empty directory and binds the newly available register', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
 	mockHttp.get
 		.mockResolvedValueOnce({ data: [] })
-		.mockResolvedValueOnce({ data: [rows[0]] })
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
 		.mockResolvedValueOnce({ data: rows[0] });
 	const view = mount();
 	await waitFor(() => expect(view.result.current.status).toBe('none'));
-	await act(() => view.result.current.retry());
+	expect(view.result.current.retrying).toBe(false);
+	let retried: Promise<void> = Promise.resolve();
+	act(() => {
+		retried = view.result.current.retry();
+	});
+	// While the second request is in flight the gate stays: `retrying` holds it up.
+	await waitFor(() => expect(view.result.current.retrying).toBe(true));
+	await act(async () => {
+		answer({ data: [rows[0]] });
+		await retried;
+	});
+	expect(view.result.current.retrying).toBe(false);
 	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toEqual([
 		['registers', { params: { store_id: 2 } }],
 		['registers', { params: { store_id: 2 } }],
@@ -366,4 +378,34 @@ it('retries an empty directory and binds the newly available register', async ()
 	expect(view.result.current.status).toBe('bound');
 	expect(view.result.current.registerId).toBe('a');
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
+});
+
+it('retries a failed directory read and binds once for a double tap', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
+	// Both mount-time reads (the directory hook's and the session hook's) fail, so the state settles.
+	mockHttp.get
+		.mockRejectedValueOnce(new Error('offline'))
+		.mockRejectedValueOnce(new Error('offline'))
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+		.mockResolvedValueOnce({ data: rows[0] });
+	const view = mount();
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(2));
+	await waitFor(() => expect(view.result.current.failed).toBe(true));
+	expect(view.result.current.status).toBe('unknown');
+	let first: Promise<void> = Promise.resolve();
+	let second: Promise<void> = Promise.resolve();
+	act(() => {
+		first = view.result.current.retry();
+		second = view.result.current.retry();
+	});
+	expect(second).toBe(first);
+	await waitFor(() => expect(view.result.current.retrying).toBe(true));
+	await act(async () => {
+		answer({ data: [rows[0]] });
+		await first;
+	});
+	expect(view.result.current.failed).toBe(false);
+	expect(view.result.current.status).toBe('bound');
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toHaveLength(3);
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers/a')).toHaveLength(1);
 });

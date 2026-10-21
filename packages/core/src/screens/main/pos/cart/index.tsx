@@ -70,7 +70,7 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
-	const { status: bindingStatus, failed } = useRegisterBinding();
+	const { status: bindingStatus, failed, retrying } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
@@ -115,7 +115,8 @@ function CartColumn({
 	// Open register card or the count instead, the tabs go with it (Paul, 2026-09-29).
 	// No register answered for this store, or the directory could not be read while unbound:
 	// the column is the gate card (board 2A, 2026-10-21). The open-order tabs stay: open carts are allowed.
-	const gateShown = bindingStatus === 'none' || (bindingStatus === 'unknown' && failed);
+	const gateShown =
+		bindingStatus === 'none' || (bindingStatus === 'unknown' && (failed || retrying));
 	const cartShown =
 		!gateShown &&
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&

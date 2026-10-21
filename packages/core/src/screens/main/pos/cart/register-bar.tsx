@@ -64,7 +64,9 @@ function RegisterBarContent({
 		registerCount: binding.registers.length,
 		storeName,
 		bindingStatus: binding.status,
-		directoryFailed: binding.failed,
+		// Only an unbound till reads Offline for a failed directory read (the gate's twin); a bound
+		// till keeps its session pills, or one 5xx at boot would hide Overdue all day.
+		directoryFailed: binding.status === 'unknown' && binding.failed,
 		online,
 		sessionsOn,
 		sessionStatus: session?.status,

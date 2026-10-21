@@ -91,7 +91,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
 		store: { id: mockStoreId, price_num_decimals: 2 },
-		site: { uuid: 'site', home: 'https://shop.example', populateResource: () => ({}) },
+		site: { uuid: 'site', url: 'https://shop.example', populateResource: () => ({}) },
 		logout: mockLogout,
 	}),
 }));

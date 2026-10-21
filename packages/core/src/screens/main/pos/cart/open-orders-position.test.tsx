@@ -22,7 +22,9 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
 jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('./register-gate-card', () => ({
-	RegisterGateCard: () => null,
+	RegisterGateCard: ({ failed }: { failed: boolean }) => (
+		<div data-testid="register-gate-card" data-failed={String(failed)} />
+	),
 }));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
@@ -266,6 +268,9 @@ it.each([
 	try {
 		render(<OpenOrders isColumn />);
 		expect(screen.getByTestId('open-orders')).toBeTruthy();
+		expect(screen.getByTestId('register-gate-card').getAttribute('data-failed')).toBe(
+			String(failed)
+		);
 		expect(screen.queryByTestId('cart-header')).toBeNull();
 		expect(screen.queryByTestId('cart-table')).toBeNull();
 		expect(screen.queryByTestId('checkout-button')).toBeNull();

@@ -17,7 +17,9 @@ export function RegisterGateCard({ failed }: { failed: boolean }) {
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities) as
 		string[] | undefined;
 	const manager = !!capabilities?.includes('manage_woocommerce_pos');
-	const adminStores = `${String(site.home ?? '').replace(/\/+$/, '')}/wp-admin/edit.php?post_type=wcpos_store`;
+	// wp-admin lives under the WordPress install URL (`site.url`), which differs from `site.home`
+	// when WordPress sits in a subdirectory, as the settings' WooCommerce links already do.
+	const adminStores = `${String(site.url ?? '').replace(/\/+$/, '')}/wp-admin/edit.php?post_type=wcpos_store`;
 	return (
 		<EmptyState
 			kind="failed"

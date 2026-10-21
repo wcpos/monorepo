@@ -11,7 +11,7 @@ let mockCapabilities: string[] = [];
 const mockRetry = jest.fn(async () => undefined);
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
-		site: { home: 'https://shop.example///' },
+		site: { url: 'https://shop.example///' },
 		wpCredentials: { capabilities: mockCapabilities },
 	}),
 }));
