@@ -954,6 +954,25 @@ it('a command records its scope, and recovery and Try again re-send only the act
 	expect(await entries()).toEqual([expect.objectContaining({ id: 'their-close' })]);
 });
 
+// A replayed submit or cancel cannot carry the awaiting-customer stamp change its first answer
+// made; only the server document does. It settles once the post-answer refresh adopted it.
+it.each([
+	['submit', 'orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} }],
+	['cancel', 'orders/5/payment-methods/g/cancel', { attempt_id: 'a-1' }],
+])(
+	'a replayed %s stays journaled until the refresh adopts the server document',
+	async (_, url, body) => {
+		store.modes = ['lose'];
+		await expect(poster()(url, body)).rejects.toThrow('Network Error');
+		refreshWorks = false;
+		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+		expect(await entries()).toEqual([expect.objectContaining({ claimedBy: null })]);
+		refreshWorks = true;
+		expect(await restart()).toHaveLength(1);
+		expect(await entries()).toEqual([]);
+	}
+);
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });

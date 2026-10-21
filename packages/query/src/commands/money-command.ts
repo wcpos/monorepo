@@ -81,6 +81,8 @@ export type MoneyCommandPoster = Post & {
 	 * refusal since the last settle also earns the refresh, never an answer chain.
 	 */
 	settle(): Promise<void>;
+	/** Give up the answered entries' claims without settling them: they stay for a re-send. */
+	abandon(): Promise<void>;
 };
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
@@ -313,6 +315,20 @@ export async function retireSettledChains(
 	}
 }
 
+/** Whether the forced refresh adopts the order's whole document, stamped at or after `since`. */
+async function adoptedSince(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	since: number
+): Promise<boolean> {
+	const { order } = await readOrder(runtime, orderUuid);
+	if (!order.payload.id) return false;
+	const { order: after } = await readopt(runtime, storeDB, orderUuid, order.payload.id);
+	const adopted = after.sync?.adopted;
+	return !!adopted && adopted.revision === after.sync.revision && (adopted.at ?? 0) >= since;
+}
+
 /** The engine scope the till is in now: one cashier's orders. */
 async function activeScopeId(runtime: QueryRuntime): Promise<string | null> {
 	const scope = runtime.engine.active() ?? (await runtime.engine.whenActive());
@@ -353,7 +369,20 @@ export async function resendOpenCommands(
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
+		const since = Date.now();
 		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
+		// A replayed submit or cancel cannot carry the awaiting-customer stamp its first answer
+		// wrote or cleared (the stamp needs the press's destination and cashier); only the server
+		// document does. So it settles only once the refresh has adopted that document, and stays
+		// journaled otherwise: a resident with a gateway's `pending` status and no stamp would read
+		// as a settled sale.
+		if (
+			(entry.kind === 'submit' || entry.kind === 'cancel') &&
+			!(await adoptedSince(runtime, storeDB, orderUuid, since))
+		) {
+			await poster.abandon();
+			throw new Error('money_command_unconfirmed');
+		}
 		await poster.mirror({
 			payment: data.payment as PaymentRow | undefined,
 			order: data.order as OrderPaymentSummary | undefined,
@@ -557,5 +586,10 @@ export function moneyCommandPoster(input: {
 			await settle();
 		},
 		settle,
+		abandon: async () => {
+			const open = answered;
+			answered = [];
+			for (const { id } of open) await release(id);
+		},
 	});
 }
