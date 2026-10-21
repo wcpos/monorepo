@@ -85,6 +85,7 @@ import {
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
 import { createDemandFloodDetector } from './demand-flood-detector';
+import { withOrderReadopt } from './write-path/order-readopt';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
@@ -165,6 +166,9 @@ type EngineRequirementCommon = {
 	/** Re-fetch targeted records even when they are already resident. Used by
 	 * explicit refresh/re-anchor flows; ordinary requirements stay coverage-aware. */
 	forceRefresh?: boolean;
+	/** Orders only, with `forceRefresh`: adopt the fetched documents even under an equal stamp
+	 * (ADR 0040 §1.3's corrective refresh). */
+	readopt?: boolean;
 };
 
 export type RefundBrowseDimensions = {
@@ -1363,7 +1367,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						});
 						skippedActive = seedResult.skippedActive;
 						const ownedTaskIds = new Set(seedResult.taskIds);
-						const drainResult = await drainScheduler({ nowMs });
+						const drainResult = await withOrderReadopt(
+							database,
+							item.requirement.readopt ? remaining : [],
+							() => drainScheduler({ nowMs })
+						);
 						appliedRecordIds.push(
 							...drainResult.tasks
 								.filter((task) => ownedTaskIds.has(task.taskId) && task.kind === 'succeeded')

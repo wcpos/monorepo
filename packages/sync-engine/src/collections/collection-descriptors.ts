@@ -294,6 +294,25 @@ type AckDoc = {
 	remove(): Promise<unknown>;
 };
 
+/**
+ * What a whole order document carries (ADR 0040): `status`, the ledger and completions in
+ * `meta_data`, `date_paid` and `payment_method`, with `total` and `currency`. The push contract
+ * allows a trimmed acknowledgement (a bare `{ id }`), which says nothing about a key it omits, so
+ * only a whole document may replace the resident's server-owned meta wholesale.
+ */
+const WHOLE_ORDER_FIELDS = [
+	'total',
+	'currency',
+	'status',
+	'meta_data',
+	'date_paid',
+	'payment_method',
+] as const;
+
+function carriesWholeOrder(document: Record<string, unknown> | null | undefined): boolean {
+	return !!document && WHOLE_ORDER_FIELDS.every((field) => field in document);
+}
+
 function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
 	remoteIdField: CollectionWriteFacet['remoteIdField'];
@@ -393,6 +412,15 @@ function ackBookkeeping(options: {
 					sync: {
 						...sync,
 						revision: ack.currentRevision ?? sync.revision,
+						// Only an ack adopting the whole document certifies it (ADR 0040 §1.3): the orders
+						// adoption keeps the local value of every key a trimmed ack omits, so stamping one
+						// would certify the till's own money as the server's.
+						...(adopting &&
+						collection === 'orders' &&
+						ack.currentRevision &&
+						carriesWholeOrder(ack.document)
+							? { adopted: { revision: ack.currentRevision, at: Date.now() } }
+							: {}),
 						...(ack.mutation.operation === 'create' && createAckSource
 							? { source: createAckSource }
 							: {}),
