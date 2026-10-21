@@ -353,6 +353,53 @@ it('backs off and re-runs a recovery whose re-send failed, until one answers', a
 	}
 });
 
+// A command whose answers are all lost after the session's first recovery, while the till stays
+// online: the bridge sees it in the journal and schedules the recovery, so a sale whose tender a
+// pull has closed still gets its receipt and audit.
+it('schedules the recovery for a command journaled and left unanswered after the session started', async () => {
+	const realSetTimeout = global.setTimeout;
+	const delays: number[] = [];
+	const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
+		callback: () => void,
+		ms?: number
+	) => {
+		if ((ms ?? 0) >= 30_000) {
+			delays.push(ms!);
+			return realSetTimeout(callback, 0);
+		}
+		return realSetTimeout(callback, ms);
+	}) as never);
+	try {
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+		await drain();
+		expect(delays).toEqual([]);
+		// The tender's send lost its answer: sent, its claim given up.
+		await journal.claimRoute(
+			mockContext.storeDB,
+			{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
+			'tender',
+			{
+				orderUuid: 'order',
+				kind: 'close',
+				path: 'orders/42/close',
+				target: null,
+				id: 'close-1',
+				body: {},
+				approval: { total: '0.00', currency: 'USD' },
+				sentAt: null,
+				sentRevision: null,
+			}
+		);
+		await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1');
+		await journal.releaseClaim(mockContext.storeDB, 'order', 'close-1', 'tender');
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2));
+		expect(delays).toContain(30_000);
+	} finally {
+		timers.mockRestore();
+	}
+});
+
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));

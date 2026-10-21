@@ -295,6 +295,19 @@ export async function nextClaimExpiry(storeDB: StoreLocalDatabase, now = Date.no
 }
 
 /** The same read, live: the tender gates on a sent command until it settles. */
+/** Every journaled command, live: the store session schedules its recovery from it. */
+export function observeMoneyJournal(storeDB: StoreLocalDatabase) {
+	return storeDatabase(storeDB)
+		.getLocal$<Journal>(ID)
+		.pipe(
+			map((doc) =>
+				Object.values(doc?.toJSON(true).data.orders ?? {}).flatMap((order) =>
+					Object.values(order.entries)
+				)
+			)
+		);
+}
+
 export function observeOrderCommands(storeDB: StoreLocalDatabase, orderUuid: string) {
 	return storeDatabase(storeDB)
 		.getLocal$<Journal>(ID)

@@ -8,6 +8,7 @@ export {
 	journalCommand,
 	markSent,
 	nextClaimExpiry,
+	observeMoneyJournal,
 	observeOrderCommands,
 	claimHeld,
 	claimRoute,

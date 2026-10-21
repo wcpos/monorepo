@@ -12,8 +12,10 @@ import {
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 import {
+	claimHeld,
 	failCompletionAttempt,
 	nextClaimExpiry,
+	observeMoneyJournal,
 	pendingCompletions,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
@@ -82,6 +84,8 @@ export function SaleCompletionBridge(): null {
 		/** Schedule the re-run for the earliest live claim's lapse; `disarm` cancels it. */
 		arm: () => void;
 		disarm: () => void;
+		/** Watch the journal for commands left unanswered (see `observeMoneyJournal`). */
+		watch: () => void;
 	} | null>(null);
 
 	// A reconnect re-sends what the outage left unanswered, then finishes what it completed.
@@ -104,7 +108,8 @@ export function SaleCompletionBridge(): null {
 			// Context changes and StrictMode reconnect the same run, never start another.
 			previous.ctx = ctx;
 			previous.stopped = false;
-			// The cleanup that ran before this disarmed the lapse re-run: arm it again.
+			// The cleanup that ran before this disarmed the timers and the journal watch: restore them.
+			previous.watch();
 			if (onlineRef.current) previous.arm();
 			return () => {
 				previous.stopped = true;
@@ -120,6 +125,7 @@ export function SaleCompletionBridge(): null {
 			reconnect: () => {},
 			arm: () => {},
 			disarm: () => {},
+			watch: () => {},
 		};
 		session.current = current;
 		/**
@@ -190,11 +196,15 @@ export function SaleCompletionBridge(): null {
 		let retry: ReturnType<typeof setTimeout> | undefined;
 		let retries = 0;
 		let retryPending = false;
+		// Declared here so `disarm` can end it; `watch` (below) starts it.
+		let journalWatch: { unsubscribe: () => void } | undefined;
 		const disarm = () => {
 			if (lapse !== undefined) clearTimeout(lapse);
 			lapse = undefined;
 			if (retry !== undefined) clearTimeout(retry);
 			retry = undefined;
+			journalWatch?.unsubscribe();
+			journalWatch = undefined;
 		};
 		const armRetry = () => {
 			if (retry !== undefined) clearTimeout(retry);
@@ -374,6 +384,32 @@ export function SaleCompletionBridge(): null {
 				const answered = await recover();
 				if (answered.size > 0 && !current.stopped) await replay(answered);
 			});
+		// A command whose answers are lost after this session's first recovery, while the till
+		// stays online: no reconnect will come for it, and a pull may close its tender. Watching
+		// the journal schedules its recovery: a sent command nobody holds arms the first backoff
+		// step, a live claim its lapse. Another scope's command waits for that scope.
+		const watch = () => {
+			journalWatch ??= observeMoneyJournal(storeDB).subscribe({
+				next: (entries) => {
+					if (current.stopped) return;
+					const scope = manager.engine?.active()?.scopeId ?? null;
+					const unanswered = entries.some(
+						(entry) =>
+							entry.sentAt !== null &&
+							(!entry.scope || entry.scope === scope) &&
+							!claimHeld(entry, null)
+					);
+					if (unanswered && retry === undefined) {
+						retryPending = true;
+						armRetry();
+					}
+					void recoverWhenClaimsLapse();
+				},
+				error: () => undefined,
+			});
+		};
+		current.watch = watch;
+		watch();
 		return () => {
 			current.stopped = true;
 			disarm();
