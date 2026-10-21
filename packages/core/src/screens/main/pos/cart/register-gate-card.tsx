@@ -5,14 +5,25 @@ import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 
 const REGISTER_DOCS_URL = 'https://docs.wcpos.com/stores/registers-and-devices';
 
-/** The cart column while this store has no register, or its register list could not be read. */
-export function RegisterGateCard({ failed }: { failed: boolean }) {
+/**
+ * The cart column while this store has no register, or its register list could not be read.
+ *
+ * `retry` comes from the column's own binding hook: the card must not read the directory itself,
+ * because a reader mounting while the last read failed starts another read, which clears
+ * `failed`, unmounts the card, and remounts it on the next failure (a request storm measured at
+ * 2,500 reads in the first capture run).
+ */
+export function RegisterGateCard({
+	failed,
+	retry,
+}: {
+	failed: boolean;
+	retry: () => Promise<void>;
+}) {
 	const t = useT();
-	const { retry } = useRegisterBinding();
 	const { site, wpCredentials } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities) as
 		string[] | undefined;

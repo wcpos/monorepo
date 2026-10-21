@@ -18,9 +18,6 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ retry: mockRetry }),
-}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
@@ -52,7 +49,7 @@ beforeEach(() => {
 });
 
 it('shows the no-register title and register guide for a cashier', () => {
-	render(<RegisterGateCard failed={false} />);
+	render(<RegisterGateCard failed={false} retry={mockRetry} />);
 	expect(screen.getByTestId('register-gate-card-title').textContent).toBe(
 		'register.no_register_for_store'
 	);
@@ -69,7 +66,7 @@ it('shows the no-register title and register guide for a cashier', () => {
 
 it('opens Stores instead of the guide for a manager', () => {
 	mockCapabilities = ['manage_woocommerce_pos'];
-	render(<RegisterGateCard failed={false} />);
+	render(<RegisterGateCard failed={false} retry={mockRetry} />);
 	expect(screen.getByTestId('register-gate-admin').textContent).toBe('register.open_stores');
 	expect(screen.queryByTestId('register-gate-docs')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-gate-admin'));
@@ -79,7 +76,7 @@ it('opens Stores instead of the guide for a manager', () => {
 });
 
 it('shows the cannot-reach title after a directory failure', () => {
-	render(<RegisterGateCard failed />);
+	render(<RegisterGateCard failed retry={mockRetry} />);
 	expect(screen.getByTestId('register-gate-card-title').textContent).toBe(
 		'register.cannot_reach_registers'
 	);
@@ -89,7 +86,7 @@ it('shows the cannot-reach title after a directory failure', () => {
 });
 
 it('retries when Try again is pressed', () => {
-	render(<RegisterGateCard failed />);
+	render(<RegisterGateCard failed retry={mockRetry} />);
 	expect(screen.getByTestId('register-gate-retry').textContent).toBe('register.try_again');
 	fireEvent.click(screen.getByTestId('register-gate-retry'));
 	expect(mockRetry).toHaveBeenCalledTimes(1);

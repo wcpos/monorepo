@@ -70,7 +70,7 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
-	const { status: bindingStatus, failed, retrying } = useRegisterBinding();
+	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
@@ -190,7 +190,7 @@ function CartColumn({
 			>
 				<ErrorBoundary>
 					{gateShown ? (
-						<RegisterGateCard failed={bindingStatus === 'unknown' && failed} />
+						<RegisterGateCard failed={bindingStatus === 'unknown' && failed} retry={retry} />
 					) : bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
 						<RegisterPicker
 							onBound={() => {

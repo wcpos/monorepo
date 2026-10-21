@@ -67,16 +67,18 @@ beforeEach(async () => {
 afterEach(async () => {
 	await mockDB.remove();
 });
-const rows = ['a', 'b', 'c'].map((id) => ({ id, name: id, status: 'active' }));
+// Rows as the plugin sends them on `next`: no status column (woocommerce-pos#2350).
+const rows = ['a', 'b', 'c'].map((id) => ({ id, name: id }));
 function mount() {
 	return renderHook(() => {
 		useRegisterBindingSession();
 		return useRegisterBinding();
 	});
 }
-it('silently binds the sole active register and filters by store', async () => {
+// The server lists live registers only (a retired one is gone from the list on the plugin side).
+it('silently binds the sole register the store lists and filters by store', async () => {
 	mockHttp.get.mockResolvedValue({
-		data: [rows[0], { id: 'retired', name: 'Old', status: 'inactive' }],
+		data: [rows[0]],
 	});
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
@@ -327,8 +329,8 @@ it('reads the default-store directory without rebinding the physical till', asyn
 	await bindRegister(mockDB, mockSite, { id: 'physical', name: 'Physical' }, 2);
 	mockHttp.get.mockResolvedValue({
 		data: [
-			{ id: 'remote', name: 'Remote', status: 'active', store_id: null },
-			{ id: 'physical', name: 'Physical', status: 'active', store_id: 2 },
+			{ id: 'remote', name: 'Remote', store_id: null },
+			{ id: 'physical', name: 'Physical', store_id: 2 },
 		],
 	});
 	const { result } = renderHook(() => useRegisterDirectory(0));

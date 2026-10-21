@@ -20,7 +20,6 @@ import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client
 type Register = {
 	id: string;
 	name: string;
-	status: string;
 	store_id?: number | null;
 	default_float?: string | null;
 	counters?: RegisterCounters;
@@ -91,9 +90,11 @@ function loadDirectory(
 			publish(entry, {
 				loaded: true,
 				failed: false,
-				registers: (response.data as Register[]).filter(
-					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
-				),
+				// The list holds live registers only (a retired one leaves it and keeps its name for
+				// history on the plugin side), so there is no status to filter on; the one-register
+				// Free model dropped the column (woocommerce-pos#2350) and a stale `status === 'active'`
+				// filter here read every store as having no register.
+				registers: (response.data as Register[]).filter((row) => storeId !== 0 || !row.store_id),
 			});
 		})
 		.catch(() => {
