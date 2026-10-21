@@ -15,7 +15,11 @@ const mockPatch = jest.fn(),
 	mockPush = jest.fn(),
 	mockMove = jest.fn(),
 	mockClose = jest.fn(),
-	mockGuard = jest.fn();
+	mockGuard = jest.fn(),
+	mockSelectProps = jest.fn();
+function mockStatusSelect() {
+	return null;
+}
 function mockWrap({ children }: React.PropsWithChildren) {
 	return <>{children}</>;
 }
@@ -34,13 +38,20 @@ function mockInput({
 	value,
 	onChange,
 	testID,
+	editable,
 }: {
 	value?: string;
 	onChange?: (value: string) => void;
 	testID?: string;
+	editable?: boolean;
 }) {
 	return (
-		<input data-testid={testID} value={value ?? ''} onChange={(e) => onChange?.(e.target.value)} />
+		<input
+			data-testid={testID}
+			readOnly={editable === false}
+			value={value ?? ''}
+			onChange={(e) => onChange?.(e.target.value)}
+		/>
 	);
 }
 jest.mock('@wcpos/components/form', () => ({
@@ -48,7 +59,10 @@ jest.mock('@wcpos/components/form', () => ({
 	FormField: jest.requireActual('react-hook-form').Controller,
 	FormInput: mockInput,
 	FormTextarea: mockInput,
-	FormSelect: mockInput,
+	FormSelect: (props: Record<string, unknown>) => {
+		mockSelectProps(props);
+		return mockInput(props);
+	},
 	FormCombobox: mockInput,
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
@@ -131,7 +145,7 @@ jest.mock('../../../../../../query', () => ({
 jest.mock('../../../../components/customer-select', () => ({ CustomerList: () => null }));
 jest.mock('../../../../components/currency-select', () => ({ CurrencySelect: mockInput }));
 jest.mock('../../../../components/order/order-status-select', () => ({
-	OrderStatusSelect: mockInput,
+	OrderStatusSelect: mockStatusSelect,
 }));
 jest.mock('../../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../components/meta-data-form', () => ({
@@ -271,11 +285,7 @@ it('does not write or push when storage is degraded', async () => {
 	expect(mockPush).not.toHaveBeenCalled();
 });
 it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
-	const protectedMeta = [
-		...meta,
-		{ id: 42, key: '_wcpos_money_owner_hint', value: 'server' },
-		{ id: 43, key: '_wcpos_money_owner', value: 'server' },
-	];
+	const protectedMeta = [...meta, { id: 42, key: '_wcpos_money_owner_hint', value: 'server' }];
 	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
 	resident.getLatest = () => resident;
 	const custom = { key: 'custom', value: 'edited' };
@@ -368,4 +378,80 @@ it('rejects renaming an ordinary row to a protected key', async () => {
 	fireEvent.change(input, { target: { value: '_pos_user' } });
 	expect(screen.queryByDisplayValue('_pos_user')).toBeNull();
 	expect(screen.getByDisplayValue('ordinary')).toBe(input);
+});
+
+// ADR 0040: under the server's reopen rule a stale pushable status is a reopen, so a
+// save names the status only when the cashier changed it.
+it('a note-only save does not write status', async () => {
+	await save();
+	expect(mockPatch).toHaveBeenCalledWith({
+		document: order,
+		data: expect.objectContaining({ customer_note: 'Keep note' }),
+	});
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+});
+
+it('the status picker offers pushable statuses and shows a paid status read-only', () => {
+	const statusProps = () =>
+		mockSelectProps.mock.calls
+			.map(([props]) => props as Record<string, unknown>)
+			.filter((props) => props.customComponent === mockStatusSelect)
+			.at(-1)!;
+	const formData = { ...payload, cashier_id: '7' };
+	const view = render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	expect([...(statusProps().allowed as string[])].sort()).toEqual(
+		['cancelled', 'on-hold', 'pending', 'pos-open'].sort()
+	);
+	expect(statusProps().disabled).toBeFalsy();
+	view.rerender(
+		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
+	);
+	expect(statusProps().allowed).toEqual(expect.arrayContaining(['completed', 'pos-open']));
+	expect(statusProps().disabled).toBe(true);
+});
+
+// ADR 0040: the server owns transaction_id and strips it from every push, so the cart shows it
+// read-only and neither the local save nor the send writes it.
+it('shows transaction_id read-only and never writes it', async () => {
+	const formData = { ...payload, transaction_id: 'tx-1', cashier_id: '7' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	expect((screen.getByTestId('order-meta-transaction-id') as HTMLInputElement).readOnly).toBe(true);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
+	mockPatch.mockClear();
+	render(
+		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
+	);
+	await act(async () => fireEvent.click(screen.getAllByTestId('order-meta-save')[1]));
+	await confirm();
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
+});
+
+// Status is an intent, never an echo (ADR 0040): a hand-off that changes only the cashier pushes
+// no status, so a stale `pos-open` copy cannot reopen a sale another till completed, and its
+// rollback restores the cashier alone.
+it('a cashier-only hand-off writes and rolls back no status', async () => {
+	mockPush.mockRejectedValueOnce(new Error('offline'));
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await confirm();
+	expect(mockPatch).toHaveBeenCalledTimes(2);
+	const [[handOff], [rollback]] = mockPatch.mock.calls as [[{ data: object }], [{ data: object }]];
+	expect(handOff.data).not.toHaveProperty('status');
+	expect(rollback.data).not.toHaveProperty('status');
+	expect(rollback.data).toEqual({ meta_data: meta });
+});
+
+// The status edit is the cashier's, captured when the hand-off is staged: a pull adopting another
+// till's completion while it awaits confirmation is never read as one, so confirming sends no
+// status and cannot reopen the paid sale.
+it('a completion adopted while the hand-off awaits confirmation is not sent as a status edit', async () => {
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	order.payload = { ...payload, status: 'completed' }; // another till completed it; a pull adopted
+	await confirm();
+	expect(mockPatch).toHaveBeenCalledTimes(1);
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
 });

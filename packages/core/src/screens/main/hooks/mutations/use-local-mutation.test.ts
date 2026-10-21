@@ -176,7 +176,7 @@ describe('useLocalMutation', () => {
 		await act(() =>
 			result.current.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 		);
 
@@ -229,7 +229,7 @@ describe('useLocalMutation', () => {
 		await act(() =>
 			result.current.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 		);
 
@@ -374,7 +374,7 @@ describe('useLocalMutation', () => {
 		const rethrown = await result.current
 			.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 			.then(
 				() => undefined,
@@ -653,7 +653,7 @@ it.each(['ordinary', 'superseded', 'scope'] as const)(
 		const { result } = renderHook(() => useLocalMutation());
 		const pending = result.current.localPatch({
 			document: { uuid: 'order-uuid', collection: { name: 'orders' } } as never,
-			data: { status: 'processing' },
+			data: { status: 'on-hold' },
 		});
 		if (kind === 'ordinary') await expect(pending).resolves.toBeUndefined();
 		else await expect(pending).rejects.toBe(error);

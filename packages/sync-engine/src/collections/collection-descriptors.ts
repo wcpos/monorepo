@@ -40,7 +40,7 @@ import {
 	type RemoteId,
 	remoteIdOrNull,
 	remoteKeyFor,
-	SERVER_ORDER_MONEY_META_KEYS,
+	SERVER_OWNED_ORDER_META_KEYS,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
@@ -293,6 +293,25 @@ type AckDoc = {
 	): Promise<unknown>;
 	remove(): Promise<unknown>;
 };
+
+/**
+ * What a whole order document carries (ADR 0040): `status`, the ledger and completions in
+ * `meta_data`, `date_paid` and `payment_method`, with `total` and `currency`. The push contract
+ * allows a trimmed acknowledgement (a bare `{ id }`), which says nothing about a key it omits, so
+ * only a whole document may replace the resident's server-owned meta wholesale.
+ */
+const WHOLE_ORDER_FIELDS = [
+	'total',
+	'currency',
+	'status',
+	'meta_data',
+	'date_paid',
+	'payment_method',
+] as const;
+
+function carriesWholeOrder(document: Record<string, unknown> | null | undefined): boolean {
+	return !!document && WHOLE_ORDER_FIELDS.every((field) => field in document);
+}
 
 function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
@@ -666,19 +685,29 @@ const ordersWriteFacet = createWriteFacet({
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
 	// cart. Editable values stay local; server-owned money facts replace local meta.
 	// The display-field strip re-applies for payloads predating it (#885/#890).
-	graftAckIdentity: (payload, source, options) =>
-		stripNonStringMetaDisplayFields({
+	graftAckIdentity: (payload, source, options) => {
+		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+			SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
+		);
+		// A whole document's server-owned set replaces the resident's, deletions included. A
+		// trimmed acknowledgement (the push contract allows a bare `{ id }`) says nothing about a
+		// key it omits: only the keys it carries are replaced, and the rest stay as the resident
+		// holds them until a whole document adopts. Otherwise an ordinary note or line push would
+		// strip the ledger and make a paid order read unpaid (ADR 0040).
+		const whole = carriesWholeOrder(source);
+		const carried = new Set(sourceMeta.map(({ key }) => key));
+		return stripNonStringMetaDisplayFields({
 			...graftServerLineIdentity(payload, source, options),
 			// Even with a successor, the server owns these facts; editable intent stays local.
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
-					(entry) => !['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
+					(entry) =>
+						!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || (!whole && !carried.has(entry.key))
 				),
-				...(Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
-					['_wcpos_money_owner', ...SERVER_ORDER_MONEY_META_KEYS].includes(entry.key)
-				),
+				...sourceMeta,
 			],
-		}),
+		});
+	},
 	upsert: async (db, document, context) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany(
 			[document as never],

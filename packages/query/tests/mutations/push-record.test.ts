@@ -96,10 +96,32 @@ describe('pushRecord', () => {
 			recordId: 'order-uuid',
 			explicit: true,
 			payload: expect.objectContaining({
-				status: 'processing',
 				line_items: [{ id: 1, product_id: 42, quantity: 2 }],
 			}),
 		});
+	});
+
+	// ADR 0040: re-sending the resident's status would reopen a paid order on a stale
+	// copy. A status reaches the wire only from a queued write that named it (the
+	// write plane coalesces this row into that write's payload).
+	it('an explicit order update push carries no status unless a queued write named it', async () => {
+		const resident: Record<string, unknown> = {
+			remoteId: '123',
+			payload: { id: 123, status: 'pending', customer_note: 'note' },
+		};
+		resident.get = (field: string) => resident[field];
+		mockFindOneExec.mockResolvedValue(resident);
+		const doc = {
+			uuid: 'order-uuid',
+			id: 123,
+			collection: { name: 'orders' },
+			getLatest: () => doc,
+		};
+
+		await pushRecord(runtime, doc as never);
+
+		const [{ payload }] = mockWrite.mock.calls[0];
+		expect(payload).toEqual({ id: 123, customer_note: 'note' });
 	});
 
 	it('enqueues a create when the resident document was born locally', async () => {

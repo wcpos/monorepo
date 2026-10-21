@@ -64,7 +64,6 @@ import {
 	buildCreateMutation,
 	buildDeleteMutation,
 	buildUpdateMutation,
-	readMoneyEpoch,
 	RecordMutationQueue,
 	remoteIdOrNull,
 	RxRecordMutationStorage,
@@ -689,10 +688,6 @@ export async function enqueueWriteIntent(input: {
 			}
 		}
 
-		if (intent.collection === 'orders' && intent.operation === 'update') {
-			mutation.expectedEpoch = readMoneyEpoch(stored?.payload?.meta_data);
-		}
-
 		// Requeue provenance (#832) rides on the row this iteration produces, whether
 		// it is enqueued plainly or swapped into a coalesce replacement below.
 		if (input.provenance) {
@@ -764,9 +759,6 @@ export async function enqueueWriteIntent(input: {
 						: {}),
 					status: 'pending' as const,
 				};
-				// Coalescing keeps the first intent's epoch, including its absence on legacy work.
-				if (prior.expectedEpoch === undefined) delete replacement.expectedEpoch;
-				else replacement.expectedEpoch = prior.expectedEpoch;
 				// Conditional swap: refuses when the prior row is no longer pending
 				// (drain-claimed or consumed by a concurrent write) — re-decide then.
 				if (!(await queue.coalesceInto(prior.mutationId, replacement, nowMs()))) continue;
@@ -975,7 +967,17 @@ function rebuiltRecoveryPayload(
 					Object.entries(entry.payload ?? {}).filter(([key]) => key !== 'meta_data')
 				)
 			: {};
-	const merged: Record<string, unknown> = { ...residentPayload, ...recovered };
+	// Status is an intent, never an echo (ADR 0040): only the dead letter's own payload
+	// names it, so a create keeps its birth status and a note edit sends none.
+	const { status: _echo, ...resident } = residentPayload;
+	const named =
+		entry.collectionName === 'orders' && entry.payload?.status !== undefined
+			? { status: entry.payload.status }
+			: {};
+	const merged: Record<string, unknown> =
+		entry.collectionName === 'orders'
+			? { ...resident, ...recovered, ...named }
+			: { ...residentPayload, ...recovered };
 	// Subtract from the WHOLE payload, resident layer included. The resident was
 	// read before `enqueueWriteIntent` re-reads it, so it is a snapshot that a
 	// concurrent cart edit can already have overtaken — and because the recovery's
@@ -1217,6 +1219,11 @@ export async function requeueBornTwiceSnapshot(input: {
 }): Promise<{ mutationId: string } | null> {
 	const queue = queueFor(input.db);
 	const { mutation } = input;
+	// A create's status never becomes an update intent (ADR 0040): against a paid server
+	// order the discarded snapshot's `pos-open` would be a reopen. A successor's named
+	// status still layers over it.
+	const { status: _createStatus, ...withoutStatus } = mutation.payload ?? {};
+	const snapshot = mutation.collectionName === 'orders' ? withoutStatus : mutation.payload;
 	const markBookkeeping = async (addId: string, dropId: string | null): Promise<void> => {
 		const doc = (await collectionOf(input.db, mutation.collectionName)
 			.findOne(mutation.recordId)
@@ -1254,7 +1261,7 @@ export async function requeueBornTwiceSnapshot(input: {
 				...(last.admittedBy ? { admissionReleased: last.admittedBy } : {}),
 				mutationId: followUpId,
 				payload: sanitizeOutboundPayload(mutation.collectionName, {
-					...mutation.payload,
+					...snapshot,
 					...last.payload,
 				}),
 				coalesced: (last.coalesced ?? 0) + 1,
@@ -1277,7 +1284,7 @@ export async function requeueBornTwiceSnapshot(input: {
 		}
 		const mergedPayload = rows.reduce<Record<string, unknown>>(
 			(acc, item) => ({ ...acc, ...item.payload }),
-			{ ...mutation.payload }
+			{ ...snapshot }
 		);
 		const payload = sanitizeOutboundPayload(mutation.collectionName, mergedPayload);
 		// CONDITIONAL tail append (#516 review P1): the placement decision was made

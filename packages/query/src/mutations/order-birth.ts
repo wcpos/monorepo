@@ -15,11 +15,9 @@ import type { EngineRecord } from '../records/engine-record';
  *   (write-intents' dirty-mark) — a create is queued but not yet pushed;
  * - the create ack stamps the server id into `remoteId` (the orders facet's
  *   `remoteIdField`, from the pushed document's `id`) — the server has it;
- * - `sync.revision` only moves for hosts that answer with a
- *   `{ document, currentRevision }` envelope. wc/v3 returns a BARE order, so
- *   `currentRevision` is null and an acked Woo order keeps `revision: ''` for
- *   life — revision alone would read every synced order as an orphan and create
- *   it a second time.
+ * - the create ack stamps `sync.revision`: orders are born through
+ *   `wcpos/v2/push/orders`, whose every 2xx answers `{ document, currentRevision }`
+ *   (a `sha256:` revision).
  *
  * With none of them the resident is an orphan from a failed (or interrupted)
  * enqueue, and queueing updates against it would 404 forever.

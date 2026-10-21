@@ -621,7 +621,8 @@ describe('NewCustomerLinkBridge', () => {
 				operation: 'update',
 				recordId: ORDER,
 				explicit: true,
-				payload: expect.objectContaining({ customer_id: 91, status: 'pos-open' }),
+				// The explicit push names no status (ADR 0040: never an echo of the resident).
+				payload: expect.objectContaining({ customer_id: 91 }),
 			}),
 		]);
 	});

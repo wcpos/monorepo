@@ -769,18 +769,28 @@ describe('reconcileCreateAck', () => {
 	});
 });
 
-it('passes the optional payments 1.3 envelope fields unchanged', async () => {
+it('an order row queued before the strip is cleaned at push time', async () => {
 	const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(200, { id: 1 }));
-	const tillAggregate = { total: '12.340000', total_tax: '2.340000' };
 	await pushRecordMutation({
-		mutation: mut({ collectionName: 'orders', operation: 'update' }),
+		mutation: mut({
+			collectionName: 'orders',
+			operation: 'update',
+			payload: {
+				status: 'completed',
+				customer_note: 'note',
+				total: '10.00',
+				transaction_id: 'txn',
+				meta_data: [
+					{ key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+					{ key: 'custom', value: 'kept' },
+				],
+			},
+		}),
 		resolveEndpoint,
 		fetcher,
-		expectedEpoch: 2,
-		tillAggregate,
 	});
-	expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toMatchObject({
-		expectedEpoch: 2,
-		tillAggregate,
+	expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).payload).toEqual({
+		customer_note: 'note',
+		meta_data: [{ key: 'custom', value: 'kept' }],
 	});
 });

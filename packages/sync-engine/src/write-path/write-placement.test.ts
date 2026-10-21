@@ -164,11 +164,11 @@ describe('coalescedPayload', () => {
 		expect(
 			coalescedPayload({
 				operation: 'update',
-				residentPayload: { status: 'pending' },
+				residentPayload: { customer_note: 'resident' },
 				prior,
 				incomingPayload: { total: '12.00' },
 			})
-		).toEqual({ status: 'pending', total: '12.00' });
+		).toEqual({ customer_note: 'resident', total: '12.00' });
 		expect(
 			coalescedPayload({
 				operation: 'delete',
@@ -177,5 +177,26 @@ describe('coalescedPayload', () => {
 				incomingPayload: { id: 'order-1' },
 			})
 		).toEqual({ id: 'order-1' });
+	});
+
+	// ADR 0040: a stale resident `pending` on a paid order is a reopen; only a write
+	// that named the status may send it.
+	it('a coalesce never takes status from the resident layer', () => {
+		expect(
+			coalescedPayload({
+				operation: 'update',
+				residentPayload: { status: 'pending', customer_note: 'resident' },
+				prior: row({ payload: { customer_note: 'prior' } }),
+				incomingPayload: { customer_note: 'incoming' },
+			})
+		).toEqual({ customer_note: 'incoming' });
+		expect(
+			coalescedPayload({
+				operation: 'update',
+				residentPayload: { status: 'pending' },
+				prior: row({ payload: { status: 'on-hold' } }),
+				incomingPayload: {},
+			})
+		).toEqual({ status: 'on-hold' });
 	});
 });
