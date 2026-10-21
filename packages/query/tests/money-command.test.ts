@@ -1146,3 +1146,14 @@ it('a displaced sender never settles the command another claimant executed', asy
 	expect(await entries()).toEqual([expect.objectContaining({ kind: 'close' })]);
 	expect((await residentJSON()).payload.total).toBe('100.00');
 });
+
+// Recovery and Try again replay what the journal holds. A command settled between their snapshot
+// and their claim is gone, and a replaying poster never freezes a new one in its place: that would
+// run a close (or any money command) nobody pressed for, on a sale reopened since.
+it('a replaying poster never freezes a new command when the journaled one is gone', async () => {
+	await expect(poster({ replay: true })('orders/5/close', {})).rejects.toThrow(
+		'money_command_unclaimed'
+	);
+	expect(store.post).not.toHaveBeenCalled();
+	expect(await entries()).toEqual([]);
+});

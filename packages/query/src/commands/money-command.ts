@@ -428,14 +428,20 @@ export async function resendOpenCommands(
 	const entries = (await readOrderCommands(storeDB, orderUuid)).entries.filter((entry) =>
 		inScope(entry, scope)
 	);
-	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post });
+	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post, replay: true });
 	const answers: ResentCommand[] = [];
 	for (const entry of entries) {
 		if (entry.sentAt === null) {
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
-		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
+		// Settled since the snapshot (by its own sender): nothing is left to replay.
+		const sent = await poster(entry.path, entry.body).catch((error: Error) => {
+			if (error.message === 'money_command_unclaimed') return null;
+			throw error;
+		});
+		if (!sent) continue;
+		const { data } = sent as { data: Record<string, unknown> };
 		// Only the refresh run after the answer confirms it: a pull adopted while the re-send was in
 		// flight, or in the answer's own millisecond, never carries the stamp change.
 		// A replayed submit or cancel cannot carry the awaiting-customer stamp its first answer
@@ -534,6 +540,8 @@ export function moneyCommandPoster(input: {
 	approval?: OrderApproval;
 	/** Called once, when the command is frozen; it sees the command it describes. */
 	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
+	/** Recovery and Try again: re-send only a command the journal holds, never freeze a new one. */
+	replay?: true;
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
 	// This poster's claim on its commands (see `claimRoute`): taken in the journal write that gets
@@ -640,7 +648,7 @@ export function moneyCommandPoster(input: {
 		// for one route, in this tab or another, always land on one command id. A sent command is
 		// re-sent under its own id; a new one is frozen only when the journal holds none.
 		let claim = await claimRoute(input.storeDB, commandRoute, claimant, null);
-		if (claim.status === 'none')
+		if (claim.status === 'none' && !input.replay)
 			claim = await claimRoute(
 				input.storeDB,
 				commandRoute,
