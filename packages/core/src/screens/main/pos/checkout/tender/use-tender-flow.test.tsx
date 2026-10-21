@@ -242,7 +242,21 @@ let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 // One client per test file, as the real hook memoises: a fresh object per render would re-arm
 // every fetch effect keyed on it.
-const mockHttp = { post: mockManualPost, get: mockGatewaysGet };
+//
+// The fixtures below script only the summary a test is about. The store's real record answer
+// also carries the row it stored (sync-core `isMoneyAnswer`, which the record path now requires),
+// so a scripted record answer without one is completed with the posted row here.
+const mockHttp = {
+	post: async (url: string, body: unknown) => {
+		const answer = await mockManualPost(url, body);
+		const data = answer?.data as Record<string, unknown> | undefined;
+		const row = (body as { payment?: unknown } | undefined)?.payment;
+		return /\/payments$/.test(url) && data && !data.payment && row
+			? { ...answer, data: { ...data, payment: row } }
+			: answer;
+	},
+	get: mockGatewaysGet,
+};
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
@@ -336,6 +350,23 @@ jest.mock('@wcpos/query', () => ({
 		}
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	MoneyCommandError: class MoneyCommandError extends Error {},
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			// The mocked mirrorServerOrder under a fixed revision.
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
+			settle: async () => undefined,
+		}),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -3724,7 +3755,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockSessionsOn = false;
 		mockBindingStatus = 'bound';
 		mockMethods = [roundingCash, card];
-		mockOnlineStatus = 'offline';
+		// Online: until ADR 0040 PR B an offline tender is refused, so rounding is taken online.
+		mockOnlineStatus = 'online-website-available';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockRecordManualPayment.mockResolvedValue(recorded);
@@ -3804,12 +3836,20 @@ describe('cash rounding (#66, #84)', () => {
 	it('writes the rounding fee before the cash row: the stored total moves by the fee alone and the leg settles', async () => {
 		mockUseRealManual = true;
 		mockPayload = sale('12.03', '10.03');
+		// The store records the row and completes the sale; the mirror lands both on the order.
+		mockManualPost.mockImplementation(async (_url: string, body: { payment: PaymentRow }) => ({
+			data: {
+				payment: { ...body.payment, status: 'captured' },
+				order: { status: 'completed', balance: '0.00' },
+			},
+		}));
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
 		await act(async () => result.current.takeTender());
 
-		const [fee, leg] = patches();
+		const [fee] = patches();
+		const leg = mockManualMirror.mock.calls[0][0].changes as Record<string, unknown>;
 		const [line] = fee.fee_lines as {
 			name: string;
 			tax_status: string;
@@ -4019,6 +4059,29 @@ describe('cash rounding (#66, #84)', () => {
 
 jest.mock('@wcpos/query/mutations', () => ({
 	...jest.requireActual('@wcpos/query/mutations'),
-	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
-		mockManualMirror({ manager, collection: 'orders', recordId, changes }),
+	// The real mirror resolves the answer over the LATEST resident (ADR 0040); the spy sees the
+	// changes it would write: the row upserted into the current ledger, the asserted meta, the status.
+	mirrorServerOrder: (
+		manager: unknown,
+		recordId: string,
+		answer: {
+			payment?: PaymentRow;
+			order?: { status?: string } | null;
+			meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
+		}
+	) => {
+		// The gateway and void paths still mirror the changes themselves.
+		if (!('payment' in answer || 'order' in answer || 'meta' in answer))
+			return mockManualMirror({ manager, collection: 'orders', recordId, changes: answer });
+		const ledger = jest.requireActual('@wcpos/order-math');
+		const meta = (mockPayload.meta_data ?? []) as MetaDataEntry[];
+		const ledgerMeta = answer.payment
+			? ledger.withLedger(meta, ledger.upsertPaymentRow(ledger.readLedger(meta), answer.payment))
+			: meta;
+		const changes = {
+			...(answer.order?.status ? { status: answer.order.status } : {}),
+			meta_data: answer.meta ? answer.meta(ledgerMeta) : ledgerMeta,
+		};
+		return mockManualMirror({ manager, collection: 'orders', recordId, changes });
+	},
 }));

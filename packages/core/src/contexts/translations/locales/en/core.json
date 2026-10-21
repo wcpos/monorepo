@@ -373,6 +373,7 @@
 	"pos_checkout.reason_not_found": "Payment not found on the store",
 	"pos_checkout.reason_amount_mismatch": "The terminal confirmed a different amount",
 	"pos_checkout.show_log": "Show log",
+	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
 	"pos_checkout.hide_log": "Hide log",
 	"pos_checkout.log_copied": "Log copied",
 	"pos_checkout.chip_waiting_for_terminal": "Waiting for terminal · {amount}",
