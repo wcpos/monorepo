@@ -67,6 +67,8 @@ interface TemplateRendererResult {
 	isOffline: boolean;
 	isSyncing: boolean;
 	hasFinalData: boolean;
+	/** `receiptData` is the server's receipt, not the local fallback built from the order. */
+	receiptDataIsServer: boolean;
 }
 
 export function useTemplateRenderer({
@@ -225,5 +227,6 @@ export function useTemplateRenderer({
 		isOffline,
 		isSyncing,
 		hasFinalData,
+		receiptDataIsServer: apiReceiptData != null,
 	};
 }

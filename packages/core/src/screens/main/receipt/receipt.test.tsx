@@ -430,6 +430,47 @@ describe('Receipt auto-print', () => {
 		act(() => capturedLoadHandlers.at(-1)!());
 		expect(mockPrint).toHaveBeenCalledTimes(2);
 	});
+
+	describe('contract gateway: routed before the order refresh landed (#2807)', () => {
+		const orderPayload = mockOrder.payload as typeof mockOrder.payload & { status?: string };
+		afterEach(() => {
+			delete orderPayload.status;
+		});
+
+		it('does not auto-print a local pos-open fallback; prints once the order settles', () => {
+			// The receipt request failed (hasResponded) with the refresh still pending: the
+			// only data is built from the local order, which still says pos-open.
+			orderPayload.status = 'pos-open';
+			mockUseTemplateRenderer.mockReturnValue({
+				...defaultTemplateRenderer,
+				hasFinalData: true,
+				receiptDataIsServer: false,
+			});
+			const { rerender } = render(<Receipt resource={{} as never} />);
+			expect(mockPrint).not.toHaveBeenCalled();
+
+			// The bounded refresh lands: the order record is now completed.
+			orderPayload.status = 'completed';
+			rerender(<Receipt resource={{} as never} />);
+			expect(mockPrint).toHaveBeenCalledTimes(1);
+
+			rerender(<Receipt resource={{} as never} />);
+			expect(mockPrint).toHaveBeenCalledTimes(1);
+		});
+
+		it('auto-prints server receipt data even while the local order is still pos-open', () => {
+			orderPayload.status = 'pos-open';
+			mockUseTemplateRenderer.mockReturnValue({
+				...defaultTemplateRenderer,
+				hasFinalData: true,
+				receiptDataIsServer: true,
+			});
+
+			render(<Receipt resource={{} as never} />);
+
+			expect(mockPrint).toHaveBeenCalledTimes(1);
+		});
+	});
 });
 
 describe('Receipt PDF download action', () => {
