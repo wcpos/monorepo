@@ -38,7 +38,16 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 
 /** `lose`: stored, answer lost. `drop`: lost before the store saw it. `503`: refused unstored. */
 type Mode =
-	'lose' | 'drop' | '503' | 'locked' | '403' | 'stale' | 'provider' | 'outstanding' | 'malformed';
+	| 'lose'
+	| 'drop'
+	| '503'
+	| 'locked'
+	| '403'
+	| 'stale'
+	| 'provider'
+	| 'outstanding'
+	| 'malformed'
+	| 'unstamped';
 /** The store's side of the contract: replay by id before the revision check, stale otherwise. */
 class FakeStore {
 	n = 1;
@@ -74,6 +83,9 @@ class FakeStore {
 		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
 		// A plugin filter or proxy answering 2xx with nothing the store said.
 		if (mode === 'malformed') return { data: {} };
+		// A close whose stamp could not persist: the order's summary, no completion (SPEC §4.3).
+		if (mode === 'unstamped')
+			return { data: { order: this.summary(), completion: null, revision: this.revision } };
 		if (mode === 'outstanding')
 			throw httpError(409, 'wcpos_balance_outstanding', { order: this.summary() });
 		if (mode === 'drop') throw new Error('Network Error');
@@ -864,6 +876,24 @@ it('a send that throws frees its claim at once, and an abandoned answer frees it
 	clock += CLAIM_LEASE_MS;
 	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
 	expect(await entries()).toEqual([]);
+});
+
+// Server SPEC §4.3: a replayed close whose stamp could not persist answers `completion: null`.
+// With a paid summary it settles as completed without a number; with an open one it stays.
+it.each([
+	['a paid', 'completed', 0],
+	['an open', 'pos-open', 1],
+])('a replayed close answered with no completion and %s summary', async (_, status, kept) => {
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+	store.status = status;
+	store.modes = ['unstamped'];
+	if (kept) await expect(restart()).rejects.toThrow('close_malformed_response');
+	else
+		expect(await restart()).toEqual([
+			{ kind: 'close', data: expect.objectContaining({ completion: null }) },
+		]);
+	expect(await entries()).toHaveLength(kept);
 });
 
 it('the status poll passes through without an envelope', async () => {

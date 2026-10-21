@@ -103,3 +103,25 @@ describe('the money answer rule, per kind', () => {
 		expect(isMoneyAnswer('close', null)).toBe(false);
 	});
 });
+
+// Server SPEC §4.3: a close whose stamp could not persist answers `completion: null` with the
+// paid summary. It is completed, without a number; on an open summary it proves nothing.
+describe('a close answered without a completion', () => {
+	it.each(['completed', 'processing', 'on-hold', 'wc-custom-paid'])(
+		'is completed when the summary is paid (%s)',
+		(status) => {
+			expect(isCloseAnswer({ order: { status }, completion: null })).toBe(true);
+			expect(isMoneyAnswer('close', { order: { status }, completion: null })).toBe(true);
+		}
+	);
+	it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled', 'refunded'])(
+		'is malformed when the summary is not paid (%s)',
+		(status) => {
+			expect(isCloseAnswer({ order: { status }, completion: null })).toBe(false);
+			expect(isMoneyAnswer('close', { order: { status }, completion: null })).toBe(false);
+		}
+	);
+	it('a missing completion is still malformed', () => {
+		expect(isCloseAnswer({ order: { status: 'completed' } })).toBe(false);
+	});
+});

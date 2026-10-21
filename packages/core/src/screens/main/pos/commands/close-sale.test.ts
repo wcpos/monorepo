@@ -88,6 +88,7 @@ it.each([
 	['no summary', { completion: { n: 1, id: 'c1' } }],
 	['a summary without a status', { order: { total: '0.00' }, completion: { n: 1, id: 'c1' } }],
 	['no completion', { order: { status: 'completed' } }],
+	['a null completion on an open summary', { order: { status: 'pos-open' }, completion: null }],
 	['a completion without its number', { order: { status: 'completed' }, completion: { id: 'c1' } }],
 ])(
 	'a 2xx with %s is not a close: nothing is mirrored or settled and the entry stays',
@@ -101,6 +102,17 @@ it.each([
 		expect(mockSettle).not.toHaveBeenCalled();
 	}
 );
+
+// Server SPEC §4.3: a paid sale whose completion stamp could not persist answers no completion.
+it('a paid summary with a null completion completes, without a completion number', async () => {
+	const summary = { status: 'completed' };
+	const post = jest.fn(async () => ({ data: { order: summary, completion: null } }));
+
+	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+
+	expect(outcome).toEqual({ kind: 'completed', order: summary, completion: null });
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
 
 it('balance outstanding mirrors the summary and says what is due', async () => {
 	const summary = { status: 'pos-partial', balance: '4.00' };

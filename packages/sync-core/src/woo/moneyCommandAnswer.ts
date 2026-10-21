@@ -77,21 +77,43 @@ export function moneyRefusalOf(error: unknown): MoneyRefusal | null {
 /** The store's answer to a `close` that completed the sale. */
 export interface CloseAnswer {
 	readonly order: { readonly status: string } & Record<string, unknown>;
-	readonly completion: { readonly n: number; readonly id: string };
+	/** null: the sale is paid but its completion stamp could not persist (server SPEC §4.3). */
+	readonly completion: { readonly n: number; readonly id: string } | null;
 }
 
 /**
+ * Statuses that are not a paid sale: the open POS carts, an unpaid or failed order, and an order
+ * that is gone. The client's own paid rule is this blocklist too (core `sale-completion.ts`,
+ * `UNPAID_STATUSES`): any other status, on-hold and a merchant's custom paid status included,
+ * is a sale the store completed.
+ */
+const UNPAID_CLOSE_STATUSES: readonly string[] = [
+	'pos-open',
+	'pos-partial',
+	'pending',
+	'failed',
+	'cancelled',
+	'refunded',
+	'trash',
+];
+
+/**
  * Whether a 2xx `close` answer is the store's own (ADR 0040 D2): a summary with a status and the
- * completion it stamped. Anything else (a proxy page, a plugin filter's `{}`) proves nothing, so
- * it never settles the journaled close or finishes the sale; the close is re-sent. One rule for
- * the first answer, Try again and the store-session recovery.
+ * completion it stamped. A paid summary with `completion: null` is a close whose stamp could not
+ * persist (server SPEC §4.3; a replay after a crash between its two saves answers the same,
+ * `API/V2/Payments_Controller.php:452-468`): the sale is completed, with no completion number
+ * (the receipt prints none). Anything else, `completion: null` on an open summary included, a
+ * proxy page or a plugin filter's `{}`, proves nothing: it never settles the journaled close or
+ * finishes the sale, and the close is re-sent. One rule for the first answer, Try again and the
+ * store-session recovery.
  */
 export function isCloseAnswer(data: unknown): data is CloseAnswer {
 	const { order, completion } = (data ?? {}) as { order?: unknown; completion?: unknown };
+	if (!order || typeof order !== 'object') return false;
+	const status = (order as { status?: unknown }).status;
+	if (typeof status !== 'string') return false;
+	if (completion === null) return !UNPAID_CLOSE_STATUSES.includes(status);
 	return (
-		!!order &&
-		typeof order === 'object' &&
-		typeof (order as { status?: unknown }).status === 'string' &&
 		!!completion &&
 		typeof completion === 'object' &&
 		typeof (completion as { n?: unknown }).n === 'number' &&
