@@ -77,14 +77,25 @@ function mount() {
 }
 // The server lists live registers only (a retired one is gone from the list on the plugin side).
 it('silently binds the sole register the store lists and filters by store', async () => {
+	const row = {
+		...rows[0],
+		session: {
+			id: 'session-1',
+			status: 'open',
+			opened_at_gmt: '2026-10-21T08:15:00Z',
+			opened_by: { id: 7, name: 'Pat' },
+		},
+		last_closure: { number: 12, closed_at_gmt: '2026-10-20T16:30:00Z' },
+	};
 	mockHttp.get.mockResolvedValue({
-		data: [rows[0]],
+		data: [row],
 	});
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
 	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: 2 } });
 	expect(view.result.current.registers).toHaveLength(1);
+	expect(view.result.current.registers[0]).toEqual(row);
 	expect(logger.info).toHaveBeenCalledWith('Register bound automatically', {
 		terminal: { operationId: 'a' },
 		context: { type: 'register.bound', registerId: 'a', previousRegisterId: null },
@@ -410,4 +421,63 @@ it('retries a failed directory read and binds once for a double tap', async () =
 	expect(view.result.current.status).toBe('bound');
 	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toHaveLength(3);
 	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers/a')).toHaveLength(1);
+});
+
+// Refresh only reads the list: even a sole-register answer must not bind or change the gate.
+it('refreshes rows while keeping choose and shares an in-flight refresh', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
+	mockHttp.get
+		.mockResolvedValueOnce({ data: rows })
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+	const view = mount();
+	await waitFor(() => expect(view.result.current.status).toBe('choose'));
+	let first: Promise<void> = Promise.resolve();
+	act(() => {
+		first = view.result.current.refresh();
+		expect(view.result.current.refresh()).toBe(first);
+	});
+	expect(view.result.current.status).toBe('choose');
+	expect(view.result.current.retrying).toBe(false);
+	expect(view.result.current.registerId).toBeNull();
+	expect(mockHttp.get.mock.calls).toEqual([
+		['registers', { params: { store_id: 2 } }],
+		['registers', { params: { store_id: 2 } }],
+	]);
+	const updated = [{ ...rows[0], name: 'Updated' }];
+	await act(async () => {
+		answer({ data: updated });
+		await first;
+	});
+	expect(view.result.current.registers).toEqual(updated);
+	expect(view.result.current.status).toBe('choose');
+	expect(view.result.current.retrying).toBe(false);
+	expect(view.result.current.registerId).toBeNull();
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toBeNull();
+	expect(mockHttp.get).toHaveBeenCalledTimes(2);
+});
+
+it('ignores a superseded directory answer that lands after a refresh', async () => {
+	let answerFirst: (value: { data: unknown }) => void = () => {};
+	let answerSecond: (value: { data: unknown }) => void = () => {};
+	mockHttp.get
+		.mockImplementationOnce(() => new Promise((resolve) => (answerFirst = resolve)))
+		.mockImplementationOnce(() => new Promise((resolve) => (answerSecond = resolve)));
+	const view = mount();
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(1));
+	let refreshed: Promise<void> = Promise.resolve();
+	act(() => {
+		refreshed = view.result.current.refresh();
+	});
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(2));
+	await act(async () => {
+		answerSecond({ data: [rows[1], rows[2]] });
+		await refreshed;
+	});
+	await act(async () => {
+		answerFirst({ data: [rows[0]] });
+		await Promise.resolve();
+	});
+	// The older answer arrived last and changed nothing: the refreshed rows stand.
+	expect(view.result.current.registers.map(({ id }) => id)).toEqual(['b', 'c']);
+	expect(view.result.current.status).toBe('choose');
 });
