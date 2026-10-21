@@ -56,9 +56,6 @@
   "packages/core/src/screens/main/components/product/variable-product-row/variations/index.tsx": {
     "bare-Suspense": 1
   },
-  "packages/core/src/screens/main/components/session-hold-banner/index.tsx": {
-    "raw-pressable": 1
-  },
   "packages/core/src/screens/main/coupons/cells/actions.tsx": {
     "group-*": 1
   },
