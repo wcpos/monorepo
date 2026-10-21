@@ -44,6 +44,7 @@ import { PrinterSwitcher } from './printer-switcher';
 import { SyncingBadge } from './syncing-badge';
 import { TemplateSwitcher } from './template-switcher';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
+import { printNeedsLoadedPreview } from './utils/print-needs-loaded-preview';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
@@ -186,13 +187,15 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		setPrinterSelection,
 		mismatch,
 		useSystemDialog,
+		isResolving: isResolvingPrinter,
 	} = useResolvedPrinter({ template: templateInfo });
 
+	const printerProfile = useSystemDialog ? undefined : (resolvedPrinter ?? undefined);
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || baseReceiptURL,
-		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
+		printerProfile,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
@@ -252,11 +255,20 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		iframeLoadedRef.current = false;
 	}, [orderId]);
 
+	// Only a print that reads the preview frame waits for it to load: on a slow site that
+	// frame is a full WordPress page, and a thermal, cloud or pre-rendered print never uses
+	// it. Until the printer is resolved the print path is unknown, so nothing starts.
+	const needsLoadedPreview = printNeedsLoadedPreview({
+		printerProfile,
+		receiptData: receiptData ?? undefined,
+		html: renderedHtml ?? undefined,
+	});
 	const attemptAutoPrint = React.useCallback(() => {
 		if (
 			uiSettings.autoPrintReceipt &&
 			checkoutRef.current &&
-			iframeLoadedRef.current &&
+			!isResolvingPrinter &&
+			(!needsLoadedPreview || iframeLoadedRef.current) &&
 			hasFinalData &&
 			!hasAutoPrintedRef.current
 		) {
@@ -264,9 +276,15 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			// Reported as PRINT101: the sale is saved, print it from the receipt.
 			void printAndReport(true);
 		}
-	}, [hasFinalData, printAndReport, uiSettings.autoPrintReceipt]);
+	}, [
+		hasFinalData,
+		isResolvingPrinter,
+		needsLoadedPreview,
+		printAndReport,
+		uiSettings.autoPrintReceipt,
+	]);
 
-	// Final API data can arrive without causing the receipt frame to load again.
+	// Final API data or the resolved printer can arrive without the receipt frame loading again.
 	React.useEffect(() => {
 		attemptAutoPrint();
 	}, [attemptAutoPrint]);

@@ -150,15 +150,19 @@ jest.mock('./hooks/use-template-renderer', () => ({
 	useTemplateRenderer: (...args: unknown[]) => mockUseTemplateRenderer(...args),
 }));
 
+const mockSystemDialogPrinter = {
+	allPrinters: [],
+	resolvedPrinter: null,
+	printerSelection: null,
+	setPrinterSelection: jest.fn(),
+	mismatch: null,
+	useSystemDialog: true,
+	isResolving: false,
+};
+const mockUseResolvedPrinter = jest.fn((): Record<string, unknown> => mockSystemDialogPrinter);
+
 jest.mock('./hooks/use-resolved-printer', () => ({
-	useResolvedPrinter: () => ({
-		allPrinters: [],
-		resolvedPrinter: null,
-		printerSelection: null,
-		setPrinterSelection: jest.fn(),
-		mismatch: null,
-		useSystemDialog: true,
-	}),
+	useResolvedPrinter: () => mockUseResolvedPrinter(),
 }));
 
 jest.mock('./hooks/use-download-receipt-pdf', () => ({
@@ -203,6 +207,11 @@ jest.mock('@wcpos/printer', () => ({
 		},
 		isPrinting: false,
 	}),
+	// The real branch predicates: the auto-print gate mirrors usePrint's routing with them.
+	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
+		.isOrderBasedCloudProfile,
+	usesSystemPrintDialog: jest.requireActual('@wcpos/printer/transport/device-key')
+		.usesSystemPrintDialog,
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
@@ -281,6 +290,24 @@ describe('Receipt preview content size', () => {
 });
 
 describe('Receipt auto-print', () => {
+	// A template the preview loads from a URL (e.g. legacy-php): the system dialog has no
+	// rendered HTML, so it reads the loaded frame and auto-print must wait for it.
+	const urlTemplateRenderer = { ...defaultTemplateRenderer, renderedHtml: null };
+	const thermalPrinter = {
+		...mockSystemDialogPrinter,
+		resolvedPrinter: {
+			id: 'thermal-1',
+			name: 'Counter printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '192.168.1.50',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+		},
+		useSystemDialog: false,
+	};
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedLoadHandlers.length = 0;
@@ -288,10 +315,45 @@ describe('Receipt auto-print', () => {
 		mockSuspenseValue = mockOrder;
 		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
 		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: false });
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: false });
 	});
 	afterEach(() => {
 		mockOrder.payload.id = 42;
+		mockUseResolvedPrinter.mockReturnValue(mockSystemDialogPrinter);
+	});
+
+	it('prints to a raw/thermal printer once final data is present, without waiting for the frame', () => {
+		mockUseResolvedPrinter.mockReturnValue(thermalPrinter);
+		const { rerender } = render(<Receipt resource={{} as never} />);
+		expect(mockPrint).not.toHaveBeenCalled();
+
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
+		rerender(<Receipt resource={{} as never} />);
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		// Still single-shot: the frame loading later does not print again.
+		act(() => capturedLoadHandlers.at(-1)!());
+		rerender(<Receipt resource={{} as never} />);
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('prints rendered HTML through the dialog without waiting for the frame', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('waits until the printer is resolved before deciding how to print', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		mockUseResolvedPrinter.mockReturnValue({ ...mockSystemDialogPrinter, isResolving: true });
+		const { rerender } = render(<Receipt resource={{} as never} />);
+		expect(mockPrint).not.toHaveBeenCalled();
+
+		mockUseResolvedPrinter.mockReturnValue(thermalPrinter);
+		rerender(<Receipt resource={{} as never} />);
+		expect(mockPrint).toHaveBeenCalledTimes(1);
 	});
 
 	it('waits for final data after the receipt frame loads and prints exactly once', () => {
@@ -300,7 +362,7 @@ describe('Receipt auto-print', () => {
 		act(() => capturedLoadHandlers.at(-1)!());
 		expect(mockPrint).not.toHaveBeenCalled();
 
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
 		rerender(<Receipt resource={{} as never} />);
 		expect(mockPrint).toHaveBeenCalledTimes(1);
 
@@ -309,7 +371,7 @@ describe('Receipt auto-print', () => {
 	});
 
 	it('reports a failed autoprint as PRINT101, and a manual print during it on its own terms', async () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
 		let failAutoprint!: (error: Error) => void;
 		mockPrint
 			.mockImplementationOnce(
@@ -342,7 +404,7 @@ describe('Receipt auto-print', () => {
 	});
 
 	it('waits for the receipt frame to load when final data is already available', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
 
 		render(<Receipt resource={{} as never} />);
 
@@ -353,7 +415,7 @@ describe('Receipt auto-print', () => {
 	});
 
 	it('waits for the new receipt frame to load after the order changes', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
 		const { rerender } = render(<Receipt resource={{} as never} />);
 
 		act(() => capturedLoadHandlers.at(-1)!());
