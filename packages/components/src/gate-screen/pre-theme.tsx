@@ -1,22 +1,14 @@
 import * as React from 'react';
-import {
-	Platform,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	useWindowDimensions,
-	View,
-} from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { G, Path } from 'react-native-svg';
-
-import { isPhoneWindow } from '@wcpos/components/lib/device';
-import { Logo } from '@wcpos/components/logo';
-import type { GateScreenProps } from '@wcpos/components/gate-screen';
-
+import { SvgAlert } from '../icon/components/tabler/alert';
+import { SvgInfo } from '../icon/components/tabler/info';
+import { SvgWarning } from '../icon/components/tabler/warning';
+import { useIsPhone } from '../lib/device';
+import { Logo } from '../logo';
 import { PRE_THEME_COLOURS as C, PRE_THEME_RADIUS } from './pre-theme-colours';
+
+import type { GateScreenProps } from './index';
 
 type Action = NonNullable<GateScreenProps['primary']>;
 type PreThemeGateProps = Omit<GateScreenProps, 'icon' | 'docs'> & {
@@ -25,22 +17,13 @@ type PreThemeGateProps = Omit<GateScreenProps, 'icon' | 'docs'> & {
 };
 
 /**
- * The default icon set's (tabler) glyphs for the three tones, copied from
- * `packages/components/src/icon/components/tabler/{warning,alert,info}.tsx`: `Icon` resolves
- * its colour from a className, which does not resolve here. `pre-theme-gate.test.tsx` pins them.
+ * The default icon set's (tabler) glyphs for the three tones, drawn by their generated components
+ * with a `color` prop: `Icon` resolves its colour from a className, which does not resolve here.
  */
-const GLYPHS = {
-	warning: [
-		'M12 9v4m-1.637-9.409L2.257 17.125a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636-2.87L13.637 3.59a1.914 1.914 0 0 0-3.274 0M12 16h.01',
-	],
-	alert: ['M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0m9-4v4m0 4h.01'],
-	info: ['M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0m9-3h.01', 'M11 12h1v4h1'],
-} as const;
-
 const tones = {
-	warn: { disc: C.warnBg, glyph: C.warnText, icon: 'warning' },
-	bad: { disc: C.badBg, glyph: C.bad, icon: 'alert' },
-	muted: { disc: C.muted, glyph: C.mutedForeground, icon: 'info' },
+	warn: { disc: C.warnBg, glyph: C.warnText, Glyph: SvgWarning },
+	bad: { disc: C.badBg, glyph: C.bad, Glyph: SvgAlert },
+	muted: { disc: C.muted, glyph: C.mutedForeground, Glyph: SvgInfo },
 } as const;
 
 /** The token sheet's base size: 14 on web, 16 on native (`text-base`). */
@@ -48,11 +31,12 @@ const BASE = Platform.OS === 'web' ? 14 : 16;
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 /**
- * `GateScreen` for the screens that render above every provider (the root error screen, the
+ * `GateScreen`'s twin for the screens that render above every provider (the root error screen, the
  * blocked reset): no theme, no translations, so no className resolves. The same geometry in
  * StyleSheet numbers from `pre-theme-colours.ts`: the mark above one card at the sign-in
  * reading width (448), inset 32 (16 on a phone), a 56 tone disc, the title in foreground ink,
- * one muted line, the actions stacked full width. Keep it in step with `GateScreen`.
+ * one muted line, the actions stacked full width. Like GateScreen it pads no safe area: the
+ * centred content keeps the page gutter from every edge. Keep it in step with `GateScreen`.
  */
 export function PreThemeGate({
 	tone,
@@ -64,70 +48,53 @@ export function PreThemeGate({
 	children,
 	testID = 'pre-theme-gate',
 }: PreThemeGateProps) {
-	const phone = isPhoneWindow(useWindowDimensions());
+	// GateScreen's own phone rule, so the twin changes inset and mark at the same width.
+	const phone = useIsPhone();
 	const style = tones[tone];
 	const mark = phone ? 64 : 80;
 	return (
-		<SafeAreaView style={styles.screen}>
-			<ScrollView
-				style={styles.screen}
-				contentContainerStyle={styles.content}
-				keyboardShouldPersistTaps="handled"
-			>
-				<View testID={testID} style={styles.column}>
-					<Logo width={mark} height={mark} />
-					<View style={[styles.card, { padding: phone ? 16 : 32 }]}>
-						<View style={[styles.disc, { backgroundColor: style.disc }]}>
-							<Svg width={28} height={28} viewBox="0 0 24 24" testID={`${testID}-glyph`}>
-								<G
-									fill="none"
-									stroke={style.glyph}
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={1.5}
-								>
-									{GLYPHS[style.icon].map((d) => (
-										<Path key={d} d={d} />
-									))}
-								</G>
-							</Svg>
-						</View>
-						<Text testID={`${testID}-title`} role="heading" style={styles.title}>
-							{title}
-						</Text>
-						{description ? (
-							<Text testID={`${testID}-description`} style={styles.line}>
-								{description}
-							</Text>
-						) : null}
-						{detail ? (
-							<Text testID={`${testID}-detail`} selectable style={styles.detail}>
-								{detail}
-							</Text>
-						) : null}
-						{children}
-						{primary || secondary ? (
-							<View style={styles.actions}>
-								{primary ? (
-									<PreThemeButton
-										action={primary}
-										fill={primary.destructive ? 'destructive' : 'primary'}
-										testID={`${testID}-primary`}
-									/>
-								) : null}
-								{secondary ? (
-									<PreThemeButton
-										action={secondary}
-										fill="outline"
-										testID={`${testID}-secondary`}
-									/>
-								) : null}
-							</View>
-						) : null}
+		<ScrollView
+			style={styles.screen}
+			contentContainerStyle={styles.content}
+			keyboardShouldPersistTaps="handled"
+		>
+			<View testID={testID} style={styles.column}>
+				<Logo width={mark} height={mark} />
+				<View style={[styles.card, { padding: phone ? 16 : 32 }]}>
+					<View style={[styles.disc, { backgroundColor: style.disc }]}>
+						<style.Glyph width={28} height={28} color={style.glyph} testID={`${testID}-glyph`} />
 					</View>
+					<Text testID={`${testID}-title`} role="heading" style={styles.title}>
+						{title}
+					</Text>
+					{description ? (
+						<Text testID={`${testID}-description`} style={styles.line}>
+							{description}
+						</Text>
+					) : null}
+					{detail ? (
+						<Text testID={`${testID}-detail`} selectable style={styles.detail}>
+							{detail}
+						</Text>
+					) : null}
+					{children}
+					{primary || secondary ? (
+						<View style={styles.actions}>
+							{primary ? (
+								<PreThemeButton
+									action={primary}
+									fill={primary.destructive ? 'destructive' : 'primary'}
+									testID={`${testID}-primary`}
+								/>
+							) : null}
+							{secondary ? (
+								<PreThemeButton action={secondary} fill="outline" testID={`${testID}-secondary`} />
+							) : null}
+						</View>
+					) : null}
 				</View>
-			</ScrollView>
-		</SafeAreaView>
+			</View>
+		</ScrollView>
 	);
 }
 

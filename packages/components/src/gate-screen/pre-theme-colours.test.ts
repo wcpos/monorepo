@@ -3,7 +3,8 @@ import { join } from 'node:path';
 
 import { PRE_THEME_COLOURS, PRE_THEME_RADIUS } from './pre-theme-colours';
 
-const css = readFileSync(join(__dirname, '..', 'global.css'), 'utf8');
+// The token sheet lives with the app; these are its light values for the screens above it.
+const css = readFileSync(join(__dirname, '../../../../apps/main/global.css'), 'utf8');
 /** The `@variant light { … }` block: the first one, the default theme's. */
 const light = css.slice(css.indexOf('@variant light {'), css.indexOf('@variant dark {'));
 

@@ -38,13 +38,9 @@ const RAW_PRESSABLES = new Set([
 ]);
 // CODING_STANDARDS § Design 7: never a hex colour in a component; the semantic tokens carry it.
 const HEX_COLOUR = /(?<![\w&#-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g;
-// Files that legitimately carry hex: the native app config, the static HTML shell, and the
-// one pre-theme palette that the screens rendered above every provider read.
-const HEX_EXEMPT = new Set([
-	'apps/main/app.config.ts',
-	'apps/main/app/+html.tsx',
-	'apps/main/components/pre-theme-colours.ts',
-]);
+// Files that legitimately carry hex: the native app config and the static HTML shell. The one
+// pre-theme palette lives in the design system (`gate-screen/pre-theme-colours.ts`), exempt below.
+const HEX_EXEMPT = new Set(['apps/main/app.config.ts', 'apps/main/app/+html.tsx']);
 // The app trees whose screens the two rules above guard (the design system itself is exempt).
 const APP_TREES = ['packages/core/src', 'apps/main/app', 'apps/main/components', 'apps/main/lib'];
 

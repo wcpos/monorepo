@@ -371,7 +371,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
 #### Gate screens
 A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.
-The family has three members: `GateScreen` inside the providers, `FallbackScreen` (`@wcpos/components/error-boundary`) as the fallback of a boundary around a whole route, and `PreThemeGate` (`apps/main/components/pre-theme-gate.tsx`) above the providers, where no className resolves; a boundary around part of a screen keeps the inline bar.
+The family has three members: `GateScreen` inside the providers, `FallbackScreen` (`@wcpos/components/error-boundary`) as the fallback of a boundary around a whole route, and `PreThemeGate` (`@wcpos/components/gate-screen/pre-theme`) above the providers, where no className resolves; a boundary around part of a screen keeps the inline bar.
 A new gate is registered in `apps/main/components/gate-screens.test.ts`, which also refuses an `EmptyState` and a `Button` hand-centred in a `View`.
 The title never takes a tone colour: the disc carries it, and `bad` stays the only red surface.
 A coded gate's copy comes from the error registry (`error-registry.json`), one source for the screen, the log row and the docs page.

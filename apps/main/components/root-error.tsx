@@ -5,6 +5,7 @@ import { resetHydration } from '@wcpos/core/contexts/app-state/use-hydration-sus
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
+import { PreThemeGate, PreThemeParagraph } from '@wcpos/components/gate-screen/pre-theme';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	forgetUnsentChanges,
@@ -12,7 +13,6 @@ import {
 	type UnsentChanges,
 } from '@wcpos/utils/unsent-changes';
 
-import { PreThemeGate, PreThemeParagraph } from './pre-theme-gate';
 import { ROOT_ERROR_COPY as COPY, resetConfirmBody } from './root-error-copy';
 
 import type { FallbackProps } from 'react-error-boundary';

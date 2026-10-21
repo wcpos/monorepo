@@ -66,7 +66,6 @@ import { stories as tooltip } from '@wcpos/components/tooltip/gallery';
 import { stories as posterTile } from '@wcpos/components/poster-tile/gallery';
 
 import NotFound from '../../app/+not-found';
-import { stories as preThemeGate } from '../pre-theme-gate-gallery';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
@@ -119,7 +118,6 @@ const registry: Record<string, Story[]> = {
 	'empty-state': emptyState,
 	notice,
 	'gate-screen': gateScreen,
-	'pre-theme-gate': preThemeGate,
 	breadcrumb,
 	'browse-tiles': browseTiles,
 	'nav-item': navItem,

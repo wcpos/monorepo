@@ -1,16 +1,51 @@
 import * as React from 'react';
-import { StyleSheet } from 'react-native';
 
 import { fireEvent, render } from '@testing-library/react-native';
 
 import { resetHydration } from '@wcpos/core/contexts/app-state/use-hydration-suspense';
 
-import { PRE_THEME_COLOURS } from './pre-theme-colours';
 import { RootError } from './root-error';
 
-jest.mock('react-native-safe-area-context', () => ({
-	SafeAreaView: jest.requireActual('react-native').View,
-}));
+type MockAction = {
+	label: string;
+	onPress(): void;
+	testID: string;
+	disabled?: boolean;
+	destructive?: boolean;
+};
+// PreThemeGate's drawing is covered in packages/components; this stand-in shows the props
+// RootError chooses: the gate's testID, its children, and each action's slot and fill.
+jest.mock('@wcpos/components/gate-screen/pre-theme', () => {
+	const { View, Text, Pressable } = jest.requireActual('react-native');
+	function Slot({ action }: { action?: MockAction }) {
+		if (!action) return null;
+		return (
+			<Pressable testID={action.testID} disabled={action.disabled} onPress={action.onPress}>
+				<Text>{action.label}</Text>
+				<Text testID={`${action.testID}-fill`}>
+					{action.destructive ? 'destructive' : 'default'}
+				</Text>
+			</Pressable>
+		);
+	}
+	return {
+		PreThemeGate: (props: {
+			testID: string;
+			children?: React.ReactNode;
+			primary?: MockAction;
+			secondary?: MockAction;
+		}) => (
+			<View testID={props.testID}>
+				{props.children}
+				<Slot action={props.primary} />
+				<Slot action={props.secondary} />
+			</View>
+		),
+		PreThemeParagraph: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+			<Text testID={testID}>{children}</Text>
+		),
+	};
+});
 jest.mock('@wcpos/core/contexts/app-state/use-hydration-suspense', () => ({
 	resetHydration: jest.fn(),
 }));
@@ -56,11 +91,9 @@ describe('reset', () => {
 		await fireEvent.press(screen.getByTestId('root-error-reset'));
 
 		expect(screen.getByTestId('root-error-reset-warning').props.children).toContain('2 changes');
-		// The confirm is the destructive fill; Cancel is the outline.
-		const fill = (testID: string) =>
-			StyleSheet.flatten(screen.getByTestId(testID).props.style).backgroundColor;
-		expect(fill('root-error-reset-confirm')).toBe(PRE_THEME_COLOURS.destructive);
-		expect(fill('root-error-reset-cancel')).toBe(PRE_THEME_COLOURS.card);
+		// Confirming a loss: the primary is the destructive one, Cancel is not.
+		expect(screen.getByTestId('root-error-reset-confirm-fill').props.children).toBe('destructive');
+		expect(screen.getByTestId('root-error-reset-cancel-fill').props.children).toBe('default');
 		expect(scheduleClearLocalDataOnNextLoad).not.toHaveBeenCalled();
 
 		await fireEvent.press(screen.getByTestId('root-error-reset-cancel'));

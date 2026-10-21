@@ -1,9 +1,10 @@
 /**
- * The light theme's tokens (`@variant light` in `apps/main/global.css`) as hex, for the screens that
- * render above every provider, before Uniwind has a theme: no className resolves there. This is the
- * ONE hard-coded palette in the app. `pre-theme-colours.test.ts` reads global.css and fails when a
- * value here stops matching its token, so a theme change cannot leave the pre-theme gate behind.
- * Out-of-gamut tokens are clipped to sRGB, as a browser paints them on an sRGB screen.
+ * The light theme's tokens (`@variant light` in `apps/main/global.css`) as hex, for `PreThemeGate`
+ * (`pre-theme.tsx`): the screens that render above every provider, before Uniwind has a theme, so
+ * no className resolves. This is the ONE hard-coded palette in the app. `pre-theme-colours.test.ts`
+ * reads global.css and fails when a value here stops matching its token, so a theme change cannot
+ * leave the pre-theme gate behind. Out-of-gamut tokens are clipped to sRGB, as a browser paints
+ * them on an sRGB screen.
  */
 export const PRE_THEME_COLOURS = {
 	background: '#f5f7f9', // --background

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { PreThemeGate } from '@wcpos/components/gate-screen/pre-theme';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import {
 	readClearLocalDataOnNextLoadFlag,
@@ -8,8 +9,6 @@ import {
 } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-
-import { PreThemeGate } from './pre-theme-gate';
 
 const appLogger = getLogger(['wcpos', 'app', 'startup']);
 

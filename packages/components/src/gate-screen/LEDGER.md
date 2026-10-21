@@ -4,7 +4,7 @@ Seeded 2026-10-21 from the gate-screen design board (`~/Projects/wcpos-handoffs/
 
 **Job:** The one screen for a state that replaces the whole app.
 
-**Base:** `react-native` ScrollView and View; `Logo`, `Card`, `Icon`, `Text`, `VStack`, `Button` and `DocsLink`.
+**Base:** `react-native` ScrollView and View; `Logo`, `Card`, `Icon`, `Text`, `VStack`, `Button` and `DocsLink`. The pre-theme twin (`pre-theme.tsx`): `react-native` ScrollView, View, Text and TouchableOpacity in StyleSheet, `Logo` and the tabler glyph components.
 
 ## Lines
 
@@ -19,3 +19,7 @@ Seeded 2026-10-21 from the gate-screen design board (`~/Projects/wcpos-handoffs/
 9. An action can be `disabled` and keeps its slot while its state changes (the parked tab's *Take over here* while the handover runs), never emptying it — evidence: `CODING_STANDARDS.md` § Buttons (a slot never empties while its state changes); `apps/main/components/parked-tab.tsx`; `feat/gate-screen-sweep`.
 10. A boundary around a whole route falls back to `FallbackScreen` (`error-boundary/fallback-screen.tsx`): a `bad` gate, *Something went wrong*, the thrown message clipped to 300 characters in the detail, *Try again* resetting the boundary; a boundary around part of a screen keeps the inline bar — evidence: the gate-screen sweep after wcpos/monorepo#2805; `feat/gate-screen-sweep`.
 11. `destructive` is a primary-only flag for confirming a loss; the disc stays the tone, the title stays foreground ink — evidence: `CODING_STANDARDS.md` § Buttons (`destructive`, solid red, only for the confirm of a loss); the root error screen's *Reset and restart* (`apps/main/components/root-error.tsx`, rendered by `PreThemeGate`, which mirrors the flag); coordinator ruling on `feat/gate-screen-sweep`, 2026-10-21.
+12. `PreThemeGate` (`pre-theme.tsx`, `@wcpos/components/gate-screen/pre-theme`) is the gate's twin for a screen that renders above every provider (the root error screen, the blocked reset): no theme and no translations, so no className resolves, and the same geometry is written in StyleSheet numbers — the mark, one card at 448 inset 32 (16 on a phone, by `useIsPhone` as here), a 56 tone disc, the title in foreground ink at 20/600, one muted line, the actions stacked full width at 44, a destructive primary in the Button's destructive colours — evidence: lines 2–5, 9 and 11; `apps/main/components/root-error.tsx`; `feat/gate-screen-sweep`, moved here from `apps/main/components` because the raw-pressable rule exempts the design system only (uniwind ratchet, 2026-10-21).
+13. The twin's mark is the `Logo` (width and height only, no className) and its tone glyph is the default set's (tabler) generated `warning`, `alert` or `info` component given a `color`, since `Icon` takes its colour from a className — evidence: `pre-theme.tsx`, `pre-theme.test.tsx`; `feat/gate-screen-sweep`.
+14. `PRE_THEME_COLOURS` (`pre-theme-colours.ts`) is the light theme's tokens as hex, out-of-gamut tokens clipped to sRGB as a browser paints them; a test parses `apps/main/global.css` so no value can drift from its token — evidence: `pre-theme-colours.test.ts`; `feat/gate-screen-sweep`.
+15. Like `GateScreen`, the twin pads no safe area: the centred content keeps the page gutter (16) from every edge — evidence: line 8; `feat/gate-screen-sweep`.

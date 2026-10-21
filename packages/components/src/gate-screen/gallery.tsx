@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { FallbackScreen } from '../error-boundary/fallback-screen';
 import { GateScreen } from './index';
+import { PreThemeGate } from './pre-theme';
 
 const noop = () => {};
 const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
@@ -81,6 +82,38 @@ export const stories = [
 				<FallbackScreen
 					error={new TypeError("Cannot read properties of undefined (reading 'line_items')")}
 					resetErrorBoundary={noop}
+				/>
+			</View>
+		),
+	},
+	// The pre-theme twin is always the light theme: it renders before any theme exists, so every
+	// theme's cell is the same picture by design.
+	{
+		id: 'pre-theme-crash',
+		render: () => (
+			<View className="h-160 w-full">
+				<PreThemeGate
+					testID="gallery-gate-screen-pre-theme-crash"
+					tone="bad"
+					title="Something went wrong"
+					description="Try again keeps everything on this device."
+					detail="TypeError: Cannot read properties of undefined (reading 'line_items')"
+					primary={{ label: 'Try again', onPress: noop }}
+					secondary={{ label: 'Reset app data and restart', onPress: noop }}
+				/>
+			</View>
+		),
+	},
+	{
+		id: 'pre-theme-reset-blocked',
+		render: () => (
+			<View className="h-160 w-full">
+				<PreThemeGate
+					testID="gallery-gate-screen-pre-theme-reset-blocked"
+					tone="warn"
+					title="Reset didn’t finish"
+					description="The local data reset did not complete. Reload the page to retry — nothing new can be saved until it finishes."
+					primary={{ label: 'Reload and retry', onPress: noop }}
 				/>
 			</View>
 		),
