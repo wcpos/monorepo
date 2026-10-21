@@ -42,6 +42,8 @@ test('public value surface is exactly the spec', () => {
 		'roundToIncrement',
 		'roundedDue',
 		'saleProvenanceMeta',
+		// Added 2026-10-21 (#2830): one payment-row identity for the ledger upsert and query's answer merge.
+		'samePaymentId',
 		'serverOwnsMoney',
 		// Added 2026-08-23 (#1472): the cart's money write must not sit behind a
 		// coupon-reference fetch, and settleCart's missing-coupon gate makes it. The
