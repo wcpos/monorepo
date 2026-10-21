@@ -239,10 +239,11 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Every interactive element carries a stable `testID`.
 
 #### 11. Settings and admin forms
-Applies to every settings form the owner edits, in the app and in the WordPress admin plugins
-(owner, 2026-10-21: *"what is variance, is it a time? is it money? You need better guidelines on
+Applies to every settings form the owner edits, in the app and in the plugins' WordPress admin
+screens (owner, 2026-10-21: *"what is variance, is it a time? is it money? You need better guidelines on
 UI because this is not intuitive"*). The long form with the cited examples is section 11 of
 `docs/design/ui-design-guidelines.md` in `wcpos/roadmap`.
+
 - **A setting is a sentence the owner would say.** The label is the behaviour in the words used at
   the counter; the control sits where the value goes in the sentence: *Ask a manager when the count
   is out by more than [£ 5.00]*.
