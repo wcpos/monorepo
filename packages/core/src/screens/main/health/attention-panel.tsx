@@ -45,15 +45,22 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 			// count selects the plural; n fills the published catalogues' placeholder.
 			title={t('health.database.attention', { count: stuck.length, n: stuck.length })}
 			// Decode both server-supplied interpolations; only a push is an upload.
+			// Three literal keys: the string extractor cannot read a computed key.
 			description={decode(
-				t(
-					first.status === 'deleted'
-						? 'health.database.attention_reason_delete'
-						: first.direction === 'pull'
-							? 'health.database.attention_reason_pull'
-							: 'health.database.attention_reason',
-					{ name: displayName, reason: first.reason }
-				)
+				first.status === 'deleted'
+					? t('health.database.attention_reason_delete', {
+							name: displayName,
+							reason: first.reason,
+						})
+					: first.direction === 'pull'
+						? t('health.database.attention_reason_pull', {
+								name: displayName,
+								reason: first.reason,
+							})
+						: t('health.database.attention_reason', {
+								name: displayName,
+								reason: first.reason,
+							})
 			)}
 		>
 			<HStack className="items-center gap-1">
