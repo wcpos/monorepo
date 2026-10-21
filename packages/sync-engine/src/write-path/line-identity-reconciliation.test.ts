@@ -168,8 +168,15 @@ it.each([true, false])(
 				payload: { customer_note: 'successor' },
 			});
 			const serverMeta = stamped ? keys.map((key) => ({ key, value: '2' })) : [];
+			// A whole document: its server-owned set replaces the resident's, deletions included
+			// (a trimmed acknowledgement replaces only the keys it carries).
 			const server = {
 				...truth,
+				total: '0.00',
+				currency: 'USD',
+				status: 'pos-open',
+				date_paid: null,
+				payment_method: '',
 				customer_note: 'old note',
 				meta_data: [...meta_data, ...serverMeta],
 			};

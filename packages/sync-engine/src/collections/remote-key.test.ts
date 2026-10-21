@@ -124,8 +124,14 @@ it('an order ack adopts every server-owned meta key while a successor is queued'
 	} as unknown as RxDatabase;
 	const ledger = { id: 9, key: '_wcpos_payments', value: 'server' };
 	const commands = { id: 10, key: '_wcpos_commands', value: 'server' };
+	// A whole document: its server-owned set replaces the resident's, deletions included.
 	const server = {
 		id: 7,
+		total: '10.00',
+		currency: 'USD',
+		status: 'pos-open',
+		date_paid: null,
+		payment_method: '',
 		meta_data: [uuid, { key: 'custom', value: 'server copy' }, ledger, commands],
 	};
 	await writeFacetFor('orders')!.reconcile(db, {
@@ -137,6 +143,58 @@ it('an order ack adopts every server-owned meta key while a successor is queued'
 		mutation: { mutationId: 'previous', operation: 'update', recordId: uuid.value },
 	});
 	expect(resident.payload.meta_data).toEqual([uuid, custom, ledger, commands]);
+});
+
+// The push contract allows a trimmed acknowledgement. It replaces only the server-owned keys it
+// carries; every other server-owned key stays as the resident holds it until a whole document
+// adopts. A bare `{ id }` changes no money: a paid resident still reads paid.
+it.each([
+	['a bare { id }', { id: 7 }, ['ledger', 'completions', 'method']],
+	[
+		'a trimmed document carrying only the ledger',
+		{ id: 7, meta_data: [{ id: 9, key: '_wcpos_payments', value: 'server' }] },
+		['completions', 'method', 'server ledger'],
+	],
+])('an order acked with %s keeps the server-owned keys it does not carry', async (_, ack, kept) => {
+	const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000081' };
+	const local = {
+		ledger: { key: '_wcpos_payments', value: 'paid' },
+		completions: { key: '_wcpos_completions', value: [{ n: 1 }] },
+		method: { key: '_wcpos_payment_method', value: 'cash' },
+		'server ledger': { id: 9, key: '_wcpos_payments', value: 'server' },
+	};
+	const resident = {
+		payload: {
+			status: 'completed',
+			meta_data: [uuid, local.ledger, local.completions, local.method],
+		},
+		local: { pendingMutationIds: ['previous'] },
+	};
+	const db = {
+		collections: {
+			orders: {
+				findOne: () => ({
+					exec: async () => ({
+						incrementalModify: async (modify: (row: typeof resident) => typeof resident) =>
+							Object.assign(resident, modify(resident)),
+					}),
+				}),
+			},
+		},
+	} as unknown as RxDatabase;
+	await writeFacetFor('orders')!.reconcile(db, {
+		recordId: uuid.value,
+		remoteId: remoteId(7),
+		currentRevision: 'r2',
+		document: ack,
+		identityDocument: ack,
+		mutation: { mutationId: 'previous', operation: 'update', recordId: uuid.value },
+	});
+	expect(resident.payload.status).toBe('completed');
+	expect(resident.payload.meta_data).toEqual(
+		expect.arrayContaining(kept.map((name) => local[name as keyof typeof local]))
+	);
+	expect(resident.payload.meta_data).toHaveLength(1 + kept.length);
 });
 
 // ADR 0040 §1.3: only an ack that adopts the whole document certifies it; a naked revision
