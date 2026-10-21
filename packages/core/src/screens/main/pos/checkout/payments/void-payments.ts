@@ -85,20 +85,17 @@ export async function voidPayments(
 			order: null,
 		};
 	let lastOrder: OrderPaymentSummary | null = null;
-	const answers: { payment: PaymentRow; order: OrderPaymentSummary | null }[] = [];
 	const rows: PaymentRow[] = [];
 	const failed: VoidPaymentsFailure[] = [];
 	for (const row of liveRows) {
+		let accepted: { payment: PaymentRow; order: OrderPaymentSummary };
 		try {
 			const response = await deps.post(`orders/${order.id}/payments/${row.id}/void`, {});
 			// Only the store's own row and summary say the leg was voided (sync-core
 			// `isMoneyAnswer`): a malformed 2xx is never replaced by a locally voided row. It is an
 			// unknown outcome, and the journal keeps the void for a re-send.
 			if (!isMoneyAnswer('void', response.data)) throw new Error('money_command_malformed_answer');
-			const accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
-			answers.push({ payment: accepted.payment, order: accepted.order });
-			rows.push(accepted.payment);
-			lastOrder = accepted.order;
+			accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 		} catch (error) {
 			const refusal = moneyRefusalOf(error);
 			failed.push({
@@ -108,11 +105,17 @@ export async function voidPayments(
 				// Only the store's decision is a refusal; anything the journal keeps is unknown.
 				refused: isDefinitiveMoneyRefusal(refusal),
 			});
+			continue;
 		}
+		// Mirrored (and settled) before the next void is sent: a settle only ever deletes the
+		// entry of a void whose row is already mirrored, so a failed refresh or a crash between
+		// two voids leaves the next one journaled, never live with no entry.
+		await deps.mirror(accepted);
+		rows.push(accepted.payment);
+		lastOrder = accepted.order;
 	}
 	if (rows.length === 0) {
 		return { kind: 'voided', via: 'online', rows, failed, order: null };
 	}
-	for (const answer of answers) await deps.mirror(answer);
 	return { kind: 'voided', via: 'online', rows, failed, order: lastOrder };
 }

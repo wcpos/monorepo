@@ -282,3 +282,17 @@ it('a malformed 2xx voids nothing locally and reports the row unknown', async ()
 	});
 	expect(deps.mirror).not.toHaveBeenCalled();
 });
+
+// One poster journals every void of the sale, and a mirror settles what that poster has answered:
+// each void is mirrored before the next is sent, so a settle never deletes the entry of a void
+// whose row is not mirrored yet (a failed refresh or a crash would leave it live with no entry).
+it('mirrors each void before sending the next one', async () => {
+	const deps = createDeps();
+	deps.post.mockImplementation(async (url: string) => answered(url));
+	await voidPayments(order([payment('first', 'captured'), payment('second', 'captured')]), deps);
+	const [firstPost, secondPost] = deps.post.mock.invocationCallOrder;
+	const [firstMirror, secondMirror] = deps.mirror.mock.invocationCallOrder;
+	expect(firstPost).toBeLessThan(firstMirror);
+	expect(firstMirror).toBeLessThan(secondPost);
+	expect(secondPost).toBeLessThan(secondMirror);
+});
