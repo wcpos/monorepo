@@ -124,7 +124,8 @@ describe('mergeAvailablePrinterProfiles', () => {
 const mockProfiles$ = new Subject<PrinterProfile[]>();
 const mockStoreDB = { collections: { printer_profiles: { find: () => ({ $: mockProfiles$ }) } } };
 // The cloud request settles immediately so the loading state is driven by the local query.
-const mockHttp = { get: () => Promise.resolve({ data: null }) };
+const settledAtOnce = (): Promise<unknown> => Promise.resolve({ data: null });
+const mockHttp = { get: jest.fn(settledAtOnce) };
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockStoreDB }),
 }));
@@ -146,3 +147,56 @@ it.each<[PrinterProfile[]]>([[[]], [[localPrinter]]])(
 		);
 	}
 );
+
+describe('cloudPending', () => {
+	let settle: { resolve: (value: unknown) => void; reject: (error: unknown) => void };
+
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockHttp.get.mockImplementation(
+			() =>
+				new Promise((resolve, reject) => {
+					settle = { resolve, reject };
+				})
+		);
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+		mockHttp.get.mockImplementation(settledAtOnce);
+	});
+
+	it('stays true past the grace while the request hangs, then clears when it answers', async () => {
+		const { result } = renderHook(() => useAvailablePrinterProfiles());
+		await act(async () => {
+			mockProfiles$.next([localPrinter]);
+		});
+		expect(result.current.cloudPending).toBe(true);
+
+		act(() => {
+			jest.advanceTimersByTime(2000);
+		});
+		// The list stops waiting; routing still knows the cloud answer is outstanding.
+		expect(result.current.isLoading).toBe(false);
+		expect(result.current.cloudPending).toBe(true);
+
+		await act(async () => {
+			settle.resolve({ data: [{ id: 'reg-7', name: 'Kitchen Cloud' }] });
+		});
+		expect(result.current.cloudPending).toBe(false);
+		expect(result.current.printers.map((p) => p.id)).toContain('cloud:reg-7');
+	});
+
+	it('clears when the request fails', async () => {
+		const { result } = renderHook(() => useAvailablePrinterProfiles());
+		await act(async () => {
+			mockProfiles$.next([localPrinter]);
+		});
+		expect(result.current.cloudPending).toBe(true);
+
+		await act(async () => {
+			settle.reject(new Error('offline'));
+		});
+		expect(result.current.cloudPending).toBe(false);
+		expect(result.current.isLoading).toBe(false);
+	});
+});
