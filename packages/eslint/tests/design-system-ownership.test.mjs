@@ -388,6 +388,7 @@ test('does not mistake prose, other opacities or Notice for a tinted alert box',
 		<Notice tone="warn" title="bg-warning/10" />
 		<View className="bg-info/100" />
 		<View className="bg-info/20" />
+		<View className="hover:bg-destructive/10 active:bg-warning/10" />
 	</>;`);
 	assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
 });

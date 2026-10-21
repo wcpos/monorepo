@@ -56,8 +56,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 				)
 			)}
 		>
-			<HStack className="flex-wrap items-baseline gap-x-3 gap-y-1">
-				<HStack className="items-center gap-1">
+			<HStack className="items-center gap-1">
 					{fixRoute ? (
 						<Button
 							variant="ghost"
@@ -88,7 +87,6 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 					>
 						<ButtonText>{t('health.database.attention_view_log')}</ButtonText>
 					</Button>
-				</HStack>
 			</HStack>
 		</Notice>
 	);
