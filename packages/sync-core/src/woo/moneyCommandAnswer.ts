@@ -1,6 +1,6 @@
 /**
  * How the till reads a money command's answer (ADR 0040 §1.3 step 6): one home for the rule,
- * so the envelope's journal, the close, the cash record and PR B's queue adapter cannot drift.
+ * so the journal, the close and the cash record cannot drift.
  *
  * A JSON WordPress error with a 4xx status is the server's decision on this command, and a
  * re-send would repeat it: the command is settled (its journal entry deleted). The exceptions
@@ -11,15 +11,12 @@
  */
 
 /** A 4xx code that is not the server's decision on the command: re-send it. */
-export const RESENDABLE_MONEY_CODES: readonly string[] = [
-	'wcpos_payment_locked',
-	'wcpos_revision_stale',
-];
+const RESENDABLE_MONEY_CODES: readonly string[] = ['wcpos_payment_locked', 'wcpos_revision_stale'];
 /**
  * A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. 407 is an
  * authenticating proxy (the terminal leg reads it the same way, `server-leg.ts` INTENT_REFUSAL).
  */
-export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408, 426, 429];
+const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408, 426, 429];
 /**
  * The 5xx answers the store documents as its own decision with no money moved, so a re-send
  * cannot take money and the journal must let the cashier move on. Free `next`
@@ -31,7 +28,7 @@ export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408,
  * AFTER dispatch, leaves its attempt `sent` (:266) behind the same 502, so the poster re-sends a
  * submit's 502 once first: a stored `sent` replays, a closed attempt answers 409 (query `send`).
  */
-export const DEFINITIVE_SERVER_ERROR_CODES: readonly string[] = [
+const DEFINITIVE_SERVER_ERROR_CODES: readonly string[] = [
 	'wcpos_capture_mode_unsupported',
 	'wcpos_provider_error',
 ];
@@ -46,13 +43,10 @@ export type PaymentRowRefusal = (typeof PAYMENT_ROW_REFUSALS)[keyof typeof PAYME
 /** The named answers a caller branches on. */
 export const MONEY_ANSWER_CODES = {
 	revisionStale: 'wcpos_revision_stale',
-	paymentLocked: 'wcpos_payment_locked',
 	balanceOutstanding: 'wcpos_balance_outstanding',
-	fieldsInvalid: 'wcpos_fields_invalid',
-	moneyInMotion: 'wcpos_money_in_motion',
 } as const;
 
-export interface MoneyRefusal {
+interface MoneyRefusal {
 	readonly status: number | undefined;
 	/** Set only when the body is a JSON WordPress error. */
 	readonly code?: string;
@@ -78,7 +72,7 @@ export function moneyRefusalOf(error: unknown): MoneyRefusal | null {
 }
 
 /** The store's answer to a `close` that completed the sale. */
-export interface CloseAnswer {
+interface CloseAnswer {
 	readonly order: { readonly status: string } & Record<string, unknown>;
 	/** null: the sale is paid but its completion stamp could not persist (server SPEC §4.3). */
 	readonly completion: { readonly n: number; readonly id: string } | null;
@@ -86,9 +80,8 @@ export interface CloseAnswer {
 
 /**
  * Statuses that are not a paid sale: the open POS carts, an unpaid or failed order, and an order
- * that is gone. The client's own paid rule is this blocklist too (core `sale-completion.ts`,
- * `UNPAID_STATUSES`): any other status, on-hold and a merchant's custom paid status included,
- * is a sale the store completed.
+ * that is gone. Any other status, on-hold and a merchant's custom paid status included, is a sale
+ * the store completed.
  */
 const UNPAID_CLOSE_STATUSES: readonly string[] = [
 	'pos-open',
@@ -130,7 +123,7 @@ export function isCloseAnswer(data: unknown): data is CloseAnswer {
 }
 
 /** What a gateway `submit` can answer, first time or replayed. */
-export const SUBMIT_OUTCOMES: readonly string[] = ['sent', 'settled', 'recorded', 'paid'];
+const SUBMIT_OUTCOMES: readonly string[] = ['sent', 'settled', 'recorded', 'paid'];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
 	!!value && typeof value === 'object';
