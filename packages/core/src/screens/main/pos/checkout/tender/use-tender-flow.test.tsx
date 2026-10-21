@@ -909,6 +909,30 @@ describe('useTenderFlow', () => {
 		expect(result.current.state.plan).toEqual(plan);
 	});
 
+	// Codex 4342609028 on #2831: the next leg reads derive()'s balance, which counts a succeeded
+	// refund on a reopened sale as due again.
+	it('a replacement leg on a reopened sale with a refund leaves the rest due and keeps the plan', async () => {
+		const plan = { kind: 'even' as const, ways: 2, from: 1 };
+		const refunds: PaymentRow['refunds'] = [
+			{ id: 1, amount: '20.00', status: 'succeeded', provider_ref: null },
+		];
+		mockPayload = {
+			total: '50.00',
+			meta_data: withLedger([], [payment({ id: 'a', amount: '50.00', tendered: null, refunds })]),
+		};
+		mockRecordManualPayment.mockResolvedValue({
+			...recorded,
+			row: payment({ id: 'b', amount: '10.00', tendered: null }),
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 2000 }));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
+		await act(async () => result.current.takeTender());
+		expect(result.current.state.entryMinor).toBe(1000);
+		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
+	});
+
 	it('a remount after the planned legs are taken still journals every share on the last leg (roadmap#422)', async () => {
 		const plan = { kind: 'even' as const, ways: 2, from: 0 };
 		setTenderPlan(order.uuid, plan);

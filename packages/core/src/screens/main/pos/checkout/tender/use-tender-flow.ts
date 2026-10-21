@@ -630,12 +630,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
 			else latest[index] = row;
-			const paidAfter = latest
-				.filter(isSettledPaymentRow)
-				.reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			// The balance the summary shows (`derive()`): captured money only (ADR 0040 D6), and a
+			// succeeded refund on a reopened sale due again (Codex 4342609028 on #2831).
+			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
 			const action: TenderAction = {
 				type: 'tender-recorded',
-				balanceMinor: Math.max(0, toMinor(order.getLatest().payload.total, dp) - paidAfter),
+				balanceMinor: toMinor(balance, dp),
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
 					.filter(isSettledPaymentRow)
