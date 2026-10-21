@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { recordReceiptPrint } from '@wcpos/query/mutations';
+import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
@@ -406,6 +407,24 @@ export function useReceiptDocument({
 	const localStatus = orderData?.status;
 	const localOrderSettled =
 		!!localStatus && isSettledOrderStatus(localStatus, gateway?.settled_order_status);
+	// Finishing waits on that too, but never for ever: the post-payment order refresh is
+	// bounded at ORDER_REFRESH_TIMEOUT_MS, so a wait that outlives the same bound means the
+	// local order will not settle from it. Past the deadline the buttons release and nothing
+	// prints (the cashier can still press Print); a settle that lands later still auto-prints.
+	const awaitingSettledData =
+		autoPrintAllowed &&
+		Boolean(uiSettings.autoPrintReceipt) &&
+		hasFinalData &&
+		!receiptDataIsServer &&
+		!localOrderSettled;
+	const [dataWaitExpiredFor, setDataWaitExpiredFor] = React.useState<string | null>(null);
+	const dataWaitExpired = dataWaitExpiredFor === order?.uuid;
+	React.useEffect(() => {
+		if (!awaitingSettledData || dataWaitExpired) return;
+		const uuid = order?.uuid ?? null;
+		const timer = setTimeout(() => setDataWaitExpiredFor(uuid), ORDER_REFRESH_TIMEOUT_MS);
+		return () => clearTimeout(timer);
+	}, [awaitingSettledData, dataWaitExpired, order?.uuid]);
 	const attemptAutoPrint = React.useCallback(() => {
 		const frameLoaded = iframeLoadedRef.current.key === frameKey && iframeLoadedRef.current.loaded;
 		if (
@@ -451,9 +470,10 @@ export function useReceiptDocument({
 	};
 	const handleError = () => setFrame({ key: frameKey, state: 'failed' });
 
-	// True while a configured auto-print is still waiting: on the store round-trip, or on the
-	// preview frame that has a document but has not loaded yet. Settled by the attempt itself,
-	// by the frame failing, or by there being no document to print — never by a timer.
+	// True while a configured auto-print is still waiting: on the store round-trip, on the
+	// printer, on the preview frame that has a document but has not loaded yet, or on settled
+	// data. Settled by the attempt itself, by the frame failing, by there being no document to
+	// print, or (the settled-data wait only) by the order refresh's bound.
 	const hasDocument = renderedHtml != null || Boolean(templateReceiptUrl || baseReceiptURL);
 	const autoPrintPending =
 		autoPrintAllowed &&
@@ -462,7 +482,8 @@ export function useReceiptDocument({
 		frameState !== 'failed' &&
 		(isSyncing ||
 			isResolvingPrinter ||
-			(needsLoadedPreview && hasDocument && frameState !== 'loaded'));
+			(needsLoadedPreview && hasDocument && frameState !== 'loaded') ||
+			(awaitingSettledData && !dataWaitExpired));
 
 	return {
 		documentError,

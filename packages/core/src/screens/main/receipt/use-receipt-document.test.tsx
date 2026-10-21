@@ -206,6 +206,39 @@ it.each([
 		expect(mockPrint).toHaveBeenCalledTimes(prints ? 1 : 0);
 	}
 );
+describe('finishing while a pos-open fallback waits to settle', () => {
+	const open = { uuid: 'h', payload: { id: 45, status: 'pos-open' } };
+	const renderOpen = () =>
+		renderHook(({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }), {
+			initialProps: { doc: open },
+		});
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockServerData = false;
+	});
+	afterEach(() => jest.useRealTimers());
+
+	it('holds the buttons, then prints once and releases when the order settles', async () => {
+		const { result, rerender } = renderOpen();
+		await act(async () => result.current.previewProps.handleLoad());
+		expect(result.current.autoPrintPending).toBe(true);
+		const settled = { ...open, payload: { ...open.payload, status: 'completed' } };
+		await act(async () => rerender({ doc: settled }));
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+		expect(result.current.autoPrintPending).toBe(false);
+	});
+
+	it('releases the buttons at the order refresh bound without printing', async () => {
+		const { result } = renderOpen();
+		await act(async () => result.current.previewProps.handleLoad());
+		await act(async () => jest.advanceTimersByTime(9_999));
+		expect(result.current.autoPrintPending).toBe(true);
+		await act(async () => jest.advanceTimersByTime(1));
+		expect(result.current.autoPrintPending).toBe(false);
+		expect(mockPrint).not.toHaveBeenCalled();
+		expect(mockToast).not.toHaveBeenCalled();
+	});
+});
 it('reports no printer mismatch for a session report the cloud printer hands to the dialog', () => {
 	const cloud = { id: 'cloud:1', connectionType: 'cloud', cloudProvider: 'star-cloudprnt' };
 	mockPrinter = { resolvedPrinter: cloud, mismatch: 'html-template-cloud-thermal-only' };
