@@ -3,6 +3,7 @@ import { Platform, ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { fromMinor } from '@wcpos/order-math';
@@ -178,14 +179,16 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				</View>
 			)}
 			{needsManager && (
-				<View className="bg-warning/10 min-h-ctl flex-row items-center gap-2 rounded-lg px-3">
-					<Icon name="lock" className="text-warn-text" />
-					<Text testID="count-manager-line" className="text-warn-text flex-1">
-						{session?.approval_required
+				<Notice
+					tone="warn"
+					icon="lock"
+					title={
+						session?.approval_required
 							? t('register.approval_needed')
-							: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}
-					</Text>
-				</View>
+							: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })
+					}
+					testID="count-manager-line"
+				/>
 			)}
 			<View className="border-border border-t">
 				<Button

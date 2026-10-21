@@ -67,6 +67,7 @@ jest.mock('../tender/legacy-tab', () => ({
 }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 jest.mock('../../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => false,
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: () => false }),
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
