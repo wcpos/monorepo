@@ -1,4 +1,4 @@
-import { POS_META_KEYS } from '@wcpos/sync-core';
+import { isPaidStatus, POS_META_KEYS } from '@wcpos/sync-core';
 import type { StoreDatabase, UserDatabase } from '@wcpos/query/user-db';
 import {
 	activeAwaitingCustomer,
@@ -265,6 +265,15 @@ export function reopenedSince(
 	);
 }
 
+/**
+ * An online leg completes only on a paid store: neither its answer (`reopenedSince`) nor the
+ * resident after the mirror may read unpaid, whether a newer adoption reopened it or the mirror
+ * never landed. The refresh decides then, never the answer alone.
+ */
+function unpaidOnStore(order: OrderPaymentSummary | null, dp: number, payload?: OrderPayload) {
+	return reopenedSince(order, dp) || (!!payload?.status && !isPaidStatus(payload.status));
+}
+
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
@@ -277,14 +286,14 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				activeAwaitingCustomer(payload.meta_data) === null
 			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
-			if (outcome.via === 'online' && reopenedSince(outcome.order, dp)) return false;
+			if (outcome.via === 'online' && unpaidOnStore(outcome.order, dp, payload)) return false;
 			return typeof outcome.order?.balance === 'string' &&
 				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&
 				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
 				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
-			if (!outcome.row.recorded_offline && reopenedSince(outcome.order, dp)) return false;
+			if (!outcome.row.recorded_offline && unpaidOnStore(outcome.order, dp, payload)) return false;
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
@@ -351,13 +360,16 @@ async function finishSale(
 	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
 		const latest = order.getLatest().payload;
 		if (
-			outcome.source === 'manual' &&
-			outcome.order &&
 			latest.id &&
-			toMinor(outcome.order.balance, ctx.dp) !== outcome.preLegBalanceMinor - outcome.amountMinor
+			((outcome.source === 'manual' &&
+				outcome.order &&
+				toMinor(outcome.order.balance, ctx.dp) !==
+					outcome.preLegBalanceMinor - outcome.amountMinor) ||
+				isSaleComplete(outcome, ctx.dp))
 		) {
 			// ADR 0032: the server's balance stands; the till must SHOW it to collect it.
-			// Only when the store disagrees with the till: an ordinary split leg costs no request.
+			// Only when the store disagrees with the till (an ordinary split leg costs no request),
+			// or its answer reads paid while the resident does not: the refresh decides.
 			const logger = getLogger(['wcpos', 'pos', 'checkout']);
 			const refreshed = refreshOrderRecord(ctx.runtime, latest.id);
 			try {
@@ -376,11 +388,14 @@ async function finishSale(
 				});
 			}
 		}
-		return {
-			outcome:
-				outcome.source === 'manual' || outcome.source === 'terminal' ? 'partial' : 'not-completed',
-			summary: null,
-		};
+		if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload))
+			return {
+				outcome:
+					outcome.source === 'manual' || outcome.source === 'terminal'
+						? 'partial'
+						: 'not-completed',
+				summary: null,
+			};
 	}
 	const payload = () =>
 		outcome.source === 'gateway-snapshot' ? outcome.snapshot : order.getLatest().payload;

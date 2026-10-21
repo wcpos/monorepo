@@ -1055,3 +1055,30 @@ it.each([
 		expect(release).toHaveBeenCalledTimes(1);
 	}
 );
+
+// The authoritative resident, after the mirror, decides: a store answer that reads paid completes
+// the sale only once the resident carries a paid status. Whether a newer adoption reopened it or
+// the mirror never landed, the sale is refreshed, never sent to the receipt on the answer alone;
+// the refresh then either completes it or leaves the reopened cart.
+it.each([
+	['a newer adoption reopened the sale', 'pos-open', 'partial'],
+	['the mirror never landed', 'completed', 'completed'],
+])('the resident is not paid after the mirror: %s', async (_, refreshedStatus, result) => {
+	let status = 'pos-open';
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status } }),
+	} as never;
+	mockRefresh.mockImplementationOnce(async () => {
+		status = refreshedStatus;
+		return 'refreshed';
+	});
+	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
+	expect(isSaleComplete(answer, 2, { ...payload, status: 'pos-open' } as never)).toBe(false);
+	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
+		result
+	);
+	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
+	if (result === 'partial') expect(mockReceipt).not.toHaveBeenCalled();
+	else expect(mockReceipt).toHaveBeenCalled();
+});
