@@ -35,7 +35,13 @@ function deferred<T>() {
 	});
 	return { promise, resolve };
 }
-function setup(offline = false, resume = false, missing?: 'driver' | 'method', pendingRow = row) {
+function setup(
+	offline = false,
+	resume = false,
+	missing?: 'driver' | 'method',
+	pendingRow = row,
+	retire?: (kind: 'intent', target: string) => Promise<void>
+) {
 	const collection = deferred<CollectResult>();
 	const driver: PaymentDriver = {
 		provider: 'simulated',
@@ -76,6 +82,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method', p
 			setTimeout,
 			clearTimeout,
 			onFinal,
+			...(retire ? { retire } : {}),
 		},
 		{
 			dp: 3,
@@ -823,5 +830,30 @@ it.each(['collect', 'capture'])(
 			code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
 		});
 		c.leg.dispose();
+	}
+);
+
+// An intent the store never confirmed (a held lock, a transport failure) whose cleanup void then
+// shows no live intent (voided, or not found) is retired from the journal before the leg is
+// final: a later recovery must never re-send it into a pending device payment no reader collects.
+it.each([
+	['not found', 'not_found'],
+	['voided', 'voided'],
+])(
+	'an unanswered intent whose cleanup void shows it %s is retired before the leg ends',
+	async (_, voidAnswer) => {
+		const retire = jest.fn(async () => undefined);
+		const c = setup(false, false, undefined, row, retire);
+		c.post.mockRejectedValueOnce({
+			response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
+		});
+		if (voidAnswer === 'not_found')
+			c.post.mockRejectedValueOnce({
+				response: { status: 404, data: { code: 'wcpos_payment_not_found', data: { status: 404 } } },
+			});
+		await c.leg.start();
+		expect(retire).toHaveBeenCalledWith('intent', row.id);
+		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'failed' });
+		expect(retire.mock.invocationCallOrder[0]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
 	}
 );

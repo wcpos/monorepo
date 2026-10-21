@@ -326,11 +326,33 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				// ends failed where it stood and the cashier reads the store's refusal of the intent,
 				// not the void's bookkeeping (a 400 here once showed as "Approved · payment not
 				// found", three steps along — WisePad 3 run, 2026-10-06).
+				// The void's answer also settles the intent: voided, or not found, means no live
+				// intent stands, so the intent (journaled unanswered after a held lock or a transport
+				// failure) is retired before the leg is final. A later recovery must never re-send it
+				// into a pending device payment no reader collects (ADR 0040 §1.3).
+				const retireIntent = async () => {
+					try {
+						await deps.retire?.('intent', input.row.id);
+					} catch (retireError) {
+						if (active())
+							set({
+								error: {
+									code: 'retire_failed',
+									message: retireError instanceof Error ? retireError.message : 'retire_failed',
+								},
+							});
+					}
+				};
 				try {
 					const response = await deps.post(url('void'), { reason: 'intent_refused' });
-					await apply(response.data as ServerLegResponse);
-				} catch {
+					const answer = response.data as ServerLegResponse;
+					if (answer?.payment?.status === 'voided') await retireIntent();
+					await apply(answer);
+				} catch (voidError) {
 					// A row the store never created needs no void.
+					const code = (voidError as { response?: { data?: { code?: string } } })?.response?.data
+						?.code;
+					if (code === 'wcpos_payment_not_found') await retireIntent();
 				}
 				if (active()) finish('failed');
 				return;

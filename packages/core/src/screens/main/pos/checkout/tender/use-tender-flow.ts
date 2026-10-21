@@ -723,6 +723,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
 				) {
 					const amountMinor = toMinor(row.amount, dp);
+					// A replay answers the stored row with the order as it now stands: an open order at
+					// a zero balance was reopened since (another till), so it is not finished here.
+					// A partial leg (a balance still due) runs the flow as a first answer would.
+					if (
+						summary &&
+						!isPaidStatus(summary.status) &&
+						typeof summary.balance === 'string' &&
+						toMinor(summary.balance, dp) === 0
+					) {
+						tenderRecorded(row, 'online');
+						logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+							showToast: true,
+							context: { ...orderContext, status: summary.status },
+						});
+						continue;
+					}
 					await completeOrderFlow({
 						source: 'manual',
 						via: 'online',
