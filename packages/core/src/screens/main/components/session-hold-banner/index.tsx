@@ -126,8 +126,8 @@ export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dens
 			tone="bad"
 			title={
 				syncBacklogSales > 0
-					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
-					: t('auth.session_expired')
+					? t('auth.sales_waiting_to_sync_title', { count: syncBacklogSales })
+					: t('auth.session_expired_title')
 			}
 			description={
 				syncBacklogSales > 0
