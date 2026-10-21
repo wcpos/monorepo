@@ -229,3 +229,57 @@ it('an order ack with a successor queued grafts the money-owner stamp it carries
 	});
 	expect(resident.payload.meta_data).toEqual([uuid, stamp]);
 });
+
+// ADR 0040 §1.3: only an ack that adopts the whole document certifies it; a naked revision
+// write (a successor queued) leaves the previous adoption behind, which revokes its authority.
+// A trimmed ack (the push contract allows one) is adopted for what it carries, but the keys it
+// omits keep their local values, so it never certifies the resident's money as the server's.
+const wholeOrder = {
+	total: '10.00',
+	currency: 'USD',
+	status: 'pos-open',
+	date_paid: null,
+	payment_method: '',
+};
+it.each([
+	[
+		'adopts a whole document',
+		[] as string[],
+		wholeOrder,
+		{ revision: 'r2', at: expect.any(Number) },
+	],
+	['writes a naked revision', ['successor'], wholeOrder, { revision: 'r1', at: 1 }],
+	['adopts a trimmed document', [] as string[], { total: '10.00' }, { revision: 'r1', at: 1 }],
+])(
+	'an order ack that %s stamps sync.adopted accordingly',
+	async (_label, successors, fields, adopted) => {
+		const uuid = { key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000079' };
+		const resident: Record<string, unknown> = {
+			payload: { meta_data: [uuid] },
+			sync: { revision: 'r1', adopted: { revision: 'r1', at: 1 } },
+			local: { pendingMutationIds: ['previous', ...successors] },
+		};
+		const db = {
+			collections: {
+				orders: {
+					findOne: () => ({
+						exec: async () => ({
+							incrementalModify: async (modify: (row: typeof resident) => typeof resident) =>
+								Object.assign(resident, modify(resident)),
+						}),
+					}),
+				},
+			},
+		} as unknown as RxDatabase;
+		const server = { id: 7, ...fields, meta_data: [uuid] };
+		await writeFacetFor('orders')!.reconcile(db, {
+			recordId: uuid.value,
+			remoteId: remoteId(7),
+			currentRevision: 'r2',
+			document: server,
+			identityDocument: server,
+			mutation: { mutationId: 'previous', operation: 'update', recordId: uuid.value },
+		});
+		expect(resident.sync).toMatchObject({ revision: 'r2', adopted });
+	}
+);

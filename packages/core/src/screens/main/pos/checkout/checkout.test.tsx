@@ -14,6 +14,7 @@ const mockBlockIfDegraded = jest.fn(() => false);
 let mockStorageDegraded = false;
 
 jest.mock('../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => mockStorageDegraded,
 	useStorageMoneyPathGuard: () => ({
 		storageDegraded: mockStorageDegraded,
 		blockIfDegraded: mockBlockIfDegraded,
@@ -380,7 +381,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		});
 
 		expect(button.disabled).toBe(true);
-		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+		expect(screen.getByTestId('checkout-payment-form-unavailable-title').textContent).toBe(
 			'pos_checkout.payment_form_load_failed_retry'
 		);
 		expect(paymentWebviewProps.retryToken).toBe(0);
@@ -400,7 +401,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		});
 
 		expect(button.disabled).toBe(true);
-		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+		expect(screen.getByTestId('checkout-payment-form-unavailable-title').textContent).toBe(
 			'pos_checkout.payment_form_navigation_failed'
 		);
 		expect(screen.queryByTestId('checkout-payment-form-retry')).toBeNull();
@@ -590,3 +591,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		paymentMethodsLoaded = false;
 	});
 });
+
+// Notice links out through the native URL boundary; keep that boundary inert in jsdom.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

@@ -418,6 +418,15 @@ function ackBookkeeping(options: {
 					sync: {
 						...sync,
 						revision: ack.currentRevision ?? sync.revision,
+						// Only an ack adopting the whole document certifies it (ADR 0040 §1.3): the orders
+						// adoption keeps the local value of every key a trimmed ack omits, so stamping one
+						// would certify the till's own money as the server's.
+						...(adopting &&
+						collection === 'orders' &&
+						ack.currentRevision &&
+						carriesWholeOrder(ack.document)
+							? { adopted: { revision: ack.currentRevision, at: Date.now() } }
+							: {}),
 						...(ack.mutation.operation === 'create' && createAckSource
 							? { source: createAckSource }
 							: {}),
