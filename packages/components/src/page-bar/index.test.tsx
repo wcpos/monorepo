@@ -83,6 +83,8 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	expect(row).toHaveClass('pt-4', 'px-4');
 	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
 	expect(row).not.toHaveClass('border-b');
+	// A title-only bar is as tall as one with a control: the title's box is control-height.
+	expect(screen.getByTestId('bar-title').parentElement).toHaveClass('min-h-ctl', 'justify-center');
 	expect(screen.getByTestId('control')).toBeInTheDocument();
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-lines', '1');
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-ellipsis', 'tail');

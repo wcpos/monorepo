@@ -81,7 +81,10 @@ export function PageBar({
 						/>
 					) : null)}
 				{title !== undefined ? (
-					<View className="min-w-0 shrink">
+					// The title stands in a control-height box: a bar with only a title is as tall as
+					// one with a control beside it (60 on wide widths), its title sits where it would
+					// next to one, and the row never takes the text's fractional height.
+					<View className="min-h-ctl min-w-0 shrink justify-center">
 						<Text
 							testID={id('title')}
 							className="text-foreground font-semibold"
