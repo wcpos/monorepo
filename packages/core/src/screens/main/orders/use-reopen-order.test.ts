@@ -126,9 +126,11 @@ it('a reopen refused with wcpos_money_in_motion names the leg and offers Cancel 
 		action: { label: 'pos_checkout.cancel_payment' },
 	});
 	toast!.action!.onClick();
+	// Standalone: the refused order is not an open cart, so the wide-screen columns cart
+	// (which resolves only open orders) could not show its payments.
 	expect(mockPush).toHaveBeenCalledWith({
 		pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-		params: { orderId: 'order-1' },
+		params: { orderId: 'order-1', standalone: '1' },
 	});
 });
 

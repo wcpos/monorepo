@@ -18,11 +18,9 @@ import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useOrderRecord, useUndoRefusedReopen } from './commands/use-order-record';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
+import { standaloneCheckoutHref } from '../pos/checkout/till-route';
 
 const logger = getLogger(['wcpos', 'orders', 'reopen']);
-
-/** Where the order's existing Cancel payment action lives. */
-const CHECKOUT_ROUTE = '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout';
 
 /**
  * Orders with a reopen awaiting the store's verdict. Module-wide, so every surface that can
@@ -109,8 +107,9 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 								type: 'error',
 								action: {
 									label: t('pos_checkout.cancel_payment'),
-									onClick: () =>
-										router.push({ pathname: CHECKOUT_ROUTE, params: { orderId: order.uuid! } }),
+									// The order's own checkout, where its Cancel payment lives: standalone,
+									// because after the undo the order is not an open cart.
+									onClick: () => router.push(standaloneCheckoutHref(order.uuid!)),
 								},
 							}
 						: {

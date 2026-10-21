@@ -10,11 +10,12 @@ let mockSize = 'lg';
 let mockLoaded = true;
 let mockUnsupported = false;
 let mockHref: unknown;
+let mockParams: Record<string, string> = { orderId: 'a' };
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('expo-router', () => ({
-	useLocalSearchParams: () => ({ orderId: 'a' }),
+	useLocalSearchParams: () => mockParams,
 	Redirect: ({ href }: { href: unknown }) => {
 		mockHref = href;
 		return <div data-testid="redirect" />;
@@ -33,6 +34,7 @@ beforeEach(() => {
 	mockLoaded = true;
 	mockUnsupported = false;
 	mockHref = undefined;
+	mockParams = { orderId: 'a' };
 });
 it('turns a wide tender deep link into order mode and the columns route', () => {
 	render(<CheckoutScreen />);
@@ -49,5 +51,13 @@ it.each(['phone', 'legacy', 'unsupported'])('retains the %s modal', (lane) => {
 	if (lane === 'unsupported') mockUnsupported = true;
 	render(<CheckoutScreen />);
 	expect(screen.getByTestId('modal')).not.toBeNull();
+	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+});
+it('a standalone link opens the order itself, never the columns cart that holds only open orders', () => {
+	// A refused reopen leaves the order completed: the columns cart could not resolve it.
+	mockParams = { orderId: 'a', standalone: '1' };
+	render(<CheckoutScreen />);
+	expect(screen.getByTestId('modal')).not.toBeNull();
+	expect(mockHref).toBeUndefined();
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 });
