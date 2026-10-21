@@ -442,3 +442,16 @@ it('a cashier-only hand-off writes and rolls back no status', async () => {
 	expect(rollback.data).not.toHaveProperty('status');
 	expect(rollback.data).toEqual({ meta_data: meta });
 });
+
+// The status edit is the cashier's, captured when the hand-off is staged: a pull adopting another
+// till's completion while it awaits confirmation is never read as one, so confirming sends no
+// status and cannot reopen the paid sale.
+it('a completion adopted while the hand-off awaits confirmation is not sent as a status edit', async () => {
+	const formData = { ...payload, cashier_id: '9' };
+	render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	order.payload = { ...payload, status: 'completed' }; // another till completed it; a pull adopted
+	await confirm();
+	expect(mockPatch).toHaveBeenCalledTimes(1);
+	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+});

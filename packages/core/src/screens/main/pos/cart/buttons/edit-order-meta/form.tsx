@@ -108,7 +108,8 @@ export function EditOrderMetaForm({
 	const { store, wpCredentials } = useStoreSession();
 	const storeID = useDocField(store, (value) => value.id);
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
-	const [pending, setPending] = React.useState<FormValues | null>(null);
+	// The staged hand-off, with whether the cashier changed the status (judged when staged).
+	const [pending, setPending] = React.useState<(FormValues & { statusEdit: boolean }) | null>(null);
 	const [loading, setLoading] = React.useState(false);
 	const cashierSelect = useSearchSelect('cashier');
 
@@ -137,9 +138,9 @@ export function EditOrderMetaForm({
 	async function applySave(data: FormValues, { close }: { close: boolean }): Promise<boolean> {
 		const payload = order.getLatest().payload;
 		const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
-		const identityChanged = data.status !== payload.status || data.cashier_id !== currentCashierId;
-		if (identityChanged) {
-			setPending(data);
+		const statusEdit = data.status !== payload.status;
+		if (statusEdit || data.cashier_id !== currentCashierId) {
+			setPending({ ...data, statusEdit });
 			return false;
 		}
 		// Status is an intent, never an echo (ADR 0040): it is unchanged here (a change goes
@@ -164,11 +165,12 @@ export function EditOrderMetaForm({
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, transaction_id: _transaction, status, ...fields } = pending;
+		const { cashier_id, transaction_id: _transaction, status, ...rest } = pending;
+		const { statusEdit: statusChanged, ...fields } = rest;
 		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
-		// out. A cashier-only hand-off sends none, so a stale open copy cannot reopen a sale
-		// another till completed, and its rollback restores the cashier alone.
-		const statusChanged = status !== previous.status;
+		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
+		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till
+		// completed, and its rollback restores the cashier alone.
 		const patch = () => ({
 			...fields,
 			...(statusChanged ? { status } : {}),
