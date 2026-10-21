@@ -254,6 +254,95 @@ describe('useCheckoutSession', () => {
 		jest.useRealTimers();
 	});
 
+	it('routes a completed contract checkout without waiting on a refresh that never settles, then releases it at the bound', async () => {
+		// #1685's failure class on the contract path: a require whose `ready` never
+		// settles (queued plane, dirty-row protection) must not keep the cashier off
+		// the receipt. Route first; the refresh is catch-up, bounded at 10 s.
+		jest.useFakeTimers();
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValue({ ready: new Promise<void>(() => {}), release });
+		const reducedItem = { id: 7, meta_data: [{ key: '_reduced_stock', value: '1' }] };
+		const paidOrder = makeOrder();
+		paidOrder.payload.line_items = [reducedItem, { id: 8, meta_data: [] }] as never;
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost
+			.mockResolvedValueOnce({ data: { status: 'ready' } })
+			.mockResolvedValueOnce({ data: { status: 'completed', terminal: true } });
+
+		const { result } = renderHook(() => useCheckoutSession(paidOrder as never));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+
+		let settled = false;
+		await act(async () => {
+			void result.current.startCheckout().then(() => {
+				settled = true;
+			});
+			await jest.advanceTimersByTimeAsync(0);
+		});
+
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(release).not.toHaveBeenCalled();
+		expect(mockStockAdjustment).not.toHaveBeenCalled();
+
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(10_000);
+		});
+
+		expect(release).toHaveBeenCalledTimes(1);
+		// Stock adjustment runs after the (bounded) refresh, from the latest order.
+		expect(mockStockAdjustment).toHaveBeenCalledWith([reducedItem]);
+		expect(settled).toBe(true);
+		expect(mockCheckoutWarn).not.toHaveBeenCalled();
+		jest.useRealTimers();
+	});
+
+	it('reports a refresh that rejects after a paid sale as PAYMENT101 at warn, already routed', async () => {
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.reject(new Error('refresh failed')),
+			release,
+		});
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost
+			.mockResolvedValueOnce({ data: { status: 'ready' } })
+			.mockResolvedValueOnce({ data: { status: 'completed', terminal: true } });
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await result.current.startCheckout();
+		});
+
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(release).toHaveBeenCalledTimes(1);
+		expect(mockStockAdjustment).not.toHaveBeenCalled();
+		expect(mockCheckoutWarn).toHaveBeenCalledWith(
+			'Contract checkout failed: refresh failed',
+			expect.objectContaining({
+				code: 'PAYMENT101',
+				context: expect.objectContaining({ phase: 'completed' }),
+			})
+		);
+	});
+
 	it('surfaces checkout_poll_timeout when polling never reaches a terminal status', async () => {
 		jest.useFakeTimers();
 		mockGet
