@@ -238,6 +238,29 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Touch targets and contrast checked, not assumed.
 - Every interactive element carries a stable `testID`.
 
+#### 11. Settings and admin forms
+Applies to every settings form the owner edits, in the app and in the plugins' WordPress admin
+screens (owner, 2026-10-21: *"what is variance, is it a time? is it money? You need better guidelines on
+UI because this is not intuitive"*). The long form with the cited examples is section 11 of
+`docs/design/ui-design-guidelines.md` in `wcpos/roadmap`.
+
+- **A setting is a sentence the owner would say.** The label is the behaviour in the words used at
+  the counter; the control sits where the value goes in the sentence: *Ask a manager when the count
+  is out by more than [£ 5.00]*.
+- **Every value carries its unit inside the control.** A currency symbol in a money field, a time
+  picker for a time, a suffix for minutes or percent. Never a bare box.
+- **Optional behaviour is a switch, and its value appears when the switch is on.** "Leave blank for
+  none" is a bug: blank is not a choice a person makes on purpose.
+- **The help line says what happens at the till, in one sentence.** Never the format, never the
+  label again.
+- **Plain words.** Float, drawer, count, short or over, close. Never variance, threshold, session,
+  expected.
+- **The common case is one switch.** Everything that only matters when it is on is hidden while it
+  is off.
+- **Inherited or customised is shown on the field, never implied by blank:** *Site default · value ·
+  Customise*, or *Overridden · value · Use site default*.
+- **Defaults are prefilled and visible in the control**, not described in a tip.
+
 ### Components: one answer per element, app-wide
 
 The owner's rule (2026-10-13, Card readers run): *"I don't want a special UI carved out for this

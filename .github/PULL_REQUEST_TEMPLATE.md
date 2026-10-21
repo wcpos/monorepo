@@ -14,5 +14,6 @@
 - [ ] Touch targets and contrast checked, not assumed
 - [ ] Every interactive element carries a stable `testID`
 - [ ] The component tables (buttons, overlays, chips, page bars) are followed
+- [ ] Settings forms follow rule 11: labels are plain-word sentences, units inside the control, switches not blanks, help says what happens at the till
 
 **Rule this PR breaks and why:** <!-- "none", or the § Design line and the reason -->
