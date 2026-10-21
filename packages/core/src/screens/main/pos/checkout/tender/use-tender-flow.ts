@@ -14,7 +14,6 @@ import {
 	derive,
 	fromMinor,
 	isLivePaymentStatus,
-	isSettledPaymentRow,
 	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
@@ -282,9 +281,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const methodId = stored?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
 		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
+		// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
 		const planRows = rows
 			.slice(storedPlan?.from ?? rows.length)
-			.filter(isSettledPaymentRow)
+			.filter(countsTowardPaid)
 			.map((row) => ({
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
@@ -423,9 +423,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
+	// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
 	const rowsSinceFrom = rows
 		.slice(state.plan?.from ?? rows.length)
-		.filter(isSettledPaymentRow)
+		.filter(countsTowardPaid)
 		.map((row) => ({
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,

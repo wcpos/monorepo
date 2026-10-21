@@ -959,6 +959,21 @@ describe('useTenderFlow', () => {
 		// Leg 2 of 3 is still due: 30.00 of the 60.00 balance, not the whole of it as leg 3.
 		expect(result.current.state.entryMinor).toBe(3000);
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
+		// The ledger as the store answers it: the keypad shows payment 2 of 3 for 30.00, and a
+		// remount pre-fills the same (Codex 4342686838 on #2831).
+		const authorized = await mockRecordManualPayment.mock.results[0].value;
+		mockPayload.meta_data = withLedger(
+			[],
+			[payment({ id: 'a', amount: '30.00', tendered: null }), authorized.row]
+		);
+		const view = renderHook(() => useTenderFlow(order));
+		expect(view.result.current.planLegs).toEqual([
+			{ minor: 3000, state: 'done', title: 'Cash' },
+			{ minor: 3000, state: 'now' },
+			{ minor: 3000, state: 'todo' },
+		]);
+		expect(view.result.current.state.entryMinor).toBe(3000);
+		view.unmount();
 	});
 
 	it('a remount after the planned legs are taken still journals every share on the last leg (roadmap#422)', async () => {
