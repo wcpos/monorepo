@@ -26,7 +26,8 @@ let mockSuspenseValue: unknown;
 
 const mockOrder = {
 	uuid: 'local-order-42',
-	payload: { id: 42, links: undefined, billing: {} },
+	// A paid order: the auto-print gate treats a missing status as not settled.
+	payload: { id: 42, status: 'completed', links: undefined, billing: {} },
 };
 
 const defaultTemplateRenderer = {
@@ -432,9 +433,9 @@ describe('Receipt auto-print', () => {
 	});
 
 	describe('contract gateway: routed before the order refresh landed (#2807)', () => {
-		const orderPayload = mockOrder.payload as typeof mockOrder.payload & { status?: string };
+		const orderPayload = mockOrder.payload;
 		afterEach(() => {
-			delete orderPayload.status;
+			orderPayload.status = 'completed';
 		});
 
 		it('does not auto-print a local pos-open fallback; prints once the order settles', () => {

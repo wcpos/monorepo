@@ -270,7 +270,8 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// the customer an "open / still payable" receipt and spend the single shot. So the
 	// auto-print waits for the server's receipt or for the local order to settle; the
 	// manual Print button is not gated.
-	const localOrderSettled = orderData.status !== 'pos-open';
+	// A missing status is not a settled order either: fail closed and wait for the server.
+	const localOrderSettled = Boolean(orderData.status) && orderData.status !== 'pos-open';
 	const attemptAutoPrint = React.useCallback(() => {
 		if (
 			uiSettings.autoPrintReceipt &&
