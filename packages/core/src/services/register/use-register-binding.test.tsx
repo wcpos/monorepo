@@ -77,14 +77,25 @@ function mount() {
 }
 // The server lists live registers only (a retired one is gone from the list on the plugin side).
 it('silently binds the sole register the store lists and filters by store', async () => {
+	const row = {
+		...rows[0],
+		session: {
+			id: 'session-1',
+			status: 'open',
+			opened_at_gmt: '2026-10-21T08:15:00',
+			opened_by: { id: 7, name: 'Pat' },
+		},
+		last_closure: { number: 12, closed_at_gmt: '2026-10-20T16:30:00' },
+	};
 	mockHttp.get.mockResolvedValue({
-		data: [rows[0]],
+		data: [row],
 	});
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
 	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: 2 } });
 	expect(view.result.current.registers).toHaveLength(1);
+	expect(view.result.current.registers[0]).toEqual(row);
 	expect(logger.info).toHaveBeenCalledWith('Register bound automatically', {
 		terminal: { operationId: 'a' },
 		context: { type: 'register.bound', registerId: 'a', previousRegisterId: null },

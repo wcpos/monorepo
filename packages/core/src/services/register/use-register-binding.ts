@@ -23,6 +23,13 @@ type Register = {
 	store_id?: number | null;
 	default_float?: string | null;
 	counters?: RegisterCounters;
+	session?: {
+		id: string;
+		status: 'open' | 'counting';
+		opened_at_gmt: string;
+		opened_by: { id: number; name: string };
+	} | null;
+	last_closure?: { number: number; closed_at_gmt: string } | null;
 };
 type Binding = {
 	status: 'bound' | 'choose' | 'none' | 'unknown';
