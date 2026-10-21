@@ -436,7 +436,16 @@ jobs:
   cdn:
     name: ☁️ Publish to cdn.wcpos.com
     needs: publish
-    if: needs.publish.outputs.cdn_configured == 'true' && needs.publish.outputs.cdn_lane == 'true'
+    # The page loads from cdn.wcpos.com; jsDelivr is the loader's fallback. The publish job
+    # pushes the bundle and uploads the build before it re-verifies jsDelivr, and that verify
+    # fails whenever jsDelivr throttles a purge (two publishes inside ~15 min: 2026-10-21 run
+    # 39689280758 left dev-next one merge behind with the cdn job skipped). A pushed bundle is
+    # enough to register here; the red publish job still reports the fallback's lag.
+    if: >-
+      always() && needs.publish.result != 'cancelled'
+      && needs.publish.outputs.cdn_configured == 'true'
+      && needs.publish.outputs.cdn_lane == 'true'
+      && needs.publish.outputs.web_bundle_commit != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
