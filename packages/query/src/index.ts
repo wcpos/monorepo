@@ -170,6 +170,11 @@ export {
 	type PrinterProfileFields,
 } from './commands/printer-profiles';
 export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
+export {
+	MoneyCommandError,
+	type MoneyCommandErrorReason,
+	type Post,
+} from './commands/money-command';
 
 export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';
 export {
