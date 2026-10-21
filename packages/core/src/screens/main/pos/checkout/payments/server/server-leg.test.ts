@@ -74,7 +74,11 @@ function deferred<T>() {
 	});
 	return { promise, resolve, reject };
 }
-function setup(resume = false, changes: Partial<PaymentRow> = {}) {
+function setup(
+	resume = false,
+	changes: Partial<PaymentRow> = {},
+	extra: { retire?: (kind: 'intent', target: string) => Promise<void> } = {}
+) {
 	const scripts: Record<string, (() => Promise<{ data: unknown }>)[]> = {};
 	const calls: { route: string; body?: unknown; at: number }[] = [];
 	const request = async (url: string, body?: unknown) => {
@@ -95,6 +99,7 @@ function setup(resume = false, changes: Partial<PaymentRow> = {}) {
 			now: Date.now,
 			setTimeout: timer,
 			clearTimeout,
+			...extra,
 		},
 		{ orderId: 42, row: { ...row, ...changes }, reader: 'reader', resume }
 	);
@@ -554,6 +559,32 @@ it('a cancel pending over a locked intent is resolved as the void, never an inte
 	expect(c.count('intent')).toBe(1);
 	expect(c.count('void')).toBe(1);
 	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+// The retirement of the cancelled locked intent is awaited before the leg is final: a failed
+// journal write keeps the leg live with the reason, never final with a re-sendable intent left.
+it.each([
+	['succeeds', true],
+	['fails', false],
+])('a cancelled locked intent whose retirement %s', async (_, retired) => {
+	const retire = jest.fn(async () => {
+		if (!retired) throw new Error('journal write failed');
+	});
+	const c = setup(false, {}, { retire });
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.answer('void', response({ status: 'voided' }));
+	const started = c.leg.start();
+	await c.leg.cancel();
+	intent.reject(refusal(409, 'wcpos_payment_locked', { retry_after: 1 }));
+	await started;
+	await tick(0);
+	expect(retire).toHaveBeenCalledWith('intent', 'leg');
+	if (retired) expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	else
+		expect(c.leg.getState()).toMatchObject({
+			outcome: null,
+			error: { code: 'retire_failed' },
+		});
 });
 it('a locked capture is re-sent after retry_after, then settles', async () => {
 	const c = setup(true);

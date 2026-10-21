@@ -123,8 +123,6 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	// recovery or Try again must never re-send it and authorize a sale the cashier cancelled.
 	let cancelledLockedIntent: string | null = null;
 	const finish = (outcome: ServerLegState['outcome']) => {
-		if (outcome === 'voided' && cancelledLockedIntent !== null)
-			void deps.retire?.('intent', cancelledLockedIntent).catch(() => undefined);
 		cancelledLockedIntent = null;
 		clearTimer();
 		sequence++;
@@ -182,6 +180,25 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
 		const status = data.payment.status;
+		if (status === 'voided' && cancelledLockedIntent !== null) {
+			// The retirement is awaited before the leg is final: a failed journal write keeps the
+			// leg live with its reason and the next status read retires again, so a voided leg never
+			// leaves a re-sendable intent behind.
+			try {
+				await deps.retire?.('intent', cancelledLockedIntent);
+			} catch (error) {
+				if (!current(seq)) return false;
+				setState({
+					error: {
+						code: 'retire_failed',
+						message: error instanceof Error ? error.message : 'retire_failed',
+					},
+				});
+				schedule(POLL_CADENCE_MS);
+				return false;
+			}
+			if (!current(seq)) return false;
+		}
 		if (isFinalPaymentStatus(status)) finish(status);
 		return current(seq);
 	};
