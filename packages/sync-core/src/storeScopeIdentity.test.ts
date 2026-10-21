@@ -79,9 +79,9 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('defaults to the v6 scope generation (products promote tagIds)', () => {
+	it('defaults to the v7 scope generation (protocol 3, ADR 0040)', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v6_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v7_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
@@ -90,7 +90,7 @@ describe('scopeDatabaseName', () => {
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v6_${scopeKeyFor(identity)}_run7`
+			`pos_v7_${scopeKeyFor(identity)}_run7`
 		);
 	});
 
@@ -151,10 +151,10 @@ describe('containsLegacyScopeDatabaseName', () => {
 });
 
 describe('DRAINABLE_SCOPE_DATABASE_GENERATION', () => {
-	it('is exactly the generation before the current one (v5 while v6 is current)', () => {
+	it('is exactly the generation before the current one (v6 while v7 is current)', () => {
 		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
 		expect(scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })).toBe(
-			`pos_v5_${scopeKeyFor(identity)}`
+			`pos_v6_${scopeKeyFor(identity)}`
 		);
 		expect(
 			containsLegacyScopeDatabaseName(

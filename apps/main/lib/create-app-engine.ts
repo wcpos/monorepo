@@ -47,6 +47,7 @@ import {
 	type RxdbSyncEngine,
 	setSyncEngineLogger,
 	type StoreScopeIdentity,
+	WRITTEN_BEFORE_PROTOCOL_3,
 } from '@wcpos/sync-engine';
 import {
 	REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE,
@@ -95,7 +96,6 @@ const isWeb = Platform.isWeb;
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
 
 export interface CreateAppSyncEngineOptions {
-	paymentsContract?: () => string | null;
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
 	/**
@@ -142,7 +142,6 @@ export interface CreateAppSyncEngineOptions {
 // scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
-	| 'paymentsContract'
 	| 'credentials'
 	| 'refreshAuth'
 	| 'useJwtAsParam'
@@ -213,7 +212,7 @@ const legacyDrainStates = new Map<string, LegacyDrainState>();
  * data" deletes every one of them, so the reset count stays UNKNOWN until each has reported
  * (drained, absent, or kept with a count). How they are found differs by platform:
  *  - NATIVE lists `Documents/wcpos-sqlite` (`scopeDatabaseFiles.list()`): every drainable
- *    `pos_v5_…` file there is marked pending at boot, and only a visit (its drain) reports it.
+ *    `pos_v6_…` file there is marked pending at boot, and only a visit (its drain) reports it.
  *  - WEB and ELECTRON cannot list their files (the sahpool worker / the main process own them).
  *    They read the till's SCOPE HISTORY (`legacy-scope-history.ts`, in the user database's local
  *    documents): every scope database name opened from this build on, plus the store registry.
@@ -223,7 +222,7 @@ const legacyDrainStates = new Map<string, LegacyDrainState>();
  *    complete and every name is cleared — opening a new scope un-settles it until that name reports.
  *    A history is complete only when it began with the app database — an install whose app
  *    database already existed at this build's first boot started its history late, may hold a
- *    pos_v5 nothing names, and so is never settled: its reset count reads unknown for the life
+ *    pos_v6 nothing names, and so is never settled: its reset count reads unknown for the life
  *    of that install (`LEGACY_HISTORY_INCOMPLETE`).
  */
 const LEGACY_HISTORY_INCOMPLETE = 'previous-version databases from before this build';
@@ -304,7 +303,7 @@ export async function inventoryLegacyScopeDatabases(input: {
 	history?: LegacyScopeHistory;
 }): Promise<void> {
 	// Only where the registry IS the inventory (web/Electron). On native the SQLite file listing
-	// is authoritative: a dangling registry reference cannot hide a pos_v5 file from it.
+	// is authoritative: a dangling registry reference cannot hide a pos_v6 file from it.
 	const unresolved = scopeDatabaseFiles === null ? (input.unresolvedReferences ?? []) : [];
 	legacyRegistryIncomplete = unresolved.length > 0;
 	// Re-read every inventory: a reference resolved since the last one no longer blocks.
@@ -326,7 +325,7 @@ export async function inventoryLegacyScopeDatabases(input: {
 	} else if (input.history?.settled) {
 		names = [];
 	} else {
-		// A cleared name reported nothing kept on an earlier boot: its pos_v5 is gone for good.
+		// A cleared name reported nothing kept on an earlier boot: its pos_v6 is gone for good.
 		const cleared = new Set(input.history?.cleared ?? []);
 		names = [
 			...new Set([
@@ -338,7 +337,7 @@ export async function inventoryLegacyScopeDatabases(input: {
 		].filter((name) => !cleared.has(name));
 		legacyHistory = input.history ?? null;
 		if (!input.history?.complete) {
-			// A pos_v5 nothing names may exist: the count is unknown for the life of this install.
+			// A pos_v6 nothing names may exist: the count is unknown for the life of this install.
 			rememberLegacyUnsentChanges(LEGACY_HISTORY_INCOMPLETE, null);
 		}
 	}
@@ -450,7 +449,6 @@ export function createSessionFetcherOptions(
 function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOptions {
 	return {
 		credentials: options.credentials,
-		paymentsContract: options.paymentsContract,
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
@@ -513,6 +511,25 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolea
 			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: { databaseName: outcome.databaseName, error: outcome.error },
 		});
+		return;
+	}
+	if (outcome.status === 'kept' && outcome.reason === WRITTEN_BEFORE_PROTOCOL_3) {
+		// ADR 0040: a protocol-2 queue is parked, never sent. It sits in Store health's log, at
+		// error on the first attempt of a process and then daily, naming what was never sent.
+		const unsent = remainingCount(outcome.remaining);
+		if (!isRetry || outcome.reportDue)
+			engineLogger.error(
+				`${unsent} changes from before this update were never sent and will not be`,
+				{
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					context: {
+						databaseName: outcome.databaseName,
+						reason: outcome.reason,
+						unsent,
+						orders: outcome.keptOrderUuids,
+					},
+				}
+			);
 		return;
 	}
 	if (outcome.status === 'kept') {
@@ -972,7 +989,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	}
 	const engine = createRxdbSyncEngine(
 		{
-			paymentsContract: () => fetcherOptions.paymentsContract?.() ?? null,
 			site: {
 				...site,
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,

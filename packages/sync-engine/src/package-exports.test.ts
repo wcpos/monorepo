@@ -52,6 +52,7 @@ describe('package exports', () => {
 				// exported rather than mirrored. A mirrored copy that missed a new
 				// terminal type would hang every waiter on it.
 				'TERMINAL_WRITE_EVENT_TYPES',
+				'WRITTEN_BEFORE_PROTOCOL_3',
 				// The health counters must exclude the queue rows the write-drain lane
 				// holds by design while a cart is open — decided by the ENGINE's rule,
 				// never by a copy of it in the UI (#1546).

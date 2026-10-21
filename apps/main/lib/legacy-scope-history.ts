@@ -1,19 +1,19 @@
 /**
  * The till's SCOPE HISTORY, for platforms that cannot list their storage (web,
  * Electron): every scope it has opened since this build, as the DRAINABLE
- * generation's database name (the `pos_v5_…` that scope may have left behind),
+ * generation's database name (the `pos_v6_…` that scope may have left behind),
  * kept in the user database's local documents.
  *
  * Why a history and not only the store registry: removing a site tombstones its
  * user records but never deletes its scope databases, so a site removed before
- * the upgrade drops out of the registry while its pos_v5 may still hold unsent
+ * the upgrade drops out of the registry while its pos_v6 may still hold unsent
  * sales. The reset count (`inventoryLegacyScopeDatabases`) may only become exact
  * once every database the till could hold has reported.
  *
  * `complete`: the history can only name scopes opened from this build on. It is
  * complete when it began together with the app database — a fresh install at
  * this build. If the app database already existed when this build first wrote
- * the history, earlier scopes (and their pos_v5) may be unnamed: the history is
+ * the history, earlier scopes (and their pos_v6) may be unnamed: the history is
  * incomplete for the life of that install, and the reset count never becomes
  * exact on it. "Created in this run" is read from IDENTITY, not time: rxdb writes
  * the user database's storage token once, when the database is created, and
@@ -24,7 +24,7 @@
  * with a token from the future read as inconclusive — incomplete.
  *
  * `cleared`: the names that reported nothing kept (drained or absent) — a
- * pos_v5 cannot come back once gone, so a cleared name is never inventoried
+ * pos_v6 cannot come back once gone, so a cleared name is never inventoried
  * again. `settled` is DERIVED, never stored: a complete history whose every name
  * is cleared. Opening a new scope adds an uncleared name, which un-settles the
  * history until that one name reports (the others stay cleared).

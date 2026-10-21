@@ -49,11 +49,9 @@ import { engineCollectionCreators } from './engine-collections';
 import {
 	DRAINABLE_SCHEMAS_GENERATION,
 	drainableGenerationCollectionCreators,
-	drainableGenerationProductDocument,
-	drainableGenerationProductSchema,
 	drainableGenerationWriteFacetFor,
 } from './drainable-generation';
-import { productDocument, writeFacetFor } from './collection-descriptors';
+import { writeFacetFor } from './collection-descriptors';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -546,7 +544,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	};
 
 	/** The scope database generation the pinned digests above ship under. */
-	const PINNED_SCOPE_GENERATION = 6;
+	const PINNED_SCOPE_GENERATION = 7;
 
 	it('every engine collection schema matches its pinned digest', () => {
 		const creators = engineCollectionCreators();
@@ -571,9 +569,9 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	 * database the drain exists to send, so the drain could never send it.
 	 */
 	const PINNED_DRAINABLE_DIGESTS: Record<string, string> = {
+		// Generation 6 shipped today's schemas (control: no schema moved at 6 -> 7).
 		orders: 'bc0b35ca7829dad7',
-		// v5's products, before tagIds was promoted.
-		products: '533f385dbba3bd58',
+		products: 'dc0ab793f15f4e7a',
 		variations: 'df92c9203ba108c1',
 		customers: 'ac922ffdb0538886',
 		taxRates: '7573745a31add62b',
@@ -593,7 +591,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		existenceManifestCustomers: '107bac24876b267a',
 		existenceManifestOrders: '107bac24876b267a',
 		syncCheckpoints: '13a461c616ee12b9',
-		recordMutations: '94c4fd4e440dbdd7',
+		recordMutations: 'd6da9686455ba784',
 		engineKv: 'a8d94dc8495e36cc',
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
@@ -608,6 +606,8 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		5: '24cd32cfac8830f7',
 		// The versioned queue migrates in place; scope-generation schemas stay unchanged.
 		6: '08d63cbb728d6f94',
+		// Protocol 3 (ADR 0040): the bump parks a protocol-2 queue; no schema moved.
+		7: '08d63cbb728d6f94',
 	};
 
 	const digestOfDigests = (digests: Record<string, string>) =>
@@ -626,32 +626,8 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
 	});
 
-	it('the drainable generation also PROJECTS what it shipped: an ack fits its schema, and only products moved', () => {
-		const projected = drainableGenerationProductDocument(
-			{
-				...PRODUCT_PAYLOAD,
-				meta_data: [
-					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
-				],
-			} as never,
-			undefined
-		);
-		const current = productDocument(
-			{
-				...PRODUCT_PAYLOAD,
-				meta_data: [
-					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
-				],
-			} as never,
-			undefined
-		);
-		const allowed = Object.keys(drainableGenerationProductSchema.properties);
-		expect(Object.keys(projected).filter((key) => !allowed.includes(key))).toEqual([]);
-		expect(projected).not.toHaveProperty('tagIds');
-		// The one difference from today's projection is the column v6 promoted.
-		expect(Object.keys(current).sort()).toEqual([...Object.keys(projected), 'tagIds'].sort());
-		expect(drainableGenerationWriteFacetFor('products')).not.toBe(writeFacetFor('products'));
-		for (const collection of ['orders', 'variations', 'customers', 'coupons']) {
+	it('the drainable generation also PROJECTS what it shipped: generation 6 moved nothing', () => {
+		for (const collection of ['products', 'orders', 'variations', 'customers', 'coupons']) {
 			expect(drainableGenerationWriteFacetFor(collection)).toBe(writeFacetFor(collection));
 		}
 	});
