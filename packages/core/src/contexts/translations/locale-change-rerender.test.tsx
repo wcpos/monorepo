@@ -57,6 +57,9 @@ jest.mock('../../screens/splash', () => ({
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
 }));
+jest.mock('@wcpos/components/error-boundary/fallback-screen', () => ({
+	FallbackScreen: () => null,
+}));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	OverlayShell: ({ children }: React.PropsWithChildren) => children,
