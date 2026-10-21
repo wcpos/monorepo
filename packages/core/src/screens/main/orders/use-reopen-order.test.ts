@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import type { EngineEvent } from '@wcpos/sync-engine';
 import type { EngineRecord } from '@wcpos/query';
-import { applyLocalPatch } from '@wcpos/query/mutations';
+import { applyLocalPatch, patchEngineResident } from '@wcpos/query/mutations';
 import { log } from '@wcpos/utils/logger';
 
 import { useReopenOrder } from './use-reopen-order';
@@ -29,6 +29,11 @@ const mockEngine = {
 		mockOnDrain();
 		return { status: 'ran' };
 	}),
+	// The store's copy of order 42, adopted by a forced targeted refresh.
+	require: jest.fn((_request: unknown) => ({
+		ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+		release: () => {},
+	})),
 };
 const emit = (event: EngineEvent) => [...mockListeners].forEach((cb) => cb(event));
 jest.mock('@wcpos/query', () => ({
@@ -39,6 +44,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('@wcpos/query/mutations', () => ({
 	...jest.requireActual('@wcpos/query/mutations'),
 	applyLocalPatch: jest.fn(),
+	patchEngineResident: jest.fn(),
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
@@ -63,6 +69,8 @@ const order = {
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	// A once-value a test queued but never consumed must not leak into the next test.
+	jest.mocked(applyLocalPatch).mockReset();
 	mockListeners.clear();
 	mockConnectivity = 'online';
 	mockOnDrain = () => {};
@@ -221,4 +229,53 @@ it('a second press while the reopen awaits the store is ignored and never bypass
 	expect(result.current.reopening).toBe(false);
 	expect(mockPush).not.toHaveBeenCalled();
 	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
+});
+
+// The resident as the optimistic reopen left it: pos-open, until the refusal is undone.
+const reopenedPaidOrder = {
+	...paidOrder,
+	getLatest: () => ({ payload: { ...paidOrder.payload, status: 'pos-open' } }),
+} as unknown as EngineRecord<'orders'>;
+
+it("a refused reopen re-adopts the store's copy of the order", async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: reopenedPaidOrder, mutationId: 'm-reopen' } as never);
+	mockOnDrain = () => emit(moneyInMotion());
+	const { result } = renderHook(() => useReopenOrder(reopenedPaidOrder));
+	await act(async () => result.current.reopen());
+	// Orders never auto-revert: the optimistic pos-open is replaced by the store's document,
+	// adopted even under an equal stamp because the store's copy did not change.
+	expect(mockEngine.require).toHaveBeenCalledWith(
+		expect.objectContaining({
+			collection: 'orders',
+			kind: 'targeted-records',
+			remoteIds: ['42'],
+			forceRefresh: true,
+			readopt: true,
+		})
+	);
+	expect(patchEngineResident).not.toHaveBeenCalled();
+	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
+});
+
+it("a refused reopen whose store copy cannot be fetched puts the order's status back locally", async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: reopenedPaidOrder, mutationId: 'm-reopen' } as never);
+	mockEngine.require.mockImplementationOnce(() => ({
+		ready: Promise.reject(new Error('offline')),
+		release: () => {},
+	}));
+	mockOnDrain = () => emit(moneyInMotion());
+	const { result } = renderHook(() => useReopenOrder(reopenedPaidOrder));
+	await act(async () => result.current.reopen());
+	expect(patchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({
+			collection: 'orders',
+			recordId: 'order-1',
+			changes: { status: 'completed' },
+		})
+	);
+	expect(mockPush).not.toHaveBeenCalled();
 });

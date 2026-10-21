@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import type { EngineRecord, OrderPayload } from '@wcpos/query';
+import { type EngineRecord, type OrderPayload, useQueryRuntime } from '@wcpos/query';
+import { patchEngineResident } from '@wcpos/query/mutations';
+import { refreshOrderRecord } from '@wcpos/query/record-readers';
 
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
@@ -24,4 +26,38 @@ export function useOrderRecord() {
 		[localPatch]
 	);
 	return { saveOrderFields, reopenOrder };
+}
+
+/**
+ * Undo a reopen the store refused. Orders never auto-revert, so the optimistic pos-open stays
+ * on the resident: re-adopt the store's copy (under an equal stamp, since the store's copy did
+ * not change), and when that does not land, put the previous status back locally. Nothing is
+ * pushed: the store already holds the previous status.
+ */
+export function useUndoRefusedReopen() {
+	const runtime = useQueryRuntime();
+	return React.useCallback(
+		async (order: EngineRecord<'orders'>, previousStatus: OrderPayload['status']) => {
+			const wooId = order.payload.id;
+			let readopted = false;
+			if (wooId) {
+				try {
+					readopted =
+						(await refreshOrderRecord(runtime.engine, wooId, { readopt: true })) === 'refreshed';
+				} catch {
+					readopted = false;
+				}
+			}
+			if (readopted || !order.uuid) return;
+			// A pull that landed meanwhile already holds the store's word; leave it.
+			if ((order.getLatest?.() ?? order).payload.status !== 'pos-open') return;
+			await patchEngineResident({
+				manager: runtime,
+				collection: 'orders',
+				recordId: order.uuid,
+				changes: { status: previousStatus },
+			});
+		},
+		[runtime]
+	);
 }

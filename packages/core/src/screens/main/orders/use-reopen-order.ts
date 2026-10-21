@@ -11,12 +11,12 @@ import {
 	WriteOutcomeError,
 } from '@wcpos/query';
 import { MONEY_ANSWER_CODES, NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useRegister } from '../../../services/register/use-register';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useOrderRecord } from './commands/use-order-record';
+import { useOrderRecord, useUndoRefusedReopen } from './commands/use-order-record';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
 
 const logger = getLogger(['wcpos', 'orders', 'reopen']);
@@ -66,6 +66,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { reopenOrder } = useOrderRecord();
+	const undoRefusedReopen = useUndoRefusedReopen();
 	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -137,6 +138,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		if (store.id === NO_STORE && existingStoreId === null) {
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
+		const previousStatus = order.payload.status;
 		const reopened = await reopenOrder(order, { status: 'pos-open', meta_data });
 		if (!reopened) return;
 		const { mutationId } = reopened;
@@ -145,7 +147,16 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 			const outcome = await awaitWriteSettlement(runtime.engine, mutationId).catch(
 				(error: unknown) => error
 			);
-			if (outcome instanceof WriteOutcomeError) return reportRefusal(outcome);
+			if (outcome instanceof WriteOutcomeError) {
+				reportRefusal(outcome);
+				// The optimistic pos-open is not the store's word; undo it before the action frees up.
+				await undoRefusedReopen(order, previousStatus).catch((error: unknown) =>
+					logger.debug('Could not undo the refused reopen locally', {
+						context: { orderId: order.uuid, error: getErrorMessage(error) },
+					})
+				);
+				return;
+			}
 			// Offline (or the drain kick failed) the reopen stays queued, as before; its verdict
 			// is reported when it drains, through the same report.
 			if (outcome !== 'success' && outcome !== 'success-local')
@@ -159,6 +170,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 	}, [
 		blockIfDegraded,
 		reopenOrder,
+		undoRefusedReopen,
 		reportRefusal,
 		runtime,
 		router,
