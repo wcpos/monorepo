@@ -12,14 +12,17 @@ import { pushRecord } from '../mutations/push-record';
 import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
+	claimHeld,
 	claimRoute,
 	dropUnsent,
 	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
+	readMoneyJournal,
 	readOrderCommands,
 	releaseClaim,
+	retireChain,
 	retireRoute,
 	type RevisionChain,
 	settleCommand,
@@ -371,11 +374,167 @@ function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>)
 	}
 }
 
+/** Whether a forced refresh, run now (after the answer), itself adopts the order's document. */
+async function refreshAdopts(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<boolean> {
+	const { order } = await readOrder(runtime, orderUuid);
+	if (!order.payload.id) return false;
+	return (await readopt(runtime, storeDB, orderUuid, order.payload.id)).refreshAdopted;
+}
+
 /** The engine scope the till is in now: one cashier's orders. */
 async function activeScopeId(runtime: QueryRuntime): Promise<string | null> {
 	const scope = runtime.engine.active() ?? (await runtime.engine.whenActive());
 	return scope?.scopeId ?? null;
 }
+/**
+ * A command is re-sent only in the scope that sent it (Codex 4333124076, 4333445290 on #2798):
+ * another cashier's order is not resident here. An entry frozen with no active scope, to any.
+ */
+function inScope(entry: MoneyCommandEntry, scope: string | null) {
+	return !entry.scope || entry.scope === scope;
+}
+
+/** A re-sent command and the store's 2xx answer to it. */
+export interface ResentCommand {
+	readonly kind: MoneyCommandKind;
+	readonly data: Record<string, unknown>;
+}
+
+/**
+ * Try again: re-send every dispatched command of the order through a replaying poster (the same
+ * entry, id and frozen body), mirror each answer and settle it; a never-sent one is dropped.
+ * Returns the answers, so the caller finishes the sale from them as from a first answer.
+ */
+export async function resendOpenCommands(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	deps: { post: Post }
+): Promise<ResentCommand[]> {
+	const scope = await activeScopeId(runtime);
+	const entries = (await readOrderCommands(storeDB, orderUuid)).entries.filter((entry) =>
+		inScope(entry, scope)
+	);
+	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post, replay: true });
+	const answers: ResentCommand[] = [];
+	for (const entry of entries) {
+		if (entry.sentAt === null) {
+			// A crash leftover put nothing on the server. One a live poster holds is its pre-flight's,
+			// and stays (CodeRabbit 4332935302 on #2798).
+			await dropUnsent(storeDB, orderUuid, entry.id, null);
+			continue;
+		}
+		const sent = await poster(entry.path, entry.body).catch((error: Error) =>
+			error.message === 'money_command_unclaimed' ? null : Promise.reject(error)
+		);
+		// Settled since the snapshot by its own sender: nothing to replay (adversarial 2 on #2798).
+		if (!sent) continue;
+		const { data } = sent as { data: Record<string, unknown> };
+		// A replayed submit or cancel cannot carry the awaiting-customer stamp its first answer wrote
+		// or cleared (the stamp needs the press's destination and cashier); only the store's document
+		// does (Codex 4333124084 on #2798). So it settles only once the refresh run after the answer
+		// has adopted that document: a pull adopted while the re-send was in flight, or in the
+		// answer's own millisecond, does not count. A resident with a gateway's `pending` status and
+		// no stamp would read as a settled sale.
+		if (
+			(entry.kind === 'submit' || entry.kind === 'cancel') &&
+			!(await refreshAdopts(runtime, storeDB, orderUuid))
+		) {
+			await poster.abandon();
+			throw new Error('money_command_unconfirmed');
+		}
+		await poster.mirror({
+			payment: data.payment as PaymentRow | undefined,
+			order: data.order as OrderPaymentSummary | undefined,
+		});
+		answers.push({ kind: entry.kind, data });
+	}
+	return answers;
+}
+
+/**
+ * When the session runs the recovery again after a re-send that failed without a definitive
+ * answer (a 429, a 5xx, no answer) while the till stays online (Codex 4333265115 on #2798). Half
+ * a minute rides out a rate limit or a proxy restart; two and then ten minutes stop a store that
+ * is down from being hammered, and the last step repeats until a run answers. A reconnect, a
+ * restart and Try again still re-send at once.
+ */
+export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 600_000];
+
+/** A store-session recovery's re-sends for one order, answered. */
+interface RecoveredOrder {
+	readonly orderUuid: string;
+	readonly answers: ResentCommand[];
+	/**
+	 * The re-send failed without a definitive answer and the command is still journaled and
+	 * unclaimed: the session retries it on `RECOVERY_RETRY_DELAYS_MS`.
+	 */
+	readonly unanswered?: true;
+}
+
+/**
+ * The store-session recovery (store session start and every reconnect): re-send every command
+ * that was sent and never answered, for every order of the active scope, whether or not a tender
+ * is on screen. A pull can adopt a completed sale and take it out of the open orders before the
+ * cashier presses Try again; its journaled command must still be answered, mirrored and settled.
+ * An order whose command a live claim holds is left to its sender; the session runs the recovery
+ * again when that claim lapses (`nextClaimExpiry`, Codex 4332957976 on #2798). A re-send that
+ * fails stays journaled for the next recovery or Try again. Then the settled chains are retired.
+ */
+export async function recoverMoneyCommands(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	deps: { post: Post }
+): Promise<RecoveredOrder[]> {
+	const recovered: RecoveredOrder[] = [];
+	const scope = await activeScopeId(runtime);
+	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
+		const sent = entries.filter((entry) => entry.sentAt !== null && inScope(entry, scope));
+		if (sent.length === 0 || sent.some((entry) => claimHeld(entry, null))) continue;
+		try {
+			recovered.push({
+				orderUuid,
+				answers: await resendOpenCommands(runtime, storeDB, orderUuid, deps),
+			});
+		} catch {
+			// Not definitive, or refused: the poster kept or settled the entry accordingly. One
+			// still sent, unclaimed and ours is unanswered, for the session to try again.
+			const left = (await readOrderCommands(storeDB, orderUuid)).entries.filter(
+				(entry) => entry.sentAt !== null && inScope(entry, scope) && !claimHeld(entry, null)
+			);
+			if (left.length > 0) recovered.push({ orderUuid, answers: [], unanswered: true });
+		}
+	}
+	await retireSettledChains(runtime, storeDB).catch(() => undefined);
+	return recovered;
+}
+
+/**
+ * Retire the chains whose purpose has ended: the order has no open entry and the resident has
+ * adopted a later document than the chain's answer under another revision than the post-answer
+ * refresh recorded. Revision choice then reads the resident (it holds authority), and the
+ * receipt's barrier no longer holds. A chain whose order is not resident stays; age bounds it
+ * (`CHAIN_RETENTION_MS`).
+ */
+async function retireSettledChains(runtime: QueryRuntime, storeDB: StoreLocalDatabase) {
+	for (const [orderUuid, { entries, chain }] of Object.entries(await readMoneyJournal(storeDB))) {
+		if (!chain || entries.length > 0) continue;
+		const resident = await findEngineResident(runtime, 'orders', orderUuid).catch(() => null);
+		if (!resident) continue;
+		const { adopted } = (resident.getLatest().toJSON() as unknown as ResidentOrder).sync ?? {};
+		if (
+			adopted?.revision &&
+			(adopted.at ?? 0) > chain.answeredAt &&
+			adopted.revision !== chain.adoptedRevision
+		)
+			await retireChain(storeDB, orderUuid, chain.answeredAt);
+	}
+}
+
 function answerChain(revision: unknown, at: number): RevisionChain | undefined {
 	return typeof revision === 'string' ? { answerRevision: revision, answeredAt: at } : undefined;
 }

@@ -12,6 +12,8 @@ import type { StoreDatabase } from '@wcpos/database';
 import {
 	MoneyCommandError,
 	moneyCommandPoster,
+	recoverMoneyCommands,
+	resendOpenCommands,
 	sendMoneyCommand,
 	settleMoneyCommand,
 } from '../src/commands/money-command';
@@ -19,6 +21,7 @@ import { pushRecord } from '../src/mutations/push-record';
 import {
 	CLAIM_LEASE_MS,
 	claimRoute,
+	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	readOrderCommands,
@@ -771,6 +774,8 @@ function poster(over: Partial<Parameters<typeof moneyCommandPoster>[0]> = {}) {
 		...over,
 	});
 }
+const restart = () => resendOpenCommands(runtime, storeDB, 'order', { post: store.post });
+const recover = () => recoverMoneyCommands(runtime, storeDB, { post: store.post });
 const chain = async () => (await readOrderCommands(storeDB, 'order')).chain;
 
 describe('moneyCommandPoster', () => {
@@ -845,5 +850,355 @@ describe('moneyCommandPoster', () => {
 		await post.mirror({ order: store.summary() as never });
 		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
 		expect(await chain()).toBeNull();
+	});
+});
+
+describe('Try again: resendOpenCommands', () => {
+	it('provenance is minted once per command, rides every re-send, and only on the kinds the store stamps from', async () => {
+		const provenance = jest.fn(async () => ({ register_id: 'reg', sale_counter: '7' }));
+		store.modes = ['lose'];
+		await expect(poster({ provenance })('orders/5/close', {})).rejects.toThrow();
+		await restart();
+		expect(provenance).toHaveBeenCalledTimes(1);
+		expect(sentBodies()[1].provenance).toEqual({ register_id: 'reg', sale_counter: '7' });
+		await poster({ provenance })('orders/5/payments/leg-1/void', {});
+		expect(provenance).toHaveBeenCalledTimes(1);
+		expect(sentBodies()[2]).not.toHaveProperty('provenance');
+	});
+
+	it('a retired route is never re-sent', async () => {
+		store.modes = ['lose'];
+		const post = poster();
+		await expect(post('orders/5/payments/leg-1/intent', {})).rejects.toThrow('Network Error');
+		await post.retire('intent', 'leg-1');
+		expect(await entries()).toEqual([]);
+		expect(await restart()).toEqual([]);
+		expect(store.post).toHaveBeenCalledTimes(1);
+	});
+
+	it('an accepted cash record whose answer is lost is re-sent from the journal and makes no second row', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments', { payment: cash() })).rejects.toThrow();
+		expect(await entries()).toHaveLength(1);
+		await restart();
+		const [first, second] = sentBodies();
+		expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+		expect(store.rows.size).toBe(1);
+		expect(await ledgerIds()).toEqual(['row-1']);
+		expect(await entries()).toEqual([]);
+	});
+
+	it('lost answer, then wcpos_payment_locked: the entry survives and the next re-send makes exactly one row', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments', { payment: cash() })).rejects.toThrow();
+		store.post.mockRejectedValueOnce(httpError(409, 'wcpos_payment_locked'));
+		await expect(restart()).rejects.toThrow('wcpos_payment_locked');
+		expect((await entries())[0].sentAt).not.toBeNull();
+		await restart();
+		expect(store.rows.size).toBe(1);
+		expect(await entries()).toEqual([]);
+	});
+
+	it('a crash after the 2xx and before the mirror keeps the entry; the re-send after the lease replays it', async () => {
+		await poster()('orders/5/payments/leg-1/void', {}); // answered; the process dies before settle()
+		const [entry] = await entries();
+		// Until the dead process's lease lapses, a live sender may still settle it.
+		await expect(restart()).rejects.toMatchObject({ reason: 'in_flight' });
+		clock += CLAIM_LEASE_MS;
+		await restart();
+		expect(sentBodies()[1].command_id).toBe(entry.id);
+		expect(store.commands.size).toBe(1);
+		expect(await entries()).toEqual([]);
+	});
+
+	it.each([
+		['intent', 'orders/5/payments/leg-1/intent', 'leg-1'],
+		['submit', 'orders/5/payment-methods/cod/submit', 'attempt-1'],
+	])(
+		'an %s re-sent keeps its command id, which is not its own id, and runs once',
+		async (_kind, url, own) => {
+			store.modes = ['lose'];
+			await expect(poster()(url, { attempt_id: 'attempt-1' })).rejects.toThrow();
+			await restart();
+			const [first, second] = sentBodies();
+			expect(second.command_id).toBe(first.command_id);
+			expect(second.command_id).not.toBe(own);
+			expect(store.legs).toBe(1);
+		}
+	);
+
+	// A replayed close is validated like a first close (CodeRabbit 4328977234 on #2798).
+	it('Try again never settles a close on a malformed 2xx; the next re-send answers it', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		store.modes = ['malformed'];
+		await expect(restart()).rejects.toThrow('close_malformed_response');
+		expect(await entries()).toHaveLength(1);
+		expect(await restart()).toEqual([expect.objectContaining({ kind: 'close' })]);
+		expect(await entries()).toEqual([]);
+		expect(store.completions).toBe(1);
+	});
+
+	it.each([
+		['a paid', 'completed', 0],
+		['an open', 'pos-open', 1],
+	])('a replayed close answered with no completion and %s summary', async (_, status, kept) => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		store.status = status;
+		store.modes = ['unstamped'];
+		if (kept) await expect(restart()).rejects.toThrow('close_malformed_response');
+		else
+			expect(await restart()).toEqual([
+				{ kind: 'close', data: expect.objectContaining({ completion: null }) },
+			]);
+		expect(await entries()).toHaveLength(kept);
+	});
+
+	// A replayed submit or cancel cannot carry the stamp change its first answer made; only the
+	// store's document does (Codex 4333124084 on #2798).
+	it.each([
+		['submit', 'orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} }],
+		['cancel', 'orders/5/payment-methods/g/cancel', { attempt_id: 'a-1' }],
+	])(
+		'a replayed %s stays journaled until the refresh adopts the store’s document',
+		async (_, url, body) => {
+			store.modes = ['lose'];
+			await expect(poster()(url, body)).rejects.toThrow('Network Error');
+			refreshWorks = false;
+			await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+			expect(await entries()).toEqual([expect.objectContaining({ claimedBy: null })]);
+			refreshWorks = true;
+			expect(await restart()).toHaveLength(1);
+			expect(await entries()).toEqual([]);
+		}
+	);
+
+	it('a replayed submit is not confirmed by a pull adopted while the re-send was in flight', async () => {
+		store.modes = ['lose'];
+		await expect(
+			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+		).rejects.toThrow('Network Error');
+		const real = store.post.getMockImplementation()!;
+		store.post.mockImplementationOnce(async (url, body) => {
+			await adoptStore(true); // the normal pull, mid-flight
+			return real(url, body);
+		});
+		refreshWorks = false;
+		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+		expect(await entries()).toHaveLength(1);
+	});
+
+	it('a pull adopted in the same millisecond as the answer never confirms a replayed submit', async () => {
+		store.modes = ['lose'];
+		await expect(
+			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+		).rejects.toThrow('Network Error');
+		const real = store.post.getMockImplementation()!;
+		store.post.mockImplementationOnce(async (url, body) => {
+			const answer = await real(url, body);
+			await adoptStore(true); // the normal pull, at the answer
+			return answer;
+		});
+		jest.mocked(Date.now).mockReturnValue(clock); // one millisecond for the whole replay
+		refreshWorks = false;
+		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+		expect(await entries()).toHaveLength(1);
+	});
+
+	it('a replayed submit is not confirmed by an older adoption landing while its refresh fails', async () => {
+		store.modes = ['lose'];
+		await expect(
+			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+		).rejects.toThrow('Network Error');
+		Object.assign(runtime.engine, {
+			require: () => ({
+				ready: (async () => {
+					await writeResident((doc) => ({
+						...doc,
+						sync: { ...doc.sync, adopted: { revision: doc.sync.revision, at: Date.now() } },
+					}));
+					throw new Error('offline');
+				})(),
+				release: () => undefined,
+				queryKey: '',
+			}),
+		});
+		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+		expect(await entries()).toHaveLength(1);
+	});
+
+	// A command settled between the snapshot and the claim is gone (adversarial 2 on #2798).
+	it('a replaying poster never freezes a new command when the journaled one is gone', async () => {
+		await expect(poster({ replay: true })('orders/5/close', {})).rejects.toThrow(
+			'money_command_unclaimed'
+		);
+		expect(store.post).not.toHaveBeenCalled();
+		expect(await entries()).toEqual([]);
+	});
+});
+
+describe('the store-session recovery', () => {
+	it('a send that throws frees its claim at once, and an abandoned answer frees it after the lease', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+		expect((await entries())[0].claimedBy).toBeNull();
+		expect(await recover()).toHaveLength(1);
+		expect(await entries()).toEqual([]);
+
+		await poster()('orders/5/payments/leg-2/void', {}); // answered; the caller never settles
+		expect(await recover()).toEqual([]);
+		clock += CLAIM_LEASE_MS;
+		expect(await recover()).toHaveLength(1);
+		expect(await entries()).toEqual([]);
+	});
+
+	it('re-sends a sent, unanswered command with no tender on screen, and settles it', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		expect(await recover()).toEqual([
+			{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
+		]);
+		expect(store.completions).toBe(1);
+		expect(await entries()).toEqual([]);
+	});
+
+	it('leaves a command on the wire from this process to its sender', async () => {
+		let answer!: () => void;
+		const held = new Promise<void>((resolve) => (answer = resolve));
+		const sending = poster({
+			post: async (url, body) => {
+				await held;
+				return store.post(url, body);
+			},
+		})('orders/5/close', {});
+		while ((await entries())[0]?.sentAt == null)
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(await recover()).toEqual([]);
+		answer();
+		await sending;
+		expect(store.post).toHaveBeenCalledTimes(1);
+	});
+
+	it('is a no-op fired after the answer and before the settle', async () => {
+		const post = poster();
+		await post('orders/5/close', {});
+		expect(await recover()).toEqual([]);
+		expect(store.post).toHaveBeenCalledTimes(1);
+		await post.mirror({});
+		expect(await entries()).toEqual([]);
+	});
+
+	it('is a no-op fired during a stale adoption and its re-send', async () => {
+		let adopting!: () => void;
+		const adoption = new Promise<void>((resolve) => (adopting = resolve));
+		const adopt = runtime.engine.adoptOrderSnapshot as jest.Mock;
+		const real = adopt.getMockImplementation()!;
+		adopt.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+			await adoption;
+			return real(payload);
+		});
+		store.modes = ['stale'];
+		const sending = poster()('orders/5/payments/leg/capture', {});
+		while (adopt.mock.calls.length === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(await recover()).toEqual([]);
+		adopting();
+		await sending;
+		expect(store.post).toHaveBeenCalledTimes(2);
+	});
+
+	// The session retries an unanswered order on `RECOVERY_RETRY_DELAYS_MS` (Codex 4333265115).
+	it('reports a re-send that got no definitive answer as unanswered, and answers it on the next run', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		store.modes = ['malformed'];
+		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(await entries()).toHaveLength(1);
+		expect(await recover()).toEqual([
+			{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
+		]);
+		expect(await entries()).toEqual([]);
+	});
+
+	// A poster's new command is unsent and claimed while its pre-flight runs (CodeRabbit 4332935302).
+	it('never deletes an unsent command another poster has claimed', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+		const fresh: MoneyCommandEntry = {
+			orderUuid: 'order',
+			kind: 'close',
+			path: 'orders/5/close',
+			target: null,
+			id: 'close-in-preflight',
+			body: {},
+			approval,
+			sentAt: null,
+			sentRevision: null,
+		};
+		const route = { orderUuid: 'order', kind: 'close', target: null, rowId: null } as const;
+		expect(await claimRoute(storeDB, route, 'cashier-tab', fresh)).toMatchObject({
+			status: 'created',
+		});
+		expect(await recover()).toHaveLength(1);
+		expect(await entries()).toEqual([expect.objectContaining({ id: 'close-in-preflight' })]);
+	});
+
+	// The journal is per store, the orders per cashier scope (Codex 4333124076, 4333445290).
+	it('a command records its scope, and recovery and Try again re-send only the active scope’s', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+		expect((await entries())[0]).toMatchObject({ scope: 'test-scope' });
+		const theirs: MoneyCommandEntry = {
+			orderUuid: 'order',
+			kind: 'close',
+			path: 'orders/5/close',
+			target: null,
+			id: 'their-close',
+			body: {},
+			approval,
+			sentAt: null,
+			sentRevision: null,
+			scope: 'another-cashier',
+		};
+		const route = { orderUuid: 'order', kind: 'close', target: null, rowId: null } as const;
+		await claimRoute(storeDB, route, 'x', theirs);
+		await markSent(storeDB, 'order', 'their-close', 'sha256:r1', 'x');
+		clock += CLAIM_LEASE_MS;
+		expect(await restart()).toEqual([expect.objectContaining({ kind: 'capture' })]);
+		expect(await recover()).toEqual([]);
+		expect(store.post.mock.calls.map(([url]) => url)).not.toContain('orders/5/close');
+		expect(await entries()).toEqual([expect.objectContaining({ id: 'their-close' })]);
+	});
+
+	it('retires a settled chain once the resident adopts a later revision than its post-answer refresh', async () => {
+		const post = poster();
+		const { data } = (await post('orders/5/payments', { payment: cash() })) as {
+			data: { payment: PaymentRow };
+		};
+		await post.mirror({ payment: data.payment });
+		expect(await chain()).toMatchObject({
+			adoptedAfterAnswer: true,
+			adoptedRevision: store.revision,
+		});
+		await recover();
+		expect(await chain()).not.toBeNull();
+		store.n += 1; // another till moves the order; the pull adopts the newer document
+		await adoptStore(false);
+		await recover();
+		expect(await chain()).toBeNull();
+	});
+
+	it('never retires the chain of an order with an open entry', async () => {
+		const post = poster();
+		const { data } = (await post('orders/5/payments', { payment: cash() })) as {
+			data: { payment: PaymentRow };
+		};
+		await post.mirror({ payment: data.payment });
+		store.modes = ['lose', '503']; // the recovery's re-send fails: the entry stays open
+		await expect(post('orders/5/payments', { payment: cash('row-2') })).rejects.toThrow();
+		store.n += 1;
+		await adoptStore(false);
+		await recover();
+		expect(await chain()).not.toBeNull();
 	});
 });
