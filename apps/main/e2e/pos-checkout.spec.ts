@@ -100,6 +100,7 @@ async function addTestProductToCart(page: Page) {
 		!productsVisible &&
 		(await page
 			.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
+			.first()
 			.isVisible()
 			.catch(() => false))
 	) {
