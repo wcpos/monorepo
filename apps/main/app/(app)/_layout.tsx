@@ -11,6 +11,7 @@ import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engi
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
+import { useUpdateRequired } from '@wcpos/core/hooks/use-update-required';
 import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
 import { SearchMetaKeysBridge } from '@wcpos/core/screens/main/components/search-meta-keys-bridge';
@@ -68,7 +69,6 @@ import {
 	startStorageTimingReporter,
 	STORAGE_TIMING_PROBE_ENABLED,
 } from '../../lib/storage-timing-report';
-import { currentUpdateRequired, subscribeUpdateRequired } from '../../lib/update-required-gate';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
@@ -332,13 +332,7 @@ function AppStack() {
  * or a fresh engine construction clears the gate.
  */
 function UpdateRequiredGate({ site, children }: { site: string; children: React.ReactNode }) {
-	const state = React.useSyncExternalStore(
-		React.useCallback(
-			(onStoreChange: () => void) => subscribeUpdateRequired(site, onStoreChange),
-			[site]
-		),
-		() => currentUpdateRequired(site)
-	);
+	const state = useUpdateRequired(site);
 	if (state) {
 		return <UpdateRequired />;
 	}

@@ -14,10 +14,10 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
-import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useReportUpdateRequired } from '../../../../hooks/use-update-required';
 import { useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
 
@@ -183,11 +183,7 @@ export const useRestHttpClient = (endpoint = '') => {
 		() => [tokenRefreshHandler, fallbackAuthHandler],
 		[tokenRefreshHandler, fallbackAuthHandler]
 	);
-	const onUpdateRequired = React.useCallback(
-		(details: Exclude<UpdateRequiredState, null>) =>
-			reportUpdateRequired(site.wp_api_url!, details),
-		[site.wp_api_url]
-	);
+	const onUpdateRequired = useReportUpdateRequired(site.wp_api_url);
 
 	/**
 	 * Sync online status with the request state manager

@@ -176,13 +176,15 @@ it('Print waits while the orders lane is still downloading, and for a printer th
 		'Still loading orders for this range'
 	);
 	act(() => mockSalesHandle.set({ laneProgress: null }));
-	mockPrintDocument.mismatchWarning = 'raw printer';
+	mockPrintDocument.mismatch = 'html-template-prints-default-layout';
+	mockPrintDocument.resolvedPrinter = { id: 'raw-printer' };
 	fireEvent.click(screen.getByTestId('detail-panel-close'));
 	fireEvent.click(screen.getByTestId('card-taxes-open'));
 	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
 		'The saved printer cannot print this template'
 	);
-	mockPrintDocument.mismatchWarning = null;
+	mockPrintDocument.mismatch = null;
+	mockPrintDocument.resolvedPrinter = null;
 });
 it('the footer names the items missing a cost', () => {
 	setOrders([

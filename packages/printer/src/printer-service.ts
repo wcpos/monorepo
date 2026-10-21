@@ -164,7 +164,8 @@ export class PrinterService {
 	}
 
 	/**
-	 * Get or create a transport for the given profile.
+	 * Get or create a transport for the given profile. Every queued job calls this once, first,
+	 * so it is where the transport hears that a new job has begun (`beginJob`).
 	 * Recreates the transport if the profile config has changed since last use.
 	 * NetworkAdapter is loaded lazily to avoid triggering NativeEventEmitter at import time.
 	 */
@@ -174,7 +175,10 @@ export class PrinterService {
 
 		if (cachedKey === key) {
 			const cached = this.transports.get(profile.id);
-			if (cached) return cached;
+			if (cached) {
+				cached.beginJob?.();
+				return cached;
+			}
 		}
 
 		// Evict stale transport
@@ -230,6 +234,7 @@ export class PrinterService {
 
 		this.transports.set(profile.id, transport);
 		this.transportKeys.set(profile.id, key);
+		transport.beginJob?.();
 		return transport;
 	}
 

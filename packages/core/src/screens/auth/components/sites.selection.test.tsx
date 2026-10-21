@@ -8,6 +8,10 @@ import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 
 // Real Sites → Site / AccordionSite → WPUsers; only the leaves are stubbed. The accordion stub
 // unmounts collapsed content like the real primitive does, so a fold really drops WPUsers.
+// The login card's update notice pulls the real Button (and its SVG loader) in.
+jest.mock('../../../components/update-required-notice', () => ({
+	UpdateRequiredNotice: () => null,
+}));
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));

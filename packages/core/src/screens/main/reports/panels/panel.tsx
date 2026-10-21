@@ -216,7 +216,9 @@ export function DetailPanel() {
 							? 'templates'
 							: doc.templates.length === 0
 								? 'no-template'
-								: doc.mismatchWarning
+								: // Only a saved printer that mis-prints the template blocks; no printer
+									// means the print dialog, which prints the preview as before.
+									doc.mismatch && doc.resolvedPrinter
 									? 'printer'
 									: null;
 	const waitingLabels = {

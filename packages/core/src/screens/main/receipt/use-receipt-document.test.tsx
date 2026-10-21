@@ -13,6 +13,11 @@ import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card
 const mockPrint = jest.fn<Promise<boolean>, []>();
 let mockFinal = true;
 let mockAutoPrint = true;
+let mockServerData = true;
+let mockReceiptData: object | undefined;
+let mockPrinter: { resolvedPrinter: object; isResolving?: boolean } = {
+	resolvedPrinter: { name: 'Till printer' },
+};
 const order = { uuid: 'paid', payload: { id: 42, currency: 'USD' } } as never;
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
@@ -37,21 +42,28 @@ jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print: mockPrint, isPrinting: false }),
 	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
 		.isOrderBasedCloudProfile,
+	usesSystemPrintDialog: jest.requireActual('@wcpos/printer/transport/device-key')
+		.usesSystemPrintDialog,
 }));
 const mockToast = jest.fn();
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (props: unknown) => mockToast(props) },
 }));
+// A preview loaded from a URL with no rendered HTML: the dialog print reads the loaded frame,
+// so auto-print waits for it (#2806). The server's receipt data has arrived by default.
 jest.mock('./hooks/use-template-renderer', () => ({
 	useTemplateRenderer: () => ({
 		templates: [{ id: 7 }],
 		selectedTemplateId: 7,
-		renderedHtml: '<html/>',
+		renderedHtml: null,
+		receiptUrl: 'https://shop.test/receipt',
+		receiptData: mockReceiptData,
 		hasFinalData: mockFinal,
+		receiptDataIsServer: mockServerData,
 	}),
 }));
 jest.mock('./hooks/use-resolved-printer', () => ({
-	useResolvedPrinter: () => ({ resolvedPrinter: { name: 'Till printer' } }),
+	useResolvedPrinter: () => mockPrinter,
 }));
 jest.mock('./hooks/use-download-receipt-pdf', () => ({
 	useDownloadReceiptPdf: () => ({ download: jest.fn() }),
@@ -123,6 +135,9 @@ beforeEach(() => {
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockFinal = true;
 	mockAutoPrint = true;
+	mockServerData = true;
+	mockReceiptData = undefined;
+	mockPrinter = { resolvedPrinter: { name: 'Till printer' } };
 });
 
 it('waits for final data and frame load, then auto-prints once', async () => {
@@ -143,6 +158,28 @@ it('waits for a frame even when final data is ready first', async () => {
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
 	expect(mockPrint).not.toHaveBeenCalled();
 	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it('prints to a raw printer without the frame, but only once the printer is resolved', async () => {
+	const raw = { id: 'raw', name: 'Counter', connectionType: 'network', address: '10.0.0.5' };
+	mockPrinter = { resolvedPrinter: raw, isResolving: true };
+	mockReceiptData = { id: 42 };
+	const { rerender } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	expect(mockPrint).not.toHaveBeenCalled();
+	mockPrinter = { resolvedPrinter: raw, isResolving: false };
+	await act(async () => rerender());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it('does not auto-print a local pos-open fallback; prints once the order settles', async () => {
+	mockServerData = false;
+	const open = { uuid: 'o', payload: { id: 43, status: 'pos-open' } };
+	const { result, rerender } = renderHook(
+		({ doc }) => useReceiptDocument({ order: doc as never, autoPrintAllowed: true }),
+		{ initialProps: { doc: open } }
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).not.toHaveBeenCalled();
+	await act(async () => rerender({ doc: { ...open, payload: { id: 43, status: 'completed' } } }));
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 it.each([false, true])(
