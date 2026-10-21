@@ -102,7 +102,8 @@ export function mergeAnsweredRow(resident: PaymentRow | undefined, answer: Payme
  * Mirror a money command's answer onto the LATEST resident, never from a pre-command snapshot
  * (ADR 0040 §1.3): the row is upserted by id and nothing is deleted; the summary is written only
  * while the resident still carries the revision the command was sent with, so an older status
- * never lands under a newer stamp. The stamp itself is untouched; the refresh after it adopts.
+ * never lands under a newer stamp, and neither does a caller's metadata change (the gateway
+ * stamp). The revision stamp itself is untouched; the refresh after it adopts.
  */
 export async function mirrorServerOrder(manager: QueryRuntime, uuid: string, answer: MoneyAnswer) {
 	const scoped = await resolveEngineResident(manager, 'orders', uuid);
@@ -136,7 +137,10 @@ export async function mirrorServerOrder(manager: QueryRuntime, uuid: string, ans
 				total: answer.total,
 			};
 			return {
-				meta_data: answer.meta ? answer.meta(ledgerMeta) : ledgerMeta,
+				// A stamp change (an invoice sent or cancelled) is the answer's view at its own
+				// revision, like the summary: under a newer adopted document it never lands, or an old
+				// cancel would erase another till's newer invoice stamp.
+				meta_data: answer.meta && underSentRevision ? answer.meta(ledgerMeta) : ledgerMeta,
 				...(order && underSentRevision
 					? Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== undefined))
 					: {}),

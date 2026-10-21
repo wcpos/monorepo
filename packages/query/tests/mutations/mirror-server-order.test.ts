@@ -150,3 +150,32 @@ it('a captured answer stamped +00:00 replaces a pending app row from the same se
 	const older = { ...captured, updated_at_gmt: '2026-10-20T09:59:59+00:00' };
 	expect(mergeAnsweredRow(pending, older as PaymentRow).status).toBe('pending');
 });
+
+// A gateway answer's stamp change (an invoice sent or cancelled) is the answer's view of the order
+// at its own revision: once a newer document was adopted (another till sent a new invoice), an
+// older answer never rewrites that metadata; under its own revision it does.
+it.each([
+	['a newer adopted document', 'sha256:newer', true],
+	['the revision it was sent under', 'sha256:sent', false],
+])('a gateway stamp change applies only under %s', async (_, revision, kept) => {
+	const order = await seed([], revision);
+	const stamp = {
+		key: '_wcpos_awaiting_customer',
+		value: { method_id: 'invoice', attempt_id: 'new' },
+	};
+	await order.incrementalModify((doc) => ({
+		...doc,
+		payload: { ...doc.payload, meta_data: [...(doc.payload.meta_data as never[]), stamp] },
+	}));
+	await mirrorServerOrder(manager, 'order', {
+		order: summary('pos-open'),
+		sentRevision: 'sha256:sent',
+		meta: (meta) => meta.filter(({ key }) => key !== '_wcpos_awaiting_customer'),
+	});
+	const meta = (
+		(await database.orders.findOne('order').exec())!.toJSON() as {
+			payload: { meta_data: { key: string }[] };
+		}
+	).payload.meta_data;
+	expect(meta.some(({ key }) => key === '_wcpos_awaiting_customer')).toBe(kept);
+});
