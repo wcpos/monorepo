@@ -159,6 +159,16 @@ describe('mirrorMoneyAnswer', () => {
 		expect(merged.provider_refs).toEqual({ charge: 'ch_1', reader: 'r1' });
 	});
 
+	// The store lowercases the ids it is given; the ledger matches rows case-insensitively, and so
+	// must the merge, or a delayed answer would replace the newer row outright (Codex on #2830).
+	it('a delayed answer whose id differs only in case never overwrites the newer row', async () => {
+		await seed([row({ id: 'ABC', status: 'voided', updated_at_gmt: '2026-10-20T11:00:00' })]);
+		await mirrorMoneyAnswer(manager, 'order', {
+			payment: row({ id: 'abc', status: 'captured', updated_at_gmt: '2026-10-20T10:00:00' }),
+		});
+		expect(await ledger()).toEqual([expect.objectContaining({ id: 'ABC', status: 'voided' })]);
+	});
+
 	it('an authorized answer arriving after a tipped capture with the same updated_at_gmt cannot regress the captured amount, even when refresh fails', async () => {
 		await seed([row({ status: 'captured', amount: '55.0000' })]);
 		await mirrorMoneyAnswer(manager, 'order', {

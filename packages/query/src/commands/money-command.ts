@@ -1,4 +1,4 @@
-import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import { type OrderPaymentSummary, type PaymentRow, samePaymentId } from '@wcpos/order-math';
 import {
 	isDefinitiveMoneyRefusal,
 	isMoneyAnswer,
@@ -305,10 +305,9 @@ export async function settleMoneyCommand(
  * settles the command, so its retry is never lost.
  */
 function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>): boolean {
-	// The store lowercases the ids it is given (`strtolower` on route uuids and attempt ids).
 	const row = (data.payment as { id?: unknown } | null | undefined)?.id;
 	const is = (id: unknown) =>
-		typeof row === 'string' && typeof id === 'string' && row.toLowerCase() === id.toLowerCase();
+		typeof row === 'string' && typeof id === 'string' && samePaymentId(row, id);
 	switch (entry.kind) {
 		case 'record':
 			return is(entry.id);

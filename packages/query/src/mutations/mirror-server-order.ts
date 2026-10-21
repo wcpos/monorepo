@@ -1,4 +1,11 @@
-import { fromMinor, readLedger, toMinor, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import {
+	fromMinor,
+	readLedger,
+	samePaymentId,
+	toMinor,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type {
 	MetaDataEntry,
 	OrderPaymentSummary,
@@ -141,7 +148,7 @@ export async function mirrorMoneyAnswer(manager: QueryRuntime, uuid: string, ans
 						upsertPaymentRow(
 							rows,
 							mergeAnsweredRow(
-								rows.find((r) => r.id === payment.id),
+								rows.find((r) => samePaymentId(r.id, payment.id)),
 								payment
 							)
 						)

@@ -97,10 +97,14 @@ export function withLedger(
 	return result;
 }
 
+/** One payment row's identity: the store lowercases the ids it is given (`strtolower`). */
+export function samePaymentId(a: string, b: string): boolean {
+	return a.toLowerCase() === b.toLowerCase();
+}
+
 export function upsertPaymentRow(rows: readonly PaymentRow[], row: PaymentRow): PaymentRow[] {
 	const result = [...rows];
-	const id = row.id.toLowerCase();
-	const index = result.findIndex((existing) => existing.id.toLowerCase() === id);
+	const index = result.findIndex((existing) => samePaymentId(existing.id, row.id));
 	if (index === -1) result.push(row);
 	else result[index] = row;
 	return result;
