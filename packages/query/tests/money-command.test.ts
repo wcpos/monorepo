@@ -1034,6 +1034,23 @@ it('an approved re-send pushes pending local work first, so an edit made after a
 	expect(await entries()).toEqual([]);
 });
 
+// Only an adoption made after the answer can carry the stamp change: a pull that adopts the
+// pre-command document while the re-send is in flight never confirms the replay.
+it('a replayed submit is not confirmed by a pull adopted while the re-send was in flight', async () => {
+	store.modes = ['lose'];
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+	).rejects.toThrow('Network Error');
+	const real = store.post.getMockImplementation()!;
+	store.post.mockImplementationOnce(async (url, body) => {
+		await adoptStore(true); // the normal pull, mid-flight
+		return real(url, body);
+	});
+	refreshWorks = false;
+	await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+	expect(await entries()).toHaveLength(1);
+});
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });

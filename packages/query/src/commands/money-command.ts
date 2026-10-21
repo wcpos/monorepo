@@ -410,8 +410,10 @@ export async function resendOpenCommands(
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
 			continue;
 		}
-		const since = Date.now();
 		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
+		// The barrier starts at the answer: a pull that adopted the pre-command document while the
+		// re-send was in flight never carries the stamp change, so it never confirms the replay.
+		const since = Date.now();
 		// A replayed submit or cancel cannot carry the awaiting-customer stamp its first answer
 		// wrote or cleared (the stamp needs the press's destination and cashier); only the server
 		// document does. So it settles only once the refresh has adopted that document, and stays
