@@ -167,7 +167,7 @@ function CartColumn({
 	return (
 		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
-			<SessionHoldBanner />
+			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(

@@ -317,25 +317,34 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
   | Container | Gutter | Today |
   |---|---|---|
-  | The page: `PageBar` left edge, a pane's body, the phone's screen edge; a card's body | 16 (`md:` page body may double to 32) | `pl-4`, `px-4 md:px-8`, cards `p-4`; the list pages' chip row `p-4` and `TableSurface gutter="page"` |
+  | The page: `PageBar`'s controls from the top and the sides, a pane's body, an area page around its card, the phone's screen edge; a card's body | 16, at every width | bar `pt-4 px-4`, `AreaPage` `p-4`, cards `p-4`; the list pages' chip row `p-4`, `TableSurface gutter="page"` and the caption row's `pb-4` |
   | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
-  | A dense strip: the icon rail, the front drawer's items, a chip row, a bar's own controls | 8 | drawer `mx-2`, rail 64 = 48 + 2 × 8 |
+  | A dense strip: the icon rail, the front drawer's items, a chip row, the POS products column | 8 | drawer `mx-2`, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`), POS column `p-2`, `TableSurface` dense and the caption row's `pb-2` |
   | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
 
-- A container's width follows from its items and its gutter (the icon rail is 48 + 2 × 8 = 64),
+- A container's width follows from its items and its gutter (the icon rail is 12 + 2 + 2 = 16 spacing units, 64 at Regular),
   not the other way round.
 - Nothing sits flush against a container's edge except the container's own border or surface.
   A lifted item (`bg-card` on the ground) that touches the edge reads as the container, not as an
   item; that is the tell that a gutter is missing.
+- The bottom edge is a container edge like the top one: the last row of a page or pane (the
+  table's caption row) sits one gutter above it, as the first row sits one gutter below the top.
+- Between the rows of a page or pane there is exactly one gutter, and the bar is a row: on wide
+  widths `PageBar` has no height of its own, its controls sit the gutter from the top and the
+  sides, and the row under it (the chip row, a page body) brings the gutter between them. A bar
+  that centres a 44 control in a fixed 64 puts 10 above the search and 26 under it; that is the
+  tell (owner, 2026-10-20).
+- One page gutter at every width: a page does not double its inset on `md` while its neighbour
+  keeps 16 (Settings sat at 32 beside Products at 16 until 2026-10-20).
 - A new container takes its gutter from this table. A mockup does not offer padding as an option.
 
 #### Page bars
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
-- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
+- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter (16) from the top and the sides and the row under it brings the 16 between them (Gutters, above); on a phone the bar is 44 and search is its own ruled row under it.
 - The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
-- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
+- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter (16) around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
 
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 

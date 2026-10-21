@@ -8,8 +8,12 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
-/** The page paddings around the card; the phone keeps its 16 px gutter. */
-const PAGE_PADDING = 'px-4 py-5 md:px-8 md:py-6';
+/**
+ * The page gutter around the card: 16 on every side at every width, the same 16 the list
+ * pages give their search, chips and card (CODING_STANDARDS § Design, Gutters). The 20/24
+ * verticals and the 32 on `md` that preceded it were this page's own numbers, off the scale.
+ */
+const PAGE_PADDING = 'p-4';
 
 export type AreaPageMode = 'scroll' | 'fill';
 
@@ -72,8 +76,9 @@ export function AreaPage({
 		<ScrollView
 			testID={testID}
 			className="flex-1"
-			// The last control on a page sits above the home indicator, never on it.
-			contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+			// The last control on a page sits above the home indicator, never on it; the page
+			// gutter under the card is `PAGE_PADDING`'s, so only the inset is added here.
+			contentContainerStyle={{ paddingBottom: insets.bottom }}
 		>
 			<View className={`mx-auto w-full max-w-4xl ${PAGE_PADDING}`}>
 				<Card className="overflow-hidden">

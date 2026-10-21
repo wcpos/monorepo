@@ -62,6 +62,7 @@ jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
 let mockHeld = false;
 jest.mock('../session-hold-banner', () => ({
 	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
+	useSessionHeld: () => mockHeld,
 }));
 jest.mock('../../pos/cart/user-sheet', () => ({
 	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
@@ -161,7 +162,9 @@ describe('NavigationAreaLayout', () => {
 		// Banner, then notice, then the rail and page row: the order the bar gave them.
 		const rows = Array.from(area.parentElement!.children);
 		expect(rows.indexOf(banner)).toBe(0);
-		expect(rows.indexOf(notice)).toBe(1);
+		// After the hold banner the notice is the next row, in a wrapper that carries the
+		// page gutter between them (it is flush when it is the column's first row).
+		expect(rows[1]).toBe(notice.parentElement);
 		expect(rows.indexOf(area)).toBe(2);
 		expect(screen.getByTestId('user-sheet')).toBeTruthy();
 	});

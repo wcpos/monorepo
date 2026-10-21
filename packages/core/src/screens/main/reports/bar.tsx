@@ -215,7 +215,7 @@ export function Bar({
 					</>
 				}
 			/>
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 		</>
 	);
 }

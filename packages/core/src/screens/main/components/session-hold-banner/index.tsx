@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
@@ -102,17 +104,31 @@ export function SessionHoldProvider({ children }: { children: React.ReactNode })
 	return <SessionHoldContext.Provider value={value}>{children}</SessionHoldContext.Provider>;
 }
 
-/** The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`. */
-export function SessionHoldBanner() {
+/** Whether a session hold is showing: the row after the banner spaces itself from it. */
+export function useSessionHeld(): boolean {
+	return React.useContext(SessionHoldContext) != null;
+}
+
+/**
+ * The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`.
+ * On wide widths it is the row under the bar, so it carries the container's gutter above and
+ * at its sides (16 on a page, 8 in a dense pane; CODING_STANDARDS § Design, Gutters) — the
+ * wide bar ends at its controls and leaves the gutter to its follower. The phone is unchanged.
+ */
+export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dense' }) {
 	const hold = React.useContext(SessionHoldContext);
 	const t = useT();
+	const phone = useIsPhone();
 	if (!hold) return null;
 	const { syncBacklogSales, login } = hold;
 
 	return (
 		<View
 			testID="session-hold-banner"
-			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
+			className={cn(
+				'border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2',
+				!phone && (gutter === 'page' ? 'mx-4 mt-4' : 'mx-2 mt-2')
+			)}
 		>
 			<Text className="text-destructive flex-1 text-sm">
 				{syncBacklogSales > 0

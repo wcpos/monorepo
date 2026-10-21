@@ -10,7 +10,10 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { DrawerContent as DrawerRail } from '@wcpos/core/screens/main/components/drawer-content/rail';
+import {
+	DrawerContent as DrawerRail,
+	useRailWidth,
+} from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
@@ -63,6 +66,8 @@ function ThemedDrawer({
 		'--color-sidebar',
 		'--color-sidebar-border',
 	]) as string[];
+	// Read on every width (a hook is never conditional); only the permanent rail uses it.
+	const railWidth = useRailWidth();
 
 	return (
 		<Drawer
@@ -76,7 +81,10 @@ function ThemedDrawer({
 					// while it measures the panel, and we must not override that.
 					...(hideDrawerPanel ? ({ display: 'none' } as const) : null),
 					backgroundColor: sidebarColor,
-					width: screenSize === 'lg' ? 'auto' : 200,
+					// The rail's width is set here, not by a class on its scroll view (which the
+					// vendored view drops): 16 spacing units, the `size-12` item + 2 each side from
+					// the gutter table, so 64 at Regular and the live step's value at the others.
+					width: screenSize === 'lg' ? railWidth : 200,
 					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
