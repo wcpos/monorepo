@@ -4,8 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
+import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -25,7 +24,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 	const onlineStatus = useOnlineStatus();
 	const { recordLedger } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
-	const { store } = useStoreSession();
+	const { store, storeDB } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 
@@ -37,6 +36,13 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				const result = await recordLedger(order, changes);
 				if (!result) throw new Error('offline_void_local_patch_failed');
 			};
+			// A void is never approval-checked; the poster journals the order as it stands.
+			const post = moneyCommandPoster({
+				runtime: manager,
+				storeDB,
+				orderUuid: order.uuid,
+				post: (url, body) => http.post(url, body),
+			});
 			const outcome = await voidPayments(
 				{
 					uuid: order.uuid,
@@ -45,12 +51,9 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 					meta_data: cloneDeep(payload.meta_data ?? []),
 				},
 				{
-					post: (url, body) => http.post(url, body),
+					post,
 					isOnline: () => onlineStatus.status === 'online-website-available',
-					patchAndEnqueue: enqueue,
-					mirror: async (changes) => {
-						await mirrorServerOrder(manager, order.uuid, changes);
-					},
+					mirror: ({ payment, order: summary }) => post.mirror({ payment, order: summary }),
 				}
 			);
 			// Reversing a cash leg reverses its rounding (#66, #84). A sweep of the latest ledger, not
@@ -94,6 +97,6 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				);
 			return outcome;
 		},
-		[http, onlineStatus.status, recordLedger, manager, dp]
+		[http, onlineStatus.status, recordLedger, manager, storeDB, dp]
 	);
 }
