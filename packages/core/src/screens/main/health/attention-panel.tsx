@@ -57,36 +57,36 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 			)}
 		>
 			<HStack className="items-center gap-1">
-					{fixRoute ? (
-						<Button
-							variant="ghost"
-							size="sm"
-							testID="db-attention-fix"
-							onPress={() => router.push(fixRoute)}
-						>
-							<ButtonText>{t('health.database.attention_fix')}</ButtonText>
-						</Button>
-					) : null}
-					{first.retryable ? (
-						<Button
-							// Retry is the one constructive action of the row: default, sm.
-							size="sm"
-							testID="db-attention-retry"
-							loading={syncing}
-							disabled={busy}
-							onPress={() => void sync()}
-						>
-							<ButtonText>{t('health.database.attention_retry')}</ButtonText>
-						</Button>
-					) : null}
+				{fixRoute ? (
 					<Button
 						variant="ghost"
 						size="sm"
-						testID="db-attention-view-log"
-						onPress={() => router.push('/health/logs')}
+						testID="db-attention-fix"
+						onPress={() => router.push(fixRoute)}
 					>
-						<ButtonText>{t('health.database.attention_view_log')}</ButtonText>
+						<ButtonText>{t('health.database.attention_fix')}</ButtonText>
 					</Button>
+				) : null}
+				{first.retryable ? (
+					<Button
+						// Retry is the one constructive action of the row: default, sm.
+						size="sm"
+						testID="db-attention-retry"
+						loading={syncing}
+						disabled={busy}
+						onPress={() => void sync()}
+					>
+						<ButtonText>{t('health.database.attention_retry')}</ButtonText>
+					</Button>
+				) : null}
+				<Button
+					variant="ghost"
+					size="sm"
+					testID="db-attention-view-log"
+					onPress={() => router.push('/health/logs')}
+				>
+					<ButtonText>{t('health.database.attention_view_log')}</ButtonText>
+				</Button>
 			</HStack>
 		</Notice>
 	);
