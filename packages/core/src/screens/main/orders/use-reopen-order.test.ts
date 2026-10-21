@@ -180,6 +180,25 @@ it('an offline reopen stays queued and reports the refusal when it drains', asyn
 	});
 });
 
+it('a late refusal of an offline-queued reopen undoes it too, even with the cashier in that cart', async () => {
+	mockConnectivity = 'offline';
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
+	const { result } = renderHook(() => useReopenOrder(paidOrder));
+	await act(async () => result.current.reopen());
+	expect(mockPush).toHaveBeenCalledTimes(1);
+	expect(mockEngine.require).not.toHaveBeenCalled();
+
+	// The refusal is the store's word: a pos-open left on the resident would get every later
+	// write on this cart refused as well.
+	await act(async () => emit(moneyInMotion()));
+	expect(mockEngine.require).toHaveBeenCalledWith(
+		expect.objectContaining({ collection: 'orders', remoteIds: ['42'], readopt: true })
+	);
+	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
+});
+
 it('does not navigate when the local write resolves undefined', async () => {
 	jest.mocked(applyLocalPatch).mockResolvedValueOnce(undefined as never);
 	const { result } = renderHook(() => useReopenOrder(order));

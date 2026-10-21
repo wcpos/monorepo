@@ -155,25 +155,34 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		const reopened = await reopenOrder(order, { status: 'pos-open', meta_data });
 		if (!reopened) return;
 		const { mutationId } = reopened;
+		/**
+		 * The store refused the reopen: say why, then undo the optimistic pos-open. Status is an
+		 * intent and the refusal is the store's word; a pos-open left behind would get every later
+		 * write on the order refused too. Online and late (queued offline) refusals alike: a late
+		 * one takes the order out of the open cart, as another till closing it would, and the
+		 * toast says why the cart changed.
+		 */
+		const refused = async (error: WriteOutcomeError) => {
+			reportRefusal(error);
+			await undoRefusedReopen(order, previousStatus).catch((failure: unknown) =>
+				logger.debug('Could not undo the refused reopen locally', {
+					context: { orderId: order.uuid, error: getErrorMessage(failure) },
+				})
+			);
+		};
 		if (mutationId) {
 			// The server's answer decides: a refused reopen never lands the cashier in a cart.
 			const outcome = await awaitWriteSettlement(runtime.engine, mutationId).catch(
 				(error: unknown) => error
 			);
-			if (outcome instanceof WriteOutcomeError) {
-				reportRefusal(outcome);
-				// The optimistic pos-open is not the store's word; undo it before the action frees up.
-				await undoRefusedReopen(order, previousStatus).catch((error: unknown) =>
-					logger.debug('Could not undo the refused reopen locally', {
-						context: { orderId: order.uuid, error: getErrorMessage(error) },
-					})
-				);
-				return;
-			}
+			// Undone before the action frees up.
+			if (outcome instanceof WriteOutcomeError) return refused(outcome);
 			// Offline (or the drain kick failed) the reopen stays queued, as before; its verdict
-			// is reported when it drains, through the same report.
+			// is handled when it drains, the same way.
 			if (outcome !== 'success' && outcome !== 'success-local')
-				void awaitTerminalWriteOutcome(runtime.engine, mutationId).catch(reportRefusal);
+				void awaitTerminalWriteOutcome(runtime.engine, mutationId).catch((error: unknown) =>
+					error instanceof WriteOutcomeError ? refused(error) : undefined
+				);
 		}
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		router.push({
