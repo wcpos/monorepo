@@ -1021,3 +1021,45 @@ it('abandons capture silently when the registry refuses ownership', async () => 
 	});
 	c.leg.dispose();
 });
+
+// A capture or void the poster refuses before it left the till is no outcome: the authorization
+// stays live on the store, and the journal holds no command for it. The leg stays live with the
+// reason and retries, never finishing on a fabricated failed row.
+it.each(['order_changed', 'preflight_failed'] as const)(
+	'a capture or void the poster refuses with %s keeps the authorized leg live and retries',
+	async (reason) => {
+		const refused = () => new MoneyCommandError(reason, { id: 'command', sentAt: null } as never);
+		const c = setup(true);
+		c.answer('status', response({ status: 'authorized' }));
+		c.fail('capture', refused());
+		c.answer('status', response({ status: 'authorized' }));
+		c.answer('capture', response({ status: 'captured' }));
+		await tick();
+		expect(c.count('capture')).toBe(1);
+		expect(c.leg.getState()).toMatchObject({ outcome: null, error: { code: reason } });
+		expect(c.leg.getState().phase).not.toBe('final');
+		expect(c.mirror).not.toHaveBeenCalledWith(
+			expect.objectContaining({ payment: expect.objectContaining({ status: 'failed' }) })
+		);
+		await tick(60_000);
+		expect(c.count('capture')).toBe(2);
+		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'captured' });
+
+		const v = setup(true);
+		v.answer('status', response({ status: 'pending' }));
+		await tick();
+		v.fail('void', refused());
+		v.answer('void', response({ status: 'voided' }));
+		await v.leg.cancel();
+		expect(v.count('void')).toBe(1);
+		expect(v.leg.getState()).toMatchObject({
+			phase: 'cancelling',
+			cancelRequested: true,
+			outcome: null,
+			error: { code: reason },
+		});
+		await tick(60_000);
+		expect(v.count('void')).toBe(2);
+		expect(v.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	}
+);

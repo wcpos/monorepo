@@ -297,22 +297,41 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	async function handleError(error: unknown, route: Route, seq: number) {
 		// The poster refused the command before it left the till: the order changed since the
 		// cashier approved it, or its pre-flight failed. Nothing reached the store and the journal
-		// holds nothing; a retry would only re-create it under the stale approval. The leg ends
-		// here with the reason, and the cashier chooses again.
+		// holds nothing.
 		if (
 			error instanceof MoneyCommandError &&
 			(error.reason === 'order_changed' || error.reason === 'preflight_failed')
 		) {
-			pendingCancel = null;
-			unansweredIntent = null;
 			const reason = { code: error.reason, message: error.message };
 			event(error.reason, 'error');
-			await applyResponse(
-				{ payment: { ...state.row, status: 'failed' as const, failure_reason: error.reason } },
-				seq,
-				{ error: reason }
-			);
-			return;
+			// An intent that never ran: a retry would only re-create it under the stale approval.
+			// The leg ends here with the reason, and the cashier chooses again.
+			if (route === 'intent') {
+				pendingCancel = null;
+				unansweredIntent = null;
+				await applyResponse(
+					{ payment: { ...state.row, status: 'failed' as const, failure_reason: error.reason } },
+					seq,
+					{ error: reason }
+				);
+				return;
+			}
+			// A capture or void after the intent ran is no outcome: the authorization is live on the
+			// store. The leg stays live with the reason. A void goes out again after the backoff (a
+			// status read would capture the authorization the cashier cancelled); a capture falls
+			// through to the transport retry, and the next status read issues it again.
+			setState({ error: reason });
+			if (route === 'void') {
+				const count = state.consecutiveErrors + 1;
+				setState({
+					phase: 'cancelling',
+					capturing: false,
+					consecutiveErrors: count,
+					unstable: count >= UNSTABLE_AFTER,
+				});
+				schedule(BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)], 'void');
+				return;
+			}
 		}
 		const response = errorResponse(error);
 		const body = response?.data;
