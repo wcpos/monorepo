@@ -16,6 +16,7 @@ export {
 	readLedger,
 	withLedger,
 	upsertPaymentRow,
+	samePaymentId,
 	mintManualPayment,
 	mintServerPayment,
 	mintDevicePayment,
