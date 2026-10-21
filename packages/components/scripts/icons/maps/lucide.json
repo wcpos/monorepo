@@ -89,7 +89,7 @@
  "receipt": "receipt",
  "refresh": "rotate-cw",
  "refund": "undo",
- "register": "calculator",
+ "register": "tabler:cash-register",
  "rejected": "circle-x",
  "reports": "chart-line",
  "scan": "scan",
