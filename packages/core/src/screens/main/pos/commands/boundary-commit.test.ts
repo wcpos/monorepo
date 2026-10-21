@@ -40,7 +40,15 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 }));
 jest.mock('../checkout/provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
-let ctx: SaleContext;
+let ctx: SaleContext & { closeSale: typeof closeSale };
+// The server completes a covered sale through close (ADR 0040 D2); its mirror lands the status.
+const closeSale = {
+	online: jest.fn(() => true),
+	close: jest.fn(async (target: EngineRecord<'orders'>) => {
+		Object.assign(target.getLatest().payload, { status: 'completed' });
+		return { kind: 'completed' as const, order: null, completion: null };
+	}),
+};
 const write = jest.fn(
 	async ({
 		document,
@@ -105,7 +113,8 @@ beforeEach(async () => {
 		storeId: 1,
 		dp: 2,
 		sessionsOn: true,
-	} as unknown as SaleContext;
+		closeSale,
+	} as unknown as typeof ctx;
 });
 afterEach(async () => {
 	await ctx.storeDB.remove();
@@ -187,6 +196,35 @@ it.each(['4', '3'])(
 		}
 	}
 );
+// ADR 0040 PR A: a system pass offline sends nothing; its completion attempt is resolved, and
+// the offline outcome is what the coordinator retries on reconnect.
+it('an offline boundary returns offline and leaves no completion attempt behind', async () => {
+	const order = orderFor();
+	closeSale.online.mockReturnValueOnce(false);
+	const complete = jest.fn();
+	const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+		commitAtBoundary(
+			{
+				...ctx,
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+				bindingStatus: 'bound',
+				complete,
+			},
+			{
+				order,
+				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+				queue,
+				write: (changes) => write({ document: order, changes }),
+			}
+		)
+	);
+	expect(outcome).toEqual({ kind: 'offline' });
+	expect(closeSale.close).not.toHaveBeenCalled();
+	expect(complete).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+
 it.each(['session', 'register'])(
 	'a refused %s leaves money, status and journal untouched',
 	async (gate) => {
@@ -237,7 +275,7 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 			if (change === 'lines') order.payload.line_items = [{ total: '8', subtotal: '8' }];
 			if (change === 'status') order.payload.status = 'completed';
 			if (change === 'ownership')
-				order.payload.meta_data!.push({ key: '_wcpos_money_owner', value: 'server' });
+				order.payload.meta_data!.push({ key: '_wcpos_money_owner_hint', value: 'server' });
 			if (change === 'refund')
 				order.payload.meta_data = [
 					{

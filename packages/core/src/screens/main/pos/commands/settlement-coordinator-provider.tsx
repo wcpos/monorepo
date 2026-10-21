@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject, skip } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	type EngineWarning,
 	settleAggregate,
@@ -10,13 +11,7 @@ import {
 	settlementPatch,
 	snapshotFromOrderJSON,
 } from '@wcpos/order-math';
-import {
-	observeCatalogChanges,
-	observeCoverage,
-	readStorePaymentsContract,
-	useDocField,
-	useQueryRuntime,
-} from '@wcpos/query';
+import { observeCatalogChanges, observeCoverage, useDocField, useQueryRuntime } from '@wcpos/query';
 import { observeOpenSessionPresence } from '@wcpos/query/register-session';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
@@ -26,6 +21,7 @@ import { couponReferences } from './coupon-continuation';
 import { readCouponContext } from '../hooks/use-coupon-context';
 import { plainPatch } from './plain-patch';
 import { commitAtBoundary } from './boundary-commit';
+import { useCloseSale } from './close-sale';
 import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { completeSale } from '../checkout/sale-completion';
@@ -56,7 +52,7 @@ const observe = (event: SettlementDiagnostic) => logger.warn(event.type, { conte
 /** Session-owned, beside the config reader; no cart tab owns this subscription. */
 export function SettlementCoordinatorProvider() {
 	const manager = useQueryRuntime();
-	const { wpCredentials, store, extraData } = useStoreSession();
+	const { wpCredentials, store } = useStoreSession();
 	const cashier = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeId = useDocField(store, (value) => value.id) as number | undefined;
 	const { registerId, status: bindingStatus } = useRegisterBinding();
@@ -65,6 +61,7 @@ export function SettlementCoordinatorProvider() {
 		bindingRef.current = { status: bindingStatus, registerId };
 	}, [bindingStatus, registerId]);
 	const saleContext = useSaleContext();
+	const closeSale = useCloseSale();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
 	const read = useCartConfigReader();
@@ -78,6 +75,14 @@ export function SettlementCoordinatorProvider() {
 	);
 	const coverage = useObservableEagerState(coverage$);
 	const [inputs$] = React.useState(() => new BehaviorSubject(inputs));
+	// A boundary deferred offline is retried when the till reconnects.
+	const [reconnected$] = React.useState(() => new Subject<void>());
+	const online = useOnlineStatus().status === 'online-website-available';
+	const wasOnline = React.useRef(online);
+	React.useEffect(() => {
+		if (online && !wasOnline.current) reconnected$.next();
+		wasOnline.current = online;
+	}, [online, reconnected$]);
 	const [ratesReady$] = React.useState(
 		() => new BehaviorSubject<RatesReady>({ ready: false, generation: 0 })
 	);
@@ -90,6 +95,7 @@ export function SettlementCoordinatorProvider() {
 		const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(null);
 		const coordinator = createSettlementCoordinator({
 			inputs$,
+			reconnected$,
 			completionChanges$: registerId
 				? observeOpenSessionPresence(saleContext.storeDB, { registerId })
 				: undefined,
@@ -102,7 +108,6 @@ export function SettlementCoordinatorProvider() {
 					couponLines: payload.coupon_lines ?? [],
 				}),
 			serverOwnsMoney,
-			storeContract: () => readStorePaymentsContract(extraData),
 			orderSaveState: getOrderSaveState,
 			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			now: Date.now,
@@ -142,7 +147,6 @@ export function SettlementCoordinatorProvider() {
 							source: 'system',
 							configForOrder: read,
 							serverOwnsMoney,
-							storeContract: () => readStorePaymentsContract(extraData),
 							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							readBindingStatus: () =>
 								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
@@ -155,6 +159,7 @@ export function SettlementCoordinatorProvider() {
 									{ host: 'background' },
 									slot
 								),
+							closeSale,
 						},
 						{
 							order: document as EngineRecord<'orders'>,
@@ -195,11 +200,6 @@ export function SettlementCoordinatorProvider() {
 			if (value.ready && !value.error)
 				openOrders$.next(value.hits.map(({ record }) => record as CurrentOrderRecord));
 		});
-		// Descriptor arrival changes ownership eligibility without changing any order.
-		const contract = extraData
-			?.get$('paymentMethods')
-			.pipe(skip(1))
-			.subscribe(() => inputs$.next(inputs$.value));
 		const stock = observeCatalogChanges(manager.engine).subscribe(() =>
 			inputs$.next(inputs$.value)
 		);
@@ -208,7 +208,6 @@ export function SettlementCoordinatorProvider() {
 			coordinator.stop();
 			offEvents();
 			offCheckout();
-			contract?.unsubscribe();
 			stock.unsubscribe();
 			rates.unsubscribe();
 			orders.unsubscribe();
@@ -217,16 +216,17 @@ export function SettlementCoordinatorProvider() {
 		manager,
 		handle,
 		read,
+		closeSale,
 		serverOwnsMoney,
 		report,
 		t,
 		inputs$,
+		reconnected$,
 		ratesReady$,
 		coverage$,
 		saleContext,
 		bindingStatus,
 		registerId,
-		extraData,
 	]);
 	return null;
 }

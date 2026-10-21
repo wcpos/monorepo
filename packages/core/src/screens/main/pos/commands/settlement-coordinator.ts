@@ -24,13 +24,14 @@ export type SettlementDiagnostic = { type: string; uuid: string; at: number; err
 interface Deps {
 	inputs$: Observable<CartConfigInputs>;
 	completionChanges$?: Observable<unknown>;
+	/** Emits when the till reconnects: a boundary deferred offline is tried again. */
+	reconnected$?: Observable<unknown>;
 	// null is a rebind: discard old records AND queued work before accepting the new scope.
 	openOrders$: Observable<CurrentOrderRecord[] | null>;
 	ratesReady$: Observable<RatesReady>;
 	references$: Observable<CouponReferences>;
 	readCoupons: (payload: OrderPayload) => Promise<CouponContext>;
 	serverOwnsMoney: (uuid: string) => boolean;
-	storeContract?: () => string | null;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	settle: (
@@ -65,7 +66,7 @@ function closed(
 		) ||
 		(!ignoreCheckout && deps.inCheckout(record.uuid)) ||
 		deps.serverOwnsMoney(record.uuid) ||
-		serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() })
+		serverOwnsMoney(payload.meta_data)
 	);
 }
 
@@ -105,10 +106,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			p.billing,
 			p.shipping,
 			p.meta_data?.filter(
-				({ key }) =>
-					key === '_woocommerce_pos_tax_based_on' ||
-					key === '_wcpos_money_owner' ||
-					key === '_wcpos_money_owner_hint'
+				({ key }) => key === '_woocommerce_pos_tax_based_on' || key === '_wcpos_money_owner_hint'
 			),
 			// A guard can outlive a ledger update that supersedes a paid-balance completion.
 			readLedger(p.meta_data)
@@ -132,6 +130,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				  'reason' in outcome
 				? outcome.reason
 				: undefined;
+		// A boundary that could not close offline is retried on the next reconnect, whatever else
+		// changed: connectivity is not part of the fingerprint.
+		if (outcome && typeof outcome === 'object' && 'kind' in outcome && outcome.kind === 'offline')
+			seen.delete(args[0]);
 		// Do not lose catalog or checkout-exit emissions consumed while a pass awaited its guards.
 		if (
 			typeof reason === 'string' &&
@@ -273,6 +275,12 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	subscription.add(
 		deps.completionChanges$?.subscribe(() => {
 			completionGeneration++;
+			dirty = true;
+			void drain();
+		})
+	);
+	subscription.add(
+		deps.reconnected$?.subscribe(() => {
 			dirty = true;
 			void drain();
 		})

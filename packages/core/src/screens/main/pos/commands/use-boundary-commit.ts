@@ -6,11 +6,9 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { useCompleteOrderFlowForOrder } from '../checkout/hooks/use-complete-order-flow';
 import { useCartConfigReader } from '../hooks/use-cart-config';
-import {
-	useServerOwnsMoneyReader,
-	useStoreContractReader,
-} from '../contexts/order-money-divergence';
+import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { commitAtBoundary } from './boundary-commit';
+import { useCloseSale } from './close-sale';
 
 import type { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import type { BoundaryResult } from './paid-balance-boundary';
@@ -19,7 +17,6 @@ import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
 export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['localPatch']) {
 	const ctx = useSaleContext();
-	const storeContract = useStoreContractReader();
 	const configForOrder = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const { status, registerId } = useRegisterBinding();
@@ -28,6 +25,7 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 		bindingRef.current = { status, registerId };
 	}, [status, registerId]);
 	const complete = useCompleteOrderFlowForOrder();
+	const closeSale = useCloseSale();
 	return React.useCallback(
 		(order: CurrentOrderRecord, result: BoundaryResult, queue: OrderMutationContext) =>
 			commitAtBoundary(
@@ -35,12 +33,12 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 					...ctx,
 					configForOrder,
 					serverOwnsMoney,
-					storeContract,
 					bindingStatus: status === 'unknown' ? 'none' : status,
 					readBindingStatus: () =>
 						bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
 					readRegisterId: () => bindingRef.current.registerId,
 					complete: (target, slot) => complete(target, { source: 'zero-balance' }, slot),
+					closeSale,
 				},
 				{
 					order: order as EngineRecord<'orders'>,
@@ -51,6 +49,6 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 					write: (changes) => write({ document: order, changes }),
 				}
 			),
-		[ctx, status, complete, write, configForOrder, serverOwnsMoney, storeContract]
+		[ctx, status, complete, closeSale, write, configForOrder, serverOwnsMoney]
 	);
 }
