@@ -148,25 +148,40 @@ async function readopt(
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
 	orderId: number
-): Promise<{ order: ResidentOrder; chain: RevisionChain | null }> {
-	const before = (await readOrder(runtime, orderUuid)).order.sync?.adopted;
-	await refreshRecordByWooId(runtime.engine, {
+): Promise<{ order: ResidentOrder; chain: RevisionChain | null; refreshAdopted: boolean }> {
+	const prior = await readOrder(runtime, orderUuid);
+	const before = prior.order.sync?.adopted;
+	const priorWrite = (prior.resident.getLatest() as { revision?: string }).revision;
+	const refreshed = await refreshRecordByWooId(runtime.engine, {
 		id: `money-command:readopt:${orderId}`,
 		collection: 'orders',
 		wooId: orderId,
 		readopt: true,
-	}).catch(() => undefined);
-	const { order } = await readOrder(runtime, orderUuid);
+	}).then(
+		() => true,
+		() => false
+	);
+	const { resident, order } = await readOrder(runtime, orderUuid);
 	const { chain } = await readOrderCommands(storeDB, orderUuid);
 	const adopted = order.sync?.adopted;
 	const adoptedNow =
 		!!adopted &&
 		adopted.revision === order.sync.revision &&
 		(adopted.at !== before?.at || adopted.revision !== before?.revision);
-	if (!chain || !adoptedNow || (adopted.at ?? 0) > chain.answeredAt) return { order, chain };
+	// This refresh adopted: a whole document under its own stamp, written since the refresh began
+	// (a new adoption, or the resident rewritten by a refresh that succeeded). Never inferred from
+	// time alone: a pull in the same millisecond is indistinguishable by its stamp.
+	const refreshAdopted =
+		adoptedNow ||
+		(refreshed &&
+			!!adopted &&
+			adopted.revision === order.sync.revision &&
+			(resident.getLatest() as { revision?: string }).revision !== priorWrite);
+	if (!chain || !adoptedNow || (adopted.at ?? 0) > chain.answeredAt)
+		return { order, chain, refreshAdopted };
 	const recorded = { ...chain, answeredAt: (adopted.at ?? 0) - 1 };
 	await settleCommand(storeDB, orderUuid, null, recorded);
-	return { order, chain: recorded };
+	return { order, chain: recorded, refreshAdopted };
 }
 
 /** Pre-flight: push pending local work, choose the revision, re-check the approval. */
@@ -356,18 +371,15 @@ function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>)
 	}
 }
 
-/** Whether the forced refresh adopts the order's whole document, stamped at or after `since`. */
-async function adoptedSince(
+/** Whether a forced refresh, run now (after the answer), itself adopts the order's document. */
+async function refreshAdopts(
 	runtime: QueryRuntime,
 	storeDB: StoreLocalDatabase,
-	orderUuid: string,
-	since: number
+	orderUuid: string
 ): Promise<boolean> {
 	const { order } = await readOrder(runtime, orderUuid);
 	if (!order.payload.id) return false;
-	const { order: after } = await readopt(runtime, storeDB, orderUuid, order.payload.id);
-	const adopted = after.sync?.adopted;
-	return !!adopted && adopted.revision === after.sync.revision && (adopted.at ?? 0) >= since;
+	return (await readopt(runtime, storeDB, orderUuid, order.payload.id)).refreshAdopted;
 }
 
 /** The engine scope the till is in now: one cashier's orders. */
@@ -411,9 +423,8 @@ export async function resendOpenCommands(
 			continue;
 		}
 		const { data } = (await poster(entry.path, entry.body)) as { data: Record<string, unknown> };
-		// The barrier starts at the answer: a pull that adopted the pre-command document while the
-		// re-send was in flight never carries the stamp change, so it never confirms the replay.
-		const since = Date.now();
+		// Only the refresh run after the answer confirms it: a pull adopted while the re-send was in
+		// flight, or in the answer's own millisecond, never carries the stamp change.
 		// A replayed submit or cancel cannot carry the awaiting-customer stamp its first answer
 		// wrote or cleared (the stamp needs the press's destination and cashier); only the server
 		// document does. So it settles only once the refresh has adopted that document, and stays
@@ -421,7 +432,7 @@ export async function resendOpenCommands(
 		// as a settled sale.
 		if (
 			(entry.kind === 'submit' || entry.kind === 'cancel') &&
-			!(await adoptedSince(runtime, storeDB, orderUuid, since))
+			!(await refreshAdopts(runtime, storeDB, orderUuid))
 		) {
 			await poster.abandon();
 			throw new Error('money_command_unconfirmed');

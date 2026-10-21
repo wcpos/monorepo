@@ -1051,6 +1051,25 @@ it('a replayed submit is not confirmed by a pull adopted while the re-send was i
 	expect(await entries()).toHaveLength(1);
 });
 
+// A pull adopted at the answer's very millisecond is indistinguishable by time: only an adoption
+// the forced refresh itself made confirms a replayed submit or cancel.
+it('a pull adopted in the same millisecond as the answer never confirms a replayed submit', async () => {
+	store.modes = ['lose'];
+	await expect(
+		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+	).rejects.toThrow('Network Error');
+	const real = store.post.getMockImplementation()!;
+	store.post.mockImplementationOnce(async (url, body) => {
+		const answer = await real(url, body);
+		await adoptStore(true); // the normal pull, at the answer
+		return answer;
+	});
+	jest.mocked(Date.now).mockReturnValue(clock); // one millisecond for the whole replay
+	refreshWorks = false;
+	await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+	expect(await entries()).toHaveLength(1);
+});
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });
