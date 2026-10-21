@@ -9,6 +9,7 @@ import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	calculateCartLine,
+	countsTowardPaid,
 	type DeclaredValues,
 	derive,
 	fromMinor,
@@ -636,9 +637,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const action: TenderAction = {
 				type: 'tender-recorded',
 				balanceMinor: toMinor(balance, dp),
+				// The legs the plan has taken: the money `derive()` counts, so an offline device
+				// authorization (a hold) never advances it.
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
-					.filter(isSettledPaymentRow)
+					.filter(countsTowardPaid)
 					.map((candidate) => ({
 						amountMinor: toMinor(candidate.amount, dp),
 						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,

@@ -933,6 +933,34 @@ describe('useTenderFlow', () => {
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
 	});
 
+	// ADR 0040 D6: an offline device authorization is a hold the store does not count as paid.
+	it('an offline device authorization never advances a split plan to its next leg', async () => {
+		const plan = { kind: 'even' as const, ways: 3, from: 0 };
+		mockPayload = {
+			total: '90.00',
+			meta_data: withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]),
+		};
+		mockRecordManualPayment.mockResolvedValue({
+			...recorded,
+			row: payment({
+				id: 'b',
+				amount: '30.00',
+				tendered: null,
+				capture_mode: 'device',
+				recorded_offline: true,
+				status: 'authorized',
+			}),
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9000 }));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 3000 }));
+		await act(async () => result.current.takeTender());
+		// Leg 2 of 3 is still due: 30.00 of the 60.00 balance, not the whole of it as leg 3.
+		expect(result.current.state.entryMinor).toBe(3000);
+		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
+	});
+
 	it('a remount after the planned legs are taken still journals every share on the last leg (roadmap#422)', async () => {
 		const plan = { kind: 'even' as const, ways: 2, from: 0 };
 		setTenderPlan(order.uuid, plan);

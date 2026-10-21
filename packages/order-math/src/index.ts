@@ -59,6 +59,7 @@ export type {
 
 // ===== Payments contract v1 (wcpos/roadmap#97) =====
 export {
+	countsTowardPaid,
 	derive,
 	isCompletingStatus,
 	hasSaleProvenance,

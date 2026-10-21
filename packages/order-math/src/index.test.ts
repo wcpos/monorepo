@@ -8,6 +8,7 @@ test('public value surface is exactly the spec', () => {
 	).toEqual([
 		'activeAwaitingCustomer',
 		'calculateCartLine',
+		'countsTowardPaid',
 		'createCartConfig',
 		'derive',
 		'fromMinor',

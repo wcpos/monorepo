@@ -10,6 +10,10 @@ import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './ty
 // ADR 0040 D6: only captured money counts toward paid; an authorization is a hold, not
 // payment. Mirrors the server's `Ledger::COUNTING_STATUSES`.
 const COUNTING_STATUSES = new Set(['captured']);
+/** Whether a row counts toward paid (ADR 0040 D6): the one predicate `derive()` applies. */
+export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
+	return COUNTING_STATUSES.has(row.status);
+}
 
 /** Σ succeeded refund allocations over every row (wire rows may omit `refunds`). */
 function refunded(payments: readonly PaymentRow[], dp: number): number {
@@ -42,7 +46,7 @@ export function derive(
 
 	const counting = payments
 		.map((row) => ({ row, amount: toMinor(row.amount, dp) }))
-		.filter(({ row }) => COUNTING_STATUSES.has(row.status));
+		.filter(({ row }) => countsTowardPaid(row));
 	const totalMinor = toMinor(total, dp);
 	const paidMinor = counting.reduce((sum, { amount }) => sum + amount, 0);
 	// Server `Ledger::signed_balance`: a succeeded refund on a reopened sale is due again. A pending
