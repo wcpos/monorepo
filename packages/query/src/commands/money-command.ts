@@ -256,6 +256,7 @@ export async function sendMoneyCommand(
 				? error
 				: new MoneyCommandError('preflight_failed', entry, undefined, { cause: error });
 		}
+	let refusal: unknown = null;
 	for (let stale = false; ; stale = true) {
 		// Fenced on this sender's claim: a sender another poster displaced never posts.
 		if (!(await markSent(storeDB, entry.orderUuid, entry.id, revision, entry.claimedBy ?? null)))
@@ -278,6 +279,13 @@ export async function sendMoneyCommand(
 				);
 			if ((stalled || isDefinitiveMoneyRefusal(failure)) && !(await held()))
 				throw new MoneyCommandError('in_flight', entry);
+			// A gateway's 502 is ambiguous: the store answers the same after a gateway that threw past
+			// dispatch, its attempt left `sent`. Re-sent once, a stored `sent` replays; a refused attempt
+			// is answered `wcpos_payment_conflict`, and the gateway's own refusal then stands.
+			if (failure?.code === 'wcpos_provider_error' && entry.kind === 'submit' && !stale) {
+				refusal = error;
+				continue;
+			}
 			if (stalled) {
 				const current = failure.data?.current as Record<string, unknown> | undefined;
 				const currentRevision = failure.data?.currentRevision;
@@ -306,6 +314,7 @@ export async function sendMoneyCommand(
 				if (payment)
 					await mirrorServerOrder(runtime, entry.orderUuid, { payment, sentRevision: revision });
 				await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
+				throw refusal ?? error;
 			}
 			throw error;
 		}

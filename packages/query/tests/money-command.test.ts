@@ -47,6 +47,7 @@ type Mode =
 	| '403'
 	| 'stale'
 	| 'provider'
+	| 'conflict'
 	| 'outstanding'
 	| 'malformed'
 	| 'unstamped'
@@ -84,6 +85,8 @@ class FakeStore {
 		if (mode === '403') throw httpError(403, 'rest_forbidden');
 		if (mode === '503') throw httpError(503, 'http_service_unavailable');
 		if (mode === 'provider') throw httpError(502, 'wcpos_provider_error');
+		// A re-send of an attempt the store closed after the gateway refused it.
+		if (mode === 'conflict') throw httpError(409, 'wcpos_payment_conflict');
 		// A plugin filter or proxy answering 2xx with nothing the store said.
 		if (mode === 'malformed') return { data: {} };
 		// A well-formed answer about another payment (a proxy, a filter, a wrong handler).
@@ -390,7 +393,7 @@ it('a refused pre-flight push ends as preflight_failed: nothing is sent and no e
 });
 
 it('a 502 wcpos_provider_error settles the submit: the store took nothing and the cashier can choose again', async () => {
-	store.modes = ['provider'];
+	store.modes = ['provider', 'conflict'];
 	await expect(
 		poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
 	).rejects.toThrow('wcpos_provider_error');
@@ -1195,4 +1198,23 @@ it.each([
 	await poster()(url, body);
 	expect(pushRecord).not.toHaveBeenCalled();
 	expect(store.post).toHaveBeenCalledTimes(1);
+});
+
+// The store answers a gateway that threw after dispatch with the same 502 as a refusal, its
+// attempt left `sent`. The command is re-sent once under its own id: a stored `sent` replays and
+// is the answer; only a re-send the store refuses (`wcpos_payment_conflict`) settles it as refused.
+it('an ambiguous 502 is re-sent under the same command, and a stored sent is its answer', async () => {
+	const real = store.post.getMockImplementation()!;
+	store.post.mockImplementationOnce(async (url, body) => {
+		await real(url, body); // dispatched and stored as sent, then the gateway threw
+		throw httpError(502, 'wcpos_provider_error');
+	});
+	const { data } = (await poster()('orders/5/payment-methods/g/submit', {
+		attempt_id: 'a-1',
+		values: {},
+	})) as { data: Record<string, unknown> };
+	expect(data.outcome).toBe('sent');
+	expect(store.post).toHaveBeenCalledTimes(2);
+	expect(new Set(sentBodies().map(({ command_id }) => command_id)).size).toBe(1);
+	expect(store.legs).toBe(1);
 });

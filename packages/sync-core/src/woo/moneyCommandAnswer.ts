@@ -28,8 +28,8 @@ export const RESENDABLE_MONEY_STATUSES: readonly number[] = [401, 403, 407, 408,
  * which the store restores the previous method, marks the attempt `cancelled` and forgets the
  * command (`restore_method`, :266-281, :517-530), so a re-send of it is refused 409
  * `wcpos_payment_conflict` (:87). The one exception the server names, a gateway that throws
- * AFTER dispatch, leaves its attempt `sent` (:266) behind the same 502; a re-send would only
- * replay that `sent`, and the store's log names the attempt for the operator.
+ * AFTER dispatch, leaves its attempt `sent` (:266) behind the same 502, so the poster re-sends a
+ * submit's 502 once first: a stored `sent` replays, a closed attempt answers 409 (query `send`).
  */
 export const DEFINITIVE_SERVER_ERROR_CODES: readonly string[] = [
 	'wcpos_capture_mode_unsupported',
