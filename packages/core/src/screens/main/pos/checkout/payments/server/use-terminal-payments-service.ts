@@ -222,8 +222,15 @@ export function useTerminalPaymentsService(): void {
 		const unsubscribe = subscribeCheckoutMode(() => {
 			void service.flushOffline();
 		});
+		// A cashier switch moves the till to another scope, where these legs' orders are not
+		// resident: the legs stop. Their sent commands re-send through the scope-bound recovery,
+		// and the legs resume, when that cashier's scope is active again (no cross-scope replay).
+		const offScope = manager.engine.events((event) => {
+			if (event.type === 'scope-switched') service.suspendLegs();
+		});
 		return () => {
 			unsubscribe();
+			offScope();
 			stopped = true;
 			ledgerSubscription.unsubscribe();
 			if (bindingRef.current === binding) bindingRef.current = null;

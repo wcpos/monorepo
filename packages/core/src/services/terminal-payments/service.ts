@@ -562,6 +562,18 @@ export class TerminalPaymentsService {
 		this.legs.delete(orderUuid);
 		this.publish();
 	}
+	/**
+	 * Stop and drop every live leg, keeping the service: the till moved to another scope (a
+	 * cashier switch), where these legs' orders are not resident, so their reads, captures and
+	 * voids cannot run (ADR 0040, one scope per command). A command already sent stays in the
+	 * journal and re-sends through the scope-bound recovery when that scope is active again, and
+	 * the leg itself resumes from its row then.
+	 */
+	suspendLegs(): void {
+		this.legs.forEach(({ leg }) => leg.dispose());
+		this.legs.clear();
+		this.publish();
+	}
 	readersInUse(): Map<string, { orderUuid: string; orderNumber: string }> {
 		const readers = new Map<string, { orderUuid: string; orderNumber: string }>();
 		this.snapshot.forEach((state, orderUuid) => {

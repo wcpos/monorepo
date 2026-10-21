@@ -168,7 +168,9 @@ let mockUseRealCompletion = false;
 const mockSetCurrentOrderID = jest.fn();
 const mockRequire = jest.fn();
 const mockAdjustStock = jest.fn();
-const mockRuntime = { engine: { require: mockRequire, db$: () => () => {} } };
+const mockRuntime = {
+	engine: { require: mockRequire, db$: () => () => {}, events: () => () => {} },
+};
 let mockAutoShowReceipt = true;
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../contexts/ui-settings', () => ({

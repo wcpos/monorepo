@@ -16,7 +16,12 @@ import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 
 const mockManager = {
-	engine: { active: () => null, ready: new Promise(() => {}), db$: () => () => {} },
+	engine: {
+		active: () => null,
+		ready: new Promise(() => {}),
+		db$: () => () => {},
+		events: () => () => {},
+	},
 };
 let mockSession = {
 	store: { id: 1 },

@@ -47,8 +47,13 @@ const mockResident = {
 };
 const mockDocuments = new BehaviorSubject([mockResident]);
 const mockFind = jest.fn(() => ({ $: mockDocuments }));
+const mockEngineListeners = new Set<(event: { type: string }) => void>();
 const mockRuntime = {
 	engine: {
+		events: (listener: (event: { type: string }) => void) => {
+			mockEngineListeners.add(listener);
+			return () => mockEngineListeners.delete(listener);
+		},
 		active: () => null,
 		ready: new Promise(() => {}),
 		require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
@@ -135,6 +140,20 @@ afterEach(() => {
 	stopTerminalPaymentsService();
 	jest.clearAllMocks();
 });
+// A cashier switch moves the till to another scope, where a live leg's order is not resident:
+// the legs stop instead of polling and posting into a scope that cannot read them.
+it('suspends every live terminal leg when the engine switches scope', async () => {
+	const hook = renderHook(() => useTerminalPaymentsService());
+	const service = getTerminalPaymentsService()!;
+	const suspend = jest.spyOn(service, 'suspendLegs');
+	mockEngineListeners.forEach((listener) => listener({ type: 'collection-reset' }));
+	expect(suspend).not.toHaveBeenCalled();
+	mockEngineListeners.forEach((listener) => listener({ type: 'scope-switched' }));
+	expect(suspend).toHaveBeenCalledTimes(1);
+	hook.unmount();
+	expect(mockEngineListeners.size).toBe(0);
+});
+
 it('recovers a completed resident offline authorization without any open checkout or live leg', async () => {
 	const hook = renderHook(() => useTerminalPaymentsService());
 	await waitFor(() =>
