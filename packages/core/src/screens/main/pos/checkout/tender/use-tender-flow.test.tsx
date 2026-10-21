@@ -585,6 +585,22 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	// A cash record whose answer was lost, then a remote reopen: the replay answers the captured
+	// row with the order as it now stands, open at a zero balance. Mirrored and settled, but the
+	// reopened sale is not finished from it.
+	it('a replayed record whose sale was reopened since does not finish the sale', async () => {
+		const row = payment({ amount: '92.95', tendered: '100.00' });
+		const reopened = { status: 'pos-open', total: '92.95', paid: '92.95', balance: '0.00' };
+		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: reopened } }]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
 	it('a Try again the store answers finishes the sale like a first answer', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
