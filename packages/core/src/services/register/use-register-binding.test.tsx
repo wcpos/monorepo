@@ -455,3 +455,29 @@ it('refreshes rows while keeping choose and shares an in-flight refresh', async 
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toBeNull();
 	expect(mockHttp.get).toHaveBeenCalledTimes(2);
 });
+
+it('ignores a superseded directory answer that lands after a refresh', async () => {
+	let answerFirst: (value: { data: unknown }) => void = () => {};
+	let answerSecond: (value: { data: unknown }) => void = () => {};
+	mockHttp.get
+		.mockImplementationOnce(() => new Promise((resolve) => (answerFirst = resolve)))
+		.mockImplementationOnce(() => new Promise((resolve) => (answerSecond = resolve)));
+	const view = mount();
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(1));
+	let refreshed: Promise<void> = Promise.resolve();
+	act(() => {
+		refreshed = view.result.current.refresh();
+	});
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(2));
+	await act(async () => {
+		answerSecond({ data: [rows[1], rows[2]] });
+		await refreshed;
+	});
+	await act(async () => {
+		answerFirst({ data: [rows[0]] });
+		await Promise.resolve();
+	});
+	// The older answer arrived last and changed nothing: the refreshed rows stand.
+	expect(view.result.current.registers.map(({ id }) => id)).toEqual(['b', 'c']);
+	expect(view.result.current.status).toBe('choose');
+});

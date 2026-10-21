@@ -92,11 +92,15 @@ function loadDirectory(
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
 	storeId: number | undefined
 ): Promise<void> {
+	if (entry.request) return entry.request;
 	// A new attempt clears the last failure: readers wait for names again while it runs.
-	if (!entry.request && entry.value.failed) publish(entry, { failed: false });
-	entry.request ??= http
+	if (entry.value.failed) publish(entry, { failed: false });
+	// A refresh drops `entry.request` while this one may still be pending: a superseded answer
+	// is ignored, so an older list never replaces the refreshed rows and live state.
+	const request: Promise<void> = http
 		.get('registers', { params: { store_id: storeId || null } })
 		.then((response) => {
+			if (entry.request !== request) return;
 			entry.loaded = true;
 			publish(entry, {
 				loaded: true,
@@ -109,6 +113,7 @@ function loadDirectory(
 			});
 		})
 		.catch(() => {
+			if (entry.request !== request) return;
 			// A failed list request leaves the pointer and status unchanged; the next
 			// session (or reconnect) tries again. Readers waiting for names stop waiting.
 			entry.request = undefined;
@@ -118,7 +123,8 @@ function loadDirectory(
 				registerId: entry.value?.registerId ?? null,
 			});
 		});
-	return entry.request;
+	entry.request = request;
+	return request;
 }
 
 /**

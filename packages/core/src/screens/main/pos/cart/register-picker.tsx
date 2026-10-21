@@ -44,9 +44,7 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 	}, [refresh]);
 	return (
 		<View className="flex-1">
-			<Text className="text-muted-foreground px-3 pt-3.5 pb-1.5">
-				{t('register.which_register')}
-			</Text>
+			<Text className="text-muted-foreground px-3 pt-3 pb-1">{t('register.which_register')}</Text>
 			<ScrollView>
 				{registers.map((register) => (
 					<ListRow
@@ -63,7 +61,7 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 						<RegisterStatus register={register} />
 					</ListRow>
 				))}
-				<Text className="text-muted-foreground px-3 py-2.5 text-xs">
+				<Text className="text-muted-foreground px-3 py-2 text-xs">
 					{t('register.change_later_from_avatar')}
 				</Text>
 			</ScrollView>
