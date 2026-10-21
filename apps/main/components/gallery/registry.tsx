@@ -31,6 +31,7 @@ import { stories as segmentedControl } from '@wcpos/components/segmented-control
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
 import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
 import { stories as notice } from '@wcpos/components/notice/gallery';
+import { stories as gateScreen } from '@wcpos/components/gate-screen/gallery';
 import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
@@ -116,6 +117,7 @@ const registry: Record<string, Story[]> = {
 	skeleton,
 	'empty-state': emptyState,
 	notice,
+	'gate-screen': gateScreen,
 	breadcrumb,
 	'browse-tiles': browseTiles,
 	'nav-item': navItem,

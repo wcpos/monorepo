@@ -266,9 +266,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			'Update WCPOS (on the web, reload the page), then reopen. Unsent sales stay on this device and send after the update.',
+			'The WCPOS plugin on your WordPress site is newer than this app. On the web, reload the page; on a phone, tablet or desktop, install the WCPOS app update and reopen it (the installation guide links each channel). Unsent sales stay on this device and send after the update.',
 		dataSafety: 'no-impact',
-		summary: 'This store now requires a newer version of the POS app.',
+		summary: 'Update the POS app on this device.',
 	},
 	AUTH101: {
 		code: 'AUTH101',

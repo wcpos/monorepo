@@ -110,5 +110,6 @@ it('preserves explicit action and docs IDs without a root ID', () => {
 	expect(screen.queryByTestId('undefined-title')).toBeNull();
 });
 it('does not truncate', () => {
-	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toContain('numberOfLines');
+	// `numberOfLines={0}` lifts ButtonText's one-line default on native; a positive limit truncates.
+	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/numberOfLines=\{[1-9]/);
 });

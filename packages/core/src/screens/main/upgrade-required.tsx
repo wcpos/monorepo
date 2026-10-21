@@ -1,34 +1,37 @@
 import * as React from 'react';
-import { StyleSheet, View } from 'react-native';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { GateScreen } from '@wcpos/components/gate-screen';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
 
+/**
+ * The store's WCPOS plugin is older than this app speaks. The mirror of
+ * UpdateRequired: the fix is on the WordPress site, so the screen names it,
+ * links the AUTH331 docs page and offers only logout.
+ */
 export function UpgradeRequired() {
 	const t = useT();
 	const { logout } = useAppState();
 
 	return (
-		<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-			<VStack>
-				<HStack>
-					<Icon name="warning" variant="destructive" />
-					<Text className="text-destructive">
-						{t('common.please_update_your_woocommerce_pos_plugin')}
-					</Text>
-				</HStack>
-				<View className="justify-center p-2">
-					<Button onPress={logout}>
-						<ButtonText>{t('common.logout')}</ButtonText>
-					</Button>
-				</View>
-			</VStack>
-		</View>
+		<GateScreen
+			tone="warn"
+			testID="upgrade-required-screen"
+			title={t('gate.update_plugin.title')}
+			description={t('gate.update_plugin.description')}
+			secondary={{
+				label: t('common.logout'),
+				onPress: () => void logout(),
+				testID: 'upgrade-required-logout',
+			}}
+			docs={{
+				label: t('common.learn_more'),
+				href: getErrorCodeDocURL('AUTH331'),
+				code: 'AUTH331',
+				testID: 'upgrade-required-docs-link-AUTH331',
+			}}
+		/>
 	);
 }

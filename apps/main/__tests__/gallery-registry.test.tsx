@@ -41,6 +41,7 @@ const registered = [
 	'skeleton',
 	"'empty-state': emptyState",
 	'notice',
+	"'gate-screen': gateScreen",
 	'breadcrumb',
 	"'browse-tiles': browseTiles",
 	"'page-bar': pageBar",

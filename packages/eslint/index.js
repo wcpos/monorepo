@@ -435,6 +435,30 @@ export const designSystemOwnershipSelectors = [
 ];
 
 /**
+ * A screen that replaces the whole app is a `GateScreen`. The hand-rolled shape it replaced
+ * (update-required, upgrade-required: a red headline centred by hand in an absoluteFill) is
+ * refused where screens live. An absoluteFill without `justifyContent` (a scrim, an overlay
+ * layer) is not this shape and stays allowed.
+ */
+export const gateScreenSelector = {
+	selector:
+		'JSXOpeningElement[name.name="View"] > JSXAttribute[name.name="style"]' +
+		':has(MemberExpression[object.name="StyleSheet"][property.name=/^absoluteFill(Object)?$/])' +
+		':has(Property[key.name="justifyContent"][value.value="center"])',
+	message:
+		'A centred full-screen state is a GateScreen (@wcpos/components/gate-screen), never a hand-centred absoluteFill.',
+};
+
+/**
+ * Where screens live, as repo-root globs; each package config rebases this array by identity,
+ * as it does `designSystemOwnershipFiles`.
+ */
+export const gateScreenFiles = [
+	'**/packages/core/src/screens/**/*.tsx',
+	'**/apps/main/app/**/*.tsx',
+];
+
+/**
  * The app code the ownership rule covers, as repo-root globs (lint-staged runs
  * from the root). Lint also runs per package (`eslint src` from packages/core,
  * `eslint app components` from apps/main), where flat-config globs resolve
@@ -600,6 +624,15 @@ export const config = [
 		ignores: ['**/*.test.tsx'],
 		rules: {
 			'no-restricted-syntax': ['error', ...designSystemOwnershipSelectors],
+		},
+	},
+	// The gate-screen guard, under screens/ and app/ only. It restates the ownership selectors
+	// because this block REPLACES the one above for these files (flat config does not merge).
+	{
+		files: gateScreenFiles,
+		ignores: ['**/*.test.tsx'],
+		rules: {
+			'no-restricted-syntax': ['error', ...designSystemOwnershipSelectors, gateScreenSelector],
 		},
 	},
 

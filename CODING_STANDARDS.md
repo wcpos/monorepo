@@ -346,6 +346,12 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 - An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter (16) around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
 
+#### Gate screens
+A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.
+The title never takes a tone colour: the disc carries it, and `bad` stays the only red surface.
+A coded gate's copy comes from the error registry (`error-registry.json`), one source for the screen, the log row and the docs page.
+The lint refuses a hand-centred `absoluteFill` (`StyleSheet.absoluteFill` with `justifyContent: 'center'`) under `screens/` and `app/`.
+
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 
 #### Rows and cards

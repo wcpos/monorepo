@@ -288,11 +288,11 @@
 		"symbol": "APP_UPDATE_REQUIRED",
 		"domain": "SYNC",
 		"severity": "error",
-		"actionHint": "Update WCPOS (on the web, reload the page), then reopen. Unsent sales stay on this device and send after the update.",
+		"actionHint": "The WCPOS plugin on your WordPress site is newer than this app. On the web, reload the page; on a phone, tablet or desktop, install the WCPOS app update and reopen it (the installation guide links each channel). Unsent sales stay on this device and send after the update.",
 		"retryPolicy": "after-change",
 		"dataSafety": "no-impact",
 		"escalation": "none",
-		"summary": "This store now requires a newer version of the POS app.",
+		"summary": "Update the POS app on this device.",
 		"docsBody": "The store's WCPOS plugin has moved to a newer sync protocol than this app speaks, and the server deliberately pauses syncing until the app is updated — this protects the store's data from being read or written incorrectly. Nothing on the till is lost: sales and edits waiting to be sent stay safely on the device and sync once an updated app connects. On the web app, reload the page to pick up the new version; on desktop and mobile, install the app update and reopen it.",
 		"troubleshooting": [
 			"On the web app, reload the browser tab — the web app picks up the new version on reload. If the screen comes back, use a hard reload (hold Shift while reloading).",
