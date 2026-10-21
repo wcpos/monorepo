@@ -3,7 +3,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { createLiveTab, holdLiveTab as holdWebTab } from '@wcpos/database/live-tab/live-tab.web';
 
-import { createDeviceLeg, type DeviceLegState } from './device-leg';
+import { createDeviceLeg, type DeviceLegState, RETIRE_RETRY_MS } from './device-leg';
 import { method, row } from './fixtures.test-utils';
 
 import type {
@@ -857,3 +857,31 @@ it.each([
 		expect(retire.mock.invocationCallOrder[0]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
 	}
 );
+
+// A retirement whose journal write fails keeps the leg live and retries: a final leg with its
+// intent still journaled would let recovery mint a pending device payment no reader collects.
+it('a failed intent retirement keeps the leg live and retries before the leg ends', async () => {
+	const retire = jest
+		.fn(async (_kind: 'intent', _target: string) => undefined)
+		.mockRejectedValueOnce(new Error('journal write failed'));
+	const c = setup(false, false, undefined, row, retire);
+	c.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
+	});
+	c.post.mockRejectedValueOnce({
+		response: { status: 404, data: { code: 'wcpos_payment_not_found', data: { status: 404 } } },
+	});
+	const started = c.leg.start();
+	await jest.advanceTimersByTimeAsync(0);
+	expect(retire).toHaveBeenCalledTimes(1);
+	expect(c.leg.getState().phase).not.toBe('final');
+	expect(c.leg.getState().error?.code).toBe('retire_failed');
+	expect(c.onFinal).not.toHaveBeenCalled();
+	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS);
+	await started;
+	expect(retire).toHaveBeenCalledTimes(2);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'failed' });
+	// The cashier reads the store's refusal of the intent, not the journal's bookkeeping.
+	expect(c.leg.getState().error?.code).toBe('wcpos_payment_locked');
+	expect(retire.mock.invocationCallOrder[1]).toBeLessThan(c.onFinal.mock.invocationCallOrder[0]);
+});
