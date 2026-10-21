@@ -29,7 +29,7 @@ type Register = {
 		opened_at_gmt: string;
 		opened_by: { id: number; name: string };
 	} | null;
-	last_closure?: { number: number; closed_at_gmt: string } | null;
+	last_closure?: { number: number; closed_at_gmt: string | null } | null;
 };
 type Binding = {
 	status: 'bound' | 'choose' | 'none' | 'unknown';
@@ -51,6 +51,7 @@ type Directory = {
 	request?: Promise<void>;
 	/** The `retry()` in flight, so a second tap joins it instead of binding twice. */
 	retry?: Promise<void>;
+	refresh?: Promise<void>;
 	loaded: boolean;
 	listeners: Set<() => void>;
 };
@@ -85,7 +86,7 @@ function publish(entry: Directory, changes: Partial<Binding>) {
 }
 
 /** Mounted once at the store-session bridge. Readers share this one site:store directory. */
-/** One directory request per (site, store) per app session, shared by every reader. */
+/** Cached directory request per (site, store), shared by readers until explicitly refreshed. */
 function loadDirectory(
 	entry: Directory,
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
@@ -287,5 +288,15 @@ export function useRegisterBinding() {
 			});
 		return current.retry;
 	}, [http, online, site.uuid, store.id, userDB]);
-	return { ...value, bind, retry };
+	const refresh = React.useCallback(() => {
+		const current = directory(site.uuid!, store.id);
+		if (current.refresh) return current.refresh;
+		current.request = undefined;
+		current.loaded = false;
+		current.refresh = loadDirectory(current, http, store.id).finally(() => {
+			current.refresh = undefined;
+		});
+		return current.refresh;
+	}, [http, site.uuid, store.id]);
+	return { ...value, bind, retry, refresh };
 }

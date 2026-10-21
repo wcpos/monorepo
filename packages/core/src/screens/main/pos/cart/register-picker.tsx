@@ -16,8 +16,8 @@ function RegisterStatus({
 	register: ReturnType<typeof useRegisterBinding>['registers'][number];
 }) {
 	const t = useT();
-	const time = useDateFormat(session?.opened_at_gmt, 'HH:mm', false);
-	const date = useDateFormat(last_closure?.closed_at_gmt, 'MMM d, h:mm a', false);
+	const time = useDateFormat(session?.opened_at_gmt, 'p', false);
+	const date = useDateFormat(last_closure?.closed_at_gmt, 'MMM d, p', false);
 	const name = session?.opened_by.name || t('register.unknown_cashier');
 	if (session?.status === 'open')
 		return <StatusBadge variant="success" label={t('register.open_since_by', { time, name })} />;
@@ -27,7 +27,7 @@ function RegisterStatus({
 		<StatusBadge
 			variant="muted"
 			label={
-				last_closure
+				last_closure?.closed_at_gmt
 					? t('register.closed_last_closure', { number: last_closure.number, date })
 					: t('register.closed')
 			}
@@ -36,8 +36,12 @@ function RegisterStatus({
 }
 
 export function RegisterPicker({ onBound }: { onBound?: () => void }) {
-	const { registers, bind } = useRegisterBinding();
+	const { registers, bind, refresh } = useRegisterBinding();
 	const t = useT();
+	// Refresh live sessions whenever the picker opens, without changing the binding or gate.
+	React.useEffect(() => {
+		void refresh();
+	}, [refresh]);
 	return (
 		<View className="flex-1">
 			<Text className="text-muted-foreground px-3 pt-3.5 pb-1.5">
@@ -59,10 +63,10 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 						<RegisterStatus register={register} />
 					</ListRow>
 				))}
+				<Text className="text-muted-foreground px-3 py-2.5 text-xs">
+					{t('register.change_later_from_avatar')}
+				</Text>
 			</ScrollView>
-			<Text className="text-muted-foreground px-3 py-2.5 text-xs">
-				{t('register.change_later_from_avatar')}
-			</Text>
 		</View>
 	);
 }

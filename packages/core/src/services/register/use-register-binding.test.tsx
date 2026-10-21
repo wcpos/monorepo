@@ -82,10 +82,10 @@ it('silently binds the sole register the store lists and filters by store', asyn
 		session: {
 			id: 'session-1',
 			status: 'open',
-			opened_at_gmt: '2026-10-21T08:15:00',
+			opened_at_gmt: '2026-10-21T08:15:00Z',
 			opened_by: { id: 7, name: 'Pat' },
 		},
-		last_closure: { number: 12, closed_at_gmt: '2026-10-20T16:30:00' },
+		last_closure: { number: 12, closed_at_gmt: '2026-10-20T16:30:00Z' },
 	};
 	mockHttp.get.mockResolvedValue({
 		data: [row],
@@ -421,4 +421,37 @@ it('retries a failed directory read and binds once for a double tap', async () =
 	expect(view.result.current.status).toBe('bound');
 	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toHaveLength(3);
 	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers/a')).toHaveLength(1);
+});
+
+// Refresh only reads the list: even a sole-register answer must not bind or change the gate.
+it('refreshes rows while keeping choose and shares an in-flight refresh', async () => {
+	let answer: (value: { data: unknown }) => void = () => {};
+	mockHttp.get
+		.mockResolvedValueOnce({ data: rows })
+		.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+	const view = mount();
+	await waitFor(() => expect(view.result.current.status).toBe('choose'));
+	let first: Promise<void> = Promise.resolve();
+	act(() => {
+		first = view.result.current.refresh();
+		expect(view.result.current.refresh()).toBe(first);
+	});
+	expect(view.result.current.status).toBe('choose');
+	expect(view.result.current.retrying).toBe(false);
+	expect(view.result.current.registerId).toBeNull();
+	expect(mockHttp.get.mock.calls).toEqual([
+		['registers', { params: { store_id: 2 } }],
+		['registers', { params: { store_id: 2 } }],
+	]);
+	const updated = [{ ...rows[0], name: 'Updated' }];
+	await act(async () => {
+		answer({ data: updated });
+		await first;
+	});
+	expect(view.result.current.registers).toEqual(updated);
+	expect(view.result.current.status).toBe('choose');
+	expect(view.result.current.retrying).toBe(false);
+	expect(view.result.current.registerId).toBeNull();
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toBeNull();
+	expect(mockHttp.get).toHaveBeenCalledTimes(2);
 });
