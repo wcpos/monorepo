@@ -1,7 +1,8 @@
 import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { recoverMoneyCommands, useQueryRuntime } from '@wcpos/query';
+import { type OrderPaymentSummary, readAwaitingCustomer } from '@wcpos/order-math';
+import { recoverMoneyCommands, type ResentCommand, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -232,7 +233,8 @@ export function SaleCompletionBridge(): null {
 			armRetry();
 		};
 		/** The orders whose unanswered commands a re-send has now answered. */
-		const recover = async (): Promise<ReadonlySet<string>> => {
+		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
+		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
 			try {
 				const recovered = await recoverMoneyCommands(manager, storeDB, {
 					post: (url, body) => httpRef.current.post(url, body),
@@ -241,21 +243,60 @@ export function SaleCompletionBridge(): null {
 				retryPending = recovered.some(({ unanswered }) => unanswered);
 				if (!retryPending) retries = 0;
 				armRetry();
-				return new Set(
-					recovered.filter(({ answers }) => answers.length > 0).map(({ orderUuid }) => orderUuid)
+				return new Map(
+					recovered
+						.filter(({ answers }) => answers.length > 0)
+						.map(({ orderUuid, answers }) => [orderUuid, answers])
 				);
 			} catch (error) {
 				logger.debug('Could not re-send unanswered money commands', {
 					context: { error: String(error) },
 				});
-				return new Set();
+				return new Map();
 			}
 		};
-		const replay = async (only?: ReadonlySet<string>) => {
+		/**
+		 * A recovered gateway submit answered `sent` finishes as a sent sale (its `checkout.sent`
+		 * audit, the attempt resolved), from the stamp the refresh adopted with the store's
+		 * document: never the unpaid replay, which would count starts and abandon it. Returns the
+		 * orders finished this way; the rest go through the completion replay.
+		 */
+		const finishRecovered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
+			const finished = new Set<string>();
+			if (answered.size === 0) return finished;
+			const pending = await pendingCompletions(storeDB);
+			for (const [uuid, answers] of answered) {
+				if (current.stopped) break;
+				const sent = answers.find(({ kind, data }) => kind === 'submit' && data.outcome === 'sent');
+				const attempt = pending[uuid];
+				const summary = sent?.data.order as OrderPaymentSummary | undefined;
+				if (!sent || !attempt || typeof summary?.status !== 'string') continue;
+				const resident = await findOrder(uuid);
+				const stamp = resident
+					? readAwaitingCustomer(resident.getLatest().payload.meta_data)
+					: null;
+				if (!resident || !stamp) continue;
+				try {
+					await completeSale(
+						{ ...current.ctx, actor: attempt.actor },
+						resident,
+						{ source: 'gateway', order: summary, stamp },
+						{ host: 'background' }
+					);
+					finished.add(uuid);
+				} catch (error) {
+					logger.debug('Recovered sent sale not finished', {
+						context: { orderUUID: uuid, error: String(error) },
+					});
+				}
+			}
+			return finished;
+		};
+		const replay = async (only?: ReadonlySet<string>, skip?: ReadonlySet<string>) => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {
 				if (current.stopped) return;
-				if (only && !only.has(uuid)) continue;
+				if ((only && !only.has(uuid)) || skip?.has(uuid)) continue;
 				try {
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
@@ -375,14 +416,17 @@ export function SaleCompletionBridge(): null {
 			});
 		};
 		run(async () => {
-			if (onlineRef.current) await recover();
-			if (!current.stopped) await replay();
+			const answered = onlineRef.current ? await recover() : new Map<string, ResentCommand[]>();
+			const sent = await finishRecovered(answered);
+			if (!current.stopped) await replay(undefined, sent);
 		});
 		current.reconnect = () =>
 			run(async () => {
 				if (current.stopped) return;
 				const answered = await recover();
-				if (answered.size > 0 && !current.stopped) await replay(answered);
+				const sent = await finishRecovered(answered);
+				const rest = new Set([...answered.keys()].filter((uuid) => !sent.has(uuid)));
+				if (rest.size > 0 && !current.stopped) await replay(rest);
 			});
 		// A command whose answers are lost after this session's first recovery, while the till
 		// stays online: no reconnect will come for it, and a pull may close its tender. Watching

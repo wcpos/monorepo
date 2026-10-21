@@ -400,6 +400,50 @@ it('schedules the recovery for a command journaled and left unanswered after the
 	}
 });
 
+// A full-balance gateway submit answered `sent` whose answer was lost: the recovery's answer is
+// the sent outcome, finished as a sent sale (the `checkout.sent` audit, the attempt resolved),
+// never the unpaid replay that would count starts and abandon it.
+it('finishes a recovered sent submit through the sent-sale path', async () => {
+	await record();
+	const stamp = {
+		method_id: 'wcpos_email_invoice',
+		destination: 'a@b.c',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-10-20T10:00:00Z',
+		cashier_id: 7,
+	};
+	mockFind.mockResolvedValue({
+		uuid: 'order',
+		getLatest: () => ({
+			payload: {
+				id: 42,
+				status: 'pending',
+				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+				line_items: [],
+			},
+		}),
+	});
+	const summary = { status: 'pending' };
+	mockRecover.mockResolvedValueOnce([
+		{
+			orderUuid: 'order',
+			answers: [{ kind: 'submit', data: { outcome: 'sent', order: summary } }],
+		},
+	]);
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ uuid: 'order' }),
+		{ source: 'gateway', order: summary, stamp },
+		{ host: 'background' }
+	);
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.sent' }) })
+	);
+});
+
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));

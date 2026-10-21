@@ -558,6 +558,33 @@ describe('useTenderFlow', () => {
 		}
 	);
 
+	// A recovered gateway submit answered `sent` finishes as a sent sale, from the stamp the
+	// refresh adopted with the store's document.
+	it('a Try again answered sent finishes the sale through the sent path', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		mockPayload = {
+			...mockPayload,
+			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+		} as typeof mockPayload;
+		const summary = { status: 'pending' };
+		mockResend.mockResolvedValueOnce([
+			{ kind: 'submit', data: { outcome: 'sent', order: summary } },
+		]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
+			source: 'gateway',
+			order: summary,
+			stamp,
+		});
+	});
+
 	it('a Try again the store answers finishes the sale like a first answer', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };

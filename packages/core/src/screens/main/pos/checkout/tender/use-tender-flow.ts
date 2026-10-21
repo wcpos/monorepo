@@ -20,6 +20,7 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readAwaitingCustomer,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -732,6 +733,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						preLegBalanceMinor: balanceMinor,
 						amountMinor,
 					}).finally(() => tenderRecorded(row, 'online'));
+				} else if (kind === 'submit' && data.outcome === 'sent' && summary) {
+					// A recovered send: a sent sale, from the stamp the refresh adopted with the
+					// store's document (the replay settles only once that refresh adopted it).
+					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
+					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}
