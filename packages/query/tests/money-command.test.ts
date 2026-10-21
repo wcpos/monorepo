@@ -743,6 +743,41 @@ it('the store-session recovery leaves a command on the wire from this process to
 	expect(store.post).toHaveBeenCalledTimes(1);
 });
 
+// The sender holds its command from before the journal write until its settle: a recovery that
+// fires anywhere inside that span (here after the answer and before the caller's mirror, and
+// during a stale adoption) leaves the command to its sender.
+it('a recovery fired mid-send is a no-op, after the answer and before the settle', async () => {
+	const post = poster();
+	await post('orders/5/close', {});
+	expect((await entries())[0]?.sentAt).not.toBeNull();
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	expect(store.post).toHaveBeenCalledTimes(1);
+	await post.mirror({});
+	expect(await entries()).toEqual([]);
+	// Settled: the claim is gone, and a later command of the same kind is the journal's again.
+	store.modes = ['lose'];
+	await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toHaveLength(1);
+});
+
+it('a recovery fired mid-send is a no-op during a stale adoption and its re-send', async () => {
+	let adopting!: () => void;
+	const adoption = new Promise<void>((resolve) => (adopting = resolve));
+	const adopt = runtime.engine.adoptOrderSnapshot as jest.Mock;
+	const real = adopt.getMockImplementation()!;
+	adopt.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+		await adoption;
+		return real(payload);
+	});
+	store.modes = ['stale'];
+	const sending = poster()('orders/5/payments/leg/capture', {});
+	while (adopt.mock.calls.length === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	adopting();
+	await sending;
+	expect(store.post).toHaveBeenCalledTimes(2);
+});
+
 it('the status poll passes through without an envelope', async () => {
 	const post = jest.fn(async () => ({ data: { ok: true } }));
 	await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });

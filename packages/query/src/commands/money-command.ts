@@ -185,8 +185,45 @@ async function chooseRevision(
 	return revision;
 }
 
-/** Commands on the wire from this process: the store-session recovery leaves them to their sender. */
-const inFlight = new Set<string>();
+/**
+ * The commands this process is sending, per store database, as counted claims. A poster claims
+ * its command by (order, kind, target; a record's target is its row id) before the journal is
+ * read or written, so markSent, the post, a stale adoption and its re-send all happen inside the
+ * claim. Once answered the claim narrows to the entry's own id and is held until the caller's
+ * settle. The store-session recovery skips an order with a claimed command, so it never re-sends
+ * one whose sender is still finishing it. A caller that never settles (it threw on a malformed
+ * answer) keeps the claim on that one entry for this process; Try again and the next start still
+ * re-send it.
+ */
+const claims = new WeakMap<object, Map<string, number>>();
+const NO_STORE = {};
+function claimsOf(storeDB: StoreLocalDatabase) {
+	const owner = storeDB ?? NO_STORE;
+	let map = claims.get(owner);
+	if (!map) claims.set(owner, (map = new Map()));
+	return map;
+}
+const routeKey = (orderUuid: string, kind: MoneyCommandKind, target: string | null) =>
+	JSON.stringify([orderUuid, kind, target]);
+const idKey = (orderUuid: string, id: string) => JSON.stringify([orderUuid, id]);
+function claimed(storeDB: StoreLocalDatabase, entry: MoneyCommandEntry) {
+	const map = claimsOf(storeDB);
+	const target = entry.kind === 'record' ? entry.id : entry.target;
+	return (
+		map.has(routeKey(entry.orderUuid, entry.kind, target)) ||
+		map.has(idKey(entry.orderUuid, entry.id))
+	);
+}
+function hold(storeDB: StoreLocalDatabase, key: string) {
+	const map = claimsOf(storeDB);
+	map.set(key, (map.get(key) ?? 0) + 1);
+}
+function letGo(storeDB: StoreLocalDatabase, key: string) {
+	const map = claimsOf(storeDB);
+	const count = (map.get(key) ?? 0) - 1;
+	if (count > 0) map.set(key, count);
+	else map.delete(key);
+}
 
 /**
  * Send (or re-send) a journaled command. A never-dispatched entry that is refused locally is
@@ -222,10 +259,7 @@ export async function sendMoneyCommand(
 		await markSent(storeDB, entry.orderUuid, entry.id, revision);
 		try {
 			const command = entry.kind === 'record' ? {} : { command_id: entry.id };
-			inFlight.add(entry.id);
-			const { data } = await deps
-				.post(entry.path, { ...entry.body, ...command, revision })
-				.finally(() => inFlight.delete(entry.id));
+			const { data } = await deps.post(entry.path, { ...entry.body, ...command, revision });
 			// A non-JSON 2xx (a proxy page) proves nothing: the entry stays for a re-send.
 			if (!data || typeof data !== 'object') throw new Error('money_command_unreadable_answer');
 			return { data: data as Record<string, unknown>, sentRevision: revision };
@@ -367,7 +401,7 @@ export async function recoverMoneyCommands(
 	const recovered: RecoveredOrder[] = [];
 	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
 		const sent = entries.filter(({ sentAt }) => sentAt !== null);
-		if (sent.length === 0 || sent.some(({ id }) => inFlight.has(id))) continue;
+		if (sent.length === 0 || sent.some((entry) => claimed(storeDB, entry))) continue;
 		try {
 			recovered.push({
 				orderUuid,
@@ -411,6 +445,12 @@ export function moneyCommandPoster(input: {
 	provenance?: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
 }): MoneyCommandPoster {
 	let answered: { id: string; chain?: RevisionChain }[] = [];
+	// The answered entries' claims this poster holds until its settle (see `claims`).
+	let held: string[] = [];
+	const releaseHeld = () => {
+		held.forEach((key) => letGo(input.storeDB, key));
+		held = [];
+	};
 	// A definitive refusal settled its own entry, so it is not an answer with a chain; it still
 	// says the resident's money is stale (`wcpos_balance_outstanding`,
 	// `wcpos_amount_exceeds_balance`), so the next settle runs the corrective refresh for it.
@@ -429,6 +469,10 @@ export function moneyCommandPoster(input: {
 			throw error;
 		});
 		answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
+		// Answered: the claim narrows to this entry until the settle.
+		const key = idKey(entry.orderUuid, entry.id);
+		hold(input.storeDB, key);
+		held.push(key);
 		return response;
 	};
 	const freezeApproval = async (entries: readonly MoneyCommandEntry[], target: string | null) => {
@@ -443,10 +487,14 @@ export function moneyCommandPoster(input: {
 		const refused = refusedSinceSettle;
 		answered = [];
 		refusedSinceSettle = false;
-		for (const { id, chain } of done)
-			await settleCommand(input.storeDB, input.orderUuid, id, chain);
-		if (done.length || refused)
-			await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
+		try {
+			for (const { id, chain } of done)
+				await settleCommand(input.storeDB, input.orderUuid, id, chain);
+			if (done.length || refused)
+				await settleMoneyCommand(input.runtime, input.storeDB, input.orderUuid);
+		} finally {
+			releaseHeld();
+		}
 	};
 	const poster = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);
@@ -456,6 +504,22 @@ export function moneyCommandPoster(input: {
 			route.kind === 'record'
 				? String((frozen.payment as { id?: unknown } | undefined)?.id ?? '')
 				: null;
+		// Claimed before the journal is read or written, so no window shows a sent entry unclaimed
+		// (see `claims`); an answer narrows it to the entry's id, held until the settle.
+		const key = routeKey(input.orderUuid, route.kind, route.target ?? rowId);
+		hold(input.storeDB, key);
+		try {
+			return await freezeAndDispatch(url, route, frozen, rowId);
+		} finally {
+			letGo(input.storeDB, key);
+		}
+	};
+	const freezeAndDispatch = async (
+		url: string,
+		route: NonNullable<ReturnType<typeof classifyMoneyRoute>>,
+		frozen: Record<string, unknown>,
+		rowId: string | null
+	) => {
 		const same = (entry: MoneyCommandEntry) =>
 			entry.kind === route.kind &&
 			(rowId === null ? entry.target === route.target : entry.id === rowId);
@@ -488,7 +552,13 @@ export function moneyCommandPoster(input: {
 	};
 	return Object.assign(poster, {
 		mirror: async (answer: Omit<MoneyAnswer, 'sentRevision'>) => {
-			await mirrorServerOrder(input.runtime, input.orderUuid, { ...answer, sentRevision });
+			try {
+				await mirrorServerOrder(input.runtime, input.orderUuid, { ...answer, sentRevision });
+			} catch (error) {
+				// Not settled: the entry stays journaled and the recovery may re-send it.
+				releaseHeld();
+				throw error;
+			}
 			await settle();
 		},
 		settle,
