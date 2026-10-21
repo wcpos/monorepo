@@ -100,12 +100,15 @@ export function useResolvedPrinter({
 	// Whether to use system dialog (no printer profile)
 	const useSystemDialog = printerSelection.type === 'system';
 
+	const isResolving = printersLoading || loadedOverrides === undefined;
+
 	// What will actually print, given the profile usePrint receives. The 'system' selection and
 	// an auto match that found nothing both leave resolvedPrinter null: the print dialog path.
+	// While printers or overrides are still loading, null is only "not loaded yet", so no verdict.
 	const mismatch = React.useMemo(() => {
-		if (!template) return null;
+		if (!template || isResolving) return null;
 		return detectMismatch(template, resolvedPrinter);
-	}, [template, resolvedPrinter]);
+	}, [template, resolvedPrinter, isResolving]);
 
 	return {
 		allPrinters,
@@ -114,6 +117,6 @@ export function useResolvedPrinter({
 		setPrinterSelection,
 		mismatch,
 		useSystemDialog,
-		isResolving: printersLoading || loadedOverrides === undefined,
+		isResolving,
 	};
 }
