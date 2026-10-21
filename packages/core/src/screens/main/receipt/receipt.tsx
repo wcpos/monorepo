@@ -117,6 +117,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		isOffline,
 		isSyncing,
 		hasFinalData,
+		receiptDataIsServer,
 	} = useTemplateRenderer({
 		orderId,
 		baseReceiptURL,
@@ -263,6 +264,14 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 	});
+	// A contract gateway (#2807) routes here before the bounded order refresh lands, with
+	// no paid snapshot to adopt. If the receipt request then fails (or the deadline passes),
+	// the only data is built from the local order, still pos-open: printing it would hand
+	// the customer an "open / still payable" receipt and spend the single shot. So the
+	// auto-print waits for the server's receipt or for the local order to settle; the
+	// manual Print button is not gated.
+	// A missing status is not a settled order either: fail closed and wait for the server.
+	const localOrderSettled = Boolean(orderData.status) && orderData.status !== 'pos-open';
 	const attemptAutoPrint = React.useCallback(() => {
 		if (
 			uiSettings.autoPrintReceipt &&
@@ -270,6 +279,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			!isResolvingPrinter &&
 			(!needsLoadedPreview || iframeLoadedRef.current) &&
 			hasFinalData &&
+			(receiptDataIsServer || localOrderSettled) &&
 			!hasAutoPrintedRef.current
 		) {
 			hasAutoPrintedRef.current = true;
@@ -279,8 +289,10 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 	}, [
 		hasFinalData,
 		isResolvingPrinter,
+		localOrderSettled,
 		needsLoadedPreview,
 		printAndReport,
+		receiptDataIsServer,
 		uiSettings.autoPrintReceipt,
 	]);
 
