@@ -11,6 +11,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { GateScreen } from '@wcpos/components/gate-screen';
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -134,6 +135,11 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 /**
  * The freeze after a scheduled reset that cannot restart the app. Mounted once by the
  * drawer layout so it outlives whichever bar or rail hosted the confirm.
+ *
+ * A gate, opaque: it replaces the register rather than dimming it, because nothing under it
+ * may be used. There is no button by design: this build cannot restart itself, and any way
+ * back into the register would let a cashier sell into data the next launch destroys. The
+ * only way out is closing the app, which the body says.
  */
 export function RestartLockOverlay() {
 	const t = useT();
@@ -141,16 +147,13 @@ export function RestartLockOverlay() {
 	if (!locked) return null;
 	return (
 		<Portal name="clear-local-data-restart-overlay">
-			<View
-				testID="clear-local-data-restart-overlay"
-				className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3 p-6"
-			>
-				<Text className="text-lg font-bold">
-					{t('common.clear_all_local_data_restart_required')}
-				</Text>
-				<Text className="text-center">
-					{t('common.clear_all_local_data_restart_required_body')}
-				</Text>
+			<View testID="clear-local-data-restart-overlay" className="absolute inset-0 z-50">
+				<GateScreen
+					testID="clear-local-data-restart-gate"
+					tone="warn"
+					title={t('common.clear_all_local_data_restart_required')}
+					description={t('common.clear_all_local_data_restart_required_body')}
+				/>
 			</View>
 		</Portal>
 	);
