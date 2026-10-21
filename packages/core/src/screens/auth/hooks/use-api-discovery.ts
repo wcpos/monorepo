@@ -14,6 +14,7 @@ import {
 import {
 	CLIENT_QUERY_PARAM,
 	formatClientSignal,
+	parseUpdateRequiredBody,
 	PROTOCOL_QUERY_PARAM,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
@@ -47,6 +48,11 @@ class ApiDiscoveryError extends Error {
  */
 function errorWithCode(message: string, code: ErrorCode): Error {
 	return Object.assign(new Error(message), { errorCode: code });
+}
+
+/** The same tag on a discovery refusal, which the outer catch re-throws as it stands. */
+function discoveryErrorWithCode(message: string, code: ErrorCode): ApiDiscoveryError {
+	return Object.assign(new ApiDiscoveryError(message), { errorCode: code });
 }
 
 export type ApiDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
@@ -141,6 +147,19 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 			const errorResponse = get(error, ['response']);
 			if (errorResponse) {
+				// The protocol gate's refusal is keyed on the body code, whatever the status:
+				// the app is too old for this store, not a bad API response.
+				const updateRequired = parseUpdateRequiredBody(get(errorResponse, ['data']));
+				if (updateRequired) {
+					const message = t('auth.update_required');
+					discoveryLogger.error(message, {
+						showToast: true,
+						code: ERROR_CODES.APP_UPDATE_REQUIRED,
+						context: { wpApiUrl, ...updateRequired },
+					});
+					throw discoveryErrorWithCode(message, ERROR_CODES.APP_UPDATE_REQUIRED);
+				}
+
 				const status = get(errorResponse, 'status');
 				const contentType = get(errorResponse, ['headers', 'content-type']);
 				const isRestrictedApi =
@@ -160,7 +179,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 						context: { wpApiUrl, httpStatus: status },
 					});
-					throw new ApiDiscoveryError(errorMsg);
+					throw discoveryErrorWithCode(errorMsg, ERROR_CODES.AUTH_PLUGIN_CONFLICT);
 				}
 
 				// Server responded but not with the expected WP REST API format

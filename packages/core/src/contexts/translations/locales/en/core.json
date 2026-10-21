@@ -439,6 +439,7 @@
 	"auth.site_took_too_long_to_respond": "The site took too long to respond — check the server and try again",
 	"auth.store": "Store",
 	"auth.testing_authorization_methods": "Testing authorization methods...",
+	"auth.update_required": "This store needs a newer version of WCPOS.",
 	"auth.url_is_required": "URL is required",
 	"auth.url_not_found": "URL not found",
 	"auth.user": "user",
