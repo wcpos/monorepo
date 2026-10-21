@@ -43,7 +43,7 @@ export function mergeProtectedOrderMeta(
 
 		// Editor identity changes win; server adoption retains the resident identity.
 		// Money ownership is one-way at either boundary.
-		const moneyOwner = key === '_wcpos_money_owner_hint' || key === '_wcpos_money_owner';
+		const moneyOwner = key === '_wcpos_money_owner_hint';
 		const takeIncoming = moneyOwner
 			? incoming?.value === 'server' ||
 				(localEntry?.value !== 'server' && source === 'mutation' && incoming?.value != null)

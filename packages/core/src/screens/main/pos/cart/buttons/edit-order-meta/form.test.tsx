@@ -271,11 +271,7 @@ it('does not write or push when storage is degraded', async () => {
 	expect(mockPush).not.toHaveBeenCalled();
 });
 it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
-	const protectedMeta = [
-		...meta,
-		{ id: 42, key: '_wcpos_money_owner_hint', value: 'server' },
-		{ id: 43, key: '_wcpos_money_owner', value: 'server' },
-	];
+	const protectedMeta = [...meta, { id: 42, key: '_wcpos_money_owner_hint', value: 'server' }];
 	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
 	resident.getLatest = () => resident;
 	const custom = { key: 'custom', value: 'edited' };

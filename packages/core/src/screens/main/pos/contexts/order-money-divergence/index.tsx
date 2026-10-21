@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { readResidentMoneyEpoch, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 /**
  * The save-time money mirror, held for the cashier (R1, ADR 0032).
@@ -38,8 +38,9 @@ import { readResidentMoneyEpoch, useQueryRuntime } from '@wcpos/query';
  * order would oscillate: the divergence loop the old re-push guard existed to
  * defend against, arriving through the eviction path instead.
  *
- * A diverged order stays owned for its money epoch; a server reopen advances it. It is
- * not dismissible either: this is a broken product invariant, not a notice the
+ * A diverged order stays owned until a store switch; no money epoch or reopen hands its
+ * aggregate back (ADR 0040 has no epoch; the durable hint carries ownership across
+ * restarts). It is not dismissible either: this is a broken product invariant, not a notice the
  * cashier may wave away. It clears on a store switch, or when the order leaves.
  *
  * Nothing here blocks the sale. The server's totals stand — the alert exists so
@@ -100,15 +101,11 @@ type DivergenceStore = {
 
 const OrderMoneyDivergenceContext = React.createContext<DivergenceStore | undefined>(undefined);
 
-const readUnknownContract = () => null;
 const ServerMoneyReaderContext = React.createContext<{
 	serverOwnsMoney: (uuid: string) => boolean;
-	storeContract: () => string | null;
-}>({ serverOwnsMoney: () => false, storeContract: readUnknownContract });
+}>({ serverOwnsMoney: () => false });
 export const useServerOwnsMoneyReader = () =>
 	React.useContext(ServerMoneyReaderContext).serverOwnsMoney;
-export const useStoreContractReader = () =>
-	React.useContext(ServerMoneyReaderContext).storeContract;
 
 type DivergenceEvent = {
 	type: string;
@@ -181,20 +178,12 @@ function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
 	return kept;
 }
 
-export function OrderMoneyDivergenceProvider({
-	children,
-	storeContract = readUnknownContract,
-}: {
-	children: React.ReactNode;
-	/** Supplied by the session-owning layout; cart readers need no app-state provider. */
-	storeContract?: () => string | null;
-}) {
+export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
 	const runtime = useQueryRuntime();
-	const ownership = React.useRef({ engine: runtime.engine, epochs: new Map<string, number>() });
+	const ownership = React.useRef({ engine: runtime.engine, uuids: new Set<string>() });
 	const serverOwnsMoney = React.useCallback(
 		(uuid: string) =>
-			ownership.current.engine === runtime.engine &&
-			ownership.current.epochs.get(uuid) === readResidentMoneyEpoch(runtime.engine, uuid),
+			ownership.current.engine === runtime.engine && ownership.current.uuids.has(uuid),
 		[runtime.engine]
 	);
 	// State carries the engine it was observed on. Engines are constructed per
@@ -223,7 +212,7 @@ export function OrderMoneyDivergenceProvider({
 			// is a claim about ONE store, and carrying a count across a switch would
 			// escalate the next till for the previous one's misconfiguration.
 			if (message.type === 'scope-switched') {
-				ownership.current = { engine: runtime.engine, epochs: new Map() };
+				ownership.current = { engine: runtime.engine, uuids: new Set() };
 				setState((current) =>
 					Object.keys(current.byOrderId).length === 0 &&
 					current.serverOwnedOrderIds.size === 0 &&
@@ -246,8 +235,8 @@ export function OrderMoneyDivergenceProvider({
 			if (typeof orderId !== 'string' || orderId === '') return;
 			// Commands must see the event immediately, without waiting for React to render.
 			if (ownership.current.engine !== runtime.engine)
-				ownership.current = { engine: runtime.engine, epochs: new Map() };
-			ownership.current.epochs.set(orderId, readResidentMoneyEpoch(runtime.engine, orderId));
+				ownership.current = { engine: runtime.engine, uuids: new Set() };
+			ownership.current.uuids.add(orderId);
 
 			const held: OrderMoneyDivergence = {
 				orderId,
@@ -288,10 +277,7 @@ export function OrderMoneyDivergenceProvider({
 		[byOrderId, serverOwnedOrderIds, divergedOrderCount]
 	);
 
-	const readers = React.useMemo(
-		() => ({ serverOwnsMoney, storeContract }),
-		[serverOwnsMoney, storeContract]
-	);
+	const readers = React.useMemo(() => ({ serverOwnsMoney }), [serverOwnsMoney]);
 
 	return (
 		<ServerMoneyReaderContext.Provider value={readers}>

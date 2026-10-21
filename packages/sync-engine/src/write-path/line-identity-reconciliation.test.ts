@@ -153,7 +153,6 @@ it.each([true, false])(
 			const facet = writeFacetFor('orders')!;
 			const previous = stamped ? 'old' : 'server';
 			const keys = [
-				'_wcpos_money_owner',
 				'_wcpos_money_epoch',
 				'_wcpos_completed_at',
 				'_wcpos_completed_epoch',
@@ -173,9 +172,7 @@ it.each([true, false])(
 				recordId: UUID,
 				payload: { customer_note: 'successor' },
 			});
-			const serverMeta = stamped
-				? keys.map((key) => ({ key, value: key === '_wcpos_money_owner' ? 'server' : '2' }))
-				: [];
+			const serverMeta = stamped ? keys.map((key) => ({ key, value: '2' })) : [];
 			const server = {
 				...truth,
 				customer_note: 'old note',

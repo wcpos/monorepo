@@ -1,31 +1,12 @@
 /** @jest-environment jsdom */
-import { act, renderHook } from '@testing-library/react';
-
 import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
 
-import {
-	OrderMoneyDivergenceProvider,
-	useServerOwnsMoneyReader,
-} from '../contexts/order-money-divergence';
 import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
 import { settleCartWrite } from './settle-cart-write';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
-let mockEpoch = 0;
-let mockDivergence: (event: { type: string; recordId: string }) => void;
-const mockEngine = {
-	events: (fn: typeof mockDivergence) => {
-		mockDivergence = fn;
-		return () => {};
-	},
-};
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
-	useQueryRuntime: () => ({ engine: mockEngine }),
-	readResidentMoneyEpoch: () => mockEpoch,
-}));
 
 const line = {
 	product_id: 1,
@@ -78,17 +59,12 @@ it('settles the latest post-intent payload in one write, without changing outbou
 	);
 });
 
-it.each(['meta', 'hint', 'memory'])(
+it.each(['hint', 'memory'])(
 	'keeps server money owned through %s while writing intent',
 	async (source) => {
 		const order = record();
-		if (source !== 'memory')
-			order.payload.meta_data = [
-				{
-					key: source === 'hint' ? '_wcpos_money_owner_hint' : '_wcpos_money_owner',
-					value: 'server',
-				},
-			];
+		if (source === 'hint')
+			order.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
 		const localPatch = jest.fn();
 		const data = { line_items: [line] };
 		await settleCartWrite(
@@ -103,8 +79,7 @@ it.each(['meta', 'hint', 'memory'])(
 	}
 );
 
-const ownerKeys = ['_wcpos_money_owner', '_wcpos_money_owner_hint'];
-it.each(ownerKeys)('preserves ownership against stale meta (%s)', async (key) => {
+it.each(['_wcpos_money_owner_hint'])('preserves ownership against stale meta (%s)', async (key) => {
 	const order = record();
 	const owner = { id: 42, key, value: 'server' };
 	order.payload.meta_data = [owner];
@@ -197,26 +172,4 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 		expect(order.payload.total).toBe('6');
 		expect(commitAtBoundary).not.toHaveBeenCalled();
 	}
-});
-
-it('settles a 1.3 order whose stamp was cleared despite a lingering hint', async () => {
-	mockEpoch = 0;
-	const { result } = renderHook(useServerOwnsMoneyReader, {
-		wrapper: OrderMoneyDivergenceProvider,
-	});
-	act(() => mockDivergence({ type: 'order-money-divergence', recordId: 'target' }));
-	mockEpoch = 1;
-	const order = record();
-	order.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
-	const configForOrder = jest.fn(() => config);
-	settleCartWrite(
-		{ document: order, data: {} },
-		{
-			localPatch: resolveCartWrite(jest.fn()),
-			configForOrder,
-			serverOwnsMoney: result.current,
-			storeContract: () => '1.3',
-		}
-	);
-	expect(configForOrder).toHaveBeenCalled();
 });
