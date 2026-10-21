@@ -74,7 +74,7 @@ it('renders code after the label in muted colour with the arrow last', () => {
 	const parts = container.querySelectorAll('span');
 	expect(parts).toHaveLength(3);
 	expect(parts[0].textContent).toBe('Learn more');
-	expect(parts[1].textContent).toBe(' · HOST121');
+	expect(parts[1].textContent).toBe('· HOST121');
 	expect(parts[1]).toHaveClass('text-muted-foreground');
 	expect(parts[2]).toHaveAttribute('data-icon', 'openExternal');
 });
