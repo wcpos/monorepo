@@ -770,6 +770,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					// A recovered send: a sent sale, from the stamp the refresh adopted with the
 					// store's document (the replay settles only once that refresh adopted it).
 					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
+					// A recovered send whose adopted order carries no awaiting-customer stamp was already
+					// settled or cancelled by the store (the stamp goes with the invoice); there is
+					// nothing left to finish.
 					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
@@ -1365,6 +1368,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
 				} else if (outcome.kind === 'sent') {
+					// A reopened gateway outcome after a failed mirror falls through: the next refresh
+					// resolves it (sale-completion re-checks the resident), and the 'not synced'
+					// warning is the cashier's signal until then.
 					await completeOrderFlow({
 						source: 'gateway',
 						order: outcome.order,
