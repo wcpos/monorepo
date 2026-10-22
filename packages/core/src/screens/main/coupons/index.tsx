@@ -2,14 +2,11 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -31,7 +28,7 @@ import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { withProAccess } from '../components/pro-guard';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
@@ -150,7 +147,6 @@ function CouponsList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<CouponRow>
 					id="coupons"
-					gutter="page"
 					collectionName="coupons"
 					handle={handle}
 					sort={state.sort}
@@ -196,78 +192,71 @@ function CouponsList({
 }
 
 /** The list: the part of the page the Free preview overlay covers. */
-function CouponsBody() {
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CouponsColumn() {
 	const state = useQueryState<'coupons'>();
 	const handle = useCollectionQueryHandle('coupons', state);
 	return (
-		<View testID="coupons-body" className="flex-1">
-			<ErrorBoundary>
-				<FilterBar />
-			</ErrorBoundary>
-			{/* A failed coupons read is thrown here; the fallback's reset asks the handle again, and
-			    a changed query (its handle is new) clears the fallback on its own. */}
-			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="coupons" gutter="page" />}>
-					<CouponsList handle={handle} />
-				</Suspense>
-			</ErrorBoundary>
-		</View>
+		<ListColumn
+			testID="coupons-body"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="coupons" />}
+		>
+			<CouponsList handle={handle} />
+		</ListColumn>
 	);
 }
-
-// The guard wraps the body only: on Free the preview overlay must leave the bar's menu, bell
-// and cashier reachable, or a Free user below lg has no way off this page (Orders, Codex review).
-const GuardedCouponsBody = withProAccess(CouponsBody, 'coupons');
 
 function CouponsScreenContent() {
 	const t = useT();
 	const router = useRouter();
-	const { bottom } = useSafeAreaInsets();
 	// The bar sits outside the guard, so it reads the licence itself.
 	const { license } = useAppInfo();
 	const readOnly = !(license?.isPro ?? false);
 	const { caps } = useUserCapabilities();
 	return (
-		<View
+		<ListPage
 			testID="screen-coupons"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
-		>
-			<ManagementBar
-				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
-				testID="coupons-bar"
-				search={
-					<QuerySearchInput
-						collectionName="coupons"
-						placeholder={t('common.search_coupons')}
-						testID="search-coupons"
-					/>
-				}
-			>
-				<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
-					<CapabilityTooltipTrigger>
-						<IconButton
-							testID="coupons-add-button"
-							name="plus"
-							accessibilityLabel={t('coupons.add_coupon')}
-							onPress={() => router.push({ pathname: '/coupons/add' })}
-							disabled={readOnly || !caps.canCreateCoupons}
+			pro="coupons"
+			bar={
+				<ManagementBar
+					// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+					testID="coupons-bar"
+					search={
+						<QuerySearchInput
+							collectionName="coupons"
+							placeholder={t('common.search_coupons')}
+							testID="search-coupons"
 						/>
-					</CapabilityTooltipTrigger>
-					<TooltipContent>
-						<Text>
-							{readOnly
-								? t('common.upgrade_to_pro')
-								: !caps.canCreateCoupons
-									? t('capability_hints.create_coupons_admin_path')
-									: t('coupons.add_coupon')}
-						</Text>
-					</TooltipContent>
-				</Tooltip>
-				<DisplayOptions />
-			</ManagementBar>
-			<GuardedCouponsBody />
-		</View>
+					}
+				>
+					<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
+						<CapabilityTooltipTrigger>
+							<IconButton
+								testID="coupons-add-button"
+								name="plus"
+								accessibilityLabel={t('coupons.add_coupon')}
+								onPress={() => router.push({ pathname: '/coupons/add' })}
+								disabled={readOnly || !caps.canCreateCoupons}
+							/>
+						</CapabilityTooltipTrigger>
+						<TooltipContent>
+							<Text>
+								{readOnly
+									? t('common.upgrade_to_pro')
+									: !caps.canCreateCoupons
+										? t('capability_hints.create_coupons_admin_path')
+										: t('coupons.add_coupon')}
+							</Text>
+						</TooltipContent>
+					</Tooltip>
+					<DisplayOptions />
+				</ManagementBar>
+			}
+		>
+			<CouponsColumn />
+		</ListPage>
 	);
 }
 

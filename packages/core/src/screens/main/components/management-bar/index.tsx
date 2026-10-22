@@ -1,10 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useNavigation } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { PageBar } from '@wcpos/components/page-bar';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
@@ -40,7 +38,6 @@ export function ManagementBar(props: Props) {
 
 function ManagementBarContent({ title, titleSlot, testID, search, back, children }: Props) {
 	const { screenSize } = useTheme();
-	const phone = useIsPhone();
 	const navigation = useNavigation();
 	const t = useT();
 	const { wpCredentials } = useStoreSession();
@@ -61,7 +58,7 @@ function ManagementBarContent({ title, titleSlot, testID, search, back, children
 				testID={testID}
 				back={back}
 				status={badge}
-				search={!phone && search != null ? search : undefined}
+				search={search}
 				onMenu={
 					screenSize !== 'lg'
 						? {
@@ -84,10 +81,7 @@ function ManagementBarContent({ title, titleSlot, testID, search, back, children
 					</Button>
 				)}
 			</PageBar>
-			{phone && search != null && (
-				<View className="h-ctl border-border justify-center border-b px-2">{search}</View>
-			)}
-			{/* Under the bar, where the drawer header showed it: a held session is a state. */}
+			{/* Under the bar (and its phone search row), where the drawer header showed it: a held session is a state. */}
 			<SessionHoldBanner />
 			{/* The root host, as the rail's: the POS host sits inside the POS screen, which is
 			    hidden (web) or detached (native) while a management page is on screen. */}

@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../../contexts/translations';
+import { ChipRow } from '../../chip-row';
 import { BrandsPill } from './brands-pill';
 import { CategoryPill } from './category-pill';
 import { FeaturedPill } from './featured-pill';
@@ -42,29 +43,26 @@ export function FilterBar() {
 	 *
 	 */
 	return (
-		// The page gutter all round: the search above and the table card below share this 16 edge.
-		<View className="p-4">
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerClassName="items-center gap-2"
-			>
-				<StockStatusPill />
-				<FeaturedPill />
-				<OnSalePill />
+		<ChipRow>
+			<StockStatusPill />
+			<FeaturedPill />
+			<OnSalePill />
+			{/* A pill that reads a record answers after the row has drawn: it holds a chip's
+			    frame meanwhile, so the pills beside it never shift. */}
+			<Suspense fallback={<Skeleton shape="chip" />}>
 				<CategoryPill />
-				<Suspense>
-					<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
-				</Suspense>
-				<Suspense>
-					<BrandsPill resource={selectedBrandResource} selectedID={selectedBrandID} />
-				</Suspense>
-				{changed >= 2 && (
-					<Button variant="ghost" testID="products-filter-clear-all" onPress={actions.resetFilters}>
-						{t('pos_products.clear_all')}
-					</Button>
-				)}
-			</ScrollView>
-		</View>
+			</Suspense>
+			<Suspense fallback={<Skeleton shape="chip" />}>
+				<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
+			</Suspense>
+			<Suspense fallback={<Skeleton shape="chip" />}>
+				<BrandsPill resource={selectedBrandResource} selectedID={selectedBrandID} />
+			</Suspense>
+			{changed >= 2 && (
+				<Button variant="ghost" testID="products-filter-clear-all" onPress={actions.resetFilters}>
+					{t('pos_products.clear_all')}
+				</Button>
+			)}
+		</ChipRow>
 	);
 }

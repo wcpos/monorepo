@@ -5,7 +5,9 @@ import type { LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
+import { cn } from '@wcpos/components/lib/utils';
 
+import { useGround } from '../components/ground';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { UpgradeNotice } from '../components/upgrade-notice';
@@ -18,8 +20,10 @@ export function Support() {
 	const t = useT();
 	const { license } = useAppInfo();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	// The frame's `p-4` in px at the live step, so the widget fills the frame exactly.
-	const gutter = 4 * useSpacingUnit();
+	// The frame's padding (the ground's gutter) in px at the live step, so the widget fills
+	// the frame exactly.
+	const ground = useGround();
+	const gutter = ground.units * useSpacingUnit();
 	// The window seeds the size so the DOM component never mounts at 0×0; once
 	// the frame reports its own layout that wins, and it reports again on
 	// every rotation, so no separate dimension listener is needed.
@@ -46,7 +50,11 @@ export function Support() {
 		>
 			<ManagementBar title={t('common.support')} testID="support-bar" />
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
-			<View testID="support-frame" className="min-h-0 flex-1 p-4" onLayout={handleLayout}>
+			<View
+				testID="support-frame"
+				className={cn('min-h-0 flex-1', ground.p)}
+				onLayout={handleLayout}
+			>
 				<Discord
 					dom={{
 						matchContents: true,

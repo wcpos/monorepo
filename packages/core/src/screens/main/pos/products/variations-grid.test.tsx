@@ -50,10 +50,13 @@ jest.mock('react-native-reanimated', () => ({
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
 const placeGrid = jest.fn();
+// What the stage's airspace hands the grid: nothing at rest; a frame reaching over the crumb row
+// while a tile is in flight.
+let mockAir: { frame?: object; scroller?: object } = {};
 jest.mock('./deal-stack', () => ({
 	FRONT: { zIndex: 1 },
 	useDeal: () => ({ placeGrid }),
-	useAirspace: () => ({}),
+	useAirspace: () => mockAir,
 	useCopyPicture: () => undefined,
 	useDealCards: () => null,
 	DealFade: ({ children }: React.PropsWithChildren) => children,
@@ -156,6 +159,32 @@ const hits = [
 let handle: FakeHandle = fakeQueryHandle({ total: 99 });
 beforeEach(() => {
 	handle = fakeQueryHandle({ total: 99 });
+	mockAir = {};
+});
+// The ground as the surface draws it, its inner element marked: the harness drops classNames.
+jest.mock('../../components/data-table/surface', () => ({
+	...jest.requireActual('../../components/data-table/surface'),
+	TileGround: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="tile-ground">
+			<div data-testid="tile-ground-inner">{children}</div>
+		</div>
+	),
+}));
+
+// The ground's `-mt-1` takes back the tiles' own margin; the air frame's `marginTop` reaches over
+// the crumb in flight. On one element the second replaced the first and the slots sat 4 px off
+// until landing (review, 2026-10-22).
+it('keeps the air frame its own element inside the ground, so its marginTop never replaces the -mt-1', () => {
+	mockAir = { frame: { marginTop: -40, paddingTop: 40 }, scroller: {} };
+	render(<VariationsGrid parent={parent} back={jest.fn()} handle={handle} hits={undefined} />);
+	const air = screen.getByTestId('variations-air');
+	expect(air.style.marginTop).toBe('-40px');
+	expect(air.parentElement).toBe(screen.getByTestId('tile-ground-inner'));
+	expect(screen.getByTestId('tile-ground-inner').style.marginTop).toBe('');
+	expect(air.contains(screen.getByTestId('variations-slots'))).toBe(true);
+	expect(screen.getByTestId('variations-surface').contains(screen.getByTestId('tile-ground'))).toBe(
+		true
+	);
 });
 const gridFields = {
 	name: true,

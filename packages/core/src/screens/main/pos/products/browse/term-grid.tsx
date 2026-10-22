@@ -22,6 +22,7 @@ import {
 import { HandleProductsFooter } from '../handle-footer';
 import { ProductTile } from '../tiles/product-tile';
 import { TileGrid } from '../tiles/tile-grid';
+import { TileGround } from '../../../components/data-table/surface';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { BrowseRootFooter } from './browse-root-footer';
@@ -62,20 +63,23 @@ export function BrowseRootGrid({
 	const tiles = React.useMemo(() => [ALL, ...terms], [terms]);
 
 	return (
-		// Tiles are cards already: they sit straight on the ground, as the products grid's do.
-		<View className="flex h-full flex-col px-1" testID="browse-root">
-			<TileGrid
-				tiles={tiles}
-				rowKey={(row) => termKey(row[0])}
-				renderTile={(term) => (
-					<TermTile
-						key={termKey(term)}
-						term={term}
-						onPress={onOpen}
-						lifted={lifted === termKey(term)}
-					/>
-				)}
-			/>
+		// Tiles are cards already: they sit straight on the ground (`TileGround`), as the products
+		// grid's do.
+		<View className="flex h-full flex-col" testID="browse-root">
+			<TileGround>
+				<TileGrid
+					tiles={tiles}
+					rowKey={(row) => termKey(row[0])}
+					renderTile={(term) => (
+						<TermTile
+							key={termKey(term)}
+							term={term}
+							onPress={onOpen}
+							lifted={lifted === termKey(term)}
+						/>
+					)}
+				/>
+			</TileGround>
 			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
 		</View>
 	);
@@ -271,65 +275,69 @@ export function TermLevelGrid({
 					testID="products-breadcrumb"
 				/>
 			</DealFade>
-			<View className="min-h-0 flex-1 px-1" testID="browse-level-surface">
-				<View className="min-h-0 flex-1" style={air.frame}>
-					<View
-						ref={slotsNode}
-						className="min-h-0 flex-1"
-						testID="browse-level-slots"
-						onLayout={(event) => {
-							onViewport(event.nativeEvent.layout.height);
-							placeGrid(slotsNode.current as Measurable);
-						}}
-					>
-						<Animated.FlatList
-							ref={scroller}
-							className="flex-1"
-							style={air.scroller}
-							testID="browse-level-scroller"
-							data={rows}
-							keyExtractor={(_, rowIndex) => String(rowIndex)}
-							CellRendererComponentStyle={frontRow}
-							onEndReachedThreshold={END_REACHED_THRESHOLD}
-							// Android detaches rows outside the viewport by default, so a tile bound below the
-							// fold flew unseen; rows outside the render window still unmount.
-							removeClippedSubviews={false}
-							onEndReached={owned ? onEndReached : undefined}
-							// A row's measured top reaches cells the list would otherwise not re-render.
-							extraData={rowTops}
-							renderItem={({ item: row, index: rowIndex }) => (
-								<View
-									className="flex-row"
-									style={rowIndex === 0 ? FRONT : undefined}
-									onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
-								>
-									{row.map((index) =>
-										index >= count ? (
-											<View key={index} className="flex-1" />
-										) : (
-											<DealCell
-												key={index}
-												index={index}
-												count={count}
-												columns={columns}
-												scroll={scroll}
-												restY={rowTops[rowIndex]}
-											>
-												{renderSlot(index)}
-											</DealCell>
-										)
-									)}
-								</View>
-							)}
-							ListFooterComponent={
-								// Furniture, as the crumb and the footer are: it fades with the deal.
-								isEmpty ? (
-									<DealFade className="items-center justify-center p-4">{empty}</DealFade>
-								) : undefined
-							}
-						/>
+			<View className="min-h-0 flex-1" testID="browse-level-surface">
+				<TileGround>
+					{/* The air frame moves itself in flight (`marginTop`): its own element, inside
+					    the ground, so it never replaces the ground's `-mt-1`. */}
+					<View testID="browse-level-air" className="min-h-0 flex-1" style={air.frame}>
+						<View
+							ref={slotsNode}
+							className="min-h-0 flex-1"
+							testID="browse-level-slots"
+							onLayout={(event) => {
+								onViewport(event.nativeEvent.layout.height);
+								placeGrid(slotsNode.current as Measurable);
+							}}
+						>
+							<Animated.FlatList
+								ref={scroller}
+								className="flex-1"
+								style={air.scroller}
+								testID="browse-level-scroller"
+								data={rows}
+								keyExtractor={(_, rowIndex) => String(rowIndex)}
+								CellRendererComponentStyle={frontRow}
+								onEndReachedThreshold={END_REACHED_THRESHOLD}
+								// Android detaches rows outside the viewport by default, so a tile bound below the
+								// fold flew unseen; rows outside the render window still unmount.
+								removeClippedSubviews={false}
+								onEndReached={owned ? onEndReached : undefined}
+								// A row's measured top reaches cells the list would otherwise not re-render.
+								extraData={rowTops}
+								renderItem={({ item: row, index: rowIndex }) => (
+									<View
+										className="flex-row"
+										style={rowIndex === 0 ? FRONT : undefined}
+										onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
+									>
+										{row.map((index) =>
+											index >= count ? (
+												<View key={index} className="flex-1" />
+											) : (
+												<DealCell
+													key={index}
+													index={index}
+													count={count}
+													columns={columns}
+													scroll={scroll}
+													restY={rowTops[rowIndex]}
+												>
+													{renderSlot(index)}
+												</DealCell>
+											)
+										)}
+									</View>
+								)}
+								ListFooterComponent={
+									// Furniture, as the crumb and the footer are: it fades with the deal.
+									isEmpty ? (
+										<DealFade className="items-center justify-center p-4">{empty}</DealFade>
+									) : undefined
+								}
+							/>
+						</View>
 					</View>
-				</View>
+				</TileGround>
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (
 					<DealFade>

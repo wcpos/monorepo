@@ -2,12 +2,15 @@ import { View, type ViewProps } from 'react-native';
 
 import { cn } from '../lib/utils';
 
-type SkeletonProps = ViewProps & { shape?: 'block' | 'line' | 'row' | 'tile' };
+type SkeletonProps = ViewProps & { shape?: 'block' | 'line' | 'row' | 'tile' | 'chip' };
 const shapes = {
 	block: 'flex-1 w-full',
 	line: 'h-5',
 	row: 'h-row w-full',
 	tile: 'h-tile w-full',
+	// A filter chip's own frame (`Chip`: `h-ctl`, full radius), so a row of pills that is still
+	// answering holds its height and the card under it stands where it will.
+	chip: 'h-ctl w-24 rounded-full',
 };
 
 export function Skeleton({ shape = 'block', className, ...props }: SkeletonProps) {

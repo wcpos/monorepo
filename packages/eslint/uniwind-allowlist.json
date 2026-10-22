@@ -38,9 +38,6 @@
   "packages/core/src/screens/main/components/notification-bell/notification-panel.tsx": {
     "raw-pressable": 1
   },
-  "packages/core/src/screens/main/components/product/filter-bar/index.tsx": {
-    "bare-Suspense": 2
-  },
   "packages/core/src/screens/main/components/product/variable-image.tsx": {
     "raw-pressable": 1
   },

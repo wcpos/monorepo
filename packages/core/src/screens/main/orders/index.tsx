@@ -1,13 +1,10 @@
 import React from 'react';
 import { Platform, useWindowDimensions, View, type ViewInstance } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import isEqual from 'lodash/isEqual';
 
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/device';
 import { SlideOver } from '@wcpos/components/slide-over';
@@ -41,7 +38,7 @@ import { CreatedVia } from '../components/order/created-via';
 import { Customer } from '../components/order/customer';
 import { OrderNumber } from '../components/order/order-number';
 import { PaymentMethod } from '../components/order/payment-method';
-import { withProAccess } from '../components/pro-guard';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { useUISettings } from '../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
 import {
@@ -198,9 +195,6 @@ function OrdersList({
 	};
 	return (
 		<>
-			<ErrorBoundary>
-				<FilterBar initialFilters={initialFilters} />
-			</ErrorBoundary>
 			{pending && <View testID="orders-searching-line" className="bg-primary h-0.5" />}
 			<View
 				className={`flex-1 ${pending ? 'opacity-60' : ''}`}
@@ -209,7 +203,6 @@ function OrdersList({
 			>
 				<DataTable<OrderListItem>
 					id="orders"
-					gutter="page"
 					collectionName="orders"
 					handle={handle}
 					sort={state.sort}
@@ -303,27 +296,28 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 					: undefined
 			}
 		>
+			{/* The list column stands beside the pane: the chips never span over it. */}
 			<View className="min-w-0 flex-1">
-				{/* A failed orders read is thrown here; the fallback's reset asks the handle again,
-				    and a changed query (its handle is new) clears the fallback on its own. */}
-				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-					<Suspense fallback={<DataTableSkeleton id="orders" gutter="page" />}>
-						{/* Beside the pane the list has the pane's width left: below the desktop
+				<ListColumn
+					chips={<FilterBar initialFilters={initialFilters} />}
+					handle={handle}
+					skeleton={<DataTableSkeleton id="orders" />}
+				>
+					{/* Beside the pane the list has the pane's width left: below the desktop
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar
 						    (number, customer, status, total) until the pane closes. */}
-						<DeviceScope
-							pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
-						>
-							<OrdersList
-								handle={handle}
-								initialFilters={initialFilters}
-								onSelectedRow={(node) => {
-									selectedRow.current = node;
-								}}
-							/>
-						</DeviceScope>
-					</Suspense>
-				</ErrorBoundary>
+					<DeviceScope
+						pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
+					>
+						<OrdersList
+							handle={handle}
+							initialFilters={initialFilters}
+							onSelectedRow={(node) => {
+								selectedRow.current = node;
+							}}
+						/>
+					</DeviceScope>
+				</ListColumn>
 			</View>
 			{phone ? (
 				selected &&
@@ -359,37 +353,37 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	);
 }
 
-// The guard wraps the body only: on Free the preview overlay must leave the bar's menu, bell
-// and cashier reachable, or a Free user below lg has no way off this page (Codex review).
-const GuardedOrdersBody = withProAccess(OrdersBody, 'orders');
-
 function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
-	const { bottom } = useSafeAreaInsets();
 	const t = useT();
 	const { license } = useAppInfo();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	return (
-		<View
+		<ListPage
 			testID="screen-orders"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
+			pro="orders"
+			bar={
+				<>
+					<ManagementBar
+						// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+						testID="orders-bar"
+						search={
+							<QuerySearchInput
+								collectionName="orders"
+								testID="search-orders"
+								placeholder={t('orders.search_orders')}
+							/>
+						}
+					>
+						<DisplayOptions />
+					</ManagementBar>
+					{showUpgrade && !license?.isPro && (
+						<UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />
+					)}
+				</>
+			}
 		>
-			<ManagementBar
-				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
-				testID="orders-bar"
-				search={
-					<QuerySearchInput
-						collectionName="orders"
-						testID="search-orders"
-						placeholder={t('orders.search_orders')}
-					/>
-				}
-			>
-				<DisplayOptions />
-			</ManagementBar>
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
-			<GuardedOrdersBody initialFilters={initialFilters} />
-		</View>
+			<OrdersBody initialFilters={initialFilters} />
+		</ListPage>
 	);
 }
 

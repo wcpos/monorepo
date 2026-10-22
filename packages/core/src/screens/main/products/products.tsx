@@ -3,11 +3,8 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import omit from 'lodash/omit';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useObservableRef } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Suspense } from '@wcpos/components/suspense';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
@@ -15,7 +12,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
 import { ManagementBar } from '../components/management-bar';
 import { DisplayOptions } from '../components/display-options';
-import { withProAccess } from '../components/pro-guard';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { ProductRow as TouchRow, VariableRow } from './row';
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -272,14 +269,10 @@ function ProductsList({
 
 	return (
 		<>
-			<ErrorBoundary>
-				<FilterBar />
-			</ErrorBoundary>
 			{pending && <View testID="products-searching-line" className="bg-primary h-0.5" />}
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<ProductRow>
 					id="products"
-					gutter="page"
 					collectionName="products"
 					handle={handle}
 					sort={state.sort}
@@ -334,50 +327,49 @@ function ProductsList({
 	);
 }
 
-function ProductsBody() {
+/** The list's column: the part of the page the Free preview overlay covers. */
+function ProductsColumn() {
 	const state = useQueryState<'products'>();
 	const handle = useProductsQueryHandle(state);
 	return (
-		<View testID="products-body" className="flex-1">
-			{/* A failed products read is thrown here; the fallback's reset asks the handle again,
-			    and a changed query (its handle is new) clears the fallback on its own. */}
-			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="products" gutter="page" />}>
-					<ProductsList handle={handle} />
-				</Suspense>
-			</ErrorBoundary>
-		</View>
+		<ListColumn
+			testID="products-body"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="products" />}
+		>
+			<ProductsList handle={handle} />
+		</ListColumn>
 	);
 }
-const GuardedProductsBody = withProAccess(ProductsBody, 'products');
 
 export function Products() {
-	const { bottom } = useSafeAreaInsets();
 	const t = useT();
 	const actions = useQueryStateActions<'products'>();
 	const { onKeyPress } = useBarcode(actions.setSearch);
 	return (
-		<View
+		<ListPage
 			testID="screen-products"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
+			pro="products"
+			bar={
+				<ManagementBar
+					// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+					testID="products-bar"
+					search={
+						<QuerySearchInput
+							collectionName="products"
+							placeholder={t('common.search_products')}
+							testID="search-products"
+							clearTestID="search-products-clear"
+							onKeyPress={onKeyPress}
+						/>
+					}
+				>
+					<DisplayOptions id="products" title={t('common.product_settings')} />
+				</ManagementBar>
+			}
 		>
-			<ManagementBar
-				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
-				testID="products-bar"
-				search={
-					<QuerySearchInput
-						collectionName="products"
-						placeholder={t('common.search_products')}
-						testID="search-products"
-						clearTestID="search-products-clear"
-						onKeyPress={onKeyPress}
-					/>
-				}
-			>
-				<DisplayOptions id="products" title={t('common.product_settings')} />
-			</ManagementBar>
-			<GuardedProductsBody />
-		</View>
+			<ProductsColumn />
+		</ListPage>
 	);
 }

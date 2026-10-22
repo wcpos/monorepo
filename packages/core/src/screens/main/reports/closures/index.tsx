@@ -12,7 +12,9 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
+import { cn } from '@wcpos/components/lib/utils';
 
+import { useGround } from '../../components/ground';
 import { useTheme } from '../../../../contexts/theme';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -56,6 +58,7 @@ export function Closures({
 	const binding = useRegisterBinding();
 	const directory = useRegisterDirectory(scope.storeId);
 	const { screenSize } = useTheme();
+	const ground = useGround();
 	const t = useT();
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
@@ -76,7 +79,7 @@ export function Closures({
 		);
 	return (
 		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1 flex-row">
-			<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+			<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<IconButton

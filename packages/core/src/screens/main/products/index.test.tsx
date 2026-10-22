@@ -131,9 +131,7 @@ jest.mock('../components/data-table', () => ({
 	defaultRenderItem: jest.fn(),
 }));
 jest.mock('../components/data-table/skeleton', () => ({
-	DataTableSkeleton: ({ gutter }: { gutter?: string }) => (
-		<div data-testid="skeleton-products" data-gutter={gutter} />
-	),
+	DataTableSkeleton: () => <div data-testid="skeleton-products" />,
 }));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
@@ -172,7 +170,9 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('./use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
-jest.mock('../components/product/filter-bar', () => ({ FilterBar: () => null }));
+jest.mock('../components/product/filter-bar', () => ({
+	FilterBar: () => <div data-testid="products-filter-bar" />,
+}));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/barcode', () => ({ Barcode: () => null }));
 jest.mock('./cells/cogs', () => ({ COGS: () => null }));
@@ -299,9 +299,8 @@ it('keeps the management bar outside the Pro body and never invents an add butto
 	const body = screen.getByTestId('products-body');
 	expect(body.contains(bar)).toBe(false);
 	expect(screen.queryByTestId('products-add-button')).toBeNull();
-	// No title: the search names the page (owner, 2026-10-18); the table takes the page gutter.
+	// No title: the search names the page (owner, 2026-10-18).
 	expect(bar.hasAttribute('data-title')).toBe(false);
-	expect(mockDataTableProps.gutter).toBe('page');
 });
 
 jest.mock('expo-haptics', () => ({}));
@@ -320,16 +319,19 @@ jest.mock('../components/management-bar', () => ({
 }));
 jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
 jest.mock('../components/pro-guard', () => ({
-	withProAccess: (Body: React.ComponentType) =>
-		function Guard() {
+	withProAccess: (Body: React.ComponentType<object>) =>
+		function Guard(props: object) {
 			return (
 				<div data-testid="pro-body">
-					<Body />
+					<Body {...props} />
 				</div>
 			);
 		},
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	usePointer: () => 'fine',
+	useIsPhone: () => false,
+}));
 jest.mock('./row', () => ({ ProductRow: () => null, VariableRow: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
@@ -363,9 +365,14 @@ it('renders the skeleton inside the guard while the handle is unanswered and the
 	mockHandle = fakeQueryHandle({ ready: false });
 	try {
 		render(<ProductsScreen />);
-		expect(screen.getByTestId('skeleton-products').getAttribute('data-gutter')).toBe('page');
+		expect(screen.getByTestId('skeleton-products')).toBeTruthy();
 		expect(screen.queryByTestId('products-table')).toBeNull();
 		expect(screen.getByTestId('products-bar')).toBeTruthy();
+		// The chip row stands above the skeleton from the first frame: the card never moves
+		// down when the rows arrive.
+		expect(
+			screen.getByTestId('products-body').contains(screen.getByTestId('products-filter-bar'))
+		).toBe(true);
 		expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-body'))).toBe(true);
 		expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-bar'))).toBe(false);
 	} finally {

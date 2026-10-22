@@ -29,6 +29,12 @@ it.each([
 	expect(screen.getByTestId('shape')).not.toHaveAttribute('data-accessible', 'false');
 });
 
+it('renders the chip shape at the control height with the full radius', () => {
+	render(<Skeleton shape="chip" testID="shape" />);
+	expect(screen.getByTestId('shape')).toHaveClass('bg-muted', 'h-ctl', 'w-24', 'rounded-full');
+	expect(screen.getByTestId('shape')).not.toHaveClass('rounded-lg');
+});
+
 it('defaults to filling the caller box', () => {
 	render(<Skeleton testID="shape" />);
 	expect(screen.getByTestId('shape')).toHaveClass('flex-1', 'w-full');

@@ -31,8 +31,8 @@ export function HandleProductsFooter({
 	children?: React.ReactNode;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
-	// Mounted outside DataTable, under the POS pane's dense card: the inset DataTable's own
-	// footer mount gives it.
+	// Mounted outside DataTable, under the POS grid or card: the inset DataTable's own footer
+	// mount gives it (surface.tsx).
 	return (
 		<CaptionRowInset>
 			<ProductsFooter

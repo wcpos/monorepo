@@ -12,6 +12,17 @@
   --color-transparent: transparent;
 }
 
+/* The page gutter (CODING_STANDARDS § Design, Gutters): three spacing units: the space between
+   content areas inside an application window (Windows app design: 8 between buttons, 12 between
+   content areas, 16 surface-to-text; UIKit view margin 8, root-view minimum 16/20 is the SCREEN
+   edge). It follows the density step. `GUTTER_UNITS` (packages/components/src/lib/scale.ts)
+   carries the same 3 for code that needs px. Inline, so a utility carries the calc itself and
+   reads `--spacing` where it is used: a step scoped below the root (a gallery cell, Uniwind's
+   ScopedVariables) moves it too. */
+@theme inline {
+  --spacing-gutter: calc(var(--spacing) * 3);
+}
+
 @theme {
   /* Regular scale: shared px values on web and native. */
   --spacing: 4px;

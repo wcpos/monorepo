@@ -42,6 +42,15 @@ const mockNavigate = jest.fn();
 let mockFocused = true;
 jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: mockNavigate }) }));
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+// The frame imports the Pro guard (the POS column passes no `pro`); the guard pulls expo-blur
+// and app-state (ESM), which jest cannot require.
+jest.mock('../../components/pro-guard', () => ({
+	withProAccess: (Component: unknown) => Component,
+}));
+// The column's bar and frame read the insets (the column's EdgeColumn pads them; both opt out).
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@wcpos/components/empty-state', () => ({
 	EmptyState: ({
 		title,

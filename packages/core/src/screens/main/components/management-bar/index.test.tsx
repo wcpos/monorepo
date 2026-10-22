@@ -100,11 +100,15 @@ it.each([
 	bar();
 	expect(screen.getByTestId('orders-bar-status').textContent).toContain(label);
 });
-it('has no badge while available and keeps phone search under the bar', () => {
+// The phone search row is PageBar's (its own test pins the row); the page bar hands it on.
+it('has no badge while available and keeps phone search under the control row', () => {
 	mockPhone = true;
 	bar();
 	expect(screen.queryByTestId('orders-bar-status')).toBeNull();
-	expect(screen.getByTestId('orders-bar').contains(screen.getByTestId('search'))).toBe(false);
+	const [row, searchRow] = Array.from(screen.getByTestId('orders-bar').children);
+	expect(row.contains(screen.getByTestId('search'))).toBe(false);
+	expect(searchRow).toBe(screen.getByTestId('orders-bar-search'));
+	expect(searchRow.contains(screen.getByTestId('search'))).toBe(true);
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 
@@ -115,8 +119,8 @@ it('shows a held session under the bar, after the phone search row', () => {
 	const { container } = bar();
 	const rows = Array.from(container.children);
 	expect(rows[0]).toBe(screen.getByTestId('orders-bar'));
-	expect(rows[1].contains(screen.getByTestId('search'))).toBe(true);
-	expect(rows[2]).toBe(screen.getByTestId('session-hold-banner'));
+	expect(rows[0].lastElementChild?.contains(screen.getByTestId('search'))).toBe(true);
+	expect(rows[1]).toBe(screen.getByTestId('session-hold-banner'));
 });
 
 it.each([false, true])('omits the empty search slot (phone: %s)', (phone) => {
@@ -126,6 +130,8 @@ it.each([false, true])('omits the empty search slot (phone: %s)', (phone) => {
 	// No search means no second phone row and no empty desktop search wrapper.
 	expect(container.firstElementChild).toBe(screen.getByTestId('settings-bar'));
 	expect(container.children).toHaveLength(1);
+	expect(screen.getByTestId('settings-bar').children).toHaveLength(1);
+	expect(screen.queryByTestId('settings-bar-search')).toBeNull();
 	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(2);
 });
 it('passes the phone back crumb through with its label, selector and action', () => {

@@ -25,8 +25,16 @@ export type PageBarProps = ViewProps & {
 	// its own, and the caller owns the translated string (Codex review on #2188).
 	onMenu?: { label: string; onPress: () => void };
 	back?: { label: string; onPress: () => void; testID?: string };
-	/** The page's search field: sits beside the title and takes the width, up to a cap. */
+	/**
+	 * The page's search field: beside the title on wide widths, taking the width up to a cap; on
+	 * a phone, its own ruled row under the bar.
+	 */
 	search?: React.ReactNode;
+	/**
+	 * Pads the top safe-area inset (default). `false` for a bar inside a column that already
+	 * pads it (the POS products column's `EdgeColumn`).
+	 */
+	insetTop?: boolean;
 };
 
 export function PageBar({
@@ -37,6 +45,7 @@ export function PageBar({
 	onMenu,
 	back,
 	search,
+	insetTop = true,
 	children,
 	testID,
 	className,
@@ -50,20 +59,20 @@ export function PageBar({
 		<View
 			testID={testID}
 			className={cn('bg-background', className)}
-			style={[style, { paddingTop: insets.top }]}
+			style={insetTop ? [style, { paddingTop: insets.top }] : style}
 			{...props}
 		>
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
 			    bar and the ground are one colour and a line would only draw a box around nothing.
 			    On wide widths the bar is the page's first row, not a box of its own height: its
-			    controls sit the page gutter (16) from the top and the sides, and the row under it
-			    (the chip row, a page body) brings the 16 between them, so search, chips and card
+			    controls sit the page gutter from the top and the sides, and the row under it
+			    (the chip row, a page body) brings the gutter between them, so search, chips and card
 			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
 			    height because its search has a ruled row of its own. */}
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'gap-4 px-4 pt-4'
+					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'px-gutter pt-gutter gap-4'
 				)}
 			>
 				{(phone || onMenu) &&
@@ -114,7 +123,7 @@ export function PageBar({
 				    left edge, beside the title, and fills it up to a cap: a field pushed to the
 				    right edge reads as a control, not as the way into the page. */}
 				<View className="min-w-0 flex-1 flex-row">
-					{search != null && (
+					{!phone && search != null && (
 						<View testID={id('search')} className="max-w-160 min-w-0 flex-1">
 							{search}
 						</View>
@@ -122,6 +131,11 @@ export function PageBar({
 				</View>
 				<HStack className="items-center gap-1">{children}</HStack>
 			</HStack>
+			{phone && search != null && (
+				<View testID={id('search')} className="h-ctl border-border justify-center border-b px-2">
+					{search}
+				</View>
+			)}
 		</View>
 	);
 }

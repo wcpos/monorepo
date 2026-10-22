@@ -8,6 +8,12 @@
  * utility (`h-ctl`, `min-h-row`, `text-amt`), never the step.
  */
 
+/**
+ * The page gutter in spacing units; `--spacing-gutter` in global.css carries the same 3 — the
+ * CSS cannot read this constant. For code that needs the gutter in px (`GUTTER_UNITS * unit`).
+ */
+export const GUTTER_UNITS = 3;
+
 /** The three drawn density steps. */
 export type ScaleStep = 'compact' | 'regular' | 'spacious';
 

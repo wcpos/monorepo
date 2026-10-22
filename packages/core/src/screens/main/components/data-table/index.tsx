@@ -39,7 +39,6 @@ import { getColumnStyle } from './column-style';
 import { CaptionRowInset, TableSurface } from './surface';
 
 import type { DataTableFooterProps } from './footer';
-import type { TableSurfaceGutter } from './surface';
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
 import type { RowData, TableOptions } from '@tanstack/react-table';
@@ -109,8 +108,6 @@ interface CommonProps<TData extends RowData> {
 	 * re-fires an end-reached the guard ignored while pending).
 	 */
 	onEndReached?: () => void;
-	/** The card's inset: `page` on a management page (16), `dense` in a dense pane (8, the POS). */
-	gutter?: TableSurfaceGutter;
 }
 
 type TableProps<TSortField extends string> = {
@@ -244,7 +241,6 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 		getItemType,
 		ListFooterComponent,
 		onEndReached,
-		gutter = 'dense',
 	} = props;
 	const pointer = usePointer();
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
@@ -327,7 +323,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 		// is a caption row on the ground beneath it, the same row the POS tile grid has, so the two
 		// views share a footer and only the body differs.
 		<View className="flex h-full flex-col">
-			<TableSurface gutter={gutter}>
+			<TableSurface>
 				<Table className="flex h-full flex-col">
 					{pointer === 'fine' && (
 						<TableHeader>
@@ -443,7 +439,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 			{showFooter && (
 				<TableFooter>
 					{/* The footer's text lines up with the cells' by the card's own gutter (surface.tsx). */}
-					<CaptionRowInset gutter={gutter}>
+					<CaptionRowInset>
 						<HandleFooter
 							Footer={props.TableFooterComponent ?? DataTableFooter}
 							collectionName={props.collectionName}

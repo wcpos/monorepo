@@ -8,6 +8,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
+import { useGround } from '../ground';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
@@ -18,7 +19,7 @@ export function UpgradeNotice({
 	setShowUpgrade: (show: boolean) => void;
 	/**
 	 * Mounted as the row under a wide page bar (Orders, Reports, Support): the bar ends at its
-	 * controls and leaves the page gutter (16) to this row. Off by default — at the top of the
+	 * controls and leaves the page gutter to this row. Off by default — at the top of the
 	 * POS, Settings or Store health column the strip is flush with the edge it already pads.
 	 */
 	underBar?: boolean;
@@ -27,6 +28,7 @@ export function UpgradeNotice({
 
 	const { screenSize } = useTheme();
 	const isPhone = screenSize === 'sm';
+	const ground = useGround();
 	const openPro = () => openExternalURL('https://wcpos.com/pro');
 
 	return (
@@ -35,8 +37,9 @@ export function UpgradeNotice({
 		<HStack
 			testID="upgrade-notice-banner"
 			className={cn(
-				'bg-muted border-border min-h-10 items-center gap-2.5 border-b pr-2 pl-4',
-				underBar && !isPhone && 'mt-4'
+				'bg-muted border-border min-h-10 items-center gap-2.5 border-b pr-2',
+				ground.pl,
+				underBar && !isPhone && ground.mt
 			)}
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from

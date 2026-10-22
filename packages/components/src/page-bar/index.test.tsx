@@ -80,7 +80,7 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	// Wide widths: the page's first row, inset by the page gutter at the top and the sides and
 	// no fixed height, with no rule under it (ledger lines 8, 11).
 	const row = screen.getByTestId('bar').firstElementChild;
-	expect(row).toHaveClass('pt-4', 'px-4');
+	expect(row).toHaveClass('pt-gutter', 'px-gutter');
 	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
 	expect(row).not.toHaveClass('border-b');
 	// A title-only bar is as tall as one with a control: the title's box is control-height.
@@ -114,7 +114,43 @@ it('seats the search beside the title and caps its width; the phone keeps the co
 			<PageBar testID="bar" title="Orders" />
 		</DeviceScope>
 	);
-	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl');
+	// The phone's screen edge keeps 16 (`pl-4`), not the window gutter (owner, 2026-10-22).
+	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl', 'pl-4');
+	expect(screen.getByTestId('bar').firstElementChild).not.toHaveClass('pl-gutter');
+});
+
+// Every bar with a search, the POS products column's included, has one phone grammar: the
+// control row, then the search on a ruled row of its own (ManagementBar used to draw it).
+it('puts the phone search on its own ruled row under the control row', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" search={<input data-testid="search" />}>
+				<button data-testid="control" />
+			</PageBar>
+		</DeviceScope>
+	);
+	const [row, searchRow] = Array.from(screen.getByTestId('bar').children);
+	expect(row.contains(screen.getByTestId('control'))).toBe(true);
+	expect(row.contains(screen.getByTestId('search'))).toBe(false);
+	expect(searchRow).toBe(screen.getByTestId('bar-search'));
+	expect(searchRow.contains(screen.getByTestId('search'))).toBe(true);
+	expect(searchRow).toHaveClass('h-ctl', 'border-b', 'px-2');
+});
+
+it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {
+	render(
+		<DeviceScope phone={phone}>
+			<PageBar testID="bar" title="Settings" />
+		</DeviceScope>
+	);
+	expect(screen.queryByTestId('bar-search')).toBeNull();
+	expect(screen.getByTestId('bar').children).toHaveLength(1);
+});
+
+// A bar inside a column that pads the inset itself (the POS products column's EdgeColumn).
+it('leaves the top inset to its column when insetTop is off', () => {
+	render(<PageBar testID="bar" insetTop={false} />);
+	expect(screen.getByTestId('bar').style.paddingTop).toBe('');
 });
 
 it('phone scope shows the named menu and fires its callback', () => {

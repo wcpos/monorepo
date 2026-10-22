@@ -184,8 +184,6 @@ describe('OrdersScreen query-state wiring', () => {
 		expect(mockDataTableProps).toMatchObject({
 			handle: mockHandle,
 			sort: { field: 'date_created_gmt', direction: 'desc' },
-			// The page gutter (16), not the POS pane's dense 8.
-			gutter: 'page',
 		});
 		expect(mockDataTableProps).not.toHaveProperty('resource');
 		expect(mockDataTableProps).not.toHaveProperty('query');
@@ -343,6 +341,9 @@ it('uses the orders skeleton while the orders handle is unanswered', () => {
 		const { unmount } = render(<OrdersScreen />);
 		expect(screen.getByTestId('skeleton-orders')).toBeTruthy();
 		expect(screen.queryByTestId('orders-table')).toBeNull();
+		// The chip row stands above the skeleton from the first frame: the card never moves
+		// down when the rows arrive.
+		expect(screen.getByTestId('search-probe')).toBeTruthy();
 		unmount();
 	} finally {
 		mockHandle = original;

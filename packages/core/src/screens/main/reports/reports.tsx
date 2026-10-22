@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
+import { cn } from '@wcpos/components/lib/utils';
 
+import { useGround } from '../components/ground';
 import { useTheme } from '../../../contexts/theme';
 import { useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
@@ -23,6 +25,7 @@ export function Reports({
 	header?: React.ReactNode;
 }) {
 	const { bottom } = useSafeAreaInsets();
+	const ground = useGround();
 	const { detail } = useReportsScope(),
 		{ screenSize } = useTheme();
 	const phonePanel = !!detail && screenSize === 'sm';
@@ -50,8 +53,8 @@ export function Reports({
 						<DetailPanel key={detail} />
 					</ErrorBoundary>
 				) : (
-					// The page gutter (16) around and between the strip, the hero and the cards.
-					<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+					// The page gutter around and between the strip, the hero and the cards.
+					<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 						{/* The strip stays outside the report's boundary: it is the only way into
 						    Closures, so a failed hero or card must not take it down (Codex, #2720). */}
 						{header}

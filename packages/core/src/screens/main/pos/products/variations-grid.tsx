@@ -11,6 +11,7 @@ import { useQueryHandleFields } from '../../../../query';
 import { matchesStockStatusFilter } from '../../components/product/stock-filter';
 import { useUISettings } from '../../contexts/ui-settings';
 import { DealCell, DealFade, FRONT, type Measurable, useAirspace, useDeal } from './deal-stack';
+import { TileGround } from '../../components/data-table/surface';
 import { HandleProductsFooter } from './handle-footer';
 import { ParentTile, VariationPlaceholder, VariationTile } from './tiles/variation-tile';
 
@@ -108,50 +109,63 @@ export function VariationsGrid({
 	);
 
 	return (
-		// The dealt grid lands on the ground under the crumb, as the products grid stands. The
-		// frame the slots rest in is reported, not assumed.
-		<View className="min-h-0 flex-1 px-1" testID="variations-surface">
-			<View className="min-h-0 flex-1" style={air.frame}>
-				<View
-					ref={slotsNode}
-					className="min-h-0 flex-1"
-					testID="variations-slots"
-					onLayout={() => placeGrid(slotsNode.current as Measurable)}
-				>
-					<Animated.ScrollView
-						ref={scroller}
-						className="flex-1"
-						style={air.scroller}
-						testID="variations-grid-scroller"
+		// The dealt grid lands on the ground under the crumb, as the products grid stands: one page
+		// gutter in, less the tiles' own `m-1` (`TileGround`). The frame the slots rest in is
+		// reported, not assumed.
+		<View className="min-h-0 flex-1" testID="variations-surface">
+			<TileGround>
+				{/* The air frame moves itself in flight (`marginTop`): its own element, inside the
+				    ground, so it never replaces the ground's `-mt-1`. */}
+				<View testID="variations-air" className="min-h-0 flex-1" style={air.frame}>
+					<View
+						ref={slotsNode}
+						className="min-h-0 flex-1"
+						testID="variations-slots"
+						onLayout={() => placeGrid(slotsNode.current as Measurable)}
 					>
-						{rows.map((row, rowIndex) => (
-							<View key={rowIndex} className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
-								{row.map((index) => {
-									if (index >= count) return <View key={index} className="flex-1" />;
-									const variation = index === 0 ? null : slots[index - 1];
-									return (
-										<DealCell
-											key={index}
-											index={index}
-											count={count}
-											columns={columns}
-											scroll={scroll}
-										>
-											{index === 0 ? (
-												<ParentTile record={parent} gridFields={gridFields} onPress={back} />
-											) : variation ? (
-												<VariationTile record={variation} parent={parent} gridFields={gridFields} />
-											) : (
-												<VariationPlaceholder />
-											)}
-										</DealCell>
-									);
-								})}
-							</View>
-						))}
-					</Animated.ScrollView>
+						<Animated.ScrollView
+							ref={scroller}
+							className="flex-1"
+							style={air.scroller}
+							testID="variations-grid-scroller"
+						>
+							{rows.map((row, rowIndex) => (
+								<View
+									key={rowIndex}
+									className="flex-row"
+									style={rowIndex === 0 ? FRONT : undefined}
+								>
+									{row.map((index) => {
+										if (index >= count) return <View key={index} className="flex-1" />;
+										const variation = index === 0 ? null : slots[index - 1];
+										return (
+											<DealCell
+												key={index}
+												index={index}
+												count={count}
+												columns={columns}
+												scroll={scroll}
+											>
+												{index === 0 ? (
+													<ParentTile record={parent} gridFields={gridFields} onPress={back} />
+												) : variation ? (
+													<VariationTile
+														record={variation}
+														parent={parent}
+														gridFields={gridFields}
+													/>
+												) : (
+													<VariationPlaceholder />
+												)}
+											</DealCell>
+										);
+									})}
+								</View>
+							))}
+						</Animated.ScrollView>
+					</View>
 				</View>
-			</View>
+			</TileGround>
 			<DealFade>
 				<VariationsFooter
 					handle={handle}
