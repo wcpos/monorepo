@@ -222,6 +222,16 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await request('void', reason);
 		return true;
 	};
+	// An unanswered intent is not re-sent once the cashier cancelled it (the void answers either
+	// way: 200, or "not found") or the leg's deadline passed, whether it failed in transit or met a
+	// held lock (Codex 4338931660 on #2798, 4343940265 on #2834).
+	const intentEnds = async () => {
+		if (await voidAfterIntent()) return true;
+		if (state.cancelRequested || deps.now() < state.deadlineAt) return false;
+		setState({ phase: 'creating', capturing: false });
+		await cancel('deadline');
+		return true;
+	};
 	async function request(route: Route, reason?: string) {
 		if (!active()) return;
 		clearTimer();
@@ -340,8 +350,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			// and only a re-send of it answers it. A status read cannot: an intent that never ran
 			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
 			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
-			// intent was out wins: nothing ran, so the void goes out now instead.
-			if (route === 'intent' && (await voidAfterIntent())) return;
+			// intent was out wins: nothing ran, so the void goes out now instead; so does the deadline.
+			if (route === 'intent' && (await intentEnds())) return;
 			if (route === 'status') setState({ capturing: false, phase: 'polling' });
 			else
 				setState(
@@ -410,16 +420,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			await applyResponse({ payment: row, order: body?.data?.order }, seq);
 			return;
 		}
-		// An intent the cashier already cancelled is not retried: the server may or may
-		// not hold the row, and the void answers that either way (200, or "not found").
-		if (route === 'intent' && (await voidAfterIntent())) return;
-		// Codex 4338931660 on #2798: an intent failing in transit is not retried past the leg's
-		// deadline; the void answers either way.
-		if (route === 'intent' && !state.cancelRequested && deps.now() >= state.deadlineAt) {
-			setState({ phase: 'creating', capturing: false });
-			await cancel('deadline');
-			return;
-		}
+		if (route === 'intent' && (await intentEnds())) return;
 		const count = state.consecutiveErrors + 1;
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).

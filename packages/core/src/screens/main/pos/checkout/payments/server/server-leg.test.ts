@@ -640,6 +640,22 @@ it('an intent retried in transit stops at the deadline and cancels', async () =>
 	expect(c.count('intent')).toBe(intents);
 });
 
+// Codex 4343940265 on #2834: a lock held past the deadline does not keep the intent going.
+it('an intent locked past the deadline stops re-sending and cancels', async () => {
+	const c = setup();
+	for (let i = 0; i < 200; i++)
+		c.fail('intent', refusal(409, 'wcpos_payment_locked', { retry_after: 15 }));
+	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
+	await c.leg.start();
+	await tick(320_000);
+	const intents = c.count('intent');
+	expect(c.count('void')).toBe(1);
+	expect(c.calls.find(({ route }) => route === 'void')?.body).toEqual({ reason: 'deadline' });
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	await tick(60_000);
+	expect(c.count('intent')).toBe(intents);
+});
+
 it('a locked capture is re-sent after retry_after, then settles', async () => {
 	const c = setup(true);
 	c.answer('status', response({ status: 'authorized' }));
