@@ -628,7 +628,8 @@ jobs:
   gallery-update:
     name: Gallery update (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Shoots twice (update, then compare), so twice a shard's budget.
+    timeout-minutes: 25
     needs: changes
     if: >-
       needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&
@@ -646,6 +647,11 @@ jobs:
       - name: Update baselines
         working-directory: apps/main
         run: npx playwright test -c playwright.gallery.config.ts --update-snapshots --shard=${{ matrix.shard }}/3
+      - name: Compare the fresh baselines
+        # Update mode's contract (roadmap#355): a second shoot must reproduce what the first
+        # wrote, or the baselines are unstable and must not be committed.
+        working-directory: apps/main
+        run: npx playwright test -c playwright.gallery.config.ts --shard=${{ matrix.shard }}/3
       - name: Stage this shard's baselines
         # Only the PNGs this shard shot: every shard's checkout holds the whole set, so
         # uploading the directory would let one shard's untouched copies overwrite
