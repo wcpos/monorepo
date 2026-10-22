@@ -118,7 +118,7 @@ it('a claim stamped in the future is expired, and schedules no lapse', async () 
 		now.mockReturnValue(1_000_000); // the clock stepped back
 		const [entry] = (await readOrderCommands(tab, 'order')).entries;
 		expect(claimHeld(entry, null)).toBe(false);
-		expect(await nextClaimExpiry(tab)).toBeNull();
+		expect(await nextClaimExpiry(tab, 'test-scope')).toBeNull();
 		expect(await claimRoute(tab, route, 'tab-b', null)).toMatchObject({ status: 'open' });
 	} finally {
 		now.mockRestore();

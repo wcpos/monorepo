@@ -1,3 +1,5 @@
+import { map } from 'rxjs/operators';
+
 import { ensureLocalDocument, storeDatabase } from './ensure-local-document';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
@@ -102,4 +104,11 @@ export async function failCompletionAttempt(
 
 export async function pendingCompletions(storeDB: StoreLocalDatabase) {
 	return (await storeDatabase(storeDB).getLocal<Journal>(ID))?.toJSON(true).data.pending ?? {};
+}
+
+/** The pending attempts, live: the store session finishes an unconfirmed one once it reads paid. */
+export function observePendingCompletions(storeDB: StoreLocalDatabase) {
+	return storeDatabase(storeDB)
+		.getLocal$<Journal>(ID)
+		.pipe(map((doc) => doc?.toJSON(true).data.pending ?? {}));
 }

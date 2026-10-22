@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { NEVER, Subject } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
@@ -47,12 +48,14 @@ jest.mock('../../../../services/terminal-payments', () => ({
 let mockManager = {};
 let mockContext: SaleContext;
 const mockRecover = jest.fn();
+const mockResidentOrders = jest.fn();
 const mockHttp = { post: jest.fn() };
 let mockOnline = 'online-website-available';
 jest.mock('@wcpos/query', () => ({
 	RECOVERY_RETRY_DELAYS_MS: jest.requireActual('@wcpos/query').RECOVERY_RETRY_DELAYS_MS,
 	useQueryRuntime: () => mockManager,
 	recoverMoneyCommands: (...args: unknown[]) => mockRecover(...args),
+	observeResidentOrders: (...args: unknown[]) => mockResidentOrders(...args),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -93,6 +96,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
 	mockRecover.mockResolvedValue([]);
+	mockResidentOrders.mockReturnValue(NEVER);
 	mockOnline = 'online-website-available';
 	mockRefresh.mockResolvedValue('refreshed');
 	mockStartVersion = 0;
@@ -285,6 +289,7 @@ it('a reconnect re-sends what the outage left unanswered and finishes only the o
 // A claim persisted by a process that crashed after its send holds the command for the lease:
 // the recovery skips it, and is run again when that lease lapses, while the till stays online.
 async function claimLapsingIn(ms: number) {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
 	const real = Date.now();
 	const now = jest.spyOn(Date, 'now').mockReturnValue(real - journal.CLAIM_LEASE_MS + ms);
 	await journal.claimRoute(
@@ -1195,4 +1200,42 @@ it('an unconfirmed sale is finished by the bridge once the paid order is adopted
 			context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
 		})
 	);
+});
+
+// The same `unconfirmed` sale, finished mid-session: the pull adopts the paid order while the till
+// stays up, and the bridge writes the receipt and the audit then, without another recovery run.
+it('finishes an unconfirmed sale when a pull adopts the paid order mid-session', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	await recordCompletionAttempt(mockContext.storeDB, { orderUuid: 'order', source: 'manual' });
+	mockCatchUp.mockRejectedValueOnce(new Error('offline'));
+	const answer = {
+		source: 'manual',
+		via: 'online',
+		row: { id: 'row-1', amount: '10.00' },
+		order: { status: 'completed', balance: '0.00' },
+		mirrorFailed: false,
+		preparedCompleting: true,
+		preLegBalanceMinor: 1000,
+		amountMinor: 1000,
+	} as unknown as Parameters<typeof owner.completeSale>[2];
+	const pos = resident('order', 'pos-open') as never;
+	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	expect(await owner.completeSale(mockContext, pos, answer, stage)).toBe('unconfirmed');
+	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+		lastError: 'unconfirmed',
+	});
+	mockFind.mockResolvedValue(resident()); // the pull adopts the paid order
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
+	);
+	expect(mockRecover).toHaveBeenCalledTimes(1);
 });
