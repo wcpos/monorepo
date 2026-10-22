@@ -53,7 +53,7 @@ function terminalRoute(request: Request, orderId: number, action: string): boole
 }
 
 function terminalResponse(page: Page, orderId: number, action: 'intent' | 'status' | 'void') {
-	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
+	// The app re-sends once on a 401; that first answer is not the answer. A 409 always is.
 	const pending = page.waitForResponse(
 		createPaymentResponseMatcher(terminalRoutePattern(orderId, action), terminalMethod(action)),
 		{ timeout: 90_000 }

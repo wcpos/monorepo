@@ -98,44 +98,29 @@ export async function requireTenderCheckout(
 
 type PaymentWrite = 'record' | 'void';
 
-type ResendCause = 'unauthorized' | 'revision-stale';
-
-/**
- * The two answers the app re-sends once instead of settling on: a 401 (it refreshes the token and
- * retries) and, under ADR 0040 protocol 3, a 409 `wcpos_revision_stale` (it re-sends with the
- * server's `currentRevision`). Anything else, any other 409 included, is the answer.
- */
-async function resendCause(response: Response): Promise<ResendCause | null> {
-	if (response.status() === 401) return 'unauthorized';
-	if (response.status() !== 409) return null;
-	const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
-	return body?.code === 'wcpos_revision_stale' ? 'revision-stale' : null;
-}
-
 /**
  * Matches the settled answer to a money command on `route` (a `wcpos/v2` REST route). It skips
- * at most ONE 401 and ONE stale-revision 409, the re-sends the app makes, and takes the next
- * answer; a second answer of the same kind is the answer, so a client that loops fails the test.
- * Reading a 409's body is async, so matching answers are classified one at a time, in the order
- * they arrive: a later answer is never judged before an earlier stale 409 has been counted.
+ * at most ONE 401, the re-send the app makes after refreshing its token, and takes the next
+ * answer; a second 401 is the answer, so a client that loops fails the test.
+ *
+ * A 409 is ALWAYS the answer, `wcpos_revision_stale` included. The app does re-send once on a
+ * stale revision (ADR 0040 protocol 3), and until wcpos/woocommerce-pos#2413 the server moved a
+ * fresh order's revision on its first read, so every first money command on a taxed order was
+ * stale and this matcher tolerated one. That server defect is fixed; a stale answer on a money
+ * command now means a regression on one side or the other, and the spec must name it instead of
+ * waiting out a second round trip.
  */
 export function createPaymentResponseMatcher(
 	route: RegExp,
 	method: 'POST' | 'GET' = 'POST'
-): (response: Response) => Promise<boolean> {
-	const skipped = new Set<ResendCause>();
-	let previous: Promise<unknown> = Promise.resolve();
+): (response: Response) => boolean {
+	let sawUnauthorized = false;
 	return (response) => {
-		if (response.request().method() !== method) return Promise.resolve(false);
-		if (!route.test(wcposRestRoute(response.url()) ?? '')) return Promise.resolve(false);
-		const verdict = previous.then(async () => {
-			const cause = await resendCause(response);
-			if (cause === null || skipped.has(cause)) return true;
-			skipped.add(cause);
-			return false;
-		});
-		previous = verdict.catch(() => {});
-		return verdict;
+		if (response.request().method() !== method) return false;
+		if (!route.test(wcposRestRoute(response.url()) ?? '')) return false;
+		if (response.status() !== 401 || sawUnauthorized) return true;
+		sawUnauthorized = true;
+		return false;
 	};
 }
 

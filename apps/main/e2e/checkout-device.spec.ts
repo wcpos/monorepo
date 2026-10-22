@@ -81,7 +81,7 @@ async function connect(page: Page, methodId: string, reader: string) {
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
-	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
+	// The app re-sends once on a 401; that first answer is not the answer. A 409 always is.
 	const response = page.waitForResponse(
 		createPaymentResponseMatcher(
 			new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`)
