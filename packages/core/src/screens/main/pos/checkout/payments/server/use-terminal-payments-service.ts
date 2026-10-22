@@ -8,14 +8,12 @@ import {
 	isCompletingStatus,
 	isSettledPaymentRow,
 	readLedger,
-	upsertPaymentRow,
-	withLedger,
 } from '@wcpos/order-math';
-import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
-import { mirrorServerOrder, observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
+import { observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -24,8 +22,10 @@ import {
 	completionMetaFor,
 	isSaleComplete,
 	isSettledOrderStatus,
+	residentUnpaid,
 } from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
+import { commandProvenance } from '../../provenance/command-provenance';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -33,7 +33,6 @@ import {
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
 import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
-import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import {
@@ -59,22 +58,22 @@ function settlesSale(payment: PaymentRow, order: OrderPaymentSummary | undefined
 }
 
 export function useTerminalPaymentsService(): void {
-	const { store, site, userDB } = useStoreSession();
+	const { store, site, userDB, storeDB } = useStoreSession();
 	const ctx = useSaleContext();
 	const actor = ctx.actor;
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
-	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	// The service outlives a cashier change — its effect keys on store, site and
 	// manager only, so an in-flight leg is never torn down by a re-login — and the
 	// action row must name whoever is at the till when the money lands, not
 	// whoever started the service. So the actor is read live, like the rest.
-	const latest = React.useRef({ recordLedger, stampCompletion, methods, online, actor, ctx });
+	const latest = React.useRef({ stampCompletion, methods, online, actor, ctx });
 	React.useLayoutEffect(() => {
-		latest.current = { recordLedger, stampCompletion, methods, online, actor, ctx };
-	}, [recordLedger, stampCompletion, methods, online, actor, ctx]);
+		latest.current = { stampCompletion, methods, online, actor, ctx };
+	}, [stampCompletion, methods, online, actor, ctx]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -105,75 +104,62 @@ export function useTerminalPaymentsService(): void {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
 			},
+			commandPoster: (orderUuid, { approval, sessionId }) =>
+				moneyCommandPoster({
+					runtime: manager,
+					storeDB,
+					orderUuid,
+					post: (url, body) => binding.client.post(url, body),
+					// A resumed leg has no press: the poster takes its journaled approval, or freezes
+					// the order as it stands.
+					approval,
+					// A re-completion names the session the leg's gates approved, and only the
+					// command that completes the sale mints a counter.
+					provenance: async (command) => {
+						const resident = await readResidentOrder(manager, orderUuid);
+						return resident
+							? commandProvenance(latest.current.ctx, resident as never, sessionId, command)
+							: null;
+					},
+				}),
 			isOnline: () => latest.current.online,
+			scopeId: () => manager.engine.active?.()?.scopeId ?? null,
 			resolveOrderId: async (orderUuid) => {
 				if (getOrderSaveState(orderUuid)) return null;
 				const resident = await readResidentOrder(manager, orderUuid);
 				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
 			},
-			patchAndEnqueue: (orderUuid, payment) =>
-				enqueueOrderMutation(orderUuid, async () => {
-					const resident = await readResidentOrder(manager, orderUuid);
-					if (stopped || !resident) throw new Error('Offline payment order is not resident');
-					const payload = (resident.getLatest?.().payload ??
-						resident.payload) as EngineRecord<'orders'>['payload'];
-					const meta = cloneDeep(payload.meta_data ?? []);
-					const rows = upsertPaymentRow(readLedger(meta), payment);
-					const summary = derive(payload.total, rows, latest.current.methods, {
-						dp: dp(),
-					});
-					const meta_data = withLedger(meta, rows);
-					const result = {
-						...summary,
-						total: String(payload.total ?? '0'),
-						payment_method: summary.payment_method ?? '',
-					};
-					// This write takes the order off the till, as the mirror's below does.
-					const enterReceiptAfter = settlesSale(payment, result, dp())
-						? receiptEntryAfterWrite(orderUuid)
-						: null;
-					const written = await latest.current.recordLedger(resident, {
-						meta_data: isCompletingStatus(summary.status)
-							? await completionMetaFor(latest.current.ctx, meta_data, {})
-							: meta_data,
-						status: summary.status,
-					});
-					if (!written) throw new Error('Offline payment could not be saved');
-					// A store switch stopped this service and reset checkout mode meanwhile.
-					if (!stopped) enterReceiptAfter?.();
-					return result;
-				}),
-			mirror: async (orderUuid, { payment, order }) => {
+			// An offline authorization is never written locally: offline tenders do not queue
+			// (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
+			// (ADR 0040 §offline).
+			patchAndEnqueue: async () => {
+				throw new Error('offline_unavailable');
+			},
+			mirror: async (orderUuid, { payment, order }, poster) => {
 				let mirrored = false;
 				try {
 					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
-					const payload = (resident.getLatest?.().payload ??
-						resident.payload) as EngineRecord<'orders'>['payload'];
-					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
-					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
 					// A settling status takes the order off the till and unmounts the tender that used
 					// to select its receipt; the service selects it once the write has landed.
 					const enterReceiptAfter = settlesSale(payment, order, dp())
 						? receiptEntryAfterWrite(orderUuid)
 						: null;
-					await mirrorServerOrder(manager, orderUuid, {
-						// Only the summary fields that are order fields: `paid` and `balance` are
-						// derived from the ledger on read, and an unknown key fails the schema.
-						...(order
-							? {
-									status: order.status,
-									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
-									payment_method: order.payment_method,
-									payment_method_title: order.payment_method_title,
-								}
-							: {}),
-						meta_data,
+					await poster.mirror({
+						payment,
+						order,
+						// A device leg's tip moves the order total.
+						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
 					});
 					mirrored = true;
-					if (!stopped) enterReceiptAfter?.();
-					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
+					const payload = (resident.getLatest?.().payload ??
+						resident.payload) as EngineRecord<'orders'>['payload'];
+					// The post-mirror resident decides, not the answer (#2798 thread 4341491603): the
+					// mirror keeps another till's newer reopen, and a reopened sale shows no receipt.
+					if (!stopped && !residentUnpaid(payload, order?.status)) enterReceiptAfter?.();
+					const meta_data = cloneDeep(payload.meta_data ?? []);
+					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta_data)) {
 						const patched = await latest.current.stampCompletion(
 							resident,
 							await completionMetaFor(latest.current.ctx, meta_data, {})
@@ -241,12 +227,19 @@ export function useTerminalPaymentsService(): void {
 		const unsubscribe = subscribeCheckoutMode(() => {
 			void service.flushOffline();
 		});
+		// A cashier switch moves the till to another scope, where these legs' orders are not
+		// resident: the legs stop. Their sent commands re-send through the scope-bound recovery,
+		// and the legs resume, when that cashier's scope is active again (no cross-scope replay).
+		const offScope = manager.engine.events((event) => {
+			if (event.type === 'scope-switched') service.scopeSwitched(event.scopeId);
+		});
 		return () => {
 			unsubscribe();
+			offScope();
 			stopped = true;
 			ledgerSubscription.unsubscribe();
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};
-	}, [store, site, manager, userDB]);
+	}, [store, site, manager, userDB, storeDB]);
 }

@@ -13,7 +13,6 @@ const input: CollectInput = {
 		payment_intent: 'sim_pi_leg',
 		outcome_url: 'https://store.test/simulated/outcome/leg',
 	},
-	offline: false,
 	tipEligibleMinor: 1000,
 };
 
@@ -53,7 +52,6 @@ it('posts approval to the handoff URL using global fetch by default', async () =
 			payment_intent: 'sim_pi_leg',
 			outcome_url: 'https://store.test/simulated/outcome/leg',
 		},
-		offline: false,
 		tipEligibleMinor: null,
 	});
 	await jest.advanceTimersByTimeAsync(500);
@@ -64,7 +62,7 @@ it('posts approval to the handoff URL using global fetch by default', async () =
 		body: JSON.stringify({ outcome: 'succeeded', amount: null, failure_reason: null }),
 	});
 });
-it.each(['sim-approve', 'sim-decline', 'sim-cancel', 'sim-tip', 'sim-offline', 'sim-tap'])(
+it.each(['sim-approve', 'sim-decline', 'sim-cancel', 'sim-tip', 'sim-tap'])(
 	'collects with %s',
 	async (id) => {
 		const fetch = jest.fn<
@@ -82,38 +80,21 @@ it.each(['sim-approve', 'sim-decline', 'sim-cancel', 'sim-tip', 'sim-offline', '
 		await jest.advanceTimersByTimeAsync(300);
 		await connected;
 		expect(driver.status$.get().connection).toBe('connected');
-		const settled = jest.fn();
-		driver.settleOffline$!.subscribe(settled);
 		const collecting = driver.collect({
 			dp: 2,
 			row,
 			method,
 			transport,
 			handoff: null,
-			offline: id === 'sim-offline',
 			tipEligibleMinor: 1000,
 		});
 		await jest.advanceTimersByTimeAsync(500);
 		if (id === 'sim-cancel') await driver.cancel!();
 		const result = await collecting;
 		expect(result.outcome).toBe(
-			id === 'sim-decline'
-				? 'declined'
-				: id === 'sim-cancel'
-					? 'cancelled'
-					: id === 'sim-offline'
-						? 'authorized'
-						: 'captured'
+			id === 'sim-decline' ? 'declined' : id === 'sim-cancel' ? 'cancelled' : 'captured'
 		);
 		expect(result.amount).toBe(id === 'sim-tip' ? '11.00' : '10.00');
-		if (id === 'sim-offline') {
-			expect(result.provider_refs).toEqual({ payment_intent: null });
-			await jest.advanceTimersByTimeAsync(3000);
-			expect(settled).toHaveBeenCalledWith({
-				rowId: row.id,
-				provider_refs: { payment_intent: `sim_pi_${row.id}` },
-			});
-		}
 		expect(fetch).not.toHaveBeenCalled();
 	}
 );
@@ -166,63 +147,6 @@ it.each(['HTTP 500', 'network unavailable'])('rejects collect on %s', async (fai
 	await jest.advanceTimersByTimeAsync(500);
 	await rejected;
 });
-
-it('does not post during offline collection even with a handoff', async () => {
-	const fetch = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>();
-	const driver = createSimulatedDriver({ fetch });
-	await connectReader(driver, 'sim-offline');
-	const collecting = driver.collect({ ...input, offline: true });
-	await jest.advanceTimersByTimeAsync(500);
-	await expect(collecting).resolves.toMatchObject({ outcome: 'authorized' });
-	expect(fetch).not.toHaveBeenCalled();
-});
-
-it.each([true, false])(
-	'uses an earlier online handoff only for the same offline row: %s',
-	async (sameRow) => {
-		const fetch = jest
-			.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>()
-			.mockRejectedValueOnce(new Error('offline'));
-		const driver = createSimulatedDriver({ fetch });
-		await connectReader(driver, 'sim-offline');
-		const rejected = expect(driver.collect(input)).rejects.toThrow('offline');
-		await jest.advanceTimersByTimeAsync(500);
-		await rejected;
-		fetch.mockClear();
-		let respond!: (response: Response) => void;
-		fetch.mockReturnValue(
-			new Promise((resolve) => {
-				respond = resolve;
-			})
-		);
-		const settled = jest.fn();
-		driver.settleOffline$!.subscribe(settled);
-		const offlineRow = sameRow ? row : { ...row, id: 'other-leg' };
-		const collecting = driver.collect({ ...input, row: offlineRow, offline: true, handoff: null });
-		await jest.advanceTimersByTimeAsync(500);
-		await expect(collecting).resolves.toMatchObject({ outcome: 'authorized' });
-		expect(fetch).not.toHaveBeenCalled();
-		await jest.advanceTimersByTimeAsync(2999);
-		expect(settled).not.toHaveBeenCalled();
-		await jest.advanceTimersByTimeAsync(1);
-		if (sameRow) {
-			expect(fetch).toHaveBeenCalledWith(input.handoff!.outcome_url, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ outcome: 'succeeded', amount: null, failure_reason: null }),
-			});
-			expect(settled).not.toHaveBeenCalled();
-			respond(new Response(null, { status: 200 }));
-			await jest.advanceTimersByTimeAsync(0);
-		} else {
-			expect(fetch).not.toHaveBeenCalled();
-		}
-		expect(settled).toHaveBeenCalledWith({
-			rowId: offlineRow.id,
-			provider_refs: { payment_intent: `sim_pi_${offlineRow.id}` },
-		});
-	}
-);
 
 it('uses configured precision for a whole-number tip amount', async () => {
 	const driver = createSimulatedDriver();

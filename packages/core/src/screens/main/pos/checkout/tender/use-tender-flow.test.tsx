@@ -40,6 +40,7 @@ import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
+import { passThroughPoster } from '../../../../../services/terminal-payments/pass-through-poster.test-utils';
 
 import type {
 	TerminalLegState,
@@ -157,7 +158,9 @@ let mockUseRealCompletion = false;
 const mockSetCurrentOrderID = jest.fn();
 const mockRequire = jest.fn();
 const mockAdjustStock = jest.fn();
-const mockRuntime = { engine: { require: mockRequire, db$: () => () => {} } };
+const mockRuntime = {
+	engine: { require: mockRequire, db$: () => () => {}, events: () => () => {} },
+};
 let mockAutoShowReceipt = true;
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../contexts/ui-settings', () => ({
@@ -1647,6 +1650,7 @@ describe('server tender', () => {
 					}),
 					post: jest.fn(),
 				},
+				commandPoster: () => passThroughPoster(jest.fn()),
 				mirror: async () => {},
 				completeOrder,
 			});
@@ -1814,6 +1818,7 @@ describe('device tender', () => {
 		const post = jest.fn(async () => ({ data: { handoff: { token: 'connection' } } }));
 		mockRealService = new TerminalPaymentsService({
 			http: { post, get: jest.fn() },
+			commandPoster: () => passThroughPoster(post),
 			mirror: async () => {},
 		});
 		registerDriver(createSimulatedDriver());
@@ -4103,7 +4108,9 @@ describe('cash rounding (#66, #84)', () => {
 			fee_lines: [fee],
 			meta_data: withLedger([], [payment({ amount: '10.05' })]),
 		} as typeof mockPayload;
-		mockManualPost.mockResolvedValue({ data: { payment: payment({ status: 'voided' }) } });
+		mockManualPost.mockResolvedValue({
+			data: { payment: payment({ status: 'voided' }), order: { status: 'pos-open' } },
+		});
 		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
 			mockPayload = { ...mockPayload, ...changes };
 		});

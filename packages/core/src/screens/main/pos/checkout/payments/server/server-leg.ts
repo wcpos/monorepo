@@ -1,4 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -8,6 +9,8 @@ import type {
 	PaymentRefusalBody,
 	PaymentRow,
 } from '@wcpos/order-math';
+
+import { legFinality, refusedBeforeSend, terminalBeforeSend } from '../leg-finality';
 
 const POLL_CADENCE_MS = 2000; // Wait after each response, not on a fixed interval.
 const BACKOFF_MS = [2000, 4000, 8000, 15000]; // Bound transport pressure without giving up.
@@ -45,6 +48,8 @@ export interface ServerLegDeps {
 	now: () => number;
 	mirror: (response: ServerLegResponse) => Promise<void>;
 	onFinal?: (state: ServerLegState) => void;
+	/** Retire a journaled intent known not to stand (`legFinality`). */
+	retire?: (kind: 'intent', target: string) => Promise<void>;
 }
 export interface ServerLegInput {
 	orderId: number;
@@ -98,12 +103,15 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	let captureAttempted = false;
 	let deadlineRead = false;
 	let awaitingRejoinedStatus = false;
-	const active = () => !stopped && state.phase !== 'final';
+	const active = () => !stopped && !finality.settling && state.phase !== 'final';
 	const current = (seq: number) => active() && seq === sequence;
 	const setState = (changes: Partial<ServerLegState>) => {
 		state = { ...state, ...changes };
 		listeners.forEach((listener) => listener());
 	};
+	// The intent stays unanswered until the store answers it; a resumed leg's was answered before.
+	const finality = legFinality(deps, () => (stopped ? null : state), setState);
+	if (!input.resume) finality.intent = input.row.id;
 	const event = (message: string, level: PaymentEvent['level'] = 'info') => {
 		setState({
 			clientEvents: [
@@ -116,9 +124,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (timer !== null) deps.clearTimeout(timer);
 		timer = null;
 	};
-	const finish = (outcome: ServerLegState['outcome']) => {
+	const finish = async (outcome: ServerLegState['outcome']) => {
+		// finish() can be entered twice, from the gate's retry and from a late answer; the second
+		// entry must not publish a second final state.
+		if (!active()) return;
 		clearTimer();
 		sequence++;
+		if (!(await finality.settle())) return;
 		setState({ phase: 'final', outcome, capturing: false, releaseAvailable: false });
 		deps.onFinal?.(state);
 	};
@@ -136,12 +148,14 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			});
 		}
 	};
-	const schedule = (delay: number, route: 'intent' | 'status' = 'status') => {
+	// The reason the last void went out with, so a re-send after a held lock carries it again.
+	let voidReason: string | undefined;
+	const schedule = (delay: number, route: Route = 'status') => {
 		clearTimer();
 		if (active())
 			timer = deps.setTimeout(() => {
 				timer = null;
-				void (route === 'intent' ? request('intent') : tick());
+				void (route === 'status' ? tick() : request(route, voidReason));
 			}, delay);
 	};
 	const applyResponse = async (
@@ -170,8 +184,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			awaitingRejoinedStatus = false;
 		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
-		const status = data.payment.status;
-		if (isFinalPaymentStatus(status)) finish(status);
+		if (isFinalPaymentStatus(data.payment.status)) void finish(data.payment.status);
 		return current(seq);
 	};
 	const afterResponse = async (route: Route) => {
@@ -209,11 +222,22 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await request('void', reason);
 		return true;
 	};
+	// An unanswered intent is not re-sent once the cashier cancelled it (the void answers either
+	// way: 200, or "not found") or the leg's deadline passed, whether it failed in transit or met a
+	// held lock (Codex 4338931660 on #2798, 4343940265 on #2834).
+	const intentEnds = async () => {
+		if (await voidAfterIntent()) return true;
+		if (state.cancelRequested || deps.now() < state.deadlineAt) return false;
+		setState({ phase: 'creating', capturing: false });
+		await cancel('deadline');
+		return true;
+	};
 	async function request(route: Route, reason?: string) {
 		if (!active()) return;
 		clearTimer();
 		const seq = ++sequence;
 		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
+		if (route === 'void') voidReason = reason;
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
@@ -246,6 +270,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		intentInFlight = false;
+		// Answered: the poster settles the intent's journal entry with this answer.
+		if (route === 'intent') finality.intent = null;
 		if (!current(seq)) return;
 		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route))) return;
 		setState({
@@ -260,6 +286,17 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
+		// A command the poster refused before it left the till shows its reason. Only an intent so
+		// refused ends the leg, for the cashier to choose again; a capture or void retries below.
+		const refused = refusedBeforeSend(error);
+		if (refused) event(refused.code, 'error');
+		if (refused && terminalBeforeSend(route, error)) {
+			pendingCancel = null;
+			const payment = { ...state.row, status: 'failed' as const, failure_reason: refused.code };
+			await applyResponse({ payment }, seq, { error: refused });
+			return;
+		}
+		if (refused) setState({ error: refused });
 		const response = errorResponse(error);
 		const body = response?.data;
 		const code = body?.code;
@@ -289,6 +326,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			code === 'wcpos_payment_in_flight' &&
 			typeof body?.data?.payment_id === 'string'
 		) {
+			// A definitive answer (the poster settled this intent): the leg follows the live one.
+			finality.intent = null;
 			awaitingRejoinedStatus = true;
 			setState({
 				row: { ...state.row, id: body.data.payment_id },
@@ -306,8 +345,23 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		if (code === 'wcpos_payment_locked') {
-			setState({ capturing: false, phase: 'polling' });
-			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
+			const delay = (body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000;
+			// The lock was held and nothing ran (ADR 0040 §1.3): the money command stays journaled,
+			// and only a re-send of it answers it. A status read cannot: an intent that never ran
+			// reads `not_found`, a capture leaves the row authorized. So the same command goes out
+			// again after `retry_after`, in the phase it was sent from. A cancel pressed while that
+			// intent was out wins: nothing ran, so the void goes out now instead; so does the deadline.
+			if (route === 'intent' && (await intentEnds())) return;
+			if (route === 'status') setState({ capturing: false, phase: 'polling' });
+			else
+				setState(
+					route === 'intent'
+						? { phase: 'creating' }
+						: route === 'void'
+							? { phase: 'cancelling', capturing: false }
+							: { phase: 'polling', capturing: true }
+				);
+			schedule(delay, route);
 			return;
 		}
 		if (code === 'wcpos_invalid_transition' && (route === 'capture' || route === 'void')) {
@@ -332,7 +386,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			route === 'intent' &&
 			response?.status !== undefined &&
 			INTENT_REFUSAL_STATUSES.has(response.status);
+		// A money command (intent, capture, void) ends the leg only on the store's own decision,
+		// the rule its journal uses (sync-core `isDefinitiveMoneyRefusal`): an answer the journal
+		// keeps for a re-send (a 426, a proxy's bare 4xx) must not end the leg, or a later re-send
+		// could authorize after the cashier was told it failed. A status read is no command.
+		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 		if (
+			definitive &&
 			(code?.startsWith('wcpos_') || refusedIntent) &&
 			response?.status !== undefined &&
 			response.status >= 400 &&
@@ -346,7 +406,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			if (!localVoid)
 				event(changes.error?.message ?? body?.message ?? `HTTP ${response.status}`, 'error');
 			if (awaitingRejoinedStatus) {
-				finish(localVoid ? 'voided' : 'failed');
+				await finish(localVoid ? 'voided' : 'failed');
 				return;
 			}
 			const row = localVoid
@@ -360,18 +420,19 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			await applyResponse({ payment: row, order: body?.data?.order }, seq);
 			return;
 		}
-		// An intent the cashier already cancelled is not retried: the server may or may
-		// not hold the row, and the void answers that either way (200, or "not found").
-		if (route === 'intent' && (await voidAfterIntent())) return;
+		if (route === 'intent' && (await intentEnds())) return;
 		const count = state.consecutiveErrors + 1;
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).
 		if (route === 'capture') captureAttempted = false;
+		// An intent, or a void refused before it left the till, is re-sent: a status read cannot
+		// answer it, and would capture the authorization the cashier cancelled.
+		const resend = route === 'intent' || (route === 'void' && refused !== null);
 		setState({
 			capturing: false,
 			consecutiveErrors: count,
 			unstable: count >= UNSTABLE_AFTER,
-			phase: route === 'intent' ? 'creating' : 'polling',
+			phase: route === 'intent' ? 'creating' : resend ? 'cancelling' : 'polling',
 		});
 		if (count === UNSTABLE_AFTER) event('Connection unstable', 'warning');
 		if (deadlineRead && !state.cancelRequested) {
@@ -379,10 +440,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			await cancel('deadline');
 			return;
 		}
-		schedule(
-			BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)],
-			route === 'intent' ? 'intent' : 'status'
-		);
+		schedule(BACKOFF_MS[Math.min(count - 1, BACKOFF_MS.length - 1)], resend ? route : 'status');
 	}
 	async function tick() {
 		if (!active()) return;
@@ -472,12 +530,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!current(seq)) return;
 		event('Leg released', 'warning');
 		setState({ row });
-		finish('released');
+		await finish('released');
 	}
 	function stop() {
 		stopped = true;
 		sequence++;
 		clearTimer();
+		finality.stop();
 	}
 	if (input.resume) schedule(0);
 	return {

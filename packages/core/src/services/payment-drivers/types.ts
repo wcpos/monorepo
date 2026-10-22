@@ -26,7 +26,6 @@ export type CollectInput = {
 	method: PaymentMethodDescriptor;
 	transport: PaymentTransport;
 	handoff: Record<string, unknown> | null;
-	offline: boolean;
 	tipEligibleMinor: number | null;
 };
 export type CollectResult = {

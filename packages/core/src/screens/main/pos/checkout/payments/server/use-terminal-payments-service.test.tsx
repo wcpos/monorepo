@@ -2,7 +2,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { type MetaDataEntry, readLedger, withLedger } from '@wcpos/order-math';
+import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
 
 import { createActionContext } from '../../../../../../extensions/actions';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
@@ -47,8 +47,13 @@ const mockResident = {
 };
 const mockDocuments = new BehaviorSubject([mockResident]);
 const mockFind = jest.fn(() => ({ $: mockDocuments }));
+const mockEngineListeners = new Set<(event: { type: string }) => void>();
 const mockRuntime = {
 	engine: {
+		events: (listener: (event: { type: string }) => void) => {
+			mockEngineListeners.add(listener);
+			return () => mockEngineListeners.delete(listener);
+		},
 		active: () => null,
 		ready: new Promise(() => {}),
 		require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
@@ -82,7 +87,32 @@ const mockPatch = jest.fn<
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
+const mockPosterInputs: {
+	post: (url: string, body: unknown) => Promise<unknown>;
+	provenance?: (command: unknown) => Promise<unknown>;
+}[] = [];
+const mockCommandProvenance = jest.fn(async (..._args: unknown[]) => null);
+jest.mock('../../provenance/command-provenance', () => ({
+	commandProvenance: (...args: unknown[]) => mockCommandProvenance(...args),
+}));
 jest.mock('@wcpos/query', () => ({
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		mockPosterInputs.push(input) &&
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
+			settle: async () => undefined,
+		}),
 	useQueryRuntime: () => mockRuntime,
 	engineCollection: () => ({ find: mockFind }),
 }));
@@ -110,6 +140,22 @@ afterEach(() => {
 	stopTerminalPaymentsService();
 	jest.clearAllMocks();
 });
+// A cashier switch moves the till to another scope, where a live leg's order is not resident:
+// the legs stop instead of polling and posting into a scope that cannot read them.
+it('suspends every live terminal leg when the engine switches scope', async () => {
+	const hook = renderHook(() => useTerminalPaymentsService());
+	const service = getTerminalPaymentsService()!;
+	const suspend = jest.spyOn(service, 'scopeSwitched');
+	mockEngineListeners.forEach((listener) => listener({ type: 'collection-reset' }));
+	expect(suspend).not.toHaveBeenCalled();
+	mockEngineListeners.forEach((listener) =>
+		listener({ type: 'scope-switched', scopeId: 'cashier-b' } as { type: string })
+	);
+	expect(suspend).toHaveBeenCalledWith('cashier-b');
+	hook.unmount();
+	expect(mockEngineListeners.size).toBe(0);
+});
+
 it('recovers a completed resident offline authorization without any open checkout or live leg', async () => {
 	const hook = renderHook(() => useTerminalPaymentsService());
 	await waitFor(() =>
@@ -137,30 +183,44 @@ it('recovers a completed resident offline authorization without any open checkou
 	hook.unmount();
 });
 
-it('offline settlement puts the tuple and ledger in the same completing patch', async () => {
-	const original = mockResident.payload.meta_data;
-	mockResident.payload.meta_data = withLedger([], []);
+// ADR 0040 PR A: an offline authorization is never written locally; PR B queues it.
+it('a re-completion provenance names the session the leg was approved under', async () => {
 	const start = jest.spyOn(
 		await import('../../../../../../services/terminal-payments'),
 		'startTerminalPaymentsService'
 	);
 	const hook = renderHook(() => useTerminalPaymentsService());
-	const options = start.mock.calls[0][0];
-	await options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
-	expect(mockPatch).toHaveBeenCalledWith(
-		expect.objectContaining({
-			data: {
-				status: 'completed',
-				meta_data: expect.arrayContaining([
-					{ key: '_wcpos_sale_counter', value: '2' },
-					expect.objectContaining({ key: '_wcpos_payments' }),
-				]),
-			},
-		})
+	try {
+		start.mock.calls[0][0].commandPoster!('completed-order', { sessionId: 'session-7' });
+		const command = { kind: 'capture', target: 'leg', body: { context: {} } };
+		await mockPosterInputs.at(-1)!.provenance!(command);
+		expect(mockCommandProvenance).toHaveBeenCalledWith(
+			expect.anything(),
+			mockResident,
+			'session-7',
+			command
+		);
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+	}
+});
+
+it('the offline payment writer refuses with offline_unavailable', async () => {
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
 	);
-	hook.unmount();
-	start.mockRestore();
-	mockResident.payload.meta_data = original;
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		await expect(
+			start.mock.calls[0][0].patchAndEnqueue!('order', { ...mockRow, status: 'authorized' })
+		).rejects.toThrow('offline_unavailable');
+		expect(mockPatch).not.toHaveBeenCalled();
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+	}
 });
 
 it('reads the decimal count from the latest store document at call time, not the snapshot', async () => {
@@ -301,17 +361,22 @@ it.each(['ledger', 'provenance'] as const)(
 		else mockPatch.mockRejectedValueOnce(error);
 		const hook = renderHook(() => useTerminalPaymentsService());
 		try {
-			const result = start.mock.calls[0][0].mirror('completed-order', {
-				payment: { ...mockRow, status: 'captured' },
-				order: {
-					status: 'completed',
-					total: '10.00',
-					paid: '10.00',
-					balance: '0.00',
-					payment_method: 'device',
-					payment_method_title: 'Reader',
+			const options = start.mock.calls[0][0];
+			const result = options.mirror(
+				'completed-order',
+				{
+					payment: { ...mockRow, status: 'captured' },
+					order: {
+						status: 'completed',
+						total: '10.00',
+						paid: '10.00',
+						balance: '0.00',
+						payment_method: 'device',
+						payment_method_title: 'Reader',
+					},
 				},
-			});
+				options.commandPoster('completed-order', { sessionId: null })
+			);
 			if (failure === 'ledger') {
 				await expect(result).rejects.toBe(error);
 				expect(mockPatch).not.toHaveBeenCalled();
@@ -471,52 +536,6 @@ jest.mock('@wcpos/query/mutations', () => ({
 }));
 
 // Without a queue around the snapshot and write, the second leg replaces the first row.
-it('preserves both offline payment rows when two legs race on one order', async () => {
-	const original = mockResident.payload;
-	mockResident.payload = { ...original, status: 'pos-open', meta_data: [] };
-	const start = jest.spyOn(
-		await import('../../../../../../services/terminal-payments'),
-		'startTerminalPaymentsService'
-	);
-	mockPatch.mockImplementation(async ({ data }) => {
-		// Model asynchronous persistence: a precomputed patch replaces the whole ledger.
-		await Promise.resolve();
-		mockResident.payload = { ...mockResident.payload, ...data };
-		return mockResident;
-	});
-	const hook = renderHook(() => useTerminalPaymentsService());
-	try {
-		const { patchAndEnqueue } = start.mock.calls[0][0];
-		await Promise.all([
-			patchAndEnqueue!('completed-order', {
-				...mockRow,
-				id: 'first',
-				amount: '4.00',
-				status: 'captured',
-			}),
-			patchAndEnqueue!('completed-order', {
-				...mockRow,
-				id: 'second',
-				amount: '6.00',
-				status: 'captured',
-			}),
-		]);
-		expect(readLedger(mockResident.payload.meta_data)).toEqual([
-			expect.objectContaining({ id: 'first', amount: '4.00' }),
-			expect.objectContaining({ id: 'second', amount: '6.00' }),
-		]);
-		expect(mockResident.payload.status).toBe('completed');
-	} finally {
-		hook.unmount();
-		start.mockRestore();
-		mockPatch.mockImplementation(async () => ({}));
-		mockResident.payload = original;
-	}
-});
-
-// A settling status drops the order from the till's open orders, which unmounts the tender
-// whose subscriber used to select its receipt: the service enters and selects it once the
-// write has landed, never before (a selected receipt renders, and can print, what is resident).
 describe('a server capture of the order in checkout', () => {
 	const order = (status: string) => ({
 		status,
@@ -526,7 +545,7 @@ describe('a server capture of the order in checkout', () => {
 		payment_method: 'device',
 		payment_method_title: 'Reader',
 	});
-	type Write = 'mirror' | 'offline';
+	type Write = 'mirror';
 	/** Runs one settling write; `duringWrite` acts while it is pending, `fail` makes it fail. */
 	async function settle(
 		write: Write,
@@ -548,7 +567,7 @@ describe('a server capture of the order in checkout', () => {
 		);
 		const original = mockResident.payload.meta_data;
 		// No recoverable offline row: only this test's write reaches the store.
-		mockResident.payload.meta_data = write === 'offline' ? withLedger([], []) : [];
+		mockResident.payload.meta_data = [];
 		const hook = renderHook(() => useTerminalPaymentsService());
 		let unmounted = false;
 		const host = {
@@ -564,17 +583,14 @@ describe('a server capture of the order in checkout', () => {
 			if (fail === 'rejects') throw new Error('disk full');
 			return fail === 'returns nothing' ? undefined : {};
 		};
-		if (write === 'mirror') mockMirror.mockImplementationOnce(async () => void (await onWrite()));
-		else mockPatch.mockImplementationOnce(onWrite as never);
+		mockMirror.mockImplementationOnce(async () => void (await onWrite()));
 		const options = start.mock.calls[0][0];
 		try {
-			const run =
-				write === 'mirror'
-					? options.mirror('completed-order', {
-							payment: { ...mockRow, status: paymentStatus },
-							order: order(status),
-						})
-					: options.patchAndEnqueue!('completed-order', mockRow);
+			const run = options.mirror(
+				'completed-order',
+				{ payment: { ...mockRow, status: paymentStatus }, order: order(status) },
+				options.commandPoster('completed-order', { sessionId: null })
+			);
 			if (fail) await expect(run).rejects.toThrow();
 			else await run;
 		} finally {
@@ -597,7 +613,6 @@ describe('a server capture of the order in checkout', () => {
 		unwatch = watchTender(uuid, autoShowReceipt);
 	};
 
-	// ADR 0040 D6: an offline authorization is a hold, so only the mirror of a capture completes.
 	it.each(['mirror'] as const)(
 		'%s: nothing is entered at the write; the receipt is entered and selected after it',
 		async (write) => {
@@ -674,6 +689,21 @@ describe('a server capture of the order in checkout', () => {
 		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
 	});
 
+	// #2798 thread 4341491603: the answer reads paid, but the mirror kept another till's newer
+	// reopen. The post-mirror resident decides, so the reopened sale gets no receipt.
+	it('enters nothing when the mirror kept a reopen the answer did not know', async () => {
+		watch('completed-order');
+		try {
+			const { after } = await settle('mirror', {
+				duringWrite: () => void (mockResident.payload.status = 'pos-open'),
+			});
+			expect(after.receiptOrders.has('completed-order')).toBe(false);
+			expect(after.selectedReceiptOrder).not.toBe('completed-order');
+		} finally {
+			mockResident.payload.status = 'completed';
+		}
+	});
+
 	// Another order's completion leaves its checkout while this write is pending.
 	it('still selects when a different order leaves checkout during the write', async () => {
 		watch('completed-order');
@@ -694,35 +724,5 @@ describe('a server capture of the order in checkout', () => {
 		enterCheckout('completed-order');
 		enterReceipt('completed-order', { select: false });
 		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
-	});
-
-	it('offline: an authorization completes nothing, so its write enters no receipt', async () => {
-		watch('completed-order');
-		const { after } = await settle('offline');
-		expect(after.receiptOrders.size).toBe(0);
-		expect(after.checkoutOrders.has('completed-order')).toBe(true);
-	});
-
-	it.each(['rejects', 'returns nothing'] as const)(
-		'offline: enters nothing when the write %s, and checkout stays',
-		async (fail) => {
-			watch('completed-order');
-			const { after } = await settle('offline', { fail });
-			expect(after.receiptOrders.size).toBe(0);
-			expect(after.checkoutOrders.has('completed-order')).toBe(true);
-			expect(after.selectedReceiptOrder).toBeNull();
-		}
-	);
-
-	it('offline: enters nothing when a store switch stopped the service during the write', async () => {
-		watch('completed-order');
-		const { after } = await settle('offline', {
-			duringWrite: (hook) => {
-				hook.unmount();
-				resetCheckoutMode();
-			},
-		});
-		expect(after.receiptOrders.size).toBe(0);
-		expect(after.selectedReceiptOrder).toBeNull();
 	});
 });

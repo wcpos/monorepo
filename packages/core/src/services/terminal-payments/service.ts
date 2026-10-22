@@ -1,4 +1,5 @@
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import type { MoneyCommandPoster, OrderApproval } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
@@ -46,7 +47,21 @@ export interface TerminalPaymentsServiceOptions {
 	isOnline?: () => boolean;
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
-	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
+	/**
+	 * The money command poster for one order (ADR 0040): journal, revision, approval. `sessionId`
+	 * is the session the leg's gates approved (the one its row was minted under): a re-completion's
+	 * provenance names it.
+	 */
+	commandPoster: (
+		orderUuid: string,
+		options: { approval?: OrderApproval; sessionId: string | null }
+	) => MoneyCommandPoster;
+	/** Mirror a leg's answer through the poster that sent its command (journal, revision guard). */
+	mirror: (
+		orderUuid: string,
+		response: ServerLegResponse,
+		poster: MoneyCommandPoster
+	) => Promise<void>;
 	getBalance?: (orderUuid: string) => Promise<string>;
 	getActor?: () => { id: string; name: string };
 	completeOrder?: (
@@ -62,6 +77,8 @@ export interface TerminalPaymentsServiceOptions {
 	now?: ServerLegDeps['now'];
 	setTimeout?: ServerLegDeps['setTimeout'];
 	clearTimeout?: ServerLegDeps['clearTimeout'];
+	/** The engine scope the till is in now (one cashier's orders); a leg is bound to its own. */
+	scopeId?: () => string | null;
 }
 interface ResumeInput {
 	dp?: number;
@@ -76,6 +93,8 @@ interface BeginInput extends ResumeInput {
 	transport?: PaymentTransport;
 	offline?: boolean;
 	tipEligibleMinor?: number | null;
+	/** The order's total and currency as the cashier approved them at the press. */
+	approval?: OrderApproval;
 }
 type TerminalLeg = ServerLeg | DeviceLeg;
 export interface TerminalSettlement extends ServerLegResponse {
@@ -91,7 +110,13 @@ export type TerminalLegState = (ServerLegState | DeviceLegState) & {
 export class TerminalPaymentsService {
 	private legs = new Map<
 		string,
-		{ leg: TerminalLeg; orderNumber: string; reader: string | null; lastRowId: string }
+		{
+			leg: TerminalLeg;
+			orderNumber: string;
+			reader: string | null;
+			lastRowId: string;
+			scope: string | null;
+		}
 	>();
 	private listeners = new Set<() => void>();
 	private snapshot: ReadonlyMap<string, TerminalLegState> = new Map();
@@ -214,8 +239,12 @@ export class TerminalPaymentsService {
 				if (this.stopped || !id) continue;
 				let response: { data: unknown };
 				const release = holdLiveTab('payment');
+				// A money route never skips the journal: the capture re-sends its open command.
+				const poster = this.options.commandPoster(orderUuid, {
+					sessionId: row.session_id ?? null,
+				});
 				try {
-					response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
+					response = await poster(`orders/${id}/payments/${row.id}/capture`, {
 						context: { provider_refs: refs },
 					});
 				} finally {
@@ -223,7 +252,7 @@ export class TerminalPaymentsService {
 				}
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
-				await this.options.mirror(orderUuid, data);
+				await this.options.mirror(orderUuid, data, poster);
 				if (entry.reportedFailure) {
 					entry.reportedFailure = false;
 					// Clears the stuck row this payment wrote when its retries ran out. It has
@@ -434,13 +463,23 @@ export class TerminalPaymentsService {
 		return this.create({ ...input, reader: null }, true);
 	}
 	private create(input: BeginInput, resume: boolean): TerminalLeg {
+		// An offline reader payment would be authorized with no journaled row to recover it:
+		// offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false; CodeRabbit 4343945871).
+		if (input.offline) throw new Error('offline_unavailable');
 		const existing = this.legs.get(input.orderUuid)?.leg;
 		if (existing && existing.getState().phase !== 'final')
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
+		const scope = this.options.scopeId?.() ?? null;
+		const poster = this.options.commandPoster(input.orderUuid, {
+			approval: input.approval,
+			sessionId: input.row.session_id ?? null,
+		});
 		const deps = {
-			...this.options.http,
+			get: this.options.http.get,
+			post: poster,
+			retire: (kind: 'intent', target: string) => poster.retire(kind, target),
 			now: this.options.now ?? Date.now,
 			// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
 			// window.setTimeout invoked with another `this` throws "Illegal invocation"
@@ -452,7 +491,7 @@ export class TerminalPaymentsService {
 				((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
 			mirror: async (response: ServerLegResponse) => {
 				try {
-					await this.options.mirror(input.orderUuid, response);
+					await this.options.mirror(input.orderUuid, response, poster);
 					finishingError = undefined;
 				} catch (error) {
 					finishingError = getErrorMessage(error);
@@ -470,17 +509,12 @@ export class TerminalPaymentsService {
 		const device = input.row.capture_mode === 'device';
 		if (device && !resume && this.readersInUse().has(`device:${input.row.provider}`))
 			throw new Error('Device method already in use');
-		if (input.offline) this.trackOffline(input);
 		const leg = device
 			? (this.options.factories?.device ?? createDeviceLeg)(
 					{
 						...deps,
 						driver: getDriver(input.row.provider),
-						patchAndEnqueue: (row) => {
-							if (!this.options.patchAndEnqueue)
-								throw new Error('Offline payment writer unavailable');
-							return this.options.patchAndEnqueue(input.orderUuid, row);
-						},
+						outOfScope: () => scope !== null && this.options.scopeId?.() !== scope,
 					},
 					{
 						dp:
@@ -492,7 +526,6 @@ export class TerminalPaymentsService {
 						resume,
 						method: input.method,
 						transport: input.transport ?? (input.row.transport as PaymentTransport),
-						offline: input.offline ?? false,
 						tipEligibleMinor: input.tipEligibleMinor ?? null,
 					}
 				)
@@ -507,6 +540,7 @@ export class TerminalPaymentsService {
 			orderNumber: input.orderNumber,
 			reader: input.reader,
 			lastRowId: input.row.id,
+			scope,
 		};
 		this.legs.set(input.orderUuid, entry);
 		leg.subscribe(() => {
@@ -534,6 +568,25 @@ export class TerminalPaymentsService {
 		if (!entry || entry.leg.getState().phase !== 'final') return;
 		entry.leg.dispose();
 		this.legs.delete(orderUuid);
+		this.publish();
+	}
+	/**
+	 * The till moved to `scopeId` (a cashier switch). Another scope's legs stop and drop, keeping
+	 * the service: their orders are not resident here, so their reads, captures and voids cannot
+	 * run (ADR 0040, one scope per command). A command already sent stays in the journal and
+	 * re-sends through the scope-bound recovery when that scope is active again, and the leg
+	 * resumes from its row then. A device leg still collecting is kept with its reader (Codex
+	 * 4343940257 on #2834): the reader can still charge, so its result waits, and is confirmed
+	 * when its own scope is back.
+	 */
+	scopeSwitched(scopeId: string): void {
+		this.legs.forEach(({ leg, scope }, orderUuid) => {
+			if (scope === scopeId) void leg.checkNow();
+			else if (leg.getState().phase !== 'collecting') {
+				leg.dispose();
+				this.legs.delete(orderUuid);
+			}
+		});
 		this.publish();
 	}
 	readersInUse(): Map<string, { orderUuid: string; orderNumber: string }> {

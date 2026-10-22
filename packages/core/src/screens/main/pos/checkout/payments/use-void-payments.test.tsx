@@ -1,6 +1,13 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
+import {
+	type MetaDataEntry,
+	type PaymentRow,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useVoidPayments } from './use-void-payments';
@@ -21,6 +28,22 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
 jest.mock('@wcpos/query', () => ({
+	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
+			settle: async () => undefined,
+		}),
 	useQueryRuntime: () => ({}),
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 }));
@@ -31,34 +54,6 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('../../../../../contexts/app-state', () => {
 	const session = { store: { price_num_decimals: 2 } };
 	return { useStoreSession: () => session };
-});
-
-const order = {
-	uuid: 'order-1',
-	payload: {},
-	getLatest: () => ({
-		payload: {
-			id: 42,
-			meta_data: [
-				{
-					key: '_wcpos_payments',
-					value: {
-						schema: 1,
-						payments: [{ id: 'payment-1', status: 'captured' }],
-					},
-				},
-			],
-		},
-	}),
-} as EngineRecord<'orders'>;
-
-it('rejects an offline void when localPatch did not apply it', async () => {
-	mockLocalPatch.mockResolvedValue(undefined);
-	const { result } = renderHook(() => useVoidPayments());
-
-	await act(async () => {
-		await expect(result.current(order)).rejects.toThrow('offline_void_local_patch_failed');
-	});
 });
 
 describe('the rounding fee of a voided cash leg (#66, #84)', () => {
@@ -77,8 +72,8 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 			value: {
 				schema: 1,
 				payments: [
-					{ id: 'payment-0', status: 'failed' },
-					{ id: 'payment-1', status },
+					{ id: 'payment-0', status: 'failed', capture_mode: 'manual' },
+					{ id: 'payment-1', status, capture_mode: 'manual' },
 				],
 			},
 		},
@@ -116,26 +111,39 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		jest.clearAllMocks();
 		payload = { id: 42, total: '12.06', fee_lines: fees, meta_data: ledger('captured') };
 		mockLocalPatch.mockImplementation(apply);
-		mockMirror.mockImplementation(apply);
+		// The mirror upserts the answered row onto the latest ledger.
+		mockMirror.mockImplementation(async ({ changes }: { changes: { payment: PaymentRow } }) => {
+			const meta = payload.meta_data as MetaDataEntry[];
+			payload = {
+				...payload,
+				meta_data: withLedger(meta, upsertPaymentRow(readLedger(meta), changes.payment)),
+			};
+			return {};
+		});
 	});
 	afterEach(() => {
 		mockStatus = 'offline';
 	});
 	const sweep = () => mockLocalPatch.mock.calls.map(([{ data }]) => data).find((d) => d.fee_lines);
 
-	it('offline: after the void, the sweep tombstones the fee and moves the total by it', async () => {
+	// ADR 0040 PR A: an offline void is not sent, so the leg and its fee both stay.
+	it('offline: nothing is voided, so the fee stays with its leg', async () => {
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
 		});
-		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
-		expect(mockLocalPatch.mock.calls[0][0].data.status).toBe('pos-open');
-		expect(sweep()).toEqual({ fee_lines: [{ ...fees[0], name: null }, fees[1]], total: '12.04' });
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(payload.fee_lines).toBe(fees);
 	});
 
 	it('online: the store voids the row, and the sweep after the mirror pushes the fee removal', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
@@ -150,7 +158,12 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('a sweep that cannot write after the store voided returns the void and logs its own row', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		mockLocalPatch.mockResolvedValue(undefined);
 		const { result } = renderHook(() => useVoidPayments());
 		let outcome: unknown;
@@ -183,7 +196,9 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('a row the store refused to void keeps its fee', async () => {
 		mockStatus = 'online-website-available';
-		mockPost.mockRejectedValue({ response: { data: { message: 'no' } } });
+		mockPost.mockRejectedValue({
+			response: { status: 422, data: { code: 'wcpos_invalid_transition', message: 'no' } },
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
@@ -199,7 +214,9 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		const failed = { ...fees[1], total: '0.03', meta_data: [posData('payment-0')] };
 		payload = { ...payload, total: '12.11', fee_lines: [...fees, orphan, failed] };
 		mockStatus = 'online-website-available';
-		mockPost.mockRejectedValue({ response: { data: { message: 'no' } } });
+		mockPost.mockRejectedValue({
+			response: { status: 422, data: { code: 'wcpos_invalid_transition', message: 'no' } },
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
@@ -212,15 +229,19 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 
 	it('leaves a null-ref fee alone when no voided row is rounded', async () => {
 		payload = { ...payload, fee_lines: [fees[1]] };
+		mockStatus = 'online-website-available';
+		mockPost.mockResolvedValue({
+			data: {
+				payment: { id: 'payment-1', status: 'voided', amount: '12.04' },
+				order: { status: 'pos-open' },
+			},
+		});
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
 			await result.current(rounded);
 		});
-		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(Object.keys(mockLocalPatch.mock.calls[0][0].data).sort()).toEqual([
-			'meta_data',
-			'status',
-		]);
+		expect(mockMirror).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
 	});
 });
 

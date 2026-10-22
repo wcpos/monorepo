@@ -1,10 +1,11 @@
-import { isLivePaymentStatus, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import { isLivePaymentStatus, readCompletions, readLedger } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import { isDefinitiveMoneyRefusal, isMoneyAnswer, moneyRefusalOf } from '@wcpos/sync-core';
 
 /**
- * Void the live payment legs when a cashier abandons a half-paid order. Offline
- * voids ride the order write already queued by the engine; online voids stay
- * sequential because each response recomputes the server's order status.
+ * Void the live payment legs when a cashier abandons a half-paid order. Offline a void is
+ * refused (ADR 0040 §offline); online voids stay sequential because each response recomputes
+ * the server's order status.
  */
 
 export interface VoidPaymentsOrder {
@@ -15,117 +16,127 @@ export interface VoidPaymentsOrder {
 export interface VoidPaymentsDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 	isOnline: () => boolean;
-	/** Offline void rides the order write the engine already queues. */
-	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
-	/** Online void mirrors the server's copy onto the resident; no second write. */
-	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
-	now?: () => string;
+	/** Online void mirrors each answered row onto the latest resident; no second write. */
+	mirror: (answer: { payment: PaymentRow; order: OrderPaymentSummary | null }) => Promise<void>;
 }
 export interface VoidPaymentsFailure {
 	paymentId: string;
 	message: string;
 	/**
-	 * True when the STORE answered and refused. A transport failure — a timeout, a
-	 * dropped connection — leaves this false, because the void may well have been
-	 * applied: telling the cashier to refund by hand in that case is how one void
-	 * becomes two refunds.
+	 * True only when the STORE decided: a definitive refusal under the money answer rule
+	 * (sync-core `isDefinitiveMoneyRefusal`). A transport failure, a held lock, a session,
+	 * proxy or rate-limit answer, or a 5xx leaves this false, because the void may well have
+	 * been applied (the journal keeps it for a re-send): telling the cashier to refund by hand
+	 * in that case is how one void becomes two refunds.
 	 */
 	refused: boolean;
 }
 export type VoidPaymentsOutcome = {
 	kind: 'voided';
+	/** `offline`: nothing was sent (nothing live to void, or no connection to send it on). */
 	via: 'online' | 'offline';
 	/** The rows that ended up voided, in ledger order. */
 	rows: PaymentRow[];
-	/** Rows the server refused to void; still live, still owed back to the customer. */
+	/** Live rows this cancel did not void: refused, unknown, unsent, or captured for good. */
 	failed: VoidPaymentsFailure[];
 	order: OrderPaymentSummary | null;
 };
-type ErrorResponse = { data?: { message?: string } };
-function errorResponse(error: unknown): ErrorResponse | undefined {
-	if (!error || typeof error !== 'object') return undefined;
-	const response = (error as { response?: unknown }).response;
-	return response && typeof response === 'object' ? (response as ErrorResponse) : undefined;
-}
 export async function voidPayments(
 	order: VoidPaymentsOrder,
 	deps: VoidPaymentsDeps
 ): Promise<VoidPaymentsOutcome> {
-	const ledger = readLedger(order.meta_data);
-	const liveRows = ledger.filter(({ status }) => isLivePaymentStatus(status));
+	// The server never voids a captured row a completion counted, nor a captured non-manual row
+	// (an adopted WooCommerce tender among them): those leave the balance only through a refund.
+	const counted = new Set(
+		readCompletions(order.meta_data).flatMap(({ payment_ids }) => payment_ids ?? [])
+	);
+	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
+		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
+	const live = readLedger(order.meta_data).filter(({ status }) => isLivePaymentStatus(status));
+	const liveRows = live.filter(voidable);
+	// #2798 thread 4341491614: such a leg is never sent a void, but it is reported, so a cancel
+	// that leaves money captured is never read as a clean one. The store's own rule, so `refused`.
+	const retained: VoidPaymentsFailure[] = live
+		.filter((row) => !voidable(row))
+		.map((row) => ({ paymentId: row.id, message: 'captured_refund_required', refused: true }));
 	if (liveRows.length === 0) {
-		return { kind: 'voided', via: 'offline', rows: [], failed: [], order: null };
+		return { kind: 'voided', via: 'offline', rows: [], failed: retained, order: null };
 	}
 
-	const now = deps.now ?? (() => new Date().toISOString());
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
+	// A void the server cannot hear is not sent, and nothing is voided locally: offline tenders do
+	// not queue (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
+	// (ADR 0040 §offline).
+	// Unknown, not refused: the legs are still held on the store, never to be refunded by hand.
+	if (!online)
+		return {
+			kind: 'voided',
+			via: 'offline',
+			rows: [],
+			failed: [
+				...liveRows.map((row) => ({
+					paymentId: row.id,
+					message: 'offline_unavailable',
+					refused: false,
+				})),
+				...retained,
+			],
+			order: null,
+		};
 	const deviceHeld = liveRows.filter(
-		(row) =>
-			row.capture_mode === 'device' &&
-			(!online || (row.recorded_offline && row.status === 'authorized'))
+		(row) => row.capture_mode === 'device' && row.recorded_offline && row.status === 'authorized'
 	);
 	if (deviceHeld.length)
 		return {
 			kind: 'voided',
-			via: online ? 'online' : 'offline',
+			via: 'online',
 			rows: [],
-			failed: deviceHeld.map((row) => ({
-				refused: true,
-				paymentId: row.id,
-				message: 'Device payment must settle before cancellation',
-			})),
+			failed: [
+				...deviceHeld.map((row) => ({
+					refused: true,
+					paymentId: row.id,
+					message: 'Device payment must settle before cancellation',
+				})),
+				...retained,
+			],
 			order: null,
 		};
-	if (!online) {
-		const rows = liveRows.map((row) => ({
-			...row,
-			status: 'voided' as const,
-			updated_at_gmt: now(),
-		}));
-		const merged = rows.reduce(upsertPaymentRow, ledger);
-		await deps.patchAndEnqueue({
-			meta_data: withLedger(order.meta_data, merged),
-			status: 'pos-open',
-		});
-		return { kind: 'voided', via: 'offline', rows, failed: [], order: null };
-	}
-	let merged = ledger;
 	let lastOrder: OrderPaymentSummary | null = null;
 	const rows: PaymentRow[] = [];
-	const failed: VoidPaymentsFailure[] = [];
+	const failed: VoidPaymentsFailure[] = [...retained];
 	for (const row of liveRows) {
-		const localVoid = { ...row, status: 'voided' as const, updated_at_gmt: now() };
+		let accepted: { payment: PaymentRow; order: OrderPaymentSummary };
 		try {
 			const response = await deps.post(`orders/${order.id}/payments/${row.id}/void`, {});
-			const accepted = (response.data ?? {}) as {
-				payment?: PaymentRow;
-				order?: OrderPaymentSummary;
-			};
-			const serverRow = accepted.payment ?? localVoid;
-			merged = upsertPaymentRow(merged, serverRow);
-			rows.push(serverRow);
-			// Keep the most recent summary the server DID send: a later response that
-			// omits one must not throw away the order status an earlier one gave us.
-			if (accepted.order) lastOrder = accepted.order;
+			// Only the store's own row and summary say the leg was voided (sync-core
+			// `isMoneyAnswer`): a malformed 2xx is never replaced by a locally voided row. It is an
+			// unknown outcome, and the journal keeps the void for a re-send.
+			if (!isMoneyAnswer('void', response.data)) throw new Error('money_command_malformed_answer');
+			accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 		} catch (error) {
-			const response = errorResponse(error);
+			const refusal = moneyRefusalOf(error);
 			failed.push({
 				paymentId: row.id,
 				message:
-					response?.data?.message ||
-					(error instanceof Error && error.message ? error.message : row.id),
-				// The store answered at all — even with a refusal message — means the void was
-				// decided. No response object means the request never completed.
-				refused: response !== undefined,
+					refusal?.message || (error instanceof Error && error.message ? error.message : row.id),
+				// Only the store's decision is a refusal; anything the journal keeps is unknown.
+				refused: isDefinitiveMoneyRefusal(refusal),
 			});
+			continue;
 		}
+		// Mirrored (and settled) before the next void is sent: a settle only ever deletes the
+		// entry of a void whose row is already mirrored, so a failed refresh or a crash between
+		// two voids leaves the next one journaled, never live with no entry.
+		await deps.mirror(accepted);
+		lastOrder = accepted.order;
+		// The store's answer is mirrored and settled either way (a re-send would replay the same
+		// stored reply), but a row it still holds live was not voided: reported unknown, never
+		// voided, so the cashier is never told the money went back.
+		if (accepted.payment.status === 'voided') rows.push(accepted.payment);
+		else failed.push({ paymentId: row.id, message: 'void_not_applied', refused: false });
 	}
 	if (rows.length === 0) {
 		return { kind: 'voided', via: 'online', rows, failed, order: null };
 	}
-	await deps.mirror({
-		meta_data: withLedger(order.meta_data, merged),
-		...(lastOrder ? { status: lastOrder.status } : {}),
-	});
 	return { kind: 'voided', via: 'online', rows, failed, order: lastOrder };
 }

@@ -8,12 +8,7 @@ import type {
 	PaymentDriver,
 	ReaderInfo,
 } from '@wcpos/core/services/payment-drivers/types';
-import {
-	fromMinor,
-	type PaymentMethodDescriptor,
-	type PaymentTransport,
-	toMinor,
-} from '@wcpos/order-math';
+import { fromMinor, type PaymentMethodDescriptor, type PaymentTransport } from '@wcpos/order-math';
 
 import type {
 	PaymentIntent,
@@ -85,7 +80,6 @@ export function createStripeTerminalDriver({
 }) {
 	let sdk: Sdk | null = null;
 	let initialize: (() => Promise<void>) | null = null;
-	const offlineIds = new Map<string, string>();
 	let status: DriverStatus = { connection: 'disconnected', reader: null };
 	let permissionDenied = false;
 	let bluetoothOff = false;
@@ -247,7 +241,6 @@ export function createStripeTerminalDriver({
 			}
 			const rowId = pi.metadata?.wcpos_payment_id;
 			if (!rowId || !pi.id) return;
-			offlineIds.delete(rowId);
 			settlements.forEach((listener) =>
 				listener({
 					rowId,
@@ -480,19 +473,9 @@ export function createStripeTerminalDriver({
 			let confirming = false;
 			try {
 				const secret = input.handoff?.client_secret;
-				if (!input.offline && (typeof secret !== 'string' || !secret))
+				if (typeof secret !== 'string' || !secret)
 					throw new Error('No Stripe payment intent client secret');
-				const initial = paymentIntent(
-					input.offline
-						? await api.createPaymentIntent({
-								amount: toMinor(input.row.amount, dp),
-								currency: input.row.currency.toLowerCase(),
-								captureMethod: 'automatic',
-								offlineBehavior: 'force_offline',
-								metadata: { wcpos_payment_id: input.row.id },
-							})
-						: await api.retrievePaymentIntent(secret as string)
-				);
+				const initial = paymentIntent(await api.retrievePaymentIntent(secret));
 				// Only readers with a screen take a tip on the reader (WisePad 3, WisePOS E, S700/S710);
 				// the M2 and Chipper refuse a tipping configuration outright
 				// (UNSUPPORTED_OPERATION "Tipping configuration provided with incompatible reader").
@@ -510,10 +493,6 @@ export function createStripeTerminalDriver({
 					await api.confirmPaymentIntent({ paymentIntent: collected })
 				);
 				const charge = confirmed.charges?.[0];
-				const offlineDetails = confirmed.offlineDetails as typeof confirmed.offlineDetails & {
-					id?: string;
-				};
-				if (input.offline && offlineDetails?.id) offlineIds.set(input.row.id, offlineDetails.id);
 				// beta.32 uses cardPresentDetails; also accept the handoff contract's cardPresent spelling.
 				const details = charge?.paymentMethodDetails;
 				const card =
@@ -533,12 +512,10 @@ export function createStripeTerminalDriver({
 						}
 					: {};
 				return {
-					outcome: input.offline ? 'authorized' : 'captured',
-					provider_refs: input.offline
-						? { payment_intent: null }
-						: { payment_intent: confirmed.id, charge: charge?.id ?? null },
+					outcome: 'captured',
+					provider_refs: { payment_intent: confirmed.id, charge: charge?.id ?? null },
 					receipt,
-					amount: input.offline ? input.row.amount : fromMinor(confirmed.amount, dp),
+					amount: fromMinor(confirmed.amount, dp),
 					transport: input.transport,
 				};
 			} catch (error) {
