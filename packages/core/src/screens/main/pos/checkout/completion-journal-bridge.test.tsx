@@ -49,7 +49,7 @@ let mockManager = {};
 let mockContext: SaleContext;
 const mockRecover = jest.fn();
 const mockResidentOrders = jest.fn();
-const mockHttp = { post: jest.fn() };
+let mockHttp = { post: jest.fn() };
 let mockOnline = 'online-website-available';
 jest.mock('@wcpos/query', () => ({
 	RECOVERY_RETRY_DELAYS_MS: jest.requireActual('@wcpos/query').RECOVERY_RETRY_DELAYS_MS,
@@ -96,6 +96,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
 	mockRecover.mockResolvedValue([]);
+	mockHttp = { post: jest.fn() };
 	mockResidentOrders.mockReturnValue(NEVER);
 	mockOnline = 'online-website-available';
 	mockRefresh.mockResolvedValue('refreshed');
@@ -330,6 +331,127 @@ it('keeps the lapse re-run across an effect re-run of the same session', async (
 	mockContext = { ...mockContext };
 	view.rerender(<SaleCompletionBridge />);
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
+});
+
+// Codex 4344063828 on #2836: a store or site switch while recovery awaits its preflight must not
+// send the old journal's command through the new session's client. The send is refused, so the
+// poster keeps the command journaled for its own session.
+it('refuses a recovery POST once its session has been switched away', async () => {
+	let preflight!: () => void;
+	let sent: Promise<unknown> | undefined;
+	mockRecover.mockImplementationOnce(
+		async (
+			_runtime: unknown,
+			_db: unknown,
+			deps: { post: (url: string, body: unknown) => Promise<unknown> }
+		) => {
+			await new Promise<void>((resolve) => {
+				preflight = resolve;
+			});
+			sent = deps.post('orders/42/close', {});
+			await sent.catch(() => undefined);
+			return [];
+		}
+	);
+	const view = render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	const before = { http: mockHttp, storeDB: mockContext.storeDB };
+	mockHttp = { post: jest.fn() };
+	mockContext = {
+		...mockContext,
+		storeDB: await createRxDatabase({
+			name: `switched${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			localDocuments: true,
+			multiInstance: false,
+		}),
+	};
+	view.rerender(<SaleCompletionBridge />);
+	await act(async () => preflight());
+	await waitFor(() => expect(sent).toBeDefined());
+	await expect(sent).rejects.toThrow('money_command_session_stopped');
+	expect(before.http.post).not.toHaveBeenCalled();
+	expect(mockHttp.post).not.toHaveBeenCalled();
+	await before.storeDB.remove();
+});
+
+/** Record the ladder's delays; `fire` runs its steps at once, else no long timer runs. */
+function ladderTimers(fire: boolean) {
+	const realSetTimeout = global.setTimeout;
+	const delays: number[] = [];
+	const spy = jest.spyOn(global, 'setTimeout').mockImplementation(((
+		callback: () => void,
+		ms?: number
+	) => {
+		// Fired, only the ladder's own steps (a claim's lapse keeps its real delay); held, any long
+		// timer, so a re-armed step's remaining delay is seen too.
+		if (fire ? RECOVERY_RETRY_DELAYS_MS.includes(ms ?? 0) : (ms ?? 0) >= 20_000) {
+			delays.push(ms!);
+			return realSetTimeout(fire ? callback : () => undefined, 0);
+		}
+		return realSetTimeout(callback, ms);
+	}) as never);
+	return { delays, restore: () => spy.mockRestore() };
+}
+
+// Codex 4344063834 on #2836: a real transient failure releases the poster's claim (the journal
+// watch arms a step) and then reports unanswered (the run arms again). Scheduling twice must
+// not advance the ladder; only an executed retry does.
+it('advances the ladder only when a retry runs, whoever schedules it', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const route = { orderUuid: 'order', kind: 'close' as const, target: null, rowId: null };
+	// A failed re-send as the poster leaves it: claimed, sent, the claim given up. The claim is
+	// stamped ahead, so it is never live and schedules no lapse.
+	const failedResend = async (claimant: string) => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
+		await journal.claimRoute(mockContext.storeDB, route, claimant, {
+			orderUuid: 'order',
+			scope: 'scope-1',
+			kind: 'close',
+			path: 'orders/42/close',
+			target: null,
+			id: 'close-1',
+			body: {},
+			approval: { total: '0.00', currency: 'USD' },
+			sentAt: null,
+			sentRevision: null,
+		});
+		await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', claimant);
+		await journal.releaseClaim(mockContext.storeDB, 'order', 'close-1', claimant);
+		now.mockRestore();
+		return [{ orderUuid: 'order', answers: [], unanswered: true }];
+	};
+	const timers = ladderTimers(true);
+	try {
+		mockRecover
+			.mockImplementationOnce(() => failedResend('start'))
+			.mockImplementationOnce(() => failedResend('retry-1'))
+			.mockResolvedValue([]);
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
+		await drain();
+		expect(timers.delays).toEqual([30_000, 120_000]);
+	} finally {
+		timers.restore();
+	}
+});
+
+it('keeps the armed step and its deadline across an effect re-run', async () => {
+	mockRecover.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }]);
+	const timers = ladderTimers(false);
+	try {
+		const view = render(<SaleCompletionBridge />);
+		await waitFor(() => expect(timers.delays).toEqual([30_000]));
+		mockContext = { ...mockContext };
+		view.rerender(<SaleCompletionBridge />);
+		await drain();
+		expect(timers.delays).toHaveLength(2);
+		expect(timers.delays[1]).toBeLessThanOrEqual(30_000);
+		expect(timers.delays[1]).toBeGreaterThan(25_000);
+		expect(mockRecover).toHaveBeenCalledTimes(1);
+	} finally {
+		timers.restore();
+	}
 });
 
 // A re-send that fails transiently (429, 5xx, no answer) leaves the command journaled and

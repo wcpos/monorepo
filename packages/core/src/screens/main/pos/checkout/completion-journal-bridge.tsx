@@ -209,6 +209,10 @@ export function SaleCompletionBridge(): null {
 		let lapse: ReturnType<typeof setTimeout> | undefined;
 		// The backoff re-run after an unanswered re-send (`RECOVERY_RETRY_DELAYS_MS`).
 		let retry: ReturnType<typeof setTimeout> | undefined;
+		// The armed step's deadline, kept across an effect re-run's disarm; `retries` counts the
+		// re-runs that executed, so scheduling twice never advances the ladder (Codex 4344063834
+		// on #2836).
+		let retryAt: number | null = null;
 		let retries = 0;
 		let retryPending = false;
 		// Declared here so `disarm` can end it; `watch` (below) starts it.
@@ -225,18 +229,22 @@ export function SaleCompletionBridge(): null {
 			adoptionWatch = undefined;
 		};
 		const armRetry = () => {
-			if (retry !== undefined) clearTimeout(retry);
-			retry = undefined;
-			if (!retryPending || current.stopped) return;
-			const delay =
-				RECOVERY_RETRY_DELAYS_MS[Math.min(retries, RECOVERY_RETRY_DELAYS_MS.length - 1)];
-			retries += 1;
-			retry = setTimeout(() => {
-				retry = undefined;
-				// Offline nothing can be sent; the reconnect hook re-runs recovery (Codex 4333265115 on
-				// #2798).
-				if (onlineRef.current) current.reconnect();
-			}, delay);
+			if (retry !== undefined || !retryPending || current.stopped) return;
+			const now = Date.now();
+			retryAt ??=
+				now + RECOVERY_RETRY_DELAYS_MS[Math.min(retries, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+			retry = setTimeout(
+				() => {
+					retry = undefined;
+					retryAt = null;
+					// Offline nothing can be sent; the reconnect hook re-runs recovery (Codex 4333265115
+					// on #2798).
+					if (!onlineRef.current) return;
+					retries += 1;
+					current.reconnect();
+				},
+				Math.max(0, retryAt - now)
+			);
 		};
 		const recoverWhenClaimsLapse = async () => {
 			const scope = manager.engine?.active()?.scopeId ?? null;
@@ -253,13 +261,26 @@ export function SaleCompletionBridge(): null {
 		};
 		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
 		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
+			if (current.stopped) return new Map();
+			// Bound to this session (Codex 4344063828 on #2836): a store or site switch swaps the
+			// client, and an old journal's command must not go out through the new store. Refused
+			// once the session stops, a send stays journaled for its own session's recovery.
+			const client = httpRef.current;
 			try {
 				const recovered = await recoverMoneyCommands(manager, storeDB, {
-					post: (url, body) => httpRef.current.post(url, body),
+					post: (url, body) =>
+						current.stopped
+							? Promise.reject(new Error('money_command_session_stopped'))
+							: client.post(url, body),
 				});
 				await recoverWhenClaimsLapse();
 				retryPending = recovered.some(({ unanswered }) => unanswered);
-				if (!retryPending) retries = 0;
+				if (!retryPending) {
+					retries = 0;
+					retryAt = null;
+					if (retry !== undefined) clearTimeout(retry);
+					retry = undefined;
+				}
 				armRetry();
 				return new Map(
 					recovered
