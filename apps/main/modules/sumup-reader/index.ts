@@ -16,8 +16,6 @@ export type CheckoutResult = {
 	last4?: string | null;
 	message?: string | null;
 	resultCode?: number | null;
-	/** Android's `tx-type`: true when an offline session took the payment. iOS has no marker. */
-	offline?: boolean | null;
 };
 export type SumUpReader = {
 	setup(affiliateKey: string): Promise<void>;
@@ -29,16 +27,6 @@ export type SumUpReader = {
 	readerStatus(): Promise<ReaderStatus | null>;
 	isTipOnReaderAvailable(): Promise<boolean>;
 	prepareForCheckout(): Promise<void>;
-	/**
-	 * SumUp's offline session (Solo and Solo Lite): while active, EVERY checkout is offline.
-	 * `pending`: this app started one SumUp has not confirmed uploaded (no SDK call when false).
-	 */
-	offlineSession(): Promise<{ active: boolean; pending: boolean }>;
-	startOfflineSession(): Promise<void>;
-	/** Uploads the stored offline payments and ends the session; rejects if the upload fails. */
-	uploadOffline(): Promise<void>;
-	/** Downloads SumUp's offline limits (Android); iOS does this itself after login. */
-	prepareOffline(): Promise<void>;
 	checkout(options: {
 		amount: string;
 		currency: string;

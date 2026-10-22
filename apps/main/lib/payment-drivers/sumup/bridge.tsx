@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { AppState } from 'react-native';
 
-import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { getSumUpReader } from '../../../modules/sumup-reader';
@@ -15,19 +14,10 @@ export function SumUpDriverBridge({
 	driver: ReturnType<typeof createSumUpDriver>;
 	methods?: readonly PaymentMethodDescriptor[];
 }) {
-	const online = useOnlineStatus().status === 'online-website-available';
-	// Reconcile an external SDK on startup, descriptor refresh, app foreground and reconnect;
-	// online, an offline SumUp session ends so its payments upload for Pro to find.
+	// Reconcile an external SDK on startup, descriptor refresh and app foreground.
 	React.useEffect(() => {
-		// The driver reads connectivity when the sync runs, so a refresh that outlives a drop
-		// back offline does not end the session.
-		driver.setOnline(online);
 		const refresh = () => {
-			void driver
-				.initialize()
-				.then(driver.refreshStatus)
-				.then(driver.syncOffline)
-				.catch(driver.reportError);
+			void driver.initialize().then(driver.refreshStatus).catch(driver.reportError);
 		};
 		refresh();
 		const subscription = AppState.addEventListener('change', (state) => {
@@ -40,6 +30,6 @@ export function SumUpDriverBridge({
 			subscription.remove();
 			native?.remove();
 		};
-	}, [driver, methods, online]);
+	}, [driver, methods]);
 	return null;
 }
