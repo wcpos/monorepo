@@ -54,7 +54,8 @@ export interface ActionContracts {
 			actor: { id: string; name: string } | null;
 		};
 		result: {
-			outcome: 'completed' | 'partial' | 'not-completed' | 'sent';
+			/** `unconfirmed`: the store took the money; the resident does not read paid yet. */
+			outcome: 'completed' | 'partial' | 'not-completed' | 'sent' | 'unconfirmed';
 			/** Only when completed: what the audit row needs, read AFTER the reconcile. */
 			summary: {
 				orderId: number | null;

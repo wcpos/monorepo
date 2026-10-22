@@ -31,6 +31,7 @@ import {
 } from './paid-balance-boundary';
 import { writeZeroBalanceCompletion } from './zero-balance-completion';
 
+import type { useCloseSale } from './close-sale';
 import type { OrderPayload } from './cart-config-for-order';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
@@ -43,8 +44,8 @@ export async function commitAtBoundary(
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
-		storeContract?: () => string | null;
 		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
+		closeSale: ReturnType<typeof useCloseSale>;
 	},
 	{
 		order,
@@ -108,6 +109,8 @@ export async function commitAtBoundary(
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
 				complete: ctx.complete,
+				online: ctx.closeSale.online,
+				close: (target) => ctx.closeSale.close(target, { sessionId }),
 				changes: (payload) => {
 					overpaid = undefined;
 					if (
@@ -147,11 +150,7 @@ export async function commitAtBoundary(
 						if (!allowed(payload, true)) return null;
 						aggregateOnly = true;
 					}
-					if (
-						serverOwnsMoney(payload.meta_data, { storeContract: ctx.storeContract?.() }) ||
-						ctx.serverOwnsMoney(order.uuid)
-					)
-						return null;
+					if (serverOwnsMoney(payload.meta_data) || ctx.serverOwnsMoney(order.uuid)) return null;
 					const config = ctx.configForOrder(payload);
 					const snapshot = snapshotFromOrderJSON(payload);
 					const fresh = coupons
@@ -170,6 +169,14 @@ export async function commitAtBoundary(
 					return patch;
 				},
 			});
+			// A system pass that cannot close (offline, refused) leaves the order pos-partial; the
+			// coordinator retries an offline one when the till reconnects.
+			if (completion && typeof completion === 'object' && 'kind' in completion) {
+				logger.debug('settlement.boundary-not-closed', {
+					context: { orderId: order.uuid, outcome: completion.kind },
+				});
+				return completion;
+			}
 			if (completion) {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {

@@ -76,7 +76,6 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
-	readResidentMoneyEpoch: () => 0,
 	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
@@ -457,7 +456,7 @@ describe('cart changes at the resident modifier', () => {
 							});
 			});
 			if (scenario === 'meta')
-				stored.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+				stored.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
 			if (scenario === 'memory') moneyOwned = true;
 			if (scenario === 'config') {
 				cartConfig = { ...config, dp: 3 };

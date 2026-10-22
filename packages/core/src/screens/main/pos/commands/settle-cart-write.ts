@@ -23,7 +23,6 @@ type Deps<T> = {
 	localPatch: (input: { document: CurrentOrderRecord; changes: PayloadChanges }) => T;
 	configForOrder: (order: OrderPayload) => CartConfig;
 	serverOwnsMoney: (uuid: string) => boolean;
-	storeContract?: () => string | null;
 };
 type BoundaryCommit = (
 	order: CurrentOrderRecord,
@@ -56,20 +55,16 @@ export function settleCartWrite<T>(
 			const intent = Object.fromEntries(
 				Object.entries(input.data).filter(([, value]) => value !== undefined)
 			);
-			for (const key of ['_wcpos_money_owner', '_wcpos_money_owner_hint']) {
-				const owner = payload.meta_data?.find((entry) => entry.key === key);
-				if (
-					owner &&
-					Array.isArray(intent.meta_data) &&
-					!intent.meta_data.some((entry) => entry.key === key)
-				) {
-					intent.meta_data = [...intent.meta_data, owner];
-				}
+			const hint = payload.meta_data?.find((entry) => entry.key === '_wcpos_money_owner_hint');
+			if (
+				hint &&
+				Array.isArray(intent.meta_data) &&
+				!intent.meta_data.some((entry) => entry.key === hint.key)
+			) {
+				intent.meta_data = [...intent.meta_data, hint];
 			}
 			const after = { ...payload, ...intent };
-			const owned =
-				serverOwnsMoney(payload.meta_data, { storeContract: deps.storeContract?.() }) ||
-				deps.serverOwnsMoney(document.uuid);
+			const owned = serverOwnsMoney(payload.meta_data) || deps.serverOwnsMoney(document.uuid);
 			const config = deps.configForOrder(after);
 			// Coupon continuation owns redistribution and its paid-balance boundary.
 			const result =

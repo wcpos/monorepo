@@ -157,7 +157,6 @@ export {
 
 export { readStorePaymentsContract, useStorePaymentsContract } from './store-payments-contract';
 
-export { readResidentMoneyEpoch } from './reads/order-money-epoch';
 export {
 	savePrinterProfile,
 	ensureSystemPrinterProfile,

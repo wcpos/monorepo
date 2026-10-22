@@ -242,13 +242,29 @@ let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 // One client per test file, as the real hook memoises: a fresh object per render would re-arm
 // every fetch effect keyed on it.
-const mockHttp = { post: mockManualPost, get: mockGatewaysGet };
+//
+// The fixtures below script only the summary a test is about. The store's real record answer
+// also carries the row it stored (sync-core `isMoneyAnswer`, which the record path now requires),
+// so a scripted record answer without one is completed with the posted row here.
+const mockHttp = {
+	post: async (url: string, body: unknown) => {
+		const answer = await mockManualPost(url, body);
+		const data = answer?.data as Record<string, unknown> | undefined;
+		const row = (body as { payment?: unknown } | undefined)?.payment;
+		return /\/payments$/.test(url) && data && !data.payment && row
+			? { ...answer, data: { ...data, payment: row } }
+			: answer;
+	},
+	get: mockGatewaysGet,
+};
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
 jest.mock('../payments', () => ({
 	RecordManualPaymentMirrorError: jest.requireActual('../payments/record-manual-payment')
 		.RecordManualPaymentMirrorError,
+	RecordManualPaymentError: jest.requireActual('../payments/record-manual-payment')
+		.RecordManualPaymentError,
 	useRecordManualPayment: (options: unknown) => {
 		mockRecordOptions(options);
 		if (mockUseRealManual)
@@ -336,6 +352,23 @@ jest.mock('@wcpos/query', () => ({
 		}
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	MoneyCommandError: class MoneyCommandError extends Error {},
+	moneyCommandPoster: (input: {
+		post: (url: string, body: unknown) => Promise<unknown>;
+		runtime: unknown;
+		orderUuid: string;
+	}) =>
+		Object.assign((url: string, body: unknown) => input.post(url, body), {
+			// The mocked mirrorServerOrder under a fixed revision.
+			mirror: (answer: object) =>
+				jest
+					.requireMock('@wcpos/query/mutations')
+					.mirrorServerOrder(input.runtime, input.orderUuid, {
+						...answer,
+						sentRevision: 'sha256:sent',
+					}),
+			settle: async () => undefined,
+		}),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -653,7 +686,10 @@ describe('useTenderFlow', () => {
 	});
 
 	it('completes a zero-balance order without recording a payment row', async () => {
-		mockPayload = { total: '0.00', meta_data: [] };
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		});
 		const { result } = renderHook(() => useTenderFlow(order));
 
 		await act(async () => result.current.takeTender());
@@ -663,13 +699,48 @@ describe('useTenderFlow', () => {
 			document: order,
 			changes: expect.any(Function),
 		});
+		// ADR 0040 D2: the provenance rides the write, the status comes from the store's close.
 		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
-			status: 'completed',
 			meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
 		});
+		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },
 			expect.objectContaining({ dispatchToken: expect.any(Object) })
+		);
+	});
+
+	it('a zero balance offline is refused with CHECKOUT101 and writes nothing', async () => {
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		mockOnlineStatus = 'offline';
+		const { result } = renderHook(() => useTenderFlow(order));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.close_needs_connection',
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+		);
+	});
+
+	it('a zero balance whose save is queued offline is refused with CHECKOUT101 even online, and sends no close', async () => {
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		markOrderSaving(order.uuid);
+		markOrderQueuedOffline(order.uuid, 'm');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.online).toBe(true);
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.close_needs_connection',
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
 		);
 	});
 
@@ -1923,11 +1994,16 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 	}),
 }));
 
-it('zero balance writes completion and provenance together exactly once', async () => {
+it('zero balance writes its provenance once, then closes', async () => {
 	jest.mocked(recordCompletionAttempt).mockClear();
-	mockPayload = { total: '0.00', meta_data: [] };
+	mockPayload = { id: 42, total: '0.00', meta_data: [] };
+	mockManualPost.mockResolvedValue({
+		data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+	});
 	mockLocalPatch.mockClear();
+	mockLocalPatch.mockResolvedValue({ document: order });
 	mockBlockIfDegraded.mockReturnValue(false);
+	mockOnlineStatus = 'online-website-available';
 	const { result } = renderHook(() => useTenderFlow(order));
 	await act(async () => result.current.takeTender());
 	expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
@@ -1939,9 +2015,11 @@ it('zero balance writes completion and provenance together exactly once', async 
 		changes: expect.any(Function),
 	});
 	expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
-		status: 'completed',
 		meta_data: [{ key: '_wcpos_sale_counter', value: '1' }],
 	});
+	expect(mockManualPost.mock.invocationCallOrder[0]).toBeGreaterThan(
+		mockLocalPatch.mock.invocationCallOrder[0]
+	);
 });
 
 it.each([
@@ -2636,6 +2714,7 @@ jest.mock('@wcpos/query/store-local', () => ({
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
+	readOrderCommands: jest.fn(async () => ({ entries: [], chain: null })),
 }));
 
 describe('gateway capture mode (contract 1.2)', () => {
@@ -3724,7 +3803,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockSessionsOn = false;
 		mockBindingStatus = 'bound';
 		mockMethods = [roundingCash, card];
-		mockOnlineStatus = 'offline';
+		// Online: until ADR 0040 PR B an offline tender is refused, so rounding is taken online.
+		mockOnlineStatus = 'online-website-available';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockRecordManualPayment.mockResolvedValue(recorded);
@@ -3804,12 +3884,20 @@ describe('cash rounding (#66, #84)', () => {
 	it('writes the rounding fee before the cash row: the stored total moves by the fee alone and the leg settles', async () => {
 		mockUseRealManual = true;
 		mockPayload = sale('12.03', '10.03');
+		// The store records the row and completes the sale; the mirror lands both on the order.
+		mockManualPost.mockImplementation(async (_url: string, body: { payment: PaymentRow }) => ({
+			data: {
+				payment: { ...body.payment, status: 'captured' },
+				order: { status: 'completed', balance: '0.00' },
+			},
+		}));
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
 		await act(async () => result.current.takeTender());
 
-		const [fee, leg] = patches();
+		const [fee] = patches();
+		const leg = mockManualMirror.mock.calls[0][0].changes as Record<string, unknown>;
 		const [line] = fee.fee_lines as {
 			name: string;
 			tax_status: string;
@@ -3895,6 +3983,78 @@ describe('cash rounding (#66, #84)', () => {
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 	});
 
+	// Codex 4342982186 on #2832: a record whose answers were all lost stays journaled at its rounded
+	// amount, so its rounding stays too: the re-send lands 10.00 on a 10.00 total.
+	it('a leg the store never answered keeps its rounding fee: 10.02 stays rounded to 10.00', async () => {
+		mockPayload = sale('10.02');
+		mockRecordManualPayment.mockImplementationOnce(async () => ({
+			kind: 'unknown',
+			row: payment({ amount: '10.00' }),
+		}));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		const [fee, ...rest] = patches();
+		expect(fee.total).toBe('10.00');
+		expect(rest).toEqual([]);
+		expect(mockPayload).toMatchObject({ total: '10.00' });
+		// The record hook already said the store has not answered: back to the methods, no second toast.
+		expect(result.current.state.methodId).toBeNull();
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
+	});
+
+	// Codex 4343139031 on #2832: the replay of a rounded record that went unanswered carries no
+	// fee of its own (the balance is already rounded); a refusal takes back the fee its row carried.
+	it('a refused replay of an unanswered rounded record takes its fee back off: 10.05 returns to 10.03', async () => {
+		mockPayload = sale('10.03');
+		let rowId = '';
+		mockRecordManualPayment.mockImplementationOnce(async (_o, _m, input: { paymentId: string }) => {
+			rowId = input.paymentId;
+			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockPayload).toMatchObject({ total: '10.05' });
+
+		mockRecordManualPayment.mockImplementationOnce(async () => ({
+			kind: 'refused',
+			reason: 'amount_exceeds_balance',
+			row: payment({ id: rowId, amount: '10.05', status: 'failed' }),
+			order: null,
+		}));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
+	});
+
+	it('a replay refused by a thrown payment conflict takes its fee back off: 10.05 returns to 10.03', async () => {
+		const { RecordManualPaymentError } = jest.requireActual('../payments/record-manual-payment');
+		mockPayload = sale('10.03');
+		let rowId = '';
+		mockRecordManualPayment.mockImplementationOnce(async (_o, _m, input: { paymentId: string }) => {
+			rowId = input.paymentId;
+			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockPayload).toMatchObject({ total: '10.05' });
+
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			throw new RecordManualPaymentError('conflict', 'wcpos_payment_conflict', 409, rowId);
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
+	});
+
 	it('a synced fee comes back off as a tombstone that no longer counts in the total', async () => {
 		mockPayload = sale('10.03');
 		// The provenance push came back with the fee's server id.
@@ -3965,8 +4125,11 @@ describe('cash rounding (#66, #84)', () => {
 		);
 	});
 
-	it('a cash due rounded to nothing writes the fee and the completion in one patch', async () => {
+	it('a cash due rounded to nothing writes the fee in one patch and completes through close', async () => {
 		mockPayload = sale('0.02');
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		});
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
@@ -3976,10 +4139,12 @@ describe('cash rounding (#66, #84)', () => {
 			expect.objectContaining({
 				fee_lines: [expect.objectContaining({ total: '-0.02', tax_status: 'none' })],
 				total: '0.00',
-				status: 'completed',
 				meta_data: expect.any(Array),
 			}),
 		]);
+		// ADR 0040 D2: the till never writes completed; the store closes the sale.
+		expect(patches()[0]).not.toHaveProperty('status');
+		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance' },
@@ -4019,6 +4184,29 @@ describe('cash rounding (#66, #84)', () => {
 
 jest.mock('@wcpos/query/mutations', () => ({
 	...jest.requireActual('@wcpos/query/mutations'),
-	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
-		mockManualMirror({ manager, collection: 'orders', recordId, changes }),
+	// The real mirror resolves the answer over the LATEST resident (ADR 0040); the spy sees the
+	// changes it would write: the row upserted into the current ledger, the asserted meta, the status.
+	mirrorServerOrder: (
+		manager: unknown,
+		recordId: string,
+		answer: {
+			payment?: PaymentRow;
+			order?: { status?: string } | null;
+			meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
+		}
+	) => {
+		// The gateway and void paths still mirror the changes themselves.
+		if (!('payment' in answer || 'order' in answer || 'meta' in answer))
+			return mockManualMirror({ manager, collection: 'orders', recordId, changes: answer });
+		const ledger = jest.requireActual('@wcpos/order-math');
+		const meta = (mockPayload.meta_data ?? []) as MetaDataEntry[];
+		const ledgerMeta = answer.payment
+			? ledger.withLedger(meta, ledger.upsertPaymentRow(ledger.readLedger(meta), answer.payment))
+			: meta;
+		const changes = {
+			...(answer.order?.status ? { status: answer.order.status } : {}),
+			meta_data: answer.meta ? answer.meta(ledgerMeta) : ledgerMeta,
+		};
+		return mockManualMirror({ manager, collection: 'orders', recordId, changes });
+	},
 }));

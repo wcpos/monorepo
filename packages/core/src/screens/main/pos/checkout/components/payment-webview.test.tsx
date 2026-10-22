@@ -1462,7 +1462,8 @@ describe('PaymentWebview settled order status', () => {
 			expect(isSettledOrderStatus('failed', 'pending')).toBe(false);
 		});
 
-		it.each(['pos-open', 'pos-partial', 'failed', 'cancelled'])(
+		// refunded and trash: sync-core's isPaidStatus, the close answer's rule, reads them unpaid.
+		it.each(['pos-open', 'pos-partial', 'failed', 'cancelled', 'refunded', 'trash'])(
 			'never settles %s, even when it is the stored status',
 			(status) => {
 				// The settings picker offers every registered status; a stored `failed`

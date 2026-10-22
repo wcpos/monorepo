@@ -1,4 +1,4 @@
-import { POS_META_KEYS } from '@wcpos/sync-core';
+import { isPaidStatus, POS_META_KEYS } from '@wcpos/sync-core';
 import type { StoreDatabase, UserDatabase } from '@wcpos/query/user-db';
 import {
 	activeAwaitingCustomer,
@@ -188,21 +188,27 @@ export type SaleOutcome =
 			settledOrderStatuses?: Record<string, string | null>;
 	  };
 
-const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
-
 /**
  * Statuses that never settle a sale whatever the merchant stored: the parked POS statuses
- * are open carts, and `failed`/`cancelled` are a payment that did not happen. The settings
- * picker offers every registered status, so a stored `failed` is reachable through the UI;
- * honouring it would report a failed payment as a finished sale.
+ * are open carts, `failed`/`cancelled` are a payment that did not happen, and `refunded`/
+ * `trash` are a sale that is undone or gone. The settings picker offers every registered
+ * status, so a stored `failed` is reachable through the UI; honouring it would report a
+ * failed payment as a finished sale.
  */
-const NEVER_SETTLED_STATUSES = ['pos-open', 'pos-partial', 'failed', 'cancelled'];
+const NEVER_SETTLED_STATUSES = [
+	'pos-open',
+	'pos-partial',
+	'failed',
+	'cancelled',
+	'refunded',
+	'trash',
+];
 
 /**
  * Whether a gateway-snapshot status means the sale is settled at the till.
  *
- * Two things settle a sale: WooCommerce calling the order paid (any status outside the
- * unpaid blocklist — on-hold and custom paid statuses included), or the order reaching the
+ * Two things settle a sale: WooCommerce calling the order paid (sync-core `isPaidStatus`, the
+ * close answer's rule too — on-hold and custom paid statuses included), or the order reaching the
  * status the merchant explicitly configured for its gateway — `settledOrderStatus`, served
  * by the store's gateway catalog. The second is what closes a "pay by invoice" sale: BACS
  * configured to land on `pending` so the customer can still pay through the web pay link.
@@ -219,7 +225,7 @@ export function isSettledOrderStatus(
 	settledOrderStatus: string | null | undefined
 ): boolean {
 	if (NEVER_SETTLED_STATUSES.includes(status)) return false;
-	if (!UNPAID_STATUSES.includes(status)) return true;
+	if (isPaidStatus(status)) return true;
 	return typeof settledOrderStatus === 'string' && settledOrderStatus === status;
 }
 
@@ -229,7 +235,7 @@ export function isSettledOrderStatus(
  * gateway catalog is still loading, so the catalog arriving later finds a poll to close it.
  */
 export function awaitsStoredStatus(status: string): boolean {
-	return UNPAID_STATUSES.includes(status) && !NEVER_SETTLED_STATUSES.includes(status);
+	return !isPaidStatus(status) && !NEVER_SETTLED_STATUSES.includes(status);
 }
 
 /**
@@ -252,6 +258,34 @@ function replayStoredStatus(
 	return typeof method === 'string' ? (outcome.settledOrderStatuses[method] ?? null) : null;
 }
 
+/**
+ * A store answer at a zero balance whose order is open: the sale was reopened since (another
+ * till), as a captured leg that covers the balance completes the order (`payment_complete`).
+ */
+function reopenedSince(
+	order: OrderPaymentSummary | null | undefined,
+	dp: number
+): order is OrderPaymentSummary {
+	return !!order?.status && !isPaidStatus(order.status) && toMinor(order.balance, dp) === 0;
+}
+
+/**
+ * An online leg completes only on a paid store: neither its answer (`reopenedSince`) nor the
+ * resident after the mirror may read unpaid, whether a newer adoption reopened it or the mirror
+ * never landed. The refresh decides then, never the answer alone.
+ */
+function unpaidOnStore(order: OrderPaymentSummary | null, dp: number, payload?: OrderPayload) {
+	return reopenedSince(order, dp) || residentUnpaid(payload);
+}
+
+/**
+ * The resident after the mirror reads unpaid: neither paid nor the status the store settled on
+ * (`settled`, a gateway's stored one). A resident with no status is unknown, not unpaid.
+ */
+export function residentUnpaid(payload?: { status?: string | null }, settled?: string) {
+	return !!payload?.status && !isPaidStatus(payload.status) && payload.status !== settled;
+}
+
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
@@ -264,17 +298,19 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				activeAwaitingCustomer(payload.meta_data) === null
 			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
+			if (outcome.via === 'online' && unpaidOnStore(outcome.order, dp, payload)) return false;
 			return typeof outcome.order?.balance === 'string' &&
 				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&
 				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
 				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
+			if (!outcome.row.recorded_offline && unpaidOnStore(outcome.order, dp, payload)) return false;
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
-		case 'gateway-settled': // The store judged the stored status reached (§3.1); the till does not re-judge.
-			return true;
+		case 'gateway-settled': // The store judged the stored status reached (§3.1), and the resident agrees.
+			return !residentUnpaid(payload, outcome.order.status);
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
 		case 'gateway-snapshot': // The blocklist, plus the status the merchant stored for the gateway.
@@ -335,18 +371,24 @@ async function finishSale(
 		return { outcome: await finishSent(ctx, order, outcome, presentation), summary: null };
 	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
 		const latest = order.getLatest().payload;
+		let confirmed = false;
 		if (
-			outcome.source === 'manual' &&
-			outcome.order &&
 			latest.id &&
-			toMinor(outcome.order.balance, ctx.dp) !== outcome.preLegBalanceMinor - outcome.amountMinor
+			((outcome.source === 'manual' &&
+				outcome.order &&
+				toMinor(outcome.order.balance, ctx.dp) !==
+					outcome.preLegBalanceMinor - outcome.amountMinor) ||
+				isSaleComplete(outcome, ctx.dp))
 		) {
 			// ADR 0032: the server's balance stands; the till must SHOW it to collect it.
-			// Only when the store disagrees with the till: an ordinary split leg costs no request.
+			// Only when the store disagrees with the till (an ordinary split leg costs no request),
+			// or its answer reads paid while the resident does not: the refresh decides.
 			const logger = getLogger(['wcpos', 'pos', 'checkout']);
 			const refreshed = refreshOrderRecord(ctx.runtime, latest.id);
 			try {
-				if ((await refreshed) === 'timed-out')
+				const result = await refreshed;
+				confirmed = result === 'refreshed';
+				if (result === 'timed-out')
 					logger.debug('Post-payment order refresh timed out; keeping sale open', {
 						terminal: { outcome: 'recovered', operationId: String(latest.id) },
 						context: { orderId: order.uuid },
@@ -361,11 +403,18 @@ async function finishSale(
 				});
 			}
 		}
-		return {
-			outcome:
-				outcome.source === 'manual' || outcome.source === 'terminal' ? 'partial' : 'not-completed',
-			summary: null,
-		};
+		if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload))
+			return {
+				// The store took the money but no refresh confirmed the resident: the attempt stays
+				// for the bridge, which finishes the sale once the paid order is adopted.
+				outcome:
+					!confirmed && isSaleComplete(outcome, ctx.dp)
+						? 'unconfirmed'
+						: outcome.source === 'manual' || outcome.source === 'terminal'
+							? 'partial'
+							: 'not-completed',
+				summary: null,
+			};
 	}
 	const payload = () =>
 		outcome.source === 'gateway-snapshot' ? outcome.snapshot : order.getLatest().payload;
@@ -472,8 +521,11 @@ export async function completeSale(
 		if (isActionRefusal(result))
 			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
-		if (outcome.source !== 'replay' || result.outcome === 'completed')
-			await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+		// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
+		const kept =
+			result.outcome === 'unconfirmed' ||
+			(outcome.source === 'replay' && result.outcome !== 'completed');
+		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return result.outcome;
 	} catch (error) {
 		try {

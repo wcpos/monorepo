@@ -3,15 +3,16 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
-import { mirrorServerOrder } from '@wcpos/query/mutations';
+import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	hasSaleProvenance,
 	isCompletingStatus,
 	type PaymentMethodDescriptor,
+	type PaymentRow,
 } from '@wcpos/order-math';
+import { readOrderCommands } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -20,6 +21,7 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
+import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
 
@@ -58,11 +60,11 @@ export function useRecordManualPayment(
 	const ctx = useSaleContext();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, storeDB } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const storeDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
-	const { recordLedger, stampCompletion } = useOrderLedgerWrite();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const manager = useQueryRuntime();
 	const t = useT();
 
@@ -79,15 +81,26 @@ export function useRecordManualPayment(
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
 			let provenanceError: unknown;
-			const outcome = await recordManualPayment(paymentOrder, method, input, {
+			// A record is never approval-checked (the server re-checks the money): no approval.
+			const post = moneyCommandPoster({
+				runtime: manager,
+				storeDB,
+				orderUuid: order.uuid,
 				post: (url, body) => http.post(url, body),
+				provenance: (command) => commandProvenance(ctx, order, sessionId, command),
+			});
+			const outcome = await recordManualPayment(paymentOrder, method, input, {
+				post,
+				unansweredRecord: async () => {
+					const { entries } = await readOrderCommands(storeDB, order.uuid);
+					const sent = entries.find(({ kind, sentAt }) => kind === 'record' && sentAt !== null);
+					return (sent?.body.payment as PaymentRow | undefined) ?? null;
+				},
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				completionMeta: (meta) =>
-					completionMetaFor(ctx, meta, { sessionId, extraMeta: input.extraMeta }),
 				persistProvenance: async () => {
 					try {
 						await persistSaleProvenance(ctx, {
@@ -107,24 +120,17 @@ export function useRecordManualPayment(
 				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
 				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
-				patchAndEnqueue: async (changes) => {
-					const result = await recordLedger(order, changes);
-					if (!result) throw new Error('Payment could not be saved locally.');
-				},
 				fetchOrderStatus: async () => {
 					const response = await http.get(`orders/${paymentOrder.id}`);
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async (changes, { accepted }) => {
+				mirror: async ({ payment, status }, { accepted }) => {
 					try {
-						await mirrorServerOrder(manager, order.uuid, changes);
-						if (
-							accepted &&
-							isCompletingStatus(changes.status ?? '') &&
-							!hasSaleProvenance(changes.meta_data)
-						) {
-							const meta_data = await completionMetaFor(ctx, changes.meta_data, {
+						await post.mirror({ payment, order: status ? ({ status } as never) : null });
+						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
+						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
+							const meta_data = await completionMetaFor(ctx, latestMeta, {
 								sessionId,
 								extraMeta: input.extraMeta,
 							});
@@ -185,27 +191,34 @@ export function useRecordManualPayment(
 				},
 			});
 			if (outcome.kind === 'failed') {
+				// The provenance push's failure, or the money command's refused pre-flight push.
+				const cause = provenanceError ?? ('cause' in outcome ? outcome.cause : undefined);
 				logger.error('Checkout failed', {
-					// A refused session behind the provenance push still reads as AUTH101.
+					// A refused session behind either push still reads as AUTH101.
 					code:
-						provenanceError === undefined
+						cause === undefined
 							? ERROR_CODES.CHECKOUT_FAILED_CART_SAFE
-							: pushFailureCode(provenanceError, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
+							: pushFailureCode(cause, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
 					context: {
 						error: outcome.reason,
-						...(provenanceError === undefined
+						...(cause === undefined
 							? {}
-							: {
-									cause:
-										provenanceError instanceof Error
-											? provenanceError.message
-											: String(provenanceError),
-								}),
+							: { cause: cause instanceof Error ? cause.message : String(cause) }),
 					},
 				});
 			}
+			if (outcome.kind === 'unknown')
+				logger.error(t('pos_checkout.payment_unanswered'), {
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					showToast: true,
+					context: {
+						orderId: paymentOrder.id,
+						paymentId: outcome.row.id,
+						amount: outcome.row.amount,
+					},
+				});
 			return outcome;
 		},
 		[
@@ -217,9 +230,9 @@ export function useRecordManualPayment(
 			store,
 			storeCurrency,
 			storeDecimals,
-			recordLedger,
 			stampCompletion,
 			manager,
+			storeDB,
 			t,
 		]
 	);

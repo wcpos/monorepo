@@ -62,7 +62,6 @@ export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
 	POS_META_KEYS.register,
 	POS_META_KEYS.till,
 	RECORD_UUID_META_KEY,
-	'_wcpos_money_owner',
 	'_wcpos_money_owner_hint',
 ];
 

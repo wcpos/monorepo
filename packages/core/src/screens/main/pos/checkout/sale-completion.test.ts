@@ -5,7 +5,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
+import { type MetaDataEntry, type OrderPaymentSummary, withLedger } from '@wcpos/order-math';
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -109,6 +109,9 @@ const sent = {
 		total: '92.95',
 		paid: '0.00',
 		balance: '92.95',
+		authorized: '0.00',
+		refund_due: '0.00',
+		refund_pending: '0.00',
 		payment_method: 'wcpos_email_invoice',
 		payment_method_title: 'Email Invoice',
 	},
@@ -188,6 +191,28 @@ it.each([
 ] as [string, SaleOutcome, boolean][])('%s', (_, outcome, expected) =>
 	expect(isSaleComplete(outcome, 2)).toBe(expected)
 );
+// A captured leg that covers the balance completes the order on the store, so a store answer at
+// a zero balance whose order is open again was reopened since (another till): the first answer,
+// an automatic re-send and Try again alike never finish that sale. A till-derived summary (an
+// offline leg) carries no store status and is judged by its balance as before.
+const reopened = { status: 'pos-open', balance: '0.00' } as OrderPaymentSummary;
+it.each([
+	['a manual store answer', { ...manual, amountMinor: 50, order: reopened }, false],
+	['a terminal store answer', { source: 'terminal', row, order: reopened }, false],
+	[
+		'an offline terminal leg',
+		{ source: 'terminal', row: { ...row, recorded_offline: true }, order: reopened },
+		true,
+	],
+	[
+		'a manual store answer that completed the sale',
+		{ ...manual, amountMinor: 50, order: { ...reopened, status: 'completed' } },
+		true,
+	],
+] as [string, SaleOutcome, boolean][])(
+	'a reopened sale at a zero balance: %s',
+	(_, outcome, done) => expect(isSaleComplete(outcome, 2)).toBe(done)
+);
 it.each([
 	['pending at the stored status settles', 'pending', 'pending', [], true],
 	['pending with no stored status is unpaid', 'pending', undefined, [], false],
@@ -229,7 +254,7 @@ it.each([
 		)
 	).toBe(expected);
 });
-it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'])(
+it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled', 'refunded', 'trash'])(
 	'snapshot excludes %s',
 	(status) =>
 		expect(
@@ -1030,3 +1055,64 @@ it.each([
 		expect(release).toHaveBeenCalledTimes(1);
 	}
 );
+
+// The authoritative resident, after the mirror, decides: a store answer that reads paid completes
+// the sale only once the resident carries a paid status. Whether a newer adoption reopened it or
+// the mirror never landed, the sale is refreshed, never sent to the receipt on the answer alone;
+// the refresh then either completes it or leaves the reopened cart.
+it.each([
+	['a newer adoption reopened the sale', 'pos-open', 'partial'],
+	['the mirror never landed', 'completed', 'completed'],
+])('the resident is not paid after the mirror: %s', async (_, refreshedStatus, result) => {
+	let status = 'pos-open';
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status } }),
+	} as never;
+	mockRefresh.mockImplementationOnce(async () => {
+		status = refreshedStatus;
+		return 'refreshed';
+	});
+	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
+	expect(isSaleComplete(answer, 2, { ...payload, status: 'pos-open' } as never)).toBe(false);
+	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
+		result
+	);
+	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
+	if (result === 'partial') expect(mockReceipt).not.toHaveBeenCalled();
+	else expect(mockReceipt).toHaveBeenCalled();
+});
+
+// The gateway's settled answer follows the same rule as the cash and close paths: the resident
+// after the mirror must read the settled status (paid, or the merchant's stored one) too.
+it('a gateway settled after a reopen was adopted is not completed: no receipt', async () => {
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status: 'pos-open' } }),
+	} as never;
+	mockRefresh.mockResolvedValueOnce('refreshed'); // the refresh confirms the reopen
+	const settled = { source: 'gateway-settled', order: { status: 'pending' } } as SaleOutcome;
+	expect(isSaleComplete(settled, 2, { ...payload, status: 'pending' } as never)).toBe(true);
+	expect(await completeSale(ctx, resident, settled, { host: 'stage', autoShowReceipt: true })).toBe(
+		'not-completed'
+	);
+	expect(mockReceipt).not.toHaveBeenCalled();
+});
+
+// The store took the money (its answer reads paid) but the resident does not read paid yet and
+// no refresh confirmed it: `unconfirmed`. No receipt, and the completion attempt stays for the
+// bridge, which finishes it once the paid order is adopted.
+it('an unconfirmed paid answer keeps its completion attempt and enters no receipt', async () => {
+	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status: 'pos-open' } }),
+	} as never;
+	mockRefresh.mockRejectedValueOnce(new Error('offline'));
+	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
+	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
+		'unconfirmed'
+	);
+	expect(mockReceipt).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+});

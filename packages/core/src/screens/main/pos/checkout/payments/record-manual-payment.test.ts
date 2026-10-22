@@ -1,6 +1,8 @@
+import { MoneyCommandError } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import {
+	RECORD_UNKNOWN_RETRY_DELAYS_MS,
 	recordManualPayment,
 	type RecordManualPaymentDeps,
 	RecordManualPaymentError,
@@ -75,9 +77,13 @@ const mintedCard: PaymentRow = {
 	updated_at_gmt: NOW,
 };
 
+/** The store's answer to a record: the row it stored and the order summary. */
+const echo = async (_url: string, body: unknown) => ({
+	data: { payment: (body as { payment: PaymentRow }).payment, order: { status: 'pos-partial' } },
+});
 function createDeps(online = true): RecordManualPaymentDeps & {
 	post: jest.Mock;
-	patchAndEnqueue: jest.Mock;
+	sleep: jest.Mock;
 	mirror: jest.Mock;
 	raiseAttention: jest.Mock;
 	fetchOrderStatus: jest.Mock;
@@ -90,7 +96,7 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		registerId: null,
 		currency: 'EUR',
 		dp: 2,
-		patchAndEnqueue: jest.fn(async () => undefined),
+		sleep: jest.fn(async () => undefined),
 		mirror: jest.fn(async () => undefined),
 		fetchOrderStatus: jest.fn(async () => null),
 		raiseAttention: jest.fn(),
@@ -103,42 +109,17 @@ function responseError(status: number, code?: string, data: Record<string, unkno
 	return { response: { status, data: code ? { code, message: 'Server refused', data } : data } };
 }
 
-function ledgerFrom(call: jest.Mock): { schema: number; payments: PaymentRow[] } {
-	return call.mock.calls[0][0].meta_data.find(
-		(entry: { key: string }) => entry.key === '_wcpos_payments'
-	).value;
-}
-
 describe('recordManualPayment', () => {
-	it('records cash offline and preserves existing metadata without mutating the order', async () => {
+	// ADR 0040 PR A: a tender the server cannot hear is refused; PR B queues it as a command.
+	it('offline is refused and nothing is written', async () => {
 		const deps = createDeps(false);
 		const original = structuredClone(order.meta_data);
 
 		const result = await recordManualPayment(order, cash, { amount: 42.5, tendered: 50 }, deps);
 
+		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
-		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
-		expect(deps.patchAndEnqueue.mock.calls[0][0].status).toBe('pos-partial');
-		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data[0]).toEqual(order.meta_data[0]);
-		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data).toContainEqual({
-			key: '_wcpos_payment_method',
-			value: 'pos_cash',
-		});
-		expect(ledgerFrom(deps.patchAndEnqueue)).toEqual({
-			schema: 1,
-			payments: [
-				expect.objectContaining({
-					id: UUID.toLowerCase(),
-					recorded_offline: true,
-					status: 'captured',
-					amount: '42.50',
-					tendered: '50.00',
-					change: '7.50',
-				}),
-			],
-		});
-		expect(result).toMatchObject({ kind: 'recorded', via: 'offline', order: null });
 		expect(order.meta_data).toEqual(original);
 	});
 
@@ -157,19 +138,15 @@ describe('recordManualPayment', () => {
 			outcome: { kind: 'recorded', via: 'online', row: serverRow, order: summary },
 			cause: mirrorFailure,
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 	});
 
-	it.each([0, null])('uses the offline path for an online order with server id %s', async (id) => {
+	it.each([0, null])('refuses an order the store has not seen (server id %s)', async (id) => {
 		const deps = createDeps(true);
 
-		await recordManualPayment({ ...order, id }, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment({ ...order, id }, card, { amount: '42.50' }, deps);
 
+		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.post).not.toHaveBeenCalled();
-		expect(ledgerFrom(deps.patchAndEnqueue).payments[0]).toMatchObject({
-			order_id: 0,
-			recorded_offline: true,
-		});
 	});
 
 	it('posts online and mirrors the authoritative server row and status', async () => {
@@ -188,17 +165,9 @@ describe('recordManualPayment', () => {
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+		// The answered row, never a ledger rebuilt from the pre-command snapshot (ADR 0040).
 		expect(deps.mirror).toHaveBeenCalledWith(
-			{
-				meta_data: expect.arrayContaining([
-					expect.objectContaining({
-						key: '_wcpos_payments',
-						value: { schema: 1, payments: [serverRow] },
-					}),
-				]),
-				status: 'completed',
-			},
+			{ payment: serverRow, status: 'completed' },
 			{ accepted: true }
 		);
 		expect(result).toEqual({ kind: 'recorded', via: 'online', row: serverRow, order: summary });
@@ -218,8 +187,7 @@ describe('recordManualPayment', () => {
 
 		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
-		expect(ledgerFrom(deps.mirror).payments).toEqual([failedRow]);
+		expect(deps.mirror.mock.calls[0][0].payment).toEqual(failedRow);
 		expect(deps.raiseAttention).toHaveBeenCalledWith({
 			row: failedRow,
 			order: summary,
@@ -238,7 +206,7 @@ describe('recordManualPayment', () => {
 
 		await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		expect(ledgerFrom(deps.mirror).payments[0]).toEqual({
+		expect(deps.mirror.mock.calls[0][0].payment).toEqual({
 			...mintedCard,
 			status: 'failed',
 			failure_reason: 'order_already_paid',
@@ -335,28 +303,101 @@ describe('recordManualPayment', () => {
 			code: 'wcpos_payment_conflict',
 			status: 409,
 			message: 'Server refused',
+			rowId: UUID.toLowerCase(),
 		});
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
 
-	it.each([new Error('network'), responseError(503)])(
-		'falls back offline with the attempted row id after %p',
+	it.each([new Error('network'), responseError(503), responseError(409, 'wcpos_payment_locked')])(
+		'a 5xx re-sends the same row and body and ends unknown with the command (%p)',
 		async (error) => {
 			const deps = createDeps();
 			deps.post.mockRejectedValue(error);
 
 			const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
+			// Every attempt is the same call; the poster re-sends the journaled record for it.
+			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
+			for (const [url, body] of deps.post.mock.calls) {
+				expect(url).toBe(deps.post.mock.calls[0][0]);
+				expect(body).toEqual(deps.post.mock.calls[0][1]);
+			}
 			expect(deps.post.mock.calls[0][1].payment.id).toBe(UUID.toLowerCase());
-			expect(ledgerFrom(deps.patchAndEnqueue).payments[0]).toMatchObject({
-				id: UUID.toLowerCase(),
-				recorded_offline: true,
+			expect(deps.sleep.mock.calls).toEqual(RECORD_UNKNOWN_RETRY_DELAYS_MS.map((ms) => [ms]));
+			expect(deps.mirror).not.toHaveBeenCalled();
+			expect(result).toEqual({
+				kind: 'unknown',
+				row: expect.objectContaining({ id: UUID.toLowerCase() }),
 			});
-			expect(result).toMatchObject({ kind: 'recorded', via: 'offline' });
 		}
 	);
+
+	// Codex 4342921641 on #2832: a record whose answers were all lost may be on the store. The next
+	// press replays it (same row id, so the poster re-sends the same journaled command) instead of
+	// minting a second payment for the same cash.
+	it('a press after an unanswered record replays that row, never a new one', async () => {
+		const deps = createDeps();
+		let journaled: PaymentRow | null = null;
+		deps.unansweredRecord = async () => journaled;
+		deps.post.mockRejectedValue(new Error('network'));
+		const first = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		expect(first.kind).toBe('unknown');
+		journaled = (first as { row: PaymentRow }).row;
+
+		deps.post.mockReset();
+		deps.post.mockImplementation(echo);
+		deps.uuid = () => 'ABCDEF00-0000-4000-8000-000000000002';
+		const second = await recordManualPayment(order, card, { amount: '10.00' }, deps);
+
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.post.mock.calls[0][1]).toEqual({ payment: journaled });
+		expect(second).toMatchObject({
+			kind: 'recorded',
+			row: { id: UUID.toLowerCase(), amount: '42.50' },
+		});
+	});
+
+	it('a pre-flight failure is terminal: a typed failed outcome, never re-sent', async () => {
+		const deps = createDeps();
+		const refused = responseError(401, 'rest_not_logged_in');
+		const entry = { sentAt: null } as never;
+		deps.post.mockRejectedValue(
+			new MoneyCommandError('preflight_failed', entry, undefined, { cause: refused })
+		);
+
+		const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+		expect(result).toEqual({ kind: 'failed', reason: 'preflight_failed', cause: refused });
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.sleep).not.toHaveBeenCalled();
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	it.each([401, 403, 408, 426, 429])(
+		'a %i is the session’s or the proxy’s answer: re-sent, never a refusal',
+		async (status) => {
+			const deps = createDeps();
+			deps.post.mockRejectedValue(responseError(status, 'rest_forbidden'));
+			const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+			expect(result).toMatchObject({ kind: 'unknown' });
+			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
+		}
+	);
+
+	it('a re-send that the store answers records the row once', async () => {
+		const deps = createDeps();
+		const serverRow = { ...mintedCard, status: 'captured' as const };
+		deps.post.mockRejectedValueOnce(responseError(502)).mockResolvedValueOnce({
+			data: { payment: serverRow, order: { status: 'pos-partial' } },
+		});
+
+		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		expect(deps.post).toHaveBeenCalledTimes(2);
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: serverRow });
+		expect(deps.mirror).toHaveBeenCalledTimes(1);
+	});
 
 	it('returns invalid for card tendered input without any side effect', async () => {
 		const deps = createDeps();
@@ -365,25 +406,9 @@ describe('recordManualPayment', () => {
 
 		expect(result).toEqual({ kind: 'invalid', reason: 'tendered_not_allowed' });
 		expect(deps.post).not.toHaveBeenCalled();
-		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
-});
-
-it.each([
-	['100.00', true],
-	['42.50', false],
-] as const)('completion provenance with offline amount %s', async (amount, completes) => {
-	const deps = createDeps(false);
-	const tuple = { key: '_wcpos_sale_counter', value: '1' };
-	const completion = jest.fn(async (meta) => [...meta, tuple]);
-	deps.completionMeta = completion;
-	await recordManualPayment(order, cash, { amount }, deps);
-	expect(completion).toHaveBeenCalledTimes(completes ? 1 : 0);
-	const meta = deps.patchAndEnqueue.mock.calls[0][0].meta_data;
-	expect(meta.some((entry: { key: string }) => entry.key === '_wcpos_payments')).toBe(true);
-	expect(meta.includes(tuple)).toBe(completes);
 });
 
 it.each(['0.00', '42.50'])(
@@ -397,9 +422,9 @@ it.each(['0.00', '42.50'])(
 				calls.push('persisted');
 			}),
 		};
-		deps.post.mockImplementation(async () => {
+		deps.post.mockImplementation(async (_url: string, body: unknown) => {
 			calls.push('post');
-			return { data: {} };
+			return echo('', body);
 		});
 		const paymentOrder = {
 			...order,
@@ -426,7 +451,7 @@ it.each(['0.00', '42.50'])(
 
 it('does not persist provenance for a partial online leg', async () => {
 	const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
-	deps.post.mockResolvedValue({ data: {} });
+	deps.post.mockImplementation(echo);
 
 	await recordManualPayment(order, cash, { amount: '42.50' }, deps);
 
@@ -441,12 +466,24 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 			throw new Error('save failed');
 		}),
 	};
-	deps.post.mockResolvedValue({ data: {} });
+	deps.post.mockImplementation(echo);
 
 	const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
 
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
-	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+	expect(deps.mirror).not.toHaveBeenCalled();
+});
+
+// A malformed 2xx proves nothing: it is never replaced by the minted row (sync-core
+// `isMoneyAnswer`). It is re-sent like no answer, then ends unknown with the command journaled.
+it('a malformed 2xx records nothing locally and ends unknown after its re-sends', async () => {
+	const deps = createDeps();
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+	expect(result).toMatchObject({ kind: 'unknown' });
+	expect(deps.post).toHaveBeenCalledTimes(4);
 	expect(deps.mirror).not.toHaveBeenCalled();
 });

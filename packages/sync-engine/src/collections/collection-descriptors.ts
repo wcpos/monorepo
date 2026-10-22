@@ -309,12 +309,6 @@ const WHOLE_ORDER_FIELDS = [
 	'payment_method',
 ] as const;
 
-/**
- * ADR 0032's server stamp on line-money ownership: grafted from every order ack while
- * `serverOwnsMoney` reads it.
- */
-const MONEY_OWNER_STAMP = '_wcpos_money_owner';
-
 function carriesWholeOrder(document: Record<string, unknown> | null | undefined): boolean {
 	return !!document && WHOLE_ORDER_FIELDS.every((field) => field in document);
 }
@@ -701,10 +695,8 @@ const ordersWriteFacet = createWriteFacet({
 	// cart. Editable values stay local; server-owned money facts replace local meta.
 	// The display-field strip re-applies for payloads predating it (#885/#890).
 	graftAckIdentity: (payload, source, options) => {
-		// The ADR 0032 money-owner stamp is still read by `serverOwnsMoney`, so every ack keeps
-		// replacing it as before (absent on the ack, it is cleared); it retires with its reader.
-		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter(
-			(entry) => SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || entry.key === MONEY_OWNER_STAMP
+		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+			SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
 		);
 		// A whole document's server-owned set replaces the resident's, deletions included. A
 		// trimmed acknowledgement (the push contract allows a bare `{ id }`) says nothing about a
@@ -719,9 +711,7 @@ const ordersWriteFacet = createWriteFacet({
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
 					(entry) =>
-						entry.key !== MONEY_OWNER_STAMP &&
-						(!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) ||
-							(!whole && !carried.has(entry.key)))
+						!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || (!whole && !carried.has(entry.key))
 				),
 				...sourceMeta,
 			],

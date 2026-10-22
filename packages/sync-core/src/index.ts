@@ -134,8 +134,4 @@ export { hasPosRefundStamp } from './refund-provenance';
 
 export { readServerSentence, readWpFatalDetail, SERVER_SENTENCE_MAX_CHARS } from './serverSentence';
 
-export {
-	parsePaymentsContract,
-	paymentsContractAtLeast,
-	readMoneyEpoch,
-} from './payments-contract';
+export { parsePaymentsContract } from './payments-contract';

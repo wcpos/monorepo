@@ -74,6 +74,7 @@ import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
 import {
+	RecordManualPaymentError,
 	RecordManualPaymentMirrorError,
 	useRecordManualPayment,
 	useVoidPayments,
@@ -114,6 +115,7 @@ import {
 	type TenderTile,
 } from './tiles';
 import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
+import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
@@ -199,6 +201,20 @@ export interface TenderFlow {
 	cancelInvoice: () => Promise<void>;
 }
 
+/** A zero balance the store did not close: say why, and what is due when it said. */
+function closeMessage(
+	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
+	t: ReturnType<typeof useT>
+): string {
+	if (closed.kind === 'refused') return closed.message;
+	if (closed.kind === 'order_changed') return t('pos_checkout.order_changed_retry');
+	if (closed.kind === 'reopened') return t('pos_checkout.sale_reopened_elsewhere');
+	if (closed.kind === 'unconfirmed') return t('pos_checkout.payment_confirming');
+	if (closed.kind === 'outstanding')
+		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
+	return t('pos_checkout.close_needs_connection');
+}
+
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
@@ -253,6 +269,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
+	const closeSale = useCloseSale();
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const t = useT();
@@ -784,14 +801,34 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-				await writeZeroBalanceCompletion(ctx, {
+				const closed = await writeZeroBalanceCompletion(ctx, {
 					order,
 					sessionId,
 					queue,
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
+					online: () => online && !queuedOffline && !!payload.id,
+					close: (target) => closeSale.close(target, { sessionId }),
 				});
+				if (closed && typeof closed === 'object' && 'kind' in closed) {
+					const context = {
+						orderId: payload.id ?? null,
+						orderUUID: order.uuid,
+						close: closed.kind,
+					};
+					// The store's answer on this sale is a notice; no close at all is a failed checkout.
+					if (closed.kind === 'offline' || closed.kind === 'refused')
+						logger.error(closeMessage(closed, t), {
+							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+							showToast: true,
+							context: {
+								...context,
+								...(closed.kind === 'refused' ? { reason: closed.code } : {}),
+							},
+						});
+					else logger.info(closeMessage(closed, t), { showToast: true, context });
+				}
 				return;
 			}
 			if (!method) return;
@@ -1044,12 +1081,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
-			const unround = () =>
+			const unround = (ref = paymentId) =>
 				patchFees(
 					withFees(target.getLatest().payload, (fees) =>
 						fees.flatMap((fee) => {
 							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-							if (!paymentId || rounding?.payment_ref !== paymentId) return [fee];
+							if (!ref || rounding?.payment_ref !== ref) return [fee];
 							return fee.id ? [{ ...fee, name: null }] : [];
 						})
 					)
@@ -1064,10 +1101,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}).catch(async (error: unknown) => {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
-				if (paymentId && !landed) await unround().catch(() => undefined);
+				// A thrown refusal of a replay takes back its row's fee, as a returned one does.
+				const ref =
+					paymentId ?? (error instanceof RecordManualPaymentError ? error.rowId : undefined);
+				if (ref && !landed) await unround(ref).catch(() => undefined);
 				throw error;
 			});
-			if (paymentId && outcome.kind !== 'recorded') await unround();
+			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
+			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
+			const ref = paymentId ?? (outcome.kind === 'refused' ? outcome.row.id : undefined);
+			if (ref && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround(ref);
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{
@@ -1085,7 +1128,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				setTenderMethod(order.uuid, null);
 				return;
 			}
-			if (outcome.kind === 'failed') {
+			// An unanswered record was already reported (PAYMENT_OUTCOME_UNKNOWN); no second toast.
+			if (outcome.kind === 'failed' || outcome.kind === 'unknown') {
 				reducerDispatch({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
@@ -1248,6 +1292,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		queuedOffline,
 		blockIfDegraded,
 		completeOrderFlow,
+		closeSale,
 		dp,
 		enteredLegMinor,
 		entryMinor,
