@@ -182,6 +182,22 @@ describe('awaitWriteOutcome', () => {
 		});
 	});
 
+	it('WriteOutcomeError carries data', async () => {
+		const { engine, emit } = createEngine();
+		const outcome = awaitTerminalWriteOutcome(engine, 'mutation-1');
+		const data = { status: 422, payment_id: 'pay-1' };
+		emit({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 422,
+			reason: 'wcpos_money_in_motion',
+			data,
+		});
+		await expect(outcome).rejects.toMatchObject({ reason: 'wcpos_money_in_motion', data });
+	});
+
 	it('rejects a matching 401 deferral without reporting a terminal outcome', async () => {
 		const { engine, emit, unsubscribe } = createEngine();
 		const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });

@@ -715,6 +715,43 @@ it('compensates and retries the resident patch once when the active scope change
 	expect(mockWrite).toHaveBeenCalledTimes(2);
 });
 
+it('an explicit order patch queues an explicit row, so the open-cart hold never holds it', async () => {
+	const stored: Record<string, unknown> = {
+		uuid: 'order-uuid',
+		remoteId: '42',
+		remoteKey: '42',
+		status: 'completed',
+		payload: { id: 42, status: 'completed' },
+	};
+	mockFindOneExec.mockResolvedValue({
+		incrementalModify: async (
+			modifier: (old: Record<string, unknown>) => Record<string, unknown>
+		) => {
+			Object.assign(stored, modifier(stored));
+			return stored;
+		},
+		toJSON: () => JSON.parse(JSON.stringify(stored)),
+	});
+	const document = {
+		uuid: 'order-uuid',
+		id: 42,
+		collection: { name: 'orders' },
+		getLatest: () => document,
+	};
+	// A reopen sets pos-open optimistically; a non-explicit row would sit behind that very hold.
+	const result = await act(() =>
+		applyLocalPatch(
+			manager as never,
+			{ document: document as never, data: { status: 'pos-open' } as never },
+			{ explicit: true }
+		)
+	);
+	expect(mockWrite).toHaveBeenCalledWith(
+		expect.objectContaining({ collection: 'orders', operation: 'update', explicit: true })
+	);
+	expect(result.mutationId).toBe('mutation-1');
+});
+
 /**
  * #1507 / ADR 0032. WooCommerce owns the order aggregate: those fields are
  * `readonly` in the wc/v3 schema and dropped before anything is set, so a
