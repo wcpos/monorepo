@@ -106,7 +106,15 @@ test.describe('POS Cart', () => {
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		await page.keyboard.type('3');
 		await page.getByTestId('numpad-done-button').click();
-		await page.waitForTimeout(500);
+		// A keyboard-wedge scanner's Enter used to press the refocused quantity
+		// trigger and reopen the numpad for the wrong row. The burst is shorter than
+		// the store's minimum code length on purpose: it never reaches the catalog,
+		// and the assertion is only that the terminator did not act on the button.
+		await expect(numpad).toBeHidden();
+		await expect(quantityButton).toBeFocused();
+		await page.keyboard.type('1234567');
+		await page.keyboard.press('Enter');
+		await expect(numpad).toBeHidden();
 	});
 
 	test('should allow entering multiple digits in numpad without resetting', async ({

@@ -281,6 +281,66 @@ describe('useBarcodeDetection', () => {
 		subscription.unsubscribe();
 	});
 
+	it('a scanner terminator does not reach a focused button', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((code) => detected.push(code));
+		const button = document.createElement('button');
+		const keys: string[] = [];
+		button.addEventListener('keydown', (event) => keys.push(event.key));
+		document.body.appendChild(button);
+		button.focus();
+		try {
+			act(() => {
+				for (const key of '12345678') {
+					button.dispatchEvent(
+						new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+					);
+					jest.advanceTimersByTime(10);
+				}
+			});
+			const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+			act(() => {
+				button.dispatchEvent(enter);
+			});
+			// The burst latches on the second key; every key from there belongs to the scanner.
+			expect(keys).toEqual(['1']);
+			expect(enter.defaultPrevented).toBe(true);
+			act(() => jest.advanceTimersByTime(200));
+			expect(detected).toEqual(['12345678']);
+		} finally {
+			button.remove();
+			subscription.unsubscribe();
+		}
+	});
+
+	it('a slow typist and Enter outside a burst reach the focused button', () => {
+		renderHook(() => useBarcodeDetection());
+		const button = document.createElement('button');
+		const keys: string[] = [];
+		button.addEventListener('keydown', (event) => keys.push(event.key));
+		document.body.appendChild(button);
+		button.focus();
+		try {
+			act(() => {
+				for (const key of '123') {
+					button.dispatchEvent(
+						new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+					);
+					jest.advanceTimersByTime(200);
+				}
+			});
+			const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+			act(() => {
+				button.dispatchEvent(enter);
+			});
+			expect(keys).toEqual(['1', '2', '3', 'Enter']);
+			expect(enter.defaultPrevented).toBe(false);
+		} finally {
+			button.remove();
+		}
+	});
+
 	it('uses the updated minimum length when scanner settings change after mount', () => {
 		const detected: string[] = [];
 		const { result } = renderHook(() => useBarcodeDetection());

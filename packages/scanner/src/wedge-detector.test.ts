@@ -66,6 +66,55 @@ describe('createWedgeDetector (streaming)', () => {
 		expect(scans).toEqual(['9310988001234']);
 	});
 
+	it('handleKey reports keys that belong to a latched burst', () => {
+		const onScan = vi.fn();
+		const detector = createWedgeDetector({
+			getSettings: () => SETTINGS,
+			onScan,
+			now: () => Date.now(),
+			setTimeout: (fn, ms) => setTimeout(fn, ms),
+		});
+		for (const entry of trace('12345678'.split(''), 13)) {
+			vi.setSystemTime(entry.timeMs);
+			expect(detector.handleKey(entry.key)).toBe(entry.key !== '1');
+		}
+		expect(detector.handleKey('Enter')).toBe(true);
+		expect(onScan).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: true });
+		expect(detector.handleKey('Enter')).toBe(false);
+	});
+
+	it('a terminator long after the last key is not part of the burst', () => {
+		const onScan = vi.fn();
+		const detector = createWedgeDetector({ getSettings: () => SETTINGS, onScan });
+		for (const entry of trace('12345678'.split(''), 13)) {
+			vi.setSystemTime(entry.timeMs);
+			detector.handleKey(entry.key);
+		}
+		vi.setSystemTime(Date.now() + WEDGE_END_OF_SCAN_MS + 1);
+		expect(detector.handleKey('Enter')).toBe(false);
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: false });
+	});
+
+	it('a threshold at or above the settle window still emits once the burst is quiet', () => {
+		const onScan = vi.fn();
+		const detector = createWedgeDetector({
+			getSettings: () => ({ ...SETTINGS, threshold: 200 }),
+			onScan,
+		});
+		for (const entry of trace('12345678'.split(''), 13)) {
+			vi.setSystemTime(entry.timeMs);
+			detector.handleKey(entry.key);
+		}
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		expect(onScan).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		expect(onScan).toHaveBeenCalledTimes(1);
+		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: false });
+	});
+
 	it('does not emit for typing-speed input', () => {
 		const { scans } = stream(trace(['H', 'L', '-', '1', '5'], 220));
 		expect(scans).toEqual([]);
