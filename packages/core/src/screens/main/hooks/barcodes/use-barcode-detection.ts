@@ -135,6 +135,10 @@ export const useBarcodeDetection = (
 				detectorRef.current?.dispose();
 				detectorRef.current = null;
 			} else {
+				if ((e.key === 'Enter' || e.key === 'Tab') && detectorRef.current?.isDetecting()) {
+					e.preventDefault();
+					e.stopPropagation();
+				}
 				handleKeyInput(e.key);
 			}
 		},
@@ -160,17 +164,21 @@ export const useBarcodeDetection = (
 	 * A user was experiencing an issue where keyup events were only giving the lowercase, even
 	 * though the barcode was uppercase. They recommend to not use keydown events, but it should
 	 * still work on almost all browsers.
+	 * Capture scanner terminators before React/RN-Web can press the focused button:
+	 * the cart quantity numpad reopened for the wrong row, and any last-clicked
+	 * button could be re-pressed. Swallow only terminators inside a detected burst;
+	 * a typist's Enter outside a burst passes through untouched.
 	 */
 	// Platform listener lifecycle follows the consumer-selected scan scope.
 	React.useEffect(() => {
 		const listenOnWeb = Platform.OS === 'web' && isActive;
 		if (listenOnWeb) {
 			// reverted to keydown, because keyup was only giving lowercase
-			document.addEventListener('keydown', onKeyUp);
+			document.addEventListener('keydown', onKeyUp, { capture: true });
 		}
 		return () => {
 			if (listenOnWeb) {
-				document.removeEventListener('keydown', onKeyUp);
+				document.removeEventListener('keydown', onKeyUp, { capture: true });
 			}
 			// Drop the detector with its latched state on EVERY platform — native
 			// onKeyPress feeds the same detector, so a partial burst must not

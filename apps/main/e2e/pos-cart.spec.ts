@@ -106,7 +106,11 @@ test.describe('POS Cart', () => {
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		await page.keyboard.type('3');
 		await page.getByTestId('numpad-done-button').click();
-		await page.waitForTimeout(500);
+		// A scanner terminator reopened the numpad for the wrong cart row.
+		await expect(numpad).toBeHidden();
+		await page.keyboard.press('Enter');
+		await expect(numpad).toBeHidden();
+		await expect(quantityButton).not.toBeFocused();
 	});
 
 	test('should allow entering multiple digits in numpad without resetting', async ({

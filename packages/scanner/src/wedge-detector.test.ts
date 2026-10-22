@@ -66,6 +66,26 @@ describe('createWedgeDetector (streaming)', () => {
 		expect(scans).toEqual(['9310988001234']);
 	});
 
+	it('isDetecting is true only while a scanner burst is latched', () => {
+		const onScan = vi.fn();
+		const detector = createWedgeDetector({
+			getSettings: () => SETTINGS,
+			onScan,
+			now: () => Date.now(),
+			setTimeout: (fn, ms) => setTimeout(fn, ms),
+		});
+		expect(detector.isDetecting()).toBe(false);
+		for (const entry of trace('12345678'.split(''), 13)) {
+			vi.setSystemTime(entry.timeMs);
+			detector.handleKey(entry.key);
+		}
+		expect(detector.isDetecting()).toBe(true);
+		expect(onScan).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: false });
+		expect(detector.isDetecting()).toBe(false);
+	});
+
 	it('does not emit for typing-speed input', () => {
 		const { scans } = stream(trace(['H', 'L', '-', '1', '5'], 220));
 		expect(scans).toEqual([]);

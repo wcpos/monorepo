@@ -149,6 +149,8 @@ export interface WedgeDetectorOptions {
 }
 
 export interface WedgeDetector {
+	/** Whether a scanner burst is currently latched. */
+	isDetecting: () => boolean;
 	/** Feed one keystroke; `timeMs` defaults to `now()`. */
 	handleKey: (key: string, timeMs?: number) => void;
 	/** Cancel any pending end-of-scan timer (host teardown). */
@@ -207,5 +209,5 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 		}, WEDGE_END_OF_SCAN_MS);
 	};
 
-	return { handleKey, dispose: clearTimer };
+	return { handleKey, isDetecting: () => state.detecting, dispose: clearTimer };
 }

@@ -114,7 +114,13 @@ export function NumberInput({
 					<ButtonText>{value !== '' ? format(value) : ''}</ButtonText>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent side={placement as 'top' | 'bottom'} className="w-auto p-2">
+			<PopoverContent
+				side={placement as 'top' | 'bottom'}
+				className="w-auto p-2"
+				// A keyboard-wedge scanner's Enter terminator would press the
+				// refocused trigger and reopen the numpad for the wrong cart row.
+				onCloseAutoFocus={(event) => event.preventDefault()}
+			>
 				<VStack className="gap-1">
 					<Numpad
 						ref={numpadRef}
