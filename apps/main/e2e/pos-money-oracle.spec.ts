@@ -127,8 +127,16 @@ async function fillCurrencyField(
 	const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 	// A click that lands while the surrounding dialog is still moving focus is swallowed and
 	// the numpad never opens: re-check after each click and click again, never wait blind.
+	let clicks = 0;
 	await expect(async () => {
-		if (!(await numpad.isVisible())) await field.click();
+		if (!(await numpad.isVisible())) {
+			if (clicks > 0)
+				console.log(
+					`WCPOS_E2E numpad.retry ${testID}: the numpad did not open after click ${clicks}, clicking again`
+				);
+			clicks += 1;
+			await field.click();
+		}
 		await expect(numpad).toBeVisible({ timeout: 2_000 });
 	}).toPass({ timeout: 15_000 });
 	// Press the numpad's own KEYS, one per character. Two reasons this is not typing
