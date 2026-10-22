@@ -4,6 +4,7 @@ import { TextInput } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 
+import { FormItem, FormLabel } from './common';
 import { FormFieldContext } from './context';
 import { FormInput } from './input';
 import { FormSwitch } from './switch';
@@ -125,5 +126,86 @@ describe('web form labels', () => {
 
 		fireEvent.click(screen.getByText('Show out of stock'));
 		expect(onChange).toHaveBeenCalledWith(true);
+	});
+
+	/**
+	 * A `SettingsRow` is a `FormItem` + `FormLabel` with the wrapper beside it and no label
+	 * of its own: the wrapper adopts the row's item, so the row's label names and acts.
+	 */
+	describe('inside an enclosing item whose label names the control', () => {
+		it('names the input by the enclosing label, and a click focuses it', () => {
+			render(
+				<Harness>
+					<FormItem>
+						<FormLabel>Store name</FormLabel>
+						<FormInput
+							name="field"
+							value=""
+							onChange={jest.fn()}
+							onBlur={jest.fn()}
+							customComponent={TextInput}
+						/>
+					</FormItem>
+				</Harness>
+			);
+
+			const labelId = screen.getByText('Store name').closest('[id]')?.id;
+			expect(labelId).toMatch(/-form-item$/);
+			const input = screen.getByRole('textbox');
+			expect(input).toHaveAttribute('aria-labelledby', labelId);
+			expect(document.querySelectorAll(`[id="${labelId}"]`)).toHaveLength(1);
+
+			fireEvent.click(screen.getByText('Store name'));
+			expect(input).toHaveFocus();
+		});
+
+		it('names the switch by the enclosing label, and a click toggles it', () => {
+			const onChange = jest.fn();
+			render(
+				<Harness>
+					<FormItem>
+						<FormLabel>Show out of stock</FormLabel>
+						<FormSwitch name="field" value={false} onChange={onChange} onBlur={jest.fn()} />
+					</FormItem>
+				</Harness>
+			);
+
+			expect(screen.getByRole('switch')).toHaveAttribute(
+				'aria-labelledby',
+				screen.getByText('Show out of stock').closest('[id]')?.id
+			);
+
+			fireEvent.click(screen.getByText('Show out of stock'));
+			expect(onChange).toHaveBeenCalledWith(true);
+		});
+
+		it('keeps a wrapper that has its own label on its own label', () => {
+			render(
+				<Harness>
+					<FormItem>
+						<FormLabel>Row</FormLabel>
+						<FormInput
+							name="field"
+							label="Own"
+							value=""
+							onChange={jest.fn()}
+							onBlur={jest.fn()}
+							customComponent={TextInput}
+						/>
+					</FormItem>
+				</Harness>
+			);
+
+			const rowId = screen.getByText('Row').closest('[id]')?.id;
+			const ownId = screen.getByText('Own').closest('[id]')?.id;
+			expect(ownId).not.toBe(rowId);
+			const input = screen.getByRole('textbox');
+			expect(input).toHaveAttribute('aria-labelledby', ownId);
+
+			fireEvent.click(screen.getByText('Row'));
+			expect(input).not.toHaveFocus();
+			fireEvent.click(screen.getByText('Own'));
+			expect(input).toHaveFocus();
+		});
 	});
 });

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useFormField } from './context';
+import { FormItemContext, useFormField } from './context';
 
 /**
  * The aria wiring every form control needs: point the control at its label, and at
@@ -21,17 +21,40 @@ import { useFormField } from './context';
  * that item's context: it mints the item id itself and the wrapper passes `itemNativeID`
  * to its `FormItem`. Reading the context here gave every control `undefined-form-item`
  * while its label carried the item's real id, so no control was named by its label.
+ *
+ * The context it can read is an ENCLOSING item's: a `SettingsRow` is a `FormItem` whose
+ * `FormLabel` names the control placed in it with no `label` of its own. Such a wrapper
+ * adopts that item's id, so `aria-labelledby` resolves to the row's label, and hands
+ * `onLabelPress` to it, so pressing the row's label focuses or toggles the control. The
+ * wrapper's own `FormDescription` / `FormMessage` then carry the row's id prefix: the row
+ * must not render those itself (`SettingsRow` renders its hint as a plain `Text`). The
+ * nested `FormItem` only provides context, so the shared id is never a duplicate DOM id.
  */
 export function useFormControlAria({
 	label,
 	description,
+	onLabelPress,
 }: {
 	label?: string;
 	description?: string;
+	/** The wrapper's own label press (focus, toggle), for an adopted enclosing label. */
+	onLabelPress?: () => void;
 }) {
-	const itemNativeID = React.useId();
+	const enclosing = React.useContext(FormItemContext);
+	const mintedID = React.useId();
+	const adopted = !label && typeof enclosing.nativeID === 'string' && enclosing.nativeID !== '';
+	const itemNativeID = adopted ? enclosing.nativeID : mintedID;
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } =
 		useFormField(itemNativeID);
+
+	const setLabelPress = adopted ? enclosing.setLabelPress : undefined;
+	React.useEffect(() => {
+		if (!setLabelPress) {
+			return;
+		}
+		setLabelPress(onLabelPress);
+		return () => setLabelPress(undefined);
+	}, [setLabelPress, onLabelPress]);
 
 	return {
 		/** For the wrapper's `FormItem`, so its label, description and message use these ids. */
@@ -39,7 +62,7 @@ export function useFormControlAria({
 		/** For the `FormLabel`'s own `nativeID` — what `aria-labelledby` resolves to. */
 		labelNativeID: formItemNativeID,
 		ariaProps: {
-			'aria-labelledby': label ? formItemNativeID : undefined,
+			'aria-labelledby': label || adopted ? formItemNativeID : undefined,
 			'aria-describedby':
 				[description && formDescriptionNativeID, error && formMessageNativeID]
 					.filter(Boolean)

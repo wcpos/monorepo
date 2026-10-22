@@ -13,6 +13,13 @@ const FormFieldContext = React.createContext<FormFieldContextValue>({} as FormFi
 
 type FormItemContextValue = {
 	nativeID: string;
+	/**
+	 * What a press on this item's `FormLabel` does when the label has no `onPress` of its
+	 * own: set by a label-less field wrapper that adopted this item (see `aria.ts`).
+	 */
+	setLabelPress?: (press: (() => void) | undefined) => void;
+	/** Runs whatever `setLabelPress` last set. */
+	pressLabel?: () => void;
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);

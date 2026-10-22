@@ -45,9 +45,14 @@ type FormItemProps<U> = FormFieldFieldProps<U> & {
 function FormItem({ className, nativeID: itemNativeID, ...props }: ViewProps) {
 	const generatedID = React.useId();
 	const nativeID = itemNativeID ?? generatedID;
+	const labelPress = React.useRef<(() => void) | undefined>(undefined);
+	const setLabelPress = React.useCallback((press: (() => void) | undefined) => {
+		labelPress.current = press;
+	}, []);
+	const pressLabel = React.useCallback(() => labelPress.current?.(), []);
 
 	return (
-		<FormItemContext.Provider value={{ nativeID }}>
+		<FormItemContext.Provider value={{ nativeID, setLabelPress, pressLabel }}>
 			<View className={cn('gap-1.5', className)} {...props} />
 		</FormItemContext.Provider>
 	);
@@ -56,9 +61,11 @@ function FormItem({ className, nativeID: itemNativeID, ...props }: ViewProps) {
 function FormLabel({
 	className,
 	nativeID: _nativeID,
+	onPress,
 	...props
 }: React.ComponentProps<typeof Label>) {
 	const { error, formItemNativeID } = useFormField();
+	const { pressLabel } = React.useContext(FormItemContext);
 
 	return (
 		<Label
@@ -66,6 +73,7 @@ function FormLabel({
 			// a little vertical padding for the finger; the horizontal inset is gone.
 			className={cn('py-1', error && 'text-destructive', className)}
 			nativeID={formItemNativeID}
+			onPress={onPress ?? pressLabel}
 			{...props}
 		/>
 	);

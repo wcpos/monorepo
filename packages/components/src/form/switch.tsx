@@ -18,7 +18,11 @@ export function FormSwitch({
 	...props
 }: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Switch>>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	React.useImperativeHandle(ref, () => {
 		if (!switchRef.current) {
