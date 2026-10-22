@@ -66,6 +66,7 @@ export const ICON_NAMES = [
 	'addCustomer', // Add a customer
 	'cashier', // The cashier / staff member
 	'customerCard', // Customer details (ID card)
+	'address', // A postal address (billing or shipping); a location pin
 	'bot', // An automated / system actor
 	'product', // A product
 	'packageOpen', // An opened package

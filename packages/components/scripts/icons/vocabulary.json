@@ -498,6 +498,12 @@
   ]
  },
  {
+  "name": "address",
+  "section": "People",
+  "meaning": "A postal address (billing or shipping); a location pin",
+  "replaces": []
+ },
+ {
   "name": "bot",
   "section": "People",
   "meaning": "An automated / system actor",

@@ -199,11 +199,92 @@ it('keeps the split wrapper out of the tree, floors the clear target and forward
 	// Per class and per prop, read from source: react-native-web compiles these classes away
 	// in this harness. Codex review on #2189.
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toContain('accessible={onClear ? false : undefined}');
+	expect(source).toContain('accessible={trail ? false : undefined}');
 	expect(source).toContain('!!(disabled || dimmed)');
 	// The clear control is as wide as the chip is tall, at both sizes.
 	expect(source).toContain("sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3'");
 	// The pill's own class line, found by a class only it carries.
 	const root = source.match(/'([^']*rounded-full border[^']*)'/)?.[1]?.split(' ') ?? [];
 	expect(root).toContain('self-start');
+});
+
+describe('action', () => {
+	const action = (onPress = jest.fn(), more: object = {}) => ({
+		icon: 'address' as const,
+		onPress,
+		accessibilityLabel: 'Edit address',
+		testID: 'chip-address',
+		...more,
+	});
+	it('renders an icon-only cell with its own name and testID, defaulting the testID', () => {
+		const { container, rerender } = render(<Chip label="Ada" testID="chip" action={action()} />);
+		expect(screen.getByTestId('chip-address')).toHaveAccessibleName('Edit address');
+		expect(screen.getByTestId('chip-address')).toHaveAttribute('role', 'button');
+		expect(container.querySelector('[data-icon="address"]')).not.toBeNull();
+		expect(screen.getByTestId('chip')).toHaveAttribute('tabindex', '-1');
+		rerender(<Chip label="Ada" testID="chip" action={action(jest.fn(), { testID: undefined })} />);
+		expect(screen.getByTestId('chip-action')).toHaveAccessibleName('Edit address');
+	});
+	it('presses the action and not the label, and the label and not the action', () => {
+		const onPress = jest.fn();
+		const onAction = jest.fn();
+		const outer = jest.fn();
+		render(
+			<div onClick={outer}>
+				<Chip label="Ada" testID="chip" onPress={onPress} action={action(onAction)} />
+			</div>
+		);
+		fireEvent.click(screen.getByTestId('chip-address'));
+		expect(onAction).toHaveBeenCalledTimes(1);
+		expect(onPress).not.toHaveBeenCalled();
+		expect(outer).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('chip-label'));
+		expect(onPress).toHaveBeenCalledTimes(1);
+		expect(onAction).toHaveBeenCalledTimes(1);
+	});
+	it('keeps its pointerdown off a trigger listening on the chip root', () => {
+		const onPointerDown = jest.fn();
+		render(<Chip label="Ada" testID="chip" action={action()} {...({ onPointerDown } as object)} />);
+		fireEvent.pointerDown(screen.getByTestId('chip-address'));
+		expect(onPointerDown).not.toHaveBeenCalled();
+	});
+	it.each([{ dimmed: true }, { disabled: true }])('is disabled with the chip for %j', (state) => {
+		const onAction = jest.fn();
+		render(<Chip {...state} label="Ada" testID="chip" action={action(onAction)} />);
+		expect(screen.getByTestId('chip-address')).toHaveAttribute('aria-disabled', 'true');
+		fireEvent.click(screen.getByTestId('chip-address'));
+		expect(onAction).not.toHaveBeenCalled();
+	});
+	it('takes the clear control’s place: onClear is ignored when both are given', () => {
+		render(<Chip label="Ada" testID="chip" onClear={jest.fn()} action={action()} />);
+		expect(screen.queryByTestId('chip-clear')).toBeNull();
+		expect(screen.getByTestId('chip-address')).toBeTruthy();
+	});
+	it('routes a press in the sm band over the action cell to the action on native', () => {
+		const { presses, layouts } = jest.requireMock<{
+			presses: Map<string, unknown>;
+			layouts: Map<string, unknown>;
+		}>('react-native');
+		const onPress = jest.fn();
+		const onAction = jest.fn();
+		render(
+			<Chip label="Ada" testID="chip" size="sm" onPress={onPress} action={action(onAction)} />
+		);
+		(layouts.get('chip-address') as (event: object) => void)({
+			nativeEvent: { layout: { x: 50, width: 32 } },
+		});
+		const route = presses.get('chip') as (event: object) => void;
+		route({ nativeEvent: { locationX: 60 } });
+		expect(onAction).toHaveBeenCalledTimes(1);
+		route({ nativeEvent: { locationX: 10 } });
+		expect(onPress).toHaveBeenCalledTimes(1);
+		expect(onAction).toHaveBeenCalledTimes(1);
+	});
+	it('fills each cell on its own, never the pill (read from source)', () => {
+		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+		expect(source).toContain("action ? 'gap-0 px-0' : 'active:bg-muted web:hover:bg-muted'");
+		expect(source).toContain(
+			"'border-border active:bg-muted web:hover:bg-muted rounded-r-full border-l'"
+		);
+	});
 });
