@@ -100,6 +100,14 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
  * Offline tenders do not queue yet (ADR 0040 §offline): a tender the store cannot hear is
  * refused. A manual `offline: 'record'` tile is disabled with the `offline` reason while the till
  * is offline or the order's save is queued, as every device tile is.
+ *
+ * This switch is the offline tender outbox's entry point, not a feature flag to tune: it flips
+ * to true in the slice that lets a tender journal while the store cannot hear it (the money
+ * command journal already re-sends on reconnect and the store replays a `record` by id, ADR 0040
+ * rule 5). What that slice still needs, and the product question it waits on, is written in
+ * woocommerce-pos ADR 0040, "Offline tenders: status". The SumUp offline-session code in
+ * apps/main (driver and native module) is the device half of the same outbox and is kept dormant
+ * for it (Paul, 2026-10-23).
  */
 export const OFFLINE_TENDERS_QUEUE = false;
 

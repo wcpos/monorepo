@@ -12,6 +12,15 @@ import { getSumUpReader } from '../../../modules/sumup-reader';
 // SumUp's offline sessions run on these readers only (Solo ≥ 3.3.31.0, Solo Lite ≥ 2.2.1.25;
 // the SDK refuses older firmware itself). The Air and Tap to Pay have no offline (roadmap#427).
 // The session query is local to the SDK; one that never answers must not hold a checkout.
+//
+// DORMANT, KEPT ON PURPOSE (Paul, 2026-10-23; monorepo#2847 closed unmerged). Nothing starts a
+// SumUp offline session today: `startOfflineSession` has no caller because offline tenders do
+// not queue (`OFFLINE_TENDERS_QUEUE` in core's checkout/tender/tiles.ts is false until the
+// offline tender outbox of ADR 0040 §offline is designed). The session query, the upload before
+// a checkout, the reconnect sync and the `authorized` outcome for an in-session checkout below
+// are the SumUp half of that outbox, validated on a physical Solo in #2495; they are not dead
+// code to delete, they wait for the outbox to flip the switch and start sessions. Where the
+// outbox stands is written in woocommerce-pos `docs/adr/0040…md`, "Offline tenders: status".
 const OFFLINE_QUERY_TIMEOUT_MS = 5000;
 
 export type Options = {
