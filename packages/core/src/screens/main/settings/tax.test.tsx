@@ -38,6 +38,28 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-hook-form', () => ({ useForm: (options: unknown) => mockUseForm(options) }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: jest.fn() }));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
+jest.mock('@wcpos/components/switch', () => ({
+	Switch: ({
+		checked,
+		disabled,
+		testID,
+		accessibilityLabel,
+	}: {
+		checked: boolean;
+		disabled?: boolean;
+		testID: string;
+		accessibilityLabel: string;
+	}) => (
+		<input
+			type="checkbox"
+			readOnly
+			checked={checked}
+			disabled={disabled}
+			data-testid={testID}
+			aria-label={accessibilityLabel}
+		/>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -150,9 +172,23 @@ describe('TaxSettings tax class persistence', () => {
 
 	it('renders the four locked store values', () => {
 		const { getByTestId } = render(<TaxSettings />);
-		expect(getByTestId('settings-tax-locked-calc_taxes').textContent).toBe('common.yes');
-		expect(getByTestId('settings-tax-locked-prices_include_tax').textContent).toBe('common.no');
-		expect(getByTestId('settings-tax-locked-tax_round_at_subtotal').textContent).toBe('common.no');
+		const calcTaxes = getByTestId('settings-tax-locked-calc_taxes-switch') as HTMLInputElement;
+		const pricesIncludeTax = getByTestId(
+			'settings-tax-locked-prices_include_tax-switch'
+		) as HTMLInputElement;
+		const roundAtSubtotal = getByTestId(
+			'settings-tax-locked-tax_round_at_subtotal-switch'
+		) as HTMLInputElement;
+		expect([calcTaxes.checked, pricesIncludeTax.checked, roundAtSubtotal.checked]).toEqual([
+			true,
+			false,
+			false,
+		]);
+		expect([calcTaxes.disabled, pricesIncludeTax.disabled, roundAtSubtotal.disabled]).toEqual([
+			true,
+			true,
+			true,
+		]);
 		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe('Standard rate');
 	});
 
@@ -186,7 +222,9 @@ describe('TaxSettings tax class persistence', () => {
 		try {
 			const { queryByRole, getByTestId } = render(<TaxSettings />);
 			expect(queryByRole('link')).toBeNull();
-			expect(getByTestId('settings-tax-locked-calc_taxes').textContent).toBe('common.yes');
+			expect(
+				(getByTestId('settings-tax-locked-calc_taxes-switch') as HTMLInputElement).checked
+			).toBe(true);
 		} finally {
 			site.url = url;
 		}

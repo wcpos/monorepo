@@ -77,7 +77,6 @@ function TaxSettingsForm() {
 			? t('common.tax_class_based_on_cart_items')
 			: (taxClasses?.find((taxClass) => taxClass.slug === shippingTaxClassSlug)?.name ??
 				shippingTaxClassSlug);
-	const yesNo = (value: unknown) => (value === 'yes' ? t('common.yes') : t('common.no'));
 	// `url` is optional on the site schema; a site without one gets no link, not a crash.
 	const siteUrl = typeof site.url === 'string' ? site.url.replace(/\/+$/, '') : '';
 	const wooTaxSettingsUrl = siteUrl ? `${siteUrl}/wp-admin/admin.php?page=wc-settings&tab=tax` : '';
@@ -140,12 +139,12 @@ function TaxSettingsForm() {
 					<LockedRow
 						label={t('settings.enable_taxes')}
 						testID="settings-tax-locked-calc_taxes"
-						value={yesNo(lockedSettings.calc_taxes)}
+						value={lockedSettings.calc_taxes === 'yes'}
 					/>
 					<LockedRow
 						label={t('settings.prices_entered_with_tax')}
 						testID="settings-tax-locked-prices_include_tax"
-						value={yesNo(lockedSettings.prices_include_tax)}
+						value={lockedSettings.prices_include_tax === 'yes'}
 					/>
 					<FormField
 						control={form.control}
@@ -169,7 +168,7 @@ function TaxSettingsForm() {
 					<LockedRow
 						label={t('settings.round_tax_at_subtotal_level')}
 						testID="settings-tax-locked-tax_round_at_subtotal"
-						value={yesNo(lockedSettings.tax_round_at_subtotal)}
+						value={lockedSettings.tax_round_at_subtotal === 'yes'}
 					/>
 					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
 					{wooTaxSettingsUrl ? (
