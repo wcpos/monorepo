@@ -377,6 +377,8 @@
 	"pos_checkout.close_needs_connection": "Completing this sale needs the store. Try again when you are online.",
 	"pos_checkout.sale_reopened_elsewhere": "This sale was reopened at the store after this payment. Check the order before taking another payment.",
 	"pos_checkout.payment_confirming": "Payment recorded. Confirming the sale with the store; the receipt follows once it does.",
+	"pos_checkout.invoice_not_cancelled": "The store did not cancel the invoice, so it still stands. Check the order before taking another payment.",
+	"pos_checkout.void_needs_connection": "Cancelling these payments needs the store. Nothing was cancelled; try again when you are online.",
 	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
 	"pos_checkout.hide_log": "Hide log",
 	"pos_checkout.log_copied": "Log copied",

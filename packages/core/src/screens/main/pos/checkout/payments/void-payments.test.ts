@@ -102,17 +102,9 @@ describe('voidPayments', () => {
 
 		const result = await voidPayments(order(rows), deps);
 
-		const unsent = (paymentId: string) => ({
-			paymentId,
-			message: 'offline_unavailable',
-			refused: false,
-		});
 		expect(result).toEqual({
-			kind: 'voided',
-			via: 'offline',
-			rows: [],
-			failed: [unsent('pending'), unsent('authorized'), unsent('captured')],
-			order: null,
+			kind: 'offline',
+			paymentIds: ['pending', 'authorized', 'captured'],
 		});
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
@@ -132,6 +124,7 @@ describe('voidPayments', () => {
 
 		expect(deps.post.mock.calls.map(([url]) => url)).toEqual(['orders/42/payments/open/void']);
 		// #2798 thread 4341491614: what was not voided is reported, never dropped as success.
+		if (result.kind !== 'voided') throw new Error(result.kind);
 		expect(result.rows.map(({ id }) => id)).toEqual(['open']);
 		expect(result.failed).toEqual([
 			{ paymentId: 'counted', message: 'captured_refund_required', refused: true },

@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
@@ -76,8 +76,18 @@ const mockReaderState = {
 		mockReaderChanges.next();
 	},
 };
-const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
+// The money command journal's local document (ADR 0040): null until a command is journaled.
+const mockJournal$ = new BehaviorSubject<unknown>(null);
+const mockResend = jest.fn(
+	async (): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
+);
+const mockPosterInputs: { approval: unknown }[] = [];
+const mockStoreDB = {
+	addState: jest.fn(async () => mockReaderState),
+	getLocal$: () => mockJournal$,
+};
 beforeEach(() => {
+	mockJournal$.next(null);
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 });
@@ -225,6 +235,7 @@ const methods: PaymentMethodDescriptor[] = [cash, card, noDriver];
 let mockPayload: {
 	id?: number;
 	number?: string;
+	status?: string;
 	currency?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
@@ -360,8 +371,10 @@ jest.mock('@wcpos/query', () => ({
 		post: (url: string, body: unknown) => Promise<unknown>;
 		runtime: unknown;
 		orderUuid: string;
-	}) =>
-		Object.assign((url: string, body: unknown) => input.post(url, body), {
+		approval: unknown;
+	}) => {
+		mockPosterInputs.push(input);
+		return Object.assign((url: string, body: unknown) => input.post(url, body), {
 			// The mocked mirrorServerOrder under a fixed revision.
 			mirror: (answer: object) =>
 				jest
@@ -371,7 +384,9 @@ jest.mock('@wcpos/query', () => ({
 						sentRevision: 'sha256:sent',
 					}),
 			settle: async () => undefined,
-		}),
+		});
+	},
+	resendOpenCommands: (...args: unknown[]) => mockResend(...(args as [])),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -472,6 +487,174 @@ describe('useTenderFlow', () => {
 		]);
 	});
 
+	// ADR 0040 §1.3: a sent command whose answer never arrived (this process or a previous one)
+	// offers no tile and no close, only a re-send of the same journaled command.
+	it('an entry with sentAt hides the tiles and Try again re-sends it', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.tiles.length).toBeGreaterThan(0);
+		const entry = { id: 'row-1', sentAt: '2026-10-20T10:00:00Z' };
+		act(() =>
+			mockJournal$.next({
+				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-1': entry } } } } }),
+			})
+		);
+		expect(result.current.unansweredCommand).toBe(true);
+		expect(result.current.tiles).toEqual([]);
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		await act(async () => result.current.retryCommand());
+		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
+			post: expect.any(Function),
+		});
+	});
+
+	it('Try again reports a changed order as such, never as an unanswered payment', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_order_changed'), {
+				reason: 'order_changed',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_changed_retry',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
+	});
+
+	// A close replayed after a remote reopen answers its stored completion with the order as it
+	// now stands (`Payments_Controller.php:452-468`), and the resident after the mirror decides as
+	// for a first answer (Codex 4341491563 on #2798): a paid answer the resident does not show
+	// finishes nothing, and only a refresh that lands tells a reopen from a lag.
+	it.each([
+		['a paid answer the resident shows', 'completed', undefined, undefined, 'completed'],
+		['a reopened answer', 'pos-open', undefined, undefined, 'reopened'],
+		[
+			'a paid answer, resident open, refresh confirms it',
+			'completed',
+			'pos-open',
+			'refreshed',
+			'reopened',
+		],
+		[
+			'a paid answer, resident open, refresh fails',
+			'completed',
+			'pos-open',
+			'failed',
+			'unconfirmed',
+		],
+	] as const)(
+		'a replayed close with %s finishes the sale only when the resident reads paid',
+		async (_, status, resident, refreshed, closed) => {
+			const { resolveCompletionAttempt } = jest.requireMock('@wcpos/query/store-local');
+			mockPayload = {
+				id: 42,
+				total: '0.00',
+				meta_data: [],
+				...(resident ? { status: resident } : {}),
+			};
+			if (refreshed) jest.mocked(provenance.refreshOrderRecord).mockResolvedValueOnce(refreshed);
+			mockResend.mockResolvedValueOnce([
+				{ kind: 'close', data: { order: { status }, completion: { n: 1, id: 'c1' } } },
+			]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(closed === 'completed' ? 1 : 0);
+			// A reopen ends the completion attempt; an unconfirmed close keeps it for the bridge.
+			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(closed === 'reopened' ? 1 : 0);
+			if (closed !== 'completed')
+				expect(mockInfo).toHaveBeenCalledWith(
+					closed === 'reopened'
+						? 'pos_checkout.sale_reopened_elsewhere'
+						: 'pos_checkout.payment_confirming',
+					expect.objectContaining({ showToast: true })
+				);
+		}
+	);
+
+	// A replayed gateway submit answers its stored outcome with the order as it now stands.
+	it.each([
+		['paid', 'completed', 1],
+		['paid', 'pos-open', 0],
+		['settled', 'pending', 1],
+		['settled', 'pos-partial', 0],
+	])(
+		'a replayed %s submit with a %s summary finishes the sale only while done',
+		async (outcome, status, finished) => {
+			mockResend.mockResolvedValueOnce([{ kind: 'submit', data: { outcome, order: { status } } }]);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.retryCommand());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+		}
+	);
+
+	// A recovered gateway submit answered `sent` finishes as a sent sale, from the stamp the
+	// refresh adopted with the store's document.
+	it('a Try again answered sent finishes the sale through the sent path', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		mockPayload = {
+			...mockPayload,
+			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+		} as typeof mockPayload;
+		const summary = { status: 'pending' };
+		mockResend.mockResolvedValueOnce([
+			{ kind: 'submit', data: { outcome: 'sent', order: summary } },
+		]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
+			source: 'gateway',
+			order: summary,
+			stamp,
+		});
+	});
+
+	// A cash record whose answer was lost, then a remote reopen: the replay answers the captured
+	// row with the order as it now stands, open at a zero balance. Mirrored and settled, but the
+	// reopened sale is not finished from it.
+	it('a replayed record whose sale was reopened since does not finish the sale', async () => {
+		const row = payment({ amount: '92.95', tendered: '100.00' });
+		const reopened = { status: 'pos-open', total: '92.95', paid: '92.95', balance: '0.00' };
+		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: reopened } }]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('a Try again the store answers finishes the sale like a first answer', async () => {
+		const row = payment({ amount: '92.95', tendered: '100.00' });
+		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
+		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: summary } }]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				via: 'online',
+				row,
+				order: summary,
+				preparedCompleting: true,
+				amountMinor: 9295,
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
 	it('preselects the first available method once, without recording', async () => {
 		mockMethods = [noDriver, card];
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
@@ -549,7 +732,7 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
-	it('treats a save queued offline as offline for tender, even once connectivity is back', async () => {
+	it('treats a save queued offline as offline for tender, even once connectivity is back: no tile records it', async () => {
 		const onlineOnly = {
 			...card,
 			id: 'pos_online',
@@ -568,10 +751,13 @@ describe('useTenderFlow', () => {
 			reason: 'offline',
 		});
 		expect(mockRecordOptions).toHaveBeenLastCalledWith({ offline: true });
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.view).toBe('amount');
+		// ADR 0040 §offline: a tender the store cannot hear is refused, cash included.
+		expect(result.current.tiles.find((tile) => tile.method.id === 'pos_cash')).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+		});
 		await act(async () => result.current.takeTender());
-		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it.each(['online-website-available', 'offline'])(
@@ -1170,6 +1356,20 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('an offline cancel says it needs the store and never promises a hand refund', async () => {
+		mockVoidPayments.mockResolvedValue({ kind: 'offline', paymentIds: ['payment-1'] });
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.void_needs_connection',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
 	it('does not record when the storage money-path guard blocks the take', async () => {
 		mockBlockIfDegraded.mockReturnValue(true);
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -1378,6 +1578,8 @@ describe('server tender', () => {
 				orderId: 42,
 				orderNumber: '42',
 				reader: 'reader',
+				// The cashier's approval, frozen at the press (ADR 0040).
+				approval: { total: '92.95', currency: 'EUR' },
 				row: expect.objectContaining({
 					amount: '92.95',
 					status: 'pending',
@@ -1866,6 +2068,7 @@ describe('device tender', () => {
 				method: deviceMethod,
 				transport: 'bluetooth',
 				offline: false,
+				approval: { total: mockPayload.total, currency: 'EUR' },
 				row: expect.objectContaining({
 					capture_mode: 'device',
 					status: 'pending',
@@ -1959,7 +2162,9 @@ describe('device tender', () => {
 		expect(mockInfo).toHaveBeenCalled();
 	});
 });
-it('reopens a device tile via its queued transport when the selected transport needs a connection', async () => {
+// ADR 0040 §offline: offline tenders do not queue (OFFLINE_TENDERS_QUEUE), so a device tile whose
+// transport would queue is not reopened offline.
+it('does not reopen an offline device tile via a queued transport while offline tenders do not queue', async () => {
 	jest.clearAllMocks();
 	mockLeg = null;
 	mockRealService = null;
@@ -1980,8 +2185,8 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].reason).toBe('offline');
 	act(() => result.current.dispatch({ type: 'back' }));
 	act(() => result.current.pickMethod(deviceMethod.id));
-	expect(result.current.deviceTransport).toBe('bluetooth');
-	expect(result.current.tiles[0].disabled).toBe(false);
+	expect(result.current.state.methodId).toBeNull();
+	expect(result.current.tiles[0]).toMatchObject({ disabled: true, reason: 'offline' });
 });
 
 let mockBoundRegisterId: string | null = 'register';
@@ -2661,6 +2866,7 @@ jest.mock('../sale-completion', () => {
 	return {
 		...actual,
 		recordSaleAttempt: jest.fn(actual.recordSaleAttempt),
+		refreshOrderRecord: jest.fn(actual.refreshOrderRecord),
 		completionMetaFor,
 		persistSaleProvenance: jest.fn(
 			async (
@@ -2911,6 +3117,83 @@ describe('gateway capture mode (contract 1.2)', () => {
 			order: summary('pending'),
 		});
 		expect(result.current.busy).toBe(false);
+	});
+
+	// ADR 0040: the approval is frozen at the press, before the provenance save; the poster then
+	// refuses a submit whose order moved (query/tests/money-command.test.ts).
+	it('a provenance push that moves the total from 100 to 120 leaves the submit approved at 100', async () => {
+		mockPayload.total = '100.00';
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		jest.mocked(provenance.persistSaleProvenance).mockImplementationOnce(async () => {
+			mockPayload.total = '120.00';
+		});
+		mockPosterInputs.length = 0;
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockPosterInputs.at(-1)?.approval).toEqual({ total: '100.00', currency: 'EUR' });
+	});
+
+	// Codex 4340856695 on #2798: a settled answer the resident after the mirror does not show (a
+	// reopen adopted since) is no finished sale, so the paid sentence is not said.
+	it('a settled answer whose resident reads open says no paid sentence', async () => {
+		mockAutoShowReceipt = false;
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		mockCompleteOrderFlow.mockImplementationOnce(async () => {
+			mockPayload = { ...mockPayload, status: 'pos-open' } as typeof mockPayload;
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		try {
+			act(() => result.current.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.takeTender());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
+			expect(mockInfo).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_completed_for_order',
+				expect.anything()
+			);
+		} finally {
+			mockAutoShowReceipt = true;
+		}
+	});
+
+	it('a replayed paid submit whose sale was reopened since finishes nothing and says so', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'paid', payment: null, order: summary('pos-open') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('a cancel answered with the order not open again says the invoice stands', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		mockPayload = {
+			...mockPayload,
+			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+		} as typeof mockPayload;
+		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.cancelInvoice());
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.invoice_not_cancelled',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockInfo).not.toHaveBeenCalledWith('pos_checkout.invoice_cancelled', expect.anything());
 	});
 
 	it('prefills the declared components from the order and posts them under a fresh attempt id', async () => {
@@ -4159,6 +4442,25 @@ describe('cash rounding (#66, #84)', () => {
 		);
 	});
 
+	it('a cash balance of 0.02 rounded to zero completes through close on the first press', async () => {
+		mockPayload = sale('0.02');
+		mockManualPost.mockResolvedValue({
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		// The close is approved against the total the rounding fee commits (0.00), not the 0.02
+		// the cashier saw before it: the store's order and the approval agree on the first press.
+		const close = mockPosterInputs.at(-1) as { approval: { total: string } };
+		expect(close.approval.total).toBe('0.00');
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'zero-balance' },
+			expect.anything()
+		);
+	});
+
 	it('a zero-balance completion that cannot build its meta leaves no fee behind', async () => {
 		mockPayload = sale('0.02');
 		jest.mocked(provenance.completionMetaFor).mockRejectedValueOnce(new Error('meta'));
@@ -4202,9 +4504,6 @@ jest.mock('@wcpos/query/mutations', () => ({
 			meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
 		}
 	) => {
-		// The gateway and void paths still mirror the changes themselves.
-		if (!('payment' in answer || 'order' in answer || 'meta' in answer))
-			return mockManualMirror({ manager, collection: 'orders', recordId, changes: answer });
 		const ledger = jest.requireActual('@wcpos/order-math');
 		const meta = (mockPayload.meta_data ?? []) as MetaDataEntry[];
 		const ledgerMeta = answer.payment

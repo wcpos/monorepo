@@ -31,16 +31,23 @@ export interface VoidPaymentsFailure {
 	 */
 	refused: boolean;
 }
-export type VoidPaymentsOutcome = {
-	kind: 'voided';
-	/** `offline`: nothing was sent (nothing live to void, or no connection to send it on). */
-	via: 'online' | 'offline';
-	/** The rows that ended up voided, in ledger order. */
-	rows: PaymentRow[];
-	/** Live rows this cancel did not void: refused, unknown, unsent, or captured for good. */
-	failed: VoidPaymentsFailure[];
-	order: OrderPaymentSummary | null;
-};
+export type VoidPaymentsOutcome =
+	| {
+			kind: 'voided';
+			/** `offline`: nothing was live to void, so nothing was sent. */
+			via: 'online' | 'offline';
+			/** The rows that ended up voided, in ledger order. */
+			rows: PaymentRow[];
+			/** Live rows this cancel did not void: refused, unknown, unsent, or captured for good. */
+			failed: VoidPaymentsFailure[];
+			order: OrderPaymentSummary | null;
+	  }
+	/**
+	 * No connection: nothing was sent and nothing voided. Not a refusal: the store never answered
+	 * and the legs are still held on it, so the cashier is told the cancel needs a connection,
+	 * never to refund by hand.
+	 */
+	| { kind: 'offline'; paymentIds: string[] };
 export async function voidPayments(
 	order: VoidPaymentsOrder,
 	deps: VoidPaymentsDeps
@@ -66,23 +73,8 @@ export async function voidPayments(
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
 	// A void the server cannot hear is not sent, and nothing is voided locally: offline tenders do
 	// not queue (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
-	// (ADR 0040 §offline).
-	// Unknown, not refused: the legs are still held on the store, never to be refunded by hand.
-	if (!online)
-		return {
-			kind: 'voided',
-			via: 'offline',
-			rows: [],
-			failed: [
-				...liveRows.map((row) => ({
-					paymentId: row.id,
-					message: 'offline_unavailable',
-					refused: false,
-				})),
-				...retained,
-			],
-			order: null,
-		};
+	// (ADR 0040 §offline). A retained captured leg is reported once a cancel can reach the store.
+	if (!online) return { kind: 'offline', paymentIds: liveRows.map(({ id }) => id) };
 	const deviceHeld = liveRows.filter(
 		(row) => row.capture_mode === 'device' && row.recorded_offline && row.status === 'authorized'
 	);
