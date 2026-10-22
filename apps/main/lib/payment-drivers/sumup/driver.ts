@@ -203,13 +203,9 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 				'SumUp account does not match this store. Use Connect Reader to log in again.'
 			);
 		await permissions();
-		// While a session is active SumUp takes EVERY checkout offline. One starts only when the
-		// till is really offline (queuesOffline already required the opt-in); any other checkout,
-		// an offline-path leg with the network up included, first has SumUp upload and end it.
-		const session = await offlineSession(sdk);
-		if (input.offline && !online) {
-			if (!session.active) await sdk.startOfflineSession();
-		} else if (session.pending) await sdk.uploadOffline();
+		// While a session is active SumUp takes EVERY checkout offline, so a checkout first has
+		// SumUp upload and end one this app started (offline tenders do not queue).
+		if ((await offlineSession(sdk)).pending) await sdk.uploadOffline();
 		await sdk.prepareForCheckout().catch(rethrowPermissionError);
 		const checkout = sdk.checkout({
 			amount: input.row.amount,
@@ -224,7 +220,7 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		const result = await checkout.catch(rethrowPermissionError);
 		const base = { amount: null, receipt: {}, provider_refs: {}, transport: input.transport };
 		// Approved on the reader only: the row settles when Pro finds the uploaded transaction.
-		const provisional = input.offline || result.offline === true;
+		const provisional = result.offline === true;
 		// A previous attempt may have charged: Pro must verify this row by lookup.
 		if (result.resultCode === 9 || result.resultCode === 53)
 			return {
@@ -330,16 +326,14 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		},
 		async collect(input: Parameters<PaymentDriver['collect']>[0]): Promise<CollectResult> {
 			if (input.transport !== 'bluetooth') throw new Error('SumUp requires a Bluetooth reader');
-			if (input.offline && !queuesOffline(input.transport))
-				throw new Error('This SumUp reader cannot take offline payments');
 			collecting = true;
 			try {
 				await syncing;
 				return await collectOnce(input);
 			} finally {
 				collecting = false;
-				// A reconnect skipped during the checkout, or a session this checkout may have used.
-				if (syncSkipped || input.offline) void syncOffline();
+				// A reconnect skipped during the checkout.
+				if (syncSkipped) void syncOffline();
 			}
 		},
 		status$: {

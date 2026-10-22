@@ -43,7 +43,6 @@ const input: CollectInput = {
 	method: descriptor,
 	transport: 'bluetooth',
 	handoff: null,
-	offline: false,
 	tipEligibleMinor: 1000,
 };
 const saved = { connected: false, serial: 'R1', model: 'Solo', battery: 82 };
@@ -238,32 +237,13 @@ it('rejects tap-to-pay before opening checkout', async () => {
 	await expect(driver.collect({ ...input, transport: 'tap_to_pay' })).rejects.toThrow(/Bluetooth/i);
 	expect(sdk.checkout).not.toHaveBeenCalled();
 });
-const offlineInput = { ...input, offline: true, tipEligibleMinor: null };
 const live = { active: true, pending: true };
-it.each(['SOLO_LITE', 'SOLO'])(
-	'takes an offline payment on a %s inside a SumUp offline session, as an authorization',
-	async (model) => {
-		sdk.readerStatus.mockResolvedValue({ ...saved, model });
-		await driver.initialize();
-		expect(driver.queuesOffline('bluetooth')).toBe(true);
-		expect(driver.queuesOffline('tap_to_pay')).toBe(false);
-		await expect(driver.collect(offlineInput)).resolves.toEqual({
-			outcome: 'authorized',
-			provider_refs: { transaction_code: 'TX1', foreign_transaction_id: 'leg' },
-			receipt: { brand: 'VISA', last4: '1234' },
-			amount: '11.25',
-			transport: 'bluetooth',
-		});
-		expect(sdk.startOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
-			sdk.checkout.mock.invocationCallOrder[0]
-		);
-		expect(sdk.uploadOffline).not.toHaveBeenCalled();
-		// A session SumUp already holds (it survives app restarts) is reused, not restarted.
-		sdk.offlineSession.mockResolvedValue(live);
-		await driver.collect(offlineInput);
-		expect(sdk.startOfflineSession).toHaveBeenCalledTimes(1);
-	}
-);
+it.each(['SOLO_LITE', 'SOLO'])('a %s queues offline on Bluetooth only', async (model) => {
+	sdk.readerStatus.mockResolvedValue({ ...saved, model });
+	await driver.initialize();
+	expect(driver.queuesOffline('bluetooth')).toBe(true);
+	expect(driver.queuesOffline('tap_to_pay')).toBe(false);
+});
 it.each([
 	['an Air', { model: 'AIR' }, descriptor],
 	['an unknown reader', { model: 'UNKNOWN' }, descriptor],
@@ -275,29 +255,17 @@ it.each([
 			capabilities: { ...descriptor.capabilities, offline: 'none' },
 		},
 	],
-])('refuses offline on %s before touching the SDK session', async (_name, reader, value) => {
+])('does not queue offline on %s', async (_name, reader, value) => {
 	resolveMethod.mockReturnValue(value);
 	sdk.readerStatus.mockResolvedValue({ ...saved, ...reader });
 	await driver.initialize();
 	expect(driver.queuesOffline('bluetooth')).toBe(false);
-	await expect(driver.collect(offlineInput)).rejects.toThrow(/cannot take offline/);
-	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
-	expect(sdk.checkout).not.toHaveBeenCalled();
 });
 it('does not offer offline before login', async () => {
 	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
 	sdk.isLoggedIn.mockResolvedValue(false);
 	await driver.initialize();
 	expect(driver.queuesOffline('bluetooth')).toBe(false);
-});
-it('stops before checkout when SumUp refuses to start an offline session', async () => {
-	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
-	sdk.startOfflineSession.mockRejectedValue(
-		new Error('SumUp has not enabled offline payments on this account')
-	);
-	await driver.initialize();
-	await expect(driver.collect(offlineInput)).rejects.toThrow('not enabled offline payments');
-	expect(sdk.checkout).not.toHaveBeenCalled();
 });
 it('has SumUp upload and end an active session before an online payment, and refuses if it cannot', async () => {
 	sdk.offlineSession.mockResolvedValue(live);
@@ -338,23 +306,6 @@ it('refuses an online payment when SumUp never says whether a session is active'
 	} finally {
 		jest.useRealTimers();
 	}
-});
-it('takes an offline-path payment online when the network is up: no session, still an authorization', async () => {
-	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
-	await driver.initialize();
-	driver.setOnline(true);
-	await expect(driver.collect(offlineInput)).resolves.toMatchObject({ outcome: 'authorized' });
-	await act(async () => {}); // the sync after an offline-path checkout settles
-	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
-	expect(sdk.uploadOffline).not.toHaveBeenCalled();
-	// A live session with the network up: SumUp uploads and ends it before this checkout.
-	sdk.offlineSession.mockResolvedValue(live);
-	sdk.checkout.mockClear();
-	await driver.collect(offlineInput);
-	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
-	expect(sdk.uploadOffline.mock.invocationCallOrder[0]).toBeLessThan(
-		sdk.checkout.mock.invocationCallOrder[0]
-	);
 });
 it('never calls a payment SumUp took offline captured', async () => {
 	sdk.checkout.mockResolvedValue({ ...success, offline: true });

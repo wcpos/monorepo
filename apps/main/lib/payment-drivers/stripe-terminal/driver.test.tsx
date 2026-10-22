@@ -72,7 +72,6 @@ const pi = {
 			},
 		},
 	],
-	offlineDetails: { id: 'offline_1' },
 };
 const input: CollectInput = {
 	dp: 2,
@@ -80,7 +79,6 @@ const input: CollectInput = {
 	method,
 	transport: 'bluetooth',
 	handoff: { client_secret: 'secret' },
-	offline: false,
 	tipEligibleMinor: 1000,
 };
 const handoff = { method_id: 'stripe_method', location_id: 'tml_1' };
@@ -94,7 +92,6 @@ function sdkMock() {
 		retrievePaymentIntent: jest
 			.fn()
 			.mockResolvedValue({ paymentIntent: { ...pi, id: 'pi_retrieved' } }),
-		createPaymentIntent: jest.fn().mockResolvedValue({ paymentIntent: { ...pi, id: undefined } }),
 		collectPaymentMethod: jest
 			.fn()
 			.mockResolvedValue({ paymentIntent: { ...pi, id: 'pi_collected' } }),
@@ -524,32 +521,9 @@ it('rejects SDK and unexpected thrown errors instead of inventing outcomes', asy
 	api.confirmPaymentIntent.mockResolvedValueOnce({});
 	await expect(driver.collect(input)).rejects.toThrow('payment intent');
 });
-it('forces offline authorization and settles only a successfully forwarded row', async () => {
+it('settles only a successfully forwarded row', async () => {
 	const settled = jest.fn();
 	const unsubscribe = driver.settleOffline$.subscribe(settled);
-	await expect(
-		driver.collect({ ...input, offline: true, tipEligibleMinor: null })
-	).resolves.toMatchObject({
-		outcome: 'authorized',
-		amount: '10.00',
-		provider_refs: { payment_intent: null },
-	});
-	expect((await driver.collect({ ...input, offline: true })).provider_refs).toEqual({
-		payment_intent: null,
-	});
-	expect(api.createPaymentIntent).toHaveBeenCalledWith({
-		amount: 1000,
-		currency: 'usd',
-		captureMethod: 'automatic',
-		offlineBehavior: 'force_offline',
-		metadata: { wcpos_payment_id: 'leg' },
-	});
-	expect(api.retrievePaymentIntent).not.toHaveBeenCalled();
-	expect(api.collectPaymentMethod).toHaveBeenCalledWith({
-		paymentIntent: { ...pi, id: undefined },
-		tipEligibleAmount: undefined,
-		skipTipping: true,
-	});
 	driver.callbacks.onDidForwardPaymentIntent(rawPi, {
 		code: 'NetworkError',
 		message: 'not forwarded',
@@ -879,13 +853,9 @@ it('prefers the current resolved descriptor over previously collected test mode'
 	});
 });
 
-it.each(['10', '10.5'])('uses configured precision for %s online and offline', async (amount) => {
+it.each(['10', '10.5'])('uses configured precision for %s', async (amount) => {
 	const value = { ...input, row: { ...row, amount } };
 	await expect(driver.collect(value)).resolves.toMatchObject({ amount: '11.25' });
-	await driver.collect({ ...value, offline: true });
-	expect(api.createPaymentIntent).toHaveBeenCalledWith(
-		expect.objectContaining({ amount: amount === '10' ? 1000 : 1050 })
-	);
 });
 it.each([
 	['poweredOff', 'Reader powered off'],

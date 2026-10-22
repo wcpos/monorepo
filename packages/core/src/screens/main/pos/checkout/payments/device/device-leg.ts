@@ -21,8 +21,7 @@ export type DeviceLegState = Omit<ServerLegState, 'phase'> & {
 	failureReason: string | null;
 };
 type Outcome = DeviceLegState['outcome'];
-// Offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false): a leg always collects online.
-export type DeviceLegInput = Omit<CollectInput, 'handoff' | 'method' | 'offline'> & {
+export type DeviceLegInput = Omit<CollectInput, 'handoff' | 'method'> & {
 	orderId: number;
 	resume: boolean;
 	method?: CollectInput['method'];
@@ -339,7 +338,6 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 					method: input.method,
 					transport: input.transport,
 					handoff,
-					offline: false,
 					tipEligibleMinor: input.tipEligibleMinor,
 				});
 			} catch (error) {

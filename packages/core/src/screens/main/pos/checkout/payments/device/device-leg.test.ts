@@ -118,7 +118,6 @@ it('mirrors intent before collect and sends exactly the driver context for serve
 		transport: 'bluetooth',
 		dp: 3,
 		handoff: { token: 'opaque' },
-		offline: false,
 		tipEligibleMinor: 1000,
 	});
 	c.collection.resolve(approved);
