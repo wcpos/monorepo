@@ -135,7 +135,7 @@ export function useTerminalPaymentsService(): void {
 			patchAndEnqueue: async () => {
 				throw new Error('offline_unavailable');
 			},
-			mirror: async (orderUuid, { payment, order }, poster) => {
+			mirror: async (orderUuid, { payment, order, revision }, poster) => {
 				let mirrored = false;
 				try {
 					const resident = await readResidentOrder(manager, orderUuid);
@@ -149,6 +149,7 @@ export function useTerminalPaymentsService(): void {
 					await poster.mirror({
 						payment,
 						order,
+						revision,
 						// A device leg's tip moves the order total.
 						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
 					});

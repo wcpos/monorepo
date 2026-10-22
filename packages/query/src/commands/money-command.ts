@@ -73,9 +73,10 @@ export type MoneyCommandPoster = Post & {
 	/**
 	 * Mirror an answer onto the LATEST resident under the revision the last command was sent
 	 * with (the summary's status lands only while the resident still carries it), then settle:
-	 * delete the answered entries and run the forced refresh.
+	 * delete the answered entries and run the forced refresh. A status poll's `revision` is
+	 * recorded as the order's chain, without the refresh, so the next command is sent under it.
 	 */
-	mirror(answer: Omit<MoneyAnswer, 'sentRevision'>): Promise<void>;
+	mirror(answer: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }): Promise<void>;
 	/**
 	 * Delete the answered entries, then the forced refresh (what `mirror` ends with). A definitive
 	 * refusal since the last settle also earns the refresh, never an answer chain.
@@ -211,7 +212,12 @@ async function chooseRevision(
 	let { chain } = await readOrderCommands(storeDB, entry.orderUuid);
 	// A re-send reaches here only without a sent revision of its own (see sendMoneyCommand).
 	const approved = APPROVED_KINDS.has(entry.kind);
-	if (!holdsAuthority(order, chain)) {
+	// A poll's chain newer than the last whole adoption names the store's revision after the poll
+	// settled the row: a void, capture or cancel goes out under it without a re-read (the refused
+	// 409 and its re-send are what the poll's revision removes). An approved kind still re-adopts,
+	// so its approval is checked against a fresh document.
+	const polled = !!chain?.polled && (order.sync?.adopted?.at ?? 0) <= chain.answeredAt;
+	if (!holdsAuthority(order, chain) && (approved || !polled)) {
 		({ order, chain } = await readopt(runtime, storeDB, entry.orderUuid, orderId));
 		if (approved && !holdsAuthority(order, chain))
 			throw new MoneyCommandError('revision_unavailable', entry);
@@ -703,7 +709,10 @@ export function moneyCommandPoster(input: {
 		return dispatch(claim.entry);
 	};
 	return Object.assign(poster, {
-		mirror: async (answer: Omit<MoneyAnswer, 'sentRevision'>) => {
+		mirror: async ({
+			revision,
+			...answer
+		}: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }) => {
 			try {
 				await mirrorMoneyAnswer(input.runtime, input.orderUuid, { ...answer, sentRevision });
 			} catch (error) {
@@ -711,6 +720,10 @@ export function moneyCommandPoster(input: {
 				for (const { id } of answered) await release(id);
 				throw error;
 			}
+			// A poll that settled the row moved the order: record its revision, never a refresh.
+			const polled = answerChain(revision, Date.now());
+			if (polled)
+				await settleCommand(input.storeDB, input.orderUuid, null, { ...polled, polled: true });
 			await settle();
 		},
 		settle,
