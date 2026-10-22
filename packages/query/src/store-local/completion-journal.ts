@@ -1,3 +1,5 @@
+import { map } from 'rxjs/operators';
+
 import { ensureLocalDocument, storeDatabase } from './ensure-local-document';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
@@ -30,6 +32,13 @@ type Attempt = {
 	 * resident order carries, not the one the sale was opened with.
 	 */
 	settledOrderStatuses?: Record<string, string | null>;
+	/**
+	 * The store took the sale but no refresh confirmed the resident (`unconfirmed`): the store
+	 * session finishes it once a pull adopts the paid order. Its own field, never a `lastError`
+	 * value, so a later replay's error cannot clear it (Codex 4344119710 on #2836); it ends with
+	 * the attempt.
+	 */
+	awaitingAdoption?: true;
 	lastError?: string;
 };
 type Journal = { pending: Record<string, Attempt> };
@@ -78,6 +87,7 @@ export async function failCompletionAttempt(
 		expectAt?: string;
 		missingStart?: boolean;
 		unpaidStart?: boolean;
+		awaitingAdoption?: true;
 		facts?: Pick<Attempt, 'source' | 'actor'>;
 	} = {}
 ) {
@@ -94,6 +104,7 @@ export async function failCompletionAttempt(
 			entry.attempts += 1;
 			if (options.missingStart) entry.missingStarts = (entry.missingStarts ?? 0) + 1;
 			if (options.unpaidStart) entry.unpaidStarts = (entry.unpaidStarts ?? 0) + 1;
+			if (options.awaitingAdoption) entry.awaitingAdoption = true;
 			entry.lastError = error instanceof Error ? error.message : String(error);
 		}
 		return data;
@@ -102,4 +113,11 @@ export async function failCompletionAttempt(
 
 export async function pendingCompletions(storeDB: StoreLocalDatabase) {
 	return (await storeDatabase(storeDB).getLocal<Journal>(ID))?.toJSON(true).data.pending ?? {};
+}
+
+/** The pending attempts, live: the store session finishes an unconfirmed one once it reads paid. */
+export function observePendingCompletions(storeDB: StoreLocalDatabase) {
+	return storeDatabase(storeDB)
+		.getLocal$<Journal>(ID)
+		.pipe(map((doc) => doc?.toJSON(true).data.pending ?? {}));
 }

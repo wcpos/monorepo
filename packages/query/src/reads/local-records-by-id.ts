@@ -30,3 +30,13 @@ export function observeLocalRecordsById<Name extends 'orders' | 'products' | 'pr
 		)
 	);
 }
+
+/** The resident orders with these uuids, live (no demand): an unbound scope answers []. */
+export function observeResidentOrders(engine: RxdbSyncEngine, uuids: readonly string[]) {
+	if (uuids.length === 0) return of([]);
+	return observeEngineQuery(engine, {
+		collection: 'orders',
+		selector: { uuid: { $in: [...uuids] } },
+		limit: Number.MAX_SAFE_INTEGER,
+	}).pipe(map(({ hits }) => hits.map(({ record }) => record.uuid)));
+}

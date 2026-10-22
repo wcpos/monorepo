@@ -293,11 +293,16 @@ export async function readMoneyJournal(
  * The recovery skips a claimed command, so the session runs it again at this time: a claim a
  * crashed process left behind must not keep its command unanswered while the till stays online.
  */
-export async function nextClaimExpiry(storeDB: StoreLocalDatabase, now = Date.now()) {
+export async function nextClaimExpiry(
+	storeDB: StoreLocalDatabase,
+	scope: string | null,
+	now = Date.now()
+) {
 	let next: number | null = null;
 	for (const { entries } of Object.values(await readMoneyJournal(storeDB)))
 		for (const entry of entries)
-			if (entry.sentAt !== null && claimHeld(entry, null, now)) {
+			// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
+			if (entry.sentAt !== null && entry.scope === scope && claimHeld(entry, null, now)) {
 				const expiry = (entry.claimedAt ?? 0) + CLAIM_LEASE_MS;
 				if (next === null || expiry < next) next = expiry;
 			}

@@ -136,6 +136,20 @@ function holdsAuthority(order: ResidentOrder, chain: RevisionChain | null): bool
 	);
 }
 
+/**
+ * The receipt's barrier (§1.8) as a named read: the resident holds a whole document adopted
+ * after the order's last answer. A paid status the mirror copied is not one (Codex 4345589089 on
+ * #2836).
+ */
+export async function residentHoldsAnswer(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<boolean> {
+	const { order } = await readOrder(runtime, orderUuid);
+	return holdsAuthority(order, (await readOrderCommands(storeDB, orderUuid)).chain);
+}
+
 function approvalHolds(approval: OrderApproval, order: { total?: unknown; currency?: unknown }) {
 	return (
 		Number(order.total) === Number(approval.total) && String(order.currency) === approval.currency
@@ -463,12 +477,18 @@ export async function resendOpenCommands(
 
 /**
  * When the session runs the recovery again after a re-send that failed without a definitive
- * answer (a 429, a 5xx, no answer) while the till stays online (Codex 4333265115 on #2798). Half
- * a minute rides out a rate limit or a proxy restart; two and then ten minutes stop a store that
- * is down from being hammered, and the last step repeats until a run answers. A reconnect, a
- * restart and Try again still re-send at once.
+ * answer (a 429, a 5xx, no answer) while the till stays online (Codex 4333265115 on #2798). A
+ * reconnect, a restart and Try again still re-send at once.
  */
-export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 600_000];
+export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [
+	// A reconnect blip: a rate limit or a proxy restart is over in half a minute.
+	30_000,
+	// A store restart takes a minute or two.
+	120_000,
+	// A longer outage: repeated every ten minutes so a down store is not hammered, until a run
+	// answers or the next session start re-sends at once.
+	600_000,
+];
 
 /** A store-session recovery's re-sends for one order, answered. */
 interface RecoveredOrder {

@@ -473,6 +473,14 @@ async function finishSale(
 	};
 }
 
+/**
+ * The store answered the sale paid but no refresh confirmed the resident: the attempt awaits the
+ * pull that adopts the paid order, and the bridge finishes it then. The one place this state is
+ * written, for a close at the till (`unconfirmed`) and a recovered answer alike.
+ */
+export const awaitAdoption = (storeDB: StoreDatabase, orderUuid: string) =>
+	failCompletionAttempt(storeDB, orderUuid, 'unconfirmed', { awaitingAdoption: true });
+
 export async function completeSale(
 	ctx: SaleContext,
 	order: EngineRecord<'orders'>,
@@ -526,6 +534,7 @@ export async function completeSale(
 			result.outcome === 'unconfirmed' ||
 			(outcome.source === 'replay' && result.outcome !== 'completed');
 		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+		else if (result.outcome === 'unconfirmed') await awaitAdoption(ctx.storeDB, order.uuid);
 		return result.outcome;
 	} catch (error) {
 		try {

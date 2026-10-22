@@ -1,28 +1,51 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { firstValueFrom } from 'rxjs';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { type OrderPaymentSummary, readAwaitingCustomer } from '@wcpos/order-math';
+import {
+	observeResidentOrders,
+	recoverMoneyCommands,
+	RECOVERY_RETRY_DELAYS_MS,
+	type ResentCommand,
+	residentHoldsAnswer,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
+import {
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isPaidStatus,
+	scopeDatabaseName,
+} from '@wcpos/sync-core';
 import {
 	awaitLegacyUnsentReport,
 	legacyUnsentOrderUuids,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 import {
+	claimHeld,
 	failCompletionAttempt,
+	type MoneyCommandEntry,
+	nextClaimExpiry,
+	observeMoneyJournal,
+	observePendingCompletions,
 	pendingCompletions,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
+import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	getTerminalPaymentsServiceStartVersion,
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
-import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
+import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -37,11 +60,36 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
  */
 const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
-/** Replays outstanding finishes at store-session start, never collecting or pushing money. */
+type Attempt = Awaited<ReturnType<typeof pendingCompletions>>[string];
+/** The stored status the attempt journaled settles the replay as the pay window would. */
+const replayOf = (attempt: Attempt) => ({
+	source: 'replay' as const,
+	...(attempt.settledOrderGateway !== undefined
+		? { settledOrderGateway: attempt.settledOrderGateway }
+		: {}),
+	...(attempt.settledOrderStatus != null ? { settledOrderStatus: attempt.settledOrderStatus } : {}),
+	// A pay-page attempt's catalog: judged by the gateway the resident order carries.
+	...(attempt.settledOrderStatuses ? { settledOrderStatuses: attempt.settledOrderStatuses } : {}),
+});
+
+/**
+ * Replays outstanding finishes at store-session start, never collecting money. First, at start
+ * and on every reconnect, it re-sends the money commands that were sent and never answered
+ * (ADR 0040 §1.3): a pull can adopt a sale completed by such a command and take it out of the
+ * open orders, so no tender is left to press Try again. An answer that completes the sale then
+ * finishes it here (receipt and audit) through the completion journal.
+ */
 export function SaleCompletionBridge(): null {
 	const { storeDB } = useStoreSession();
 	const manager = useQueryRuntime();
 	const ctx = useSaleContext();
+	const http = useRestHttpClient();
+	const httpRef = React.useRef(http);
+	const online = useOnlineStatus().status === 'online-website-available';
+	const onlineRef = React.useRef(online);
+	React.useLayoutEffect(() => {
+		httpRef.current = http;
+	}, [http]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -53,7 +101,20 @@ export function SaleCompletionBridge(): null {
 		ctx: typeof ctx;
 		startVersion: number;
 		stopped: boolean;
+		reconnect: () => void;
+		/** Schedule the claim-lapse and ladder re-runs; `disarm` cancels them. */
+		arm: () => void;
+		disarm: () => void;
+		/** Watch the journal for commands left unanswered (see `observeMoneyJournal`). */
+		watch: () => void;
 	} | null>(null);
+
+	// A reconnect re-sends what the outage left unanswered, then finishes what it completed.
+	React.useEffect(() => {
+		const was = onlineRef.current;
+		onlineRef.current = online;
+		if (online && !was) session.current?.reconnect();
+	}, [online]);
 
 	// The journal belongs to the external store session, not a checkout screen.
 	React.useEffect(() => {
@@ -68,11 +129,26 @@ export function SaleCompletionBridge(): null {
 			// Context changes and StrictMode reconnect the same run, never start another.
 			previous.ctx = ctx;
 			previous.stopped = false;
+			// React re-runs effects on remount and HMR; the watch and timers are re-armed so no
+			// interval goes unwatched.
+			previous.watch();
+			if (onlineRef.current) previous.arm();
 			return () => {
 				previous.stopped = true;
+				previous.disarm();
 			};
 		}
-		const current = { storeDB, manager, ctx, startVersion, stopped: false };
+		const current = {
+			storeDB,
+			manager,
+			ctx,
+			startVersion,
+			stopped: false,
+			reconnect: () => {},
+			arm: () => {},
+			disarm: () => {},
+			watch: () => {},
+		};
 		session.current = current;
 		/**
 		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
@@ -135,10 +211,161 @@ export function SaleCompletionBridge(): null {
 				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) => await readResidentOrder(manager, uuid);
-		const replay = async () => {
+		// A command the recovery skipped because a live claim held it is tried again when that claim
+		// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
+		let lapse: ReturnType<typeof setTimeout> | undefined;
+		// The backoff re-run after an unanswered re-send (`RECOVERY_RETRY_DELAYS_MS`).
+		let retry: ReturnType<typeof setTimeout> | undefined;
+		// The armed step's deadline, kept across an effect re-run's disarm; `retries` counts the
+		// re-runs that executed, so scheduling twice never advances the ladder (Codex 4344063834
+		// on #2836).
+		let retryAt: number | null = null;
+		let retries = 0;
+		let retryPending = false;
+		// Declared here so `disarm` can end it; `watch` (below) starts it.
+		let journalWatch: { unsubscribe: () => void } | undefined;
+		let adoptionWatch: { unsubscribe: () => void } | undefined;
+		// A finish that throws backs off on the ladder, per order: recording its failure writes the
+		// journal, which must not itself run the next attempt (Codex 4344157679 on #2836).
+		type Backoff = { failures: number; at: number; timer?: ReturnType<typeof setTimeout> };
+		const adoptionBackoff = new Map<string, Backoff>();
+		/**
+		 * A sent command of the active scope that nobody holds: the recovery owes it a re-send. Read
+		 * off the CURRENT journal, so a command that lost its answer while a run iterated its
+		 * snapshot keeps its retry (Codex 4345589102 on #2836).
+		 */
+		const unansweredIn = (entries: readonly MoneyCommandEntry[]) => {
+			const scope = manager.engine?.active()?.scopeId ?? null;
+			return entries.some(
+				(entry) => entry.sentAt !== null && entry.scope === scope && !claimHeld(entry, null)
+			);
+		};
+		const disarm = () => {
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
+			if (retry !== undefined) clearTimeout(retry);
+			retry = undefined;
+			journalWatch?.unsubscribe();
+			journalWatch = undefined;
+			adoptionWatch?.unsubscribe();
+			adoptionWatch = undefined;
+			for (const backoff of adoptionBackoff.values()) {
+				if (backoff.timer !== undefined) clearTimeout(backoff.timer);
+				backoff.timer = undefined;
+			}
+		};
+		const armRetry = () => {
+			if (retry !== undefined || !retryPending || current.stopped) return;
+			const now = Date.now();
+			retryAt ??=
+				now + RECOVERY_RETRY_DELAYS_MS[Math.min(retries, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+			retry = setTimeout(
+				() => {
+					retry = undefined;
+					retryAt = null;
+					// Offline nothing can be sent; the reconnect hook re-runs recovery (Codex 4333265115
+					// on #2798).
+					if (!onlineRef.current) return;
+					retries += 1;
+					current.reconnect();
+				},
+				Math.max(0, retryAt - now)
+			);
+		};
+		const recoverWhenClaimsLapse = async () => {
+			const scope = manager.engine?.active()?.scopeId ?? null;
+			const expiry = await nextClaimExpiry(storeDB, scope).catch(() => null);
+			if (lapse !== undefined) clearTimeout(lapse);
+			lapse = undefined;
+			if (expiry === null || current.stopped) return;
+			lapse = setTimeout(() => current.reconnect(), Math.max(0, expiry - Date.now()) + 1);
+		};
+		current.disarm = disarm;
+		current.arm = () => {
+			void recoverWhenClaimsLapse();
+			armRetry();
+		};
+		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
+		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
+			if (current.stopped) return new Map();
+			// Bound to this session (Codex 4344063828 on #2836): a store or site switch swaps the
+			// client, and an old journal's command must not go out through the new store. Refused
+			// once the session stops, a send stays journaled for its own session's recovery.
+			const client = httpRef.current;
+			try {
+				const recovered = await recoverMoneyCommands(manager, storeDB, {
+					post: (url, body) =>
+						current.stopped
+							? Promise.reject(new Error('money_command_session_stopped'))
+							: client.post(url, body),
+				});
+				await recoverWhenClaimsLapse();
+				retryPending =
+					recovered.some(({ unanswered }) => unanswered) ||
+					unansweredIn(await firstValueFrom(observeMoneyJournal(storeDB)));
+				if (!retryPending) {
+					retries = 0;
+					retryAt = null;
+					if (retry !== undefined) clearTimeout(retry);
+					retry = undefined;
+				}
+				armRetry();
+				return new Map(
+					recovered
+						.filter(({ answers }) => answers.length > 0)
+						.map(({ orderUuid, answers }) => [orderUuid, answers])
+				);
+			} catch (error) {
+				logger.debug('Could not re-send unanswered money commands', {
+					context: { error: String(error) },
+				});
+				return new Map();
+			}
+		};
+		/**
+		 * A recovered gateway submit answered `sent` finishes as a sent sale (its `checkout.sent`
+		 * audit, the attempt resolved), from the stamp the refresh adopted with the store's
+		 * document: never the unpaid replay, which would count starts and abandon it. Returns the
+		 * orders finished this way; the rest go through the completion replay.
+		 */
+		const finishRecovered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
+			const finished = new Set<string>();
+			if (answered.size === 0) return finished;
+			const pending = await pendingCompletions(storeDB);
+			for (const [uuid, answers] of answered) {
+				if (current.stopped) break;
+				const sent = answers.find(({ kind, data }) => kind === 'submit' && data.outcome === 'sent');
+				const attempt = pending[uuid];
+				const summary = sent?.data.order as OrderPaymentSummary | undefined;
+				// A `sent` gateway answer is final only when the summary carries a status; a summary
+				// without one is the trimmed ack and the next refresh decides (ADR 0040 §1.8).
+				if (!sent || !attempt || typeof summary?.status !== 'string') continue;
+				const resident = await findOrder(uuid);
+				const stamp = resident
+					? readAwaitingCustomer(resident.getLatest().payload.meta_data)
+					: null;
+				if (!resident || !stamp) continue;
+				try {
+					await completeSale(
+						{ ...current.ctx, actor: attempt.actor },
+						resident,
+						{ source: 'gateway', order: summary, stamp },
+						{ host: 'background' }
+					);
+					finished.add(uuid);
+				} catch (error) {
+					logger.debug('Recovered sent sale not finished', {
+						context: { orderUUID: uuid, error: String(error) },
+					});
+				}
+			}
+			return finished;
+		};
+		const replay = async (only?: ReadonlySet<string>, skip?: ReadonlySet<string>) => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {
 				if (current.stopped) return;
+				if ((only && !only.has(uuid)) || skip?.has(uuid)) continue;
 				try {
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
@@ -185,20 +412,7 @@ export function SaleCompletionBridge(): null {
 					}
 					let refreshed = false;
 					const payload = resident.getLatest().payload;
-					// The stored status the attempt journaled settles the replay as the pay window would.
-					const replay = {
-						source: 'replay' as const,
-						...(attempt.settledOrderGateway !== undefined
-							? { settledOrderGateway: attempt.settledOrderGateway }
-							: {}),
-						...(attempt.settledOrderStatus != null
-							? { settledOrderStatus: attempt.settledOrderStatus }
-							: {}),
-						// A pay-page attempt's catalog: judged by the gateway the resident order carries.
-						...(attempt.settledOrderStatuses
-							? { settledOrderStatuses: attempt.settledOrderStatuses }
-							: {}),
-					};
+					const replay = replayOf(attempt);
 					if (
 						payload.status !== 'cancelled' &&
 						!isSaleComplete(replay, current.ctx.dp, payload) &&
@@ -248,13 +462,147 @@ export function SaleCompletionBridge(): null {
 				}
 			}
 		};
-		void replay().catch((error: unknown) => {
-			logger.debug('Could not read pending sale completions', {
-				context: { error: String(error) },
+		// A recovered answer that reads paid but did not finish here (its refresh failed) is the same
+		// state as an unconfirmed close: the pull that adopts the paid order finishes it (Codex
+		// 4344157692 on #2836).
+		const awaitAnswered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
+			if (answered.size === 0) return;
+			const pending = await pendingCompletions(storeDB);
+			for (const [uuid, answers] of answered)
+				if (
+					pending[uuid] &&
+					answers.some(({ data }) =>
+						isPaidStatus((data.order as { status?: unknown } | undefined)?.status)
+					)
+				)
+					await awaitAdoption(storeDB, uuid);
+		};
+		// One run at a time: a reconnect during the start's replay waits for it.
+		let queue: Promise<void> = Promise.resolve();
+		const run = (task: () => Promise<void>) => {
+			queue = queue.then(task).catch((error: unknown) => {
+				logger.debug('Could not read pending sale completions', {
+					context: { error: String(error) },
+				});
 			});
+		};
+		run(async () => {
+			const answered = onlineRef.current ? await recover() : new Map<string, ResentCommand[]>();
+			const sent = await finishRecovered(answered);
+			if (!current.stopped) await replay(undefined, sent);
+			if (!current.stopped) await awaitAnswered(answered);
 		});
+		current.reconnect = () =>
+			run(async () => {
+				if (current.stopped) return;
+				const answered = await recover();
+				const sent = await finishRecovered(answered);
+				const rest = new Set([...answered.keys()].filter((uuid) => !sent.has(uuid)));
+				if (rest.size > 0 && !current.stopped) await replay(rest);
+				if (!current.stopped) await awaitAnswered(answered);
+			});
+		// A command whose answers are lost after this session's first recovery, while the till
+		// stays online: no reconnect will come for it, and a pull may close its tender. Watching
+		// the journal schedules its recovery: a sent command nobody holds arms the first backoff
+		// step, a live claim its lapse. Another scope's command waits for that scope.
+		const watch = () => {
+			journalWatch ??= observeMoneyJournal(storeDB).subscribe({
+				next: (entries) => {
+					if (current.stopped) return;
+					if (unansweredIn(entries)) {
+						retryPending = true;
+						armRetry();
+					}
+					void recoverWhenClaimsLapse();
+				},
+				error: () => undefined,
+			});
+		};
+		/**
+		 * An `unconfirmed` sale (Codex 4341491589 on #2798): the store took it, no refresh agreed,
+		 * and the tender left it to this bridge. Once a pull adopts the paid order it is finished
+		 * here, the same session: receipt, completion audit, attempt resolved. Checked inside the
+		 * order's mutation queue, so a finish that ran first (a retried close) is not repeated.
+		 */
+		const finishAdopted = (uuids: string[]) =>
+			run(async () => {
+				for (const uuid of uuids) {
+					const backoff = adoptionBackoff.get(uuid);
+					if (backoff && backoff.at > Date.now()) {
+						armAdoption(uuid, backoff, backoff.at - Date.now());
+						continue;
+					}
+					const resident = current.stopped ? null : await findOrder(uuid);
+					if (!resident) continue;
+					try {
+						await finishOne(uuid, resident);
+						adoptionBackoff.delete(uuid);
+					} catch (error) {
+						const failures = (backoff?.failures ?? 0) + 1;
+						const step =
+							RECOVERY_RETRY_DELAYS_MS[Math.min(failures - 1, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+						const next = { failures, at: Date.now() + step };
+						adoptionBackoff.set(uuid, next);
+						armAdoption(uuid, next, step);
+						logger.debug('Adopted sale not finished', {
+							context: { orderUUID: uuid, error: String(error) },
+						});
+					}
+				}
+			});
+		const finishOne = (
+			uuid: string,
+			resident: NonNullable<Awaited<ReturnType<typeof findOrder>>>
+		) =>
+			enqueueOrderMutation(uuid, async (queue) => {
+				const attempt = (await pendingCompletions(storeDB))[uuid];
+				if (!attempt?.awaitingAdoption || current.stopped) return;
+				const outcome = replayOf(attempt);
+				if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
+				// Only a whole document adopted after the answer stands in for the replay's refresh;
+				// until one arrives the attempt stays pending.
+				if (!(await residentHoldsAnswer(manager, storeDB, uuid))) return;
+				const ctx = { ...current.ctx, actor: attempt.actor };
+				const finish = { ...outcome, refreshed: true };
+				await completeSale(ctx, resident, finish, { host: 'background' }, queue);
+			});
+		const armAdoption = (uuid: string, backoff: Backoff, delay: number) => {
+			if (backoff.timer !== undefined || current.stopped) return;
+			backoff.timer = setTimeout(
+				() => {
+					backoff.timer = undefined;
+					backoff.at = 0;
+					finishAdopted([uuid]);
+				},
+				Math.max(0, delay)
+			);
+		};
+		const watchAdoptions = () => {
+			adoptionWatch ??= observePendingCompletions(storeDB)
+				.pipe(
+					// Keyed on the eligible set: a journal write that changes only an attempt's count or
+					// error keeps the resident subscription (and its initial emission) as it is.
+					map((pending) =>
+						Object.keys(pending)
+							.filter((uuid) => pending[uuid].awaitingAdoption)
+							.sort()
+					),
+					distinctUntilChanged((a, b) => a.join() === b.join()),
+					switchMap((uuids) => observeResidentOrders(manager.engine, uuids))
+				)
+				.subscribe({
+					next: (uuids) => uuids.length > 0 && finishAdopted(uuids),
+					error: () => undefined,
+				});
+		};
+		current.watch = () => {
+			watch();
+			watchAdoptions();
+		};
+		current.watch();
 		return () => {
 			current.stopped = true;
+			disarm();
 		};
 	}, [storeDB, manager, ctx, version]);
 	return null;

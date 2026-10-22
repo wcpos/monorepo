@@ -1,5 +1,6 @@
 export {
 	failCompletionAttempt,
+	observePendingCompletions,
 	pendingCompletions,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,

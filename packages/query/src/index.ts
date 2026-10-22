@@ -120,7 +120,7 @@ export {
 	type ObservedPaymentMethod,
 } from './reads/payment-method-history';
 export { observeCatalogChanges, readCatalogGeneration } from './reads/catalog-changes';
-export { observeLocalRecordsById } from './reads/local-records-by-id';
+export { observeLocalRecordsById, observeResidentOrders } from './reads/local-records-by-id';
 export { observeProductMetaKeys } from './reads/product-meta-keys';
 export { observeUnsentWorkCount } from './reads/unsent-work-count';
 export { hasQueuedDelete } from './reads/queued-delete';
@@ -175,6 +175,7 @@ export {
 	RECOVERY_RETRY_DELAYS_MS,
 	recoverMoneyCommands,
 	resendOpenCommands,
+	residentHoldsAnswer,
 	type CommandProvenance,
 	type MoneyCommandErrorReason,
 	type MoneyCommandPoster,
