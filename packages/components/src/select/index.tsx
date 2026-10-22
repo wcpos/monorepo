@@ -465,7 +465,9 @@ function OptionSelect({
 			onValueChange={(option) => onChange?.(option?.value, resolveOption(options, option))}
 			{...props}
 		>
-			<SelectTrigger testID={triggerTestID} className={triggerClassName}>
+			{/* The trigger owns the dimmed look and the touch/native press guard: a root-only
+			    `disabled` neither dims it nor stops a press from opening it. */}
+			<SelectTrigger testID={triggerTestID} className={triggerClassName} disabled={props.disabled}>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
 			<SelectContent matchWidth={matchWidth}>
