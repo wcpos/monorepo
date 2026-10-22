@@ -373,11 +373,16 @@ describe('TenderCheckout', () => {
 	});
 
 	// Codex 4346411060 on #2837: an unanswered close gates the checkout before the Done shortcut.
-	it('a zero-total order with an unanswered command offers only Try again', () => {
+	// Codex 4346556708 on #2837: and before the Legacy tab.
+	it.each([
+		['a zero-total order', { totalMinor: 0, balanceMinor: 0 }],
+		['the Legacy tab', { state: { ...initialTenderState, tab: 'legacy' as const } }],
+	])('%s with an unanswered command offers only Try again', (_, overrides) => {
 		const retryCommand = jest.fn(async () => undefined);
-		mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, unansweredCommand: true, retryCommand });
+		mockFlow = makeFlow({ ...overrides, unansweredCommand: true, retryCommand });
 		render(<TenderCheckout order={order} />);
 		expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 		fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
 		expect(retryCommand).toHaveBeenCalledTimes(1);
 	});

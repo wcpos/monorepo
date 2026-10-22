@@ -64,13 +64,29 @@ interface Props {
 }
 
 /**
- * The zero-total Done shortcut both checkout hosts offer. An unanswered command gates the
- * checkout before it: the pane's Try again is the only way on (ADR 0040, Codex 4346411060).
+ * A command sent and never answered gates the whole checkout (ADR 0040): each host shows this
+ * before any routing, the zero-total Done, the Legacy tab and the tiles alike (Codex 4346411060,
+ * 4346556708). A live terminal leg keeps its own view; the terminal service owns its commands.
  */
-export function offersZeroTotalDone(
-	flow: Pick<TenderFlow, 'totalMinor' | 'balanceMinor' | 'unansweredCommand'>
-) {
-	return flow.totalMinor === 0 && flow.balanceMinor === 0 && !flow.unansweredCommand;
+export const gatesCheckout = (flow: Pick<TenderFlow, 'unansweredCommand' | 'terminalLeg'>) =>
+	flow.unansweredCommand && !flow.terminalLeg;
+
+export function UnansweredGate({ flow }: { flow: TenderFlow }) {
+	const t = useT();
+	return (
+		<Notice
+			tone="warn"
+			title={t('pos_checkout.payment_unanswered')}
+			testID="checkout-unanswered"
+			actions={[
+				{
+					label: t('pos_checkout.try_again'),
+					onPress: () => void flow.retryCommand(),
+					testID: 'checkout-unanswered-retry',
+				},
+			]}
+		/>
+	);
 }
 
 export function TenderPane({ flow, format, compact }: Props) {
@@ -89,25 +105,6 @@ export function TenderPane({ flow, format, compact }: Props) {
 	// that has never fetched its methods gets tile-shaped slots in the method row, nothing else.
 	if (flow.saveState?.kind === 'saving') {
 		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
-	}
-
-	// A command sent and never answered offers one thing: re-send it (ADR 0040). A press while
-	// the re-send is in flight is inert (the flow's busy guard).
-	if (flow.unansweredCommand) {
-		return (
-			<Notice
-				tone="warn"
-				title={t('pos_checkout.payment_unanswered')}
-				testID="checkout-unanswered"
-				actions={[
-					{
-						label: t('pos_checkout.try_again'),
-						onPress: () => void flow.retryCommand(),
-						testID: 'checkout-unanswered-retry',
-					},
-				]}
-			/>
-		);
 	}
 
 	if (flow.tiles.length === 0) {

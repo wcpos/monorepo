@@ -4427,6 +4427,35 @@ describe('cash rounding (#66, #84)', () => {
 		}
 	);
 
+	// Codex 4346556717 on #2837: a void recovered by Try again takes its leg's rounding back off,
+	// as the press's void does (one sweep after every settle).
+	it('a rounded cash leg whose void Try again recovers takes its fee back off: 10.05 returns to 10.03', async () => {
+		mockPayload = sale('10.03');
+		let rowId = '';
+		mockRecordManualPayment.mockImplementationOnce(async (_o, _m, input: { paymentId: string }) => {
+			rowId = input.paymentId;
+			return { ...recorded, row: payment({ id: rowId, amount: '10.05' }) };
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockPayload).toMatchObject({ total: '10.05' });
+
+		const entry = { id: 'void-1', kind: 'void', sentAt: '2026-10-20T10:00:00Z' };
+		act(() =>
+			mockJournal$.next({
+				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'void-1': entry } } } } }),
+			})
+		);
+		mockResend.mockImplementationOnce(async () => {
+			const voided = payment({ id: rowId, amount: '10.05', status: 'voided' });
+			mockPayload = { ...mockPayload, meta_data: withLedger([], [voided]) };
+			return [{ kind: 'void', data: { payment: voided, order: { status: 'pos-open' } } }];
+		});
+		await act(async () => result.current.retryCommand());
+		expect(mockPayload).toMatchObject({ total: '10.03' });
+	});
+
 	it('a replay refused by a thrown payment conflict takes its fee back off: 10.05 returns to 10.03', async () => {
 		const { RecordManualPaymentError } = jest.requireActual('../payments/record-manual-payment');
 		mockPayload = sale('10.03');
@@ -4441,7 +4470,7 @@ describe('cash rounding (#66, #84)', () => {
 		expect(mockPayload).toMatchObject({ total: '10.05' });
 
 		mockRecordManualPayment.mockImplementationOnce(async () => {
-			throw new RecordManualPaymentError('conflict', 'wcpos_payment_conflict', 409, rowId);
+			throw new RecordManualPaymentError('conflict', 'wcpos_payment_conflict', 409);
 		});
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());

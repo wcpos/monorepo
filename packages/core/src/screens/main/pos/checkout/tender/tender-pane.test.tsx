@@ -10,7 +10,7 @@ import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
-import { TenderPane } from './tender-pane';
+import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
 
 import type { TenderFlow } from './use-tender-flow';
@@ -394,14 +394,15 @@ it('lists an offline queue-capable device method as unavailable until offline te
 	expect(flow.pickMethod).not.toHaveBeenCalled();
 });
 
-// ADR 0040 §1.3: a command sent and never answered offers one thing, a re-send of that command.
-it('a sent, unanswered command shows only Try again, which re-sends it', () => {
-	const flow: TenderFlow = { ...makeFlow(), saveState: null, unansweredCommand: true };
-	render(<TenderPane flow={flow} format={String} />);
-	expect(screen.queryByTestId('checkout-method-pos_cash')).toBeNull();
+// ADR 0040 §1.3: a command sent and never answered gates the checkout; its one action re-sends it.
+// A live terminal leg keeps its own view.
+it('the unanswered gate re-sends the command, and leaves a live terminal leg its view', () => {
+	const flow: TenderFlow = { ...makeFlow(), unansweredCommand: true };
+	expect(gatesCheckout(flow)).toBe(true);
+	expect(gatesCheckout({ ...flow, terminalLeg: {} as TenderFlow['terminalLeg'] })).toBe(false);
+	render(<UnansweredGate flow={flow} />);
 	fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
 	expect(flow.retryCommand).toHaveBeenCalledTimes(1);
-	expect(flow.takeTender).not.toHaveBeenCalled();
 });
 
 it.each([

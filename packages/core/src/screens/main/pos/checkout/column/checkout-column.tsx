@@ -15,7 +15,7 @@ import { useCheckoutBack } from './use-checkout-back';
 import { leaveCheckout } from '../checkout-mode';
 import { CancelPaymentView } from '../tender/cancel-payment-view';
 import { LegacyTab } from '../tender/legacy-tab';
-import { offersZeroTotalDone, TenderPane } from '../tender/tender-pane';
+import { gatesCheckout, TenderPane, UnansweredGate } from '../tender/tender-pane';
 import { useT } from '../../../../../contexts/translations';
 import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
@@ -36,6 +36,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	}, [flow, order.uuid]);
 	useCheckoutBack(back);
 	const body = (() => {
+		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
 		// A live terminal leg is never hidden behind another view: the pane below
 		// shows it (with its own Cancel) until the server says the leg is over.
 		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
@@ -44,7 +45,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		if (flow.state.tab === 'legacy') {
 			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
-		if (offersZeroTotalDone(flow)) {
+		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
 			return (
 				<View className="p-4">
 					<Button

@@ -35,11 +35,7 @@ import {
 	useDocField,
 	useRecordField,
 } from '@wcpos/query';
-import {
-	observeOrderCommands,
-	readOrderCommands,
-	resolveCompletionAttempt,
-} from '@wcpos/query/store-local';
+import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -91,9 +87,8 @@ import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
-import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
+import { getUuidFromLineItem } from '../../hooks/utils';
 import {
-	RecordManualPaymentError,
 	RecordManualPaymentMirrorError,
 	useRecordManualPayment,
 	useVoidPayments,
@@ -103,6 +98,7 @@ import {
 	GatewayMirrorError,
 	submitStillDone,
 } from '../payments/submit-gateway-payment';
+import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
 	declaredValues,
@@ -242,21 +238,6 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 	const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines, dp) - feeMinor(fees, dp);
 	return { fee_lines, total: fromMinor(totalMinor, dp) };
 }
-/**
- * A record the store refused takes its rounding fee (#66, #84) back off, whether the refusal
- * answers the press or Try again: the next tender may be a card. An unanswered record keeps it,
- * since the journal re-sends it at the rounded amount.
- */
-function withoutRounding(latest: OrderPayload, dp: number, paymentRef: string) {
-	return withFees(latest, dp, (fees) =>
-		fees.flatMap((fee) => {
-			const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-			if (rounding?.payment_ref !== paymentRef) return [fee];
-			return fee.id ? [{ ...fee, name: null }] : [];
-		})
-	);
-}
-
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
 	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
@@ -283,12 +264,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
-	const [sentCommands, setSentCommands] = React.useState<{ kind: string; id: string }[]>([]);
+	const [sentCommands, setSentCommands] = React.useState(0);
 	// The command journal is an external store: a command sent and never answered gates the
 	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
 	React.useEffect(() => {
 		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
-			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null)),
+			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null).length),
 			error: () => undefined,
 		});
 		return () => subscription.unsubscribe();
@@ -296,7 +277,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// While this till's own press is in flight its entry is sent too; that is not unanswered. A
 	// Try again in flight keeps the gate: its keypad is never shown (CodeRabbit 4346454764).
 	const [pressing, setPressing] = React.useState(false);
-	const unansweredCommand = sentCommands.length > 0 && !pressing;
+	const unansweredCommand = sentCommands > 0 && !pressing;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -750,7 +731,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
-		const records = sentCommands.flatMap(({ kind, id }) => (kind === 'record' ? [id] : []));
 		try {
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
@@ -824,27 +804,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						error: error instanceof Error ? error.message : String(error),
 					},
 				});
-		}
-		try {
-			// A re-sent record that left the journal without a live row was refused (Codex 4346411073).
-			const journaled = new Set(
-				(await readOrderCommands(storeDB, order.uuid)).entries.map(({ id }) => id)
-			);
-			const ledger = readLedger(order.getLatest().payload.meta_data);
-			for (const id of records)
-				if (
-					!journaled.has(id) &&
-					!ledger.some((row) => row.id === id && isLivePaymentStatus(row.status))
-				)
-					await recordLedger(order, withoutRounding(order.getLatest().payload, dp, id));
-		} catch {
-			// The fee stays until the next void's sweep removes a fee naming a dead row.
 		} finally {
+			// A refused record or a recovered void leaves a leg with no live row: its rounding comes
+			// off (Codex 4346411073, 4346556717). A failed sweep is finished by the next settle's.
+			await sweepDeadRounding(storeDB, order, dp, (changes) => recordLedger(order, changes)).catch(
+				() => undefined
+			);
 			busyRef.current = false;
 			setBusy(false);
 		}
 	}, [
-		sentCommands,
 		recordLedger,
 		ctx.runtime,
 		storeDB,
@@ -1278,8 +1247,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
-			const unround = (ref: string) =>
-				patchFees(withoutRounding(target.getLatest().payload, dp, ref));
+			// A leg that did not land takes its rounding with it: the next tender may be a card.
+			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(amountMinor, dp),
 				tendered,
@@ -1291,15 +1260,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
 				// A thrown refusal of a replay takes back its row's fee, as a returned one does.
-				const ref =
-					paymentId ?? (error instanceof RecordManualPaymentError ? error.rowId : undefined);
-				if (ref && !landed) await unround(ref).catch(() => undefined);
+				if (!landed) await unround().catch(() => undefined);
 				throw error;
 			});
 			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
 			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
-			const ref = paymentId ?? (outcome.kind === 'refused' ? outcome.row.id : undefined);
-			if (ref && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround(ref);
+			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{

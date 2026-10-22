@@ -24,7 +24,7 @@ import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
 import { LegacyTab } from './legacy-tab';
 import { LedgerPane } from './ledger-pane';
-import { offersZeroTotalDone, TenderPane } from './tender-pane';
+import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useTheme } from '../../../../../contexts/theme';
@@ -96,6 +96,7 @@ export function TenderCheckout({ order }: Props) {
 	);
 
 	const body = (() => {
+		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
 		// A live terminal leg is never hidden behind another view: the pane below
 		// shows it (with its own Cancel) until the server says the leg is over.
 		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
@@ -104,7 +105,7 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
-		if (offersZeroTotalDone(flow)) {
+		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
 			return (
 				<View className="p-4">
 					<Button
