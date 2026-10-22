@@ -403,6 +403,42 @@ describe('clock-free settlement', () => {
 			jest.useRealTimers();
 		}
 	});
+	it.each(['deferral', 'latch'] as const)(
+		'a sign-in hold (%s) releases an opted-in wait and leaves the rest waiting',
+		async (source) => {
+			// One engine per waiter: the harness keeps a single listener of each kind.
+			const holding = () => {
+				const e = createEngine();
+				if (source === 'latch')
+					e.statusChanges.mockImplementation((callback) => {
+						callback?.({ connectivity: 'online', authRequired: true } as never);
+						return e.unsubscribeStatus;
+					});
+				return e;
+			};
+			const deferral = {
+				...ack,
+				type: 'write-deferred',
+				status: 401,
+				reason: 'rest_not_logged_in',
+			} as EngineEvent;
+			const opted = holding();
+			const released = awaitWriteSettlement(opted.engine, 'm', { releaseOnSignInHold: true });
+			if (source === 'deferral') opted.emit(deferral);
+			await expect(released).rejects.toBeInstanceOf(WriteDeferredError);
+			await expect(released).rejects.toMatchObject({ status: 401 });
+
+			const checkout = holding();
+			const settled = jest.fn();
+			const waiting = awaitWriteSettlement(checkout.engine, 'm').then(settled);
+			if (source === 'deferral') checkout.emit(deferral);
+			await Promise.resolve();
+			expect(settled).not.toHaveBeenCalled();
+			checkout.emit(ack);
+			await waiting;
+			expect(settled).toHaveBeenCalledWith('success-local');
+		}
+	);
 	it.each([awaitWriteSettlement, awaitTerminalWriteOutcome])(
 		'replays terminal outcomes and releases the listener (%p)',
 		async (awaitOutcome) => {

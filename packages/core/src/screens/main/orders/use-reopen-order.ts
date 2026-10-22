@@ -171,13 +171,15 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		};
 		if (mutationId) {
 			// The server's answer decides: a refused reopen never lands the cashier in a cart.
-			const outcome = await awaitWriteSettlement(runtime.engine, mutationId).catch(
-				(error: unknown) => error
-			);
+			// The in-flight hold lasts only while a verdict can still arrive: a sign-in hold
+			// releases it too.
+			const outcome = await awaitWriteSettlement(runtime.engine, mutationId, {
+				releaseOnSignInHold: true,
+			}).catch((error: unknown) => error);
 			// Undone before the action frees up.
 			if (outcome instanceof WriteOutcomeError) return refused(outcome);
-			// Offline (or the drain kick failed) the reopen stays queued, as before; its verdict
-			// is handled when it drains, the same way.
+			// Offline, held for sign-in, or the drain kick failed: the reopen stays queued, as
+			// before; its verdict is handled when it drains, the same way.
 			if (outcome !== 'success' && outcome !== 'success-local')
 				void awaitTerminalWriteOutcome(runtime.engine, mutationId).catch((error: unknown) =>
 					error instanceof WriteOutcomeError ? refused(error) : undefined

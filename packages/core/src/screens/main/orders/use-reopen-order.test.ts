@@ -199,6 +199,32 @@ it('a late refusal of an offline-queued reopen undoes it too, even with the cash
 	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
 });
 
+it('a reopen held for sign-in frees the actions and keeps its late refusal', async () => {
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
+	// The store refuses the session, not the reopen: the row stays queued until a sign-in.
+	mockOnDrain = () =>
+		emit({
+			type: 'write-deferred',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'm-reopen',
+			status: 401,
+		});
+	const { result } = renderHook(() => useReopenOrder(paidOrder));
+	await act(async () => {
+		// Never a wait that outlives the verdict: the reopen settles with no sign-in.
+		await Promise.race([result.current.reopen(), new Promise((r) => setTimeout(r, 50))]);
+	});
+	expect(result.current.reopening).toBe(false);
+	expect(mockPush).toHaveBeenCalledTimes(1);
+
+	await act(async () => emit(moneyInMotion()));
+	expect(mockEngine.require).toHaveBeenCalledWith(expect.objectContaining({ readopt: true }));
+	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
+});
+
 it('does not navigate when the local write resolves undefined', async () => {
 	jest.mocked(applyLocalPatch).mockResolvedValueOnce(undefined as never);
 	const { result } = renderHook(() => useReopenOrder(order));

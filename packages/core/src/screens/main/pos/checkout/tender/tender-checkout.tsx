@@ -55,7 +55,7 @@ export function TenderCheckout({ order }: Props) {
 
 	const compact = screenSize === 'sm';
 	const stage = useOrderCheckoutStage(order);
-	const finishSale = useFinishSale(order.uuid, compact);
+	const finishSale = useFinishSale(order.uuid, 'modal');
 	// Every figure in this modal is carried as minor units and only becomes a
 	// display string here, so there is exactly one place a rounding rule applies.
 	const format = React.useCallback(
