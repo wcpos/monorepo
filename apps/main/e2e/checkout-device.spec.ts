@@ -29,10 +29,17 @@ async function connect(page: Page, methodId: string, reader: string) {
 	// the reader's own name: the settings link renders only while no reader is held, and the
 	// line names the simulated reader ("Simulated reader", driver data) only once connected.
 	const link = page.getByTestId('checkout-reader-settings-link');
-	const held = status.filter({ hasText: 'Simulated' });
+	const readerState = async (): Promise<'link' | 'held' | null> => {
+		if (await link.isVisible()) return 'link';
+		const line = await status.innerText().catch(() => '');
+		return line.includes('Simulated') ? 'held' : null;
+	};
 	// A remembered reader may still be reconnecting; decide on the settled line.
-	await expect(link.or(held)).toBeVisible({ timeout: 15_000 });
-	const viaLink = await link.isVisible();
+	let settled: 'link' | 'held' | null = null;
+	await expect
+		.poll(async () => (settled = await readerState()), { timeout: 15_000 })
+		.not.toBeNull();
+	const viaLink = settled === 'link';
 	if (viaLink) {
 		await page.getByTestId('checkout-reader-settings-link').click();
 	} else {
@@ -58,7 +65,7 @@ async function connect(page: Page, methodId: string, reader: string) {
 	)
 		await page.goBack();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
-	await expect(held).toBeVisible();
+	await expect(status).toContainText('Simulated');
 	await expect(link).toBeHidden();
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }

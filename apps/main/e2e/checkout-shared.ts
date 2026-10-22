@@ -116,19 +116,26 @@ async function resendCause(response: Response): Promise<ResendCause | null> {
  * Matches the settled answer to a money command on `route` (a `wcpos/v2` REST route). It skips
  * at most ONE 401 and ONE stale-revision 409, the re-sends the app makes, and takes the next
  * answer; a second answer of the same kind is the answer, so a client that loops fails the test.
+ * Reading a 409's body is async, so matching answers are classified one at a time, in the order
+ * they arrive: a later answer is never judged before an earlier stale 409 has been counted.
  */
 export function createPaymentResponseMatcher(
 	route: RegExp,
 	method: 'POST' | 'GET' = 'POST'
 ): (response: Response) => Promise<boolean> {
 	const skipped = new Set<ResendCause>();
-	return async (response) => {
-		if (response.request().method() !== method) return false;
-		if (!route.test(wcposRestRoute(response.url()) ?? '')) return false;
-		const cause = await resendCause(response);
-		if (cause === null || skipped.has(cause)) return true;
-		skipped.add(cause);
-		return false;
+	let previous: Promise<unknown> = Promise.resolve();
+	return (response) => {
+		if (response.request().method() !== method) return Promise.resolve(false);
+		if (!route.test(wcposRestRoute(response.url()) ?? '')) return Promise.resolve(false);
+		const verdict = previous.then(async () => {
+			const cause = await resendCause(response);
+			if (cause === null || skipped.has(cause)) return true;
+			skipped.add(cause);
+			return false;
+		});
+		previous = verdict.catch(() => {});
+		return verdict;
 	};
 }
 

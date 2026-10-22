@@ -278,6 +278,7 @@ for (const targetStoreId of storeTargets) {
 						const dismissReceipt = page
 							.getByTestId('receipt-new-sale')
 							.or(page.getByTestId('receipt-close-button'))
+							.filter({ visible: true })
 							.first();
 						await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
 						await dismissReceipt.click();
@@ -464,6 +465,8 @@ for (const targetStoreId of storeTargets) {
 					const dismissReceipt = page
 						.getByTestId('receipt-new-sale')
 						.or(page.getByTestId('receipt-close-button'))
+						// The in-pane stage can stay mounted under the routed dialog: take the visible one.
+						.filter({ visible: true })
 						.first();
 					await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
 					await dismissReceipt.click();
