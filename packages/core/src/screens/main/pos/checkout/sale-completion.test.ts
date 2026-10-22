@@ -38,7 +38,12 @@ const mockBound = jest.fn(),
 	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
 	mockRetractReceipt = jest.fn(),
+	mockHoldsAnswer = jest.fn(),
 	mockInfo = jest.fn();
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	residentHoldsAnswer: (...args: unknown[]) => mockHoldsAnswer(...args),
+}));
 jest.mock('@wcpos/query/register-session', () => ({
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
 	readRegister: async () => ({ sites: { site: { register_id: 'register-A' } } }),
@@ -143,6 +148,7 @@ beforeEach(async () => {
 		mockInfo(message, rest);
 	});
 	mockRefresh.mockReset();
+	mockHoldsAnswer.mockResolvedValue(false);
 	mockReconcile.mockResolvedValue('refreshed');
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
@@ -329,6 +335,66 @@ it.each([
 		expect(mockGap.mock.invocationCallOrder[0]).toBeLessThan(
 			mockReconcile.mock.invocationCallOrder[0]
 		);
+});
+describe("the poster's post-answer adoption stands in for the completion's refresh", () => {
+	const settled = [
+		manual,
+		{ source: 'terminal', row: { ...row, recorded_offline: false }, order: { balance: '0' } },
+		{ source: 'gateway-settled', order: sent.order },
+	] as SaleOutcome[];
+	it.each(settled)('%j: no second whole-order read, stock still reconciled', async (outcome) => {
+		const { reconcileCompletedOrder } = jest.requireActual('./hooks/reconcile-completed-order');
+		mockReconcile.mockImplementationOnce(reconcileCompletedOrder);
+		mockHoldsAnswer.mockResolvedValue(true);
+		expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
+		expect(mockHoldsAnswer).toHaveBeenCalledWith(ctx.runtime, ctx.storeDB, 'order');
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, false, ctx.stockAdjustment);
+		await expect(mockReconcile.mock.results[0].value).resolves.toBe('skipped');
+		expect(mockRefresh).not.toHaveBeenCalled();
+		expect(ctx.stockAdjustment).toHaveBeenCalledWith([]);
+	});
+	it.each(settled)(
+		'%j: refreshes as before when the resident does not hold the answer',
+		async (outcome) => {
+			expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
+			expect(mockReconcile).toHaveBeenCalledTimes(1);
+			expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+		}
+	);
+	it('refreshes when a command is still journaled (a failed mirror never settled its answer)', async () => {
+		mockHoldsAnswer.mockResolvedValue(true);
+		const entry = {
+			orderUuid: 'order',
+			kind: 'record',
+			path: 'orders/42/payments',
+			target: null,
+			id: row.id,
+			body: {},
+			approval: { total: '1.00', currency: 'USD' },
+			sentAt: '2026-10-23T00:00:00.000Z',
+			sentRevision: 'r1',
+			scope: 'scope',
+		} as const;
+		const route = { orderUuid: 'order', kind: 'record', target: null, rowId: row.id } as const;
+		await journal.claimRoute(ctx.storeDB as never, route, 'poster', entry);
+		await completeSale(ctx, order, manual, { host: 'modal' });
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+	});
+	it('refreshes when the resident cannot be read', async () => {
+		mockHoldsAnswer.mockRejectedValue(new Error('Engine resident "order" is missing'));
+		expect(await completeSale(ctx, order, manual, { host: 'modal' })).toBe('completed');
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+	});
+	it.each([
+		[{ source: 'replay', refreshed: false }],
+		[{ source: 'gateway-contract', status: 'completed' }],
+	] as [SaleOutcome][])('%j refreshes whatever the resident holds', async (outcome) => {
+		mockHoldsAnswer.mockResolvedValue(true);
+		await completeSale(ctx, order, outcome, { host: 'modal' });
+		expect(mockHoldsAnswer).not.toHaveBeenCalled();
+		expect(mockReconcile).toHaveBeenCalledTimes(1);
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+	});
 });
 it.each([
 	[{ host: 'stage', autoShowReceipt: true }, ['order']],

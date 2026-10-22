@@ -12,10 +12,11 @@ import {
 	toMinor,
 	withMetaReplaced,
 } from '@wcpos/order-math';
-import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, residentHoldsAnswer, type useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import {
 	failCompletionAttempt,
+	readOrderCommands,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
@@ -435,7 +436,7 @@ async function finishSale(
 	const payload = () =>
 		outcome.source === 'gateway-snapshot' ? outcome.snapshot : order.getLatest().payload;
 	let latest = payload();
-	const refresh =
+	let refresh =
 		outcome.source === 'manual'
 			? outcome.via === 'online'
 			: outcome.source === 'terminal'
@@ -443,6 +444,20 @@ async function finishSale(
 				: outcome.source === 'replay'
 					? !!latest.id && !outcome.refreshed
 					: outcome.source === 'gateway-contract' || outcome.source === 'gateway-settled';
+	// The poster's post-answer refresh already adopted the store's document after the last answer
+	// and settled every command it sent; a second whole-order read of the same document is the
+	// 10 s a slow host pays twice. A failed mirror leaves its answer journaled (its chain never
+	// written), and a failed or timed-out refresh never holds the answer: both read as before. A
+	// replay re-judges a suspect cached status on purpose; a pay-page contract never went through
+	// the poster, so an earlier leg's adoption would read as this answer's. A read that throws
+	// proves nothing either way: the completion reads the store.
+	if (refresh && outcome.source !== 'replay' && outcome.source !== 'gateway-contract')
+		refresh = !(await readOrderCommands(ctx.storeDB, order.uuid)
+			.then(
+				({ entries }) =>
+					!entries.length && residentHoldsAnswer(ctx.runtime, ctx.storeDB, order.uuid)
+			)
+			.catch(() => false));
 	if (outcome.source === 'replay' && refresh) {
 		// The cached status is suspect on replay; re-judge the store's copy before any receipt.
 		const refreshed = await reconcileCompletedOrder(
