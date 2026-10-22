@@ -28,7 +28,9 @@ describe('WebView native source', () => {
 	});
 
 	it('shows inline HTML read from src with src as its base, so relative links resolve', () => {
-		render(<WebView src="https://store.test/receipt/1/?key=k" srcDoc="<p>hi</p>" />);
+		render(
+			<WebView src="https://store.test/receipt/1/?key=k" srcDoc="<p>hi</p>" onMessage={() => {}} />
+		);
 		expect(sources[0]).toEqual({
 			html: '<p>hi</p>',
 			baseUrl: 'https://store.test/receipt/1/?key=k',
@@ -36,7 +38,7 @@ describe('WebView native source', () => {
 	});
 
 	it('shows inline HTML without a base when there is no src', () => {
-		render(<WebView srcDoc="<p>hi</p>" />);
+		render(<WebView srcDoc="<p>hi</p>" onMessage={() => {}} />);
 		expect(sources[0]).toEqual({ html: '<p>hi</p>' });
 	});
 });

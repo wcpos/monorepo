@@ -15,8 +15,8 @@ jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/webview', () => ({
-	WebView: ({ testID, srcDoc }: { testID: string; srcDoc: string }) => (
-		<iframe data-testid={testID} srcDoc={srcDoc} />
+	WebView: ({ testID, srcDoc, src }: { testID: string; srcDoc: string; src?: string }) => (
+		<iframe data-testid={testID} srcDoc={srcDoc} data-src={src} />
 	),
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
@@ -136,4 +136,19 @@ it('shows no frame while the receipt page is still being read', () => {
 	expect(screen.getByTestId('receipt-preview-loading')).toBeTruthy();
 	expect(screen.queryByTestId('receipt-preview-frame')).toBeNull();
 	expect(screen.queryByTestId('receipt-unavailable')).toBeNull();
+});
+
+// Revert: show the fetched page as bare srcDoc, so its relative links lose the store as their base.
+it('shows a fetched page with the URL it was read from as its base', () => {
+	const doc = {
+		previewProps: {
+			renderedHtml: '<p>Server receipt</p>',
+			pageBase: 'https://shop.test/r?key=k&mode=live&template=7',
+			previewPaperWidth: '80mm',
+		},
+	} as unknown as ReturnType<typeof useReceiptDocument>;
+	render(<ReceiptBody doc={doc} />);
+	const frame = screen.getByTestId('receipt-preview-frame');
+	expect(frame.getAttribute('srcdoc')).toBe('<p>Server receipt</p>');
+	expect(frame.getAttribute('data-src')).toBe('https://shop.test/r?key=k&mode=live&template=7');
 });

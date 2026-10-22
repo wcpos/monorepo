@@ -1053,7 +1053,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			await waitFor(() =>
 				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
 			);
-			expect(result.current.previewProps.pending).toBe(false);
+			expect(result.current.previewProps).toMatchObject({ pending: false, pageBase: templated });
 			await act(async () => {
 				await result.current.print();
 			});
@@ -1080,6 +1080,36 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
 			);
 			expect(pageReads().map(([url]) => url)).toEqual(['https://shop.test/r?key=k']);
+		});
+
+		it('settles a read that never answers to the URL at the deadline', async () => {
+			jest.useFakeTimers();
+			try {
+				jest
+					.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+					.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+				mockFetch.mockReturnValue(new Promise(() => {}));
+				const { result } = renderHook(() =>
+					useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+				);
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(19_999);
+				});
+				expect(result.current.previewProps.pending).toBe(true);
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(1);
+				});
+				expect(pageReads()).toHaveLength(1);
+				expect(pageReads()[0][1].signal.aborted).toBe(true);
+				expect(result.current.previewProps).toMatchObject({
+					pending: false,
+					renderedHtml: null,
+					receiptUrl: templated,
+					pageBase: undefined,
+				});
+			} finally {
+				jest.useRealTimers();
+			}
 		});
 
 		it('falls back to the frame loading the URL when the read fails', async () => {

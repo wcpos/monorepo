@@ -58,6 +58,7 @@ export function ReceiptBody({
 		handleError,
 		handleContentSizeChange,
 		pending,
+		pageBase,
 	} = doc.previewProps;
 	// Keep the iframe at paper size, then scale its canvas just like the modal preview.
 	const paper = PAPER_DIMENSIONS[previewPaperWidth];
@@ -69,7 +70,7 @@ export function ReceiptBody({
 			testID="receipt-preview-frame"
 			ref={iframeRef as never}
 			{...(renderedHtml != null
-				? { srcDoc: renderedHtml }
+				? { srcDoc: renderedHtml, src: pageBase }
 				: { src: receiptUrl || baseReceiptURL || '' })}
 			onLoad={handleLoad}
 			onError={handleError}

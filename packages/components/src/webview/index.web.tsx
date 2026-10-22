@@ -28,6 +28,19 @@ export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'
 }
 
 /**
+ * The HTML was read from `src` (the receipt stage reads the page once and shows the text), so
+ * `src` is its base: relative links in a template resolve against the store, as they did when
+ * the frame loaded the URL itself. Same rule as the native `baseUrl`.
+ */
+function withBase(html: string, base: string): string {
+	const tag = `<base href="${base.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`;
+	const head = /<head(\s[^>]*)?>/i.exec(html);
+	if (!head) return tag + html;
+	const end = head.index + head[0].length;
+	return html.slice(0, end) + tag + html.slice(end);
+}
+
+/**
  *
  */
 function WebView({
@@ -169,8 +182,12 @@ function WebView({
 			<iframe
 				ref={composedRef}
 				data-testid={props.testID}
-				src={(source && 'uri' in source ? source.uri : undefined) || src}
-				srcDoc={srcDoc}
+				// srcDoc wins over src; with both, src is only the document's base and the frame never
+				// navigates to it.
+				src={
+					srcDoc != null ? undefined : (source && 'uri' in source ? source.uri : undefined) || src
+				}
+				srcDoc={srcDoc != null && src ? withBase(srcDoc, src) : srcDoc}
 				onLoad={handleLoaded}
 				frameBorder="0"
 				sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-modals"

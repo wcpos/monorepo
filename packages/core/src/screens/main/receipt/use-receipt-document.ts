@@ -27,6 +27,12 @@ import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
 
+// Bounds the receipt page read so a stalled read cannot hold the cashier: while it is pending no
+// frame mounts, so the auto-print and the finish-sale buttons wait on it. It is not there to race
+// the host: the page on a slow host answers in 12-15 s (run 39803114058), and it was the print
+// path's own 10 s FETCH_TIMEOUT_MS that timed out there. Past it, the frame loads the URL as before.
+const RECEIPT_PAGE_READ_TIMEOUT_MS = 20_000;
+
 export function useReceiptDocument({
 	order,
 	autoPrintAllowed,
@@ -129,14 +135,26 @@ export function useReceiptDocument({
 	React.useEffect(() => {
 		if (!pageURL) return;
 		const controller = new AbortController();
+		let current = true;
 		const settle = (html: string | null) => {
-			if (!controller.signal.aborted) setPage({ url: pageURL, html });
+			if (!current) return;
+			current = false;
+			clearTimeout(deadline);
+			setPage({ url: pageURL, html });
 		};
+		const deadline = setTimeout(() => {
+			settle(null);
+			controller.abort();
+		}, RECEIPT_PAGE_READ_TIMEOUT_MS);
 		Promise.resolve()
 			.then(() => fetch(pageURL, { signal: controller.signal }))
 			.then((response) => (response.ok ? response.text() : null))
 			.then(settle, () => settle(null));
-		return () => controller.abort();
+		return () => {
+			current = false;
+			clearTimeout(deadline);
+			controller.abort();
+		};
 	}, [pageURL]);
 	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
 	const previewHtml = renderedHtml ?? pageHtml ?? null;
@@ -556,6 +574,8 @@ export function useReceiptDocument({
 			receiptUrl: previewPending ? null : templateReceiptUrl,
 			baseReceiptURL: previewPending ? undefined : fallbackURL,
 			pending: previewPending,
+			// The URL the shown page was read from, so its relative links resolve against the store.
+			pageBase: pageHtml ? pageURL : undefined,
 			iframeRef,
 			handleLoad,
 			handleError,
