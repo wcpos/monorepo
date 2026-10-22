@@ -25,17 +25,13 @@ beforeEach(() => {
 	mockPhone = false;
 });
 
-// The container's density decides the inset (CODING_STANDARDS § Design, Gutters).
-it('insets a dense pane by 8 by default, so the POS mounts stay where they were', () => {
+// One gutter on every list surface (CODING_STANDARDS § Design, Gutters): the pages and the POS
+// products column alike.
+it('insets the card by the page gutter on its sides and bottom, leaving the top to the row above', () => {
 	render(<TableSurface testID="surface" />);
-	expect(classes()).toEqual(expect.arrayContaining(['mx-2', 'mb-2', 'rounded-lg', 'border']));
-	expect(classes()).not.toContain('mx-4');
-});
-
-it('insets a page by 16 on its sides and bottom, leaving the top to the row above it', () => {
-	render(<TableSurface testID="surface" gutter="page" />);
-	expect(classes()).toEqual(expect.arrayContaining(['mx-4', 'mb-4', 'rounded-lg', 'border']));
-	expect(classes()).not.toContain('mx-2');
+	expect(classes()).toEqual(
+		expect.arrayContaining(['mx-gutter', 'mb-gutter', 'rounded-lg', 'border'])
+	);
 	expect(classes().some((name) => /^(m|mt|my)-/.test(name))).toBe(false);
 });
 
@@ -43,31 +39,29 @@ it('insets a page by 16 on its sides and bottom, leaving the top to the row abov
 // as the pane's last row, it carries the gutter below it too (the bottom edge is a container
 // edge like the top one; owner, 2026-10-20).
 it('insets the caption row by the gutter plus the cell padding, and by the gutter below', () => {
-	const inset = (gutter?: 'page' | 'dense') => {
+	const inset = () => {
 		const { unmount } = render(
-			<CaptionRowInset gutter={gutter}>
+			<CaptionRowInset>
 				<span data-testid="caption" />
 			</CaptionRowInset>
 		);
 		const node = screen.getByTestId('data-table-caption-inset');
-		expect(node.contains(screen.getByTestId('caption'))).toBe(true);
-		const value = node.getAttribute('data-class');
+		const cell = node.firstElementChild as HTMLElement;
+		expect(cell.contains(screen.getByTestId('caption'))).toBe(true);
+		const value = [node.getAttribute('data-class'), cell.getAttribute('data-class')];
 		unmount();
 		return value;
 	};
-	expect(inset('page')).toBe('px-7 pb-4');
-	expect(inset()).toBe('px-5 pb-2');
-	expect(inset('dense')).toBe('px-5 pb-2');
+	expect(inset()).toEqual(['px-gutter pb-gutter', 'px-3']);
 	// The phone card has no side gutter, so the caption sits on the cell's 12 alone, and the
 	// screen pads the home indicator itself, so there is no bottom gutter either.
 	mockPhone = true;
-	expect(inset('page')).toBe('px-3');
-	expect(inset('dense')).toBe('px-3');
+	expect(inset()).toEqual([null, 'px-3']);
 });
 
-it.each(['page', 'dense'] as const)('runs edge to edge on a phone (%s)', (gutter) => {
+it('runs edge to edge on a phone', () => {
 	mockPhone = true;
-	render(<TableSurface testID="surface" gutter={gutter} />);
+	render(<TableSurface testID="surface" />);
 	expect(classes()).toContain('border-t');
 	expect(classes().some((name) => /^(mx|mb|rounded)/.test(name))).toBe(false);
 });

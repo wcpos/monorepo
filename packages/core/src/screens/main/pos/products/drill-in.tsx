@@ -56,6 +56,8 @@ export function DrillIn({
 			detail={t('pos_products.n_variations', { count })}
 			autoFocus
 			testID="products-breadcrumb"
+			// The crumb's first button carries its own 12, so its text sits on the page gutter.
+			className="pl-1"
 		/>
 	);
 	return (

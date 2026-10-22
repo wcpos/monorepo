@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, type ScrollViewInstance, View } from 'react-native';
+import { type ScrollViewInstance, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
@@ -29,6 +29,7 @@ import type { FiltersOf } from '@wcpos/query/query-state';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
+import { ChipRow } from '../../../components/chip-row';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
@@ -282,12 +283,7 @@ export function POSFilterBar({
 		return set && JSON.stringify(value) !== JSON.stringify(initialFilters[key]);
 	}).length;
 	return (
-		<ScrollView
-			ref={scroll}
-			horizontal
-			showsHorizontalScrollIndicator={false}
-			contentContainerClassName="items-center gap-2"
-		>
+		<ChipRow ref={scroll}>
 			{items.map((item) => {
 				if (item.type === 'pill' && (!item.show || item.id === place?.field)) return null;
 				const touched = () =>
@@ -356,6 +352,6 @@ export function POSFilterBar({
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>
 			)}
-		</ScrollView>
+		</ChipRow>
 	);
 }

@@ -4,36 +4,27 @@ import { View, type ViewProps } from 'react-native';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 
-/** The container's density decides the inset (CODING_STANDARDS § Design, Gutters). */
-export type TableSurfaceGutter = 'page' | 'dense';
-
 /**
  * The one surface every table and tile grid sits on: a white card with a hairline border and
- * one radius, inset by the gutter of the container it stands in, so its edge lines up with
- * the search and the chips above it. A page (Products, Orders, Customers, Coupons) is 16; a
- * dense pane (the POS products column) is 8. The card owns its sides and its bottom only:
- * the row above it (the chip row's `p-4`, or Customers' body `pt-4` where there are no chips)
- * owns the 16 over it, so there is exactly one gutter between the chips and the card and the
- * pending-search line between them still runs the pane's full width. The phone has no ground
- * to show around it — the list runs edge to edge under a hairline instead.
+ * one radius, inset by the page gutter (`--spacing-gutter`, 16 at Regular) on every list surface
+ * — Products, Orders, Customers, Coupons and the POS products column alike — so its edge lines
+ * up with the search and the chips above it. The card owns its sides and its bottom only: the
+ * row above it (the chip row's `p-gutter`, or `ListFrame`'s body `pt-gutter` where there are no
+ * chips) owns the gutter over it, so there is exactly one gutter between the chips and the card
+ * and the pending-search line between them still runs the pane's full width. The phone has no
+ * ground to show around it — the list runs edge to edge under a hairline instead.
  *
  * Owner's choice from the 2026-10-05 mockup (white card, rounded) over edge-to-edge white and
  * one-card-per-day; applied inside DataTable, its skeleton and the POS grid so every mount
  * agrees without each screen remembering to wrap.
  */
-export function TableSurface({
-	className,
-	gutter = 'dense',
-	...props
-}: ViewProps & { gutter?: TableSurfaceGutter }) {
+export function TableSurface({ className, ...props }: ViewProps) {
 	const phone = useIsPhone();
 	return (
 		<View
 			className={cn(
 				'bg-card border-border min-h-0 flex-1',
-				phone
-					? 'border-t'
-					: cn('overflow-hidden rounded-lg border', gutter === 'page' ? 'mx-4 mb-4' : 'mx-2 mb-2'),
+				phone ? 'border-t' : 'mx-gutter mb-gutter overflow-hidden rounded-lg border',
 				className
 			)}
 			{...props}
@@ -42,30 +33,19 @@ export function TableSurface({
 }
 
 /**
- * The caption row's inset under the card, derived from the same gutter: the card's gutter plus
- * the cell's own 12 (`px-3`), so the footer's text lines up with the cells' — 8 + 12 = 20
- * (`px-5`) in a dense pane, 16 + 12 = 28 (`px-7`) on a page, and 0 + 12 = 12 (`px-3`) on a
- * phone, where the card runs edge to edge whatever the gutter. The caption row is the pane's
- * last row, so it also carries the gutter below it (`pb-4` on a page, `pb-2` in a dense pane):
- * the container insets its last child from its bottom edge as it does its first from the top
- * (owner, 2026-10-20: "consistent, including at the bottom"). The phone's list runs edge to
- * edge and its screen already pads the home indicator, so it keeps no bottom gutter. The mount
- * owns it; a footer component carries no padding of its own.
+ * The caption row's inset under the card: the card's gutter, then the cell's own 12 (`px-3`),
+ * so the footer's text lines up with the cells' (16 + 12 at Regular); on a phone, where the
+ * card runs edge to edge, the cell's 12 alone. The caption row is the pane's last row, so it
+ * also carries the gutter below it: the container insets its last child from its bottom edge as
+ * it does its first from the top (owner, 2026-10-20: "consistent, including at the bottom").
+ * The phone's list runs edge to edge and its screen already pads the home indicator, so it keeps
+ * no bottom gutter. The mount owns it; a footer component carries no padding of its own.
  */
-export function CaptionRowInset({
-	gutter = 'dense',
-	children,
-}: {
-	gutter?: TableSurfaceGutter;
-	children: React.ReactNode;
-}) {
+export function CaptionRowInset({ children }: { children: React.ReactNode }) {
 	const phone = useIsPhone();
 	return (
-		<View
-			testID="data-table-caption-inset"
-			className={phone ? 'px-3' : gutter === 'page' ? 'px-7 pb-4' : 'px-5 pb-2'}
-		>
-			{children}
+		<View testID="data-table-caption-inset" className={phone ? undefined : 'px-gutter pb-gutter'}>
+			<View className="px-3">{children}</View>
 		</View>
 	);
 }

@@ -2,14 +2,11 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@wcpos/components/empty-state';
-import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
+import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -25,7 +22,7 @@ import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { withProAccess } from '../components/pro-guard';
+import { ListFrame } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
@@ -121,7 +118,6 @@ function CustomersList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<CustomerRow>
 					id="customers"
-					gutter="page"
 					collectionName="customers"
 					handle={handle}
 					sort={state.sort}
@@ -166,80 +162,60 @@ function CustomersList({
 	);
 }
 
-/** The list: the part of the page the Free preview overlay covers. */
-function CustomersBody() {
-	const state = useQueryState<'customers'>();
-	const handle = useCollectionQueryHandle('customers', state);
-	const phone = useIsPhone();
-	return (
-		// No chip row here to own the page gutter over the card (TableSurface owns its sides and
-		// bottom only), so the body does; the phone list runs edge to edge under the search row.
-		<View testID="customers-body" className={phone ? 'flex-1' : 'flex-1 pt-4'}>
-			{/* A failed customers read is thrown here; the fallback's reset asks the handle again,
-			    and a changed query (its handle is new) clears the fallback on its own. */}
-			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="customers" gutter="page" />}>
-					<CustomersList handle={handle} />
-				</Suspense>
-			</ErrorBoundary>
-		</View>
-	);
-}
-
-// The guard wraps the body only: on Free the preview overlay must leave the bar's menu, bell
-// and cashier reachable, or a Free user below lg has no way off this page (Orders, Codex review).
-const GuardedCustomersBody = withProAccess(CustomersBody, 'customers');
-
 function CustomersScreenContent() {
 	const t = useT();
 	const router = useRouter();
-	const { bottom } = useSafeAreaInsets();
+	const state = useQueryState<'customers'>();
+	const handle = useCollectionQueryHandle('customers', state);
 	// The bar sits outside the guard, so it reads the licence itself.
 	const { license } = useAppInfo();
 	const readOnly = !(license?.isPro ?? false);
 	const { caps } = useUserCapabilities();
 	return (
-		<View
+		<ListFrame
 			testID="screen-customers"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
-		>
-			<ManagementBar
-				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
-				testID="customers-bar"
-				search={
-					<QuerySearchInput
-						collectionName="customers"
-						placeholder={t('common.search_customers')}
-						testID="search-customers"
-					/>
-				}
-			>
-				<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
-					<CapabilityTooltipTrigger>
-						<IconButton
-							testID="customers-add-button"
-							name="addCustomer"
-							accessibilityLabel={t('common.add_new_customer')}
-							onPress={() => router.push({ pathname: '/customers/add' })}
-							disabled={readOnly || !caps.canCreateCustomers}
+			bodyTestID="customers-body"
+			pro="customers"
+			bar={
+				<ManagementBar
+					// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+					testID="customers-bar"
+					search={
+						<QuerySearchInput
+							collectionName="customers"
+							placeholder={t('common.search_customers')}
+							testID="search-customers"
 						/>
-					</CapabilityTooltipTrigger>
-					<TooltipContent>
-						<Text>
-							{readOnly
-								? t('common.upgrade_to_pro')
-								: !caps.canCreateCustomers
-									? t('capability_hints.create_customers_admin_path')
-									: t('common.add_new_customer')}
-						</Text>
-					</TooltipContent>
-				</Tooltip>
-				<DisplayOptions />
-			</ManagementBar>
-
-			<GuardedCustomersBody />
-		</View>
+					}
+				>
+					<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
+						<CapabilityTooltipTrigger>
+							<IconButton
+								testID="customers-add-button"
+								name="addCustomer"
+								accessibilityLabel={t('common.add_new_customer')}
+								onPress={() => router.push({ pathname: '/customers/add' })}
+								disabled={readOnly || !caps.canCreateCustomers}
+							/>
+						</CapabilityTooltipTrigger>
+						<TooltipContent>
+							<Text>
+								{readOnly
+									? t('common.upgrade_to_pro')
+									: !caps.canCreateCustomers
+										? t('capability_hints.create_customers_admin_path')
+										: t('common.add_new_customer')}
+							</Text>
+						</TooltipContent>
+					</Tooltip>
+					<DisplayOptions />
+				</ManagementBar>
+			}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="customers" />}
+		>
+			<CustomersList handle={handle} />
+		</ListFrame>
 	);
 }
 

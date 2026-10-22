@@ -184,8 +184,6 @@ describe('OrdersScreen query-state wiring', () => {
 		expect(mockDataTableProps).toMatchObject({
 			handle: mockHandle,
 			sort: { field: 'date_created_gmt', direction: 'desc' },
-			// The page gutter (16), not the POS pane's dense 8.
-			gutter: 'page',
 		});
 		expect(mockDataTableProps).not.toHaveProperty('resource');
 		expect(mockDataTableProps).not.toHaveProperty('query');

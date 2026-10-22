@@ -12,10 +12,9 @@ import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Notice } from '@wcpos/components/notice';
+import { PageBar } from '@wcpos/components/page-bar';
 import { PaneStack } from '@wcpos/components/pane-stack';
-import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -36,6 +35,7 @@ import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
+import { ListFrame } from '../../components/list-frame';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -348,17 +348,20 @@ function POSProductsContent({
 			<DataTableSkeleton id="pos-products" />
 		) : (
 			// The grid loads in the tiles' own shape, so the rows drawn are the rows counted.
-			<View className="px-1">
-				{Array.from(
-					{ length: skeletonCount(body.height, body.width / gridColumns + POSTER_ROW_EXTRA_PX) },
-					(_, row) => (
-						<TileRow key={row} columns={gridColumns}>
-							{Array.from({ length: gridColumns }, (_, column) => (
-								<PosterPlaceholder key={column} testID="products-grid-skeleton" />
-							))}
-						</TileRow>
-					)
-				)}
+			// The grids' frame (product-grid.tsx): the page gutter, less the tiles' own `m-1`.
+			<View className="px-gutter">
+				<View className="-mx-1 -mt-1">
+					{Array.from(
+						{ length: skeletonCount(body.height, body.width / gridColumns + POSTER_ROW_EXTRA_PX) },
+						(_, row) => (
+							<TileRow key={row} columns={gridColumns}>
+								{Array.from({ length: gridColumns }, (_, column) => (
+									<PosterPlaceholder key={column} testID="products-grid-skeleton" />
+								))}
+							</TileRow>
+						)
+					)}
+				</View>
 			</View>
 		);
 
@@ -494,136 +497,131 @@ function POSProductsContent({
 		/>
 	);
 
-	// The column's rows sit one dense gutter (8) apart: the header gives 8 over the table card,
-	// which carries none of its own, but a tile carries 4 of its own (`m-1`, as at the sides
-	// under the grid's `px-1`), so the row above the grid gives the other 4.
-	const rowAboveBody = viewMode === 'grid' ? 'pb-1' : 'pb-2';
+	const lockedNotice = (session?.status === 'counting' || (!session && sessionsOn)) && (
+		<Notice
+			tone="info"
+			icon={session?.status === 'counting' ? 'info' : 'lock'}
+			title={t(
+				session?.status === 'counting'
+					? 'pos_products.counting_items_after_count'
+					: 'pos_products.price_check_only_until_open'
+			)}
+			testID="products-locked-notice"
+		/>
+	);
 
+	// The pages' frame at the pages' gutter: the bar, the chips, the rows the column adds, and the
+	// body on its card (the table) or on the ground (the tiles), one page gutter apart.
 	return (
-		<View className="h-full">
-			<View className="flex-1">
-				<View className={`px-2 pt-2 ${rowAboveBody}`} testID="pos-products-header">
-					<ErrorBoundary>
-						<VStack>
-							<HStack>
-								<ErrorBoundary>
-									<QuerySearchInput
-										ref={searchRef}
-										collectionName="products"
-										placeholder={t('pos_products.search_products')}
-										className="flex-1"
-										onKeyPress={onKeyPress}
-										testID="search-products"
-										clearTestID="search-products-clear"
-									/>
-								</ErrorBoundary>
-								<CameraScanButton
-									open={scannerOpen}
-									onToggle={() => setScannerOpen((open) => !open)}
-								/>
-								<ViewModeToggle />
-								<UISettingsDialog
-									side={side}
-									portalHost="pos"
-									title={t('pos_products.product_settings')}
-									triggerTestID="products-settings-button"
-								>
-									<UISettingsForm />
-								</UISettingsDialog>
-							</HStack>
+		<ListFrame
+			safeArea={false}
+			bar={
+				<ErrorBoundary>
+					<PageBar
+						safeArea={false}
+						search={
 							<ErrorBoundary>
-								<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
-							</ErrorBoundary>
-							<ErrorBoundary>
-								<POSFilterBar
-									level={drilled || browseDrilled ? 'variations' : 'products'}
-									initialFilters={initialFilters}
-									place={browsePlace}
+								<QuerySearchInput
+									ref={searchRef}
+									collectionName="products"
+									placeholder={t('pos_products.search_products')}
+									onKeyPress={onKeyPress}
+									testID="search-products"
+									clearTestID="search-products-clear"
 								/>
 							</ErrorBoundary>
-							{scannerOpen ? (
-								<ErrorBoundary>
-									<CameraScannerPanel onClose={() => setScannerOpen(false)} />
-								</ErrorBoundary>
-							) : null}
-							<ErrorBoundary>
-								<StorageOutageBanner />
-							</ErrorBoundary>
-						</VStack>
-					</ErrorBoundary>
-				</View>
-				{/* No rule here: the grid and the table each sit on their own card (TableSurface),
-				    whose edge is the line. */}
-				<View className="flex-1">
-					{(session?.status === 'counting' || (!session && sessionsOn)) && (
-						<Notice
-							tone="info"
-							icon={session?.status === 'counting' ? 'info' : 'lock'}
-							title={t(
-								session?.status === 'counting'
-									? 'pos_products.counting_items_after_count'
-									: 'pos_products.price_check_only_until_open'
-							)}
-							className={`mx-2 ${viewMode === 'grid' ? 'mb-1' : 'mb-2'}`}
-							testID="products-locked-notice"
-						/>
-					)}
-					<View
-						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
-						testID="register-products"
-						onLayout={(event) => {
-							handleProductsLayout(event);
-							setBody(event.nativeEvent.layout);
-						}}
+						}
 					>
-						{/* A failed products read is thrown here; the fallback's reset asks the handle again. */}
-						<ErrorBoundary onReset={() => handle.retry()}>
-							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
-							    a browse source on, the stage owns search too: a search drops the path and
-							    shows the catalogue-wide products at its root, drilling into the stage's
-							    own drill; a shortcut's own search keeps its level. Keyed by source and
-							    scope: either switch starts the stage afresh. */}
-							{browseBy !== 'all' ? (
-								<BrowseStage
-									key={stageKey}
-									source={browseBy}
-									viewMode={viewMode}
-									renderProducts={renderProducts}
-									empty={noDataMessage}
-									variationsStyle={variationsStyle}
-									stockStatus={stockStatusFilter}
-									handle={handle}
-									state={state}
-									actions={tableActions}
-									tableConfig={tableConfig}
-									onDrilledChange={setBrowseDrilled}
-									onLevelChange={setBrowsePlace}
-									persistKey={browsePersistKey}
-								/>
-							) : viewMode === 'grid' ? (
-								<DealStack
-									testID="products-pane-stack"
-									detail={drilled}
-									target={drill?.target}
-									renderDetail={renderDrillIn}
-								>
-									{products}
-								</DealStack>
-							) : (
-								<PaneStack
-									testID="products-pane-stack"
-									detail={drilled}
-									paneClassName="bg-background"
-									renderDetail={renderDrillIn}
-								>
-									{products}
-								</PaneStack>
-							)}
+						<CameraScanButton open={scannerOpen} onToggle={() => setScannerOpen((open) => !open)} />
+						<ViewModeToggle />
+						<UISettingsDialog
+							side={side}
+							portalHost="pos"
+							title={t('pos_products.product_settings')}
+							triggerTestID="products-settings-button"
+						>
+							<UISettingsForm />
+						</UISettingsDialog>
+					</PageBar>
+				</ErrorBoundary>
+			}
+			chips={
+				<POSFilterBar
+					level={drilled || browseDrilled ? 'variations' : 'products'}
+					initialFilters={initialFilters}
+					place={browsePlace}
+				/>
+			}
+			rows={
+				<>
+					<ErrorBoundary>
+						<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
+					</ErrorBoundary>
+					{scannerOpen ? (
+						<ErrorBoundary>
+							<CameraScannerPanel onClose={() => setScannerOpen(false)} />
 						</ErrorBoundary>
-					</View>
-				</View>
+					) : null}
+					<ErrorBoundary>
+						<StorageOutageBanner />
+					</ErrorBoundary>
+					{lockedNotice}
+				</>
+			}
+			handle={handle}
+			skeleton={loading}
+		>
+			<View
+				className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
+				testID="register-products"
+				onLayout={(event) => {
+					handleProductsLayout(event);
+					setBody(event.nativeEvent.layout);
+				}}
+			>
+				{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With a
+				    browse source on, the stage owns search too: a search drops the path and shows the
+				    catalogue-wide products at its root, drilling into the stage's own drill; a
+				    shortcut's own search keeps its level. Keyed by source and scope: either switch
+				    starts the stage afresh. */}
+				{browseBy !== 'all' ? (
+					<BrowseStage
+						key={stageKey}
+						source={browseBy}
+						viewMode={viewMode}
+						renderProducts={renderProducts}
+						empty={noDataMessage}
+						variationsStyle={variationsStyle}
+						stockStatus={stockStatusFilter}
+						handle={handle}
+						state={state}
+						actions={tableActions}
+						tableConfig={tableConfig}
+						onDrilledChange={setBrowseDrilled}
+						onLevelChange={setBrowsePlace}
+						persistKey={browsePersistKey}
+					/>
+				) : viewMode === 'grid' ? (
+					<DealStack
+						testID="products-pane-stack"
+						detail={drilled}
+						target={drill?.target}
+						renderDetail={renderDrillIn}
+					>
+						{products}
+					</DealStack>
+				) : (
+					<PaneStack
+						testID="products-pane-stack"
+						detail={drilled}
+						paneClassName="bg-background"
+						renderDetail={renderDrillIn}
+					>
+						{products}
+					</PaneStack>
+				)}
 			</View>
-		</View>
+		</ListFrame>
 	);
 }
 

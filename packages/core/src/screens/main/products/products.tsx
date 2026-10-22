@@ -3,11 +3,8 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import omit from 'lodash/omit';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useObservableRef } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Suspense } from '@wcpos/components/suspense';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
@@ -15,7 +12,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
 import { ManagementBar } from '../components/management-bar';
 import { DisplayOptions } from '../components/display-options';
-import { withProAccess } from '../components/pro-guard';
+import { ListFrame } from '../components/list-frame';
 import { ProductRow as TouchRow, VariableRow } from './row';
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -33,7 +30,6 @@ import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { RecordDateCell } from '../components/record-date-cell';
 import { ProductCategories } from '../components/product/categories';
-import { FilterBarSkeleton } from '../components/filter-bar-skeleton';
 import { FilterBar } from '../components/product/filter-bar';
 import { ProductImage } from '../components/product/image';
 import { ProductTags } from '../components/product/tags';
@@ -277,7 +273,6 @@ function ProductsList({
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<ProductRow>
 					id="products"
-					gutter="page"
 					collectionName="products"
 					handle={handle}
 					sort={state.sort}
@@ -332,58 +327,39 @@ function ProductsList({
 	);
 }
 
-function ProductsBody() {
+export function Products() {
+	const t = useT();
 	const state = useQueryState<'products'>();
 	const handle = useProductsQueryHandle(state);
-	return (
-		<View testID="products-body" className="flex-1">
-			{/* The chip row is a row of the page, not of the table: it stands above the table's
-			    loading boundary so the card never moves when the rows arrive. Its own boundary
-			    holds the row's height while a pill answers. */}
-			<ErrorBoundary>
-				<Suspense fallback={<FilterBarSkeleton />}>
-					<FilterBar />
-				</Suspense>
-			</ErrorBoundary>
-			{/* A failed products read is thrown here; the fallback's reset asks the handle again,
-			    and a changed query (its handle is new) clears the fallback on its own. */}
-			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
-				<Suspense fallback={<DataTableSkeleton id="products" gutter="page" />}>
-					<ProductsList handle={handle} />
-				</Suspense>
-			</ErrorBoundary>
-		</View>
-	);
-}
-const GuardedProductsBody = withProAccess(ProductsBody, 'products');
-
-export function Products() {
-	const { bottom } = useSafeAreaInsets();
-	const t = useT();
 	const actions = useQueryStateActions<'products'>();
 	const { onKeyPress } = useBarcode(actions.setSearch);
 	return (
-		<View
+		<ListFrame
 			testID="screen-products"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
+			bodyTestID="products-body"
+			pro="products"
+			bar={
+				<ManagementBar
+					// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+					testID="products-bar"
+					search={
+						<QuerySearchInput
+							collectionName="products"
+							placeholder={t('common.search_products')}
+							testID="search-products"
+							clearTestID="search-products-clear"
+							onKeyPress={onKeyPress}
+						/>
+					}
+				>
+					<DisplayOptions id="products" title={t('common.product_settings')} />
+				</ManagementBar>
+			}
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="products" />}
 		>
-			<ManagementBar
-				// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
-				testID="products-bar"
-				search={
-					<QuerySearchInput
-						collectionName="products"
-						placeholder={t('common.search_products')}
-						testID="search-products"
-						clearTestID="search-products-clear"
-						onKeyPress={onKeyPress}
-					/>
-				}
-			>
-				<DisplayOptions id="products" title={t('common.product_settings')} />
-			</ManagementBar>
-			<GuardedProductsBody />
-		</View>
+			<ProductsList handle={handle} />
+		</ListFrame>
 	);
 }

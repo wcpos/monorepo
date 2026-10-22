@@ -108,48 +108,59 @@ export function VariationsGrid({
 	);
 
 	return (
-		// The dealt grid lands on the ground under the crumb, as the products grid stands. The
-		// frame the slots rest in is reported, not assumed.
-		<View className="min-h-0 flex-1 px-1" testID="variations-surface">
-			<View className="min-h-0 flex-1" style={air.frame}>
-				<View
-					ref={slotsNode}
-					className="min-h-0 flex-1"
-					testID="variations-slots"
-					onLayout={() => placeGrid(slotsNode.current as Measurable)}
-				>
-					<Animated.ScrollView
-						ref={scroller}
-						className="flex-1"
-						style={air.scroller}
-						testID="variations-grid-scroller"
+		// The dealt grid lands on the ground under the crumb, as the products grid stands: one page
+		// gutter in, less the tiles' own `m-1` (product-grid.tsx). The frame the slots rest in is
+		// reported, not assumed.
+		<View className="min-h-0 flex-1" testID="variations-surface">
+			<View className="px-gutter min-h-0 flex-1">
+				<View className="-mx-1 -mt-1 min-h-0 flex-1" style={air.frame}>
+					<View
+						ref={slotsNode}
+						className="min-h-0 flex-1"
+						testID="variations-slots"
+						onLayout={() => placeGrid(slotsNode.current as Measurable)}
 					>
-						{rows.map((row, rowIndex) => (
-							<View key={rowIndex} className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
-								{row.map((index) => {
-									if (index >= count) return <View key={index} className="flex-1" />;
-									const variation = index === 0 ? null : slots[index - 1];
-									return (
-										<DealCell
-											key={index}
-											index={index}
-											count={count}
-											columns={columns}
-											scroll={scroll}
-										>
-											{index === 0 ? (
-												<ParentTile record={parent} gridFields={gridFields} onPress={back} />
-											) : variation ? (
-												<VariationTile record={variation} parent={parent} gridFields={gridFields} />
-											) : (
-												<VariationPlaceholder />
-											)}
-										</DealCell>
-									);
-								})}
-							</View>
-						))}
-					</Animated.ScrollView>
+						<Animated.ScrollView
+							ref={scroller}
+							className="flex-1"
+							style={air.scroller}
+							testID="variations-grid-scroller"
+						>
+							{rows.map((row, rowIndex) => (
+								<View
+									key={rowIndex}
+									className="flex-row"
+									style={rowIndex === 0 ? FRONT : undefined}
+								>
+									{row.map((index) => {
+										if (index >= count) return <View key={index} className="flex-1" />;
+										const variation = index === 0 ? null : slots[index - 1];
+										return (
+											<DealCell
+												key={index}
+												index={index}
+												count={count}
+												columns={columns}
+												scroll={scroll}
+											>
+												{index === 0 ? (
+													<ParentTile record={parent} gridFields={gridFields} onPress={back} />
+												) : variation ? (
+													<VariationTile
+														record={variation}
+														parent={parent}
+														gridFields={gridFields}
+													/>
+												) : (
+													<VariationPlaceholder />
+												)}
+											</DealCell>
+										);
+									})}
+								</View>
+							))}
+						</Animated.ScrollView>
+					</View>
 				</View>
 			</View>
 			<DealFade>

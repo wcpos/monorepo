@@ -11,8 +11,6 @@ import { DataTableHeader } from './header';
 import { getColumnStyle } from './column-style';
 import { CaptionRowInset, TableSurface } from './surface';
 
-import type { TableSurfaceGutter } from './surface';
-
 type Column = { key: string; hideLabel?: boolean; show?: boolean };
 
 /**
@@ -78,16 +76,7 @@ export function DataTableSkeletonRows({ id, rowCount }: { id: UISettingID; rowCo
  * and the footer line pinned where the footer will be. A table that loads into this frame
  * changes its contents and nothing else.
  */
-export function DataTableSkeleton({
-	id,
-	rowCount,
-	gutter = 'dense',
-}: {
-	id: UISettingID;
-	rowCount?: number;
-	/** The loaded table's gutter, so the shell stands where the card will. */
-	gutter?: TableSurfaceGutter;
-}) {
+export function DataTableSkeleton({ id, rowCount }: { id: UISettingID; rowCount?: number }) {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const columns: Column[] = useDocField(uiSettings, (value) => value.columns).filter(
 		(column: Column) => column.show
@@ -98,7 +87,7 @@ export function DataTableSkeleton({
 		// The same card the loaded table stands on, with the footer's row held beneath it, so the
 		// shell and the table share one frame.
 		<View className="flex h-full flex-col">
-			<TableSurface gutter={gutter}>
+			<TableSurface>
 				<Table className="flex h-full flex-col">
 					{pointer === 'fine' && (
 						<TableHeader>
@@ -132,7 +121,7 @@ export function DataTableSkeleton({
 			</TableSurface>
 			{/* The footer's row sits in the caption row's inset, gutter below it included, so the
 			    card's bottom edge stays put when the table loads (CodeRabbit on #2795). */}
-			<CaptionRowInset gutter={gutter}>
+			<CaptionRowInset>
 				<View className="min-h-ctl" />
 			</CaptionRowInset>
 		</View>

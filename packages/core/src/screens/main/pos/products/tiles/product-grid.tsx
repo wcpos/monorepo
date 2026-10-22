@@ -94,7 +94,7 @@ function GridStatusFooter({
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
-	// The tile grid stands on the POS pane's dense card: the inset DataTable's footer mount gives.
+	// The tile grid's caption row: the inset DataTable's footer mount gives (surface.tsx).
 	return (
 		<CaptionRowInset>
 			<ProductsFooter
@@ -229,46 +229,52 @@ export function ProductGrid({
 	return (
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
-		<View className="flex h-full flex-col px-1">
+		// The tiles stand one page gutter from the sides and under the chip row, as the table's
+		// card does: the frame is the gutter, and the list takes back the tile's own `m-1`.
+		<View className="flex h-full flex-col">
 			{RENDER_PROBE_ENABLED ? <EmissionProbe handle={handle} /> : null}
-			<TileGrid
-				testID="pos-products-grid-scroller"
-				tiles={products}
-				renderTile={({ record }) =>
-					record.payload.type === 'variable' ? (
-						<VariableProductTile
-							key={record.uuid}
-							record={record}
-							gridFields={gridFields}
-							onDrill={onDrill}
-							variationsStyle={variationsStyle}
-						/>
-					) : (
-						<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
-					)
-				}
-				onEndReached={handleEndReached}
-				footer={
-					<ProductGridFooter
-						engine={engine}
-						renderedCount={renderedCount}
-						hitCount={deferredResult.hits.length}
-					/>
-				}
-				empty={() => (
-					<View className="items-center justify-center p-4">
-						{/* "No products found" may only ever mean the search ANSWERED with
+			<View className="px-gutter min-h-0 flex-1">
+				<View className="-mx-1 -mt-1 flex-1">
+					<TileGrid
+						testID="pos-products-grid-scroller"
+						tiles={products}
+						renderTile={({ record }) =>
+							record.payload.type === 'variable' ? (
+								<VariableProductTile
+									key={record.uuid}
+									record={record}
+									gridFields={gridFields}
+									onDrill={onDrill}
+									variationsStyle={variationsStyle}
+								/>
+							) : (
+								<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
+							)
+						}
+						onEndReached={handleEndReached}
+						footer={
+							<ProductGridFooter
+								engine={engine}
+								renderedCount={renderedCount}
+								hitCount={deferredResult.hits.length}
+							/>
+						}
+						empty={() => (
+							<View className="items-center justify-center p-4">
+								{/* "No products found" may only ever mean the search ANSWERED with
 							    nothing; a pending search says so instead (#1733). */}
-						{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
-							<Text testID="search-pending-message">{t('common.searching')}</Text>
-						) : (
-							(noDataMessage ?? (
-								<Text testID="no-data-message">{t('common.no_products_found')}</Text>
-							))
+								{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
+									<Text testID="search-pending-message">{t('common.searching')}</Text>
+								) : (
+									(noDataMessage ?? (
+										<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+									))
+								)}
+							</View>
 						)}
-					</View>
-				)}
-			/>
+					/>
+				</View>
+			</View>
 			<GridStatusFooter handle={handle} shown={shown} drawnCount={renderedCount} />
 		</View>
 	);

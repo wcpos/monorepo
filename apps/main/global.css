@@ -12,6 +12,13 @@
   --color-transparent: transparent;
 }
 
+/* The page gutter (CODING_STANDARDS § Design, Gutters): four spacing units, so it follows the
+   density step. Inline, so a utility carries the calc itself and reads `--spacing` where it is
+   used: a step scoped below the root (a gallery cell, Uniwind's ScopedVariables) moves it too. */
+@theme inline {
+  --spacing-gutter: calc(var(--spacing) * 4);
+}
+
 @theme {
   /* Regular scale: shared px values on web and native. */
   --spacing: 4px;
