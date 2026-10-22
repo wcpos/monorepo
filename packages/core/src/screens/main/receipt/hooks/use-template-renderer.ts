@@ -78,6 +78,8 @@ interface TemplateRendererResult {
 	serverReceiptData: Record<string, unknown> | null;
 	templates: ActiveTemplate[];
 	templatesReady: boolean;
+	/** The template sync has settled: an empty list now means the store has no template. */
+	templatesSynced: boolean;
 	selectedTemplateId: string | number | null;
 	setSelectedTemplateId: (id: string | number) => void;
 	renderedHtml: string | null;
@@ -401,6 +403,7 @@ export function useTemplateRenderer({
 		serverReceiptData: isOffline ? null : apiReceiptData,
 		templates,
 		templatesReady: !localDocument || isOffline || synced,
+		templatesSynced: synced,
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,

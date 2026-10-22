@@ -19,6 +19,7 @@ jest.mock('@wcpos/components/webview', () => ({
 		<iframe data-testid={testID} srcDoc={srcDoc} />
 	),
 }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('./components/receipt-preview-viewport', () => ({
 	ReceiptPreviewViewport: ({ children }: { children: React.ReactNode }) => (
 		<div data-testid="paper-viewport">{children}</div>
@@ -119,4 +120,20 @@ it('retains the paper viewport for the existing receipt presentation', () => {
 	} as ReturnType<typeof useReceiptDocument>;
 	render(<ReceiptBody doc={doc} />);
 	expect(screen.getByTestId('paper-viewport')).toBeTruthy();
+});
+
+// Revert: mount the frame on a URL while the page is still being read (it reloads once it lands).
+it('shows no frame while the receipt page is still being read', () => {
+	const doc = {
+		previewProps: {
+			renderedHtml: null,
+			receiptUrl: null,
+			pending: true,
+			previewPaperWidth: '80mm',
+		},
+	} as unknown as ReturnType<typeof useReceiptDocument>;
+	render(<ReceiptBody doc={doc} />);
+	expect(screen.getByTestId('receipt-preview-loading')).toBeTruthy();
+	expect(screen.queryByTestId('receipt-preview-frame')).toBeNull();
+	expect(screen.queryByTestId('receipt-unavailable')).toBeNull();
 });

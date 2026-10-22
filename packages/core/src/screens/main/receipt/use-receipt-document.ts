@@ -3,7 +3,7 @@ import * as React from 'react';
 import { recordReceiptPrint } from '@wcpos/query/mutations';
 import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
-import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
+import { isOrderBasedCloudProfile, usePrint, usesSystemPrintDialog } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -80,6 +80,7 @@ export function useReceiptDocument({
 		refetch,
 		templates,
 		templatesReady,
+		templatesSynced,
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,
@@ -111,6 +112,36 @@ export function useReceiptDocument({
 			return closure ? closure.getLatest().print_count + 1 : 0;
 		},
 	});
+
+	// The order's own link is the fallback for a store with no receipt template. While the
+	// templates are still arriving it is not the answer yet: loading it then cost the cashier one
+	// more full WordPress page, and the templated page right after it (run 39803114058).
+	const templatesResolving = !document && templates.length === 0 && !templatesSynced && !isOffline;
+	const fallbackURL = document || templatesResolving ? undefined : baseReceiptURL;
+	// The receipt page is read ONCE per URL (order, template and mode are all in it): the preview
+	// shows it as srcDoc and a dialog print prints the same HTML. A failed read (a cross-origin
+	// host) falls back to the frame loading the URL, as before.
+	const pageURL =
+		!document && previewEnabled && !isOffline && renderedHtml == null
+			? templateReceiptUrl || fallbackURL
+			: undefined;
+	const [page, setPage] = React.useState<{ url: string; html: string | null } | null>(null);
+	React.useEffect(() => {
+		if (!pageURL) return;
+		const controller = new AbortController();
+		const settle = (html: string | null) => {
+			if (!controller.signal.aborted) setPage({ url: pageURL, html });
+		};
+		Promise.resolve()
+			.then(() => fetch(pageURL, { signal: controller.signal }))
+			.then((response) => (response.ok ? response.text() : null))
+			.then(settle, () => settle(null));
+		return () => controller.abort();
+	}, [pageURL]);
+	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
+	const previewHtml = renderedHtml ?? pageHtml ?? null;
+	const previewPending =
+		previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL));
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
@@ -198,6 +229,10 @@ export function useReceiptDocument({
 	);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
+			// The page the preview read, printed as the URL print always was: uncounted.
+			if (pageHtml && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
+				return { html: pageHtml };
+			}
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
 				if (getLocalClosure) {
@@ -245,7 +280,7 @@ export function useReceiptDocument({
 			return { ...prepared, commit };
 		},
 		receiptData: receiptData ?? undefined,
-		html: renderedHtml ?? undefined,
+		html: previewHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
 		printerProfile,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
@@ -391,9 +426,9 @@ export function useReceiptDocument({
 			printNeedsLoadedPreview({
 				printerProfile,
 				receiptData: receiptData ?? undefined,
-				html: renderedHtml ?? undefined,
+				html: previewHtml ?? undefined,
 			}),
-		[printerProfile, receiptData, renderedHtml]
+		[printerProfile, receiptData, previewHtml]
 	);
 	// The receipt is entered before the bounded order refresh lands. If the receipt request
 	// then fails (or the deadline passes), the only data is built from the local order, still
@@ -517,9 +552,10 @@ export function useReceiptDocument({
 			previewKey,
 			previewPaperWidth,
 			contentSize,
-			renderedHtml,
-			receiptUrl: templateReceiptUrl,
-			baseReceiptURL: document ? undefined : baseReceiptURL,
+			renderedHtml: previewHtml,
+			receiptUrl: previewPending ? null : templateReceiptUrl,
+			baseReceiptURL: previewPending ? undefined : fallbackURL,
+			pending: previewPending,
 			iframeRef,
 			handleLoad,
 			handleError,

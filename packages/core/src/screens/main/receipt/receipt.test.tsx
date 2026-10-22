@@ -109,6 +109,8 @@ jest.mock('@wcpos/components/webview', () => ({
 	},
 }));
 
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+
 jest.mock('./components/receipt-preview-viewport', () => ({
 	ReceiptPreviewViewport: ({
 		children,
