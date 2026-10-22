@@ -16,6 +16,7 @@ import {
 	FormSelect,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { Select, SelectTrigger, SelectValue } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
@@ -136,16 +137,6 @@ function TaxSettingsForm() {
 			<VStack className="gap-5">
 				<FormErrors />
 				<SettingsSection first title={t('settings.tax_calculation')}>
-					<LockedRow
-						label={t('settings.enable_taxes')}
-						testID="settings-tax-locked-calc_taxes"
-						value={lockedSettings.calc_taxes === 'yes'}
-					/>
-					<LockedRow
-						label={t('settings.prices_entered_with_tax')}
-						testID="settings-tax-locked-prices_include_tax"
-						value={lockedSettings.prices_include_tax === 'yes'}
-					/>
 					<FormField
 						control={form.control}
 						name="tax_based_on"
@@ -160,20 +151,44 @@ function TaxSettingsForm() {
 							</SettingsRow>
 						)}
 					/>
+					<View className="gap-1 pt-3">
+						<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
+						{wooTaxSettingsUrl ? (
+							<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
+						) : null}
+					</View>
 					<LockedRow
+						label={t('settings.enable_taxes')}
+						testID="settings-tax-locked-calc_taxes"
+						value={lockedSettings.calc_taxes === 'yes'}
+					/>
+					<LockedRow
+						label={t('settings.prices_entered_with_tax')}
+						testID="settings-tax-locked-prices_include_tax"
+						value={lockedSettings.prices_include_tax === 'yes'}
+					/>
+					{/* Read-only: a disabled select, never in the form, so the value is never written.
+					    The trigger itself takes `disabled` — a root-only `disabled` neither dims it
+					    nor stops a native/touch press from opening it. */}
+					<SettingsRow
 						label={t('settings.shipping_tax_class')}
 						testID="settings-tax-locked-shipping_tax_class"
-						value={shippingTaxClassName}
-					/>
+					>
+						<Select
+							value={{ value: shippingTaxClassSlug, label: shippingTaxClassName }}
+							onValueChange={() => {}}
+							disabled
+						>
+							<SelectTrigger disabled testID="settings-tax-locked-shipping_tax_class-select">
+								<SelectValue placeholder={t('common.select_tax_class')} />
+							</SelectTrigger>
+						</Select>
+					</SettingsRow>
 					<LockedRow
 						label={t('settings.round_tax_at_subtotal_level')}
 						testID="settings-tax-locked-tax_round_at_subtotal"
 						value={lockedSettings.tax_round_at_subtotal === 'yes'}
 					/>
-					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
-					{wooTaxSettingsUrl ? (
-						<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
-					) : null}
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.tax_display')}>

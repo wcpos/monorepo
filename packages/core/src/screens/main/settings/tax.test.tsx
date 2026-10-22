@@ -60,6 +60,26 @@ jest.mock('@wcpos/components/switch', () => ({
 		/>
 	),
 }));
+jest.mock('@wcpos/components/select', () => {
+	const mockReact = jest.requireActual('react');
+	const MockValue = mockReact.createContext(undefined);
+	return {
+		Select: ({ value, children }: React.PropsWithChildren<{ value?: { label: string } }>) => (
+			<MockValue.Provider value={value}>{children}</MockValue.Provider>
+		),
+		SelectTrigger: ({
+			disabled,
+			testID,
+			children,
+		}: React.PropsWithChildren<{ disabled?: boolean; testID: string }>) => (
+			<button disabled={disabled} data-testid={testID}>
+				{children}
+			</button>
+		),
+		SelectValue: ({ placeholder }: { placeholder: string }) =>
+			mockReact.useContext(MockValue)?.label || placeholder,
+	};
+});
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -190,6 +210,9 @@ describe('TaxSettings tax class persistence', () => {
 			true,
 		]);
 		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe('Standard rate');
+		expect(
+			(getByTestId('settings-tax-locked-shipping_tax_class-select') as HTMLButtonElement).disabled
+		).toBe(true);
 	});
 
 	it.each([
