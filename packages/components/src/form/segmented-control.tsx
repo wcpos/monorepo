@@ -24,7 +24,7 @@ export function FormSegmentedControl({
 	onBlur,
 	ref,
 }: FormItemProps<string> & { segments: Segments; testID?: string }) {
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 	const drawn = segments.map((segment) => ({
 		...segment,
 		disabled: !!(disabled || segment.disabled),
@@ -32,7 +32,7 @@ export function FormSegmentedControl({
 	})) as unknown as Segments;
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 			<SegmentedControl
 				segments={drawn}

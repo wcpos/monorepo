@@ -17,7 +17,7 @@ export function FormTextarea({
 }: FormItemProps<string> &
 	Partial<React.ComponentProps<typeof Textarea>> & { ref?: React.Ref<TextInputInstance> }) {
 	const textareaRef = React.useRef<TextInputInstance>(null);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!textareaRef.current) {
@@ -38,7 +38,7 @@ export function FormTextarea({
 	}
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			{!!label && (
 				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
 					{label}

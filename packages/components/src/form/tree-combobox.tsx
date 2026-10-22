@@ -42,7 +42,7 @@ export function FormTreeCombobox({
 	portalHost,
 	...treeProps
 }: FormTreeComboboxProps & { children?: React.ReactNode }) {
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	const selected = value ?? [];
 	const hasValue = selected.length > 0;
@@ -53,7 +53,7 @@ export function FormTreeCombobox({
 	}, [selected, placeholder]);
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 			<TreeCombobox
 				options={options}

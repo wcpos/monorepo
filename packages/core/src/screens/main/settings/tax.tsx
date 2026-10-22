@@ -15,7 +15,9 @@ import {
 	FormRadioGroup,
 	FormSelect,
 	useFormChangeHandler,
+	useFormField,
 } from '@wcpos/components/form';
+import { Select, SelectTrigger, SelectValue } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
@@ -41,6 +43,31 @@ const formSchema = z.object({
 	price_display_suffix: z.string().optional(),
 	tax_total_display: z.enum(['single', 'itemized']).default('itemized'),
 });
+
+/**
+ * The row's label names the dimmed select: `SettingsRow` is a `FormItem`, so the label's id is
+ * the item's `formItemNativeID`, read here from inside the row.
+ */
+function LockedShippingTaxClass({
+	value,
+	placeholder,
+}: {
+	value: { value: string; label: string };
+	placeholder: string;
+}) {
+	const { formItemNativeID } = useFormField();
+	return (
+		<Select value={value} onValueChange={() => {}} disabled>
+			<SelectTrigger
+				disabled
+				testID="settings-tax-locked-shipping_tax_class-select"
+				aria-labelledby={formItemNativeID}
+			>
+				<SelectValue placeholder={placeholder} />
+			</SelectTrigger>
+		</Select>
+	);
+}
 
 /**
  *
@@ -77,7 +104,6 @@ function TaxSettingsForm() {
 			? t('common.tax_class_based_on_cart_items')
 			: (taxClasses?.find((taxClass) => taxClass.slug === shippingTaxClassSlug)?.name ??
 				shippingTaxClassSlug);
-	const yesNo = (value: unknown) => (value === 'yes' ? t('common.yes') : t('common.no'));
 	// `url` is optional on the site schema; a site without one gets no link, not a crash.
 	const siteUrl = typeof site.url === 'string' ? site.url.replace(/\/+$/, '') : '';
 	const wooTaxSettingsUrl = siteUrl ? `${siteUrl}/wp-admin/admin.php?page=wc-settings&tab=tax` : '';
@@ -137,16 +163,6 @@ function TaxSettingsForm() {
 			<VStack className="gap-5">
 				<FormErrors />
 				<SettingsSection first title={t('settings.tax_calculation')}>
-					<LockedRow
-						label={t('settings.enable_taxes')}
-						testID="settings-tax-locked-calc_taxes"
-						value={yesNo(lockedSettings.calc_taxes)}
-					/>
-					<LockedRow
-						label={t('settings.prices_entered_with_tax')}
-						testID="settings-tax-locked-prices_include_tax"
-						value={yesNo(lockedSettings.prices_include_tax)}
-					/>
 					<FormField
 						control={form.control}
 						name="tax_based_on"
@@ -161,20 +177,39 @@ function TaxSettingsForm() {
 							</SettingsRow>
 						)}
 					/>
+					<View className="gap-1 pt-3">
+						<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
+						{wooTaxSettingsUrl ? (
+							<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
+						) : null}
+					</View>
 					<LockedRow
+						label={t('settings.enable_taxes')}
+						testID="settings-tax-locked-calc_taxes"
+						value={lockedSettings.calc_taxes === 'yes'}
+					/>
+					<LockedRow
+						label={t('settings.prices_entered_with_tax')}
+						testID="settings-tax-locked-prices_include_tax"
+						value={lockedSettings.prices_include_tax === 'yes'}
+					/>
+					{/* Read-only: a disabled select, never in the form, so the value is never written.
+					    The trigger itself takes `disabled` — a root-only `disabled` neither dims it
+					    nor stops a native/touch press from opening it. */}
+					<SettingsRow
 						label={t('settings.shipping_tax_class')}
 						testID="settings-tax-locked-shipping_tax_class"
-						value={shippingTaxClassName}
-					/>
+					>
+						<LockedShippingTaxClass
+							value={{ value: shippingTaxClassSlug, label: shippingTaxClassName }}
+							placeholder={t('common.select_tax_class')}
+						/>
+					</SettingsRow>
 					<LockedRow
 						label={t('settings.round_tax_at_subtotal_level')}
 						testID="settings-tax-locked-tax_round_at_subtotal"
-						value={yesNo(lockedSettings.tax_round_at_subtotal)}
+						value={lockedSettings.tax_round_at_subtotal === 'yes'}
 					/>
-					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
-					{wooTaxSettingsUrl ? (
-						<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
-					) : null}
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.tax_display')}>

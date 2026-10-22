@@ -205,6 +205,10 @@ function SelectSingleContent({
 					className={cn(
 						OVERLAY_PANEL.anchored,
 						'relative z-50 max-h-96 min-w-32 p-1.5',
+						// The trigger-width floor sits on the bordered, padded content box (border-box), not
+						// on the viewport: on the viewport it made the rows trigger-width inside a box that
+						// was trigger-width in total, so they overflowed the right padding and border.
+						position === 'popper' && 'min-w-(--radix-select-trigger-width)',
 						position === 'popper' &&
 							'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
 						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
@@ -217,8 +221,7 @@ function SelectSingleContent({
 					<SelectPrimitive.Viewport
 						className={cn(
 							'p-0',
-							position === 'popper' &&
-								'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
+							position === 'popper' && 'h-(--radix-select-trigger-height) w-full'
 						)}
 					>
 						{children}
@@ -462,7 +465,9 @@ function OptionSelect({
 			onValueChange={(option) => onChange?.(option?.value, resolveOption(options, option))}
 			{...props}
 		>
-			<SelectTrigger testID={triggerTestID} className={triggerClassName}>
+			{/* The trigger owns the dimmed look and the touch/native press guard: a root-only
+			    `disabled` neither dims it nor stops a press from opening it. */}
+			<SelectTrigger testID={triggerTestID} className={triggerClassName} disabled={props.disabled}>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
 			<SelectContent matchWidth={matchWidth}>
