@@ -339,6 +339,12 @@ it('does not silently finish a receipt on Escape', () => {
 	expect(finishSale).not.toHaveBeenCalled();
 });
 
+it.each([true, false])('holds Cancel payment disabled while busy: %s', (busy) => {
+	mockFlow = makeFlow({ hasLiveLeg: true, busy });
+	mountColumn();
+	expect((screen.getByTestId('checkout-cancel-payment') as HTMLButtonElement).disabled).toBe(busy);
+});
+
 it('leaves a live terminal leg without whole-order cancellation', () => {
 	mockFlow = makeFlow({ hasLiveLeg: true, hasLiveTerminalLeg: true });
 	mountColumn();

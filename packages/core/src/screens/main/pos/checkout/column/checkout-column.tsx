@@ -91,6 +91,8 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						variant="outline-destructive"
 						size="sm"
 						testID="checkout-cancel-payment"
+						// The flow drops every action while a payment is in progress; the button says so.
+						disabled={flow.busy}
 						onPress={() => flow.dispatch({ type: 'request-cancel' })}
 					>
 						<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>

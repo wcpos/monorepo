@@ -178,6 +178,8 @@ export function TenderCheckout({ order }: Props) {
 				variant="outline-destructive"
 				size={compact ? undefined : 'sm'}
 				testID="checkout-cancel-payment"
+				// The flow drops every action while a payment is in progress; the button says so.
+				disabled={flow.busy}
 				onPress={() => flow.dispatch({ type: 'request-cancel' })}
 			>
 				<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>

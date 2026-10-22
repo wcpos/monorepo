@@ -348,6 +348,21 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-cancel-payment')).not.toBeNull();
 	});
 
+	it('holds Cancel payment disabled while the payment is in progress, enabled after', () => {
+		mockFlow = makeFlow({ hasLiveLeg: true, busy: true });
+		const inProgress = render(<TenderCheckout order={order} />);
+		expect((screen.getByTestId('checkout-cancel-payment') as HTMLButtonElement).disabled).toBe(
+			true
+		);
+		inProgress.unmount();
+
+		mockFlow = makeFlow({ hasLiveLeg: true, busy: false });
+		render(<TenderCheckout order={order} />);
+		expect((screen.getByTestId('checkout-cancel-payment') as HTMLButtonElement).disabled).toBe(
+			false
+		);
+	});
+
 	it('does not close a live payment while its cancellation view is open', () => {
 		mockFlow = makeFlow({
 			hasLiveLeg: true,
