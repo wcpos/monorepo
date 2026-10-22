@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrderTabs } from './tabs';
 import {
+	enterCheckout,
 	enterReceipt,
 	finishReceipt,
 	getCheckoutModeSnapshot,
@@ -159,6 +160,7 @@ jest.mock('@wcpos/query/record-readers', () => ({
 }));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: (record: unknown) => record }));
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
@@ -501,5 +503,35 @@ it('the first cart pins to the left edge with only the right arrow', () => {
 		expect(screen.getByTestId('open-order-tab-a').getAttribute('aria-selected')).toBe('true');
 	} finally {
 		mockOpen = open;
+	}
+});
+
+it('keeps a paid checkout member tab before confirmation', () => {
+	enterCheckout('late');
+	const record = mockReceipts.late;
+	mockReceipts.late = {
+		...record,
+		payload: { ...record.payload, status: 'completed' },
+	} as typeof record;
+	try {
+		render(<OpenOrderTabs />);
+		expect(screen.getByTestId('open-order-tab-late').textContent).toContain('Paid · receipt');
+	} finally {
+		mockReceipts.late = record;
+	}
+});
+it('does not show a tab for a cancelled checkout member outside the open hits', () => {
+	enterCheckout('late');
+	const record = mockReceipts.late;
+	mockReceipts.late = {
+		...record,
+		payload: { ...record.payload, status: 'cancelled' },
+	} as typeof record;
+	try {
+		render(<OpenOrderTabs />);
+		expect(screen.queryByTestId('open-order-tab-late')).toBeNull();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('late')).toBe(false);
+	} finally {
+		mockReceipts.late = record;
 	}
 });

@@ -39,6 +39,11 @@ export function POSColumns() {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(currentOrderRecord);
+	const { uiSettings: cartSettings } = useUISettings('pos-cart');
+	const receiptUuid =
+		selectedReceiptOrder ??
+		(stage === 'receipt' && cartSettings.autoShowReceipt ? currentOrderRecord.uuid : null);
+	const showTender = stage === 'checkout' || stage === 'receipt';
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const position = useDocField(uiSettings, (value) => value.position);
 	const productsOnRight = position === 'right';
@@ -89,16 +94,18 @@ export function POSColumns() {
 									    the full screen height (ledger line 6). */}
 									{descriptor.id === PRODUCTS_ENTRY_ID ? (
 										<Animated.View
-											key={selectedReceiptOrder ? `receipt:${selectedReceiptOrder}` : stage}
+											key={
+												receiptUuid ? `receipt:${receiptUuid}` : showTender ? 'checkout' : 'cart'
+											}
 											entering={FadeIn.duration(CROSSFADE)}
 											exiting={FadeOut.duration(CROSSFADE)}
 											style={{ flex: 1 }}
 										>
-											{selectedReceiptOrder ? (
+											{receiptUuid ? (
 												<EdgeColumn testID="pos-receipt-column" className="bg-card">
-													<ReceiptStage orderUuid={selectedReceiptOrder} compact={false} />
+													<ReceiptStage orderUuid={receiptUuid} compact={false} />
 												</EdgeColumn>
-											) : stage === 'checkout' ? (
+											) : showTender ? (
 												<EdgeColumn testID="pos-checkout-column" className="bg-card">
 													{/* Keyed by order: two orders in checkout must not share one keypad reducer. */}
 													<CheckoutColumn

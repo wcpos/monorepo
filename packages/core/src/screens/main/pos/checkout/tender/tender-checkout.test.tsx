@@ -26,6 +26,7 @@ const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
 const mockFinishSale = jest.fn();
 let mockStage = 'checkout';
+let mockAutoShow = true;
 let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
@@ -53,8 +54,12 @@ const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethod
 	...overrides,
 });
 
+jest.mock('../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: { autoShowReceipt: mockAutoShow } }),
+}));
+
 jest.mock('../checkout-mode', () => ({
-	releaseTender: () => {},
+	...jest.requireActual('../checkout-mode'),
 	useOrderCheckoutStage: () => mockStage,
 }));
 jest.mock('../receipt-stage/receipt-stage', () => ({
@@ -254,6 +259,7 @@ describe('TenderCheckout', () => {
 		mockNumber = '1187';
 		mockScreenSize = 'lg';
 		mockStage = 'checkout';
+		mockAutoShow = true;
 		mockOnClose = undefined;
 		mockLineItems = [];
 		mockFlow = makeFlow();
@@ -270,6 +276,15 @@ describe('TenderCheckout', () => {
 		mockOnClose?.();
 		expect(mockFinishSale).toHaveBeenCalledTimes(1);
 		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('keeps the phone tender at receipt stage when receipts do not show automatically', () => {
+		mockStage = 'receipt';
+		mockAutoShow = false;
+		mockScreenSize = 'sm';
+		render(<TenderCheckout order={order} />);
+		expect(screen.queryByTestId('checkout-receipt-stage')).toBeNull();
+		expect(screen.getByTestId('checkout-label')).not.toBeNull();
 	});
 
 	it('finishes a wide sale from the routed modal it was opened in, never by width', () => {

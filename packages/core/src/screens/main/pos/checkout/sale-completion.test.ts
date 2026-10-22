@@ -23,9 +23,15 @@ import {
 	completionMetaFor,
 	isSaleComplete,
 	persistSaleProvenance,
-	receiptOnPaidWrite,
 	recordSaleAttempt,
 } from './sale-completion';
+import {
+	claimReceiptAutoPrint,
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	resetCheckoutMode,
+	resolveStage,
+} from './checkout-mode';
 
 import type { SaleContext, SaleOutcome } from './sale-completion';
 
@@ -37,7 +43,6 @@ const mockBound = jest.fn(),
 	mockRefresh = jest.fn(),
 	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
-	mockRetractReceipt = jest.fn(),
 	mockHoldsAnswer = jest.fn(),
 	mockInfo = jest.fn();
 jest.mock('@wcpos/query', () => ({
@@ -61,8 +66,8 @@ jest.mock('./hooks/reconcile-completed-order', () => ({
 	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
 }));
 jest.mock('./checkout-mode', () => ({
+	...jest.requireActual('./checkout-mode'),
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
-	retractReceiptEntry: (...args: unknown[]) => mockRetractReceipt(...args),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
@@ -136,6 +141,7 @@ afterEach(async () => {
 	await ctx.storeDB.remove();
 });
 beforeEach(async () => {
+	resetCheckoutMode();
 	ctx.storeDB = await createRxDatabase({
 		name: `owner${Math.random().toString(36).slice(2)}`,
 		storage: getRxStorageMemory(),
@@ -1133,6 +1139,8 @@ it.each([
 	['a newer adoption reopened the sale', 'pos-open', 'partial'],
 	['the mirror never landed', 'completed', 'completed'],
 ])('the resident is not paid after the mirror: %s', async (_, refreshedStatus, result) => {
+	enterCheckout('order');
+	expect(claimReceiptAutoPrint('order')).toBe(true);
 	let status = 'pos-open';
 	const resident = {
 		uuid: 'order',
@@ -1150,10 +1158,11 @@ it.each([
 	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
 	if (result === 'partial') {
 		expect(mockReceipt).not.toHaveBeenCalled();
-		expect(mockRetractReceipt).toHaveBeenCalledWith('order');
+		expect(claimReceiptAutoPrint('order')).toBe(true);
+		expect(resolveStage('order', getCheckoutModeSnapshot(), [], status)).toBe('checkout');
 	} else {
 		expect(mockReceipt).toHaveBeenCalled();
-		expect(mockRetractReceipt).not.toHaveBeenCalled();
+		expect(claimReceiptAutoPrint('order')).toBe(false);
 	}
 });
 
@@ -1189,27 +1198,4 @@ it('an unconfirmed paid answer keeps its completion attempt and enters no receip
 	);
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
-});
-
-describe('receiptOnPaidWrite', () => {
-	it('leaves unpaid answers without a callback', () => {
-		expect(receiptOnPaidWrite(order, 'pos-open', { entry: jest.fn() })).toBeUndefined();
-	});
-	it('does not enter after the caller stops or the resident reopens', () => {
-		let status = 'completed';
-		const resident = { uuid: 'order', getLatest: () => ({ payload: { status } }) };
-		const entry = jest.fn();
-		receiptOnPaidWrite(resident, 'completed', { entry, live: () => false })?.();
-		const afterWrite = receiptOnPaidWrite(resident, 'completed', { entry });
-		status = 'pos-open';
-		afterWrite?.();
-		expect(entry).not.toHaveBeenCalled();
-	});
-	it('enters after the paid write when the caller is live', () => {
-		const entry = jest.fn();
-		const afterWrite = receiptOnPaidWrite(order, 'completed', { entry });
-		expect(entry).not.toHaveBeenCalled();
-		afterWrite?.();
-		expect(entry).toHaveBeenCalledTimes(1);
-	});
 });

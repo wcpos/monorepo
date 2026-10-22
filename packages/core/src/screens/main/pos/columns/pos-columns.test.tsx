@@ -9,6 +9,7 @@ import { POSColumns } from './pos-columns';
 
 let mockPosition = 'left';
 let mockStage = 'cart';
+let mockAutoShow = true;
 let mockReceipt: string | null = null;
 let mockIsNew = false;
 const mockPatchUI = jest.fn();
@@ -16,7 +17,7 @@ type PanelProps = { children?: React.ReactNode; testID?: string; defaultSize?: n
 
 jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
-		uiSettings: { position: mockPosition, width: 60 },
+		uiSettings: { position: mockPosition, width: 60, autoShowReceipt: mockAutoShow },
 		patchUI: mockPatchUI,
 	}),
 }));
@@ -73,6 +74,7 @@ jest.mock('@wcpos/components/panels', () => ({
 describe('POSColumns', () => {
 	beforeEach(() => {
 		mockStage = 'cart';
+		mockAutoShow = true;
 		mockReceipt = null;
 		mockIsNew = false;
 		mockPosition = 'left';
@@ -179,4 +181,36 @@ describe('POSColumns', () => {
 				.contains(screen.getByTestId('checkout-receipt-stage'))
 		).toBe(true);
 	});
+});
+
+it.each([true, false])('hosts an unconfirmed paid receipt with autoShow=%s', (autoShow) => {
+	mockStage = 'receipt';
+	mockReceipt = null;
+	mockAutoShow = autoShow;
+	render(<POSColumns />);
+	expect(screen.queryByTestId('pos-products-column')).toBeNull();
+	if (autoShow) {
+		expect(screen.getByTestId('pos-receipt-column').textContent).toBe('a');
+	} else {
+		expect(screen.getByTestId('pos-checkout-column')).not.toBeNull();
+		expect(screen.queryByTestId('pos-receipt-column')).toBeNull();
+	}
+});
+it('keeps the tender mounted across the paid write when receipts are off', () => {
+	mockAutoShow = false;
+	mockReceipt = null;
+	mockStage = 'checkout';
+	const view = render(<POSColumns />);
+	const tender = screen.getByTestId('checkout-tender-pane');
+	mockStage = 'receipt';
+	view.rerender(<POSColumns />);
+	expect(screen.getByTestId('checkout-tender-pane')).toBe(tender);
+});
+it('shows the current paid order its receipt column before any selection', () => {
+	mockAutoShow = true;
+	mockReceipt = null;
+	mockStage = 'receipt';
+	render(<POSColumns />);
+	expect(screen.getByTestId('checkout-receipt-stage').textContent).toBe('a');
+	expect(screen.queryByTestId('checkout-tender-pane')).toBeNull();
 });

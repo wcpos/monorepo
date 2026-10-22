@@ -100,15 +100,16 @@ export function PayButton() {
 		if (state?.kind === 'saving') {
 			// The earlier press is still waiting on the store. Show that wait again
 			// rather than enqueue a second write; the pane flips on the same events.
-			if (tenderFlow && screenSize !== 'sm') enterCheckout(uuid);
-			else if (tenderFlow) router.push(sheetRoute);
+			if (tenderFlow) enterCheckout(uuid);
+			if (tenderFlow && screenSize === 'sm') router.push(sheetRoute);
 			return;
 		}
 		markOrderSaving(uuid);
-		if (tenderFlow && screenSize !== 'sm') {
+		// Every width enters checkout: the phone's sheet is a checkout member too, so a paid
+		// sale stays the current order while its sheet is up (the provider holds members only).
+		if (tenderFlow) {
 			enterCheckout(uuid);
-		} else if (tenderFlow) {
-			router.push(sheetRoute);
+			if (screenSize === 'sm') router.push(sheetRoute);
 		} else {
 			setLoading(true);
 		}

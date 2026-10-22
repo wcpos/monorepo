@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 import { registerSlotEntry } from '../../../extensions/slots';
-import { useCheckoutMode } from './checkout/checkout-mode';
+import { useUISettings } from '../contexts/ui-settings';
+import { useCurrentOrder } from './contexts/current-order';
+import { useCheckoutMode, useOrderCheckoutStage } from './checkout/checkout-mode';
 import { OpenOrders } from './cart';
 import { POSProducts } from './products';
 
@@ -25,9 +27,14 @@ function ProductsPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {
 
 function CartPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {
 	const { selectedReceiptOrder } = useCheckoutMode();
+	const { currentOrderRecord } = useCurrentOrder();
+	const stage = useOrderCheckoutStage(currentOrderRecord);
+	const { uiSettings } = useUISettings('pos-cart');
 	return React.createElement(OpenOrders, {
 		isColumn: true,
-		receiptOrderUuid: selectedReceiptOrder ?? undefined,
+		receiptOrderUuid:
+			selectedReceiptOrder ??
+			(stage === 'receipt' && uiSettings.autoShowReceipt ? currentOrderRecord.uuid : undefined),
 	});
 }
 

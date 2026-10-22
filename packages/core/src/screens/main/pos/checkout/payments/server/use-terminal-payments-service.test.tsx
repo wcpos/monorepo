@@ -11,18 +11,7 @@ import {
 	stopTerminalPaymentsService,
 } from '../../../../../../services/terminal-payments';
 import { row } from '../device/fixtures.test-utils';
-import {
-	type CheckoutModeSnapshot,
-	enterCheckout,
-	enterReceipt,
-	finishReceipt,
-	getCheckoutModeSnapshot,
-	leaveCheckout,
-	releaseTender,
-	resetCheckoutMode,
-	selectReceipt,
-	watchTender,
-} from '../../checkout-mode';
+import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../checkout-mode';
 
 const mockStore = { id: 1, price_num_decimals: 2 };
 const mockSite = {};
@@ -105,14 +94,13 @@ jest.mock('@wcpos/query', () => ({
 	}) =>
 		mockPosterInputs.push(input) &&
 		Object.assign((url: string, body: unknown) => input.post(url, body), {
-			mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+			mirror: async (answer: object) => {
 				await jest
 					.requireMock('@wcpos/query/mutations')
 					.mirrorServerOrder(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
 					});
-				options?.afterWrite?.();
 				await mockPosterRefresh();
 			},
 			settle: async () => undefined,
@@ -140,6 +128,7 @@ jest.mock('@wcpos/query/record-readers', () => ({
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
 }));
+beforeEach(() => resetCheckoutMode());
 afterEach(() => {
 	stopTerminalPaymentsService();
 	jest.clearAllMocks();
@@ -465,6 +454,8 @@ it('a completion nobody was watching still reports its missing store register', 
 				})
 			)
 		);
+		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	} finally {
 		hook.unmount();
 		start.mockRestore();
@@ -564,204 +555,3 @@ jest.mock('@wcpos/query/mutations', () => ({
 	observeOfflineDeviceAuthorizations:
 		jest.requireActual('@wcpos/query/mutations').observeOfflineDeviceAuthorizations,
 }));
-
-// Without a queue around the snapshot and write, the second leg replaces the first row.
-describe('a server capture of the order in checkout', () => {
-	const order = (status: string) => ({
-		status,
-		total: '10.00',
-		paid: '10.00',
-		balance: '0.00',
-		payment_method: 'device',
-		payment_method_title: 'Reader',
-	});
-	type Write = 'mirror';
-	/** Runs one settling write; `duringWrite` acts while it is pending, `fail` makes it fail. */
-	async function settle(
-		write: Write,
-		{
-			status = 'completed',
-			paymentStatus = 'captured',
-			duringWrite,
-			fail,
-		}: {
-			status?: string;
-			paymentStatus?: 'captured' | 'failed';
-			duringWrite?: (hook: { unmount: () => void }) => void;
-			fail?: 'rejects' | 'returns nothing';
-		} = {}
-	) {
-		const start = jest.spyOn(
-			await import('../../../../../../services/terminal-payments'),
-			'startTerminalPaymentsService'
-		);
-		const original = mockResident.payload.meta_data;
-		// No recoverable offline row: only this test's write reaches the store.
-		mockResident.payload.meta_data = [];
-		const hook = renderHook(() => useTerminalPaymentsService());
-		let unmounted = false;
-		const host = {
-			unmount: () => {
-				unmounted = true;
-				hook.unmount();
-			},
-		};
-		let atWrite: CheckoutModeSnapshot | null = null;
-		let atRefresh: CheckoutModeSnapshot | null = null;
-		mockPosterRefresh.mockImplementation(async () => {
-			atRefresh = getCheckoutModeSnapshot();
-		});
-		const onWrite = async () => {
-			atWrite = getCheckoutModeSnapshot();
-			duringWrite?.(host);
-			if (fail === 'rejects') throw new Error('disk full');
-			return fail === 'returns nothing' ? undefined : {};
-		};
-		mockMirror.mockImplementationOnce(async () => void (await onWrite()));
-		const options = start.mock.calls[0][0];
-		try {
-			const run = options.mirror(
-				'completed-order',
-				{ payment: { ...mockRow, status: paymentStatus }, order: order(status) },
-				options.commandPoster('completed-order', { sessionId: null })
-			);
-			if (fail) await expect(run).rejects.toThrow();
-			else await run;
-		} finally {
-			if (!unmounted) hook.unmount();
-			start.mockRestore();
-			mockResident.payload.meta_data = original;
-		}
-		return {
-			atWrite: atWrite! as CheckoutModeSnapshot,
-			atRefresh: atRefresh as CheckoutModeSnapshot | null,
-			after: getCheckoutModeSnapshot(),
-		};
-	}
-	let unwatch: (() => void) | undefined;
-	// Earlier background completions in this file leave their receipts in the module store.
-	beforeEach(() => resetCheckoutMode());
-	afterEach(() => {
-		unwatch?.();
-		unwatch = undefined;
-		resetCheckoutMode();
-	});
-	const watch = (uuid: string, autoShowReceipt = true) => {
-		enterCheckout('completed-order');
-		unwatch = watchTender(uuid, autoShowReceipt);
-	};
-
-	it.each(['mirror'] as const)(
-		'%s: receipt entry follows the write but precedes the poster refresh',
-		async (write) => {
-			watch('completed-order');
-			const { atWrite, atRefresh, after } = await settle(write);
-			expect(atRefresh?.selectedReceiptOrder).toBe('completed-order');
-			expect(atWrite.receiptOrders.size).toBe(0);
-			expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
-			expect(after.receiptOrders.has('completed-order')).toBe(true);
-			expect(after.checkoutOrders.has('completed-order')).toBe(false);
-			expect(after.selectedReceiptOrder).toBe('completed-order');
-		}
-	);
-
-	// The write unmounts the column, whose cleanup clears the watch: the decision was taken
-	// before the write.
-	it('selects after the write even though the column unmounted during it', async () => {
-		watch('completed-order');
-		const { after } = await settle('mirror', { duringWrite: () => unwatch?.() });
-		expect(after.selectedReceiptOrder).toBe('completed-order');
-	});
-
-	// After a reload, resolveStage restores the column from the live ledger row alone: the
-	// order is on screen and watched without ever joining checkoutOrders.
-	it('selects the receipt of a checkout restored from its ledger', async () => {
-		unwatch = watchTender('completed-order', true);
-		const { after } = await settle('mirror');
-		expect(after.selectedReceiptOrder).toBe('completed-order');
-	});
-
-	// Each of these is left to the background completion, which enters the receipt unselected.
-	it.each([
-		['receipts do not show automatically', () => watch('completed-order', false), {}],
-		['the cashier is on another order', () => watch('other-order'), {}],
-		[
-			'the cashier closed the column checkout during the write',
-			() => watch('completed-order'),
-			{ duringWrite: () => leaveCheckout('completed-order') },
-		],
-		[
-			'the cashier closed the phone sheet during the write',
-			() => watch('completed-order'),
-			{ duringWrite: () => releaseTender('completed-order') },
-		],
-		[
-			'the cashier switched to another order during the write',
-			() => watch('completed-order'),
-			{ duringWrite: () => void watchTender('other-order', true) },
-		],
-		[
-			'the cashier selected another receipt during the write',
-			() => watch('completed-order'),
-			{ duringWrite: () => selectReceipt('other-sale') },
-		],
-		[
-			'a store switch stopped the service during the write',
-			() => watch('completed-order'),
-			{
-				duringWrite: (hook: { unmount: () => void }) => {
-					hook.unmount();
-					resetCheckoutMode();
-				},
-			},
-		],
-		['the write rejects', () => watch('completed-order'), { fail: 'rejects' as const }],
-		['the payment failed', () => watch('completed-order'), { paymentStatus: 'failed' as const }],
-		['the order was cancelled', () => watch('completed-order'), { status: 'cancelled' }],
-		['the payment leaves a balance', () => watch('completed-order'), { status: 'pos-partial' }],
-	])('enters nothing when %s', async (_name, arrange, options) => {
-		arrange();
-		const before = getCheckoutModeSnapshot().selectedReceiptOrder;
-		const { after } = await settle('mirror', options);
-		expect(after.receiptOrders.has('completed-order')).toBe(false);
-		expect(after.selectedReceiptOrder).not.toBe('completed-order');
-		expect(['other-sale', before]).toContain(after.selectedReceiptOrder);
-	});
-
-	// #2798 thread 4341491603: the answer reads paid, but the mirror kept another till's newer
-	// reopen. The post-mirror resident decides, so the reopened sale gets no receipt.
-	it('enters nothing when the mirror kept a reopen the answer did not know', async () => {
-		watch('completed-order');
-		try {
-			const { after } = await settle('mirror', {
-				duringWrite: () => void (mockResident.payload.status = 'pos-open'),
-			});
-			expect(after.receiptOrders.has('completed-order')).toBe(false);
-			expect(after.selectedReceiptOrder).not.toBe('completed-order');
-		} finally {
-			mockResident.payload.status = 'completed';
-		}
-	});
-
-	// Another order's completion leaves its checkout while this write is pending.
-	it('still selects when a different order leaves checkout during the write', async () => {
-		watch('completed-order');
-		const { after } = await settle('mirror', { duringWrite: () => leaveCheckout('other-order') });
-		expect(after.selectedReceiptOrder).toBe('completed-order');
-	});
-
-	// The receipt is live before the sale's background completion runs: one the cashier has
-	// already finished must not come back as a paid tab from that completion.
-	it('keeps a receipt finished before the background completion from coming back', async () => {
-		watch('completed-order');
-		const { after } = await settle('mirror');
-		expect(after.selectedReceiptOrder).toBe('completed-order');
-		finishReceipt('completed-order');
-		enterReceipt('completed-order', { select: false });
-		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(false);
-		// Skipped once: the order's next sale (re-opened into checkout) enters as usual.
-		enterCheckout('completed-order');
-		enterReceipt('completed-order', { select: false });
-		expect(getCheckoutModeSnapshot().receiptOrders.has('completed-order')).toBe(true);
-	});
-});

@@ -33,7 +33,7 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
-import { enterReceipt, receiptEntryAfterWrite, retractReceiptEntry } from './checkout-mode';
+import { enterReceipt, releaseReceiptAutoPrint } from './checkout-mode';
 import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
 import { persistProvenance } from './provenance/persist-provenance';
@@ -287,20 +287,6 @@ export function residentUnpaid(payload?: { status?: string | null }, settled?: s
 	return !!payload?.status && !isPaidStatus(payload.status) && payload.status !== settled;
 }
 
-/** Capture before a paid write; enter after it unless stopped or reopened. */
-export function receiptOnPaidWrite(
-	order: { uuid: string; getLatest(): { payload: { status?: string | null } } },
-	status: string | null | undefined,
-	options: { live?: () => boolean; entry?: () => void } = {}
-): (() => void) | undefined {
-	if (!isPaidStatus(status)) return undefined;
-	const enter = options.entry ?? receiptEntryAfterWrite(order.uuid);
-	return () => {
-		if (options.live?.() === false) return;
-		if (!residentUnpaid(order.getLatest().payload, status ?? undefined)) enter();
-	};
-}
-
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
@@ -419,7 +405,7 @@ async function finishSale(
 			}
 		}
 		if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
-			retractReceiptEntry(order.uuid);
+			releaseReceiptAutoPrint(order.uuid);
 			return {
 				// The store took the money but no refresh confirmed the resident: the attempt stays
 				// for the bridge, which finishes the sale once the paid order is adopted.
@@ -467,17 +453,15 @@ async function finishSale(
 			ctx.stockAdjustment
 		);
 		if (refreshed !== 'refreshed') {
-			retractReceiptEntry(order.uuid);
+			releaseReceiptAutoPrint(order.uuid);
 			return { outcome: 'not-completed', summary: null };
 		}
 		latest = payload();
 		if (latest.status === 'cancelled' || !isSaleComplete(outcome, ctx.dp, latest)) {
-			retractReceiptEntry(order.uuid);
+			releaseReceiptAutoPrint(order.uuid);
 			return { outcome: 'not-completed', summary: null };
 		}
 	}
-	// receiptOnPaidWrite usually selected it in afterWrite; this completion's own entry covers
-	// paths without one. The retract above withdraws a provisional entry we did not confirm.
 	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
 	if (presentation.host === 'stage' && presentation.autoShowReceipt) {
 		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });

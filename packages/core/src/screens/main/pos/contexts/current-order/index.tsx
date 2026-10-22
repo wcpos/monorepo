@@ -2,9 +2,14 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import type { QueryHandle, QueryResult } from '@wcpos/query';
+import { type QueryHandle, type QueryResult, useRecordField } from '@wcpos/query';
 import { useQuerySnapshot } from '@wcpos/query/query-state';
 
+import {
+	getCheckoutModeSnapshot,
+	isReceiptStage,
+	subscribeCheckoutMode,
+} from '../../checkout/checkout-mode';
 import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,
@@ -38,6 +43,12 @@ interface CurrentOrderContextProviderProps {
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
 	defaultCustomerResource: DefaultCustomerResource;
 	currentOrderUUID?: string;
+}
+
+function inFlightFor(id: string | undefined) {
+	const mode = getCheckoutModeSnapshot();
+	if (!id) return 'none';
+	return mode.receiptOrders.has(id) ? 'receipt' : mode.checkoutOrders.has(id) ? 'checkout' : 'none';
 }
 
 /**
@@ -105,7 +116,27 @@ export function CurrentOrderProvider({
 	// Determine the current record from internal state. The temporary order has the same
 	// engine-shaped record face as resident orders since ADR 0028 stage I.
 	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
-	const currentOrderRecord = selectedOrder?.record ?? newOrder;
+	const [held, setHeld] = React.useState<OpenOrderHit | undefined>(undefined);
+	// Subscribe only to this order's membership, not keypad/tender-plan updates.
+	const membership = () => inFlightFor(internalOrderId);
+	React.useSyncExternalStore(subscribeCheckoutMode, membership, membership);
+	const heldStatus = useRecordField(held?.record, (order) => order.payload.status);
+	// Decide from the latest document: the subscribed status can lag the hits by one emission.
+	const latestHeldStatus = held?.record.getLatest?.().payload.status ?? heldStatus;
+	const keepHeld =
+		held &&
+		held.id === internalOrderId &&
+		isReceiptStage(held.id, getCheckoutModeSnapshot(), latestHeldStatus);
+	if (selectedOrder && held !== selectedOrder) {
+		setHeld(selectedOrder);
+	} else if (!selectedOrder && held && !keepHeld) {
+		setHeld(undefined);
+	}
+	const heldRecord = !selectedOrder && keepHeld ? held.record : undefined;
+	const currentOrderRecord = selectedOrder?.record ?? heldRecord ?? newOrder;
+	// The displayed and writable orders differ only while a paid sale is finishing;
+	// a scan then starts the next sale.
+	const writableOrderRecord = selectedOrder?.record ?? newOrder;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.
@@ -137,12 +168,12 @@ export function CurrentOrderProvider({
 	 * barcode scan) can fire after the commit that switched orders but before passive
 	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
-	const currentOrderRecordRef = React.useRef(currentOrderRecord);
+	const currentOrderRecordRef = React.useRef(writableOrderRecord);
 	const currentOrderIDRef = React.useRef(internalOrderId);
 	React.useLayoutEffect(() => {
-		currentOrderRecordRef.current = currentOrderRecord;
+		currentOrderRecordRef.current = writableOrderRecord;
 		currentOrderIDRef.current = internalOrderId;
-	}, [currentOrderRecord, internalOrderId]);
+	}, [writableOrderRecord, internalOrderId]);
 
 	React.useLayoutEffect(() => {
 		routeOrderUUIDRef.current = currentOrderUUID;

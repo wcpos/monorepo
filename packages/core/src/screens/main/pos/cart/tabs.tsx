@@ -10,11 +10,19 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { CROSSFADE, EASE } from '@wcpos/components/lib/motion';
 import { SlideOver } from '@wcpos/components/slide-over';
 import { Text } from '@wcpos/components/text';
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, OPEN_ORDER_STATUSES } from '@wcpos/query';
+import { isPaidStatus } from '@wcpos/sync-core';
+import { readLedger } from '@wcpos/order-math';
 import { useEngineRecord } from '@wcpos/query/record-readers';
 
 import { useT } from '../../../../contexts/translations';
-import { finishReceipt, selectReceipt, useCheckoutMode } from '../checkout/checkout-mode';
+import {
+	finishReceipt,
+	leaveCheckout,
+	resolveStage,
+	selectReceipt,
+	useCheckoutMode,
+} from '../checkout/checkout-mode';
 import { useResumeTerminalLegsForOrders } from '../checkout/payments/server/use-resume-terminal-legs';
 import { useCurrentOrder } from '../contexts/current-order';
 import { CartTabTitle } from './tab-title';
@@ -46,8 +54,8 @@ export function OpenOrderTabs({
 	useResumeTerminalLegsForOrders(openOrders.map(({ record }) => record));
 	const t = useT();
 	const phone = useIsPhone();
-	const { receiptOrders, selectedReceiptOrder } = useCheckoutMode();
-	const extraReceiptIds = [...receiptOrders].filter(
+	const { checkoutOrders, receiptOrders, selectedReceiptOrder } = useCheckoutMode();
+	const extraIds = [...new Set([...checkoutOrders, ...receiptOrders])].filter(
 		(uuid) => !openOrders.some((order) => order.id === uuid)
 	);
 	const [listOpen, setListOpenState] = React.useState(false);
@@ -107,17 +115,17 @@ export function OpenOrderTabs({
 			content: <TabContent order={record} active={id === activeValue} phone={phone} />,
 			measure: <TabContent order={record} active={id === activeValue} phone={phone} measuring />,
 		})),
-		...extraReceiptIds.map((uuid) => ({
+		...extraIds.map((uuid) => ({
 			id: uuid,
 			content: (
 				// Suspend receipt content only: one loading receipt must not hide the other tabs.
 				<React.Suspense fallback={null}>
-					<ReceiptTabContent uuid={uuid} active={uuid === activeValue} phone={phone} />
+					<InFlightTabContent uuid={uuid} active={uuid === activeValue} phone={phone} />
 				</React.Suspense>
 			),
 			measure: (
 				<React.Suspense fallback={null}>
-					<ReceiptTabContent uuid={uuid} active={uuid === activeValue} phone={phone} measuring />
+					<InFlightTabContent uuid={uuid} active={uuid === activeValue} phone={phone} measuring />
 				</React.Suspense>
 			),
 		})),
@@ -404,7 +412,7 @@ function TabContent({
 		</View>
 	);
 }
-function ReceiptTabContent({
+function InFlightTabContent({
 	uuid,
 	active,
 	phone,
@@ -415,6 +423,7 @@ function ReceiptTabContent({
 	phone: boolean;
 	measuring?: boolean;
 }) {
+	const mode = useCheckoutMode();
 	const resource = useEngineRecord('orders', uuid);
 	const record = useObservableSuspense(resource);
 	// A receipt whose order is gone (store switch, purge) leaves the strip rather than
@@ -422,6 +431,14 @@ function ReceiptTabContent({
 	React.useEffect(() => {
 		if (!record) finishReceipt(uuid);
 	}, [record, uuid]);
-	if (!record) return null;
+	// A checkout member definitively closed unpaid is no sale of this till's; remove its tab.
+	React.useEffect(() => {
+		const status = record?.payload.status;
+		if (record && !OPEN_ORDER_STATUSES.includes(status as never) && !isPaidStatus(status)) {
+			leaveCheckout(uuid);
+		}
+	}, [record, uuid, record?.payload.status]);
+	const rows = readLedger(record?.payload.meta_data);
+	if (!record || resolveStage(uuid, mode, rows, record.payload.status) !== 'receipt') return null;
 	return <TabContent order={record} active={active} phone={phone} measuring={measuring} />;
 }

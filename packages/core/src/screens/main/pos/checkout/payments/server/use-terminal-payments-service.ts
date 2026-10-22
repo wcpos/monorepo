@@ -2,14 +2,7 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import {
-	derive,
-	hasSaleProvenance,
-	isCompletingStatus,
-	isSettledPaymentRow,
-	readLedger,
-} from '@wcpos/order-math';
-import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
+import { derive, hasSaleProvenance, isCompletingStatus, readLedger } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
@@ -17,13 +10,7 @@ import { observeOfflineDeviceAuthorizations } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import {
-	completeSale,
-	completionMetaFor,
-	isSaleComplete,
-	isSettledOrderStatus,
-	receiptOnPaidWrite,
-} from '../../sale-completion';
+import { completeSale, completionMetaFor } from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
 import { commandProvenance } from '../../provenance/command-provenance';
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -38,20 +25,6 @@ import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
-
-/**
- * Whether this payment finishes the sale: the settlement's own test (a settled row and
- * `isSaleComplete`, as the service's recordSettlement judges it), plus the status blocklist,
- * so a cancelled or failed order never shows a Paid receipt.
- */
-function settlesSale(payment: PaymentRow, order: OrderPaymentSummary | undefined, dp: number) {
-	return (
-		order !== undefined &&
-		isSettledPaymentRow(payment) &&
-		isSettledOrderStatus(order.status, null) &&
-		isSaleComplete({ source: 'terminal', row: payment, order }, dp)
-	);
-}
 
 export function useTerminalPaymentsService(): void {
 	const { store, site, userDB, storeDB } = useStoreSession();
@@ -137,23 +110,13 @@ export function useTerminalPaymentsService(): void {
 					const resident = await readResidentOrder(manager, orderUuid);
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
-					// A settling status takes the order off the till and unmounts the tender that used
-					// to select its receipt; the service selects it as soon as the status is on the
-					// resident, before the poster's forced refresh.
-					await poster.mirror(
-						{
-							payment,
-							order,
-							revision,
-							// A device leg's tip moves the order total.
-							...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
-						},
-						{
-							afterWrite: settlesSale(payment, order, dp())
-								? receiptOnPaidWrite(resident, order?.status, { live: () => !stopped })
-								: undefined,
-						}
-					);
+					await poster.mirror({
+						payment,
+						order,
+						revision,
+						// A device leg's tip moves the order total.
+						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
+					});
 					mirrored = true;
 					const payload = (resident.getLatest?.().payload ??
 						resident.payload) as EngineRecord<'orders'>['payload'];

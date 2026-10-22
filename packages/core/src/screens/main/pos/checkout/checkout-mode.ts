@@ -4,6 +4,7 @@ import isEqual from 'lodash/isEqual';
 
 import { isLivePaymentStatus, type PaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { isPaidStatus } from '@wcpos/sync-core';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { TenderLineId, TenderPlan } from './tender/tender-state';
@@ -35,11 +36,8 @@ let snapshot: CheckoutModeSnapshot = {
 // Receipt panes remount when cashiers switch tabs; an auto-print attempt belongs
 // to the sale, not the mount. Keep this transient and clear it when the sale ends.
 const receiptPrintAttempts = new Set<string>();
-// A receipt the terminal service entered after its write (receiptEntryAfterWrite) is live
-// before the sale's background completion runs. If the cashier finishes it first, that
-// completion's unselected entry must not bring the paid tab back (finishing also clears the
-// print claim, so the tab could print again): it is skipped once.
-const enteredAfterWrite = new Set<string>();
+// Finishing an unconfirmed receipt skips the confirmation's unselected entry once,
+// so it cannot restore the dismissed tab and its released print claim.
 const finishedBeforeCompletion = new Set<string>();
 export function claimReceiptAutoPrint(uuid: string) {
 	if (receiptPrintAttempts.has(uuid)) return false;
@@ -97,7 +95,6 @@ export function clearOrderSaveIfMutation(uuid: string, mutationId: string) {
 		clearOrderSaving(uuid);
 }
 export function enterCheckout(uuid: string) {
-	enteredAfterWrite.delete(uuid);
 	finishedBeforeCompletion.delete(uuid);
 	if (snapshot.checkoutOrders.has(uuid)) return;
 	publish({ ...snapshot, checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]) });
@@ -127,7 +124,6 @@ export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
 export function leaveCheckout(uuid: string) {
-	releaseTender(uuid);
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -143,7 +139,6 @@ export function leaveCheckout(uuid: string) {
  * serving: that order keeps its tab ("Paid · receipt") and waits to be tapped.
  */
 export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
-	if (select) enteredAfterWrite.delete(uuid);
 	if (!select && finishedBeforeCompletion.delete(uuid)) return;
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -156,70 +151,9 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 		selectedReceiptOrder: select ? uuid : snapshot.selectedReceiptOrder,
 	});
 }
-/**
- * The order whose tender is on screen, and whether its receipt shows itself (`autoShowReceipt`).
- * Registered by the mounted tender flow, so code above the screens can tell a sale the
- * cashier is watching from one completing in the background.
- */
-let watchedTender: { uuid: string; autoShowReceipt: boolean } | null = null;
-// Bumped by every registration, never by a cleanup: the write's own unmount leaves it, a
-// switch to another order (which mounts that order's tender) moves it.
-let tenderGeneration = 0;
-export function watchTender(uuid: string, autoShowReceipt: boolean) {
-	const entry = { uuid, autoShowReceipt };
-	watchedTender = entry;
-	tenderGeneration++;
-	return () => {
-		if (watchedTender === entry) watchedTender = null;
-	};
-}
-/**
- * The cashier closed a tender (the column's Back through `leaveCheckout`, the phone sheet's
- * close), as opposed to a status write unmounting it: a write still pending for that order
- * must not select its receipt afterwards. Only the watched order's close counts: another
- * order leaving checkout (its own completion finishing) says nothing about this one.
- */
-export function releaseTender(uuid: string) {
-	if (watchedTender?.uuid === uuid) tenderGeneration++;
-}
-/**
- * Called just before a status write that settles the sale; the returned function is called
- * once the write has succeeded. That write drops the order from the till's open orders and
- * unmounts the tender whose settlement subscriber was the only caller of `selectReceipt`
- * (its cleanup also clears the watch), so the decision is taken now and acted on after:
- * the receipt is entered and selected when the cashier was watching this order's tender,
- * receipts show automatically, and the cashier did not move on in between: no other receipt
- * selected, no other tender registered (a tab switch clears the selection, so only the
- * registration shows it). Otherwise nothing happens here and the background completion
- * enters it unselected, as before.
- */
-export function receiptEntryAfterWrite(uuid: string): () => void {
-	const select = watchedTender?.uuid === uuid && watchedTender.autoShowReceipt;
-	const selection = snapshot.selectedReceiptOrder;
-	const generation = tenderGeneration;
-	return () => {
-		if (select && snapshot.selectedReceiptOrder === selection && tenderGeneration === generation) {
-			enterReceipt(uuid);
-			enteredAfterWrite.add(uuid);
-		}
-	};
-}
-/** Withdraw only a provisional write entry; confirmed or already finished receipts stay alone. */
-export function retractReceiptEntry(uuid: string): void {
-	if (!enteredAfterWrite.delete(uuid)) return;
-	receiptPrintAttempts.delete(uuid);
-	const receiptOrders = new Set(snapshot.receiptOrders);
-	receiptOrders.delete(uuid);
-	publish({
-		...snapshot,
-		receiptOrders,
-		checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]),
-		selectedReceiptOrder:
-			snapshot.selectedReceiptOrder === uuid ? null : snapshot.selectedReceiptOrder,
-	});
-}
 export function finishReceipt(uuid: string) {
-	if (enteredAfterWrite.delete(uuid)) finishedBeforeCompletion.add(uuid);
+	if (snapshot.checkoutOrders.has(uuid)) finishedBeforeCompletion.add(uuid);
+	leaveCheckout(uuid);
 	setLinesPaidBy(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -239,7 +173,6 @@ export function selectReceipt(uuid: string | null) {
 }
 export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
-	enteredAfterWrite.clear();
 	finishedBeforeCompletion.clear();
 	publish({
 		tenderMethods: new Map(),
@@ -252,13 +185,26 @@ export function resetCheckoutMode() {
 	});
 }
 
+export function releaseReceiptAutoPrint(uuid: string): void {
+	receiptPrintAttempts.delete(uuid);
+}
+
+export function isReceiptStage(
+	uuid: string,
+	mode: CheckoutModeSnapshot,
+	status: string | null | undefined
+): boolean {
+	return mode.receiptOrders.has(uuid) || (mode.checkoutOrders.has(uuid) && isPaidStatus(status));
+}
+
 export function resolveStage(
 	uuid: string | undefined,
 	mode: CheckoutModeSnapshot,
-	rows: PaymentRow[]
+	rows: PaymentRow[],
+	status: string | null | undefined
 ): 'cart' | 'checkout' | 'receipt' {
 	if (!uuid) return 'cart';
-	if (mode.receiptOrders.has(uuid)) return 'receipt';
+	if (isReceiptStage(uuid, mode, status)) return 'receipt';
 	if (mode.checkoutOrders.has(uuid) || rows.some((row) => isLivePaymentStatus(row.status)))
 		return 'checkout';
 	return 'cart';
@@ -292,8 +238,9 @@ export function useOrderCheckoutStage(
 ) {
 	const mode = useCheckoutMode();
 	const meta = useRecordField(record, (order) => order.payload.meta_data);
+	const status = useRecordField(record, (order) => order.payload.status);
 	// A draft has no ledger to derive from, but Pay can flag it before its first
 	// save lands; the explicit store entry must swap the columns for it too.
 	const isNew = Boolean((record as { isNew?: boolean } | undefined)?.isNew);
-	return resolveStage(record?.uuid, mode, isNew ? [] : readLedger(meta));
+	return resolveStage(record?.uuid, mode, isNew ? [] : readLedger(meta), status);
 }

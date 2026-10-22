@@ -15,6 +15,11 @@ import {
 	useCurrentOrderActions,
 } from './index';
 
+jest.mock('@wcpos/query', () => ({
+	useRecordField: <T,>(record: T, select: (value: T) => unknown) =>
+		record ? select(record) : undefined,
+}));
+
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ setParams: jest.fn() }),
 }));
