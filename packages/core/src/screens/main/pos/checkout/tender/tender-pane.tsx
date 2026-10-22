@@ -21,7 +21,7 @@ import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
-import { deviceTransports, OFFLINE_TENDERS_QUEUE, queuesOffline, selectableReaders } from './tiles';
+import { selectableReaders } from './tiles';
 import { disabledReasonKey } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
@@ -242,16 +242,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			: fixedAmount
 				? flow.entryAppliedMinor
 				: flow.state.entryMinor;
-	// An offline device tile is choosable only while offline tenders queue; until then it is
-	// listed as unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
-	const canChoose = (tile: TenderTile) =>
-		!tile.disabled ||
-		(OFFLINE_TENDERS_QUEUE &&
-			tile.reason === 'offline' &&
-			tile.method.capture.mode === 'device' &&
-			deviceTransports(tile.method).some((transport) => queuesOffline(tile.method, transport)));
-	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));
-	const pills = flow.tiles.filter(canChoose).map((tile) => {
+	// A disabled tile, an offline reader included (offline tenders do not queue), is listed as
+	// unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
+	const unavailable = flow.tiles.filter((tile) => tile.disabled);
+	const choosable = flow.tiles.filter((tile) => !tile.disabled);
+	const pills = choosable.map((tile) => {
 		const selected = flow.state.methodId === tile.method.id;
 		return (
 			<Tile
@@ -273,9 +268,6 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</Tile>
 		);
 	});
-	// One rule: the picked card-reader tile settles later (the payment takes the offline path and
-	// its driver can queue it). It outranks the change and part-payment lines.
-	const settlesLater = flow.tiles.find((tile) => tile.method.id === method?.id)?.settlesLater;
 	const hint = missing
 		? t('pos_checkout.enter_field', { label: missing.label })
 		: noChange
@@ -283,17 +275,15 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					amount: format(flow.balanceMinor),
 					method: method?.title,
 				})
-			: settlesLater
-				? t('pos_checkout.offline_card_may_decline')
-				: flow.entryChangeMinor > 0
-					? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
-					: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
-						? plan
-							? t('pos_checkout.less_than_planned', {
-									amount: format(due - flow.entryAppliedMinor),
-								})
-							: t('pos_checkout.part_payment_left', { left: format(left) })
-						: '';
+			: flow.entryChangeMinor > 0
+				? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
+				: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+					? plan
+						? t('pos_checkout.less_than_planned', {
+								amount: format(due - flow.entryAppliedMinor),
+							})
+						: t('pos_checkout.part_payment_left', { left: format(left) })
+					: '';
 	const commit = method
 		? (fields
 				? t('pos_checkout.send_verb_amount', {

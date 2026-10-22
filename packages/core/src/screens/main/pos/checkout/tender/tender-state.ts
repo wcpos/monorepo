@@ -39,7 +39,6 @@ export type TenderAction =
 			methodId: string;
 			prefillMinor: number;
 			readerId: string | null;
-			transport?: PaymentTransport | null;
 	  }
 	| { type: 'pick-transport'; transport: PaymentTransport }
 	| { type: 'pick-reader'; readerId: string | null }
@@ -105,7 +104,7 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				view: 'amount',
 				methodId: action.methodId,
 				readerId: action.readerId,
-				transport: action.transport ?? null,
+				transport: null,
 				entryMinor: state.entryDirty ? state.entryMinor : action.prefillMinor,
 				entryDirty: state.entryDirty,
 			};

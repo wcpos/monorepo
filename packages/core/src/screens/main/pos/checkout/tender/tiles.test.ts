@@ -223,30 +223,17 @@ describe('device tiles', () => {
 	const driver = createSimulatedDriver();
 	const device = deviceMethod;
 	beforeEach(() => registerDriver(driver));
-	it('enables a registered available driver and queues only on the chosen transport', () => {
-		expect(buildTenderTiles([device], { online: true })[0]).toMatchObject({
-			disabled: false,
-			settlesLater: false,
-		});
-		// Offline tenders do not queue (ADR 0040 §offline): one that settles later is refused offline.
+	// Offline tenders do not queue (ADR 0040 §offline): a reader tile is refused offline on every
+	// transport, the descriptor's `offline: queue` included.
+	it('enables a registered available driver online and refuses it offline on every transport', () => {
+		expect(buildTenderTiles([device], { online: true })[0]).toMatchObject({ disabled: false });
 		expect(buildTenderTiles([device], { online: false })[0]).toMatchObject({
 			disabled: true,
 			reason: 'offline',
-			settlesLater: true,
 		});
 		expect(
 			buildTenderTiles([device], { online: false, transports: { [device.id]: 'tap_to_pay' } })[0]
-		).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
-	});
-	it('lets the driver narrow offline: queue to the reader in hand', () => {
-		const queuesOffline = jest.fn(() => false);
-		registerDriver({ ...driver, queuesOffline });
-		expect(buildTenderTiles([device], { online: false })[0]).toMatchObject({
-			disabled: true,
-			reason: 'offline',
-			settlesLater: false,
-		});
-		expect(queuesOffline).toHaveBeenCalledWith('bluetooth');
+		).toMatchObject({ disabled: true, reason: 'offline' });
 	});
 	it.each(['web', 'permission', 'bluetooth_off', 'not_logged_in', 'unsupported'] as const)(
 		'explains unavailable %s',

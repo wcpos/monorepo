@@ -238,35 +238,6 @@ it('rejects tap-to-pay before opening checkout', async () => {
 	expect(sdk.checkout).not.toHaveBeenCalled();
 });
 const live = { active: true, pending: true };
-it.each(['SOLO_LITE', 'SOLO'])('a %s queues offline on Bluetooth only', async (model) => {
-	sdk.readerStatus.mockResolvedValue({ ...saved, model });
-	await driver.initialize();
-	expect(driver.queuesOffline('bluetooth')).toBe(true);
-	expect(driver.queuesOffline('tap_to_pay')).toBe(false);
-});
-it.each([
-	['an Air', { model: 'AIR' }, descriptor],
-	['an unknown reader', { model: 'UNKNOWN' }, descriptor],
-	[
-		'a gateway without the opt-in',
-		{ model: 'SOLO_LITE' },
-		{
-			...descriptor,
-			capabilities: { ...descriptor.capabilities, offline: 'none' },
-		},
-	],
-])('does not queue offline on %s', async (_name, reader, value) => {
-	resolveMethod.mockReturnValue(value);
-	sdk.readerStatus.mockResolvedValue({ ...saved, ...reader });
-	await driver.initialize();
-	expect(driver.queuesOffline('bluetooth')).toBe(false);
-});
-it('does not offer offline before login', async () => {
-	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
-	sdk.isLoggedIn.mockResolvedValue(false);
-	await driver.initialize();
-	expect(driver.queuesOffline('bluetooth')).toBe(false);
-});
 it('has SumUp upload and end an active session before an online payment, and refuses if it cannot', async () => {
 	sdk.offlineSession.mockResolvedValue(live);
 	await expect(driver.collect(input)).resolves.toMatchObject({ outcome: 'captured' });

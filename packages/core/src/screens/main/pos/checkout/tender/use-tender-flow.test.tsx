@@ -2162,9 +2162,9 @@ describe('device tender', () => {
 		expect(mockInfo).toHaveBeenCalled();
 	});
 });
-// ADR 0040 §offline: offline tenders do not queue (OFFLINE_TENDERS_QUEUE), so a device tile whose
-// transport would queue is not reopened offline.
-it('does not reopen an offline device tile via a queued transport while offline tenders do not queue', async () => {
+// ADR 0040 §offline: offline tenders do not queue, so a device tile whose descriptor allows an
+// offline queue is not reopened offline on any transport.
+it('does not reopen an offline device tile, whatever its descriptor allows offline', async () => {
 	jest.clearAllMocks();
 	mockLeg = null;
 	mockRealService = null;

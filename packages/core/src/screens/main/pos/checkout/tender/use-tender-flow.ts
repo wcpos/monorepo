@@ -129,8 +129,6 @@ import {
 	deviceTransports,
 	initialReaderId,
 	legacyPaymentMethods,
-	OFFLINE_TENDERS_QUEUE,
-	queuesOffline,
 	selectableReaders,
 	type TenderTile,
 } from './tiles';
@@ -606,11 +604,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
-			const offlineTransport =
-				OFFLINE_TENDERS_QUEUE && tile.method.capture.mode === 'device' && tile.reason === 'offline'
-					? deviceTransports(tile.method).find((item) => queuesOffline(tile.method, item))
-					: undefined;
-			if (tile.disabled && !offlineTransport) return;
+			if (tile.disabled) return;
 			// The entry is shared across pills (ledger line 1), so a fixed gateway never writes the
 			// balance into it: `entryAppliedMinor` applies the balance for it instead. A split plan
 			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
@@ -635,7 +629,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			reducerDispatch({
 				type: 'pick-method',
-				transport: offlineTransport?.transport,
 				methodId,
 				prefillMinor,
 				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId)),
