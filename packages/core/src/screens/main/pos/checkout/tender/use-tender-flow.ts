@@ -71,6 +71,7 @@ import {
 	leaveCheckout,
 	type OrderSaveState,
 	receiptEntryAfterWrite,
+	retractReceiptEntry,
 	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
@@ -756,6 +757,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const closed = await closeConfirmed(ctx.runtime, order, summary);
 					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
 					else {
+						// Not finished: the provisional receipt afterMirror entered is withdrawn, as a
+						// first attempt's closeSale does.
+						retractReceiptEntry(order.uuid);
 						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
 						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
 						logger.info(closeMessage({ kind: closed, order: summary }, t), {

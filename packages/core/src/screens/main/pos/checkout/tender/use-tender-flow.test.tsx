@@ -35,6 +35,7 @@ import {
 	setTenderMethod,
 	setTenderPlan,
 	useCheckoutMode,
+	watchTender,
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
@@ -615,11 +616,34 @@ describe('useTenderFlow', () => {
 				...(resident ? { status: resident } : {}),
 			};
 			if (refreshed) jest.mocked(provenance.refreshOrderRecord).mockResolvedValueOnce(refreshed);
-			mockResend.mockResolvedValueOnce([
-				{ kind: 'close', data: { order: { status }, completion: { n: 1, id: 'c1' } } },
-			]);
+			const answer = {
+				kind: 'close' as const,
+				data: { order: { status }, completion: { n: 1, id: 'c1' } },
+			};
+			// The mirror lands the answer's status, afterMirror enters the provisional receipt, then
+			// the forced refresh adopts the resident the row describes (a reopen, for the open rows).
+			const unwatch = watchTender(order.uuid, true);
+			mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+				const before = mockPayload.status;
+				mockPayload.status = status;
+				deps.afterMirror?.(answer);
+				// An open answer never leaves the till, so it enters nothing to withdraw.
+				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
+					status === 'pos-open' ? null : order.uuid
+				);
+				if (before === undefined) delete mockPayload.status;
+				else mockPayload.status = before;
+				return [answer];
+			});
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.retryCommand());
+			unwatch();
+			// Only a confirmed close keeps the provisional receipt; a reopen or an unconfirmed close
+			// withdraws it (Codex 4352787835 on #2853).
+			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(closed === 'completed');
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
+				closed === 'completed' ? order.uuid : null
+			);
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(closed === 'completed' ? 1 : 0);
 			// A reopen ends the completion attempt; an unconfirmed close keeps it for the bridge.
 			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(closed === 'reopened' ? 1 : 0);
