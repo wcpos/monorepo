@@ -25,7 +25,7 @@ async function openAddCartItemsMenu(page: Page) {
  * Customer-related tests in the POS context (both free and pro).
  */
 test.describe('Customers in POS', () => {
-	test('opens the customer picker on a tap and the address editor on a long press', async ({
+	test('opens the customer picker from the name and the address editor from the pin', async ({
 		posPage: page,
 	}) => {
 		const customerPill = page.getByTestId('cart-customer-name');
@@ -35,9 +35,9 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByTestId('cart-customer-select')).toBeVisible({ timeout: 15_000 });
 		await page.keyboard.press('Escape');
 
-		// The address editor stays on a long press until it has a home in the order sheet.
+		// The address editor is the split chip's pin cell (owner, 2026-10-22).
 		await expect(customerPill).toBeVisible({ timeout: 15_000 });
-		await customerPill.click({ delay: 700 });
+		await page.getByTestId('cart-customer-address').click();
 		await expect(page.getByTestId('customer-address-dialog')).toBeVisible({ timeout: 15_000 });
 	});
 });
