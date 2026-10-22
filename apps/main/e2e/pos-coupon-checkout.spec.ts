@@ -460,9 +460,13 @@ for (const targetStoreId of storeTargets) {
 					});
 					await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 					await processPayment(page);
-					if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
-						await page.getByTestId('receipt-close-button').click();
-					}
+					// Dismiss the receipt (in-pane stage or routed modal), as the first coupon test does.
+					const dismissReceipt = page
+						.getByTestId('receipt-new-sale')
+						.or(page.getByTestId('receipt-close-button'))
+						.first();
+					await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+					await dismissReceipt.click();
 					await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 					const authorization = await resolveProbeAuthorization(
 						request,

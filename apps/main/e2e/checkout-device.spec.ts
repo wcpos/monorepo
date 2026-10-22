@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import {
+	createPaymentResponseMatcher,
 	type Descriptor,
 	ledgerRows,
 	newOrderAtCheckout,
@@ -8,7 +9,6 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { wcposRestRoute } from './fixtures';
 import { expectOrderPaid, liveOrderTest as liveTest } from './order-lifecycle';
 
 function simulatedDevice(descriptors: Descriptor[]) {
@@ -25,9 +25,14 @@ function simulatedDevice(descriptors: Descriptor[]) {
 async function connect(page: Page, methodId: string, reader: string) {
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
 	const status = page.getByTestId('checkout-reader-status');
+	// The status copy is translated (dev-next runs in Spanish), so read state from test ids and
+	// the reader's own name: the settings link renders only while no reader is held, and the
+	// line names the simulated reader ("Simulated reader", driver data) only once connected.
+	const link = page.getByTestId('checkout-reader-settings-link');
+	const held = status.filter({ hasText: 'Simulated' });
 	// A remembered reader may still be reconnecting; decide on the settled line.
-	await expect(status).not.toContainText('Connecting', { timeout: 15_000 });
-	const viaLink = !(await status.innerText()).includes('Simulated');
+	await expect(link.or(held)).toBeVisible({ timeout: 15_000 });
+	const viaLink = await link.isVisible();
 	if (viaLink) {
 		await page.getByTestId('checkout-reader-settings-link').click();
 	} else {
@@ -41,7 +46,8 @@ async function connect(page: Page, methodId: string, reader: string) {
 	const option = page.getByTestId(`reader-row-${methodId}-connect-${reader}`);
 	await expect(option).toBeVisible();
 	await option.click();
-	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toContainText('Connected');
+	// The row's status line renders only while the reader is connected.
+	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toBeVisible();
 	await page.goBack();
 	if (
 		!viaLink &&
@@ -52,23 +58,17 @@ async function connect(page: Page, methodId: string, reader: string) {
 	)
 		await page.goBack();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
-	await expect(page.getByTestId('checkout-reader-status')).toContainText('Simulated');
+	await expect(held).toBeVisible();
+	await expect(link).toBeHidden();
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
-	let unauthorized = false;
-	const response = page.waitForResponse((response) => {
-		if (
-			response.request().method() !== 'POST' ||
-			!new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`).test(
-				wcposRestRoute(response.url()) ?? ''
-			)
+	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
+	const response = page.waitForResponse(
+		createPaymentResponseMatcher(
+			new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`)
 		)
-			return false;
-		if (response.status() !== 401 || unauthorized) return true;
-		unauthorized = true;
-		return false;
-	});
+	);
 	response.catch(() => {});
 	return response;
 }
