@@ -158,8 +158,8 @@ export interface WedgeDetectorOptions {
 }
 
 export interface WedgeDetector {
-	/** Feed one keystroke; `timeMs` defaults to `now()`. */
-	handleKey: (key: string, timeMs?: number) => void;
+	/** Feed one keystroke; returns true when the key belongs to a latched scanner burst (the host must keep it from acting on the focused element). */
+	handleKey: (key: string, timeMs?: number) => boolean;
 	/** Cancel any pending end-of-scan timer (host teardown). */
 	dispose: () => void;
 }
@@ -185,23 +185,28 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 	};
 
 	const handleKey = (key: string, timeMs?: number) => {
+		const time = timeMs ?? now();
+		const sinceLastMs =
+			state.lastTimeMs === null ? Number.POSITIVE_INFINITY : time - state.lastTimeMs;
 		if (key.length !== 1) {
+			const inBurst = state.detecting && sinceLastMs <= WEDGE_END_OF_SCAN_MS;
 			// Non-printable keys never advance the burst, but an Enter/Tab landing
 			// inside one is the scanner-terminator signature — remember it so the
 			// emit can tell a real (mis-configured) scan from fast typing.
-			if ((key === 'Enter' || key === 'Tab') && state.detecting) {
+			if ((key === 'Enter' || key === 'Tab') && inBurst) {
 				state.sawTerminator = true;
+				return true;
 			}
-			return;
+			return false;
 		}
 		const settings = options.getSettings();
-		foldWedgeKey(state, key, timeMs ?? now(), settings.threshold);
+		foldWedgeKey(state, key, time, settings.threshold);
 
 		if (!state.detecting) {
-			return;
+			return false;
 		}
 		clearTimer();
-		timer = schedule(() => {
+		function settle() {
 			timer = null;
 			const current = options.getSettings();
 			if (state.detecting && now() - (state.lastTimeMs || 0) > current.threshold) {
@@ -213,8 +218,13 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 				state = createWedgeState();
 				state.lastTimeMs = lastTimeMs;
 				options.onScan(code, { terminated, startedAtMs: startedAtMs ?? now() });
+			} else if (state.detecting) {
+				// A threshold at or above the settle window would otherwise latch forever.
+				timer = schedule(settle, WEDGE_END_OF_SCAN_MS);
 			}
-		}, WEDGE_END_OF_SCAN_MS);
+		}
+		timer = schedule(settle, WEDGE_END_OF_SCAN_MS);
+		return state.detecting && sinceLastMs <= WEDGE_END_OF_SCAN_MS;
 	};
 
 	return { handleKey, dispose: clearTimer };
