@@ -1350,6 +1350,7 @@ it('finishes an unconfirmed sale when a pull adopts the paid order mid-session',
 	expect(await owner.completeSale(mockContext, pos, answer, stage)).toBe('unconfirmed');
 	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 		lastError: 'unconfirmed',
+		awaitingAdoption: true,
 	});
 	mockFind.mockResolvedValue(resident()); // the pull adopts the paid order
 	act(() => adoptions.next(['order']));
@@ -1360,4 +1361,50 @@ it('finishes an unconfirmed sale when a pull adopts the paid order mid-session',
 		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
 	);
 	expect(mockRecover).toHaveBeenCalledTimes(1);
+});
+
+// Codex 4344119710 on #2836: an offline restart's replay fails its refresh and records that error;
+// the attempt still awaits adoption, so the pull that adopts the paid order after the reconnect
+// finishes it.
+it('finishes an unconfirmed sale adopted after an offline restart whose replay failed', async () => {
+	await recordCompletionAttempt(mockContext.storeDB, { orderUuid: 'order', source: 'manual' });
+	mockCatchUp.mockRejectedValueOnce(new Error('offline'));
+	const answer = {
+		source: 'manual',
+		via: 'online',
+		row: { id: 'row-1', amount: '10.00' },
+		order: { status: 'completed', balance: '0.00' },
+		mirrorFailed: false,
+		preparedCompleting: true,
+		preLegBalanceMinor: 1000,
+		amountMinor: 1000,
+	} as unknown as Parameters<typeof owner.completeSale>[2];
+	const pos = resident('order', 'pos-open') as never;
+	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	expect(await owner.completeSale(mockContext, pos, answer, stage)).toBe('unconfirmed');
+	// The restart, offline: the replay's refresh of the still-unpaid resident fails.
+	mockOnline = 'offline';
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	mockCatchUp.mockRejectedValueOnce(new Error('refresh failed'));
+	const view = render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+			lastError: 'refresh failed',
+			awaitingAdoption: true,
+		})
+	);
+	mockOnline = 'online-website-available';
+	view.rerender(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	mockFind.mockResolvedValue(resident()); // the pull adopts the paid order
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
+	);
 });

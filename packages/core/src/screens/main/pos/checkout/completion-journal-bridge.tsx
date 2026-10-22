@@ -38,7 +38,7 @@ import {
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
-import { completeSale, isSaleComplete, refreshOrderRecord, UNCONFIRMED } from './sale-completion';
+import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -490,7 +490,7 @@ export function SaleCompletionBridge(): null {
 					if (!resident) continue;
 					await enqueueOrderMutation(uuid, async (queue) => {
 						const attempt = (await pendingCompletions(storeDB))[uuid];
-						if (attempt?.lastError !== UNCONFIRMED || current.stopped) return;
+						if (!attempt?.awaitingAdoption || current.stopped) return;
 						const outcome = replayOf(attempt);
 						if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
 						// The adopted document is the store's copy: no second refresh before the receipt.
@@ -506,7 +506,7 @@ export function SaleCompletionBridge(): null {
 					switchMap((pending) =>
 						observeResidentOrders(
 							manager.engine,
-							Object.keys(pending).filter((uuid) => pending[uuid].lastError === UNCONFIRMED)
+							Object.keys(pending).filter((uuid) => pending[uuid].awaitingAdoption)
 						)
 					)
 				)

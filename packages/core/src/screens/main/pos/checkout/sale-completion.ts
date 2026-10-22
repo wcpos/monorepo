@@ -473,9 +473,6 @@ async function finishSale(
 	};
 }
 
-/** The `lastError` an unconfirmed sale's attempt carries: the store took it, no refresh agreed. */
-export const UNCONFIRMED = 'unconfirmed';
-
 export async function completeSale(
 	ctx: SaleContext,
 	order: EngineRecord<'orders'>,
@@ -531,7 +528,9 @@ export async function completeSale(
 		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		// Marked for the bridge, which finishes it once the pull adopts the paid order.
 		else if (result.outcome === 'unconfirmed')
-			await failCompletionAttempt(ctx.storeDB, order.uuid, UNCONFIRMED);
+			await failCompletionAttempt(ctx.storeDB, order.uuid, 'unconfirmed', {
+				awaitingAdoption: true,
+			});
 		return result.outcome;
 	} catch (error) {
 		try {
