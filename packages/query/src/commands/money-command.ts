@@ -136,6 +136,20 @@ function holdsAuthority(order: ResidentOrder, chain: RevisionChain | null): bool
 	);
 }
 
+/**
+ * The receipt's barrier (§1.8) as a named read: the resident holds a whole document adopted
+ * after the order's last answer. A paid status the mirror copied is not one (Codex 4345589089 on
+ * #2836).
+ */
+export async function residentHoldsAnswer(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<boolean> {
+	const { order } = await readOrder(runtime, orderUuid);
+	return holdsAuthority(order, (await readOrderCommands(storeDB, orderUuid)).chain);
+}
+
 function approvalHolds(approval: OrderApproval, order: { total?: unknown; currency?: unknown }) {
 	return (
 		Number(order.total) === Number(approval.total) && String(order.currency) === approval.currency

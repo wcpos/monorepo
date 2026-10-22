@@ -175,6 +175,7 @@ export {
 	RECOVERY_RETRY_DELAYS_MS,
 	recoverMoneyCommands,
 	resendOpenCommands,
+	residentHoldsAnswer,
 	type CommandProvenance,
 	type MoneyCommandErrorReason,
 	type MoneyCommandPoster,

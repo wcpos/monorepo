@@ -48,6 +48,7 @@ jest.mock('../../../../services/terminal-payments', () => ({
 let mockManager = {};
 let mockContext: SaleContext;
 const mockRecover = jest.fn();
+const mockHoldsAnswer = jest.fn();
 const mockResidentOrders = jest.fn();
 let mockHttp = { post: jest.fn() };
 let mockOnline = 'online-website-available';
@@ -55,6 +56,7 @@ jest.mock('@wcpos/query', () => ({
 	RECOVERY_RETRY_DELAYS_MS: jest.requireActual('@wcpos/query').RECOVERY_RETRY_DELAYS_MS,
 	useQueryRuntime: () => mockManager,
 	recoverMoneyCommands: (...args: unknown[]) => mockRecover(...args),
+	residentHoldsAnswer: (...args: unknown[]) => mockHoldsAnswer(...args),
 	observeResidentOrders: (...args: unknown[]) => mockResidentOrders(...args),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
@@ -96,6 +98,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
 	mockRecover.mockResolvedValue([]);
+	mockHoldsAnswer.mockResolvedValue(true);
 	mockHttp = { post: jest.fn() };
 	mockResidentOrders.mockReturnValue(NEVER);
 	mockOnline = 'online-website-available';
@@ -379,6 +382,8 @@ it('refuses a recovery POST once its session has been switched away', async () =
 function ladderTimers(fire: boolean) {
 	const realSetTimeout = global.setTimeout;
 	const delays: number[] = [];
+	const handles: unknown[] = [];
+	const cleared = jest.spyOn(global, 'clearTimeout');
 	const spy = jest.spyOn(global, 'setTimeout').mockImplementation(((
 		callback: () => void,
 		ms?: number
@@ -387,11 +392,55 @@ function ladderTimers(fire: boolean) {
 		// timer, so a re-armed step's remaining delay is seen too.
 		if (fire ? RECOVERY_RETRY_DELAYS_MS.includes(ms ?? 0) : (ms ?? 0) >= 20_000) {
 			delays.push(ms!);
-			return realSetTimeout(fire ? callback : () => undefined, 0);
+			const handle = realSetTimeout(fire ? callback : () => undefined, 0);
+			handles.push(handle);
+			return handle;
 		}
 		return realSetTimeout(callback, ms);
 	}) as never);
-	return { delays, restore: () => spy.mockRestore() };
+	return {
+		delays,
+		/** Recorded steps never cleared: a held step that is still armed. */
+		armed: () => handles.filter((h) => !cleared.mock.calls.some(([c]) => c === h)).length,
+		restore: () => {
+			spy.mockRestore();
+			cleared.mockRestore();
+		},
+	};
+}
+
+// A failed send as the poster leaves it: claimed, sent, the claim given up. The claim is stamped
+// ahead, so it is never live and schedules no lapse.
+async function journalUnanswered(orderUuid: string, claimant: string) {
+	const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
+	const route = { orderUuid, kind: 'close' as const, target: null, rowId: null };
+	await journal.claimRoute(mockContext.storeDB, route, claimant, {
+		orderUuid,
+		scope: 'scope-1',
+		kind: 'close',
+		path: 'orders/42/close',
+		target: null,
+		id: `${orderUuid}-close`,
+		body: {},
+		approval: { total: '0.00', currency: 'USD' },
+		sentAt: null,
+		sentRevision: null,
+	});
+	await journal.markSent(
+		mockContext.storeDB,
+		orderUuid,
+		`${orderUuid}-close`,
+		'sha256:r1',
+		claimant
+	);
+	await journal.releaseClaim(mockContext.storeDB, orderUuid, `${orderUuid}-close`, claimant);
+	now.mockRestore();
+}
+
+/** A recovery that answered every command: the journal holds none (the poster settled them). */
+async function journalAnswered() {
+	await (await mockContext.storeDB.getLocal('money-commands'))?.remove();
+	return [];
 }
 
 // Codex 4344063834 on #2836: a real transient failure releases the poster's claim (the journal
@@ -399,26 +448,8 @@ function ladderTimers(fire: boolean) {
 // not advance the ladder; only an executed retry does.
 it('advances the ladder only when a retry runs, whoever schedules it', async () => {
 	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-	const route = { orderUuid: 'order', kind: 'close' as const, target: null, rowId: null };
-	// A failed re-send as the poster leaves it: claimed, sent, the claim given up. The claim is
-	// stamped ahead, so it is never live and schedules no lapse.
 	const failedResend = async (claimant: string) => {
-		const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
-		await journal.claimRoute(mockContext.storeDB, route, claimant, {
-			orderUuid: 'order',
-			scope: 'scope-1',
-			kind: 'close',
-			path: 'orders/42/close',
-			target: null,
-			id: 'close-1',
-			body: {},
-			approval: { total: '0.00', currency: 'USD' },
-			sentAt: null,
-			sentRevision: null,
-		});
-		await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', claimant);
-		await journal.releaseClaim(mockContext.storeDB, 'order', 'close-1', claimant);
-		now.mockRestore();
+		await journalUnanswered('order', claimant);
 		return [{ orderUuid: 'order', answers: [], unanswered: true }];
 	};
 	const timers = ladderTimers(true);
@@ -426,7 +457,7 @@ it('advances the ladder only when a retry runs, whoever schedules it', async () 
 		mockRecover
 			.mockImplementationOnce(() => failedResend('start'))
 			.mockImplementationOnce(() => failedResend('retry-1'))
-			.mockResolvedValue([]);
+			.mockImplementation(journalAnswered);
 		render(<SaleCompletionBridge />);
 		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
 		await drain();
@@ -494,6 +525,7 @@ it.each([
 	'%s a command journaled and left unanswered after the session started (%s)',
 	async (_, scope, armed) => {
 		mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+		mockRecover.mockImplementation(journalAnswered);
 		const realSetTimeout = global.setTimeout;
 		const delays: number[] = [];
 		const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
@@ -1463,4 +1495,54 @@ it('keeps a recovered paid answer whose refresh failed eligible for adoption', a
 		expect.any(String),
 		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
 	);
+});
+
+// Codex 4345589102 on #2836: another order's command loses its answer while a run iterates its
+// snapshot. The watcher arms a retry; the run's clean result must not clear it, since the
+// current journal still holds that command.
+it('keeps the retry for a command that lost its answer during a recovery run', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	let finish!: (recovered: unknown[]) => void;
+	mockRecover.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+	);
+	const timers = ladderTimers(false);
+	try {
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+		await journalUnanswered('other', 'tender');
+		await waitFor(() => expect(timers.delays).toContain(30_000));
+		await act(async () => finish([]));
+		await drain();
+		expect(timers.armed()).toBe(1);
+	} finally {
+		timers.restore();
+	}
+});
+
+// Codex 4345589089 on #2836: a paid status the mirror copied is not an adoption. The attempt
+// finishes only once the resident holds a whole document adopted after the answer.
+it('waits for a whole-document adoption before finishing an adopted sale', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	await record();
+	await owner.awaitAdoption(mockContext.storeDB, 'order');
+	mockHoldsAnswer.mockResolvedValueOnce(false); // the mirror's paid status, nothing adopted
+	act(() => adoptions.next(['order']));
+	await waitFor(() => expect(mockHoldsAnswer).toHaveBeenCalledTimes(1));
+	await drain();
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+		awaitingAdoption: true,
+	});
+	act(() => adoptions.next(['order'])); // the pull adopts the whole document
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockHoldsAnswer).toHaveBeenCalledWith(mockManager, mockContext.storeDB, 'order');
 });

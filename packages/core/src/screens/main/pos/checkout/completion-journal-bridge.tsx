@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { firstValueFrom } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -9,6 +10,7 @@ import {
 	recoverMoneyCommands,
 	RECOVERY_RETRY_DELAYS_MS,
 	type ResentCommand,
+	residentHoldsAnswer,
 	useQueryRuntime,
 } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
@@ -27,6 +29,7 @@ import {
 import {
 	claimHeld,
 	failCompletionAttempt,
+	type MoneyCommandEntry,
 	nextClaimExpiry,
 	observeMoneyJournal,
 	observePendingCompletions,
@@ -226,6 +229,17 @@ export function SaleCompletionBridge(): null {
 		// journal, which must not itself run the next attempt (Codex 4344157679 on #2836).
 		type Backoff = { failures: number; at: number; timer?: ReturnType<typeof setTimeout> };
 		const adoptionBackoff = new Map<string, Backoff>();
+		/**
+		 * A sent command of the active scope that nobody holds: the recovery owes it a re-send. Read
+		 * off the CURRENT journal, so a command that lost its answer while a run iterated its
+		 * snapshot keeps its retry (Codex 4345589102 on #2836).
+		 */
+		const unansweredIn = (entries: readonly MoneyCommandEntry[]) => {
+			const scope = manager.engine?.active()?.scopeId ?? null;
+			return entries.some(
+				(entry) => entry.sentAt !== null && entry.scope === scope && !claimHeld(entry, null)
+			);
+		};
 		const disarm = () => {
 			if (lapse !== undefined) clearTimeout(lapse);
 			lapse = undefined;
@@ -286,7 +300,9 @@ export function SaleCompletionBridge(): null {
 							: client.post(url, body),
 				});
 				await recoverWhenClaimsLapse();
-				retryPending = recovered.some(({ unanswered }) => unanswered);
+				retryPending =
+					recovered.some(({ unanswered }) => unanswered) ||
+					unansweredIn(await firstValueFrom(observeMoneyJournal(storeDB)));
 				if (!retryPending) {
 					retries = 0;
 					retryAt = null;
@@ -493,11 +509,7 @@ export function SaleCompletionBridge(): null {
 			journalWatch ??= observeMoneyJournal(storeDB).subscribe({
 				next: (entries) => {
 					if (current.stopped) return;
-					const scope = manager.engine?.active()?.scopeId ?? null;
-					const unanswered = entries.some(
-						(entry) => entry.sentAt !== null && entry.scope === scope && !claimHeld(entry, null)
-					);
-					if (unanswered && retry === undefined) {
+					if (unansweredIn(entries)) {
 						retryPending = true;
 						armRetry();
 					}
@@ -547,7 +559,9 @@ export function SaleCompletionBridge(): null {
 				if (!attempt?.awaitingAdoption || current.stopped) return;
 				const outcome = replayOf(attempt);
 				if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
-				// The adopted document is the store's copy: no second refresh before the receipt.
+				// Only a whole document adopted after the answer stands in for the replay's refresh;
+				// until one arrives the attempt stays pending.
+				if (!(await residentHoldsAnswer(manager, storeDB, uuid))) return;
 				const ctx = { ...current.ctx, actor: attempt.actor };
 				const finish = { ...outcome, refreshed: true };
 				await completeSale(ctx, resident, finish, { host: 'background' }, queue);
