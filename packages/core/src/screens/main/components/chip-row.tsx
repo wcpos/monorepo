@@ -6,7 +6,7 @@ import { Skeleton } from '@wcpos/components/skeleton';
 /**
  * The chip row every list surface with pills has (Products, Orders, Coupons, the POS
  * products column): the page gutter all round, so the search above and the card below share one
- * 16 edge, and the pills in a horizontal scroller. The plain wrapper sizes the row to its chips,
+ * edge, and the pills in a horizontal scroller. The plain wrapper sizes the row to its chips,
  * so the scroller never grows into the card's space (CODING_STANDARDS § Design, Gutters).
  *
  * `ref` reaches the scroller: the POS bar scrolls a pressed chip into view with it.

@@ -135,11 +135,11 @@ export function NavigationAreaLayout({
 			<SessionHoldBanner />
 			{/* First row of the column: flush with the top it pads; after the hold banner it is the
 			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
-			{barNotice != null && <View className={held ? 'mt-4' : undefined}>{barNotice}</View>}
+			{barNotice != null && <View className={held ? 'mt-gutter' : undefined}>{barNotice}</View>}
 			<View testID={testID} className="flex-1 flex-row">
 				<View
 					testID={`${testID}-rail`}
-					className="border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r p-3"
+					className="border-border/50 bg-background p-gutter w-56 shrink-0 gap-0.5 border-r"
 				>
 					<NavigationItems items={items} showChevron={false} />
 				</View>
@@ -171,7 +171,7 @@ export function NavigationAreaIndex({
 
 	return (
 		<ScrollView testID={testID} className="bg-background flex-1">
-			<View className="gap-1 p-4">
+			<View className="p-gutter gap-1">
 				<NavigationItems items={items} showChevron />
 			</View>
 		</ScrollView>

@@ -192,7 +192,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 					fallback={
 						// The same scrolling shell as the settled page: on a short phone the strip
 						// can push the date button below the fold (Codex, #2720).
-						<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+						<ScrollView className="flex-1" contentContainerClassName="gap-gutter p-gutter">
 							{strip}
 							<HeroShell title={title} />
 						</ScrollView>
@@ -328,12 +328,12 @@ function ReportsShell() {
 							/>
 							<View
 								testID="reports-scope-row"
-								// The row under the wide bar brings the page gutter (16) between the bar's
-								// controls and its own; the Closures body's `p-4` brings the 16 below. The
-								// phone keeps its 8 under its control-height bar.
+								// The row under the wide bar brings the page gutter between the bar's
+								// controls and its own; the Closures body's `p-gutter` brings the gutter
+								// below. The phone keeps its 8 under its control-height bar.
 								className={cn(
-									'flex-row items-center justify-between gap-2 px-4',
-									phone ? 'py-2' : 'pt-4'
+									'px-gutter flex-row items-center justify-between gap-2',
+									phone ? 'py-2' : 'pt-gutter'
 								)}
 							>
 								<DateButton
@@ -376,7 +376,7 @@ export function ReportsScreen() {
 	) : (
 		<View className="flex-1">
 			<ManagementBar title={t('common.reports')} testID="reports-bar" />
-			<Text testID="reports-denied" className="p-4">
+			<Text testID="reports-denied" className="p-gutter">
 				{t('reports.no_access')}
 			</Text>
 		</View>

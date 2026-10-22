@@ -274,8 +274,6 @@ export function TermLevelGrid({
 					detail={detail}
 					autoFocus
 					testID="products-breadcrumb"
-					// The crumb's first button carries its own 12, so its text sits on the page gutter.
-					className="pl-1"
 				/>
 			</DealFade>
 			<View className="min-h-0 flex-1" testID="browse-level-surface">

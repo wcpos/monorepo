@@ -6,7 +6,7 @@ import { cn } from '@wcpos/components/lib/utils';
 
 /**
  * The one surface every table and tile grid sits on: a white card with a hairline border and
- * one radius, inset by the page gutter (`--spacing-gutter`, 16 at Regular) on every list surface
+ * one radius, inset by the page gutter (`--spacing-gutter`, 12 at Regular) on every list surface
  * — Products, Orders, Customers, Coupons and the POS products column alike — so its edge lines
  * up with the search and the chips above it. The card owns its sides and its bottom only: the
  * row above it (the chip row's `p-gutter`, or `ListFrame`'s body `pt-gutter` where there are no
@@ -34,7 +34,7 @@ export function TableSurface({ className, ...props }: ViewProps) {
 
 /**
  * The caption row's inset under the card: the card's gutter, then the cell's own 12 (`px-3`),
- * so the footer's text lines up with the cells' (16 + 12 at Regular); on a phone, where the
+ * so the footer's text lines up with the cells' (12 + 12 at Regular); on a phone, where the
  * card runs edge to edge, the cell's 12 alone. The caption row is the pane's last row, so it
  * also carries the gutter below it: the container insets its last child from its bottom edge as
  * it does its first from the top (owner, 2026-10-20: "consistent, including at the bottom").

@@ -76,7 +76,7 @@ export function Closures({
 		);
 	return (
 		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1 flex-row">
-			<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+			<ScrollView className="flex-1" contentContainerClassName="gap-gutter p-gutter">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<IconButton

@@ -9,11 +9,12 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
 /**
- * The page gutter around the card: 16 on every side at every width, the same 16 the list
- * pages give their search, chips and card (CODING_STANDARDS § Design, Gutters). The 20/24
- * verticals and the 32 on `md` that preceded it were this page's own numbers, off the scale.
+ * The page gutter around the card (`--spacing-gutter`), on every side at every width: the same
+ * gutter the list pages give their search, chips and card (CODING_STANDARDS § Design, Gutters).
+ * The 20/24 verticals and the 32 on `md` that preceded it were this page's own numbers, off the
+ * scale. The card's own body keeps its 16 (inside a surface).
  */
-const PAGE_PADDING = 'p-4';
+const PAGE_PADDING = 'p-gutter';
 
 export type AreaPageMode = 'scroll' | 'fill';
 

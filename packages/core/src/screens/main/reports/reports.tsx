@@ -50,8 +50,8 @@ export function Reports({
 						<DetailPanel key={detail} />
 					</ErrorBoundary>
 				) : (
-					// The page gutter (16) around and between the strip, the hero and the cards.
-					<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+					// The page gutter around and between the strip, the hero and the cards.
+					<ScrollView className="flex-1" contentContainerClassName="gap-gutter p-gutter">
 						{/* The strip stays outside the report's boundary: it is the only way into
 						    Closures, so a failed hero or card must not take it down (Codex, #2720). */}
 						{header}

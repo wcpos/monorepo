@@ -340,10 +340,15 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
   | Container | Gutter | Today |
   |---|---|---|
-  | The page: `PageBar`'s controls from the top and the sides, a pane's body, an area page around its card, the phone's screen edge; a card's body; every list surface, the POS products column included | 16, at every width | the `--spacing-gutter` token (`p-gutter`, `px-gutter`, `mx-gutter`…, four spacing units, so it follows the density step): `PageBar` `pt-gutter px-gutter`, `ListFrame`, `ChipRow` `p-gutter`, `TableSurface` `mx-gutter mb-gutter` and the caption row's `pb-gutter`, the tile grids' `px-gutter`; `AreaPage` `p-4`, cards `p-4` |
-  | A panel column: the area nav rail, a side panel's body | 12 | nav rail `p-3` |
-  | A dense strip: the icon rail, the front drawer's items | 8 | drawer `mx-2`, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`) |
-  | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | hitSlop, `gap-1` |
+  | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | `gap-1`, hitSlop |
+  | Between controls, and a dense strip of them: the icon rail (48 + 2×8), the front drawer's items, the gap between chips, the cart column's rows | 8 | drawer `mx-2`, chips `gap-2`, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`) |
+  | Between content areas on the page ground — the page gutter: `PageBar`'s controls from the top and the sides, the chip row, `TableSurface` and the caption row, `ListFrame`'s rows, `AreaPage` around its card, the area nav rail, the hold banner and the upgrade strip, the Reports ground | 12 at Regular: the `--spacing-gutter` token, 3 units (10.5 / 12 / 15), so it follows the density step | `p-gutter`, `px-gutter`, `mx-gutter`, `gap-gutter`…: `PageBar` `pt-gutter px-gutter`, `ListFrame`, `ChipRow` `p-gutter`, `TableSurface` `mx-gutter mb-gutter`, the caption row's `pb-gutter`, the tile grids' `px-gutter`, `AreaPage` `p-gutter` |
+  | Inside a surface: a card's body, a pane's body, a panel's header and footer, a bordered notice; and the screen edge of a gate or sign-in screen | 16 | `p-4` |
+
+  Sources: Windows app design (Content layout and spacing): 8 epx between buttons, 12 between
+  content areas, 16 between a surface and edge text. UIKit: 8 pt default view margins; 16/20 is
+  the root view's minimum, i.e. the screen edge. Owner, 2026-10-22: 16/20 read too spacious for
+  an application pane.
 
 - A container's width follows from its items and its gutter (the icon rail is 12 + 2 + 2 = 16 spacing units, 64 at Regular),
   not the other way round.
@@ -358,7 +363,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   that centres a 44 control in a fixed 64 puts 10 above the search and 26 under it; that is the
   tell (owner, 2026-10-20).
 - One page gutter at every width: a page does not double its inset on `md` while its neighbour
-  keeps 16 (Settings sat at 32 beside Products at 16 until 2026-10-20).
+  keeps the page gutter (Settings sat at 32 beside Products at 16 until 2026-10-20).
 - A new container takes its gutter from this table. A mockup does not offer padding as an option.
 - The list surfaces (Products, Orders, Customers, Coupons, the POS products column) share one
   frame, `ListFrame` (bar, `ChipRow`, rows, body on `TableSurface`, caption row), so a change to
@@ -366,12 +371,12 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 
 #### Page bars
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
-- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter (16) from the top and the sides and the row under it brings the 16 between them (Gutters, above); on a phone the bar is 44 and search is its own ruled row under it.
+- The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter from the top and the sides and the row under it brings the page gutter between them (Gutters, above); on a phone the bar is 44 and search is its own ruled row under it.
 - The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11. The POS products column's search row is a `PageBar` too: no title, `safeArea={false}` (its `EdgeColumn` pads the inset), the scan, view and settings controls as its actions.
 - The phone search row is `PageBar`'s: on a phone, a bar with a search shows it on its own 44 ruled row under the control row, so every bar with a search, the POS's included, has one phone grammar.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
-- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter (16) around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
+- An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
 
 #### Gate screens
 A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.

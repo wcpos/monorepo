@@ -111,7 +111,7 @@ export function useSessionHeld(): boolean {
 /**
  * The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`.
  * On wide widths it is the row under the bar, so it carries the container's gutter above and
- * at its sides (16 on a page, 8 in a dense pane; CODING_STANDARDS § Design, Gutters) — the
+ * at its sides (the page gutter on a page, 8 in a dense pane; CODING_STANDARDS § Design, Gutters) — the
  * wide bar ends at its controls and leaves the gutter to its follower. The phone is unchanged.
  */
 export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dense' }) {
@@ -135,7 +135,7 @@ export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dens
 					: t('auth.session_expired_description')
 			}
 			actions={[{ label: t('auth.log_in'), onPress: login, testID: 'session-hold-login' }]}
-			className={cn(!phone && (gutter === 'page' ? 'mx-4 mt-4' : 'mx-2 mt-2'))}
+			className={cn(!phone && (gutter === 'page' ? 'mx-gutter mt-gutter' : 'mx-2 mt-2'))}
 			testID="session-hold-banner"
 		/>
 	);

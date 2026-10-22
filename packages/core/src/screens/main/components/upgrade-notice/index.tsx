@@ -18,7 +18,7 @@ export function UpgradeNotice({
 	setShowUpgrade: (show: boolean) => void;
 	/**
 	 * Mounted as the row under a wide page bar (Orders, Reports, Support): the bar ends at its
-	 * controls and leaves the page gutter (16) to this row. Off by default — at the top of the
+	 * controls and leaves the page gutter to this row. Off by default — at the top of the
 	 * POS, Settings or Store health column the strip is flush with the edge it already pads.
 	 */
 	underBar?: boolean;
@@ -35,8 +35,8 @@ export function UpgradeNotice({
 		<HStack
 			testID="upgrade-notice-banner"
 			className={cn(
-				'bg-muted border-border min-h-10 items-center gap-2.5 border-b pr-2 pl-4',
-				underBar && !isPhone && 'mt-4'
+				'bg-muted border-border pl-gutter min-h-10 items-center gap-2.5 border-b pr-2',
+				underBar && !isPhone && 'mt-gutter'
 			)}
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from

@@ -65,14 +65,14 @@ export function PageBar({
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
 			    bar and the ground are one colour and a line would only draw a box around nothing.
 			    On wide widths the bar is the page's first row, not a box of its own height: its
-			    controls sit the page gutter (16) from the top and the sides, and the row under it
-			    (the chip row, a page body) brings the 16 between them, so search, chips and card
+			    controls sit the page gutter from the top and the sides, and the row under it
+			    (the chip row, a page body) brings the gutter between them, so search, chips and card
 			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
 			    height because its search has a ruled row of its own. */}
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'px-gutter pt-gutter gap-4'
+					phone ? 'h-ctl pl-gutter gap-2 pr-2' : 'px-gutter pt-gutter gap-4'
 				)}
 			>
 				{(phone || onMenu) &&
