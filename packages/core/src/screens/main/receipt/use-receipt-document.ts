@@ -5,6 +5,7 @@ import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
 import { isOrderBasedCloudProfile, usePrint, usesSystemPrintDialog } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
+import { withBase } from '@wcpos/components/webview/with-base';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -248,8 +249,11 @@ export function useReceiptDocument({
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			// The page the preview read, printed as the URL print always was: uncounted.
-			if (pageHtml && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
-				return { html: pageHtml };
+			// The dialog adapter loads inline HTML from a data: URL, so the page's own URL travels
+			// with it as <base> for relative stylesheets and logos; the preview frame does the same
+			// via `src`. pageURL is set whenever pageHtml is.
+			if (pageHtml && pageURL && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
+				return { html: withBase(pageHtml, pageURL) };
 			}
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {

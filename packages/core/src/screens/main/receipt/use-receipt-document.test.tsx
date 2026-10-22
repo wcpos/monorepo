@@ -1057,7 +1057,10 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			await act(async () => {
 				await result.current.print();
 			});
-			expect(mockHtmlPrint.mock.calls[0][0]).toContain('Server receipt');
+			// The dialog loads the HTML from a data: URL, so it carries the page URL as its base.
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain(
+				'<base href="https://shop.test/r?key=k&amp;mode=live&amp;template=7"><p>Server receipt</p>'
+			);
 			expect(pageReads().map(([url]) => url)).toEqual([templated]);
 			// Uncounted, as the URL print always was: no intent=print request.
 			expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
