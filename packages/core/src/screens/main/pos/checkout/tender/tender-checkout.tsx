@@ -44,7 +44,7 @@ interface Props {
  * same flow works from a phone at a market stall to a desktop till.
  */
 export function TenderCheckout({ order }: Props) {
-	const flow = useTenderFlow(order);
+	const flow = useTenderFlow(order, 'modal');
 	const payload = useRecordField(order, (record) => record.payload);
 	const { screenSize } = useTheme();
 	const { format: formatCurrency } = useCurrencyFormat({

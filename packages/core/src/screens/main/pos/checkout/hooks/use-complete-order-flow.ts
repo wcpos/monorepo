@@ -9,6 +9,7 @@ import { useTheme } from '../../../../../contexts/theme';
 import { useT } from '../../../../../contexts/translations';
 import { getCheckoutModeSnapshot, leaveCheckout, selectReceipt } from '../checkout-mode';
 import { returnToTill } from '../till-route';
+import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { completeSale, type SaleOutcome } from '../sale-completion';
@@ -21,18 +22,29 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
-	receiptHost: 'stage' | 'modal' = 'stage'
+	receiptHost: 'stage' | 'modal' = 'stage',
+	checkoutHost?: CheckoutHost
 ): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<void> {
-	const complete = useCompleteOrderFlowForOrder(receiptHost);
+	const complete = useCompleteOrderFlowForOrder(receiptHost, checkoutHost);
 	return React.useCallback((outcome, queue) => complete(order, outcome, queue), [complete, order]);
 }
 
-/** Cart commands finish their captured order, even if the cashier has switched tabs. */
-export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 'stage') {
+/**
+ * Cart commands finish their captured order, even if the cashier has switched tabs. A cart
+ * command's host is the cart itself: a phone tab the till leaves as it leaves the modal, or the
+ * wide columns, which stay.
+ */
+export function useCompleteOrderFlowForOrder(
+	receiptHost: 'stage' | 'modal' = 'stage',
+	checkoutHost?: CheckoutHost
+) {
 	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
+	const leaveHost = useLeaveCheckoutHost(
+		checkoutHost ?? (screenSize === 'sm' ? 'modal' : 'columns')
+	);
 	const t = useT();
 	const { setCurrentOrderID, getCurrentOrderID } = useCurrentOrderActions();
 
@@ -98,7 +110,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			if (!uiSettings.autoShowReceipt) {
 				leaveCheckout(order.uuid);
 				setCurrentOrderID('');
-				if (screenSize === 'sm') returnToTill(router, true, 'products');
+				leaveHost();
 			}
 		},
 		[
@@ -106,6 +118,7 @@ export function useCompleteOrderFlowForOrder(receiptHost: 'stage' | 'modal' = 's
 			receiptHost,
 			router,
 			screenSize,
+			leaveHost,
 			setCurrentOrderID,
 			getCurrentOrderID,
 			uiSettings.autoShowReceipt,
