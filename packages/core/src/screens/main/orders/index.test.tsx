@@ -343,6 +343,9 @@ it('uses the orders skeleton while the orders handle is unanswered', () => {
 		const { unmount } = render(<OrdersScreen />);
 		expect(screen.getByTestId('skeleton-orders')).toBeTruthy();
 		expect(screen.queryByTestId('orders-table')).toBeNull();
+		// The chip row stands above the skeleton from the first frame: the card never moves
+		// down when the rows arrive.
+		expect(screen.getByTestId('search-probe')).toBeTruthy();
 		unmount();
 	} finally {
 		mockHandle = original;

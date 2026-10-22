@@ -5,6 +5,7 @@ import isEqual from 'lodash/isEqual';
 
 import { Chip } from '@wcpos/components/chip';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
@@ -103,18 +104,19 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 				/>
 				<StatusPill />
 				<PaymentMethodPill />
-				<Suspense>
+				{/* A pill that reads a record answers after the row has drawn: it holds a chip's
+				    frame meanwhile, so the pills beside it never shift. */}
+				<Suspense fallback={<Skeleton shape="chip" />}>
 					<CustomerPill
 						resource={customerResource}
 						guestCustomer={guestCustomer}
 						onMissing={refreshCustomer}
 					/>
 				</Suspense>
-				<Suspense>
+				<Suspense fallback={<Skeleton shape="chip" />}>
 					<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 				</Suspense>
-
-				<Suspense>
+				<Suspense fallback={<Skeleton shape="chip" />}>
 					<StorePill resource={storesResource} />
 				</Suspense>
 				<RegisterPill />

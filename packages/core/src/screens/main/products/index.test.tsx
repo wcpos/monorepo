@@ -172,7 +172,9 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('./use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
-jest.mock('../components/product/filter-bar', () => ({ FilterBar: () => null }));
+jest.mock('../components/product/filter-bar', () => ({
+	FilterBar: () => <div data-testid="products-filter-bar" />,
+}));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/barcode', () => ({ Barcode: () => null }));
 jest.mock('./cells/cogs', () => ({ COGS: () => null }));
@@ -366,6 +368,11 @@ it('renders the skeleton inside the guard while the handle is unanswered and the
 		expect(screen.getByTestId('skeleton-products').getAttribute('data-gutter')).toBe('page');
 		expect(screen.queryByTestId('products-table')).toBeNull();
 		expect(screen.getByTestId('products-bar')).toBeTruthy();
+		// The chip row stands above the skeleton from the first frame: the card never moves
+		// down when the rows arrive.
+		expect(
+			screen.getByTestId('products-body').contains(screen.getByTestId('products-filter-bar'))
+		).toBe(true);
 		expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-body'))).toBe(true);
 		expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-bar'))).toBe(false);
 	} finally {

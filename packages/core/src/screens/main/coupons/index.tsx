@@ -35,6 +35,7 @@ import { withProAccess } from '../components/pro-guard';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
+import { FilterBarSkeleton } from '../components/filter-bar-skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { useCouponRecord } from './commands/use-coupon-record';
@@ -202,7 +203,9 @@ function CouponsBody() {
 	return (
 		<View testID="coupons-body" className="flex-1">
 			<ErrorBoundary>
-				<FilterBar />
+				<Suspense fallback={<FilterBarSkeleton />}>
+					<FilterBar />
+				</Suspense>
 			</ErrorBoundary>
 			{/* A failed coupons read is thrown here; the fallback's reset asks the handle again, and
 			    a changed query (its handle is new) clears the fallback on its own. */}

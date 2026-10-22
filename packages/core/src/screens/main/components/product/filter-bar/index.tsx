@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
@@ -52,11 +53,15 @@ export function FilterBar() {
 				<StockStatusPill />
 				<FeaturedPill />
 				<OnSalePill />
-				<CategoryPill />
-				<Suspense>
+				{/* A pill that reads a record answers after the row has drawn: it holds a chip's
+				    frame meanwhile, so the pills beside it never shift. */}
+				<Suspense fallback={<Skeleton shape="chip" />}>
+					<CategoryPill />
+				</Suspense>
+				<Suspense fallback={<Skeleton shape="chip" />}>
 					<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
 				</Suspense>
-				<Suspense>
+				<Suspense fallback={<Skeleton shape="chip" />}>
 					<BrandsPill resource={selectedBrandResource} selectedID={selectedBrandID} />
 				</Suspense>
 				{changed >= 2 && (

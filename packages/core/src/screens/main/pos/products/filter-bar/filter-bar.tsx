@@ -18,6 +18,7 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
@@ -315,7 +316,9 @@ export function POSFilterBar({
 						}}
 					/>
 				) : (
-					<Suspense>
+					// The chip reads its records before it can draw: it holds a chip's frame
+					// meanwhile, so the chips beside it never shift.
+					<Suspense fallback={<Skeleton shape="chip" />}>
 						<SetChip field={item.id} dimmed={dimmed} touched={touched} />
 					</Suspense>
 				);

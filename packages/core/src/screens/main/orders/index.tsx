@@ -35,6 +35,7 @@ import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
+import { FilterBarSkeleton } from '../components/filter-bar-skeleton';
 import { Cashier } from '../components/order/cashier';
 import { Register } from '../components/order/register';
 import { CreatedVia } from '../components/order/created-via';
@@ -198,9 +199,6 @@ function OrdersList({
 	};
 	return (
 		<>
-			<ErrorBoundary>
-				<FilterBar initialFilters={initialFilters} />
-			</ErrorBoundary>
 			{pending && <View testID="orders-searching-line" className="bg-primary h-0.5" />}
 			<View
 				className={`flex-1 ${pending ? 'opacity-60' : ''}`}
@@ -304,6 +302,14 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 			}
 		>
 			<View className="min-w-0 flex-1">
+				{/* The chip row is a row of the page, not of the list: it stands above the list's
+				    loading boundary so the card never moves when the rows arrive. Its own boundary
+				    holds the row's height while a pill answers. */}
+				<ErrorBoundary>
+					<Suspense fallback={<FilterBarSkeleton />}>
+						<FilterBar initialFilters={initialFilters} />
+					</Suspense>
+				</ErrorBoundary>
 				{/* A failed orders read is thrown here; the fallback's reset asks the handle again,
 				    and a changed query (its handle is new) clears the fallback on its own. */}
 				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>

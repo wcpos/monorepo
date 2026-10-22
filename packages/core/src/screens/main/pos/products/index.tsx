@@ -494,10 +494,15 @@ function POSProductsContent({
 		/>
 	);
 
+	// The column's rows sit one dense gutter (8) apart: the header gives 8 over the table card,
+	// which carries none of its own, but a tile carries 4 of its own (`m-1`, as at the sides
+	// under the grid's `px-1`), so the row above the grid gives the other 4.
+	const rowAboveBody = viewMode === 'grid' ? 'pb-1' : 'pb-2';
+
 	return (
 		<View className="h-full">
 			<View className="flex-1">
-				<View className="p-2">
+				<View className={`px-2 pt-2 ${rowAboveBody}`} testID="pos-products-header">
 					<ErrorBoundary>
 						<VStack>
 							<HStack>
@@ -559,7 +564,7 @@ function POSProductsContent({
 									? 'pos_products.counting_items_after_count'
 									: 'pos_products.price_check_only_until_open'
 							)}
-							className="mx-2 mb-2"
+							className={`mx-2 ${viewMode === 'grid' ? 'mb-1' : 'mb-2'}`}
 							testID="products-locked-notice"
 						/>
 					)}

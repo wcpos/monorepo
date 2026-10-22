@@ -33,6 +33,7 @@ import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { RecordDateCell } from '../components/record-date-cell';
 import { ProductCategories } from '../components/product/categories';
+import { FilterBarSkeleton } from '../components/filter-bar-skeleton';
 import { FilterBar } from '../components/product/filter-bar';
 import { ProductImage } from '../components/product/image';
 import { ProductTags } from '../components/product/tags';
@@ -272,9 +273,6 @@ function ProductsList({
 
 	return (
 		<>
-			<ErrorBoundary>
-				<FilterBar />
-			</ErrorBoundary>
 			{pending && <View testID="products-searching-line" className="bg-primary h-0.5" />}
 			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
 				<DataTable<ProductRow>
@@ -339,6 +337,14 @@ function ProductsBody() {
 	const handle = useProductsQueryHandle(state);
 	return (
 		<View testID="products-body" className="flex-1">
+			{/* The chip row is a row of the page, not of the table: it stands above the table's
+			    loading boundary so the card never moves when the rows arrive. Its own boundary
+			    holds the row's height while a pill answers. */}
+			<ErrorBoundary>
+				<Suspense fallback={<FilterBarSkeleton />}>
+					<FilterBar />
+				</Suspense>
+			</ErrorBoundary>
 			{/* A failed products read is thrown here; the fallback's reset asks the handle again,
 			    and a changed query (its handle is new) clears the fallback on its own. */}
 			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
