@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import { parseRegistryEntries, REGISTRY_PATH } from '../gallery/inventory';
+
 // Match the source-only app tests: clear Expo's lazy native runtime after setup.
 jest.resetModules();
 
@@ -59,9 +61,6 @@ const registered = [
 ];
 
 it('registers every new primitive before the gallery shoot', () => {
-	const source = readFileSync(`${__dirname}/../components/gallery/registry.tsx`, 'utf8');
-	const entries = source.match(/const registry[^=]*=\s*\{([^}]+)\}/)?.[1];
-	expect(entries).toBeDefined();
-	const names = entries!.split(',').map((entry) => entry.trim());
+	const names = parseRegistryEntries(readFileSync(REGISTRY_PATH, 'utf8'));
 	for (const name of registered) expect(names).toContain(name);
 });

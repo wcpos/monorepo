@@ -12,7 +12,10 @@ const PIXEL_COLOUR_THRESHOLD = 0.05;
 // CI prebuilds once; local runs always export fresh. Smoke without baselines: npx playwright test -c playwright.gallery.config.ts --ignore-snapshots
 export default defineConfig({
 	testDir: './gallery',
-	workers: 1,
+	// One test per component (gallery/inventory.ts), run in parallel: a CI runner has four
+	// cores, and the shoot is split again across shards in .github/workflows/test.yml.
+	fullyParallel: true,
+	workers: process.env.CI ? 4 : 2,
 	retries: 0,
 	timeout: 120_000,
 	forbidOnly: !!process.env.CI,
@@ -36,7 +39,9 @@ export default defineConfig({
 			(process.env.CI
 				? ''
 				: 'EXPO_PUBLIC_WCPOS_GALLERY=1 npx expo export --platform web --output-dir ./gallery-build && ') +
-			'npx serve gallery-build -l 8097 -s',
+			// `serve` is a root devDependency: `--no-install` means a registry stall cannot hold the
+			// shoot (three update shards hung the full 7-minute server budget on 2026-10-22).
+			'npx --no-install serve gallery-build -l 8097 -s',
 		url: 'http://127.0.0.1:8097',
 		timeout: 7 * 60 * 1000,
 	},

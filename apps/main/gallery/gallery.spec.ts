@@ -1,7 +1,9 @@
-import { readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type TestInfo } from '@playwright/test';
+
+import { GALLERY_COMPONENTS } from './inventory';
 
 // The longest rise is the panel slide (PANEL_SLIDE, 250 ms) plus the focus hand-over
 // after it; two seconds leaves every entrance well finished without stalling a page.
@@ -15,110 +17,135 @@ const FULL_THEMES = ['light', 'dark'] as const;
 const COLOUR_THEMES = ['ocean', 'sunset', 'monochrome'] as const;
 const COLOUR_THEME_CELL = '--regular-coarse';
 
-test('gallery cells', async ({ page }, testInfo) => {
-	const smoke = testInfo.project.ignoreSnapshots && !process.env.CI;
-	if (!smoke && process.platform !== 'linux') {
-		throw new Error(
-			'Gallery comparison requires Linux. CI is the only baseline writer. Use --ignore-snapshots for a local smoke shoot.'
-		);
-	}
-	if (testInfo.project.ignoreSnapshots && process.env.CI)
-		throw new Error('CI must compare gallery baselines.');
-	if (!smoke && testInfo.config.updateSnapshots !== 'none' && !process.env.CI) {
-		throw new Error('CI is the only gallery baseline writer.');
-	}
-	await page.goto('/gallery');
-	const links = page.locator('[data-gallery-component]');
-	await expect(links.first()).toBeVisible();
-	const components = await links.evaluateAll((nodes) =>
-		nodes.map((node) => node.getAttribute('data-gallery-component')!)
-	);
-	// One test shoots every page: the budget grows with the inventory, a minute a
-	// page and theme (its isolated cells included), so a new component never trips
-	// a fixed clock.
-	test.setTimeout(components.length * (FULL_THEMES.length + COLOUR_THEMES.length) * 60_000);
-	let count = 0;
-	const shot = new Set<string>();
-	const shoot = async (id: string, theme: string, isolated = false) => {
-		const cell = page.getByTestId(id);
-		// An overlay's rise and the focus it hands over once the rise ends both settle after
-		// the page's animations; the first cells on a page were shot before that. Only a
-		// running, finite animation can finish (the indeterminate progress sweep never does,
-		// a paused one never will), and the wait is bounded well past the longest rise.
-		await page.evaluate(
-			(bound) =>
-				Promise.race([
-					Promise.all(
-						document
-							.getAnimations()
-							.filter(
-								(animation) =>
-									animation.playState === 'running' &&
-									animation.effect?.getComputedTiming().iterations !== Infinity
-							)
-							.map((animation) => animation.finished.catch(() => undefined))
-					),
-					new Promise((resolve) => setTimeout(resolve, bound)),
-				]),
-			SETTLE_BOUND_MS
-		);
-		// An isolated cell is shot with no field focused. An open sheet or popover focuses
-		// its search field on mount, and the runner paints that field's ring or not from one
-		// shoot to the next with the ring's class present either way (the update run of
-		// 5d2bc0e5e held the class on every cell and drew the ring on two of twelve dark sheet
-		// cells), so the focused look is the Input's own story and the overlay's cell shows
-		// the panel. The blur is asserted, so a shot never carries focus into a baseline.
-		if (isolated) {
-			const focused = await page.evaluate(async (cellId) => {
-				const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
-				const field = root?.querySelector<HTMLElement>('input,textarea');
-				if (!field) return false;
-				field.blur();
-				// React flushes the blur's state after this task; the ring leaves on the next frame.
-				await new Promise((resolve) => requestAnimationFrame(resolve));
-				return root!.contains(document.activeElement);
-			}, id);
-			expect(focused, `a field still holds focus in ${id}-${theme}`).toBe(false);
+// A minute a page and theme (its isolated cells included). Each component is its own test,
+// so the budget is per component and a new component never trips a fixed clock.
+const THEME_BUDGET_MS = 60_000;
+
+const isSmoke = (testInfo: TestInfo) => testInfo.project.ignoreSnapshots && !process.env.CI;
+
+// One test per component, collected from the static inventory, so Playwright splits the shoot
+// across workers and CI splits it across shards. No test sees every cell, so the orphan check
+// (roadmap#355) unions every test's shot list afterwards: gallery/check-orphans.mjs.
+test.describe('gallery cells', () => {
+	test.describe.configure({ mode: 'parallel' });
+
+	test.beforeAll(async ({ browser }, testInfo) => {
+		const smoke = isSmoke(testInfo);
+		if (!smoke && process.platform !== 'linux') {
+			throw new Error(
+				'Gallery comparison requires Linux. CI is the only baseline writer. Use --ignore-snapshots for a local smoke shoot.'
+			);
 		}
-		if (smoke)
-			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
-		else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
-		shot.add(`${id}-${theme}-linux.png`);
-		count++;
-	};
-	for (const component of components) {
-		for (const theme of [...FULL_THEMES, ...COLOUR_THEMES]) {
-			const colourOnly = (COLOUR_THEMES as readonly string[]).includes(theme);
-			await page.goto(`/gallery/${component}?theme=${theme}`);
-			const cells = page.locator('[data-cell-id]');
-			await expect(cells.first()).toBeVisible();
-			const ids = (
-				await cells.evaluateAll((nodes) =>
-					nodes.map((node) => ({
-						id: node.getAttribute('data-cell-id')!,
-						isolated: node.getAttribute('data-isolated') === 'true',
-					}))
-				)
-			).filter(({ id }) => !colourOnly || id.endsWith(COLOUR_THEME_CELL));
-			for (const { id, isolated } of ids) if (!isolated) await shoot(id, theme);
-			// An isolated story (an open popover, select or dialog: it owns the document's
-			// focus) is shot one cell per page, so its siblings cannot close or cover it.
-			for (const { id, isolated } of ids) {
-				if (!isolated) continue;
-				await page.goto(`/gallery/${component}?theme=${theme}&cell=${id}`);
-				await expect(page.getByTestId(id)).toBeVisible();
-				await shoot(id, theme, true);
+		if (testInfo.project.ignoreSnapshots && process.env.CI)
+			throw new Error('CI must compare gallery baselines.');
+		if (!smoke && testInfo.config.updateSnapshots !== 'none' && !process.env.CI) {
+			throw new Error('CI is the only gallery baseline writer.');
+		}
+		// The inventory is read from the registry's source; the index page renders the registry
+		// itself. A registry entry that never renders (no stories) or a page the inventory does
+		// not know would otherwise shoot fewer cells without a word.
+		const page = await browser.newPage({ baseURL: testInfo.project.use.baseURL });
+		try {
+			await page.goto('/gallery');
+			const links = page.locator('[data-gallery-component]');
+			await expect(links.first()).toBeVisible();
+			const components = await links.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-gallery-component')!)
+			);
+			// Set equality, compared sorted so a failure prints a readable diff.
+			expect(
+				[...new Set(components)].sort(),
+				'the /gallery page lists exactly the inventory (gallery/inventory.ts)'
+			).toEqual([...GALLERY_COMPONENTS]);
+		} finally {
+			await page.close();
+		}
+	});
+
+	for (const component of GALLERY_COMPONENTS) {
+		test(component, async ({ page }, testInfo) => {
+			test.setTimeout((FULL_THEMES.length + COLOUR_THEMES.length) * THEME_BUDGET_MS);
+			const smoke = isSmoke(testInfo);
+			let count = 0;
+			const shot = new Set<string>();
+			const shoot = async (id: string, theme: string, isolated = false) => {
+				const cell = page.getByTestId(id);
+				// An overlay's rise and the focus it hands over once the rise ends both settle after
+				// the page's animations; the first cells on a page were shot before that. Only a
+				// running, finite animation can finish (the indeterminate progress sweep never does,
+				// a paused one never will), and the wait is bounded well past the longest rise.
+				await page.evaluate(
+					(bound) =>
+						Promise.race([
+							Promise.all(
+								document
+									.getAnimations()
+									.filter(
+										(animation) =>
+											animation.playState === 'running' &&
+											animation.effect?.getComputedTiming().iterations !== Infinity
+									)
+									.map((animation) => animation.finished.catch(() => undefined))
+							),
+							new Promise((resolve) => setTimeout(resolve, bound)),
+						]),
+					SETTLE_BOUND_MS
+				);
+				// An isolated cell is shot with no field focused. An open sheet or popover focuses
+				// its search field on mount, and the runner paints that field's ring or not from one
+				// shoot to the next with the ring's class present either way (the update run of
+				// 5d2bc0e5e held the class on every cell and drew the ring on two of twelve dark sheet
+				// cells), so the focused look is the Input's own story and the overlay's cell shows
+				// the panel. The blur is asserted, so a shot never carries focus into a baseline.
+				if (isolated) {
+					const focused = await page.evaluate(async (cellId) => {
+						const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
+						const field = root?.querySelector<HTMLElement>('input,textarea');
+						if (!field) return false;
+						field.blur();
+						// React flushes the blur's state after this task; the ring leaves on the next frame.
+						await new Promise((resolve) => requestAnimationFrame(resolve));
+						return root!.contains(document.activeElement);
+					}, id);
+					expect(focused, `a field still holds focus in ${id}-${theme}`).toBe(false);
+				}
+				if (smoke)
+					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
+				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
+				shot.add(`${id}-${theme}-linux.png`);
+				count++;
+			};
+			for (const theme of [...FULL_THEMES, ...COLOUR_THEMES]) {
+				const colourOnly = (COLOUR_THEMES as readonly string[]).includes(theme);
+				await page.goto(`/gallery/${component}?theme=${theme}`);
+				const cells = page.locator('[data-cell-id]');
+				await expect(cells.first()).toBeVisible();
+				const ids = (
+					await cells.evaluateAll((nodes) =>
+						nodes.map((node) => ({
+							id: node.getAttribute('data-cell-id')!,
+							isolated: node.getAttribute('data-isolated') === 'true',
+						}))
+					)
+				).filter(({ id }) => !colourOnly || id.endsWith(COLOUR_THEME_CELL));
+				for (const { id, isolated } of ids) if (!isolated) await shoot(id, theme);
+				// An isolated story (an open popover, select or dialog: it owns the document's
+				// focus) is shot one cell per page, so its siblings cannot close or cover it.
+				for (const { id, isolated } of ids) {
+					if (!isolated) continue;
+					await page.goto(`/gallery/${component}?theme=${theme}&cell=${id}`);
+					await expect(page.getByTestId(id)).toBeVisible();
+					await shoot(id, theme, true);
+				}
 			}
-		}
+			expect(count).toBeGreaterThan(0);
+			// This test's share of the baseline set, for the orphan check across shards.
+			const list = JSON.stringify([...shot].sort());
+			await testInfo.attach('shot-list', { body: list, contentType: 'application/json' });
+			const shotsDir = join(testInfo.project.testDir, '.shots');
+			mkdirSync(shotsDir, { recursive: true });
+			writeFileSync(join(shotsDir, `${component}.json`), list);
+			process.stdout.write(`Gallery cells found: ${count} (${component})\n`);
+		});
 	}
-	expect(count).toBeGreaterThan(0);
-	if (!smoke && testInfo.config.updateSnapshots === 'none') {
-		// The inventory is the baseline set: a story or component that silently disappears
-		// leaves orphaned PNGs behind, and an orphan fails the job (review, roadmap#355).
-		const onDisk = readdirSync(join(testInfo.project.testDir, 'gallery.spec.ts-snapshots'))
-			.filter((name) => name.endsWith('.png'))
-			.sort();
-		expect(onDisk).toEqual([...shot].sort());
-	}
-	process.stdout.write(`Gallery cells found: ${count}\n`);
 });
