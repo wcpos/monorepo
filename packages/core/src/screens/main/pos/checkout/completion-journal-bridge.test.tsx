@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
-import { NEVER, Subject } from 'rxjs';
+import { concat, NEVER, of, Subject } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
@@ -1399,6 +1399,62 @@ it('finishes an unconfirmed sale adopted after an offline restart whose replay f
 	mockOnline = 'online-website-available';
 	view.rerender(<SaleCompletionBridge />);
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	mockFind.mockResolvedValue(resident()); // the pull adopts the paid order
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
+	);
+});
+
+// Codex 4344157679 on #2836: a paid, adopted sale whose finish keeps throwing. Recording each
+// failure writes the journal; that must not re-run the finish at once. It backs off on the ladder.
+it('backs off on the ladder when an adopted sale keeps failing to finish', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	// Like the real read: every subscription emits the resident orders at once.
+	mockResidentOrders.mockImplementation((_engine: unknown, uuids: string[]) =>
+		concat(of(uuids), NEVER)
+	);
+	const fail = async () => {
+		await journal.failCompletionAttempt(mockContext.storeDB, 'order', new Error('finish failed'));
+		throw new Error('finish failed');
+	};
+	jest.mocked(owner.completeSale).mockImplementationOnce(fail).mockImplementationOnce(fail);
+	const timers = ladderTimers(true);
+	try {
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+		await drain();
+		await record();
+		await owner.awaitAdoption(mockContext.storeDB, 'order');
+		await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+		expect(owner.completeSale).toHaveBeenCalledTimes(3);
+		expect(timers.delays).toEqual([30_000, 120_000]);
+	} finally {
+		timers.restore();
+	}
+});
+
+// Codex 4344157692 on #2836: a recovered close answered paid whose refresh then fails is the same
+// state as an unconfirmed close, so the pull that adopts the paid order finishes it.
+it('keeps a recovered paid answer whose refresh failed eligible for adoption', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	await record();
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	mockCatchUp.mockRejectedValueOnce(new Error('refresh failed'));
+	mockRecover.mockResolvedValueOnce([
+		{ orderUuid: 'order', answers: [{ kind: 'close', data: { order: { status: 'completed' } } }] },
+	]);
+	render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+			awaitingAdoption: true,
+		})
+	);
 	mockFind.mockResolvedValue(resident()); // the pull adopts the paid order
 	act(() => adoptions.next(['order']));
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));

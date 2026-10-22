@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type OrderPaymentSummary, readAwaitingCustomer } from '@wcpos/order-math';
@@ -14,7 +14,11 @@ import {
 import { readResidentOrder } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
+import {
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isPaidStatus,
+	scopeDatabaseName,
+} from '@wcpos/sync-core';
 import {
 	awaitLegacyUnsentReport,
 	legacyUnsentOrderUuids,
@@ -38,7 +42,7 @@ import {
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
-import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
+import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -218,6 +222,10 @@ export function SaleCompletionBridge(): null {
 		// Declared here so `disarm` can end it; `watch` (below) starts it.
 		let journalWatch: { unsubscribe: () => void } | undefined;
 		let adoptionWatch: { unsubscribe: () => void } | undefined;
+		// A finish that throws backs off on the ladder, per order: recording its failure writes the
+		// journal, which must not itself run the next attempt (Codex 4344157679 on #2836).
+		type Backoff = { failures: number; at: number; timer?: ReturnType<typeof setTimeout> };
+		const adoptionBackoff = new Map<string, Backoff>();
 		const disarm = () => {
 			if (lapse !== undefined) clearTimeout(lapse);
 			lapse = undefined;
@@ -227,6 +235,10 @@ export function SaleCompletionBridge(): null {
 			journalWatch = undefined;
 			adoptionWatch?.unsubscribe();
 			adoptionWatch = undefined;
+			for (const backoff of adoptionBackoff.values()) {
+				if (backoff.timer !== undefined) clearTimeout(backoff.timer);
+				backoff.timer = undefined;
+			}
 		};
 		const armRetry = () => {
 			if (retry !== undefined || !retryPending || current.stopped) return;
@@ -434,6 +446,21 @@ export function SaleCompletionBridge(): null {
 				}
 			}
 		};
+		// A recovered answer that reads paid but did not finish here (its refresh failed) is the same
+		// state as an unconfirmed close: the pull that adopts the paid order finishes it (Codex
+		// 4344157692 on #2836).
+		const awaitAnswered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
+			if (answered.size === 0) return;
+			const pending = await pendingCompletions(storeDB);
+			for (const [uuid, answers] of answered)
+				if (
+					pending[uuid] &&
+					answers.some(({ data }) =>
+						isPaidStatus((data.order as { status?: unknown } | undefined)?.status)
+					)
+				)
+					await awaitAdoption(storeDB, uuid);
+		};
 		// One run at a time: a reconnect during the start's replay waits for it.
 		let queue: Promise<void> = Promise.resolve();
 		const run = (task: () => Promise<void>) => {
@@ -447,6 +474,7 @@ export function SaleCompletionBridge(): null {
 			const answered = onlineRef.current ? await recover() : new Map<string, ResentCommand[]>();
 			const sent = await finishRecovered(answered);
 			if (!current.stopped) await replay(undefined, sent);
+			if (!current.stopped) await awaitAnswered(answered);
 		});
 		current.reconnect = () =>
 			run(async () => {
@@ -455,6 +483,7 @@ export function SaleCompletionBridge(): null {
 				const sent = await finishRecovered(answered);
 				const rest = new Set([...answered.keys()].filter((uuid) => !sent.has(uuid)));
 				if (rest.size > 0 && !current.stopped) await replay(rest);
+				if (!current.stopped) await awaitAnswered(answered);
 			});
 		// A command whose answers are lost after this session's first recovery, while the till
 		// stays online: no reconnect will come for it, and a pull may close its tender. Watching
@@ -486,29 +515,66 @@ export function SaleCompletionBridge(): null {
 		const finishAdopted = (uuids: string[]) =>
 			run(async () => {
 				for (const uuid of uuids) {
+					const backoff = adoptionBackoff.get(uuid);
+					if (backoff && backoff.at > Date.now()) {
+						armAdoption(uuid, backoff, backoff.at - Date.now());
+						continue;
+					}
 					const resident = current.stopped ? null : await findOrder(uuid);
 					if (!resident) continue;
-					await enqueueOrderMutation(uuid, async (queue) => {
-						const attempt = (await pendingCompletions(storeDB))[uuid];
-						if (!attempt?.awaitingAdoption || current.stopped) return;
-						const outcome = replayOf(attempt);
-						if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
-						// The adopted document is the store's copy: no second refresh before the receipt.
-						const ctx = { ...current.ctx, actor: attempt.actor };
-						const finish = { ...outcome, refreshed: true };
-						await completeSale(ctx, resident, finish, { host: 'background' }, queue);
-					});
+					try {
+						await finishOne(uuid, resident);
+						adoptionBackoff.delete(uuid);
+					} catch (error) {
+						const failures = (backoff?.failures ?? 0) + 1;
+						const step =
+							RECOVERY_RETRY_DELAYS_MS[Math.min(failures - 1, RECOVERY_RETRY_DELAYS_MS.length - 1)];
+						const next = { failures, at: Date.now() + step };
+						adoptionBackoff.set(uuid, next);
+						armAdoption(uuid, next, step);
+						logger.debug('Adopted sale not finished', {
+							context: { orderUUID: uuid, error: String(error) },
+						});
+					}
 				}
 			});
+		const finishOne = (
+			uuid: string,
+			resident: NonNullable<Awaited<ReturnType<typeof findOrder>>>
+		) =>
+			enqueueOrderMutation(uuid, async (queue) => {
+				const attempt = (await pendingCompletions(storeDB))[uuid];
+				if (!attempt?.awaitingAdoption || current.stopped) return;
+				const outcome = replayOf(attempt);
+				if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
+				// The adopted document is the store's copy: no second refresh before the receipt.
+				const ctx = { ...current.ctx, actor: attempt.actor };
+				const finish = { ...outcome, refreshed: true };
+				await completeSale(ctx, resident, finish, { host: 'background' }, queue);
+			});
+		const armAdoption = (uuid: string, backoff: Backoff, delay: number) => {
+			if (backoff.timer !== undefined || current.stopped) return;
+			backoff.timer = setTimeout(
+				() => {
+					backoff.timer = undefined;
+					backoff.at = 0;
+					finishAdopted([uuid]);
+				},
+				Math.max(0, delay)
+			);
+		};
 		const watchAdoptions = () => {
 			adoptionWatch ??= observePendingCompletions(storeDB)
 				.pipe(
-					switchMap((pending) =>
-						observeResidentOrders(
-							manager.engine,
-							Object.keys(pending).filter((uuid) => pending[uuid].awaitingAdoption)
-						)
-					)
+					// Keyed on the eligible set: a journal write that changes only an attempt's count or
+					// error keeps the resident subscription (and its initial emission) as it is.
+					map((pending) =>
+						Object.keys(pending)
+							.filter((uuid) => pending[uuid].awaitingAdoption)
+							.sort()
+					),
+					distinctUntilChanged((a, b) => a.join() === b.join()),
+					switchMap((uuids) => observeResidentOrders(manager.engine, uuids))
 				)
 				.subscribe({
 					next: (uuids) => uuids.length > 0 && finishAdopted(uuids),
