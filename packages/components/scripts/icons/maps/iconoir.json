@@ -1,6 +1,7 @@
 {
  "addCustomer": "user-plus",
  "addToCart": "cart-plus",
+ "address": "map-pin",
  "alert": "warning-circle",
  "arrowDown": "arrow-down",
  "arrowLeft": "arrow-left",

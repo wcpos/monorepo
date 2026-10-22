@@ -1,6 +1,7 @@
 {
  "addCustomer": "user-plus-linear",
  "addToCart": "cart-plus-linear",
+ "address": "map-point-linear",
  "alert": "danger-circle-linear",
  "arrowDown": "arrow-down-linear",
  "arrowLeft": "arrow-left-linear",

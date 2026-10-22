@@ -60,6 +60,7 @@ import { SvgCustomers } from './customers';
 import { SvgAddCustomer } from './addCustomer';
 import { SvgCashier } from './cashier';
 import { SvgCustomerCard } from './customerCard';
+import { SvgAddress } from './address';
 import { SvgBot } from './bot';
 import { SvgProduct } from './product';
 import { SvgPackageOpen } from './packageOpen';
@@ -180,6 +181,7 @@ export const set = {
 	addCustomer: SvgAddCustomer,
 	cashier: SvgCashier,
 	customerCard: SvgCustomerCard,
+	address: SvgAddress,
 	bot: SvgBot,
 	product: SvgProduct,
 	packageOpen: SvgPackageOpen,
