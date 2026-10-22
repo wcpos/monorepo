@@ -537,45 +537,176 @@ jobs:
           node scripts/check-dep-duplicates.mjs
           node scripts/check-android-aar-compile-sdk.mjs
 
+  # The gallery shoot: ~3,800 cells (3,780 on 2026-10-22), one Playwright test per
+  # component, split over 3 shards x 4 workers (playwright.gallery.config.ts). One
+  # serial worker took 9.5 min for the whole set; a shard shoots a third of the
+  # components four at a time. Each shard uploads its shot lists, and the orphan check
+  # (roadmap#355) runs once over the union of all three.
   gallery-shoot:
-    name: Gallery shoot
+    name: Gallery shoot (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # The compare ran 5.3 min for 2,352 cells (2026-10-17); five themes make it ~3,400.
-    timeout-minutes: 30
+    timeout-minutes: 15
     needs: changes
     if: >-
       needs.changes.outputs.gallery == 'true' &&
       (github.event.pull_request.draft == false || github.event_name == 'push') &&
       !(contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
         github.event.pull_request.head.repo.full_name == github.repository)
-    steps: &gallery-steps
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - &gallery-checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # The update job must sit on the PR head so it can push baselines to the
-          # branch. The read-only shoot takes the default merge ref, so a PR opened
-          # before the gallery landed on its base is still shot with the gallery
+          # The update job must shoot the PR head, whose baselines gallery-commit pushes
+          # back to the branch. The read-only shoot takes the default merge ref, so a PR
+          # opened before the gallery landed on its base is still shot with the gallery
           # (on 2026-09-18 #2176's head predated it and the compare step had no
           # config to run).
           ref: ${{ github.job == 'gallery-update' && github.event.pull_request.head.sha || '' }}
           submodules: false
-      - name: Setup monorepo
+      - &gallery-setup
+        name: Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
-      - name: Install Chromium
+      - &gallery-chromium
+        name: Install Chromium
         working-directory: apps/main
         run: npx playwright install --with-deps chromium
-      - name: Build gallery
+      - &gallery-build
+        name: Build gallery
         working-directory: apps/main
         run: EXPO_PUBLIC_WCPOS_GALLERY=1 npx expo export --platform web --output-dir ./gallery-build
-      - name: Update baselines
-        if: github.job == 'gallery-update'
+      - name: Compare baselines
         working-directory: apps/main
-        run: npx playwright test -c playwright.gallery.config.ts --update-snapshots
+        run: npx playwright test -c playwright.gallery.config.ts --shard=${{ matrix.shard }}/3
+      - name: Upload shot lists
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gallery-shots-${{ matrix.shard }}
+          path: apps/main/gallery/.shots/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - &gallery-report
+        name: Upload gallery report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gallery-report-${{ matrix.shard }}
+          path: apps/main/playwright-report/
+          retention-days: 7
+
+  # A compare shard sees only its own components, so the orphan check runs here, over
+  # every shard's shot list against the checked-out baselines (roadmap#355).
+  gallery-orphans:
+    name: Gallery orphans
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: gallery-shoot
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: apps/main/gallery
+          submodules: false
+      - name: Download shot lists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gallery-shots-*
+          path: apps/main/gallery/.shots
+          merge-multiple: true
+      - name: Check orphaned baselines
+        run: node apps/main/gallery/check-orphans.mjs
+
+  # Shoots the same 3 shards with --update-snapshots and uploads what each shot;
+  # gallery-commit merges and pushes them. Read-only: no shard writes to the branch.
+  gallery-update:
+    name: Gallery update (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: changes
+    if: >-
+      needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - *gallery-checkout
+      - *gallery-setup
+      - *gallery-chromium
+      - *gallery-build
+      - name: Update baselines
+        working-directory: apps/main
+        run: npx playwright test -c playwright.gallery.config.ts --update-snapshots --shard=${{ matrix.shard }}/3
+      - name: Stage this shard's baselines
+        # Only the PNGs this shard shot: every shard's checkout holds the whole set, so
+        # uploading the directory would let one shard's untouched copies overwrite
+        # another shard's updates when gallery-commit merges the three.
+        working-directory: apps/main/gallery
+        run: |
+          mkdir -p "$RUNNER_TEMP/gallery-baselines"
+          jq -r '.[]' .shots/*.json | while IFS= read -r name; do
+            cp -- "gallery.spec.ts-snapshots/$name" "$RUNNER_TEMP/gallery-baselines/"
+          done
+      - name: Upload baselines
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gallery-baselines-${{ matrix.shard }}
+          path: ${{ runner.temp }}/gallery-baselines/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload shot lists
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gallery-shots-${{ matrix.shard }}
+          path: apps/main/gallery/.shots/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - *gallery-report
+
+  # Permissions cannot be conditional: only the label-selected commit job receives write.
+  # Orphans fail it before anything is committed: the three shards shoot disjoint
+  # components, so their union must cover every PNG on disk.
+  gallery-commit:
+    name: Gallery (commit baselines)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [changes, gallery-update]
+    if: >-
+      needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: false
+      - name: Download baselines
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gallery-baselines-*
+          path: apps/main/gallery/gallery.spec.ts-snapshots
+          merge-multiple: true
+      - name: Download shot lists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: gallery-shots-*
+          path: apps/main/gallery/.shots
+          merge-multiple: true
+      - name: Check orphaned baselines
+        run: node apps/main/gallery/check-orphans.mjs
       - name: Commit baselines
-        if: github.job == 'gallery-update'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -584,40 +715,16 @@ jobs:
             git commit -m "test: update gallery baselines (run $GITHUB_RUN_ID)"
             git push origin "HEAD:$GITHUB_HEAD_REF"
           fi
-      - name: Compare baselines
-        working-directory: apps/main
-        run: npx playwright test -c playwright.gallery.config.ts
-      - name: Upload gallery report
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: gallery-report
-          path: apps/main/playwright-report/
-          retention-days: 7
 
-  # Permissions cannot be conditional: only the label-selected job receives write.
-  gallery-update:
-    name: Gallery (update baselines)
-    runs-on: ubuntu-latest
-    # Shoots twice (update, then compare), so twice the shoot's budget.
-    timeout-minutes: 45
-    needs: changes
-    if: >-
-      needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&
-      contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: write
-    steps: *gallery-steps
-
-  # The one "Gallery" check aggregates the mutually exclusive jobs above. Skipped
-  # when both were skipped (path filter or draft), which the gate counts as a pass.
-  # A cancelled (superseded) run reports no Gallery check, so cannot leave stale red.
+  # The one "Gallery" check aggregates the mutually exclusive lanes above (compare:
+  # shoot + orphans; update: update + commit). Skipped when both lanes were skipped
+  # (path filter or draft), which the gate counts as a pass. A cancelled (superseded)
+  # run reports no Gallery check, so cannot leave stale red.
   gallery:
     name: Gallery
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [gallery-shoot, gallery-update]
+    needs: [gallery-shoot, gallery-orphans, gallery-update, gallery-commit]
     if: >-
       !cancelled() &&
       (needs.gallery-shoot.result != 'skipped' || needs.gallery-update.result != 'skipped')
@@ -625,9 +732,14 @@ jobs:
       - name: Aggregate
         env:
           SHOOT: ${{ needs.gallery-shoot.result }}
+          ORPHANS: ${{ needs.gallery-orphans.result }}
           UPDATE: ${{ needs.gallery-update.result }}
+          COMMIT: ${{ needs.gallery-commit.result }}
         run: |
-          echo "shoot=$SHOOT update=$UPDATE"
-          for r in "$SHOOT" "$UPDATE"; do
+          echo "shoot=$SHOOT orphans=$ORPHANS update=$UPDATE commit=$COMMIT"
+          for r in "$SHOOT" "$ORPHANS" "$UPDATE" "$COMMIT"; do
             case "$r" in success|skipped) ;; *) echo "::error::gallery job result: $r"; exit 1;; esac
           done
+          # A passed shoot is only done once its orphan check (or its commit) has run.
+          if [ "$SHOOT" = success ] && [ "$ORPHANS" != success ]; then echo "::error::gallery orphan check did not run"; exit 1; fi
+          if [ "$UPDATE" = success ] && [ "$COMMIT" != success ]; then echo "::error::gallery baseline commit did not run"; exit 1; fi
