@@ -799,8 +799,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
 					// A recovered send whose adopted order carries no awaiting-customer stamp was already
 					// settled or cancelled by the store (the stamp goes with the invoice); there is
-					// nothing left to finish.
+					// nothing left to finish — and the provisional receipt afterMirror entered while the
+					// stamp still stood is withdrawn with it (local Codex review on #2853).
 					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
+					else retractReceiptEntry(order.uuid);
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}

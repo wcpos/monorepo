@@ -700,6 +700,41 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	// A recovered send on a paid-looking status enters its provisional receipt while the stamp
+	// stands; the forced refresh then adopts another till's cancel (open, no stamp). The loop
+	// finishes nothing, so the receipt is withdrawn with the stamp (local Codex review on #2853).
+	it('a recovered send whose refresh drops the stamp withdraws its provisional receipt', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		const answer = {
+			kind: 'submit' as const,
+			data: { outcome: 'sent', order: { status: 'on-hold' } },
+		};
+		const unwatch = watchTender(order.uuid, true);
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload = {
+				...mockPayload,
+				status: 'on-hold',
+				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+			} as typeof mockPayload;
+			deps.afterMirror?.(answer);
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(order.uuid);
+			mockPayload = { ...mockPayload, status: 'pos-open', meta_data: [] } as typeof mockPayload;
+			return [answer];
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.retryCommand());
+		unwatch();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	});
+
 	// A cash record whose answer was lost, then a remote reopen: the replay answers the captured
 	// row with the order as it now stands, open at a zero balance. Mirrored and settled, but the
 	// reopened sale is not finished from it.
