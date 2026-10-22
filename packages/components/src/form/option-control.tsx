@@ -71,7 +71,7 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	...props
 }: FormOptionControlProps<TControl>) {
 	const [open, setOpen] = React.useState(false);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	/**
 	 * The control is chosen at runtime, so its props cannot be resolved statically here.
@@ -94,7 +94,7 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	);
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 			<Component
 				{...ariaProps}

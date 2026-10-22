@@ -16,10 +16,10 @@ export function FormRadioGroup({
 	...props
 }: FormItemProps<string> &
 	Omit<Partial<React.ComponentProps<typeof RadioGroup>>, 'value' | 'onValueChange'>) {
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			<View>
 				{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 				{!!description && <FormDescription className="pt-0">{description}</FormDescription>}

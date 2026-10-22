@@ -41,8 +41,10 @@ type FormItemProps<U> = FormFieldFieldProps<U> & {
 		| 'web-search';
 };
 
-function FormItem({ className, ...props }: ViewProps) {
-	const nativeID = React.useId();
+/** `nativeID` seeds the ids of the item's label, description and message (see `aria.ts`). */
+function FormItem({ className, nativeID: itemNativeID, ...props }: ViewProps) {
+	const generatedID = React.useId();
+	const nativeID = itemNativeID ?? generatedID;
 
 	return (
 		<FormItemContext.Provider value={{ nativeID }}>

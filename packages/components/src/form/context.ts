@@ -17,7 +17,11 @@ type FormItemContextValue = {
 
 const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
 
-const useFormField = () => {
+/**
+ * `itemNativeID` is for the one caller that sits ABOVE its `FormItem`: a field wrapper's
+ * `useFormControlAria`, which mints the item id and hands the same id to its `FormItem`.
+ */
+const useFormField = (itemNativeID?: string) => {
 	const fieldContext = React.useContext(FormFieldContext);
 	const itemContext = React.useContext(FormItemContext);
 	const { getFieldState, formState, handleSubmit } = useFormContext();
@@ -28,7 +32,7 @@ const useFormField = () => {
 		throw new Error('useFormField should be used within <FormField>');
 	}
 
-	const { nativeID } = itemContext;
+	const nativeID = itemNativeID ?? itemContext.nativeID;
 
 	return {
 		nativeID,

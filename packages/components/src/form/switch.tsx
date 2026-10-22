@@ -18,7 +18,7 @@ export function FormSwitch({
 	...props
 }: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Switch>>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!switchRef.current) {
@@ -32,7 +32,7 @@ export function FormSwitch({
 	}
 
 	return (
-		<FormItem className="px-1">
+		<FormItem nativeID={itemNativeID} className="px-1">
 			{/* At least a row tall on native, so the switch's 44 pt square stays inside its own
 			    row and stacked switches never take each other's touches. */}
 			<View className="native:min-h-row w-full flex-row items-center gap-3">

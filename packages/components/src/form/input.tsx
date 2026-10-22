@@ -18,7 +18,7 @@ export function FormInput({
 }: FormItemProps<string | number> &
 	Omit<Partial<React.ComponentProps<typeof Input>>, 'value' | 'onChangeText'>) {
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!inputRef.current) {
@@ -76,7 +76,7 @@ export function FormInput({
 	}
 
 	return (
-		<FormItem>
+		<FormItem nativeID={itemNativeID}>
 			{!!label && (
 				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
 					{label}

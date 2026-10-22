@@ -4,8 +4,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 
 **Job:** A styled form label that supports press interactions.
 
-**Base:** `@rn-primitives/label`, `@rn-primitives/slot`, and `react-native` Pressable. Platform split: no split; web-specific styling uses `web:` classes.
+**Base:** `@rn-primitives/label`, `@rn-primitives/slot`, and `react-native` Pressable. Platform split: `index.web.tsx` since 2026-10-22 (line 2); web-specific styling uses `web:` classes.
 
 ## Lines
 
 1. Wraps primitive label text in a Pressable to preserve press, long-press, press-in, and press-out events — evidence: code: "@rn-primitives/label is not using Pressable, only a View so we don't get the onPress events" in `packages/components/src/label/index.tsx:18`.
+2. Web split (2026-10-22): on web the root is a real `<label>` (`index.web.tsx`, react-native-web renders `accessibilityRole="label"` as one), never a Tab stop; `onPress` is its click, so pressing a label still focuses or toggles its control. Line 1 holds on native only; the press phases have no web caller — evidence: `packages/components/src/form/label.web.test.tsx`.
