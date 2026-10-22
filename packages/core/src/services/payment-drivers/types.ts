@@ -66,11 +66,6 @@ export interface PaymentDriver {
 	openReaderSettings?(): Promise<void>;
 	/** Dev affordance: the harness only calls this when __DEV__ is true. */
 	devControls?(): DevControl[];
-	/**
-	 * Whether this transport can take a payment offline now. The descriptor's `offline: queue`
-	 * is the ceiling; a driver narrows it to the reader in hand (SumUp: Solo and Solo Lite).
-	 */
-	queuesOffline?(transport: PaymentTransport): boolean;
 	collect(input: CollectInput): Promise<CollectResult>;
 	cancel?(): Promise<void>;
 	status$: { subscribe(listener: (s: DriverStatus) => void): () => void; get(): DriverStatus };

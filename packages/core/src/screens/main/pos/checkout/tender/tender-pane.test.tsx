@@ -10,7 +10,7 @@ import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
-import { TenderPane } from './tender-pane';
+import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
 
 import type { TenderFlow } from './use-tender-flow';
@@ -18,6 +18,7 @@ import type { TenderFlow } from './use-tender-flow';
 const mockPush = jest.fn();
 const mockBootstrap = jest.fn(async () => ({ token: 'reader-token', method_id: 'device' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
@@ -258,6 +259,8 @@ function makeFlow(count = 1): TenderFlow {
 		fieldErrors: {},
 		invoiceSent: null,
 		cancelInvoice: jest.fn(),
+		unansweredCommand: false,
+		retryCommand: jest.fn(async () => undefined),
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
@@ -367,7 +370,9 @@ it('selects methods without committing and folds unavailable reasons', () => {
 	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
 });
 
-it('keeps an offline queue-capable device method selectable', () => {
+// ADR 0040 §offline: offline tenders do not queue, so a queue-capable
+// device tile offline is listed as unavailable, never a pill whose commit button stays dead.
+it('lists an offline queue-capable device method as unavailable until offline tenders queue', () => {
 	const flow: TenderFlow = {
 		...makeFlow(),
 		saveState: null,
@@ -381,9 +386,23 @@ it('keeps an offline queue-capable device method selectable', () => {
 		],
 	};
 	render(<TenderPane flow={flow} format={String} />);
-	fireEvent.click(screen.getByTestId('checkout-method-device'));
-	expect(flow.pickMethod).toHaveBeenCalledWith('device');
-	expect(screen.queryByTestId('checkout-unavailable-toggle')).toBeNull();
+	expect(screen.queryByTestId('checkout-method-device')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.getByTestId('checkout-unavailable-device').textContent).toContain(
+		'Needs a connection'
+	);
+	expect(flow.pickMethod).not.toHaveBeenCalled();
+});
+
+// ADR 0040 §1.3: a command sent and never answered gates the checkout; its one action re-sends it.
+// A live terminal leg keeps its own view.
+it('the unanswered gate re-sends the command, and leaves a live terminal leg its view', () => {
+	const flow: TenderFlow = { ...makeFlow(), unansweredCommand: true };
+	expect(gatesCheckout(flow)).toBe(true);
+	expect(gatesCheckout({ ...flow, terminalLeg: {} as TenderFlow['terminalLeg'] })).toBe(false);
+	render(<UnansweredGate flow={flow} />);
+	fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
+	expect(flow.retryCommand).toHaveBeenCalledTimes(1);
 });
 
 it.each([
@@ -769,41 +788,6 @@ it('names the connected reader as Settings → Card readers does, never the SDK 
 	await act(async () => {
 		await driver.disconnect!();
 	});
-});
-
-it('says once, under the amount, that an offline card payment can still be declined', () => {
-	registerDriver(createSimulatedDriver());
-	const tile = { method: deviceMethod, disabled: false, reason: null, worksOffline: false };
-	const flow = {
-		...makeFlow(),
-		saveState: null,
-		method: deviceMethod,
-		tiles: [tile],
-		deviceTransport: 'bluetooth' as const,
-		pickTransport: jest.fn(),
-	};
-	const hint = () => screen.getByTestId('checkout-entry-hint').textContent;
-	const line = 'Offline card payments can still be declined by the bank when they upload.';
-	const rendered = render(<TenderPane flow={flow} format={String} />);
-	expect(hint()).toBe('');
-	// A reader that cannot queue (an Air) says nothing, even with the till offline.
-	rendered.rerender(
-		<TenderPane
-			flow={{ ...flow, online: false, tiles: [{ ...tile, settlesLater: false }] }}
-			format={String}
-		/>
-	);
-	expect(hint()).toBe('');
-	// It outranks the part-payment line: a part payment still goes down the offline path.
-	const queued = {
-		...flow,
-		online: false,
-		tiles: [{ ...tile, settlesLater: true }],
-		entryAppliedMinor: 100,
-		state: { ...flow.state, entryMinor: 100 },
-	};
-	rendered.rerender(<TenderPane flow={queued} format={String} />);
-	expect(hint()).toBe(line);
 });
 
 it.each(['discovery', 'bootstrap'] as const)(

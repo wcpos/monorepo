@@ -104,9 +104,7 @@ export class RecordManualPaymentError extends Error {
 	public constructor(
 		message: string,
 		public code: string,
-		public status: number | undefined,
-		/** The refused row: a replayed one carries the rounding fee the tender must take back. */
-		public rowId?: string
+		public status: number | undefined
 	) {
 		super(message);
 		this.name = 'RecordManualPaymentError';
@@ -230,8 +228,7 @@ export async function recordManualPayment(
 				throw new RecordManualPaymentError(
 					refusal.message ?? refusal.code,
 					refusal.code,
-					refusal.status,
-					row.id
+					refusal.status
 				);
 			}
 			// No answer, a 5xx, a held lock, a session or proxy answer proves nothing: re-send the

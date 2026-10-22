@@ -16,17 +16,6 @@ export function deviceTransports(method: PaymentMethodDescriptor | null) {
 		: [];
 }
 
-/** A device transport that takes payments offline: the descriptor allows it and the driver agrees. */
-export function queuesOffline(
-	method: PaymentMethodDescriptor,
-	item: ReturnType<typeof deviceTransports>[number]
-) {
-	return (
-		item.offline === 'queue' &&
-		(getDriver(method.capture.provider)?.queuesOffline?.(item.transport) ?? true)
-	);
-}
-
 /** Why a tile cannot be tapped. The UI turns each into a cashier-facing line. */
 export type TileDisabledReason =
 	/** The descriptor names a capture mode this build has never heard of. */
@@ -100,13 +89,19 @@ export interface TenderTile {
 	reason: TileDisabledReason | null;
 	/** capabilities.offline === 'record' — the tile carries a "works offline" flag. */
 	worksOffline: boolean;
-	settlesLater?: boolean;
 }
 /** The order the POS settings page assigns, then title, so the grid never reshuffles itself. */
 function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDescriptor): number {
 	if (left.order !== right.order) return left.order - right.order;
 	return left.title < right.title ? -1 : left.title > right.title ? 1 : 0;
 }
+
+/**
+ * Offline tenders do not queue yet (ADR 0040 §offline): a tender the store cannot hear is
+ * refused. A manual `offline: 'record'` tile is disabled with the `offline` reason while the till
+ * is offline or the order's save is queued, as every device tile is.
+ */
+export const OFFLINE_TENDERS_QUEUE = false;
 
 export function buildTenderTiles(
 	methods: readonly PaymentMethodDescriptor[],
@@ -128,8 +123,6 @@ export function buildTenderTiles(
 				deviceTransports(method).find(
 					(item) => item.transport === options.transports?.[method.id]
 				) ?? deviceTransports(method)[0];
-			const settlesLater =
-				method.capture.mode === 'device' && !!transport && queuesOffline(method, transport);
 			if (!KNOWN_CAPTURE_MODES.some((mode) => mode === method.capture.mode)) {
 				reason = 'unsupported_mode';
 			} else if (method.capture.mode === 'device') {
@@ -149,7 +142,7 @@ export function buildTenderTiles(
 					!(availability.reason === 'not_logged_in' && driver?.capabilities.discovery === 'sdk_ui')
 				)
 					reason = `driver_${availability.reason}` as TileDisabledReason;
-				else if (!options.online && !settlesLater) reason = 'offline';
+				else if (!options.online) reason = 'offline';
 				else if (holder && holder.orderUuid !== options.currentOrderUuid)
 					reason = { type: 'reader_in_use', number: holder.orderNumber };
 			} else if (method.capture.mode === 'stored_value') {
@@ -168,14 +161,16 @@ export function buildTenderTiles(
 				else if (!readers.length) reason = 'no_readers';
 				else if (readers.every((reader) => reader.inUseBy !== null))
 					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
-			} else if (!options.online && method.capabilities.offline === 'none') {
+			} else if (
+				!options.online &&
+				(method.capabilities.offline === 'none' || !OFFLINE_TENDERS_QUEUE)
+			) {
 				reason = 'offline';
 			}
 			return {
 				method,
 				disabled: reason !== null,
 				reason,
-				settlesLater: !options.online && settlesLater,
 				worksOffline: method.capture.mode === 'manual' && method.capabilities.offline === 'record',
 			};
 		});

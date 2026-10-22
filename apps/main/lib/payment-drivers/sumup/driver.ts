@@ -5,18 +5,12 @@ import type {
 	DriverStatus,
 	PaymentDriver,
 } from '@wcpos/core/services/payment-drivers/types';
-import {
-	fromMinor,
-	type PaymentMethodDescriptor,
-	type PaymentTransport,
-	toMinor,
-} from '@wcpos/order-math';
+import { fromMinor, type PaymentMethodDescriptor, toMinor } from '@wcpos/order-math';
 
 import { getSumUpReader } from '../../../modules/sumup-reader';
 
 // SumUp's offline sessions run on these readers only (Solo ≥ 3.3.31.0, Solo Lite ≥ 2.2.1.25;
 // the SDK refuses older firmware itself). The Air and Tap to Pay have no offline (roadmap#427).
-const OFFLINE_READER_MODELS = new Set(['SOLO', 'SOLO_LITE']);
 // The session query is local to the SDK; one that never answers must not hold a checkout.
 const OFFLINE_QUERY_TIMEOUT_MS = 5000;
 
@@ -166,12 +160,6 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			);
 	};
 	const optedIn = () => enabledMethod()?.capabilities.offline === 'queue';
-	// The descriptor says the merchant opted in; the saved reader says whether it can.
-	const queuesOffline = (transport: PaymentTransport) =>
-		transport === 'bluetooth' &&
-		loggedIn &&
-		optedIn() &&
-		OFFLINE_READER_MODELS.has(status.reader?.model ?? '');
 	// Whether a session runs, and whether this app started one SumUp has not confirmed uploaded
 	// (the native module answers without an SDK call when it has not, so a store that never
 	// opted in pays nothing). Gated on that marker, not the opt-in: a session survives the
@@ -291,7 +279,6 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		initialize,
 		refreshStatus,
 		reportError,
-		queuesOffline,
 		/** The bridge reports the till's connectivity; back online, SumUp's offline payments upload. */
 		setOnline(next: boolean) {
 			online = next;

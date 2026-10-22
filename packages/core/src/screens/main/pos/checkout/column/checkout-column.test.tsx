@@ -227,6 +227,20 @@ beforeEach(() => {
 	mockFlow = makeFlow();
 	mockFlow satisfies LedgerView;
 });
+// Codex 4346411060 on #2837: an unanswered close gates the checkout before the Done shortcut.
+// Codex 4346556708 on #2837: and before the Legacy tab.
+it.each([
+	['a zero-total order', { totalMinor: 0, balanceMinor: 0 }],
+	['the Legacy tab', { state: { ...initialTenderState, tab: 'legacy' as const } }],
+])('%s with an unanswered command offers only Try again', (_, overrides) => {
+	const retryCommand = jest.fn(async () => undefined);
+	mockFlow = makeFlow({ ...overrides, unansweredCommand: true, retryCommand });
+	mountColumn();
+	expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
+	expect(mockLegacyTab).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
+	expect(retryCommand).toHaveBeenCalledTimes(1);
+});
 it('hosts the Legacy tab with the in-pane receipt (receiptHost="stage")', () => {
 	mockFlow = makeFlow({ state: { ...initialTenderState, tab: 'legacy' } });
 	mountColumn();

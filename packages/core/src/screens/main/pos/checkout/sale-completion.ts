@@ -262,7 +262,7 @@ function replayStoredStatus(
  * A store answer at a zero balance whose order is open: the sale was reopened since (another
  * till), as a captured leg that covers the balance completes the order (`payment_complete`).
  */
-function reopenedSince(
+export function reopenedSince(
 	order: OrderPaymentSummary | null | undefined,
 	dp: number
 ): order is OrderPaymentSummary {

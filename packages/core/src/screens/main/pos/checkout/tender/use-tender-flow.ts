@@ -16,9 +16,11 @@ import {
 	isLivePaymentStatus,
 	mintDevicePayment,
 	mintServerPayment,
+	type OrderPaymentSummary,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readAwaitingCustomer,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -26,7 +28,14 @@ import {
 	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import {
+	type EngineRecord,
+	MoneyCommandError,
+	resendOpenCommands,
+	useDocField,
+	useRecordField,
+} from '@wcpos/query';
+import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -44,11 +53,17 @@ import {
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import { returnToTill } from '../till-route';
-import { persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
+import {
+	persistSaleProvenance,
+	recordSaleAttempt,
+	reopenedSince,
+	residentUnpaid,
+} from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
@@ -72,14 +87,18 @@ import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
-import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
+import { getUuidFromLineItem } from '../../hooks/utils';
 import {
-	RecordManualPaymentError,
 	RecordManualPaymentMirrorError,
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
-import { GatewayCancelMirrorError, GatewayMirrorError } from '../payments/submit-gateway-payment';
+import {
+	GatewayCancelMirrorError,
+	GatewayMirrorError,
+	submitStillDone,
+} from '../payments/submit-gateway-payment';
+import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
 	declaredValues,
@@ -110,12 +129,11 @@ import {
 	deviceTransports,
 	initialReaderId,
 	legacyPaymentMethods,
-	queuesOffline,
 	selectableReaders,
 	type TenderTile,
 } from './tiles';
 import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
-import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
+import { closeConfirmed, type CloseOutcome, useCloseSale } from '../../commands/close-sale';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
@@ -125,6 +143,9 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
+	unansweredCommand: boolean;
+	retryCommand: () => Promise<void>;
 	rememberedReaderId: string | null;
 	rememberReader: (reader: RememberedReader) => Promise<void>;
 	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
@@ -201,6 +222,22 @@ export interface TenderFlow {
 	cancelInvoice: () => Promise<void>;
 }
 
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type FeeLines = NonNullable<OrderPayload['fee_lines']>;
+// A fee edit moves the stored total by the fee money alone (the rounding fee has no tax) and
+// recomputes nothing: the store may own the order's money (ADR 0032).
+const feeMinor = (fees: FeeLines, dp: number) =>
+	fees.reduce(
+		(sum, fee) =>
+			fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
+		0
+	);
+function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => FeeLines) {
+	const fees = latest.fee_lines ?? [];
+	const fee_lines = edit(fees);
+	const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines, dp) - feeMinor(fees, dp);
+	return { fee_lines, total: fromMinor(totalMinor, dp) };
+}
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
 	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
@@ -225,7 +262,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, storeDB } = useStoreSession();
+	const http = useRestHttpClient();
+	const [sentCommands, setSentCommands] = React.useState(0);
+	// The command journal is an external store: a command sent and never answered gates the
+	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
+	React.useEffect(() => {
+		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
+			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null).length),
+			error: () => undefined,
+		});
+		return () => subscription.unsubscribe();
+	}, [storeDB, order.uuid]);
+	// While this till's own press is in flight its entry is sent too; that is not unanswered. A
+	// Try again in flight keeps the gate: its keypad is never shown (CodeRabbit 4346454764).
+	const [pressing, setPressing] = React.useState(false);
+	const unansweredCommand = sentCommands > 0 && !pressing;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -570,11 +622,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
-			const offlineTransport =
-				tile.method.capture.mode === 'device' && tile.reason === 'offline'
-					? deviceTransports(tile.method).find((item) => queuesOffline(tile.method, item))
-					: undefined;
-			if (tile.disabled && !offlineTransport) return;
+			if (tile.disabled) return;
 			// The entry is shared across pills (ledger line 1), so a fixed gateway never writes the
 			// balance into it: `entryAppliedMinor` applies the balance for it instead. A split plan
 			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
@@ -599,7 +647,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			reducerDispatch({
 				type: 'pick-method',
-				transport: offlineTransport?.transport,
 				methodId,
 				prefillMinor,
 				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId)),
@@ -675,15 +722,124 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[order, state, dp, byId, actor, orderContext]
 	);
 
+	/**
+	 * Try again: re-send the unanswered command under its own id, with its frozen body; the store
+	 * replays what it did. An answer finishes the sale exactly as a first answer would. A terminal
+	 * leg's capture is left to the terminal service, which owns that leg's completion.
+	 */
+	const retryCommand = React.useCallback(async () => {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
+				post: (url, body) => http.post(url, body),
+			});
+			for (const { kind, data } of answers) {
+				const row = data.payment as PaymentRow | undefined;
+				const summary = (data.order ?? null) as OrderPaymentSummary | null;
+				if (kind === 'close' && summary) {
+					// A replayed close answers its stored completion with the order as it now stands,
+					// and the resident after the mirror decides, as for a first answer (closeConfirmed).
+					const closed = await closeConfirmed(ctx.runtime, order, summary);
+					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
+					else {
+						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
+						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
+						logger.info(closeMessage({ kind: closed, order: summary }, t), {
+							showToast: true,
+							context: { ...orderContext, close: closed },
+						});
+					}
+				} else if (
+					row &&
+					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
+				) {
+					const amountMinor = toMinor(row.amount, dp);
+					// A replay answers the stored row with the order as it now stands: an open order at
+					// a zero balance was reopened since (another till), so it is not finished here.
+					// A partial leg (a balance still due) runs the flow as a first answer would.
+					if (reopenedSince(summary, dp)) {
+						tenderRecorded(row, 'online');
+						logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+							showToast: true,
+							context: { ...orderContext, status: summary.status },
+						});
+						continue;
+					}
+					await completeOrderFlow({
+						source: 'manual',
+						via: 'online',
+						row,
+						order: summary,
+						mirrorFailed: false,
+						preparedCompleting: amountMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor,
+					}).finally(() => tenderRecorded(row, 'online'));
+				} else if (kind === 'submit' && data.outcome === 'sent' && summary) {
+					// A recovered send: a sent sale, from the stamp the refresh adopted with the
+					// store's document (the replay settles only once that refresh adopted it).
+					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
+					// A recovered send whose adopted order carries no awaiting-customer stamp was already
+					// settled or cancelled by the store (the stamp goes with the invoice); there is
+					// nothing left to finish.
+					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
+				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
+					await completeOrderFlow({ source: 'gateway-settled', order: summary });
+			}
+		} catch (error) {
+			// The store stored nothing and the order moved: the cashier approves it again.
+			if (error instanceof MoneyCommandError && error.reason === 'order_changed')
+				logger.info(t('pos_checkout.order_changed_retry'), {
+					showToast: true,
+					context: { ...orderContext, retry: 'order_changed' },
+				});
+			else
+				logger.error(t('pos_checkout.payment_unanswered'), {
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					showToast: true,
+					context: {
+						...orderContext,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+		} finally {
+			// A refused record or a recovered void leaves a leg with no live row: its rounding comes
+			// off (Codex 4346411073, 4346556717). A failed sweep is finished by the next settle's.
+			await sweepDeadRounding(storeDB, order, dp, (changes) => recordLedger(order, changes)).catch(
+				() => undefined
+			);
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [
+		recordLedger,
+		ctx.runtime,
+		storeDB,
+		order,
+		http,
+		t,
+		completeOrderFlow,
+		dp,
+		balanceMinor,
+		tenderRecorded,
+		orderContext,
+	]);
+
 	const takeTender = React.useCallback(async () => {
 		if (
 			busyRef.current ||
+			unansweredCommand ||
 			(saveState && saveState.kind !== 'queued-offline') ||
 			service?.get(order.uuid)
 		)
 			return;
 		busyRef.current = true;
 		setBusy(true);
+		setPressing(true);
+		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
+		const approval = { total: String(order.getLatest().payload.total ?? ''), currency };
 		let savingProvenance = false;
 		// The split as the cashier saw it, written with whichever leg completes the sale —
 		// cash included, which does not pass through saveProvenance below. With no plan, a
@@ -729,25 +885,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
-			// push and the store's ledger all see the rounded due; it names the row it rounds. A fee
-			// edit moves the stored total by the fee money alone (the rounding fee has no tax) and
-			// recomputes nothing: the store may own the order's money (ADR 0032).
-			type FeeLines = NonNullable<typeof payload.fee_lines>;
+			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
-			const feeMinor = (fees: FeeLines) =>
-				fees.reduce(
-					(sum, fee) =>
-						fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
-					0
-				);
-			const withFees = (latest: typeof payload, edit: (fees: FeeLines) => FeeLines) => {
-				const fees = latest.fee_lines ?? [];
-				const fee_lines = edit(fees);
-				const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines) - feeMinor(fees);
-				return { fee_lines, total: fromMinor(totalMinor, dp) };
-			};
 			const roundingFee = (latest: typeof payload, paymentRef: string | null) =>
-				withFees(latest, (fees) => {
+				withFees(latest, dp, (fees) => {
 					const posData = {
 						amount: fromMinor(roundingMinor, dp),
 						percent: false,
@@ -801,6 +942,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
+				// The close approves the sale the press commits: its rounding fee moves the stored
+				// total by the fee alone, so the approved total is the rounded one.
+				const closeApproval = {
+					...approval,
+					total: fromMinor(toMinor(approval.total, dp) + roundingMinor, dp),
+				};
 				const closed = await writeZeroBalanceCompletion(ctx, {
 					order,
 					sessionId,
@@ -809,7 +956,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
 					online: () => online && !queuedOffline && !!payload.id,
-					close: (target) => closeSale.close(target, { sessionId }),
+					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
 				});
 				if (closed && typeof closed === 'object' && 'kind' in closed) {
 					const context = {
@@ -906,6 +1053,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					method,
 					transport: deviceTransport,
 					offline,
+					approval,
 					tipEligibleMinor:
 						method.capabilities.tips === 'on_reader' &&
 						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
@@ -960,6 +1108,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					orderNumber: payload.number ?? String(payload.id),
 					row: minted.row,
 					reader: reader.id,
+					approval,
 				});
 				void remember(reader);
 				reducerDispatch({ type: 'tender-started' });
@@ -999,11 +1148,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (attemptRef.current && invoiceSent?.attempt_id === attemptRef.current)
 					attemptRef.current = null;
 				attemptRef.current ??= uuidv4();
-				const outcome = await gateway.submit(order, method.id, {
-					attemptId: attemptRef.current,
-					values: fields ? declaredValues(fields, fieldValues) : {},
-					destination: fields ? destinationOf(fields, fieldValues) : null,
-				});
+				const outcome = await gateway.submit(
+					order,
+					method.id,
+					{
+						attemptId: attemptRef.current,
+						values: fields ? declaredValues(fields, fieldValues) : {},
+						destination: fields ? destinationOf(fields, fieldValues) : null,
+					},
+					{ approval, sessionId }
+				);
 				attemptRef.current = null;
 				if (outcome.kind === 'fields_invalid') {
 					setErrorsFor({ methodId: method.id, errors: outcome.errors });
@@ -1034,11 +1188,24 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
+				if (outcome.kind === 'reopened') {
+					// A replayed attempt whose sale another till reopened since: nothing to finish.
+					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+						showToast: true,
+						context: { ...orderContext, method: method.id, status: outcome.order.status },
+					});
+					return;
+				}
 				if (outcome.kind === 'settled') {
 					// No money, no stamp: the gateway landed the order on the status the merchant
 					// stored for it, which is the sale finishing (§3.1) — the paid completion, as is.
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order }, queue);
-					if (!uiSettings.autoShowReceipt) {
+					// The completion decides from the resident after the mirror, not the answer: a
+					// reopen adopted since is no finished sale, so no paid sentence (Codex 4340856695).
+					if (
+						!uiSettings.autoShowReceipt &&
+						!residentUnpaid(order.getLatest().payload, outcome.order.status)
+					) {
 						logger.info(
 							t('pos_checkout.payment_completed_for_order', {
 								orderNumber: payload.number ?? String(payload.id),
@@ -1081,16 +1248,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
-			const unround = (ref = paymentId) =>
-				patchFees(
-					withFees(target.getLatest().payload, (fees) =>
-						fees.flatMap((fee) => {
-							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-							if (!ref || rounding?.payment_ref !== ref) return [fee];
-							return fee.id ? [{ ...fee, name: null }] : [];
-						})
-					)
-				);
+			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(amountMinor, dp),
 				tendered,
@@ -1102,15 +1260,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				const landed =
 					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
 				// A thrown refusal of a replay takes back its row's fee, as a returned one does.
-				const ref =
-					paymentId ?? (error instanceof RecordManualPaymentError ? error.rowId : undefined);
-				if (ref && !landed) await unround(ref).catch(() => undefined);
+				if (!landed) await unround().catch(() => undefined);
 				throw error;
 			});
 			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
 			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
-			const ref = paymentId ?? (outcome.kind === 'refused' ? outcome.row.id : undefined);
-			if (ref && outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround(ref);
+			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{
@@ -1171,6 +1326,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// till's copy failed to save. "Try again" would send or charge a second time.
 				attemptRef.current = null;
 				const { outcome } = error;
+				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
+				if (outcome.kind === 'reopened') {
+					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+						showToast: true,
+						context: { ...orderContext, status: outcome.order.status },
+					});
+					return;
+				}
 				// PAYMENT111's summary speaks of a recorded payment; a sent invoice needs its own sentence.
 				const sentence =
 					outcome.kind === 'sent'
@@ -1281,8 +1444,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
+			setPressing(false);
 		}
 	}, [
+		unansweredCommand,
 		actionCtx,
 		actionActor,
 		ctx,
@@ -1445,12 +1610,28 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		setBusy(true);
 		try {
 			attemptRef.current = null;
-			const outcome = await gateway.cancel(order, invoiceSent);
+			// An unchanged answer is that whether or not its mirror landed: the invoice stands, and the
+			// till's copy still carries its stamp (Codex 4346411064).
+			const outcome = await gateway
+				.cancel(order, invoiceSent)
+				.catch((error: unknown) =>
+					error instanceof GatewayCancelMirrorError && error.outcome.kind === 'unchanged'
+						? error.outcome
+						: Promise.reject(error)
+				);
 			if (outcome.kind === 'refused') {
 				logger.error(outcome.message, {
 					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
 					showToast: true,
 					context: { ...orderContext, method: invoiceSent.method_id, refusal: outcome.code },
+				});
+				return;
+			}
+			// Answered, but the order is not open again: the invoice stands (it may have been paid).
+			if (outcome.kind === 'unchanged') {
+				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
+					showToast: true,
+					context: { ...orderContext, method: invoiceSent.method_id, status: outcome.order.status },
 				});
 				return;
 			}
@@ -1525,6 +1706,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			const outcome = await voidPayments(order);
+			// Nothing reached the store: no leg was voided and none was refused, so the cashier is
+			// told the cancel needs a connection, never to refund by hand (the legs are still held).
+			if (outcome.kind === 'offline') {
+				logger.info(t('pos_checkout.void_needs_connection'), {
+					showToast: true,
+					context: { ...orderContext, paymentId: outcome.paymentIds.join(', ') },
+				});
+				return;
+			}
 			for (const row of outcome.rows) {
 				logger.info('Payment voided', {
 					actor,
@@ -1636,7 +1826,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
 			hasLiveLeg: liveRows.length > 0,
 			online,
-			tiles,
+			// A sent, unanswered command offers no tile and no close: only Try again.
+			tiles: unansweredCommand ? [] : tiles,
 			legacyMethods,
 			methodsLoaded,
 			unsupportedSchema,
@@ -1656,6 +1847,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredCommand,
+			retryCommand,
 		}),
 		[
 			plan,
@@ -1710,6 +1903,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredCommand,
+			retryCommand,
 		]
 	);
 }
