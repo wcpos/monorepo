@@ -1,0 +1,8 @@
+#!/bin/sh
+# Reap merged worktrees after a local merge or pull. core.hooksPath points at
+# this directory, so a copy in .git/hooks/ is silently ignored here (that is
+# how this repo missed the hook every other clone gets from ~/.git-template).
+# No-op on a machine without the maintainer's cleanup script.
+if [ -x "$HOME/.claude/scripts/cleanup-worktrees.sh" ]; then
+  "$HOME/.claude/scripts/cleanup-worktrees.sh" || true
+fi
