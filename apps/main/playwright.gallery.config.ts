@@ -12,7 +12,10 @@ const PIXEL_COLOUR_THRESHOLD = 0.05;
 // CI prebuilds once; local runs always export fresh. Smoke without baselines: npx playwright test -c playwright.gallery.config.ts --ignore-snapshots
 export default defineConfig({
 	testDir: './gallery',
-	workers: 1,
+	// One test per component (gallery/inventory.ts), run in parallel: a CI runner has four
+	// cores, and the shoot is split again across shards in .github/workflows/test.yml.
+	fullyParallel: true,
+	workers: process.env.CI ? 4 : 2,
 	retries: 0,
 	timeout: 120_000,
 	forbidOnly: !!process.env.CI,
