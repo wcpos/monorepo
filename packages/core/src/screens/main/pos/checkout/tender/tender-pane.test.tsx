@@ -18,6 +18,7 @@ import type { TenderFlow } from './use-tender-flow';
 const mockPush = jest.fn();
 const mockBootstrap = jest.fn(async () => ({ token: 'reader-token', method_id: 'device' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
@@ -258,6 +259,8 @@ function makeFlow(count = 1): TenderFlow {
 		fieldErrors: {},
 		invoiceSent: null,
 		cancelInvoice: jest.fn(),
+		unansweredCommand: false,
+		retryCommand: jest.fn(async () => undefined),
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
@@ -367,7 +370,9 @@ it('selects methods without committing and folds unavailable reasons', () => {
 	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
 });
 
-it('keeps an offline queue-capable device method selectable', () => {
+// ADR 0040 §offline: offline tenders do not queue (OFFLINE_TENDERS_QUEUE), so a queue-capable
+// device tile offline is listed as unavailable, never a pill whose commit button stays dead.
+it('lists an offline queue-capable device method as unavailable until offline tenders queue', () => {
 	const flow: TenderFlow = {
 		...makeFlow(),
 		saveState: null,
@@ -381,9 +386,22 @@ it('keeps an offline queue-capable device method selectable', () => {
 		],
 	};
 	render(<TenderPane flow={flow} format={String} />);
-	fireEvent.click(screen.getByTestId('checkout-method-device'));
-	expect(flow.pickMethod).toHaveBeenCalledWith('device');
-	expect(screen.queryByTestId('checkout-unavailable-toggle')).toBeNull();
+	expect(screen.queryByTestId('checkout-method-device')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.getByTestId('checkout-unavailable-device').textContent).toContain(
+		'Needs a connection'
+	);
+	expect(flow.pickMethod).not.toHaveBeenCalled();
+});
+
+// ADR 0040 §1.3: a command sent and never answered offers one thing, a re-send of that command.
+it('a sent, unanswered command shows only Try again, which re-sends it', () => {
+	const flow: TenderFlow = { ...makeFlow(), saveState: null, unansweredCommand: true };
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.queryByTestId('checkout-method-pos_cash')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
+	expect(flow.retryCommand).toHaveBeenCalledTimes(1);
+	expect(flow.takeTender).not.toHaveBeenCalled();
 });
 
 it.each([

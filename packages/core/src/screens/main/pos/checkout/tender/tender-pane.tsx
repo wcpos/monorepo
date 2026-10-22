@@ -11,6 +11,7 @@ import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { VStack } from '@wcpos/components/vstack';
@@ -20,7 +21,7 @@ import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
-import { deviceTransports, queuesOffline, selectableReaders } from './tiles';
+import { deviceTransports, OFFLINE_TENDERS_QUEUE, queuesOffline, selectableReaders } from './tiles';
 import { disabledReasonKey } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
@@ -78,6 +79,25 @@ export function TenderPane({ flow, format, compact }: Props) {
 	// that has never fetched its methods gets tile-shaped slots in the method row, nothing else.
 	if (flow.saveState?.kind === 'saving') {
 		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
+	}
+
+	// A command sent and never answered offers one thing: re-send it (ADR 0040). A press while
+	// the re-send is in flight is inert (the flow's busy guard).
+	if (flow.unansweredCommand) {
+		return (
+			<Notice
+				tone="warn"
+				title={t('pos_checkout.payment_unanswered')}
+				testID="checkout-unanswered"
+				actions={[
+					{
+						label: t('pos_checkout.try_again'),
+						onPress: () => void flow.retryCommand(),
+						testID: 'checkout-unanswered-retry',
+					},
+				]}
+			/>
+		);
 	}
 
 	if (flow.tiles.length === 0) {
@@ -222,9 +242,12 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			: fixedAmount
 				? flow.entryAppliedMinor
 				: flow.state.entryMinor;
+	// An offline device tile is choosable only while offline tenders queue; until then it is
+	// listed as unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
-		(tile.reason === 'offline' &&
+		(OFFLINE_TENDERS_QUEUE &&
+			tile.reason === 'offline' &&
 			tile.method.capture.mode === 'device' &&
 			deviceTransports(tile.method).some((transport) => queuesOffline(tile.method, transport)));
 	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));

@@ -108,6 +108,13 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
 	return left.title < right.title ? -1 : left.title > right.title ? 1 : 0;
 }
 
+/**
+ * Offline tenders do not queue yet (ADR 0040 §offline): a tender the store cannot hear is
+ * refused. A manual `offline: 'record'` tile and a device tile that settles later are disabled
+ * with the `offline` reason while the till is offline or the order's save is queued.
+ */
+export const OFFLINE_TENDERS_QUEUE = false;
+
 export function buildTenderTiles(
 	methods: readonly PaymentMethodDescriptor[],
 	options: {
@@ -149,7 +156,7 @@ export function buildTenderTiles(
 					!(availability.reason === 'not_logged_in' && driver?.capabilities.discovery === 'sdk_ui')
 				)
 					reason = `driver_${availability.reason}` as TileDisabledReason;
-				else if (!options.online && !settlesLater) reason = 'offline';
+				else if (!options.online && (!settlesLater || !OFFLINE_TENDERS_QUEUE)) reason = 'offline';
 				else if (holder && holder.orderUuid !== options.currentOrderUuid)
 					reason = { type: 'reader_in_use', number: holder.orderNumber };
 			} else if (method.capture.mode === 'stored_value') {
@@ -168,7 +175,10 @@ export function buildTenderTiles(
 				else if (!readers.length) reason = 'no_readers';
 				else if (readers.every((reader) => reader.inUseBy !== null))
 					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
-			} else if (!options.online && method.capabilities.offline === 'none') {
+			} else if (
+				!options.online &&
+				(method.capabilities.offline === 'none' || !OFFLINE_TENDERS_QUEUE)
+			) {
 				reason = 'offline';
 			}
 			return {
