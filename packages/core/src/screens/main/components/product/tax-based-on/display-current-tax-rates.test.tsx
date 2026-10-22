@@ -61,6 +61,7 @@ const props = (
 		rates,
 		allRates: rates,
 		taxBasedOn: 'base',
+		addressUsed: 'base',
 		location: { country: 'GB', state: '', city: '', postcode: '' },
 		hasOrder: false,
 		taxClasses: [{ slug: 'standard', name: 'Standard rate' }],
@@ -110,6 +111,7 @@ it('View all hands the panel the address to match, closing first', () => {
 		<DisplayCurrentTaxRates
 			{...props({
 				taxBasedOn: 'shipping',
+				addressUsed: 'shipping',
 				hasOrder: true,
 				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
 				rates: [rate({ country: 'US', state: 'OR' })],
@@ -129,6 +131,7 @@ it('View all from an order with no address opens the plain panel: nothing to mat
 		<DisplayCurrentTaxRates
 			{...props({
 				taxBasedOn: 'billing',
+				addressUsed: 'billing',
 				hasOrder: true,
 				location: { country: '', state: '', city: '', postcode: '' },
 				rates: [],
@@ -144,6 +147,7 @@ it("reads the order's address on an order, with its postal line", () => {
 		<DisplayCurrentTaxRates
 			{...props({
 				taxBasedOn: 'shipping',
+				addressUsed: 'shipping',
 				hasOrder: true,
 				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
 				rates: [rate({ country: 'US', state: 'OR', name: 'Oregon' })],
@@ -153,6 +157,48 @@ it("reads the order's address on an order, with its postal line", () => {
 	expect(screen.getByText('common.address_on_the_order')).toBeTruthy();
 	expect(screen.getByText('Portland OR 97201, United States (US)')).toBeTruthy();
 	expect(screen.getByText(/· common\.tax_why_state$/)).toBeTruthy();
+});
+
+it('says the order has no shipping address and that tax uses its billing address', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({ taxBasedOn: 'shipping', addressUsed: 'billing', hasOrder: true })}
+		/>
+	);
+	expect(screen.getByText('common.customer_shipping_address')).toBeTruthy();
+	expect(screen.getByText('common.address_on_the_order')).toBeTruthy();
+	expect(screen.getByText('common.no_shipping_address_using_billing')).toBeTruthy();
+});
+
+it('labels the shop address when the order has no address with a country', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({ taxBasedOn: 'shipping', addressUsed: 'base', hasOrder: true })}
+		/>
+	);
+	expect(screen.getByText('common.shop_address')).toBeTruthy();
+	expect(screen.getByText('common.no_order_address_using_shop')).toBeTruthy();
+	expect(screen.queryByText('common.address_on_the_order')).toBeNull();
+});
+
+it('says the order has no billing address and that tax uses the shop address', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({ taxBasedOn: 'billing', addressUsed: 'base', hasOrder: true })}
+		/>
+	);
+	expect(screen.getByText('common.no_billing_address_using_shop')).toBeTruthy();
+});
+
+it('adds no fallback note when the address used is the configured one', () => {
+	render(
+		<DisplayCurrentTaxRates
+			{...props({ taxBasedOn: 'shipping', addressUsed: 'shipping', hasOrder: true })}
+		/>
+	);
+	expect(screen.queryByText('common.no_shipping_address_using_billing')).toBeNull();
+	expect(screen.queryByText('common.no_order_address_using_shop')).toBeNull();
+	expect(screen.queryByText('common.no_billing_address_using_shop')).toBeNull();
 });
 
 it("without an order the address is the shop's, whatever the setting", () => {
@@ -179,6 +225,7 @@ it('breaks at the rates when the address matched none, naming the country', () =
 		<DisplayCurrentTaxRates
 			{...props({
 				taxBasedOn: 'shipping',
+				addressUsed: 'shipping',
 				hasOrder: true,
 				location: { country: 'IS', state: '', city: 'Reykjavík', postcode: '101' },
 				rates: [],
@@ -195,6 +242,7 @@ it('says the rates for the country miss this address when the store has some for
 		<DisplayCurrentTaxRates
 			{...props({
 				taxBasedOn: 'shipping',
+				addressUsed: 'shipping',
 				hasOrder: true,
 				location: { country: 'US', state: 'OR', city: 'Portland', postcode: '97201' },
 				rates: [],

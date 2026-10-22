@@ -49,6 +49,7 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 const mockLocation = {
 	rates: [{ id: 1, name: 'VAT', rate: '20.0000', class: 'standard', country: 'GB' }],
 	taxBasedOn: 'base',
+	addressUsed: 'base',
 	location: { country: 'GB', state: '', city: '', postcode: '' },
 	hasOrder: false,
 };
@@ -83,6 +84,7 @@ beforeEach(() => {
 	mockPush.mockClear();
 	mockLocation.hasOrder = false;
 	mockLocation.taxBasedOn = 'base';
+	mockLocation.addressUsed = 'base';
 });
 afterEach(() => jest.useRealTimers());
 
@@ -135,6 +137,7 @@ describe.each([false, true])('phone: %s', (phone) => {
 	it('an order with no billing address breaks the chain at the address', () => {
 		mockLocation.hasOrder = true;
 		mockLocation.taxBasedOn = 'billing';
+		mockLocation.addressUsed = 'billing';
 		const { location, rates } = mockLocation;
 		mockLocation.location = { country: '', state: '', city: '', postcode: '' };
 		// Nothing matched: a worldwide rate on an empty address would not be a failure.

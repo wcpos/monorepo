@@ -36,6 +36,8 @@ export interface DisplayCurrentTaxRatesProps {
 	allRates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
+	/** The address the location was taken from after WooCommerce's fallback. */
+	addressUsed: TaxBasedOn;
 	/** False on the standalone Products screen, where the address is the shop base. */
 	hasOrder: boolean;
 	config: CartConfig;
@@ -60,6 +62,7 @@ function TaxDerivation({
 	allRates,
 	taxBasedOn,
 	location,
+	addressUsed,
 	hasOrder,
 	config,
 	taxClasses,
@@ -67,9 +70,8 @@ function TaxDerivation({
 	const t = useT();
 	const router = useRouter();
 	const { onOpenChange } = useRootContext();
-	// Without an order the address is the shop base whatever the setting says
-	// (`orderTaxLocation`), so it is labelled and judged as the shop's.
-	const isOrderAddress = hasOrder && taxBasedOn !== 'base';
+	// The resolved address, not the configured basis, determines whether this is the order's.
+	const isOrderAddress = hasOrder && addressUsed !== 'base';
 	const countries = useCountries();
 	// The lookup normalises case and decodes; the field strip keeps the code as stored.
 	const countryName = countryDisplayName(countries, location.country);
@@ -121,6 +123,17 @@ function TaxDerivation({
 	let source = t('common.shop_base_address');
 	if (taxBasedOn === 'billing') source = t('common.customer_billing_address');
 	if (taxBasedOn === 'shipping') source = t('common.customer_shipping_address');
+	let addressDetail: string | undefined;
+	if (hasOrder && taxBasedOn !== 'base' && addressUsed !== taxBasedOn) {
+		if (taxBasedOn === 'shipping') {
+			addressDetail =
+				addressUsed === 'billing'
+					? t('common.no_shipping_address_using_billing')
+					: t('common.no_order_address_using_shop');
+		} else if (taxBasedOn === 'billing') {
+			addressDetail = t('common.no_billing_address_using_shop');
+		}
+	}
 
 	// One scroll container: the rail scrolls inside whatever height the sheet or popover leaves,
 	// and the hairline and View-all row sit outside it, so a long US ledger on a short handset
@@ -161,6 +174,7 @@ function TaxDerivation({
 						<DerivationStep
 							label={isOrderAddress ? t('common.address_on_the_order') : t('common.shop_address')}
 							title={postalLine(location, countryName)}
+							detail={addressDetail}
 						>
 							<AddressFields location={location} />
 						</DerivationStep>

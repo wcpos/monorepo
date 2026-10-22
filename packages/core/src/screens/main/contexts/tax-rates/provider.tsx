@@ -63,6 +63,8 @@ export interface TaxLocationContextProps {
 	rates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
+	/** The address the tax location was actually taken from. */
+	addressUsed: TaxBasedOn;
 	/**
 	 * Whether a current order is in scope. False on the standalone Products screen, where the
 	 * location is the shop base whatever `taxBasedOn` says. Published here, deduped with the
@@ -257,7 +259,7 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	const storeTaxBasedOn = useDocField(store, (value) => value.tax_based_on);
 	const hasOrder = Boolean(order);
 	const { country, state, city, postcode } = baseLocation;
-	const { taxBasedOn, location } = React.useMemo(
+	const { taxBasedOn, location, addressUsed } = React.useMemo(
 		() =>
 			orderTaxLocation(
 				{ country, state, city, postcode },
@@ -276,8 +278,8 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	}, [allRates, location]);
 
 	const value = React.useMemo<TaxLocationContextProps>(
-		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location, hasOrder }),
-		[rates, taxBasedOn, location, hasOrder]
+		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location, addressUsed, hasOrder }),
+		[rates, taxBasedOn, location, addressUsed, hasOrder]
 	);
 
 	return <TaxLocationContext.Provider value={value}>{children}</TaxLocationContext.Provider>;
