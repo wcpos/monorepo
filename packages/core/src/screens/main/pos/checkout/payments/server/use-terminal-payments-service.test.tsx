@@ -397,6 +397,32 @@ it.each(['ledger', 'provenance'] as const)(
 	}
 );
 
+it('a status answer’s revision reaches the poster’s mirror', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = [];
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const options = start.mock.calls[0][0];
+		const payment = { ...mockRow, capture_mode: 'server' as const, recorded_offline: false };
+		await options.mirror(
+			'completed-order',
+			{ payment, revision: 'sha256:poll' },
+			options.commandPoster('completed-order', { sessionId: null })
+		);
+		expect(mockMirror).toHaveBeenCalledWith(
+			expect.objectContaining({ changes: expect.objectContaining({ revision: 'sha256:poll' }) })
+		);
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+		mockResident.payload.meta_data = original;
+	}
+});
+
 it('a completion nobody was watching still reports its missing store register', async () => {
 	const start = jest.spyOn(
 		await import('../../../../../../services/terminal-payments'),

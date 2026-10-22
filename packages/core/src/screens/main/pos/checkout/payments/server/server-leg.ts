@@ -22,6 +22,8 @@ const INTENT_REFUSAL_STATUSES = new Set([400, 404, 405, 409, 410, 413, 415, 422]
 export interface ServerLegResponse {
 	payment: PaymentRow;
 	order?: OrderPaymentSummary;
+	/** The order's revision after the answer (every 2xx, the status poll's included). */
+	revision?: string;
 }
 export interface ServerLegState {
 	phase: 'idle' | 'creating' | 'polling' | 'cancelling' | 'final';

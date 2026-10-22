@@ -45,6 +45,8 @@ export interface RevisionChain {
 	/** Set only by the post-answer refresh (§1.8). */
 	readonly adoptedAfterAnswer?: boolean;
 	readonly adoptedRevision?: string;
+	/** Answered by a status poll, not a command: names the store's revision, so no re-read. */
+	readonly polled?: true;
 }
 type OrderCommands = { entries: Record<string, MoneyCommandEntry>; chain: RevisionChain | null };
 type Journal = { orders: Record<string, OrderCommands> };

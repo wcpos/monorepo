@@ -765,6 +765,44 @@ describe('the answer chain and the post-answer refresh', () => {
 			adoptedRevision: store.revision,
 		});
 	});
+
+	// A server-mode poll that settles the row moves the order on the store (routes §4.3).
+	/** The poll settled the row on the store, which moved the order to the revision it answers. */
+	async function pollSettles() {
+		store.n += 1;
+		const payment = { ...cash('leg-1', '10.00'), status: 'authorized' } as PaymentRow;
+		await poster().mirror({ payment, order: store.summary() as never, revision: store.revision });
+		return store.revision;
+	}
+
+	it('a status poll’s revision is recorded as the chain, without the post-answer refresh, and the next void is sent once under it with no re-read', async () => {
+		const polled = await pollSettles();
+		expect(requires).toEqual([]);
+		expect((await readOrderCommands(storeDB, 'order')).chain).toMatchObject({
+			answerRevision: polled,
+			polled: true,
+		});
+		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
+		expect(requires).toEqual([]);
+		expect(store.post).toHaveBeenCalledTimes(1);
+		expect(sentBodies()[0].revision).toBe(polled);
+	});
+
+	it('an approved kind after a polled chain still re-adopts before it is sent', async () => {
+		const polled = await pollSettles();
+		await poster()('orders/5/close', {});
+		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
+		expect(store.post).toHaveBeenCalledTimes(1);
+		expect(sentBodies()[0].revision).toBe(polled);
+		expect(store.completions).toBe(1);
+	});
+
+	it('a mirror without a revision leaves the chain as it was', async () => {
+		await sendAndSettle('orders/5/payments', { payment: cash() });
+		const { chain: before } = await readOrderCommands(storeDB, 'order');
+		await poster().mirror({ payment: cash(), order: store.summary() as never });
+		expect((await readOrderCommands(storeDB, 'order')).chain).toEqual(before);
+	});
 });
 
 function poster(over: Partial<Parameters<typeof moneyCommandPoster>[0]> = {}) {
