@@ -30,6 +30,8 @@ export type DeviceLegDeps = Omit<ServerLegDeps, 'onFinal'> & {
 	driver: PaymentDriver | undefined;
 	patchAndEnqueue: (row: PaymentRow) => Promise<OrderPaymentSummary | void>;
 	onFinal?: (state: DeviceLegState) => void;
+	/** The till is in another cashier's scope: a reader result waits for the leg's own. */
+	outOfScope?: () => boolean;
 };
 // How long a device leg waits for a card before the till gives up. A Bluetooth reader waits
 // forever on its own; the cashier can always cancel sooner. Two minutes covers a customer digging
@@ -148,6 +150,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	};
 	async function confirm() {
 		if (!active() || inFlight || (state.phase === 'collecting' && !result)) return;
+		// Every command is bound to the leg's own scope (4333445290 on #2798): a reader result that
+		// lands in another one stays collecting until the service confirms it there (4343940257).
+		if (deps.outOfScope?.()) return;
 		inFlight = true;
 		set({
 			phase: 'confirming',

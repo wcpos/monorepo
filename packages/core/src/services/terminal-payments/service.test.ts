@@ -19,6 +19,8 @@ import {
 	stopTerminalPaymentsService,
 	subscribeTerminalPaymentsServiceStart,
 } from './index';
+
+import type { CollectResult } from '../payment-drivers/types';
 jest.mock('@wcpos/database/live-tab', () => ({
 	...jest.requireActual('@wcpos/database/live-tab'),
 	holdLiveTab: jest.fn(() => jest.fn()),
@@ -107,12 +109,12 @@ it('begin starts one intent and refuses another live leg for the order', async (
 // A cashier switch moves the till to another scope, where the leg's order is not resident: the
 // leg stops (no poll, no capture, no void) and is dropped; its journaled command re-sends through
 // the scope-bound recovery, and the leg resumes when that cashier's scope is active again.
-it('suspendLegs stops and drops every live leg without ending the service', async () => {
+it('a scope switch stops and drops every live leg without ending the service', async () => {
 	const c = setup();
 	c.service.resume(input);
 	await jest.advanceTimersByTimeAsync(0);
 	const reads = c.http.get.mock.calls.length;
-	c.service.suspendLegs();
+	c.service.scopeSwitched('cashier-b');
 	expect(c.service.get('order')).toBeNull();
 	expect(c.service.leg('order')).toBeUndefined();
 	await jest.advanceTimersByTimeAsync(60_000);
@@ -121,6 +123,67 @@ it('suspendLegs stops and drops every live leg without ending the service', asyn
 	// The service still takes legs: the order resumes when its scope is active again.
 	expect(c.service.resume(input)).toBeDefined();
 	c.service.stop();
+});
+
+// Codex 4343940257 on #2834: the reader can still charge after a cashier switch. The collecting
+// leg is kept with its reader; its result waits, and the capture goes out once its own scope is
+// back, journaled there (4333445290 on #2798), then the reader is released.
+it('a device leg collecting through a scope switch confirms its result in its own scope', async () => {
+	const c = setup();
+	let scope = 'cashier-a';
+	let collected!: (result: CollectResult) => void;
+	registerDriver({
+		...createSimulatedDriver(),
+		collect: () =>
+			new Promise((resolve) => {
+				collected = resolve;
+			}),
+	});
+	const scopes: string[] = [];
+	const service = new TerminalPaymentsService({
+		...c.options,
+		scopeId: () => scope,
+		commandPoster: () =>
+			passThroughPoster(async (url: string, body: unknown) => {
+				scopes.push(`${url.split('/').at(-1)}@${scope}`);
+				return c.http.post(url, body);
+			}),
+	});
+	c.http.post.mockImplementation(async (url) => ({
+		data: {
+			payment: { ...deviceRow, status: url.endsWith('/capture') ? 'captured' : 'pending' },
+			order: c.summary,
+		},
+	}));
+	service.begin({ ...input, row: deviceRow, method: deviceMethod, transport: 'bluetooth' });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(service.get('order')).toMatchObject({ phase: 'collecting' });
+	scope = 'cashier-b';
+	service.scopeSwitched('cashier-b');
+	expect(service.readersInUse().has('device:simulated')).toBe(true);
+	collected({
+		outcome: 'authorized',
+		provider_refs: { payment_intent: 'pi' },
+		receipt: {},
+		amount: '10.00',
+		transport: 'bluetooth',
+	});
+	await jest.advanceTimersByTimeAsync(0);
+	// The result waits: nothing is sent in another cashier's scope, and the reader stays held.
+	expect(scopes).toEqual(['intent@cashier-a']);
+	expect(service.readersInUse().has('device:simulated')).toBe(true);
+	scope = 'cashier-a';
+	service.scopeSwitched('cashier-a');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(scopes).toEqual(['intent@cashier-a', 'capture@cashier-a']);
+	expect(c.mirror).toHaveBeenLastCalledWith(
+		'order',
+		expect.objectContaining({ payment: expect.objectContaining({ status: 'captured' }) }),
+		expect.anything()
+	);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(service.readersInUse().size).toBe(0);
+	service.stop();
 });
 
 it('the leg’s command poster carries the session its row was minted under', () => {
@@ -460,52 +523,27 @@ it('online device capture notifies once without tracking or writing an offline s
 	]);
 	service.stop();
 });
-it('tracks offline settlement after dismissal and only sends it while online', async () => {
-	let online = false;
-	const driver = createSimulatedDriver();
-	registerDriver(driver);
+// CodeRabbit 4343945871 on #2834: offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false).
+// An offline reader payment would be authorized with no journaled row, so no leg starts.
+it('an offline device begin throws offline_unavailable and never asks the reader', async () => {
 	const c = setup();
-	const patchAndEnqueue = jest.fn(async (_uuid: string, _row: PaymentRow) => {});
-	const service = new TerminalPaymentsService({
-		...c.options,
-		patchAndEnqueue,
-		isOnline: () => online,
-		resolveOrderId: async () => 42,
-	});
-	const connected = driver.connect!(
-		(await driver.discoverReaders!('bluetooth')).find((r) => r.id === 'sim-offline')!,
-		null
-	);
-	await jest.advanceTimersByTimeAsync(300);
-	await connected;
-	service.begin({
-		...input,
-		row: { ...deviceRow, recorded_offline: true },
-		method: deviceMethod,
-		transport: 'bluetooth',
-		offline: true,
-	});
-	await jest.advanceTimersByTimeAsync(500);
-	expect(service.get('order')).toMatchObject({
-		outcome: 'captured',
-		row: { status: 'authorized' },
-	});
-	service.dismiss('order');
-	expect(service.get('order')).toBeNull();
-	await jest.advanceTimersByTimeAsync(3000);
+	const collect = jest.fn();
+	registerDriver({ ...createSimulatedDriver(), collect });
+	expect(() =>
+		c.service.begin({
+			...input,
+			row: { ...deviceRow, recorded_offline: true },
+			method: deviceMethod,
+			transport: 'bluetooth',
+			offline: true,
+		})
+	).toThrow('offline_unavailable');
+	await jest.advanceTimersByTimeAsync(1000);
+	expect(collect).not.toHaveBeenCalled();
 	expect(c.http.post).not.toHaveBeenCalled();
-	online = true;
-	c.http.post.mockResolvedValue({ data: { payment: { ...deviceRow, status: 'captured' } } });
-	await service.flushOffline();
-	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
-		context: { provider_refs: { payment_intent: 'sim_pi_leg' } },
-	});
-	expect(c.mirror).toHaveBeenLastCalledWith(
-		'order',
-		{ payment: { ...deviceRow, status: 'captured' } },
-		expect.anything()
-	);
-	service.stop();
+	expect(c.service.get('order')).toBeNull();
+	expect(c.service.readersInUse().size).toBe(0);
+	c.service.stop();
 });
 it('authorized offline rows never occupy a live leg on resume', async () => {
 	const c = setup();
@@ -829,70 +867,6 @@ it('retains capture before refresh, narrates once across duplicate/stale deliver
 	).toHaveLength(1);
 	finish();
 	await Promise.resolve();
-	service.stop();
-});
-
-it('narrates offline authorization once and completes without refresh, not again at server capture', async () => {
-	const c = setup();
-	const info = getLogger([]).info as jest.Mock;
-	info.mockClear();
-	registerDriver({
-		...createSimulatedDriver(),
-		collect: async () => ({
-			outcome: 'authorized',
-			provider_refs: { transaction: 'offline-tx' },
-			receipt: {},
-			amount: '10.00',
-			transport: 'bluetooth',
-		}),
-	});
-	let online = false;
-	const service = new TerminalPaymentsService({
-		...c.options,
-		isOnline: () => online,
-		patchAndEnqueue: async () => c.summary,
-		getActor: () => ({ id: '7', name: 'Pat' }),
-	});
-	const published = jest.fn();
-	service.subscribe(() => published(service.get('order')?.settlement));
-	service.begin({
-		...input,
-		row: deviceRow,
-		method: deviceMethod,
-		transport: 'bluetooth',
-		offline: true,
-	});
-	await jest.advanceTimersByTimeAsync(0);
-	expect(published).toHaveBeenCalledWith(
-		expect.objectContaining({
-			outcome: 'captured',
-			payment: expect.objectContaining({ status: 'authorized' }),
-			saleComplete: true,
-		})
-	);
-	expect(service.get('order')).toBeNull();
-	expect(c.completeOrder).toHaveBeenCalledWith(
-		'order',
-		{ id: '7', name: 'Pat' },
-		expect.objectContaining({
-			source: 'terminal',
-			row: expect.objectContaining({ recorded_offline: true }),
-		})
-	);
-	service.subscribe(jest.fn())();
-	service.subscribe(jest.fn());
-	online = true;
-	c.http.post.mockResolvedValue({ data: { payment: { ...deviceRow, status: 'captured' } } });
-	await service.flushOffline();
-	expect(c.mirror).toHaveBeenCalledWith(
-		'order',
-		expect.objectContaining({ payment: expect.objectContaining({ status: 'captured' }) }),
-		expect.anything()
-	);
-	expect(c.completeOrder).toHaveBeenCalledTimes(1);
-	expect(
-		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.authorized-offline')
-	).toHaveLength(1);
 	service.stop();
 });
 

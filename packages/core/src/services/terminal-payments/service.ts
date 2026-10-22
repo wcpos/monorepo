@@ -77,6 +77,8 @@ export interface TerminalPaymentsServiceOptions {
 	now?: ServerLegDeps['now'];
 	setTimeout?: ServerLegDeps['setTimeout'];
 	clearTimeout?: ServerLegDeps['clearTimeout'];
+	/** The engine scope the till is in now (one cashier's orders); a leg is bound to its own. */
+	scopeId?: () => string | null;
 }
 interface ResumeInput {
 	dp?: number;
@@ -108,7 +110,13 @@ export type TerminalLegState = (ServerLegState | DeviceLegState) & {
 export class TerminalPaymentsService {
 	private legs = new Map<
 		string,
-		{ leg: TerminalLeg; orderNumber: string; reader: string | null; lastRowId: string }
+		{
+			leg: TerminalLeg;
+			orderNumber: string;
+			reader: string | null;
+			lastRowId: string;
+			scope: string | null;
+		}
 	>();
 	private listeners = new Set<() => void>();
 	private snapshot: ReadonlyMap<string, TerminalLegState> = new Map();
@@ -455,11 +463,15 @@ export class TerminalPaymentsService {
 		return this.create({ ...input, reader: null }, true);
 	}
 	private create(input: BeginInput, resume: boolean): TerminalLeg {
+		// An offline reader payment would be authorized with no journaled row to recover it:
+		// offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false; CodeRabbit 4343945871).
+		if (input.offline) throw new Error('offline_unavailable');
 		const existing = this.legs.get(input.orderUuid)?.leg;
 		if (existing && existing.getState().phase !== 'final')
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
 		let finishingError: string | undefined;
+		const scope = this.options.scopeId?.() ?? null;
 		const poster = this.options.commandPoster(input.orderUuid, {
 			approval: input.approval,
 			sessionId: input.row.session_id ?? null,
@@ -497,12 +509,12 @@ export class TerminalPaymentsService {
 		const device = input.row.capture_mode === 'device';
 		if (device && !resume && this.readersInUse().has(`device:${input.row.provider}`))
 			throw new Error('Device method already in use');
-		if (input.offline) this.trackOffline(input);
 		const leg = device
 			? (this.options.factories?.device ?? createDeviceLeg)(
 					{
 						...deps,
 						driver: getDriver(input.row.provider),
+						outOfScope: () => scope !== null && this.options.scopeId?.() !== scope,
 						patchAndEnqueue: (row) => {
 							if (!this.options.patchAndEnqueue)
 								throw new Error('Offline payment writer unavailable');
@@ -534,6 +546,7 @@ export class TerminalPaymentsService {
 			orderNumber: input.orderNumber,
 			reader: input.reader,
 			lastRowId: input.row.id,
+			scope,
 		};
 		this.legs.set(input.orderUuid, entry);
 		leg.subscribe(() => {
@@ -564,15 +577,22 @@ export class TerminalPaymentsService {
 		this.publish();
 	}
 	/**
-	 * Stop and drop every live leg, keeping the service: the till moved to another scope (a
-	 * cashier switch), where these legs' orders are not resident, so their reads, captures and
-	 * voids cannot run (ADR 0040, one scope per command). A command already sent stays in the
-	 * journal and re-sends through the scope-bound recovery when that scope is active again, and
-	 * the leg itself resumes from its row then.
+	 * The till moved to `scopeId` (a cashier switch). Another scope's legs stop and drop, keeping
+	 * the service: their orders are not resident here, so their reads, captures and voids cannot
+	 * run (ADR 0040, one scope per command). A command already sent stays in the journal and
+	 * re-sends through the scope-bound recovery when that scope is active again, and the leg
+	 * resumes from its row then. A device leg still collecting is kept with its reader (Codex
+	 * 4343940257 on #2834): the reader can still charge, so its result waits, and is confirmed
+	 * when its own scope is back.
 	 */
-	suspendLegs(): void {
-		this.legs.forEach(({ leg }) => leg.dispose());
-		this.legs.clear();
+	scopeSwitched(scopeId: string): void {
+		this.legs.forEach(({ leg, scope }, orderUuid) => {
+			if (scope === scopeId) void leg.checkNow();
+			else if (leg.getState().phase !== 'collecting') {
+				leg.dispose();
+				this.legs.delete(orderUuid);
+			}
+		});
 		this.publish();
 	}
 	readersInUse(): Map<string, { orderUuid: string; orderNumber: string }> {

@@ -145,11 +145,13 @@ afterEach(() => {
 it('suspends every live terminal leg when the engine switches scope', async () => {
 	const hook = renderHook(() => useTerminalPaymentsService());
 	const service = getTerminalPaymentsService()!;
-	const suspend = jest.spyOn(service, 'suspendLegs');
+	const suspend = jest.spyOn(service, 'scopeSwitched');
 	mockEngineListeners.forEach((listener) => listener({ type: 'collection-reset' }));
 	expect(suspend).not.toHaveBeenCalled();
-	mockEngineListeners.forEach((listener) => listener({ type: 'scope-switched' }));
-	expect(suspend).toHaveBeenCalledTimes(1);
+	mockEngineListeners.forEach((listener) =>
+		listener({ type: 'scope-switched', scopeId: 'cashier-b' } as { type: string })
+	);
+	expect(suspend).toHaveBeenCalledWith('cashier-b');
 	hook.unmount();
 	expect(mockEngineListeners.size).toBe(0);
 });

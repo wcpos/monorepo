@@ -123,6 +123,7 @@ export function useTerminalPaymentsService(): void {
 					},
 				}),
 			isOnline: () => latest.current.online,
+			scopeId: () => manager.engine.active?.()?.scopeId ?? null,
 			resolveOrderId: async (orderUuid) => {
 				if (getOrderSaveState(orderUuid)) return null;
 				const resident = await readResidentOrder(manager, orderUuid);
@@ -230,7 +231,7 @@ export function useTerminalPaymentsService(): void {
 		// resident: the legs stop. Their sent commands re-send through the scope-bound recovery,
 		// and the legs resume, when that cashier's scope is active again (no cross-scope replay).
 		const offScope = manager.engine.events((event) => {
-			if (event.type === 'scope-switched') service.suspendLegs();
+			if (event.type === 'scope-switched') service.scopeSwitched(event.scopeId);
 		});
 		return () => {
 			unsubscribe();
