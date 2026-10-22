@@ -10,6 +10,11 @@ const examples: ({ id: string } & React.ComponentProps<typeof Chip>)[] = [
 	{ id: 'dimmed', label: 'Morning menu', dimmed: true },
 	{ id: 'add', label: 'Add quick filter', add: true, icon: 'plus' },
 	{ id: 'sm', label: 'Morning menu', size: 'sm', onClear: () => {} },
+	{
+		id: 'action',
+		label: 'Ada Lovelace',
+		action: { icon: 'address', onPress: () => {}, accessibilityLabel: 'Edit address' },
+	},
 ];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,
