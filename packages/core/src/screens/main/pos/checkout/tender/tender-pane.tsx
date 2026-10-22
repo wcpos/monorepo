@@ -63,6 +63,16 @@ interface Props {
 	slow?: boolean;
 }
 
+/**
+ * The zero-total Done shortcut both checkout hosts offer. An unanswered command gates the
+ * checkout before it: the pane's Try again is the only way on (ADR 0040, Codex 4346411060).
+ */
+export function offersZeroTotalDone(
+	flow: Pick<TenderFlow, 'totalMinor' | 'balanceMinor' | 'unansweredCommand'>
+) {
+	return flow.totalMinor === 0 && flow.balanceMinor === 0 && !flow.unansweredCommand;
+}
+
 export function TenderPane({ flow, format, compact }: Props) {
 	const t = useT();
 

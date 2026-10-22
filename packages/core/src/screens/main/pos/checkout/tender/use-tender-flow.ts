@@ -35,7 +35,11 @@ import {
 	useDocField,
 	useRecordField,
 } from '@wcpos/query';
-import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
+import {
+	observeOrderCommands,
+	readOrderCommands,
+	resolveCompletionAttempt,
+} from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -222,6 +226,37 @@ export interface TenderFlow {
 	cancelInvoice: () => Promise<void>;
 }
 
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type FeeLines = NonNullable<OrderPayload['fee_lines']>;
+// A fee edit moves the stored total by the fee money alone (the rounding fee has no tax) and
+// recomputes nothing: the store may own the order's money (ADR 0032).
+const feeMinor = (fees: FeeLines, dp: number) =>
+	fees.reduce(
+		(sum, fee) =>
+			fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
+		0
+	);
+function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => FeeLines) {
+	const fees = latest.fee_lines ?? [];
+	const fee_lines = edit(fees);
+	const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines, dp) - feeMinor(fees, dp);
+	return { fee_lines, total: fromMinor(totalMinor, dp) };
+}
+/**
+ * A record the store refused takes its rounding fee (#66, #84) back off, whether the refusal
+ * answers the press or Try again: the next tender may be a card. An unanswered record keeps it,
+ * since the journal re-sends it at the rounded amount.
+ */
+function withoutRounding(latest: OrderPayload, dp: number, paymentRef: string) {
+	return withFees(latest, dp, (fees) =>
+		fees.flatMap((fee) => {
+			const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
+			if (rounding?.payment_ref !== paymentRef) return [fee];
+			return fee.id ? [{ ...fee, name: null }] : [];
+		})
+	);
+}
+
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
 	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
@@ -248,18 +283,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
-	const [sentCommands, setSentCommands] = React.useState(0);
+	const [sentCommands, setSentCommands] = React.useState<{ kind: string; id: string }[]>([]);
 	// The command journal is an external store: a command sent and never answered gates the
 	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
 	React.useEffect(() => {
 		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
-			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null).length),
+			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null)),
 			error: () => undefined,
 		});
 		return () => subscription.unsubscribe();
 	}, [storeDB, order.uuid]);
 	// While this till's own request is in flight its entry is sent too; that is not unanswered.
-	const unansweredCommand = sentCommands > 0 && !busy;
+	const unansweredCommand = sentCommands.length > 0 && !busy;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -713,6 +748,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
+		const records = sentCommands.flatMap(({ kind, id }) => (kind === 'record' ? [id] : []));
 		try {
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
@@ -786,11 +822,28 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						error: error instanceof Error ? error.message : String(error),
 					},
 				});
+		}
+		try {
+			// A re-sent record that left the journal without a live row was refused (Codex 4346411073).
+			const journaled = new Set(
+				(await readOrderCommands(storeDB, order.uuid)).entries.map(({ id }) => id)
+			);
+			const ledger = readLedger(order.getLatest().payload.meta_data);
+			for (const id of records)
+				if (
+					!journaled.has(id) &&
+					!ledger.some((row) => row.id === id && isLivePaymentStatus(row.status))
+				)
+					await recordLedger(order, withoutRounding(order.getLatest().payload, dp, id));
+		} catch {
+			// The fee stays until the next void's sweep removes a fee naming a dead row.
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
 		}
 	}, [
+		sentCommands,
+		recordLedger,
 		ctx.runtime,
 		storeDB,
 		order,
@@ -860,25 +913,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
-			// push and the store's ledger all see the rounded due; it names the row it rounds. A fee
-			// edit moves the stored total by the fee money alone (the rounding fee has no tax) and
-			// recomputes nothing: the store may own the order's money (ADR 0032).
-			type FeeLines = NonNullable<typeof payload.fee_lines>;
+			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
-			const feeMinor = (fees: FeeLines) =>
-				fees.reduce(
-					(sum, fee) =>
-						fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
-					0
-				);
-			const withFees = (latest: typeof payload, edit: (fees: FeeLines) => FeeLines) => {
-				const fees = latest.fee_lines ?? [];
-				const fee_lines = edit(fees);
-				const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines) - feeMinor(fees);
-				return { fee_lines, total: fromMinor(totalMinor, dp) };
-			};
 			const roundingFee = (latest: typeof payload, paymentRef: string | null) =>
-				withFees(latest, (fees) => {
+				withFees(latest, dp, (fees) => {
 					const posData = {
 						amount: fromMinor(roundingMinor, dp),
 						percent: false,
@@ -1237,17 +1275,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
-			// A leg that did not land takes its rounding with it: the next tender may be a card.
-			const unround = (ref = paymentId) =>
-				patchFees(
-					withFees(target.getLatest().payload, (fees) =>
-						fees.flatMap((fee) => {
-							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-							if (!ref || rounding?.payment_ref !== ref) return [fee];
-							return fee.id ? [{ ...fee, name: null }] : [];
-						})
-					)
-				);
+			const unround = (ref: string) =>
+				patchFees(withoutRounding(target.getLatest().payload, dp, ref));
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(amountMinor, dp),
 				tendered,
@@ -1606,7 +1635,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		setBusy(true);
 		try {
 			attemptRef.current = null;
-			const outcome = await gateway.cancel(order, invoiceSent);
+			// An unchanged answer is that whether or not its mirror landed: the invoice stands, and the
+			// till's copy still carries its stamp (Codex 4346411064).
+			const outcome = await gateway
+				.cancel(order, invoiceSent)
+				.catch((error: unknown) =>
+					error instanceof GatewayCancelMirrorError && error.outcome.kind === 'unchanged'
+						? error.outcome
+						: Promise.reject(error)
+				);
 			if (outcome.kind === 'refused') {
 				logger.error(outcome.message, {
 					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,

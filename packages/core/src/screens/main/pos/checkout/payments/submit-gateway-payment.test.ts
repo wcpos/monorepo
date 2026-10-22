@@ -283,7 +283,21 @@ describe('cancelGatewayInvoice', () => {
 		mirror.mockRejectedValueOnce(new Error('disk'));
 		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
 		expect(error).toBeInstanceOf(GatewayCancelMirrorError);
-		expect((error as GatewayCancelMirrorError).order.status).toBe('pos-open');
+		expect((error as GatewayCancelMirrorError).outcome).toEqual({
+			kind: 'cancelled',
+			order: summary('pos-open'),
+		});
+	});
+	// Codex 4346411064 on #2837: the invoice still stands whether or not the mirror landed.
+	it('an unchanged cancel whose local write fails is still unchanged', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { order: summary('completed') } });
+		mirror.mockRejectedValueOnce(new Error('disk'));
+		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
+		expect((error as GatewayCancelMirrorError).outcome).toEqual({
+			kind: 'unchanged',
+			order: summary('completed'),
+		});
 	});
 	// A cancel whose answer shows the order not reopened did not cancel the invoice: the summary
 	// is mirrored with the stamp kept, and the outcome says so (never "cancelled").

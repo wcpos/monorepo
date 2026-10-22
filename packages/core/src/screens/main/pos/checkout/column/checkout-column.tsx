@@ -15,7 +15,7 @@ import { useCheckoutBack } from './use-checkout-back';
 import { leaveCheckout } from '../checkout-mode';
 import { CancelPaymentView } from '../tender/cancel-payment-view';
 import { LegacyTab } from '../tender/legacy-tab';
-import { TenderPane } from '../tender/tender-pane';
+import { offersZeroTotalDone, TenderPane } from '../tender/tender-pane';
 import { useT } from '../../../../../contexts/translations';
 import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
@@ -44,7 +44,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		if (flow.state.tab === 'legacy') {
 			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		if (offersZeroTotalDone(flow)) {
 			return (
 				<View className="p-4">
 					<Button

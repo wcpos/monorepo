@@ -24,7 +24,7 @@ import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
 import { LegacyTab } from './legacy-tab';
 import { LedgerPane } from './ledger-pane';
-import { TenderPane } from './tender-pane';
+import { offersZeroTotalDone, TenderPane } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useTheme } from '../../../../../contexts/theme';
@@ -104,7 +104,7 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		if (offersZeroTotalDone(flow)) {
 			return (
 				<View className="p-4">
 					<Button

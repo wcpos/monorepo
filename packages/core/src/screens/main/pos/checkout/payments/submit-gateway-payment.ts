@@ -62,10 +62,10 @@ export class GatewayMirrorError extends Error {
 	}
 }
 
-/** The store cancelled the invoice and the till's copy could not be written. */
+/** The store answered the cancel and the till's copy could not be written: the outcome stands. */
 export class GatewayCancelMirrorError extends Error {
 	public constructor(
-		public order: OrderPaymentSummary,
+		public outcome: { kind: 'cancelled' | 'unchanged'; order: OrderPaymentSummary },
 		public cause: unknown
 	) {
 		super('Cancelled invoice could not be mirrored locally.', { cause });
@@ -236,10 +236,11 @@ export async function cancelGatewayInvoice(
 	// with the order anywhere else did not cancel the invoice: the summary is mirrored with the
 	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
 	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
+	const outcome = { kind: reopened ? 'cancelled' : 'unchanged', order: summary } as const;
 	try {
 		await deps.mirror({ order: summary, awaiting: reopened ? null : stamp });
 	} catch (mirrorError) {
-		throw new GatewayCancelMirrorError(summary, mirrorError);
+		throw new GatewayCancelMirrorError(outcome, mirrorError);
 	}
-	return reopened ? { kind: 'cancelled', order: summary } : { kind: 'unchanged', order: summary };
+	return outcome;
 }

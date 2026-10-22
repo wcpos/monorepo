@@ -3196,6 +3196,33 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(mockInfo).not.toHaveBeenCalledWith('pos_checkout.invoice_cancelled', expect.anything());
 	});
 
+	// Codex 4346411064 on #2837: a mirror failure does not turn an unchanged answer into a cancel.
+	it('a cancel answered not open whose mirror fails still says the invoice stands', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		mockPayload = {
+			...mockPayload,
+			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+		} as typeof mockPayload;
+		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.cancelInvoice());
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.invoice_not_cancelled',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockWarn).not.toHaveBeenCalledWith(
+			'pos_checkout.invoice_cancelled_not_synced',
+			expect.anything()
+		);
+	});
+
 	it('prefills the declared components from the order and posts them under a fresh attempt id', async () => {
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
@@ -4320,6 +4347,41 @@ describe('cash rounding (#66, #84)', () => {
 
 		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
 	});
+
+	// Codex 4346411073 on #2837: Try again's refusal unrounds as the press's refusal does; a record
+	// the store still has not answered (still journaled) keeps its rounding.
+	it.each([
+		['refused (left the journal, no live row)', false, '10.03'],
+		['still unanswered (journaled)', true, '10.05'],
+	])(
+		'a Try again whose rounded record is %s (journaled: %s) leaves the total at %s',
+		async (_, journaled, total) => {
+			const { readOrderCommands } = jest.requireMock('@wcpos/query/store-local');
+			mockPayload = sale('10.03');
+			let rowId = '';
+			mockRecordManualPayment.mockImplementationOnce(
+				async (_o, _m, input: { paymentId: string }) => {
+					rowId = input.paymentId;
+					return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
+				}
+			);
+			const { result } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('pos_cash'));
+			await act(async () => result.current.takeTender());
+			expect(mockPayload).toMatchObject({ total: '10.05' });
+
+			const entry = { id: rowId, kind: 'record', sentAt: '2026-10-20T10:00:00Z' };
+			act(() =>
+				mockJournal$.next({
+					toJSON: () => ({ data: { orders: { 'order-1': { entries: { [rowId]: entry } } } } }),
+				})
+			);
+			readOrderCommands.mockResolvedValueOnce({ entries: journaled ? [entry] : [], chain: null });
+			mockResend.mockRejectedValueOnce(new Error('wcpos_amount_exceeds_balance'));
+			await act(async () => result.current.retryCommand());
+			expect(mockPayload).toMatchObject({ total });
+		}
+	);
 
 	it('a replay refused by a thrown payment conflict takes its fee back off: 10.05 returns to 10.03', async () => {
 		const { RecordManualPaymentError } = jest.requireActual('../payments/record-manual-payment');
