@@ -79,6 +79,7 @@ const mockHttp = {
 		},
 	})),
 };
+const mockPosterRefresh = jest.fn(async () => {});
 const mockMirror = jest.fn(async (_input: unknown) => {});
 const mockPatch = jest.fn<
 	Promise<object | undefined>,
@@ -104,13 +105,16 @@ jest.mock('@wcpos/query', () => ({
 	}) =>
 		mockPosterInputs.push(input) &&
 		Object.assign((url: string, body: unknown) => input.post(url, body), {
-			mirror: (answer: object) =>
-				jest
+			mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+				await jest
 					.requireMock('@wcpos/query/mutations')
 					.mirrorServerOrder(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
-					}),
+					});
+				options?.afterWrite?.();
+				await mockPosterRefresh();
+			},
 			settle: async () => undefined,
 		}),
 	useQueryRuntime: () => mockRuntime,
@@ -603,6 +607,10 @@ describe('a server capture of the order in checkout', () => {
 			},
 		};
 		let atWrite: CheckoutModeSnapshot | null = null;
+		let atRefresh: CheckoutModeSnapshot | null = null;
+		mockPosterRefresh.mockImplementation(async () => {
+			atRefresh = getCheckoutModeSnapshot();
+		});
 		const onWrite = async () => {
 			atWrite = getCheckoutModeSnapshot();
 			duringWrite?.(host);
@@ -624,7 +632,11 @@ describe('a server capture of the order in checkout', () => {
 			start.mockRestore();
 			mockResident.payload.meta_data = original;
 		}
-		return { atWrite: atWrite! as CheckoutModeSnapshot, after: getCheckoutModeSnapshot() };
+		return {
+			atWrite: atWrite! as CheckoutModeSnapshot,
+			atRefresh: atRefresh as CheckoutModeSnapshot | null,
+			after: getCheckoutModeSnapshot(),
+		};
 	}
 	let unwatch: (() => void) | undefined;
 	// Earlier background completions in this file leave their receipts in the module store.
@@ -640,10 +652,11 @@ describe('a server capture of the order in checkout', () => {
 	};
 
 	it.each(['mirror'] as const)(
-		'%s: nothing is entered at the write; the receipt is entered and selected after it',
+		'%s: receipt entry follows the write but precedes the poster refresh',
 		async (write) => {
 			watch('completed-order');
-			const { atWrite, after } = await settle(write);
+			const { atWrite, atRefresh, after } = await settle(write);
+			expect(atRefresh?.selectedReceiptOrder).toBe('completed-order');
 			expect(atWrite.receiptOrders.size).toBe(0);
 			expect(atWrite.checkoutOrders.has('completed-order')).toBe(true);
 			expect(after.receiptOrders.has('completed-order')).toBe(true);

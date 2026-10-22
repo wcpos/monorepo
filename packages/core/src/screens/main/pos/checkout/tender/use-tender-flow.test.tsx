@@ -79,7 +79,9 @@ const mockReaderState = {
 // The money command journal's local document (ADR 0040): null until a command is journaled.
 const mockJournal$ = new BehaviorSubject<unknown>(null);
 const mockResend = jest.fn(
-	async (): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
+	async (
+		..._args: Parameters<typeof import('@wcpos/query').resendOpenCommands>
+	): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
 );
 const mockPosterInputs: { approval: unknown }[] = [];
 const mockStoreDB = {
@@ -376,17 +378,20 @@ jest.mock('@wcpos/query', () => ({
 		mockPosterInputs.push(input);
 		return Object.assign((url: string, body: unknown) => input.post(url, body), {
 			// The mocked mirrorServerOrder under a fixed revision.
-			mirror: (answer: object) =>
-				jest
+			mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+				await jest
 					.requireMock('@wcpos/query/mutations')
 					.mirrorServerOrder(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
-					}),
+					});
+				options?.afterWrite?.();
+			},
 			settle: async () => undefined,
 		});
 	},
-	resendOpenCommands: (...args: unknown[]) => mockResend(...(args as [])),
+	resendOpenCommands: (...args: Parameters<typeof import('@wcpos/query').resendOpenCommands>) =>
+		mockResend(...args),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -505,7 +510,21 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.retryCommand());
 		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
 			post: expect.any(Function),
+			afterMirror: expect.any(Function),
 		});
+	});
+
+	it('Try again selects the replayed paid receipt before re-send settlement returns', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		let atMirror: string | null | undefined;
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload.status = 'completed';
+			deps.afterMirror?.({ kind: 'record', data: { order: { status: 'completed' } } });
+			atMirror = getCheckoutModeSnapshot().selectedReceiptOrder;
+			return [];
+		});
+		await act(async () => result.current.retryCommand());
+		expect(atMirror).toBe(order.uuid);
 	});
 
 	// CodeRabbit 4346454764 on #2837: a re-send in flight never shows the keypad.

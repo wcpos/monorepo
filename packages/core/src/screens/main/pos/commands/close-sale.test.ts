@@ -1,5 +1,6 @@
 import type { EngineRecord } from '@wcpos/query';
 
+import { getCheckoutModeSnapshot, resetCheckoutMode, watchTender } from '../checkout/checkout-mode';
 import { closeSale } from './close-sale';
 
 // The hook's dependencies; closeSale itself takes everything it needs as arguments.
@@ -24,11 +25,12 @@ jest.mock('@wcpos/query', () => {
 		}) => {
 			mockPosterInput(input);
 			return Object.assign((url: string, body: unknown) => input.post(url, body), {
-				mirror: async (answer: object) => {
+				mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
 					await mockMirror(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
 					});
+					options?.afterWrite?.();
 					await mockSettle();
 				},
 				settle: mockSettle,
@@ -58,7 +60,10 @@ function deps(post: jest.Mock) {
 	return { post, approval, provenance: async () => null };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+	jest.clearAllMocks();
+	resetCheckoutMode();
+});
 
 it('a zero-balance close carries the approval and is refused when the covered total changed', async () => {
 	const { MoneyCommandError } = jest.requireMock('@wcpos/query');
@@ -120,6 +125,7 @@ it('a paid summary with a null completion completes, without a completion number
 });
 
 it('balance outstanding mirrors the summary and says what is due', async () => {
+	const unwatch = watchTender(order.uuid, true);
 	const summary = { status: 'pos-partial', balance: '4.00' };
 	const post = jest.fn(async () => {
 		throw refusal(409, 'wcpos_balance_outstanding', { order: summary });
@@ -129,6 +135,8 @@ it('balance outstanding mirrors the summary and says what is due', async () => {
 		kind: 'outstanding',
 		order: summary,
 	});
+	unwatch();
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	expect(mockMirror).toHaveBeenCalledWith(
 		{},
 		'order-1',
@@ -244,4 +252,35 @@ it('a paid close the resident already shows costs no refresh', async () => {
 	}));
 	await closeSale({} as never, {} as never, order, deps(post));
 	expect(mockRefresh).not.toHaveBeenCalled();
+});
+
+it('selects a paid close receipt before the poster refresh and close confirmation refresh', async () => {
+	let status = 'pos-open';
+	const resident = {
+		uuid: order.uuid,
+		getLatest: () => ({ payload: { id: 42, status } }),
+	} as EngineRecord<'orders'>;
+	const unwatch = watchTender(order.uuid, true);
+	const post = jest.fn(async () => ({
+		data: { order: { status: 'completed' }, completion: null },
+	}));
+	mockMirror.mockImplementationOnce(async () => {
+		status = 'completed';
+	});
+	let atPoster: string | null | undefined;
+	let atConfirmation: string | null | undefined;
+	mockSettle.mockImplementationOnce(async () => {
+		atPoster = getCheckoutModeSnapshot().selectedReceiptOrder;
+		// The forced refresh adopts an open document, so closeConfirmed must re-check it.
+		status = 'pos-open';
+	});
+	mockRefresh.mockImplementationOnce(async () => {
+		atConfirmation = getCheckoutModeSnapshot().selectedReceiptOrder;
+		status = 'completed';
+		return 'refreshed';
+	});
+	await closeSale({} as never, {} as never, resident, deps(post));
+	unwatch();
+	expect(atPoster).toBe(order.uuid);
+	expect(atConfirmation).toBe(order.uuid);
 });

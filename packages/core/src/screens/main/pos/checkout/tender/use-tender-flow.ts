@@ -36,7 +36,7 @@ import {
 } from '@wcpos/query';
 import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { isPaidStatus, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -69,6 +69,7 @@ import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	receiptEntryAfterWrite,
 	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
@@ -729,8 +730,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		busyRef.current = true;
 		setBusy(true);
 		try {
+			const enterReceiptAfter = receiptEntryAfterWrite(order.uuid);
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
+				afterMirror: ({ kind, data }) => {
+					const summary = data.order as OrderPaymentSummary | null | undefined;
+					if (
+						summary &&
+						(isPaidStatus(summary.status) ||
+							(kind === 'submit' && submitStillDone(data.outcome, summary.status))) &&
+						!residentUnpaid(order.getLatest().payload, summary.status)
+					)
+						enterReceiptAfter();
+				},
 			});
 			for (const { kind, data } of answers) {
 				const row = data.payment as PaymentRow | undefined;

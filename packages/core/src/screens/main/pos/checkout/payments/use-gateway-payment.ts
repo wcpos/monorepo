@@ -17,7 +17,8 @@ import {
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { commandProvenance } from '../provenance/command-provenance';
-import { refreshOrderRecord } from '../sale-completion';
+import { refreshOrderRecord, residentUnpaid } from '../sale-completion';
+import { receiptEntryAfterWrite } from '../checkout-mode';
 import {
 	cancelGatewayInvoice,
 	submitGatewayPayment,
@@ -61,13 +62,26 @@ export function useGatewayPayment() {
 					payment,
 					order: summary,
 					awaiting,
+					settles,
 				}: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) => {
 					try {
-						await post.mirror({
-							payment,
-							order: summary,
-							meta: (meta) => withAwaitingCustomer(meta, awaiting),
-						});
+						const enterReceiptAfter = settles ? receiptEntryAfterWrite(order.uuid) : null;
+						await post.mirror(
+							{
+								payment,
+								order: summary,
+								meta: (meta) => withAwaitingCustomer(meta, awaiting),
+							},
+							{
+								afterWrite: () => {
+									if (
+										enterReceiptAfter &&
+										!residentUnpaid(order.getLatest().payload, summary?.status)
+									)
+										enterReceiptAfter();
+								},
+							}
+						);
 					} catch (error) {
 						// The store has already answered; only this till's copy is behind. Pull it.
 						const id = order.getLatest().payload.id;

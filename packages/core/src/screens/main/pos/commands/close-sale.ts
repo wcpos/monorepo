@@ -21,6 +21,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { receiptEntryAfterWrite } from '../checkout/checkout-mode';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
 import { refreshOrderRecord, residentUnpaid, type SaleContext } from '../checkout/sale-completion';
@@ -90,7 +91,18 @@ export async function closeSale(
 		// filter) proves nothing: the entry stays journaled for a re-send.
 		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
 		const summary = data.order as unknown as OrderPaymentSummary;
-		await post.mirror({ order: summary });
+		const enterReceiptAfter = isPaidStatus(summary.status)
+			? receiptEntryAfterWrite(order.uuid)
+			: null;
+		await post.mirror(
+			{ order: summary },
+			{
+				afterWrite: () => {
+					if (enterReceiptAfter && !residentUnpaid(order.getLatest().payload, summary.status))
+						enterReceiptAfter();
+				},
+			}
+		);
 		const closed = await closeConfirmed(runtime, order, summary);
 		if (closed !== 'completed') return { kind: closed, order: summary };
 		return { kind: 'completed', order: summary, completion: data.completion };

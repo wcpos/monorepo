@@ -142,23 +142,31 @@ export function useTerminalPaymentsService(): void {
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
 					// A settling status takes the order off the till and unmounts the tender that used
-					// to select its receipt; the service selects it once the write has landed.
+					// to select its receipt; the service selects it as soon as the status is on the
+					// resident, before the poster's forced refresh.
 					const enterReceiptAfter = settlesSale(payment, order, dp())
 						? receiptEntryAfterWrite(orderUuid)
 						: null;
-					await poster.mirror({
-						payment,
-						order,
-						revision,
-						// A device leg's tip moves the order total.
-						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
-					});
+					await poster.mirror(
+						{
+							payment,
+							order,
+							revision,
+							// A device leg's tip moves the order total.
+							...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
+						},
+						{
+							afterWrite: () => {
+								const payload = (resident.getLatest?.().payload ??
+									resident.payload) as EngineRecord<'orders'>['payload'];
+								// The mirror keeps another till's newer reopen: a reopened sale shows no receipt.
+								if (!stopped && !residentUnpaid(payload, order?.status)) enterReceiptAfter?.();
+							},
+						}
+					);
 					mirrored = true;
 					const payload = (resident.getLatest?.().payload ??
 						resident.payload) as EngineRecord<'orders'>['payload'];
-					// The post-mirror resident decides, not the answer (#2798 thread 4341491603): the
-					// mirror keeps another till's newer reopen, and a reopened sale shows no receipt.
-					if (!stopped && !residentUnpaid(payload, order?.status)) enterReceiptAfter?.();
 					const meta_data = cloneDeep(payload.meta_data ?? []);
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta_data)) {
 						const patched = await latest.current.stampCompletion(
