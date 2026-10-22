@@ -514,6 +514,19 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it('Try again does not select a receipt for a replayed cancel with a paid summary', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload.status = 'processing';
+			const answer = { kind: 'cancel' as const, data: { order: { status: 'processing' } } };
+			deps.afterMirror?.(answer);
+			return [answer];
+		});
+		await act(async () => result.current.retryCommand());
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	});
+
 	it('Try again selects the replayed paid receipt before re-send settlement returns', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		let atMirror: string | null | undefined;

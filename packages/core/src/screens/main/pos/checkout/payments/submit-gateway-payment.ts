@@ -33,8 +33,6 @@ export interface SubmitGatewayPaymentDeps {
 		payment?: PaymentRow;
 		order: OrderPaymentSummary;
 		awaiting: AwaitingCustomerStamp | null;
-		/** Whether this answer takes the sale off the till. */
-		settles: boolean;
 	}) => Promise<void>;
 	cashierId: number;
 	now?: () => string;
@@ -165,9 +163,6 @@ export async function submitGatewayPayment(
 				...(outcome.kind === 'recorded' ? { payment: outcome.row } : {}),
 				order: outcome.order,
 				awaiting,
-				settles:
-					outcome.kind === 'settled' ||
-					(outcome.kind !== 'reopened' && isPaidStatus(outcome.order.status)),
 			});
 		} catch (mirrorError) {
 			throw new GatewayMirrorError(outcome, mirrorError);
@@ -243,7 +238,7 @@ export async function cancelGatewayInvoice(
 	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
 	const outcome = { kind: reopened ? 'cancelled' : 'unchanged', order: summary } as const;
 	try {
-		await deps.mirror({ order: summary, awaiting: reopened ? null : stamp, settles: false });
+		await deps.mirror({ order: summary, awaiting: reopened ? null : stamp });
 	} catch (mirrorError) {
 		throw new GatewayCancelMirrorError(outcome, mirrorError);
 	}

@@ -22,7 +22,7 @@ import {
 	completionMetaFor,
 	isSaleComplete,
 	isSettledOrderStatus,
-	residentUnpaid,
+	receiptOnPaidWrite,
 } from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
 import { commandProvenance } from '../../provenance/command-provenance';
@@ -35,11 +35,7 @@ import {
 import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
-import {
-	getOrderSaveState,
-	receiptEntryAfterWrite,
-	subscribeCheckoutMode,
-} from '../../checkout-mode';
+import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -144,9 +140,6 @@ export function useTerminalPaymentsService(): void {
 					// A settling status takes the order off the till and unmounts the tender that used
 					// to select its receipt; the service selects it as soon as the status is on the
 					// resident, before the poster's forced refresh.
-					const enterReceiptAfter = settlesSale(payment, order, dp())
-						? receiptEntryAfterWrite(orderUuid)
-						: null;
 					await poster.mirror(
 						{
 							payment,
@@ -156,12 +149,9 @@ export function useTerminalPaymentsService(): void {
 							...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
 						},
 						{
-							afterWrite: () => {
-								const payload = (resident.getLatest?.().payload ??
-									resident.payload) as EngineRecord<'orders'>['payload'];
-								// The mirror keeps another till's newer reopen: a reopened sale shows no receipt.
-								if (!stopped && !residentUnpaid(payload, order?.status)) enterReceiptAfter?.();
-							},
+							afterWrite: settlesSale(payment, order, dp())
+								? receiptOnPaidWrite(resident, order?.status, { live: () => !stopped })
+								: undefined,
 						}
 					);
 					mirrored = true;

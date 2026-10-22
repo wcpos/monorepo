@@ -12,7 +12,6 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 } from '@wcpos/order-math';
-import { isPaidStatus } from '@wcpos/sync-core';
 import { readOrderCommands } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -24,10 +23,9 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import {
 	completionMetaFor,
 	persistSaleProvenance,
+	receiptOnPaidWrite,
 	refreshOrderRecord,
-	residentUnpaid,
 } from '../sale-completion';
-import { receiptEntryAfterWrite } from '../checkout-mode';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
@@ -134,16 +132,9 @@ export function useRecordManualPayment(
 				},
 				mirror: async ({ payment, status }, { accepted }) => {
 					try {
-						const enterReceiptAfter =
-							accepted && isPaidStatus(status) ? receiptEntryAfterWrite(order.uuid) : null;
 						await post.mirror(
 							{ payment, order: status ? ({ status } as never) : null },
-							{
-								afterWrite: () => {
-									if (enterReceiptAfter && !residentUnpaid(order.getLatest().payload, status))
-										enterReceiptAfter();
-								},
-							}
+							{ afterWrite: receiptOnPaidWrite(order, accepted ? status : undefined) }
 						);
 						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
 						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {

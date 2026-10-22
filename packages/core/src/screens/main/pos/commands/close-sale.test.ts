@@ -284,3 +284,30 @@ it('selects a paid close receipt before the poster refresh and close confirmatio
 	expect(atPoster).toBe(order.uuid);
 	expect(atConfirmation).toBe(order.uuid);
 });
+
+it('withdraws the early receipt when close confirmation confirms a reopen', async () => {
+	let status = 'pos-open';
+	const resident = {
+		uuid: order.uuid,
+		getLatest: () => ({ payload: { id: 42, status } }),
+	} as EngineRecord<'orders'>;
+	const unwatch = watchTender(order.uuid, true);
+	const post = jest.fn(async () => ({
+		data: { order: { status: 'completed' }, completion: null },
+	}));
+	mockMirror.mockImplementationOnce(async () => {
+		status = 'completed';
+	});
+	mockSettle.mockImplementationOnce(async () => {
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(order.uuid);
+		status = 'pos-open';
+	});
+	mockRefresh.mockResolvedValueOnce('refreshed');
+	expect(await closeSale({} as never, {} as never, resident, deps(post))).toMatchObject({
+		kind: 'reopened',
+	});
+	unwatch();
+	expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
+	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(true);
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+});

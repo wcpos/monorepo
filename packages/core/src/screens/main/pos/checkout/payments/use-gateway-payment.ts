@@ -17,8 +17,7 @@ import {
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { commandProvenance } from '../provenance/command-provenance';
-import { refreshOrderRecord, residentUnpaid } from '../sale-completion';
-import { receiptEntryAfterWrite } from '../checkout-mode';
+import { receiptOnPaidWrite, refreshOrderRecord } from '../sale-completion';
 import {
 	cancelGatewayInvoice,
 	submitGatewayPayment,
@@ -43,7 +42,12 @@ export function useGatewayPayment() {
 	const deps = React.useCallback(
 		(
 			order: EngineRecord<'orders'>,
-			options: { destination?: string | null; approval?: OrderApproval; sessionId?: string | null }
+			options: {
+				destination?: string | null;
+				approval?: OrderApproval;
+				sessionId?: string | null;
+				receipt?: false;
+			}
 		) => {
 			const post = moneyCommandPoster({
 				runtime: manager,
@@ -62,10 +66,8 @@ export function useGatewayPayment() {
 					payment,
 					order: summary,
 					awaiting,
-					settles,
 				}: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) => {
 					try {
-						const enterReceiptAfter = settles ? receiptEntryAfterWrite(order.uuid) : null;
 						await post.mirror(
 							{
 								payment,
@@ -73,13 +75,10 @@ export function useGatewayPayment() {
 								meta: (meta) => withAwaitingCustomer(meta, awaiting),
 							},
 							{
-								afterWrite: () => {
-									if (
-										enterReceiptAfter &&
-										!residentUnpaid(order.getLatest().payload, summary?.status)
-									)
-										enterReceiptAfter();
-								},
+								afterWrite:
+									options.receipt === false
+										? undefined
+										: receiptOnPaidWrite(order, summary?.status),
 							}
 						);
 					} catch (error) {
@@ -118,7 +117,7 @@ export function useGatewayPayment() {
 	);
 	const cancel = React.useCallback(
 		(order: EngineRecord<'orders'>, stamp: AwaitingCustomerStamp) =>
-			cancelGatewayInvoice(gatewayOrder(order), stamp, deps(order, {})),
+			cancelGatewayInvoice(gatewayOrder(order), stamp, deps(order, { receipt: false })),
 		[deps]
 	);
 	return React.useMemo(() => ({ submit, cancel }), [submit, cancel]);

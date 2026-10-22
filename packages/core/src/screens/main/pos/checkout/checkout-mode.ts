@@ -143,6 +143,7 @@ export function leaveCheckout(uuid: string) {
  * serving: that order keeps its tab ("Paid · receipt") and waits to be tapped.
  */
 export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
+	if (select) enteredAfterWrite.delete(uuid);
 	if (!select && finishedBeforeCompletion.delete(uuid)) return;
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
@@ -202,6 +203,20 @@ export function receiptEntryAfterWrite(uuid: string): () => void {
 			enteredAfterWrite.add(uuid);
 		}
 	};
+}
+/** Withdraw only a provisional write entry; confirmed or already finished receipts stay alone. */
+export function retractReceiptEntry(uuid: string): void {
+	if (!enteredAfterWrite.delete(uuid)) return;
+	receiptPrintAttempts.delete(uuid);
+	const receiptOrders = new Set(snapshot.receiptOrders);
+	receiptOrders.delete(uuid);
+	publish({
+		...snapshot,
+		receiptOrders,
+		checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]),
+		selectedReceiptOrder:
+			snapshot.selectedReceiptOrder === uuid ? null : snapshot.selectedReceiptOrder,
+	});
 }
 export function finishReceipt(uuid: string) {
 	if (enteredAfterWrite.delete(uuid)) finishedBeforeCompletion.add(uuid);

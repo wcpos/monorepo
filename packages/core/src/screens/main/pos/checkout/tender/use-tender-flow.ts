@@ -36,7 +36,7 @@ import {
 } from '@wcpos/query';
 import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { isPaidStatus, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -53,6 +53,7 @@ import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import {
 	persistSaleProvenance,
+	receiptOnPaidWrite,
 	recordSaleAttempt,
 	reopenedSince,
 	residentUnpaid,
@@ -734,14 +735,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
 				afterMirror: ({ kind, data }) => {
+					// Only answers the loop below finishes; a send needs its adopted stamp.
+					const finishes =
+						kind === 'close' ||
+						kind === 'record' ||
+						(kind === 'submit' &&
+							(data.outcome !== 'sent' ||
+								readAwaitingCustomer(order.getLatest().payload.meta_data) !== null));
+					if (!finishes) return;
 					const summary = data.order as OrderPaymentSummary | null | undefined;
-					if (
-						summary &&
-						(isPaidStatus(summary.status) ||
-							(kind === 'submit' && submitStillDone(data.outcome, summary.status))) &&
-						!residentUnpaid(order.getLatest().payload, summary.status)
-					)
-						enterReceiptAfter();
+					receiptOnPaidWrite(order, summary?.status, { entry: enterReceiptAfter })?.();
 				},
 			});
 			for (const { kind, data } of answers) {
