@@ -28,7 +28,7 @@ import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { ListFrame } from '../components/list-frame';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
@@ -192,19 +192,32 @@ function CouponsList({
 }
 
 /** The list: the part of the page the Free preview overlay covers. */
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CouponsColumn() {
+	const state = useQueryState<'coupons'>();
+	const handle = useCollectionQueryHandle('coupons', state);
+	return (
+		<ListColumn
+			testID="coupons-body"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="coupons" />}
+		>
+			<CouponsList handle={handle} />
+		</ListColumn>
+	);
+}
+
 function CouponsScreenContent() {
 	const t = useT();
 	const router = useRouter();
-	const state = useQueryState<'coupons'>();
-	const handle = useCollectionQueryHandle('coupons', state);
 	// The bar sits outside the guard, so it reads the licence itself.
 	const { license } = useAppInfo();
 	const readOnly = !(license?.isPro ?? false);
 	const { caps } = useUserCapabilities();
 	return (
-		<ListFrame
+		<ListPage
 			testID="screen-coupons"
-			bodyTestID="coupons-body"
 			pro="coupons"
 			bar={
 				<ManagementBar
@@ -241,12 +254,9 @@ function CouponsScreenContent() {
 					<DisplayOptions />
 				</ManagementBar>
 			}
-			chips={<FilterBar />}
-			handle={handle}
-			skeleton={<DataTableSkeleton id="coupons" />}
 		>
-			<CouponsList handle={handle} />
-		</ListFrame>
+			<CouponsColumn />
+		</ListPage>
 	);
 }
 

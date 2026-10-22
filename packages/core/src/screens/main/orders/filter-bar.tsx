@@ -97,7 +97,7 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 			<StatusPill />
 			<PaymentMethodPill />
 			{/* A pill that reads a record answers after the row has drawn: it holds a chip's
-				    frame meanwhile, so the pills beside it never shift. */}
+			    frame meanwhile, so the pills beside it never shift. */}
 			<Suspense fallback={<Skeleton shape="chip" />}>
 				<CustomerPill
 					resource={customerResource}

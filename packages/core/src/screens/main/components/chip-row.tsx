@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { ScrollView, type ScrollViewInstance, View } from 'react-native';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { Skeleton } from '@wcpos/components/skeleton';
 
 /**
@@ -8,6 +10,9 @@ import { Skeleton } from '@wcpos/components/skeleton';
  * products column): the page gutter all round, so the search above and the card below share one
  * edge, and the pills in a horizontal scroller. The plain wrapper sizes the row to its chips,
  * so the scroller never grows into the card's space (CODING_STANDARDS § Design, Gutters).
+ *
+ * A phone's screen edge keeps 16 (`p-4`): Apple's root-view minimum applies at the device edge;
+ * the gutter is for the ground inside a window.
  *
  * `ref` reaches the scroller: the POS bar scrolls a pressed chip into view with it.
  */
@@ -21,7 +26,7 @@ export function ChipRow({
 	children: React.ReactNode;
 }) {
 	return (
-		<View testID={testID} className="p-gutter">
+		<View testID={testID} className={useIsPhone() ? 'p-4' : 'p-gutter'}>
 			<ScrollView
 				ref={ref}
 				horizontal
@@ -38,14 +43,18 @@ export function ChipRow({
 const PLACEHOLDER_CHIPS = 4;
 
 /**
- * The chip row's frame while its pills are still answering: the same `p-gutter` row at the
+ * The chip row's frame while its pills are still answering: the same row at the
  * chips' own height, so the card under it stands where it will once the pills arrive. The row
  * used to mount with the table, after its skeleton, and push the card down when it came
  * (owner, 2026-10-22: "jarring, either load the filter bar or at least skeleton").
  */
 export function ChipRowSkeleton() {
+	const phone = useIsPhone();
 	return (
-		<View testID="filter-bar-skeleton" className="p-gutter flex-row items-center gap-2">
+		<View
+			testID="filter-bar-skeleton"
+			className={cn('flex-row items-center gap-2', phone ? 'p-4' : 'p-gutter')}
+		>
 			{Array.from({ length: PLACEHOLDER_CHIPS }, (_, index) => (
 				<Skeleton key={index} shape="chip" />
 			))}

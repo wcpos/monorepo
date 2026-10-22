@@ -4,6 +4,7 @@ import type { LayoutChangeEvent } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GUTTER_UNITS } from '@wcpos/components/lib/scale';
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 
 import { useT } from '../../../contexts/translations';
@@ -18,9 +19,9 @@ export function Support() {
 	const t = useT();
 	const { license } = useAppInfo();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	// The frame's `p-gutter` (three spacing units) in px at the live step, so the widget fills
+	// The frame's `p-gutter` (`GUTTER_UNITS`) in px at the live step, so the widget fills
 	// the frame exactly.
-	const gutter = 3 * useSpacingUnit();
+	const gutter = GUTTER_UNITS * useSpacingUnit();
 	// The window seeds the size so the DOM component never mounts at 0×0; once
 	// the frame reports its own layout that wins, and it reports again on
 	// every rotation, so no separate dimension listener is needed.

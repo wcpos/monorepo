@@ -22,6 +22,7 @@ import {
 import { HandleProductsFooter } from '../handle-footer';
 import { ProductTile } from '../tiles/product-tile';
 import { TileGrid } from '../tiles/tile-grid';
+import { TileGround } from '../../../components/data-table/surface';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { BrowseRootFooter } from './browse-root-footer';
@@ -62,25 +63,23 @@ export function BrowseRootGrid({
 	const tiles = React.useMemo(() => [ALL, ...terms], [terms]);
 
 	return (
-		// Tiles are cards already: they sit straight on the ground, one page gutter in, as the
-		// products grid's do (product-grid.tsx).
+		// Tiles are cards already: they sit straight on the ground (`TileGround`), as the products
+		// grid's do.
 		<View className="flex h-full flex-col" testID="browse-root">
-			<View className="px-gutter min-h-0 flex-1">
-				<View className="-mx-1 -mt-1 flex-1">
-					<TileGrid
-						tiles={tiles}
-						rowKey={(row) => termKey(row[0])}
-						renderTile={(term) => (
-							<TermTile
-								key={termKey(term)}
-								term={term}
-								onPress={onOpen}
-								lifted={lifted === termKey(term)}
-							/>
-						)}
-					/>
-				</View>
-			</View>
+			<TileGround>
+				<TileGrid
+					tiles={tiles}
+					rowKey={(row) => termKey(row[0])}
+					renderTile={(term) => (
+						<TermTile
+							key={termKey(term)}
+							term={term}
+							onPress={onOpen}
+							lifted={lifted === termKey(term)}
+						/>
+					)}
+				/>
+			</TileGround>
 			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
 		</View>
 	);
@@ -277,9 +276,10 @@ export function TermLevelGrid({
 				/>
 			</DealFade>
 			<View className="min-h-0 flex-1" testID="browse-level-surface">
-				{/* The grid one page gutter in, less the tiles' own `m-1` (product-grid.tsx). */}
-				<View className="px-gutter min-h-0 flex-1">
-					<View className="-mx-1 -mt-1 min-h-0 flex-1" style={air.frame}>
+				<TileGround>
+					{/* The air frame moves itself in flight (`marginTop`): its own element, inside
+					    the ground, so it never replaces the ground's `-mt-1`. */}
+					<View testID="browse-level-air" className="min-h-0 flex-1" style={air.frame}>
 						<View
 							ref={slotsNode}
 							className="min-h-0 flex-1"
@@ -337,7 +337,7 @@ export function TermLevelGrid({
 							/>
 						</View>
 					</View>
-				</View>
+				</TileGround>
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (
 					<DealFade>

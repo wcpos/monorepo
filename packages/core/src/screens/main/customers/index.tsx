@@ -22,7 +22,7 @@ import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { ListFrame } from '../components/list-frame';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
@@ -162,19 +162,32 @@ function CustomersList({
 	);
 }
 
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CustomersColumn() {
+	const state = useQueryState<'customers'>();
+	const handle = useCollectionQueryHandle('customers', state);
+	return (
+		<ListColumn
+			testID="customers-body"
+
+			handle={handle}
+			skeleton={<DataTableSkeleton id="customers" />}
+		>
+			<CustomersList handle={handle} />
+		</ListColumn>
+	);
+}
+
 function CustomersScreenContent() {
 	const t = useT();
 	const router = useRouter();
-	const state = useQueryState<'customers'>();
-	const handle = useCollectionQueryHandle('customers', state);
 	// The bar sits outside the guard, so it reads the licence itself.
 	const { license } = useAppInfo();
 	const readOnly = !(license?.isPro ?? false);
 	const { caps } = useUserCapabilities();
 	return (
-		<ListFrame
+		<ListPage
 			testID="screen-customers"
-			bodyTestID="customers-body"
 			pro="customers"
 			bar={
 				<ManagementBar
@@ -211,11 +224,9 @@ function CustomersScreenContent() {
 					<DisplayOptions />
 				</ManagementBar>
 			}
-			handle={handle}
-			skeleton={<DataTableSkeleton id="customers" />}
 		>
-			<CustomersList handle={handle} />
-		</ListFrame>
+			<CustomersColumn />
+		</ListPage>
 	);
 }
 

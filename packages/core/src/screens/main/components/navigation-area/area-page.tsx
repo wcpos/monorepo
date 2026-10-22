@@ -5,16 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
 /**
- * The page gutter around the card (`--spacing-gutter`), on every side at every width: the same
- * gutter the list pages give their search, chips and card (CODING_STANDARDS § Design, Gutters).
- * The 20/24 verticals and the 32 on `md` that preceded it were this page's own numbers, off the
- * scale. The card's own body keeps its 16 (inside a surface).
+ * The page gutter around the card (`--spacing-gutter`), on every side: the same gutter the list
+ * pages give their search, chips and card (CODING_STANDARDS § Design, Gutters). A phone's screen
+ * edge keeps 16: Apple's root-view minimum applies at the device edge. The 20/24 verticals and
+ * the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's own
+ * body keeps its 16 (inside a surface).
  */
-const PAGE_PADDING = 'p-gutter';
+const pagePadding = (phone: boolean) => (phone ? 'p-4' : 'p-gutter');
 
 export type AreaPageMode = 'scroll' | 'fill';
 
@@ -41,6 +43,7 @@ export function AreaPage({
 	children: React.ReactNode;
 }) {
 	const insets = useSafeAreaInsets();
+	const padding = pagePadding(useIsPhone());
 	const heading = (
 		<View className="gap-0.5 px-4 pt-4 pb-3">
 			<Text role="heading" aria-level={1} className="text-xl font-semibold">
@@ -63,7 +66,7 @@ export function AreaPage({
 				// The last control on a page sits above the home indicator, never on it.
 				style={{ paddingBottom: insets.bottom }}
 			>
-				<View className={`min-h-0 flex-1 ${PAGE_PADDING}`}>
+				<View className={`min-h-0 flex-1 ${padding}`}>
 					<Card className="mx-auto min-h-0 w-full max-w-4xl flex-1 overflow-hidden">
 						{heading}
 						<View className="border-border border-t-hairline min-h-0 flex-1 p-4">{body}</View>
@@ -78,10 +81,10 @@ export function AreaPage({
 			testID={testID}
 			className="flex-1"
 			// The last control on a page sits above the home indicator, never on it; the page
-			// gutter under the card is `PAGE_PADDING`'s, so only the inset is added here.
+			// gutter under the card is the page padding's, so only the inset is added here.
 			contentContainerStyle={{ paddingBottom: insets.bottom }}
 		>
-			<View className={`mx-auto w-full max-w-4xl ${PAGE_PADDING}`}>
+			<View className={`mx-auto w-full max-w-4xl ${padding}`}>
 				<Card className="overflow-hidden">
 					{heading}
 					<View className="border-border border-t-hairline p-4">{body}</View>

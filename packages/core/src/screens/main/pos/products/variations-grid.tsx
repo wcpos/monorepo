@@ -11,6 +11,7 @@ import { useQueryHandleFields } from '../../../../query';
 import { matchesStockStatusFilter } from '../../components/product/stock-filter';
 import { useUISettings } from '../../contexts/ui-settings';
 import { DealCell, DealFade, FRONT, type Measurable, useAirspace, useDeal } from './deal-stack';
+import { TileGround } from '../../components/data-table/surface';
 import { HandleProductsFooter } from './handle-footer';
 import { ParentTile, VariationPlaceholder, VariationTile } from './tiles/variation-tile';
 
@@ -109,11 +110,13 @@ export function VariationsGrid({
 
 	return (
 		// The dealt grid lands on the ground under the crumb, as the products grid stands: one page
-		// gutter in, less the tiles' own `m-1` (product-grid.tsx). The frame the slots rest in is
+		// gutter in, less the tiles' own `m-1` (`TileGround`). The frame the slots rest in is
 		// reported, not assumed.
 		<View className="min-h-0 flex-1" testID="variations-surface">
-			<View className="px-gutter min-h-0 flex-1">
-				<View className="-mx-1 -mt-1 min-h-0 flex-1" style={air.frame}>
+			<TileGround>
+				{/* The air frame moves itself in flight (`marginTop`): its own element, inside the
+				    ground, so it never replaces the ground's `-mt-1`. */}
+				<View testID="variations-air" className="min-h-0 flex-1" style={air.frame}>
 					<View
 						ref={slotsNode}
 						className="min-h-0 flex-1"
@@ -162,7 +165,7 @@ export function VariationsGrid({
 						</Animated.ScrollView>
 					</View>
 				</View>
-			</View>
+			</TileGround>
 			<DealFade>
 				<VariationsFooter
 					handle={handle}

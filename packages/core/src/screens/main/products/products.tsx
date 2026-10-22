@@ -12,7 +12,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
 import { ManagementBar } from '../components/management-bar';
 import { DisplayOptions } from '../components/display-options';
-import { ListFrame } from '../components/list-frame';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { ProductRow as TouchRow, VariableRow } from './row';
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -327,16 +327,29 @@ function ProductsList({
 	);
 }
 
-export function Products() {
-	const t = useT();
+/** The list's column: the part of the page the Free preview overlay covers. */
+function ProductsColumn() {
 	const state = useQueryState<'products'>();
 	const handle = useProductsQueryHandle(state);
+	return (
+		<ListColumn
+			testID="products-body"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="products" />}
+		>
+			<ProductsList handle={handle} />
+		</ListColumn>
+	);
+}
+
+export function Products() {
+	const t = useT();
 	const actions = useQueryStateActions<'products'>();
 	const { onKeyPress } = useBarcode(actions.setSearch);
 	return (
-		<ListFrame
+		<ListPage
 			testID="screen-products"
-			bodyTestID="products-body"
 			pro="products"
 			bar={
 				<ManagementBar
@@ -355,11 +368,8 @@ export function Products() {
 					<DisplayOptions id="products" title={t('common.product_settings')} />
 				</ManagementBar>
 			}
-			chips={<FilterBar />}
-			handle={handle}
-			skeleton={<DataTableSkeleton id="products" />}
 		>
-			<ProductsList handle={handle} />
-		</ListFrame>
+			<ProductsColumn />
+		</ListPage>
 	);
 }

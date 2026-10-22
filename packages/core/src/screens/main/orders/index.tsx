@@ -38,7 +38,7 @@ import { CreatedVia } from '../components/order/created-via';
 import { Customer } from '../components/order/customer';
 import { OrderNumber } from '../components/order/order-number';
 import { PaymentMethod } from '../components/order/payment-method';
-import { ListFrame, ListFrameBoundary, ListFrameChips } from '../components/list-frame';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { useUISettings } from '../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
 import {
@@ -296,13 +296,13 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 					: undefined
 			}
 		>
-			{/* The frame's chip row and boundary, drawn in the list column: the chips never span
-			    over the pane. */}
+			{/* The list column stands beside the pane: the chips never span over it. */}
 			<View className="min-w-0 flex-1">
-				<ListFrameChips>
-					<FilterBar initialFilters={initialFilters} />
-				</ListFrameChips>
-				<ListFrameBoundary handle={handle} skeleton={<DataTableSkeleton id="orders" />}>
+				<ListColumn
+					chips={<FilterBar initialFilters={initialFilters} />}
+					handle={handle}
+					skeleton={<DataTableSkeleton id="orders" />}
+				>
 					{/* Beside the pane the list has the pane's width left: below the desktop
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar
 						    (number, customer, status, total) until the pane closes. */}
@@ -317,7 +317,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 							}}
 						/>
 					</DeviceScope>
-				</ListFrameBoundary>
+				</ListColumn>
 			</View>
 			{phone ? (
 				selected &&
@@ -358,10 +358,9 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 	const { license } = useAppInfo();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	return (
-		<ListFrame
+		<ListPage
 			testID="screen-orders"
 			pro="orders"
-			bodyOwnsRows
 			bar={
 				<>
 					<ManagementBar
@@ -384,7 +383,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 			}
 		>
 			<OrdersBody initialFilters={initialFilters} />
-		</ListFrame>
+		</ListPage>
 	);
 }
 

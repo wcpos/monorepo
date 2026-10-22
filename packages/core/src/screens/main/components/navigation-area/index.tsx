@@ -171,7 +171,8 @@ export function NavigationAreaIndex({
 
 	return (
 		<ScrollView testID={testID} className="bg-background flex-1">
-			<View className="p-gutter gap-1">
+			{/* A phone only: the screen edge keeps 16 (CODING_STANDARDS § Design, Gutters). */}
+			<View className="gap-1 p-4">
 				<NavigationItems items={items} showChevron />
 			</View>
 		</ScrollView>

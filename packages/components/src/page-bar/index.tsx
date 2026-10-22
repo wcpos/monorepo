@@ -34,7 +34,7 @@ export type PageBarProps = ViewProps & {
 	 * Pads the top safe-area inset (default). `false` for a bar inside a column that already
 	 * pads it (the POS products column's `EdgeColumn`).
 	 */
-	safeArea?: boolean;
+	insetTop?: boolean;
 };
 
 export function PageBar({
@@ -45,7 +45,7 @@ export function PageBar({
 	onMenu,
 	back,
 	search,
-	safeArea = true,
+	insetTop = true,
 	children,
 	testID,
 	className,
@@ -59,7 +59,7 @@ export function PageBar({
 		<View
 			testID={testID}
 			className={cn('bg-background', className)}
-			style={safeArea ? [style, { paddingTop: insets.top }] : style}
+			style={insetTop ? [style, { paddingTop: insets.top }] : style}
 			{...props}
 		>
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
@@ -72,7 +72,7 @@ export function PageBar({
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone ? 'h-ctl pl-gutter gap-2 pr-2' : 'px-gutter pt-gutter gap-4'
+					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'px-gutter pt-gutter gap-4'
 				)}
 			>
 				{(phone || onMenu) &&

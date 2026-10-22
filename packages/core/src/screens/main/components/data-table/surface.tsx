@@ -9,7 +9,7 @@ import { cn } from '@wcpos/components/lib/utils';
  * one radius, inset by the page gutter (`--spacing-gutter`, 12 at Regular) on every list surface
  * — Products, Orders, Customers, Coupons and the POS products column alike — so its edge lines
  * up with the search and the chips above it. The card owns its sides and its bottom only: the
- * row above it (the chip row's `p-gutter`, or `ListFrame`'s body `pt-gutter` where there are no
+ * row above it (the chip row's `p-gutter`, or `ListColumn`'s body `pt-gutter` where there are no
  * chips) owns the gutter over it, so there is exactly one gutter between the chips and the card
  * and the pending-search line between them still runs the pane's full width. The phone has no
  * ground to show around it — the list runs edge to edge under a hairline instead.
@@ -29,6 +29,20 @@ export function TableSurface({ className, ...props }: ViewProps) {
 			)}
 			{...props}
 		/>
+	);
+}
+
+/**
+ * The ground a tile grid stands on, in the card's place: a Poster tile carries 4 of its own
+ * margin; the ground gives the page gutter minus it, so tiles sit one gutter from the sides and
+ * under the row above, like the table card. A child that moves itself (the deal's air frame)
+ * goes inside, never on the element taking the tiles' margin back.
+ */
+export function TileGround({ children }: { children: React.ReactNode }) {
+	return (
+		<View className="px-gutter min-h-0 flex-1">
+			<View className="-mx-1 -mt-1 min-h-0 flex-1">{children}</View>
+		</View>
 	);
 }
 

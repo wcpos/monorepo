@@ -114,7 +114,9 @@ it('seats the search beside the title and caps its width; the phone keeps the co
 			<PageBar testID="bar" title="Orders" />
 		</DeviceScope>
 	);
-	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl');
+	// The phone's screen edge keeps 16 (`pl-4`), not the window gutter (owner, 2026-10-22).
+	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl', 'pl-4');
+	expect(screen.getByTestId('bar').firstElementChild).not.toHaveClass('pl-gutter');
 });
 
 // Every bar with a search, the POS products column's included, has one phone grammar: the
@@ -146,8 +148,8 @@ it.each([false, true])('draws no search row or slot without a search (phone: %s)
 });
 
 // A bar inside a column that pads the inset itself (the POS products column's EdgeColumn).
-it('leaves the top inset to its column when safeArea is off', () => {
-	render(<PageBar testID="bar" safeArea={false} />);
+it('leaves the top inset to its column when insetTop is off', () => {
+	render(<PageBar testID="bar" insetTop={false} />);
 	expect(screen.getByTestId('bar').style.paddingTop).toBe('');
 });
 

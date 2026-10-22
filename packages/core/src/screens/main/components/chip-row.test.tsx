@@ -44,6 +44,11 @@ jest.mock('react-native', () => {
 		},
 	};
 });
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
+beforeEach(() => {
+	mockPhone = false;
+});
 jest.mock('@wcpos/components/skeleton', () => ({
 	Skeleton: ({ shape }: { shape: string }) => (
 		<span data-testid="chip-skeleton" data-shape={shape} />
@@ -65,6 +70,22 @@ it('insets the pills by the page gutter in a horizontal scroller', () => {
 	expect(scroller.getAttribute('data-horizontal')).toBe('true');
 	expect(scroller.getAttribute('data-indicator')).toBe('false');
 	expect(scroller.getAttribute('data-content-class')).toBe('items-center gap-2');
+});
+
+// The phone's screen edge keeps 16: Apple's root-view minimum applies at the device edge; the
+// gutter is for the ground inside a window (owner, 2026-10-22).
+it('keeps 16 at the phone screen edge, the row and its skeleton alike', () => {
+	mockPhone = true;
+	render(
+		<ChipRow testID="chips">
+			<button />
+		</ChipRow>
+	);
+	render(<ChipRowSkeleton />);
+	expect(screen.getByTestId('chips').getAttribute('data-class')).toBe('p-4');
+	const skeleton = screen.getByTestId('filter-bar-skeleton').getAttribute('data-class')?.split(' ');
+	expect(skeleton).toContain('p-4');
+	expect(skeleton).not.toContain('p-gutter');
 });
 
 it('hands its ref to the scroller', () => {
