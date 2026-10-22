@@ -9,7 +9,16 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
+import { wcposRestRoute } from './fixtures';
 import { expectOrderPaid, liveOrderTest as liveTest } from './order-lifecycle';
+
+/**
+ * How long a reader status line may take to appear. These are waits, not measurements: each
+ * one sits behind server round trips (the reader bootstrap; intent, outcome, status and void
+ * for a decline), and on the shared pool a single store request took 5-22 s (live run
+ * 39782966367). Playwright's 5 s default expect window closed on a slow pool.
+ */
+const READER_STATUS_WAIT = 60_000;
 
 function simulatedDevice(descriptors: Descriptor[]) {
 	return descriptors.find((method) => {
@@ -54,7 +63,9 @@ async function connect(page: Page, methodId: string, reader: string) {
 	await expect(option).toBeVisible();
 	await option.click();
 	// The row's status line renders only while the reader is connected.
-	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toBeVisible();
+	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toBeVisible({
+		timeout: READER_STATUS_WAIT,
+	});
 	await page.goBack();
 	if (
 		!viaLink &&
@@ -122,13 +133,17 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 						: null;
 				await take(page, orderId);
 				if (scenario === 'cancel') {
-					await expect(page.getByTestId('checkout-terminal-cancel')).toBeEnabled();
+					await expect(page.getByTestId('checkout-terminal-cancel')).toBeEnabled({
+						timeout: READER_STATUS_WAIT,
+					});
 					const voided = paymentResponse(page, orderId, 'void');
 					await page.getByTestId('checkout-terminal-cancel').click();
 					expect((await voided).status()).toBeLessThan(400);
 				}
 				if (scenario === 'decline' || scenario === 'cancel') {
-					await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible();
+					await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible({
+						timeout: READER_STATUS_WAIT,
+					});
 					const failedOrder = await pollOrder(
 						request,
 						testInfo,
@@ -159,7 +174,31 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 				}
 				if (capture) {
 					const response = await capture;
-					expect(response.status()).toBeLessThan(400);
+					if (response.status() >= 400) {
+						// The reader's outcome can settle the row on the store before the till's own
+						// capture lands (device-leg.ts expects this); the store then refuses the repeat
+						// with wcpos_invalid_transition, whose body carries no payment. That refusal is
+						// the answer only when the store's ledger shows this same row captured.
+						expect(response.status(), 'capture POST must succeed or be a settled repeat').toBe(409);
+						expect(((await response.json()) as { code?: string }).code).toBe(
+							'wcpos_invalid_transition'
+						);
+						const paymentId = /\/payments\/([^/]+)\/capture$/
+							.exec(wcposRestRoute(response.url()) ?? '')?.[1]
+							?.toLowerCase();
+						expect(paymentId, 'capture route must name the payment').toBeTruthy();
+						await pollOrder(
+							request,
+							testInfo,
+							authorization,
+							orderId,
+							(order) =>
+								ledgerRows(order).some(
+									(row) => row.id?.toLowerCase() === paymentId && row.status === 'captured'
+								),
+							'a refused repeat capture must find the same row already captured'
+						);
+					}
 					const sent = response.request().postDataJSON();
 					expect(sent.context).toMatchObject({
 						provider_refs: { payment_intent: expect.stringMatching(/^sim_pi_/) },

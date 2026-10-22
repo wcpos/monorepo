@@ -172,7 +172,15 @@ async function interceptRefundDependencies(page: Page) {
 async function openRefundModalForNewOrder(page: Page) {
 	await interceptRefundDependencies(page);
 	const { orderUuid, total } = await createRefundableOrder(page);
+	// The reload re-pulls the (stubbed) gateway list, and the original-method destination stays
+	// disabled until it lands; on a slow queue that pull leaves well after the modal paints.
+	const gatewaysLoaded = page.waitForResponse(
+		(response) => isWcposRestRoute(response.url(), '/wcpos/v2/payment-gateways'),
+		{ timeout: 90_000 }
+	);
+	gatewaysLoaded.catch(() => {});
 	await page.goto(`/orders/refund/${orderUuid}`);
+	await gatewaysLoaded;
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
