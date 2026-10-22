@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { CaptionRowInset, TableSurface } from './surface';
+import { CaptionRowInset, TableSurface, TileGround } from './surface';
 
 let mockPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
@@ -64,4 +64,24 @@ it('runs edge to edge on a phone', () => {
 	render(<TableSurface testID="surface" />);
 	expect(classes()).toContain('border-t');
 	expect(classes().some((name) => /^(mx|mb|rounded)/.test(name))).toBe(false);
+});
+
+// The tile ground gives the page gutter less the tile's own 4; on a phone the screen edge keeps
+// 16, as the chip row above the tiles does (owner, 2026-10-22).
+it('insets the tile ground by the gutter, and by 16 on a phone', () => {
+	const ground = () => {
+		const { unmount } = render(
+			<TileGround>
+				<span data-testid="tiles" />
+			</TileGround>
+		);
+		const outer = screen.getByTestId('tiles').parentElement?.parentElement as HTMLElement;
+		const inner = screen.getByTestId('tiles').parentElement as HTMLElement;
+		const value = [outer.getAttribute('data-class'), inner.getAttribute('data-class')];
+		unmount();
+		return value;
+	};
+	expect(ground()).toEqual(['px-gutter min-h-0 flex-1', '-mx-1 -mt-1 min-h-0 flex-1']);
+	mockPhone = true;
+	expect(ground()).toEqual(['min-h-0 flex-1 px-4', '-mx-1 -mt-1 min-h-0 flex-1']);
 });

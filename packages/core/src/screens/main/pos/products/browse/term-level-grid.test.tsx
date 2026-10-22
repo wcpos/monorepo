@@ -179,7 +179,10 @@ jest.mock('react-native-reanimated', () => ({
 	useAnimatedStyle: (style: () => object) => style(),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	usePointer: () => 'fine',
+	useIsPhone: () => false,
+}));
 jest.mock('react-native-gesture-handler', () => ({
 	GestureDetector: ({ children }: React.PropsWithChildren) => children,
 	Gesture: {

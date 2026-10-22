@@ -39,8 +39,10 @@ export function TableSurface({ className, ...props }: ViewProps) {
  * goes inside, never on the element taking the tiles' margin back.
  */
 export function TileGround({ children }: { children: React.ReactNode }) {
+	// The phone's screen edge keeps 16 (owner, 2026-10-22), as the chip row above the tiles does.
+	const phone = useIsPhone();
 	return (
-		<View className="px-gutter min-h-0 flex-1">
+		<View className={phone ? 'min-h-0 flex-1 px-4' : 'px-gutter min-h-0 flex-1'}>
 			<View className="-mx-1 -mt-1 min-h-0 flex-1">{children}</View>
 		</View>
 	);
