@@ -24,3 +24,18 @@ export function returnToTill(
 	if (compact) router.dismissTo(tillHref(true, tab));
 	else router.replace({ pathname: '/cart' });
 }
+
+/**
+ * Checkout for one order as it stands, whatever its status. Wide screens otherwise redirect
+ * checkout to the columns cart, which resolves only open orders (pos-open, pos-partial,
+ * pending): an order that is not an open cart (a refused reopen, back to completed) would land
+ * the cashier on a new cart instead of its payments.
+ */
+export const STANDALONE_CHECKOUT_PARAM = 'standalone';
+
+export function standaloneCheckoutHref(orderId: string) {
+	return {
+		pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+		params: { orderId, [STANDALONE_CHECKOUT_PARAM]: '1' },
+	} as const;
+}

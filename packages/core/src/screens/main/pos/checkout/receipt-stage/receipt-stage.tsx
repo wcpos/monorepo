@@ -100,6 +100,7 @@ function PaidMoment({ children, sent = false }: { children: React.ReactNode; sen
 	);
 }
 
+/** `compact`: the routed checkout modal's layout, on every width; the columns cart passes false. */
 export function ReceiptStage({ orderUuid, compact }: { orderUuid: string; compact: boolean }) {
 	const resource = useEngineRecord('orders', orderUuid);
 	const order = useObservableSuspense(resource);
@@ -157,7 +158,7 @@ function ReceiptStageDocument({
 				tendered: format(cashTendered),
 			})
 		: paidWith;
-	const finishSale = useFinishSale(order.uuid, compact);
+	const finishSale = useFinishSale(order.uuid, compact ? 'modal' : 'columns');
 	useCheckoutBack(finishSale, { escape: false });
 	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
 	const stamp = activeAwaitingCustomer(payload.meta_data);

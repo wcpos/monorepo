@@ -69,8 +69,14 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 	{
 		registerId,
 		collectionName = document.collection?.name,
-	}: { registerId?: string; collectionName?: string } = {}
-) {
+		explicit,
+	}: {
+		registerId?: string;
+		collectionName?: string;
+		/** The row is the cashier asking for the push: an open cart's hold never holds it. */
+		explicit?: boolean;
+	} = {}
+): Promise<{ changes: Record<string, unknown>; document: TDocument; mutationId?: string }> {
 	try {
 		if (resolveChanges)
 			return await applyPayloadChanges(
@@ -155,6 +161,7 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 		if (engineCollection) {
 			const syncChanges = syncableChanges(engineCollection, changes);
 			let patched: EngineResident;
+			let mutationId: string | undefined;
 			if (
 				Object.keys(syncChanges).length > 0 &&
 				assertsSomething(engineCollection, syncChanges, snapshot)
@@ -166,6 +173,8 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 					changes: syncChanges,
 					initial: scopedEngineResident!,
 					registerId: registerId,
+					...(explicit ? { explicit: true } : {}),
+					onEnqueued: (id) => (mutationId = id),
 				});
 			} else {
 				patched = await applyEngineResidentChanges(
@@ -175,10 +184,8 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 					scopeBarcodeSelectors(scopedEngineResident!.scope, engineCollection)
 				);
 			}
-			return {
-				changes,
-				document: patched as TDocument,
-			};
+			// The queued row's id, when this patch queued one: a caller can await its verdict.
+			return { changes, document: patched as TDocument, mutationId };
 		}
 
 		const latest = document.getLatest() as unknown as EngineResident;

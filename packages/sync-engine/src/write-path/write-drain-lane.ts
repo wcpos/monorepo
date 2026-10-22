@@ -236,6 +236,8 @@ export type WriteOutcomeEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
+			/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+			data?: Record<string, unknown>;
 			/**
 			 * True when the rejected mutation is a CREATE with no local or queued
 			 * remote id and the rejection does not imply a matching server record.
@@ -869,7 +871,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								currentRevision: conflict.currentRevision,
 							});
 						}
-						for (const { mutation: dead, status, reason, serverMessage } of result.rejected) {
+						for (const { mutation: dead, status, reason, serverMessage, data } of result.rejected) {
 							// A dead letter never pushes again: its push streak goes with it.
 							pushFailures.delete(dead.mutationId);
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
@@ -913,6 +915,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								status,
 								reason,
 								serverMessage,
+								...(data ? { data } : {}),
 								bornLocalCreate:
 									dead.operation === 'create' &&
 									doc !== null &&

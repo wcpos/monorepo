@@ -60,7 +60,10 @@ jest.mock('../checkout-mode', () => ({
 jest.mock('../receipt-stage/receipt-stage', () => ({
 	ReceiptStage: () => <div data-testid="checkout-receipt-stage" />,
 }));
-jest.mock('../receipt-stage/use-finish-sale', () => ({ useFinishSale: () => mockFinishSale }));
+const mockUseFinishSale = jest.fn((..._args: unknown[]) => mockFinishSale);
+jest.mock('../receipt-stage/use-finish-sale', () => ({
+	useFinishSale: (...args: unknown[]) => mockUseFinishSale(...args),
+}));
 jest.mock('./reader-connection', () => ({ ReaderConnection: () => null }));
 jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
@@ -267,6 +270,13 @@ describe('TenderCheckout', () => {
 		mockOnClose?.();
 		expect(mockFinishSale).toHaveBeenCalledTimes(1);
 		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('finishes a wide sale from the routed modal it was opened in, never by width', () => {
+		// A standalone checkout is this modal on a wide screen too: New sale must leave it.
+		mockStage = 'receipt';
+		render(<TenderCheckout order={order} />);
+		expect(mockUseFinishSale).toHaveBeenCalledWith(order.uuid, 'modal');
 	});
 
 	it('shows the ledger pane beside the tenders on a wide screen', () => {

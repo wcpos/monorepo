@@ -9,13 +9,16 @@ export class WriteOutcomeError extends Error {
 	reason?: string;
 	/** The server's own (already localized) sentence; `reason` is the machine code. */
 	serverMessage?: string;
+	/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+	data?: Record<string, unknown>;
 
 	constructor(
 		eventType: WriteOutcomeError['eventType'],
 		mutationId: string,
 		status?: number,
 		reason?: string,
-		serverMessage?: string
+		serverMessage?: string,
+		data?: Record<string, unknown>
 	) {
 		// The server's sentence rides the message too, so every caller's logged `error` says why.
 		super(`${eventType} for mutation "${mutationId}"${serverMessage ? `: ${serverMessage}` : ''}`);
@@ -24,6 +27,7 @@ export class WriteOutcomeError extends Error {
 		this.status = status;
 		this.reason = reason;
 		this.serverMessage = serverMessage;
+		this.data = data;
 	}
 }
 
@@ -105,14 +109,20 @@ function subscribeTerminal(
 							break;
 						case 'write-conflict':
 						case 'write-rejected': {
-							const detail = event as { status?: number; reason?: string; serverMessage?: string };
+							const detail = event as {
+								status?: number;
+								reason?: string;
+								serverMessage?: string;
+								data?: Record<string, unknown>;
+							};
 							reject(
 								new WriteOutcomeError(
 									event.type,
 									boundId,
 									detail.status,
 									detail.reason,
-									detail.serverMessage
+									detail.serverMessage,
+									detail.data
 								)
 							);
 							break;
@@ -143,6 +153,22 @@ export class WriteDeferredError extends Error {
 	}
 }
 
+/**
+ * The sign-in hold, stated once for every waiter that settles on it: the store refused this
+ * row's push for the SESSION (a 401 deferral), or the host's auth latch is already set. The row
+ * stays queued and only a sign-in moves it (the session-hold banner tells the cashier); its
+ * later verdict still arrives on the same mutation id.
+ */
+function signInHold(
+	mutationId: string,
+	evidence: { deferral?: { status?: number; reason?: string }; authRequired?: boolean }
+): WriteDeferredError | null {
+	if (evidence.authRequired) return new WriteDeferredError(mutationId, 401, 'auth-required');
+	if (evidence.deferral?.status === 401)
+		return new WriteDeferredError(mutationId, 401, evidence.deferral.reason);
+	return null;
+}
+
 export function awaitWriteOutcome(
 	engine: Pick<RxdbSyncEngine, 'events' | 'status' | 'sync'>,
 	mutationId: string,
@@ -170,12 +196,9 @@ export function awaitWriteOutcome(
 			mutationId,
 			(value) => finish(() => resolve(value)),
 			(error) => finish(() => reject(error)),
-			(deferred) => {
-				if (deferred.status === 401) {
-					finish(() =>
-						reject(new WriteDeferredError(mutationId, deferred.status, deferred.reason))
-					);
-				}
+			(deferral) => {
+				const held = signInHold(mutationId, { deferral });
+				if (held) finish(() => reject(held));
 			}
 		);
 		// The replay fires synchronously inside events(), so `settled` may already
@@ -188,8 +211,9 @@ export function awaitWriteOutcome(
 		// A standing auth hold is the 401 verdict known up front. A retry enqueued behind
 		// a held row is FIFO-blocked in the backoff window, where no drain reports it, so
 		// without this it would wait out the clock to learn what the engine already knows.
-		if (engine.status().authRequired) {
-			finish(() => reject(new WriteDeferredError(mutationId, 401, 'auth-required')));
+		const held = signInHold(mutationId, { authRequired: engine.status().authRequired });
+		if (held) {
+			finish(() => reject(held));
 			return;
 		}
 
@@ -223,10 +247,16 @@ export function awaitTerminalWriteOutcome(
 	});
 }
 
-/** No clock: terminal replay, an offline drain report, or offline engine status settles. */
+/**
+ * No clock: terminal replay, an offline drain report, or offline engine status settles.
+ * `releaseOnSignInHold`: a sign-in hold rejects with WriteDeferredError, for a caller whose
+ * wait holds the cashier. Checkout's save keeps waiting through it: its pane stays `saving`
+ * and lands when the cashier signs in (559511b990).
+ */
 export function awaitWriteSettlement(
 	engine: Pick<RxdbSyncEngine, 'events' | 'sync' | 'statusChanges'>,
-	mutationId: string
+	mutationId: string,
+	{ releaseOnSignInHold = false }: { releaseOnSignInHold?: boolean } = {}
 ): Promise<WriteSettlement> {
 	return new Promise((resolve, reject) => {
 		let settled = false;
@@ -243,11 +273,17 @@ export function awaitWriteSettlement(
 			engine,
 			mutationId,
 			(value) => finish(() => resolve(value)),
-			(error) => finish(() => reject(error))
+			(error) => finish(() => reject(error)),
+			(deferral) => {
+				const held = releaseOnSignInHold && signInHold(mutationId, { deferral });
+				if (held) finish(() => reject(held));
+			}
 		);
 		if (settled) unsubscribe();
 		unsubscribeStatus = engine.statusChanges((status) => {
 			if (status.connectivity === 'offline') finish(() => resolve('queued-offline'));
+			const held = releaseOnSignInHold && signInHold(mutationId, status);
+			if (held) finish(() => reject(held));
 		});
 		if (settled) unsubscribeStatus();
 		void engine.sync('write-drain').then(

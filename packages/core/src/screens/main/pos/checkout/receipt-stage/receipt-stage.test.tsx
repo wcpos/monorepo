@@ -25,6 +25,10 @@ let mockPrintedTo: string | null = null;
 let mockAutoPrint = false;
 let mockAutoPrintPending = false;
 let mockBack: () => void;
+let mockScreenSize = 'sm';
+jest.mock('../../../../../contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 const mockOrder = {
 	uuid: 'paid',
 	payload: { total: '92.95', currency_symbol: '$', meta_data: [] },
@@ -330,6 +334,18 @@ it.each(['receipt-no-receipt', 'receipt-new-sale'])(
 		expect(mockReplace).not.toHaveBeenCalled();
 	}
 );
+it('a standalone checkout modal on a wide screen leaves for the wide cart when the sale is done', () => {
+	// The modal's layout is compact on every width; leaving it is the host's, never the width's.
+	mockScreenSize = 'lg';
+	try {
+		render(<ReceiptStage orderUuid="paid" compact />);
+		fireEvent.click(screen.getByTestId('receipt-new-sale'));
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismissTo).not.toHaveBeenCalled();
+	} finally {
+		mockScreenSize = 'sm';
+	}
+});
 it('finishes on Android hardware back', () => {
 	render(<ReceiptStage orderUuid="paid" compact />);
 	act(() => mockBack());

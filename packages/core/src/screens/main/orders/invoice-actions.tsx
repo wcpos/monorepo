@@ -28,7 +28,7 @@ export function InvoiceActions({
 	stamp: AwaitingCustomerStamp;
 }) {
 	const t = useT();
-	const reopen = useReopenOrder(order);
+	const { reopen, reopening } = useReopenOrder(order);
 	const gateway = useGatewayPayment();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const [busy, setBusy] = React.useState(false);
@@ -109,7 +109,8 @@ export function InvoiceActions({
 			<Button
 				variant="outline"
 				testID="orders-send-again"
-				disabled={busy}
+				disabled={busy || reopening}
+				loading={reopening}
 				onPress={() => {
 					setTenderMethod(order.uuid, stamp.method_id);
 					void reopen();

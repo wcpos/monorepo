@@ -182,6 +182,22 @@ describe('awaitWriteOutcome', () => {
 		});
 	});
 
+	it('WriteOutcomeError carries data', async () => {
+		const { engine, emit } = createEngine();
+		const outcome = awaitTerminalWriteOutcome(engine, 'mutation-1');
+		const data = { status: 422, payment_id: 'pay-1' };
+		emit({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 422,
+			reason: 'wcpos_money_in_motion',
+			data,
+		});
+		await expect(outcome).rejects.toMatchObject({ reason: 'wcpos_money_in_motion', data });
+	});
+
 	it('rejects a matching 401 deferral without reporting a terminal outcome', async () => {
 		const { engine, emit, unsubscribe } = createEngine();
 		const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });
@@ -387,6 +403,42 @@ describe('clock-free settlement', () => {
 			jest.useRealTimers();
 		}
 	});
+	it.each(['deferral', 'latch'] as const)(
+		'a sign-in hold (%s) releases an opted-in wait and leaves the rest waiting',
+		async (source) => {
+			// One engine per waiter: the harness keeps a single listener of each kind.
+			const holding = () => {
+				const e = createEngine();
+				if (source === 'latch')
+					e.statusChanges.mockImplementation((callback) => {
+						callback?.({ connectivity: 'online', authRequired: true } as never);
+						return e.unsubscribeStatus;
+					});
+				return e;
+			};
+			const deferral = {
+				...ack,
+				type: 'write-deferred',
+				status: 401,
+				reason: 'rest_not_logged_in',
+			} as EngineEvent;
+			const opted = holding();
+			const released = awaitWriteSettlement(opted.engine, 'm', { releaseOnSignInHold: true });
+			if (source === 'deferral') opted.emit(deferral);
+			await expect(released).rejects.toBeInstanceOf(WriteDeferredError);
+			await expect(released).rejects.toMatchObject({ status: 401 });
+
+			const checkout = holding();
+			const settled = jest.fn();
+			const waiting = awaitWriteSettlement(checkout.engine, 'm').then(settled);
+			if (source === 'deferral') checkout.emit(deferral);
+			await Promise.resolve();
+			expect(settled).not.toHaveBeenCalled();
+			checkout.emit(ack);
+			await waiting;
+			expect(settled).toHaveBeenCalledWith('success-local');
+		}
+	);
 	it.each([awaitWriteSettlement, awaitTerminalWriteOutcome])(
 		'replays terminal outcomes and releases the listener (%p)',
 		async (awaitOutcome) => {

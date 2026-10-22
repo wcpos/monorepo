@@ -1396,6 +1396,34 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		]);
 	});
 
+	it("a rejected push keeps the server's error data", async () => {
+		// ADR 0040: a refused reopen names the leg in `data`; the cashier's toast needs it.
+		const q = await queueWith(mut({ mutationId: 'm-reopen', collectionName: 'orders' }));
+		const data = { status: 422, payment_id: 'pay-1', attempt_id: 'att-1' };
+		const result = await drainMutationQueue({
+			queue: q,
+			push: (mutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: async () =>
+						jsonResponse(422, {
+							code: 'wcpos_money_in_motion',
+							message: 'Payment pay-1 is still in motion.',
+							data,
+						}),
+				}),
+		});
+		expect(result.rejected).toEqual([
+			expect.objectContaining({
+				status: 422,
+				reason: 'wcpos_money_in_motion',
+				serverMessage: 'Payment pay-1 is still in motion.',
+				data,
+			}),
+		]);
+	});
+
 	it('writes the server verdict ONTO the dead-lettered row so the recovery surface can say why (#832)', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1' }));
 		const push = vi.fn(async (mutation: RecordMutation) => {

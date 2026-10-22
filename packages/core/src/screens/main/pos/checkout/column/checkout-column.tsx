@@ -21,7 +21,7 @@ import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
 
 export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
-	const flow = useTenderFlow(order);
+	const flow = useTenderFlow(order, 'columns');
 	const payload = useRecordField(order, (record) => record.payload);
 	const { format: formatCurrency } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const format = React.useCallback(

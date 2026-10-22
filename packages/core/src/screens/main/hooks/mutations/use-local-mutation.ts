@@ -29,12 +29,15 @@ export const useLocalMutation = () => {
 	const manager = useQueryRuntime();
 	const localPatch = React.useCallback(
 		async <TDocument extends MutationDocument, TData extends object>(
-			input: LocalPatchProps<TDocument, TData>
+			input: LocalPatchProps<TDocument, TData>,
+			/** `explicit`: the cashier asked for this push, so an open cart's hold never holds it. */
+			options: { explicit?: boolean } = {}
 		) => {
 			const { document } = input;
 			try {
 				return await applyLocalPatch(manager, input, {
 					registerId: getCurrentBoundRegisterId() ?? undefined,
+					...(options.explicit ? { explicit: true } : {}),
 				});
 			} catch (failure) {
 				const error = failure instanceof ResidentWriteError ? failure.cause : failure;

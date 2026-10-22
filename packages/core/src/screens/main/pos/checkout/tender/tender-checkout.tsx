@@ -44,7 +44,7 @@ interface Props {
  * same flow works from a phone at a market stall to a desktop till.
  */
 export function TenderCheckout({ order }: Props) {
-	const flow = useTenderFlow(order);
+	const flow = useTenderFlow(order, 'modal');
 	const payload = useRecordField(order, (record) => record.payload);
 	const { screenSize } = useTheme();
 	const { format: formatCurrency } = useCurrencyFormat({
@@ -55,7 +55,7 @@ export function TenderCheckout({ order }: Props) {
 
 	const compact = screenSize === 'sm';
 	const stage = useOrderCheckoutStage(order);
-	const finishSale = useFinishSale(order.uuid, compact);
+	const finishSale = useFinishSale(order.uuid, 'modal');
 	// Every figure in this modal is carried as minor units and only becomes a
 	// display string here, so there is exactly one place a rounding rule applies.
 	const format = React.useCallback(

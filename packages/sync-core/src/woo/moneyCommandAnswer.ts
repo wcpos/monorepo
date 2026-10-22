@@ -44,6 +44,7 @@ export type PaymentRowRefusal = (typeof PAYMENT_ROW_REFUSALS)[keyof typeof PAYME
 export const MONEY_ANSWER_CODES = {
 	revisionStale: 'wcpos_revision_stale',
 	balanceOutstanding: 'wcpos_balance_outstanding',
+	moneyInMotion: 'wcpos_money_in_motion',
 } as const;
 
 interface MoneyRefusal {

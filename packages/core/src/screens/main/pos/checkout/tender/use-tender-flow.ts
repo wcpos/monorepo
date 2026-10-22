@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
-import { useRouter } from 'expo-router';
 
 import { Toast } from '@wcpos/components/toast';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -52,7 +51,6 @@ import {
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
-import { returnToTill } from '../till-route';
 import {
 	persistSaleProvenance,
 	recordSaleAttempt,
@@ -67,7 +65,6 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-import { useTheme } from '../../../../../contexts/theme';
 import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
@@ -87,6 +84,7 @@ import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
+import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
 import { getUuidFromLineItem } from '../../hooks/utils';
 import {
 	RecordManualPaymentMirrorError,
@@ -252,7 +250,7 @@ function closeMessage(
 	return t('pos_checkout.close_needs_connection');
 }
 
-export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
+export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
@@ -320,10 +318,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const gateway = useGatewayPayment();
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
-	const completeOrderFlow = useCompleteOrderFlow(order);
+	const completeOrderFlow = useCompleteOrderFlow(order, 'stage', host);
 	const closeSale = useCloseSale();
-	const router = useRouter();
-	const { screenSize } = useTheme();
+	const leaveHost = useLeaveCheckoutHost(host);
 	const t = useT();
 
 	const rows = React.useMemo(() => readLedger(payload.meta_data), [payload.meta_data]);
@@ -1543,7 +1540,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				else {
 					leaveCheckout(order.uuid);
 					setCurrentOrderID('');
-					if (screenSize === 'sm') returnToTill(router, true, 'products');
+					leaveHost();
 				}
 			}
 		};
@@ -1558,8 +1555,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		tenderRecorded,
 		uiSettings.autoShowReceipt,
 		setCurrentOrderID,
-		screenSize,
-		router,
+		leaveHost,
 	]);
 
 	const pickReader = React.useCallback(
@@ -1762,7 +1758,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
-			if (screenSize === 'sm') returnToTill(router, true, 'cart');
+			leaveHost('cart');
 		} catch (error) {
 			logger.error(t('pos_checkout.void_failed'), {
 				code: ERROR_CODES.PAYMENT_VOID_REFUSED,
@@ -1778,8 +1774,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}
 	}, [
 		order,
-		router,
-		screenSize,
+		leaveHost,
 		t,
 		voidPayments,
 		service,
