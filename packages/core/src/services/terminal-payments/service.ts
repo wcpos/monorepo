@@ -515,11 +515,6 @@ export class TerminalPaymentsService {
 						...deps,
 						driver: getDriver(input.row.provider),
 						outOfScope: () => scope !== null && this.options.scopeId?.() !== scope,
-						patchAndEnqueue: (row) => {
-							if (!this.options.patchAndEnqueue)
-								throw new Error('Offline payment writer unavailable');
-							return this.options.patchAndEnqueue(input.orderUuid, row);
-						},
 					},
 					{
 						dp:
@@ -531,7 +526,6 @@ export class TerminalPaymentsService {
 						resume,
 						method: input.method,
 						transport: input.transport ?? (input.row.transport as PaymentTransport),
-						offline: input.offline ?? false,
 						tipEligibleMinor: input.tipEligibleMinor ?? null,
 					}
 				)

@@ -2,7 +2,6 @@ import { log } from '@wcpos/utils/logger';
 import { MoneyCommandError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
-import { createLiveTab, holdLiveTab as holdWebTab } from '@wcpos/database/live-tab/live-tab.web';
 
 import { RETIRE_RETRY_MS } from '../leg-finality';
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
@@ -38,7 +37,6 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 function setup(
-	offline = false,
 	resume = false,
 	missing?: 'driver' | 'method',
 	pendingRow = row,
@@ -71,7 +69,6 @@ function setup(
 		data: { payment: row },
 	}));
 	const mirror = jest.fn(async (_value: unknown) => {});
-	const patchAndEnqueue = jest.fn(async (_row: unknown): Promise<void> => {});
 	const onFinal = jest.fn();
 	const leg = createDeviceLeg(
 		{
@@ -79,7 +76,6 @@ function setup(
 			get,
 			driver: missing === 'driver' ? undefined : driver,
 			mirror,
-			patchAndEnqueue,
 			now: Date.now,
 			setTimeout,
 			clearTimeout,
@@ -92,12 +88,11 @@ function setup(
 			row: pendingRow,
 			method: missing === 'method' ? undefined : method,
 			transport: 'bluetooth',
-			offline,
 			tipEligibleMinor: 1000,
 			resume,
 		}
 	);
-	return { leg, driver, post, get, mirror, patchAndEnqueue, onFinal, collection };
+	return { leg, driver, post, get, mirror, onFinal, collection };
 }
 beforeEach(() => {
 	jest.useFakeTimers();
@@ -472,31 +467,6 @@ it('a result that arrives during the cancel grace period is captured, not voided
 	expect(c.leg.getState().outcome).toBe('captured');
 	expect(c.post.mock.calls.map(([url]) => url.split('/').pop())).toEqual(['intent', 'capture']);
 });
-// Offline there is no intent to void and the reader's stored payment forwards regardless.
-it('offline, a cancel the reader refuses leaves the leg waiting for the reader', async () => {
-	const c = setup(true);
-	jest.mocked(c.driver.cancel!).mockRejectedValueOnce(new Error('CANCEL_FAILED'));
-	const start = c.leg.start();
-	await tick();
-	await c.leg.cancel();
-	await jest.advanceTimersByTimeAsync(60000);
-	expect(c.leg.getState()).toMatchObject({
-		phase: 'collecting',
-		cancelRequested: false,
-		outcome: null,
-		error: { message: 'CANCEL_FAILED' },
-	});
-	c.collection.resolve({
-		...approved,
-		outcome: 'authorized',
-		provider_refs: { payment_intent: null },
-		amount: '10.00',
-	});
-	await start;
-	expect(c.leg.getState().outcome).toBe('captured');
-	expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
-	expect(c.post).not.toHaveBeenCalled();
-});
 it('the deadline does not claim a cancel the cashier already asked for', async () => {
 	const c = setup();
 	const start = c.leg.start();
@@ -534,81 +504,8 @@ it('on-device cancellation only publishes the request', async () => {
 	c.collection.resolve({ ...approved, outcome: 'cancelled' });
 	await start;
 });
-it('queues offline authorization before telling the till it is paid', async () => {
-	const c = setup(true);
-	const write = deferred<void>();
-	c.patchAndEnqueue.mockImplementationOnce(() => write.promise);
-	const start = c.leg.start();
-	c.collection.resolve({
-		...approved,
-		outcome: 'authorized',
-		provider_refs: { payment_intent: null },
-		receipt: { brand: 'visa' },
-		amount: '10.00',
-	});
-	await tick();
-	expect(c.post).not.toHaveBeenCalled();
-	expect(c.leg.getState().outcome).toBeNull();
-	expect(c.patchAndEnqueue).toHaveBeenCalledWith(
-		expect.objectContaining({
-			status: 'authorized',
-			recorded_offline: true,
-			authorized_at_gmt: '2026-01-01T00:00:00.000Z',
-			updated_at_gmt: '2026-01-01T00:00:00.000Z',
-			provider_refs: { payment_intent: null },
-		})
-	);
-	write.resolve();
-	await start;
-	expect(c.leg.getState()).toMatchObject({ outcome: 'captured', row: { status: 'authorized' } });
-});
-it('keeps the reader the row was minted for through an offline authorization', async () => {
-	const c = setup(true, false, undefined, { ...row, provider_refs: { reader: 'sn-1' } });
-	const start = c.leg.start();
-	c.collection.resolve({
-		...approved,
-		outcome: 'authorized',
-		provider_refs: { payment_intent: null },
-	});
-	await start;
-	// The driver's refs describe the offline intent; the reader is a fact about the row.
-	expect(c.leg.getState().row.provider_refs).toEqual({ reader: 'sn-1', payment_intent: null });
-});
-it('does not stamp an approval time for an offline decline', async () => {
-	const pendingRow = { ...row };
-	delete pendingRow.authorized_at_gmt;
-	const c = setup(true, false, undefined, pendingRow);
-	const start = c.leg.start();
-	c.collection.resolve({ ...approved, outcome: 'declined', provider_refs: {} });
-	await start;
-	expect(c.leg.getState().row.status).toBe('failed');
-	expect(c.leg.getState().row).not.toHaveProperty('authorized_at_gmt');
-});
-it('a failed offline write stays held for retry without a second collect', async () => {
-	const c = setup(true);
-	c.patchAndEnqueue.mockRejectedValueOnce(new Error('disk'));
-	const start = c.leg.start();
-	c.collection.resolve({
-		...approved,
-		outcome: 'authorized',
-		provider_refs: { payment_intent: null },
-	});
-	await start;
-	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
-	// The retry happens later; the approval time is when the reader answered, not now.
-	jest.setSystemTime(new Date('2026-01-01T00:05:00Z'));
-	await c.leg.capture();
-	expect(c.leg.getState().outcome).toBe('captured');
-	expect(c.driver.collect).toHaveBeenCalledTimes(1);
-	expect(c.patchAndEnqueue).toHaveBeenLastCalledWith(
-		expect.objectContaining({
-			authorized_at_gmt: '2026-01-01T00:00:00.000Z',
-			updated_at_gmt: '2026-01-01T00:05:00.000Z',
-		})
-	);
-});
 it('a resumed pending row the store has captured is paid, not lost', async () => {
-	const c = setup(false, true);
+	const c = setup(true);
 	c.get.mockResolvedValueOnce({ data: { payment: { ...row, status: 'captured' } } });
 	await c.leg.start();
 	expect(c.driver.collect).not.toHaveBeenCalled();
@@ -619,7 +516,7 @@ it('a resumed pending row the store has captured is paid, not lost', async () =>
 	expect(c.leg.getState().outcome).toBe('captured');
 });
 it('a resumed pending row recorded offline asks no store and ends lost', async () => {
-	const c = setup(false, true, undefined, { ...row, recorded_offline: true });
+	const c = setup(true, undefined, { ...row, recorded_offline: true });
 	await c.leg.start();
 	expect(c.get).not.toHaveBeenCalled();
 	expect(c.post).not.toHaveBeenCalled();
@@ -629,7 +526,7 @@ it('a resumed pending row recorded offline asks no store and ends lost', async (
 	expect(c.leg.getState().outcome).toBe('failed');
 });
 it('lost pending sessions fail locally without restarting the driver', async () => {
-	const c = setup(false, true);
+	const c = setup(true);
 	await c.leg.start();
 	expect(c.driver.collect).not.toHaveBeenCalled();
 	expect(c.post).not.toHaveBeenCalled();
@@ -663,28 +560,14 @@ it('an SDK rejection is confirmed by void instead of leaving a dead cancel butto
 	});
 	expect(c.leg.getState().phase).toBe('final');
 });
-it('offline reader-added tips cannot pay down the remaining sale balance', async () => {
-	const c = setup(true);
-	const start = c.leg.start();
-	c.collection.resolve({
-		...approved,
-		outcome: 'authorized',
-		provider_refs: { payment_intent: null },
-	});
-	await start;
-	expect(c.patchAndEnqueue).toHaveBeenCalledWith(
-		expect.objectContaining({ amount: '10.00', tip: null })
-	);
-});
 it('resumes an online authorization by checking the server, never recollecting or claiming it paid', async () => {
-	const c = setup(false, true);
+	const c = setup(true);
 	const leg = createDeviceLeg(
 		{
 			post: c.post,
 			get: async () => ({ data: { payment: { ...row, status: 'authorized' } } }),
 			driver: c.driver,
 			mirror: c.mirror,
-			patchAndEnqueue: c.patchAndEnqueue,
 			now: Date.now,
 			setTimeout,
 			clearTimeout,
@@ -696,7 +579,6 @@ it('resumes an online authorization by checking the server, never recollecting o
 			resume: true,
 			method,
 			transport: 'bluetooth',
-			offline: false,
 			tipEligibleMinor: null,
 		}
 	);
@@ -711,7 +593,7 @@ it('resumes an online authorization by checking the server, never recollecting o
 it.each(['driver', 'method'] as const)(
 	'finalizes instead of rejecting when %s is missing',
 	async (missing) => {
-		const c = setup(false, false, missing);
+		const c = setup(false, missing);
 		await expect(c.leg.start()).resolves.toBeUndefined();
 		expect(c.leg.getState()).toMatchObject({
 			phase: 'final',
@@ -763,54 +645,10 @@ it('releases the collection hold when the reader rejects', async () => {
 	c.leg.dispose();
 });
 
-it.each(['success', 'rejection'])(
-	'keeps a deferred takeover held until offline persistence %s',
-	async (outcome) => {
-		const c = setup(true);
-		const write = deferred<void>();
-		c.patchAndEnqueue.mockImplementationOnce(async () => {
-			await write.promise;
-			if (outcome === 'rejection') throw new Error('disk');
-		});
-		const channel = {
-			onmessage: null as ((event: MessageEvent) => void) | null,
-			postMessage: jest.fn(),
-			close: jest.fn(),
-		};
-		const tab = createLiveTab({
-			channel: () => channel,
-			onHandover: async () => {},
-			onUnavailable: jest.fn(),
-			onError: jest.fn(),
-		});
-		// As in the gate, parking unmounts the payment service.
-		tab.state$.subscribe((state) => {
-			if (state.kind === 'parked') c.leg.stop();
-		});
-		jest.mocked(holdLiveTab).mockImplementation(holdWebTab);
-		const start = c.leg.start();
-		channel.onmessage?.(
-			new MessageEvent('message', { data: { type: 'takeover-request', requestId: 'other-tab' } })
-		);
-		c.collection.resolve({ ...approved, outcome: 'authorized', provider_refs: {} });
-		await tick();
-		expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
-		expect(tab.getState().kind).toBe('live');
-		write.resolve();
-		await start;
-		await tick();
-		expect(tab.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
-		tab.dispose();
-		expect(c.leg.getState()).toMatchObject(
-			outcome === 'success' ? { outcome: 'captured' } : { outcome: null, captureFailed: true }
-		);
-	}
-);
-
 it.each(['collect', 'capture'])(
 	'abandons device %s silently when ownership is refused',
 	async (stage) => {
-		const c = setup(stage === 'collect');
+		const c = setup();
 		jest.mocked(log.info).mockClear();
 		if (stage === 'collect')
 			jest.mocked(holdLiveTab).mockImplementation(() => {
@@ -827,7 +665,10 @@ it.each(['collect', 'capture'])(
 		}
 		await start;
 		await c.leg.capture();
-		expect(c.post).not.toHaveBeenCalled();
+		// Only the preparation intent left the till: no capture, no void.
+		expect(c.post.mock.calls.map(([url]) => url)).toEqual(
+			stage === 'collect' ? ['orders/42/payments/leg/intent'] : []
+		);
 		if (stage === 'collect') expect(c.driver.collect).not.toHaveBeenCalled();
 		expect(c.leg.getState().error).toBeNull();
 		expect(log.info).toHaveBeenCalledTimes(1);
@@ -848,7 +689,7 @@ it.each([
 	'an unanswered intent whose cleanup void shows it %s is retired before the leg ends',
 	async (_, voidAnswer) => {
 		const retire = jest.fn(async () => undefined);
-		const c = setup(false, false, undefined, row, retire);
+		const c = setup(false, undefined, row, retire);
 		c.post.mockRejectedValueOnce({
 			response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
 		});
@@ -869,7 +710,7 @@ it('a failed intent retirement keeps the leg live and retries before the leg end
 	const retire = jest
 		.fn(async (_kind: 'intent', _target: string) => undefined)
 		.mockRejectedValueOnce(new Error('journal write failed'));
-	const c = setup(false, false, undefined, row, retire);
+	const c = setup(false, undefined, row, retire);
 	c.post.mockRejectedValueOnce({
 		response: { status: 409, data: { code: 'wcpos_payment_locked', data: { status: 409 } } },
 	});
@@ -902,7 +743,7 @@ it.each([
 	['refused before it left the till', new MoneyCommandError('preflight_failed', {} as never)],
 ])('a cleanup void %s is re-sent until the store decides it', async (_, voidFailure) => {
 	const retire = jest.fn(async (_kind: 'intent', _target: string) => undefined);
-	const c = setup(false, false, undefined, row, retire);
+	const c = setup(false, undefined, row, retire);
 	c.post.mockRejectedValueOnce(new Error('Network Error')); // the intent's answer is lost
 	c.post.mockRejectedValueOnce(voidFailure);
 	const started = c.leg.start();
