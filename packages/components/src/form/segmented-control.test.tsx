@@ -21,6 +21,7 @@ jest.mock('./common', () => {
 });
 
 jest.mock('./context', () => ({
+	FormItemContext: jest.requireActual<typeof import('react')>('react').createContext({}),
 	useFormField: () => ({
 		error: mockError,
 		formItemNativeID: 'item-id',

@@ -16,7 +16,11 @@ export function FormCheckbox({
 	checked: _checked,
 	...props
 }: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Checkbox>>) {
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	function handleOnLabelPress() {
 		onChange?.(!value);
