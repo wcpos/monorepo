@@ -28,13 +28,14 @@ import { authenticatedTest as test } from './fixtures';
  * bundles): 400 committed searches, heap 70 → plateau 150–225 MB, 1 long task (124 ms) in
  * total, post-GC 174 MB. The ceilings below are 2–3× those readings.
  *
- * The trend gate compares the MINIMUM heap in each window, not the mean. Since #2092 (search
- * answered from a folded-text blob, hits materialised through `findByIds`) the per-search
- * sawtooth is taller and V8's major-collection period no longer fits inside a 5-cycle window, so
- * two window means differ by GC phase alone: on 2026-09-16 first attempts read 1.33–1.51 while the
- * retained-after-GC gate sat at ~1.15 in every run and the window troughs were flat. A leak per
- * committed search raises the troughs; collection timing only moves peaks and means. The windows
- * are sized to hold a whole sawtooth period so each minimum is a real trough (see PLATEAU_WINDOW).
+ * There is no tail-over-plateau heap gate. Since #2092 (search answered from a folded-text blob,
+ * hits materialised through `findByIds`) the per-search sawtooth is 70–90 MB tall, and neither the
+ * window means (2026-09-16: 1.33–1.51 on first attempts) nor the window minima (2026-10-22, run
+ * 39691629238: 1.33–1.38, a 10-cycle window still sitting on one deep trough) read anything but
+ * collection timing; the retained-after-GC reading on the same runs was ×1.07–1.15. What a forced
+ * collection cannot reclaim is the leak signal, so that gate and the DOM-node gate carry it; the
+ * plateau and tail floors and means are still printed so a run's line compares with every run
+ * logged before (see PLATEAU_WINDOW for the window size).
  */
 const WORD = 'brake';
 const KEY_GAP_MS = 400; // > the 250 ms debounce, so each key is its own committed search
@@ -59,8 +60,6 @@ if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 }
 /** Absolute ceiling on the heap at any sample — a renderer dies near 4 GB, a healthy tab sits ~200 MB. */
 const HEAP_CEILING_BYTES = 768 * 1024 * 1024;
-/** Tail floor over plateau floor (window minima): a leak per committed search reads as rising troughs. */
-const MAX_TAIL_OVER_PLATEAU = 1.25;
 /** Post-GC heap over the collected baseline: what a forced collection cannot reclaim is retained. */
 const MAX_RETAINED_OVER_BASELINE = 1.25;
 /** DOM nodes at the end over the plateau: detached-but-referenced rows show up here first. */
@@ -167,8 +166,7 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	const plateauFrom = WARM_UP_CYCLES + REWARM_CYCLES;
 	const plateau = cycles.slice(plateauFrom, plateauFrom + PLATEAU_WINDOW);
 	const tail = cycles.slice(-PLATEAU_WINDOW);
-	// Floors gate the trend (see the header); the means are printed alongside so this run's line
-	// compares with every run logged before the gate changed.
+	// Floors and means are printed, not gated (see the header): they read collection timing.
 	const plateauHeap = min(plateau.map((s) => s.heapUsed));
 	const tailHeap = min(tail.map((s) => s.heapUsed));
 	const plateauMean = mean(plateau.map((s) => s.heapUsed));
@@ -200,11 +198,6 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	process.stdout.write(`[search-heap] heapUsed/cycle (MB): ${heapSeries}\n`);
 
 	expect(maxHeap, `heap peaked at ${mb(maxHeap)}`).toBeLessThanOrEqual(HEAP_CEILING_BYTES);
-	expect(
-		tailHeap / plateauHeap,
-		`tail floor ${mb(tailHeap)} over plateau floor ${mb(plateauHeap)}: the heap is trending up per committed search ` +
-			`(means ${mb(tailMean)} / ${mb(plateauMean)}; heapUsed/cycle MB: ${heapSeries})`
-	).toBeLessThanOrEqual(MAX_TAIL_OVER_PLATEAU);
 	expect(
 		afterGc.heapUsed / collectedBaseline.heapUsed,
 		`${mb(afterGc.heapUsed)} retained after GC over the collected baseline ${mb(collectedBaseline.heapUsed)}`
