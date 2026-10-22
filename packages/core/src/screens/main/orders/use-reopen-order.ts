@@ -150,10 +150,9 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		if (store.id === NO_STORE && existingStoreId === null) {
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
-		const previousStatus = order.payload.status;
 		const reopened = await reopenOrder(order, { status: 'pos-open', meta_data });
 		if (!reopened) return;
-		const { mutationId } = reopened;
+		const { mutationId, before } = reopened;
 		/**
 		 * The store refused the reopen: say why, then undo the optimistic pos-open. Status is an
 		 * intent and the refusal is the store's word; a pos-open left behind would get every later
@@ -163,7 +162,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		 */
 		const refused = async (error: WriteOutcomeError) => {
 			reportRefusal(error);
-			await undoRefusedReopen(order, previousStatus).catch((failure: unknown) =>
+			await undoRefusedReopen(order, before).catch((failure: unknown) =>
 				logger.debug('Could not undo the refused reopen locally', {
 					context: { orderId: order.uuid, error: getErrorMessage(failure) },
 				})

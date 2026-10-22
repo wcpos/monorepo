@@ -306,22 +306,46 @@ it("a refused reopen re-adopts the store's copy of the order", async () => {
 	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
 });
 
-it("a refused reopen whose store copy cannot be fetched puts the order's status back locally", async () => {
+it('a refused reopen whose store copy cannot be fetched puts the order back as it was before the reopen', async () => {
+	const payments = paidOrder.payload.meta_data![0];
+	// Taken by cashier 3 at till A; the reopen stamps cashier 7 and store 1 over that.
+	const before = [
+		{ key: '_pos_user', value: '3' },
+		{ key: '_wcpos_till', value: 'till-a' },
+	];
+	const stampedByReopen = [
+		{ key: '_pos_user', value: '7' },
+		{ key: '_wcpos_till', value: 'till-a' },
+		{ key: '_pos_store', value: '1' },
+	];
+	// Written while the refusal was pending: stays.
+	const meanwhile = { key: '_wcpos_tender_note', value: 'kept' };
+	const takenOrder = {
+		...paidOrder,
+		payload: { ...paidOrder.payload, meta_data: [payments, ...before] },
+		getLatest: () => ({
+			payload: {
+				...paidOrder.payload,
+				status: 'pos-open',
+				meta_data: [payments, ...stampedByReopen, meanwhile],
+			},
+		}),
+	} as unknown as EngineRecord<'orders'>;
 	jest
 		.mocked(applyLocalPatch)
-		.mockResolvedValueOnce({ document: reopenedPaidOrder, mutationId: 'm-reopen' } as never);
+		.mockResolvedValueOnce({ document: takenOrder, mutationId: 'm-reopen' } as never);
 	mockEngine.require.mockImplementationOnce(() => ({
 		ready: Promise.reject(new Error('offline')),
 		release: () => {},
 	}));
 	mockOnDrain = () => emit(moneyInMotion());
-	const { result } = renderHook(() => useReopenOrder(reopenedPaidOrder));
+	const { result } = renderHook(() => useReopenOrder(takenOrder));
 	await act(async () => result.current.reopen());
 	expect(patchEngineResident).toHaveBeenCalledWith(
 		expect.objectContaining({
 			collection: 'orders',
 			recordId: 'order-1',
-			changes: { status: 'completed' },
+			changes: { status: 'completed', meta_data: [payments, meanwhile, ...before] },
 		})
 	);
 	expect(mockPush).not.toHaveBeenCalled();
