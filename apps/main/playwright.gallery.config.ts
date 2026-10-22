@@ -39,7 +39,9 @@ export default defineConfig({
 			(process.env.CI
 				? ''
 				: 'EXPO_PUBLIC_WCPOS_GALLERY=1 npx expo export --platform web --output-dir ./gallery-build && ') +
-			'npx serve gallery-build -l 8097 -s',
+			// `serve` is a root devDependency: `--no-install` means a registry stall cannot hold the
+			// shoot (three update shards hung the full 7-minute server budget on 2026-10-22).
+			'npx --no-install serve gallery-build -l 8097 -s',
 		url: 'http://127.0.0.1:8097',
 		timeout: 7 * 60 * 1000,
 	},

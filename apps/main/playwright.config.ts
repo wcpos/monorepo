@@ -244,7 +244,7 @@ export default defineConfig<WcposTestOptions>({
 	webServer: process.env.BASE_URL
 		? undefined
 		: {
-				command: 'pnpm run build:web && npx serve web-build -p 8081 -s',
+				command: 'pnpm run build:web && npx --no-install serve web-build -p 8081 -s',
 				url: 'http://localhost:8081',
 				reuseExistingServer: !process.env.CI,
 				// This budget covers a full cold `build:web`, not just `serve`
