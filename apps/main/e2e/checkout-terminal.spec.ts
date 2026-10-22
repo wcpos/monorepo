@@ -4,6 +4,7 @@ import copy from '../../../packages/core/src/contexts/translations/locales/en/co
 import { addCheckoutProbeProductAgain } from './checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
+	createPaymentResponseMatcher,
 	type Descriptor,
 	ledgerRows,
 	newOrderAtCheckout,
@@ -36,26 +37,25 @@ function simulatedTerminal(descriptors: Descriptor[]): Descriptor | null {
 	);
 }
 
+function terminalRoutePattern(orderId: number, action: string): RegExp {
+	return new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`);
+}
+
+function terminalMethod(action: string): 'GET' | 'POST' {
+	return action === 'status' ? 'GET' : 'POST';
+}
+
 function terminalRoute(request: Request, orderId: number, action: string): boolean {
 	return (
-		request.method() === (action === 'status' ? 'GET' : 'POST') &&
-		new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`).test(
-			wcposRestRoute(request.url()) ?? ''
-		)
+		request.method() === terminalMethod(action) &&
+		terminalRoutePattern(orderId, action).test(wcposRestRoute(request.url()) ?? '')
 	);
 }
 
 function terminalResponse(page: Page, orderId: number, action: 'intent' | 'status' | 'void') {
-	// Like createPaymentResponseMatcher: the app's HTTP layer takes ONE 401 on an
-	// expired token, refreshes and retries, so the first 401 is not the answer.
-	let sawUnauthorized = false;
+	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
 	const pending = page.waitForResponse(
-		(response) => {
-			if (!terminalRoute(response.request(), orderId, action)) return false;
-			if (response.status() !== 401 || sawUnauthorized) return true;
-			sawUnauthorized = true;
-			return false;
-		},
+		createPaymentResponseMatcher(terminalRoutePattern(orderId, action), terminalMethod(action)),
 		{ timeout: 90_000 }
 	);
 	// Match the existing write helper: a UI failure must not leave an unhandled rejection.

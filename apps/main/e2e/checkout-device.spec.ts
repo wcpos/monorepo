@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import {
+	createPaymentResponseMatcher,
 	type Descriptor,
 	ledgerRows,
 	newOrderAtCheckout,
@@ -10,6 +11,14 @@ import {
 } from './checkout-shared';
 import { wcposRestRoute } from './fixtures';
 import { expectOrderPaid, liveOrderTest as liveTest } from './order-lifecycle';
+
+/**
+ * How long a reader status line may take to appear. These are waits, not measurements: each
+ * one sits behind server round trips (the reader bootstrap; intent, outcome, status and void
+ * for a decline), and on the shared pool a single store request took 5-22 s (live run
+ * 39782966367). Playwright's 5 s default expect window closed on a slow pool.
+ */
+const READER_STATUS_WAIT = 60_000;
 
 function simulatedDevice(descriptors: Descriptor[]) {
 	return descriptors.find((method) => {
@@ -25,9 +34,21 @@ function simulatedDevice(descriptors: Descriptor[]) {
 async function connect(page: Page, methodId: string, reader: string) {
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
 	const status = page.getByTestId('checkout-reader-status');
+	// The status copy is translated (dev-next runs in Spanish), so read state from test ids and
+	// the reader's own name: the settings link renders only while no reader is held, and the
+	// line names the simulated reader ("Simulated reader", driver data) only once connected.
+	const link = page.getByTestId('checkout-reader-settings-link');
+	const readerState = async (): Promise<'link' | 'held' | null> => {
+		if (await link.isVisible()) return 'link';
+		const line = await status.innerText().catch(() => '');
+		return line.includes('Simulated') ? 'held' : null;
+	};
 	// A remembered reader may still be reconnecting; decide on the settled line.
-	await expect(status).not.toContainText('Connecting', { timeout: 15_000 });
-	const viaLink = !(await status.innerText()).includes('Simulated');
+	let settled: 'link' | 'held' | null = null;
+	await expect
+		.poll(async () => (settled = await readerState()), { timeout: 15_000 })
+		.not.toBeNull();
+	const viaLink = settled === 'link';
 	if (viaLink) {
 		await page.getByTestId('checkout-reader-settings-link').click();
 	} else {
@@ -41,7 +62,10 @@ async function connect(page: Page, methodId: string, reader: string) {
 	const option = page.getByTestId(`reader-row-${methodId}-connect-${reader}`);
 	await expect(option).toBeVisible();
 	await option.click();
-	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toContainText('Connected');
+	// The row's status line renders only while the reader is connected.
+	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toBeVisible({
+		timeout: READER_STATUS_WAIT,
+	});
 	await page.goBack();
 	if (
 		!viaLink &&
@@ -52,23 +76,17 @@ async function connect(page: Page, methodId: string, reader: string) {
 	)
 		await page.goBack();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
-	await expect(page.getByTestId('checkout-reader-status')).toContainText('Simulated');
+	await expect(status).toContainText('Simulated');
+	await expect(link).toBeHidden();
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
-	let unauthorized = false;
-	const response = page.waitForResponse((response) => {
-		if (
-			response.request().method() !== 'POST' ||
-			!new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`).test(
-				wcposRestRoute(response.url()) ?? ''
-			)
+	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
+	const response = page.waitForResponse(
+		createPaymentResponseMatcher(
+			new RegExp(`^/wcpos/v2/orders/${orderId}/payments/[^/]+/${action}$`)
 		)
-			return false;
-		if (response.status() !== 401 || unauthorized) return true;
-		unauthorized = true;
-		return false;
-	});
+	);
 	response.catch(() => {});
 	return response;
 }
@@ -115,13 +133,17 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 						: null;
 				await take(page, orderId);
 				if (scenario === 'cancel') {
-					await expect(page.getByTestId('checkout-terminal-cancel')).toBeEnabled();
+					await expect(page.getByTestId('checkout-terminal-cancel')).toBeEnabled({
+						timeout: READER_STATUS_WAIT,
+					});
 					const voided = paymentResponse(page, orderId, 'void');
 					await page.getByTestId('checkout-terminal-cancel').click();
 					expect((await voided).status()).toBeLessThan(400);
 				}
 				if (scenario === 'decline' || scenario === 'cancel') {
-					await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible();
+					await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible({
+						timeout: READER_STATUS_WAIT,
+					});
 					const failedOrder = await pollOrder(
 						request,
 						testInfo,
@@ -152,7 +174,31 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 				}
 				if (capture) {
 					const response = await capture;
-					expect(response.status()).toBeLessThan(400);
+					if (response.status() >= 400) {
+						// The reader's outcome can settle the row on the store before the till's own
+						// capture lands (device-leg.ts expects this); the store then refuses the repeat
+						// with wcpos_invalid_transition, whose body carries no payment. That refusal is
+						// the answer only when the store's ledger shows this same row captured.
+						expect(response.status(), 'capture POST must succeed or be a settled repeat').toBe(409);
+						expect(((await response.json()) as { code?: string }).code).toBe(
+							'wcpos_invalid_transition'
+						);
+						const paymentId = /\/payments\/([^/]+)\/capture$/
+							.exec(wcposRestRoute(response.url()) ?? '')?.[1]
+							?.toLowerCase();
+						expect(paymentId, 'capture route must name the payment').toBeTruthy();
+						await pollOrder(
+							request,
+							testInfo,
+							authorization,
+							orderId,
+							(order) =>
+								ledgerRows(order).some(
+									(row) => row.id?.toLowerCase() === paymentId && row.status === 'captured'
+								),
+							'a refused repeat capture must find the same row already captured'
+						);
+					}
 					const sent = response.request().postDataJSON();
 					expect(sent.context).toMatchObject({
 						provider_refs: { payment_intent: expect.stringMatching(/^sim_pi_/) },

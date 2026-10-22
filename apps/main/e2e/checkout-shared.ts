@@ -1,4 +1,10 @@
-import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
+import {
+	type APIRequestContext,
+	expect,
+	type Page,
+	type Response,
+	type TestInfo,
+} from '@playwright/test';
 
 import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { ensureRegisterOpen, getStoreUrl, wcposRestRoute } from './fixtures';
@@ -92,22 +98,44 @@ export async function requireTenderCheckout(
 
 type PaymentWrite = 'record' | 'void';
 
-function createPaymentResponseMatcher(orderId: number, write: PaymentWrite) {
-	let sawUnauthorized = false;
-	return (response: {
-		url: () => string;
-		request: () => { method: () => string };
-		status: () => number;
-	}) => {
-		if (response.request().method() !== 'POST') return false;
-		const route = wcposRestRoute(response.url());
-		const base = `/wcpos/v2/orders/${orderId}/payments`;
-		const matches =
-			write === 'record' ? route === base : new RegExp(`^${base}/[^/]+/void$`).test(route ?? '');
-		if (!matches || response.status() !== 401) return matches;
-		if (sawUnauthorized) return true;
-		sawUnauthorized = true;
-		return false;
+type ResendCause = 'unauthorized' | 'revision-stale';
+
+/**
+ * The two answers the app re-sends once instead of settling on: a 401 (it refreshes the token and
+ * retries) and, under ADR 0040 protocol 3, a 409 `wcpos_revision_stale` (it re-sends with the
+ * server's `currentRevision`). Anything else, any other 409 included, is the answer.
+ */
+async function resendCause(response: Response): Promise<ResendCause | null> {
+	if (response.status() === 401) return 'unauthorized';
+	if (response.status() !== 409) return null;
+	const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+	return body?.code === 'wcpos_revision_stale' ? 'revision-stale' : null;
+}
+
+/**
+ * Matches the settled answer to a money command on `route` (a `wcpos/v2` REST route). It skips
+ * at most ONE 401 and ONE stale-revision 409, the re-sends the app makes, and takes the next
+ * answer; a second answer of the same kind is the answer, so a client that loops fails the test.
+ * Reading a 409's body is async, so matching answers are classified one at a time, in the order
+ * they arrive: a later answer is never judged before an earlier stale 409 has been counted.
+ */
+export function createPaymentResponseMatcher(
+	route: RegExp,
+	method: 'POST' | 'GET' = 'POST'
+): (response: Response) => Promise<boolean> {
+	const skipped = new Set<ResendCause>();
+	let previous: Promise<unknown> = Promise.resolve();
+	return (response) => {
+		if (response.request().method() !== method) return Promise.resolve(false);
+		if (!route.test(wcposRestRoute(response.url()) ?? '')) return Promise.resolve(false);
+		const verdict = previous.then(async () => {
+			const cause = await resendCause(response);
+			if (cause === null || skipped.has(cause)) return true;
+			skipped.add(cause);
+			return false;
+		});
+		previous = verdict.catch(() => {});
+		return verdict;
 	};
 }
 
@@ -117,9 +145,9 @@ export async function clickAndExpectPaymentWrite(
 	orderId: number,
 	write: PaymentWrite
 ): Promise<void> {
-	const pending = page.waitForResponse(createPaymentResponseMatcher(orderId, write), {
-		timeout: 90_000,
-	});
+	const base = `/wcpos/v2/orders/${orderId}/payments`;
+	const route = write === 'record' ? new RegExp(`^${base}$`) : new RegExp(`^${base}/[^/]+/void$`);
+	const pending = page.waitForResponse(createPaymentResponseMatcher(route), { timeout: 90_000 });
 	pending.catch(() => {});
 	await page.getByTestId(testId).click();
 	const response = await pending;

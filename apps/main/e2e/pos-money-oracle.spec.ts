@@ -124,9 +124,21 @@ async function fillCurrencyField(
 ) {
 	const field = page.getByTestId(testID);
 	await expect(field).toBeVisible({ timeout: 15_000 });
-	await field.click();
 	const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-	await expect(numpad).toBeVisible({ timeout: 15_000 });
+	// A click that lands while the surrounding dialog is still moving focus is swallowed and
+	// the numpad never opens: re-check after each click and click again, never wait blind.
+	let clicks = 0;
+	await expect(async () => {
+		if (!(await numpad.isVisible())) {
+			if (clicks > 0)
+				console.log(
+					`WCPOS_E2E numpad.retry ${testID}: the numpad did not open after click ${clicks}, clicking again`
+				);
+			clicks += 1;
+			await field.click();
+		}
+		await expect(numpad).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 15_000 });
 	// Press the numpad's own KEYS, one per character. Two reasons this is not typing
 	// into the input:
 	//
@@ -168,6 +180,17 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	// dialog, and this suite selects app UI by stable testID only.
 	const dialog = page.getByTestId('add-misc-product-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
+	// The dialog defers its auto-focus to the first field (Name); wait for focus to settle inside
+	// it, or that focus move lands after the price click and the numpad never opens.
+	await expect
+		.poll(
+			() =>
+				page.evaluate(
+					() => document.activeElement?.closest('[data-testid="add-misc-product-dialog"]') != null
+				),
+			{ timeout: 15_000 }
+		)
+		.toBe(true);
 	await fillCurrencyField(page, 'misc-product-price-input', price);
 	if (taxStatus) {
 		const option = page.getByTestId(`tax_status-option-${taxStatus}`);
