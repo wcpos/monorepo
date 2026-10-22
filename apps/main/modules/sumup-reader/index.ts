@@ -33,11 +33,12 @@ export type SumUpReader = {
 	 * SumUp's offline session (Solo and Solo Lite): while active, EVERY checkout is offline.
 	 * `pending`: this app started one SumUp has not confirmed uploaded (no SDK call when false).
 	 *
-	 * The four offline methods are dormant and kept on purpose (Paul, 2026-10-23, monorepo#2847
-	 * closed unmerged): no caller starts a session until the offline tender outbox of ADR 0040
-	 * §offline lands (`OFFLINE_TENDERS_QUEUE`), and the native side was validated on a physical
-	 * Solo in #2495. The status of that outbox is in woocommerce-pos ADR 0040, "Offline tenders:
-	 * status". Do not delete them as dead code; see `lib/payment-drivers/sumup/driver.ts`.
+	 * Kept on purpose (Paul, 2026-10-23, monorepo#2847 closed unmerged): `startOfflineSession`
+	 * has no caller until the offline tender outbox of ADR 0040 §offline lands
+	 * (`OFFLINE_TENDERS_QUEUE`); the query, upload and prepare calls still run from the driver
+	 * and find no session. The native side was validated on a physical Solo in #2495. The status
+	 * of that outbox is in woocommerce-pos ADR 0040, "Offline tenders: status". Do not delete
+	 * these as dead code; see `lib/payment-drivers/sumup/driver.ts`.
 	 */
 	offlineSession(): Promise<{ active: boolean; pending: boolean }>;
 	startOfflineSession(): Promise<void>;

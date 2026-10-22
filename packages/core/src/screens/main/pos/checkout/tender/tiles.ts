@@ -106,8 +106,9 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
  * command journal already re-sends on reconnect and the store replays a `record` by id, ADR 0040
  * rule 5). What that slice still needs, and the product question it waits on, is written in
  * woocommerce-pos ADR 0040, "Offline tenders: status". The SumUp offline-session code in
- * apps/main (driver and native module) is the device half of the same outbox and is kept dormant
- * for it (Paul, 2026-10-23).
+ * apps/main (driver and native module) is the device half of the same outbox and is kept for it
+ * (Paul, 2026-10-23): nothing starts a session while this is false, and its session query,
+ * upload and reconnect sync run and find none.
  */
 export const OFFLINE_TENDERS_QUEUE = false;
 
