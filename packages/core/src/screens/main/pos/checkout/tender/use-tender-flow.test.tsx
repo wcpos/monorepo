@@ -508,6 +508,30 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	// CodeRabbit 4346454764 on #2837: a re-send in flight never shows the keypad.
+	it('Try again in flight keeps the gate: no tiles until the re-send settles', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		const entry = { id: 'row-1', kind: 'record', sentAt: '2026-10-20T10:00:00Z' };
+		act(() =>
+			mockJournal$.next({
+				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-1': entry } } } } }),
+			})
+		);
+		let answer!: (value: { kind: string; data: Record<string, unknown> }[]) => void;
+		mockResend.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+		let retried!: Promise<void>;
+		act(() => {
+			retried = result.current.retryCommand();
+		});
+		expect(result.current.busy).toBe(true);
+		expect(result.current.unansweredCommand).toBe(true);
+		expect(result.current.tiles).toEqual([]);
+		await act(async () => {
+			answer([]);
+			await retried;
+		});
+	});
+
 	it('Try again reports a changed order as such, never as an unanswered payment', async () => {
 		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
 		mockResend.mockRejectedValueOnce(
@@ -3172,6 +3196,26 @@ describe('gateway capture mode (contract 1.2)', () => {
 			'pos_checkout.sale_reopened_elsewhere',
 			expect.objectContaining({ showToast: true })
 		);
+	});
+
+	// CodeRabbit 4346454779 on #2837: a reopened replay took no money, whatever its mirror did.
+	it('a reopened replay whose mirror fails says the sale was reopened, never recorded', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'paid', payment: null, order: summary('pos-open') },
+		});
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockWarn).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_recorded_not_synced',
+			expect.anything()
+		);
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 	});
 
 	it('a cancel answered with the order not open again says the invoice stands', async () => {

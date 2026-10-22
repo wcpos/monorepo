@@ -293,8 +293,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		});
 		return () => subscription.unsubscribe();
 	}, [storeDB, order.uuid]);
-	// While this till's own request is in flight its entry is sent too; that is not unanswered.
-	const unansweredCommand = sentCommands.length > 0 && !busy;
+	// While this till's own press is in flight its entry is sent too; that is not unanswered. A
+	// Try again in flight keeps the gate: its keypad is never shown (CodeRabbit 4346454764).
+	const [pressing, setPressing] = React.useState(false);
+	const unansweredCommand = sentCommands.length > 0 && !pressing;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -866,6 +868,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			return;
 		busyRef.current = true;
 		setBusy(true);
+		setPressing(true);
 		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
 		const approval = { total: String(order.getLatest().payload.total ?? ''), currency };
 		let savingProvenance = false;
@@ -1357,6 +1360,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// till's copy failed to save. "Try again" would send or charge a second time.
 				attemptRef.current = null;
 				const { outcome } = error;
+				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
+				if (outcome.kind === 'reopened') {
+					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
+						showToast: true,
+						context: { ...orderContext, status: outcome.order.status },
+					});
+					return;
+				}
 				// PAYMENT111's summary speaks of a recorded payment; a sent invoice needs its own sentence.
 				const sentence =
 					outcome.kind === 'sent'
@@ -1389,10 +1400,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
-				} else if (outcome.kind === 'sent') {
-					// A reopened gateway outcome after a failed mirror falls through: the next refresh
-					// resolves it (sale-completion re-checks the resident), and the 'not synced'
-					// warning is the cashier's signal until then.
+				} else {
 					await completeOrderFlow({
 						source: 'gateway',
 						order: outcome.order,
@@ -1470,6 +1478,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
+			setPressing(false);
 		}
 	}, [
 		unansweredCommand,
