@@ -20,7 +20,12 @@ import { useT } from '../../../../../contexts/translations';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
+import {
+	completionMetaFor,
+	persistSaleProvenance,
+	receiptOnPaidWrite,
+	refreshOrderRecord,
+} from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
@@ -127,7 +132,10 @@ export function useRecordManualPayment(
 				},
 				mirror: async ({ payment, status }, { accepted }) => {
 					try {
-						await post.mirror({ payment, order: status ? ({ status } as never) : null });
+						await post.mirror(
+							{ payment, order: status ? ({ status } as never) : null },
+							{ afterWrite: receiptOnPaidWrite(order, accepted ? status : undefined) }
+						);
 						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
 						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
 							const meta_data = await completionMetaFor(ctx, latestMeta, {

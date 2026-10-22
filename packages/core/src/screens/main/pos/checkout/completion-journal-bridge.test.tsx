@@ -77,6 +77,7 @@ jest.mock('./hooks/reconcile-completed-order', () => ({
 jest.mock('./provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 jest.mock('./checkout-mode', () => ({
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
+	retractReceiptEntry: () => {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({

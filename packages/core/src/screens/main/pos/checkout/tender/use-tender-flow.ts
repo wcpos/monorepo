@@ -53,6 +53,7 @@ import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import {
 	persistSaleProvenance,
+	receiptOnPaidWrite,
 	recordSaleAttempt,
 	reopenedSince,
 	residentUnpaid,
@@ -69,6 +70,8 @@ import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	receiptEntryAfterWrite,
+	retractReceiptEntry,
 	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
@@ -729,8 +732,21 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		busyRef.current = true;
 		setBusy(true);
 		try {
+			const enterReceiptAfter = receiptEntryAfterWrite(order.uuid);
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
+				afterMirror: ({ kind, data }) => {
+					// Only answers the loop below finishes; a send needs its adopted stamp.
+					const finishes =
+						kind === 'close' ||
+						kind === 'record' ||
+						(kind === 'submit' &&
+							(data.outcome !== 'sent' ||
+								readAwaitingCustomer(order.getLatest().payload.meta_data) !== null));
+					if (!finishes) return;
+					const summary = data.order as OrderPaymentSummary | null | undefined;
+					receiptOnPaidWrite(order, summary?.status, { entry: enterReceiptAfter })?.();
+				},
 			});
 			for (const { kind, data } of answers) {
 				const row = data.payment as PaymentRow | undefined;
@@ -741,6 +757,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const closed = await closeConfirmed(ctx.runtime, order, summary);
 					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
 					else {
+						// Not finished: the provisional receipt afterMirror entered is withdrawn, as a
+						// first attempt's closeSale does.
+						retractReceiptEntry(order.uuid);
 						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
 						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
 						logger.info(closeMessage({ kind: closed, order: summary }, t), {
@@ -780,8 +799,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
 					// A recovered send whose adopted order carries no awaiting-customer stamp was already
 					// settled or cancelled by the store (the stamp goes with the invoice); there is
-					// nothing left to finish.
+					// nothing left to finish — and the provisional receipt afterMirror entered while the
+					// stamp still stood is withdrawn with it (local Codex review on #2853).
 					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
+					else retractReceiptEntry(order.uuid);
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}

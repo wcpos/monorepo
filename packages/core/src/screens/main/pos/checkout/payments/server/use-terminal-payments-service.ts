@@ -22,7 +22,7 @@ import {
 	completionMetaFor,
 	isSaleComplete,
 	isSettledOrderStatus,
-	residentUnpaid,
+	receiptOnPaidWrite,
 } from '../../sale-completion';
 import { useSaleContext } from '../../hooks/use-sale-context';
 import { commandProvenance } from '../../provenance/command-provenance';
@@ -35,11 +35,7 @@ import {
 import { useOrderLedgerWrite } from '../../../commands/use-order-ledger-write';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
-import {
-	getOrderSaveState,
-	receiptEntryAfterWrite,
-	subscribeCheckoutMode,
-} from '../../checkout-mode';
+import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -142,23 +138,25 @@ export function useTerminalPaymentsService(): void {
 					if (stopped) return;
 					if (!resident) throw new Error('Terminal payment order is not resident');
 					// A settling status takes the order off the till and unmounts the tender that used
-					// to select its receipt; the service selects it once the write has landed.
-					const enterReceiptAfter = settlesSale(payment, order, dp())
-						? receiptEntryAfterWrite(orderUuid)
-						: null;
-					await poster.mirror({
-						payment,
-						order,
-						revision,
-						// A device leg's tip moves the order total.
-						...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
-					});
+					// to select its receipt; the service selects it as soon as the status is on the
+					// resident, before the poster's forced refresh.
+					await poster.mirror(
+						{
+							payment,
+							order,
+							revision,
+							// A device leg's tip moves the order total.
+							...(order && payment.capture_mode === 'device' ? { total: order.total } : {}),
+						},
+						{
+							afterWrite: settlesSale(payment, order, dp())
+								? receiptOnPaidWrite(resident, order?.status, { live: () => !stopped })
+								: undefined,
+						}
+					);
 					mirrored = true;
 					const payload = (resident.getLatest?.().payload ??
 						resident.payload) as EngineRecord<'orders'>['payload'];
-					// The post-mirror resident decides, not the answer (#2798 thread 4341491603): the
-					// mirror keeps another till's newer reopen, and a reopened sale shows no receipt.
-					if (!stopped && !residentUnpaid(payload, order?.status)) enterReceiptAfter?.();
 					const meta_data = cloneDeep(payload.meta_data ?? []);
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta_data)) {
 						const patched = await latest.current.stampCompletion(

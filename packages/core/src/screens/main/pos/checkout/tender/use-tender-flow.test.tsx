@@ -35,6 +35,7 @@ import {
 	setTenderMethod,
 	setTenderPlan,
 	useCheckoutMode,
+	watchTender,
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
@@ -79,7 +80,9 @@ const mockReaderState = {
 // The money command journal's local document (ADR 0040): null until a command is journaled.
 const mockJournal$ = new BehaviorSubject<unknown>(null);
 const mockResend = jest.fn(
-	async (): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
+	async (
+		..._args: Parameters<typeof import('@wcpos/query').resendOpenCommands>
+	): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
 );
 const mockPosterInputs: { approval: unknown }[] = [];
 const mockStoreDB = {
@@ -376,17 +379,20 @@ jest.mock('@wcpos/query', () => ({
 		mockPosterInputs.push(input);
 		return Object.assign((url: string, body: unknown) => input.post(url, body), {
 			// The mocked mirrorServerOrder under a fixed revision.
-			mirror: (answer: object) =>
-				jest
+			mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+				await jest
 					.requireMock('@wcpos/query/mutations')
 					.mirrorServerOrder(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
-					}),
+					});
+				options?.afterWrite?.();
+			},
 			settle: async () => undefined,
 		});
 	},
-	resendOpenCommands: (...args: unknown[]) => mockResend(...(args as [])),
+	resendOpenCommands: (...args: Parameters<typeof import('@wcpos/query').resendOpenCommands>) =>
+		mockResend(...args),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
@@ -505,7 +511,34 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.retryCommand());
 		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
 			post: expect.any(Function),
+			afterMirror: expect.any(Function),
 		});
+	});
+
+	it('Try again does not select a receipt for a replayed cancel with a paid summary', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload.status = 'processing';
+			const answer = { kind: 'cancel' as const, data: { order: { status: 'processing' } } };
+			deps.afterMirror?.(answer);
+			return [answer];
+		});
+		await act(async () => result.current.retryCommand());
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	});
+
+	it('Try again selects the replayed paid receipt before re-send settlement returns', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		let atMirror: string | null | undefined;
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload.status = 'completed';
+			deps.afterMirror?.({ kind: 'record', data: { order: { status: 'completed' } } });
+			atMirror = getCheckoutModeSnapshot().selectedReceiptOrder;
+			return [];
+		});
+		await act(async () => result.current.retryCommand());
+		expect(atMirror).toBe(order.uuid);
 	});
 
 	// CodeRabbit 4346454764 on #2837: a re-send in flight never shows the keypad.
@@ -583,11 +616,34 @@ describe('useTenderFlow', () => {
 				...(resident ? { status: resident } : {}),
 			};
 			if (refreshed) jest.mocked(provenance.refreshOrderRecord).mockResolvedValueOnce(refreshed);
-			mockResend.mockResolvedValueOnce([
-				{ kind: 'close', data: { order: { status }, completion: { n: 1, id: 'c1' } } },
-			]);
+			const answer = {
+				kind: 'close' as const,
+				data: { order: { status }, completion: { n: 1, id: 'c1' } },
+			};
+			// The mirror lands the answer's status, afterMirror enters the provisional receipt, then
+			// the forced refresh adopts the resident the row describes (a reopen, for the open rows).
+			const unwatch = watchTender(order.uuid, true);
+			mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+				const before = mockPayload.status;
+				mockPayload.status = status;
+				deps.afterMirror?.(answer);
+				// An open answer never leaves the till, so it enters nothing to withdraw.
+				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
+					status === 'pos-open' ? null : order.uuid
+				);
+				if (before === undefined) delete mockPayload.status;
+				else mockPayload.status = before;
+				return [answer];
+			});
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.retryCommand());
+			unwatch();
+			// Only a confirmed close keeps the provisional receipt; a reopen or an unconfirmed close
+			// withdraws it (Codex 4352787835 on #2853).
+			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(closed === 'completed');
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
+				closed === 'completed' ? order.uuid : null
+			);
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(closed === 'completed' ? 1 : 0);
 			// A reopen ends the completion attempt; an unconfirmed close keeps it for the bridge.
 			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(closed === 'reopened' ? 1 : 0);
@@ -642,6 +698,41 @@ describe('useTenderFlow', () => {
 			order: summary,
 			stamp,
 		});
+	});
+
+	// A recovered send on a paid-looking status enters its provisional receipt while the stamp
+	// stands; the forced refresh then adopts another till's cancel (open, no stamp). The loop
+	// finishes nothing, so the receipt is withdrawn with the stamp (local Codex review on #2853).
+	it('a recovered send whose refresh drops the stamp withdraws its provisional receipt', async () => {
+		const stamp = {
+			method_id: 'wcpos_email_invoice',
+			destination: 'a@b.c',
+			attempt_id: 'attempt-1',
+			sent_at_gmt: '2026-10-20T10:00:00Z',
+			cashier_id: 7,
+		};
+		const answer = {
+			kind: 'submit' as const,
+			data: { outcome: 'sent', order: { status: 'on-hold' } },
+		};
+		const unwatch = watchTender(order.uuid, true);
+		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+			mockPayload = {
+				...mockPayload,
+				status: 'on-hold',
+				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+			} as typeof mockPayload;
+			deps.afterMirror?.(answer);
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(order.uuid);
+			mockPayload = { ...mockPayload, status: 'pos-open', meta_data: [] } as typeof mockPayload;
+			return [answer];
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.retryCommand());
+		unwatch();
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	});
 
 	// A cash record whose answer was lost, then a remote reopen: the replay answers the captured

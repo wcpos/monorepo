@@ -23,6 +23,7 @@ import {
 	completionMetaFor,
 	isSaleComplete,
 	persistSaleProvenance,
+	receiptOnPaidWrite,
 	recordSaleAttempt,
 } from './sale-completion';
 
@@ -36,6 +37,7 @@ const mockBound = jest.fn(),
 	mockRefresh = jest.fn(),
 	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
+	mockRetractReceipt = jest.fn(),
 	mockInfo = jest.fn();
 jest.mock('@wcpos/query/register-session', () => ({
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
@@ -55,6 +57,7 @@ jest.mock('./hooks/reconcile-completed-order', () => ({
 }));
 jest.mock('./checkout-mode', () => ({
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
+	retractReceiptEntry: (...args: unknown[]) => mockRetractReceipt(...args),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
@@ -1079,8 +1082,13 @@ it.each([
 		result
 	);
 	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
-	if (result === 'partial') expect(mockReceipt).not.toHaveBeenCalled();
-	else expect(mockReceipt).toHaveBeenCalled();
+	if (result === 'partial') {
+		expect(mockReceipt).not.toHaveBeenCalled();
+		expect(mockRetractReceipt).toHaveBeenCalledWith('order');
+	} else {
+		expect(mockReceipt).toHaveBeenCalled();
+		expect(mockRetractReceipt).not.toHaveBeenCalled();
+	}
 });
 
 // The gateway's settled answer follows the same rule as the cash and close paths: the resident
@@ -1115,4 +1123,27 @@ it('an unconfirmed paid answer keeps its completion attempt and enters no receip
 	);
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+});
+
+describe('receiptOnPaidWrite', () => {
+	it('leaves unpaid answers without a callback', () => {
+		expect(receiptOnPaidWrite(order, 'pos-open', { entry: jest.fn() })).toBeUndefined();
+	});
+	it('does not enter after the caller stops or the resident reopens', () => {
+		let status = 'completed';
+		const resident = { uuid: 'order', getLatest: () => ({ payload: { status } }) };
+		const entry = jest.fn();
+		receiptOnPaidWrite(resident, 'completed', { entry, live: () => false })?.();
+		const afterWrite = receiptOnPaidWrite(resident, 'completed', { entry });
+		status = 'pos-open';
+		afterWrite?.();
+		expect(entry).not.toHaveBeenCalled();
+	});
+	it('enters after the paid write when the caller is live', () => {
+		const entry = jest.fn();
+		const afterWrite = receiptOnPaidWrite(order, 'completed', { entry });
+		expect(entry).not.toHaveBeenCalled();
+		afterWrite?.();
+		expect(entry).toHaveBeenCalledTimes(1);
+	});
 });

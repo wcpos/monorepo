@@ -105,7 +105,10 @@ describe('submitGatewayPayment', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pos-open') },
 		});
 		await submitGatewayPayment(order, 'wcpos_email_invoice', input, deps);
-		expect(mirror).toHaveBeenCalledWith({ order: summary('pos-open'), awaiting: null });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary('pos-open'),
+			awaiting: null,
+		});
 	});
 	it('recorded: mirrors the captured row into the ledger and drops any stamp', async () => {
 		const { post, mirror, order, deps } = harness([
@@ -136,7 +139,10 @@ describe('submitGatewayPayment', () => {
 		});
 		const outcome = await submitGatewayPayment(order, 'bacs', input, deps);
 		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
-		expect(mirror).toHaveBeenCalledWith({ order: summary('pending'), awaiting: null });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary('pending'),
+			awaiting: null,
+		});
 	});
 	it('a replayed paid answer is settled: no row, the stamp is cleared, the summary is the truth', async () => {
 		const { post, mirror, order, deps } = harness();
@@ -147,7 +153,10 @@ describe('submitGatewayPayment', () => {
 			kind: 'settled',
 			order: summary('completed'),
 		});
-		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: null });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary('completed'),
+			awaiting: null,
+		});
 	});
 	// A replay answers the attempt's stored outcome with the order as it now stands: after another
 	// till reopened the sale, that is open again. Mirrored, but never reported finished.
@@ -168,7 +177,10 @@ describe('submitGatewayPayment', () => {
 			kind,
 			order: summary(status),
 		});
-		expect(mirror).toHaveBeenCalledWith({ order: summary(status), awaiting: null });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary(status),
+			awaiting: null,
+		});
 	});
 	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
 		const { post, mirror, order, deps } = harness();
@@ -267,7 +279,10 @@ describe('cancelGatewayInvoice', () => {
 		expect(post).toHaveBeenCalledWith('orders/42/payment-methods/wcpos_email_invoice/cancel', {
 			attempt_id: 'attempt-0',
 		});
-		expect(mirror).toHaveBeenCalledWith({ order: summary('pos-open'), awaiting: null });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary('pos-open'),
+			awaiting: null,
+		});
 	});
 	it('an empty 2xx confirms nothing: no stamp is cleared', async () => {
 		const { post, mirror, order, deps } = harness();
@@ -308,7 +323,10 @@ describe('cancelGatewayInvoice', () => {
 			kind: 'unchanged',
 			order: summary('completed'),
 		});
-		expect(mirror).toHaveBeenCalledWith({ order: summary('completed'), awaiting: stamp });
+		expect(mirror).toHaveBeenCalledWith({
+			order: summary('completed'),
+			awaiting: stamp,
+		});
 	});
 	it('a refusal leaves the order alone', async () => {
 		const { post, mirror, order, deps } = harness();

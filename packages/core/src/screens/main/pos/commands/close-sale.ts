@@ -21,9 +21,15 @@ import {
 } from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { retractReceiptEntry } from '../checkout/checkout-mode';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
-import { refreshOrderRecord, residentUnpaid, type SaleContext } from '../checkout/sale-completion';
+import {
+	receiptOnPaidWrite,
+	refreshOrderRecord,
+	residentUnpaid,
+	type SaleContext,
+} from '../checkout/sale-completion';
 
 export type CloseOutcome =
 	| {
@@ -90,9 +96,15 @@ export async function closeSale(
 		// filter) proves nothing: the entry stays journaled for a re-send.
 		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
 		const summary = data.order as unknown as OrderPaymentSummary;
-		await post.mirror({ order: summary });
+		await post.mirror(
+			{ order: summary },
+			{ afterWrite: receiptOnPaidWrite(order, summary.status) }
+		);
 		const closed = await closeConfirmed(runtime, order, summary);
-		if (closed !== 'completed') return { kind: closed, order: summary };
+		if (closed !== 'completed') {
+			retractReceiptEntry(order.uuid);
+			return { kind: closed, order: summary };
+		}
 		return { kind: 'completed', order: summary, completion: data.completion };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')

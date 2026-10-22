@@ -5,6 +5,7 @@ import type { EngineRecord } from '@wcpos/query';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import {
+	claimReceiptAutoPrint,
 	clearOrderSaveIfMutation,
 	clearOrderSaving,
 	enterCheckout,
@@ -16,12 +17,15 @@ import {
 	markOrderQueuedOffline,
 	markOrderSaveRejected,
 	markOrderSaving,
+	receiptEntryAfterWrite,
 	resetCheckoutMode,
 	resolveStage,
+	retractReceiptEntry,
 	selectReceipt,
 	setTenderMethod,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
+	watchTender,
 } from './checkout-mode';
 import { useOrderSaveState, useOrderSaving } from './use-order-save-state';
 
@@ -226,4 +230,38 @@ it('derives offline immediately without changing the stored saving state', () =>
 	rerender();
 	expect(result.current).toEqual([{ kind: 'queued-offline', mutationId: '' }, false]);
 	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
+});
+
+it('retracts a provisional receipt to checkout and releases its print claim', () => {
+	enterCheckout('a');
+	const unwatch = watchTender('a', true);
+	receiptEntryAfterWrite('a')();
+	unwatch();
+	expect(claimReceiptAutoPrint('a')).toBe(true);
+	retractReceiptEntry('a');
+	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(false);
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [])).toBe('checkout');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	expect(claimReceiptAutoPrint('a')).toBe(true);
+});
+it.each(['direct', 'finished'])('does not retract a %s receipt entry', (kind) => {
+	if (kind === 'direct') enterReceipt('a');
+	else {
+		const unwatch = watchTender('a', true);
+		receiptEntryAfterWrite('a')();
+		unwatch();
+		finishReceipt('a');
+	}
+	const before = getCheckoutModeSnapshot();
+	retractReceiptEntry('a');
+	expect(getCheckoutModeSnapshot()).toBe(before);
+});
+it('a confirmed entry does not skip an unrelated background entry after New order', () => {
+	const unwatch = watchTender('a', true);
+	receiptEntryAfterWrite('a')();
+	unwatch();
+	enterReceipt('a');
+	finishReceipt('a');
+	enterReceipt('a', { select: false });
+	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
 });

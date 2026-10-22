@@ -76,7 +76,17 @@ export type MoneyCommandPoster = Post & {
 	 * delete the answered entries and run the forced refresh. A status poll's `revision` is
 	 * recorded as the order's chain, without the refresh, so the next command is sent under it.
 	 */
-	mirror(answer: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }): Promise<void>;
+	mirror(
+		answer: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown },
+		options?: {
+			/**
+			 * Runs once the answer is on the resident and before the forced refresh; for state the
+			 * write itself changes (the open-orders query drops a paid order), not for anything
+			 * that needs the refreshed document.
+			 */
+			afterWrite?: () => void;
+		}
+	): Promise<void>;
 	/**
 	 * Delete the answered entries, then the forced refresh (what `mirror` ends with). A definitive
 	 * refusal since the last settle also earns the refresh, never an answer chain.
@@ -432,7 +442,7 @@ export async function resendOpenCommands(
 	runtime: QueryRuntime,
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
-	deps: { post: Post }
+	deps: { post: Post; afterMirror?: (command: ResentCommand) => void }
 ): Promise<ResentCommand[]> {
 	const scope = await activeScopeId(runtime);
 	const entries = (await readOrderCommands(storeDB, orderUuid)).entries.filter((entry) =>
@@ -472,10 +482,13 @@ export async function resendOpenCommands(
 			await poster.abandon();
 			throw new Error('money_command_unconfirmed');
 		}
-		await poster.mirror({
-			payment: data.payment as PaymentRow | undefined,
-			order: data.order as OrderPaymentSummary | undefined,
-		});
+		await poster.mirror(
+			{
+				payment: data.payment as PaymentRow | undefined,
+				order: data.order as OrderPaymentSummary | undefined,
+			},
+			{ afterWrite: () => deps.afterMirror?.({ kind: entry.kind, data }) }
+		);
 		answers.push({ kind: entry.kind, data });
 	}
 	return answers;
@@ -709,10 +722,10 @@ export function moneyCommandPoster(input: {
 		return dispatch(claim.entry);
 	};
 	return Object.assign(poster, {
-		mirror: async ({
-			revision,
-			...answer
-		}: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }) => {
+		mirror: async (
+			{ revision, ...answer }: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown },
+			options?: { afterWrite?: () => void }
+		) => {
 			try {
 				await mirrorMoneyAnswer(input.runtime, input.orderUuid, { ...answer, sentRevision });
 			} catch (error) {
@@ -720,6 +733,7 @@ export function moneyCommandPoster(input: {
 				for (const { id } of answered) await release(id);
 				throw error;
 			}
+			options?.afterWrite?.();
 			// A poll that settled the row moved the order: record its revision, never a refresh.
 			const polled = answerChain(revision, Date.now());
 			if (polled)

@@ -820,6 +820,59 @@ const recover = () => recoverMoneyCommands(runtime, storeDB, { post: store.post 
 const chain = async () => (await readOrderCommands(storeDB, 'order')).chain;
 
 describe('moneyCommandPoster', () => {
+	it('calls afterWrite once after the resident write and before the forced refresh', async () => {
+		const post = poster();
+		await post('orders/5/close', {});
+		const doc = await resident();
+		const calls: string[] = [];
+		const apply = residents.applyEngineResidentChanges;
+		jest.spyOn(residents, 'applyEngineResidentChanges').mockImplementation(async (...args) => {
+			const result = await apply(...args);
+			calls.push('write');
+			return result;
+		});
+		const require = runtime.engine.require.bind(runtime.engine);
+		jest.spyOn(runtime.engine, 'require').mockImplementation((...args) => {
+			calls.push('refresh');
+			return require(...args);
+		});
+		const afterWrite = jest.fn(() => {
+			expect(doc.getLatest().payload.status).toBe('completed');
+			calls.push('afterWrite');
+		});
+
+		await post.mirror({ order: store.summary() as never }, { afterWrite });
+
+		expect(afterWrite).toHaveBeenCalledTimes(1);
+		expect(calls).toEqual(['write', 'afterWrite', 'refresh']);
+	});
+
+	it('does not call afterWrite when the resident write throws', async () => {
+		const post = poster();
+		await post('orders/5/close', {});
+		jest.spyOn(residents, 'applyEngineResidentChanges').mockRejectedValueOnce(new Error('disk'));
+		const afterWrite = jest.fn();
+		await expect(post.mirror({}, { afterWrite })).rejects.toThrow('disk');
+		expect(afterWrite).not.toHaveBeenCalled();
+	});
+
+	it('a throwing afterWrite does not release the answered command claim', async () => {
+		const post = poster();
+		await post('orders/5/close', {});
+		const [before] = await entries();
+		await expect(
+			post.mirror(
+				{},
+				{
+					afterWrite: () => {
+						throw new Error('callback');
+					},
+				}
+			)
+		).rejects.toThrow('callback');
+		expect((await entries())[0].claimedBy).toBe(before.claimedBy);
+	});
+
 	it('a capture retried through a fresh poster re-sends the journaled command, never a new one', async () => {
 		store.modes = ['503'];
 		await expect(poster()('orders/5/payments/leg-1/capture', { context: {} })).rejects.toThrow();
@@ -895,6 +948,22 @@ describe('moneyCommandPoster', () => {
 });
 
 describe('Try again: resendOpenCommands', () => {
+	it('forwards the replayed kind and data to afterMirror after the resident write', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments', { payment: cash() })).rejects.toThrow();
+		const doc = await resident();
+		const afterMirror = jest.fn(() => {
+			expect(readLedger(doc.getLatest().payload.meta_data).map((row) => row.id)).toEqual(['row-1']);
+			expect(requires).toEqual([]);
+		});
+		const answers = await resendOpenCommands(runtime, storeDB, 'order', {
+			post: store.post,
+			afterMirror,
+		});
+		expect(afterMirror).toHaveBeenCalledTimes(1);
+		expect(afterMirror).toHaveBeenCalledWith({ kind: 'record', data: answers[0].data });
+	});
+
 	it('provenance is minted once per command, rides every re-send, and only on the kinds the store stamps from', async () => {
 		const provenance = jest.fn(async () => ({ register_id: 'reg', sale_counter: '7' }));
 		store.modes = ['lose'];
