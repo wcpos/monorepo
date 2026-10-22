@@ -7,7 +7,9 @@ import * as LabelPrimitive from '@rn-primitives/label';
 import { cn } from '../lib/utils';
 
 /** react-native-web forwards `onClick` to the DOM; React Native's types do not list it. */
-const WebRoot = View as React.ComponentType<ViewProps & { onClick?: () => void }>;
+const WebRoot = View as React.ComponentType<
+	ViewProps & { onClick?: (event: React.MouseEvent) => void }
+>;
 
 /**
  * Web: the root is a real `<label>` (react-native-web renders `accessibilityRole="label"`
@@ -23,20 +25,31 @@ function Label({
 	onLongPress: _onLongPress,
 	onPressIn: _onPressIn,
 	onPressOut: _onPressOut,
+	htmlFor,
 	...props
 }: LabelPrimitive.TextProps) {
+	const textClassName =
+		'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-45 text-muted-foreground text-sm leading-none font-medium';
+	// With `htmlFor` the primitive's Text is itself the `<label for>`; a second one around it
+	// would be a label inside a label, so the text stands alone and takes the press itself.
+	if (htmlFor) {
+		return (
+			<LabelPrimitive.Text
+				className={cn(textClassName, className)}
+				htmlFor={htmlFor}
+				onPress={onPress}
+				{...props}
+			/>
+		);
+	}
 	return (
 		<WebRoot
 			accessibilityRole="label"
-			onClick={onPress ? () => onPress({} as never) : undefined}
+			// A React mouse event carries `nativeEvent`, which is what an `onPress` caller may read.
+			onClick={onPress ? (event) => onPress(event as never) : undefined}
 			className={cn('web:cursor-default', className)}
 		>
-			<LabelPrimitive.Text
-				className={cn(
-					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-45 text-muted-foreground text-sm leading-none font-medium'
-				)}
-				{...props}
-			/>
+			<LabelPrimitive.Text className={textClassName} {...props} />
 		</WebRoot>
 	);
 }
