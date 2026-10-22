@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
+import { cn } from '@wcpos/components/lib/utils';
 
+import { useGround } from '../ground';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
@@ -98,6 +100,7 @@ export function NavigationAreaLayout({
 }) {
 	const { screenSize } = useTheme();
 	const insets = useSafeAreaInsets();
+	const ground = useGround();
 	const pathname = usePathname();
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
@@ -135,11 +138,11 @@ export function NavigationAreaLayout({
 			<SessionHoldBanner />
 			{/* First row of the column: flush with the top it pads; after the hold banner it is the
 			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
-			{barNotice != null && <View className={held ? 'mt-gutter' : undefined}>{barNotice}</View>}
+			{barNotice != null && <View className={held ? ground.mt : undefined}>{barNotice}</View>}
 			<View testID={testID} className="flex-1 flex-row">
 				<View
 					testID={`${testID}-rail`}
-					className="border-border/50 bg-background p-gutter w-56 shrink-0 gap-0.5 border-r"
+					className={cn('border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r', ground.p)}
 				>
 					<NavigationItems items={items} showChevron={false} />
 				</View>
@@ -164,6 +167,7 @@ export function NavigationAreaIndex({
 	testID: string;
 }) {
 	const { screenSize } = useTheme();
+	const ground = useGround();
 
 	if (screenSize !== 'sm') {
 		return <Redirect href={defaultHref} />;
@@ -171,8 +175,7 @@ export function NavigationAreaIndex({
 
 	return (
 		<ScrollView testID={testID} className="bg-background flex-1">
-			{/* A phone only: the screen edge keeps 16 (CODING_STANDARDS § Design, Gutters). */}
-			<View className="gap-1 p-4">
+			<View className={cn('gap-1', ground.p)}>
 				<NavigationItems items={items} showChevron />
 			</View>
 		</ScrollView>

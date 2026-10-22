@@ -110,6 +110,12 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+// AreaPage reads the device for its ground's gutter (`useGround`); the real hook needs the
+// window, which this harness's react-native does not drive.
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => false,
+	usePointer: () => 'fine',
+}));
 jest.mock('@wcpos/components/label', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Label: Text };

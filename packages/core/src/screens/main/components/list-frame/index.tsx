@@ -9,6 +9,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import type { QueryHandle } from '@wcpos/query';
 
+import { useGround } from '../ground';
 import { ChipRowSkeleton } from '../chip-row';
 import { withProAccess } from '../pro-guard';
 
@@ -95,6 +96,7 @@ export function ListColumn({
 	children: React.ReactNode;
 } & ({ handle: QueryHandle; skeleton: React.ReactNode } | { handle?: never; skeleton?: never })) {
 	const phone = useIsPhone();
+	const ground = useGround();
 	// The row above the card brings the gutter over it; with no such row, the body brings it.
 	// The phone's list runs edge to edge under the search row.
 	const bodyGutter = !phone && chips == null && rows == null;
@@ -108,14 +110,8 @@ export function ListColumn({
 				</ErrorBoundary>
 			)}
 			{rows != null && (
-				// The phone's screen edge keeps 16, as its chip row does.
-				<View
-					className={cn(
-						'gap-gutter',
-						phone ? 'px-4' : 'px-gutter',
-						(chips != null || phone) && '-mt-gutter'
-					)}
-				>
+				// The phone's screen edge keeps 16, as its chip row does (`useGround`).
+				<View className={cn(ground.gap, ground.px, (chips != null || phone) && ground.negMt)}>
 					<View />
 					{rows}
 					<View />

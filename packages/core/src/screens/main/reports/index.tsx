@@ -16,6 +16,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
+import { useGround } from '../components/ground';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
@@ -82,6 +83,7 @@ function getInitialReportSort(
 
 function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const t = useT();
+	const ground = useGround();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	// The three handles are owned here (the effects retain them), above the refunds and
@@ -192,7 +194,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 					fallback={
 						// The same scrolling shell as the settled page: on a short phone the strip
 						// can push the date button below the fold (Codex, #2720).
-						<ScrollView className="flex-1" contentContainerClassName="gap-gutter p-gutter">
+						<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 							{strip}
 							<HeroShell title={title} />
 						</ScrollView>
@@ -276,6 +278,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 function ReportsShell() {
 	const t = useT();
 	const phone = useIsPhone();
+	const ground = useGround();
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -332,8 +335,9 @@ function ReportsShell() {
 								// controls and its own; the Closures body's `p-gutter` brings the gutter
 								// below. The phone keeps its 8 under its control-height bar.
 								className={cn(
-									'px-gutter flex-row items-center justify-between gap-2',
-									phone ? 'py-2' : 'pt-gutter'
+									'flex-row items-center justify-between gap-2',
+									ground.px,
+									phone ? 'py-2' : ground.pt
 								)}
 							>
 								<DateButton
@@ -371,12 +375,13 @@ export function ReportsScreen() {
 	const { wpCredentials } = useAppState();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const t = useT();
+	const ground = useGround();
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
 		<ReportsShell key={link.key} />
 	) : (
 		<View className="flex-1">
 			<ManagementBar title={t('common.reports')} testID="reports-bar" />
-			<Text testID="reports-denied" className="p-gutter">
+			<Text testID="reports-denied" className={ground.p}>
 				{t('reports.no_access')}
 			</Text>
 		</View>

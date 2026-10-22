@@ -5,18 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
-/**
- * The page gutter around the card (`--spacing-gutter`), on every side: the same gutter the list
- * pages give their search, chips and card (CODING_STANDARDS § Design, Gutters). A phone's screen
- * edge keeps 16: Apple's root-view minimum applies at the device edge. The 20/24 verticals and
- * the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's own
- * body keeps its 16 (inside a surface).
- */
-const pagePadding = (phone: boolean) => (phone ? 'p-4' : 'p-gutter');
+import { useGround } from '../ground';
 
 export type AreaPageMode = 'scroll' | 'fill';
 
@@ -43,7 +35,11 @@ export function AreaPage({
 	children: React.ReactNode;
 }) {
 	const insets = useSafeAreaInsets();
-	const padding = pagePadding(useIsPhone());
+	// The ground's gutter around the card (`useGround`), on every side: the same gutter the list
+	// pages give their search, chips and card, 16 at a phone's screen edge. The 20/24 verticals
+	// and the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's
+	// own body keeps its 16 (inside a surface).
+	const padding = useGround().p;
 	const heading = (
 		<View className="gap-0.5 px-4 pt-4 pb-3">
 			<Text role="heading" aria-level={1} className="text-xl font-semibold">

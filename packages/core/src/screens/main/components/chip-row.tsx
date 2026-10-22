@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { ScrollView, type ScrollViewInstance, View } from 'react-native';
 
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Skeleton } from '@wcpos/components/skeleton';
+
+import { useGround } from './ground';
 
 /**
  * The chip row every list surface with pills has (Products, Orders, Coupons, the POS
@@ -26,7 +27,7 @@ export function ChipRow({
 	children: React.ReactNode;
 }) {
 	return (
-		<View testID={testID} className={useIsPhone() ? 'p-4' : 'p-gutter'}>
+		<View testID={testID} className={useGround().p}>
 			<ScrollView
 				ref={ref}
 				horizontal
@@ -49,12 +50,9 @@ const PLACEHOLDER_CHIPS = 4;
  * (owner, 2026-10-22: "jarring, either load the filter bar or at least skeleton").
  */
 export function ChipRowSkeleton() {
-	const phone = useIsPhone();
+	const ground = useGround();
 	return (
-		<View
-			testID="filter-bar-skeleton"
-			className={cn('flex-row items-center gap-2', phone ? 'p-4' : 'p-gutter')}
-		>
+		<View testID="filter-bar-skeleton" className={cn('flex-row items-center gap-2', ground.p)}>
 			{Array.from({ length: PLACEHOLDER_CHIPS }, (_, index) => (
 				<Skeleton key={index} shape="chip" />
 			))}

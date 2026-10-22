@@ -4,6 +4,8 @@ import { View, type ViewProps } from 'react-native';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 
+import { useGround } from '../ground';
+
 /**
  * The one surface every table and tile grid sits on: a white card with a hairline border and
  * one radius, inset by the page gutter (`--spacing-gutter`, 12 at Regular) on every list surface
@@ -39,10 +41,9 @@ export function TableSurface({ className, ...props }: ViewProps) {
  * goes inside, never on the element taking the tiles' margin back.
  */
 export function TileGround({ children }: { children: React.ReactNode }) {
-	// The phone's screen edge keeps 16 (owner, 2026-10-22), as the chip row above the tiles does.
-	const phone = useIsPhone();
+	// The phone's screen edge keeps 16 (`useGround`), as the chip row above the tiles does.
 	return (
-		<View className={phone ? 'min-h-0 flex-1 px-4' : 'px-gutter min-h-0 flex-1'}>
+		<View className={cn('min-h-0 flex-1', useGround().px)}>
 			<View className="-mx-1 -mt-1 min-h-0 flex-1">{children}</View>
 		</View>
 	);

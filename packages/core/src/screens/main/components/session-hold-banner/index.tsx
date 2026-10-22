@@ -8,6 +8,7 @@ import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useGround } from '../ground';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useEngineStatus, useMutationCounts } from '../../hooks/use-engine-monitor';
@@ -118,6 +119,7 @@ export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dens
 	const hold = React.useContext(SessionHoldContext);
 	const t = useT();
 	const phone = useIsPhone();
+	const ground = useGround();
 	if (!hold) return null;
 	const { syncBacklogSales, login } = hold;
 
@@ -135,7 +137,7 @@ export function SessionHoldBanner({ gutter = 'page' }: { gutter?: 'page' | 'dens
 					: t('auth.session_expired_description')
 			}
 			actions={[{ label: t('auth.log_in'), onPress: login, testID: 'session-hold-login' }]}
-			className={cn(!phone && (gutter === 'page' ? 'mx-gutter mt-gutter' : 'mx-2 mt-2'))}
+			className={cn(!phone && (gutter === 'page' ? cn(ground.mx, ground.mt) : 'mx-2 mt-2'))}
 			testID="session-hold-banner"
 		/>
 	);

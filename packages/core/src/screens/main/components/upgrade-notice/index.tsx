@@ -8,6 +8,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
+import { useGround } from '../ground';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
@@ -27,6 +28,7 @@ export function UpgradeNotice({
 
 	const { screenSize } = useTheme();
 	const isPhone = screenSize === 'sm';
+	const ground = useGround();
 	const openPro = () => openExternalURL('https://wcpos.com/pro');
 
 	return (
@@ -35,8 +37,9 @@ export function UpgradeNotice({
 		<HStack
 			testID="upgrade-notice-banner"
 			className={cn(
-				'bg-muted border-border pl-gutter min-h-10 items-center gap-2.5 border-b pr-2',
-				underBar && !isPhone && 'mt-gutter'
+				'bg-muted border-border min-h-10 items-center gap-2.5 border-b pr-2',
+				ground.pl,
+				underBar && !isPhone && ground.mt
 			)}
 		>
 			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
