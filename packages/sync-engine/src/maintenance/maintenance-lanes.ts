@@ -89,12 +89,13 @@ export type MaintenanceLaneReport = {
 };
 
 /** The host port the query-total retry lane drains through: a host-executed fetch on
- * the engine's `fetcher`, which carries the lane's label and its one deadline. */
+ * the engine's `engineRequest`, which carries the lane's label and its one deadline
+ * (`request` already names the probe itself). */
 export type QueryTotalPort = {
 	fetchWooQueryTotal: (input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
-		fetcher: (url: string, init?: RequestInit) => Promise<Response>;
+		engineRequest: (url: string, init?: RequestInit) => Promise<Response>;
 	}) => Promise<number | null>;
 };
 

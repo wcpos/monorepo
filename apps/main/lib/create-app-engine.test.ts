@@ -125,7 +125,7 @@ function loadCreateAppEngine(
 							totalHeader: 'X-WP-Total';
 						};
 						signal?: AbortSignal;
-						fetcher: (url: string, init?: RequestInit) => Promise<Response>;
+						engineRequest: (url: string, init?: RequestInit) => Promise<Response>;
 					}): Promise<number | null>;
 				};
 				databaseOpenBarrier?: Promise<void>;
@@ -364,6 +364,32 @@ describe('createAppSyncEngine scope cache', () => {
 			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&store_id=store-1`
 		);
 		fetch.mockRestore();
+	});
+
+	it('probes the query total through the request the engine hands the port', async () => {
+		// The handed request carries the query-total lane and its one deadline; the
+		// host transport would stack a second deadline (two pressure strikes per probe).
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const port = createRxdbSyncEngine.mock.calls[0]?.[0].queryTotal;
+		const engineRequest = jest.fn(
+			async (_url: string, _init?: RequestInit) =>
+				new Response(null, { status: 200, headers: { 'X-WP-Total': '7' } })
+		);
+
+		const total = await port?.fetchWooQueryTotal({
+			request: {
+				queryKey: 'census:products',
+				endpoint: 'products',
+				params: {},
+				totalHeader: 'X-WP-Total',
+			},
+			engineRequest,
+		});
+
+		expect(total).toBe(7);
+		expect(engineRequest).toHaveBeenCalledTimes(1);
+		expect(new URL(engineRequest.mock.calls[0]![0]).searchParams.get('per_page')).toBe('1');
 	});
 
 	it('reports settled non-server-error transport responses as network pulses', async () => {

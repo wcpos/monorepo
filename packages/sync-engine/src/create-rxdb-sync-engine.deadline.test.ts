@@ -21,8 +21,8 @@ const blackHole = (init?: RequestInit) =>
 		init?.signal?.addEventListener('abort', abort, { once: true });
 	});
 /** The host's port as apps/main builds it: one probe through the request the engine hands it. */
-const hostProbe: QueryTotalPort['fetchWooQueryTotal'] = async ({ fetcher, signal }) => {
-	await fetcher(TOTAL_URL, { signal });
+const hostProbe: QueryTotalPort['fetchWooQueryTotal'] = async ({ engineRequest, signal }) => {
+	await engineRequest(TOTAL_URL, { signal });
 	return 42;
 };
 beforeEach(async () => {

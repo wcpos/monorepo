@@ -59,9 +59,10 @@ import type { PushResult } from './recordPushAdapter';
  *    retries a dead letter: recovery is an explicit `resolveConflict` call that
  *    enqueues a FRESH row with the payload rebuilt from the current resident;
  *
- *  - error → back to 'pending' with backoff; left queued to retry next drain.
- *    A 401 from ANY push attempt (first, 428 re-push or #1204 re-push) also
- *    walls the rest of the pass: no user is logged in, so every push would get one;
+ *  - error (any push attempt, or a 428's revision refresh) → back to 'pending'
+ *    with backoff, reported to the row's waiter; left queued to retry next drain.
+ *    A 401 also walls the rest of the pass: no user is logged in, so every push
+ *    would get one;
  *  - abort (scope switch) → the row STAYS durably 'claimed' (gate2 #516 item
  *    1): the push may have reached the server, so the intent is
  *    pushed-with-unknown-outcome — a claimed row never coalesces, which is
@@ -97,7 +98,7 @@ export type DrainResult = {
 	failed: number;
 	/** True when a push in this drain failed with 401; later rows were not pushed. */
 	sessionExpired: boolean;
-	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
+	/** Retryable push failures, whichever attempt met them (first push, 428 restamp or #1204 re-push). */
 	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
 	deferred: number;
@@ -742,14 +743,10 @@ export async function drainMutationQueue(input: {
 	};
 
 	// ONE ATTEMPT, one owner per rule. The first push and the #1204 re-anchored
-	// re-push both run `attempt`, so a 428 buys the same single refresh
-	// (`refreshAndRepush`) and a throw settles the same way (`settleThrown`)
+	// re-push both run `attempt`, so a 428 buys the same refresh (`refreshAndRepush`,
+	// one per push it re-anchors) and a throw settles the same way (`settleThrown`)
 	// whichever push met it.
-	const attempt = async (
-		row: QueuedMutation,
-		first: boolean,
-		prepare?: () => Promise<void>
-	): Promise<Settled> => {
+	const attempt = async (row: QueuedMutation, prepare?: () => Promise<void>): Promise<Settled> => {
 		try {
 			await prepare?.();
 			return { kind: 'pushed', result: await input.push(row) };
@@ -763,7 +760,7 @@ export async function drainMutationQueue(input: {
 			if ((error as { status?: unknown } | null)?.status === 428) {
 				return refreshAndRepush(row, error);
 			}
-			await settleThrown(row, error, first);
+			await settleThrown(row, error);
 			return { kind: 'settled' };
 		}
 	};
@@ -776,11 +773,10 @@ export async function drainMutationQueue(input: {
 		let revision: string | null | undefined;
 		try {
 			revision = await input.refreshRevision?.(row);
-		} catch {
+		} catch (refreshError) {
 			if (input.signal?.aborted) return { kind: 'aborted' };
-			failed += 1;
-			blockedRecords.add(recordKey(row));
-			await applyBackoff({ ...row, status: 'pending' });
+			// Never a dead letter: a failed refresh says nothing about the write itself.
+			await defer(row, refreshError);
 			return { kind: 'settled' };
 		}
 		if (!revision) {
@@ -795,31 +791,28 @@ export async function drainMutationQueue(input: {
 			if (input.signal?.aborted) return { kind: 'aborted' };
 			// A second 428 proves the refreshed revision ineffective; isNonRetryable
 			// treats 428 as terminal, so it dead-letters instead of looping on that base.
-			await settleThrown(restamped, retryError, false);
+			await settleThrown(restamped, retryError);
 			return { kind: 'settled' };
 		}
 	};
 
-	// A thrown push, settled in one place: a permanent 4xx is dead-lettered (retrying
-	// forever would poison the queue); anything else stays queued behind backoff
-	// (ADR 0012 — the push adapter already emitted push.error). `failures` and
-	// `onRetryableFailure` carry FIRST-push failures only (see DrainResult), but a 401
-	// walls the pass whichever attempt met it: it is a session fact, not this row's.
-	const settleThrown = async (row: QueuedMutation, error: unknown, first: boolean) => {
-		if (isNonRetryable(error)) {
-			await deadLetter(row, error);
-			return;
-		}
+	// A retryable failure, settled in one place: the row stays queued behind backoff
+	// (ADR 0012) and its waiter hears now, whichever attempt met it. A 401 also walls
+	// the pass: it is a session fact, not this row's.
+	const defer = async (row: QueuedMutation, error: unknown): Promise<void> => {
 		failed += 1;
 		const { status, reason } = (error ?? {}) as { status?: number; reason?: string };
-		if (first) {
-			reportFailure({ mutation: row, status, reason });
-			blockedByFailure.set(recordKey(row), { status, reason });
-		}
+		reportFailure({ mutation: row, status, reason });
+		blockedByFailure.set(recordKey(row), { status, reason });
 		blockedRecords.add(recordKey(row));
 		await applyBackoff({ ...row, status: 'pending' });
 		if (status === SESSION_EXPIRED_STATUS) sessionWall = { status, reason };
 	};
+
+	// A thrown push: a permanent 4xx is dead-lettered (retrying forever would poison
+	// the queue); anything else is deferred (the push adapter already emitted push.error).
+	const settleThrown = (row: QueuedMutation, error: unknown): Promise<void | false> =>
+		isNonRetryable(error) ? deadLetter(row, error) : defer(row, error);
 
 	// A drainable release row — an explicit mutation or a delete — must drain its
 	// record's WHOLE chain in FIFO order. An already-attempted predecessor cannot
@@ -970,7 +963,7 @@ export async function drainMutationQueue(input: {
 		if (admission === 'lost') draining.admissionReleased = draining.admittedBy;
 		attemptStartedAt = now();
 		attempted += 1;
-		const first = await attempt(draining, true);
+		const first = await attempt(draining);
 		if (first.kind === 'aborted') break;
 		if (first.kind === 'settled') continue;
 		let result = first.result;
@@ -999,9 +992,9 @@ export async function drainMutationQueue(input: {
 			if (serverRevision && input.autoRecoverConflict?.(draining) === true) {
 				const reanchored = { ...draining, baseRevision: serverRevision };
 				// A re-anchored push that throws settles exactly as a first attempt
-				// would (a 428 is owed its one refresh, since this row has spent none),
-				// never parked 'conflicted' — that would hide the server's real verdict.
-				const retried = await attempt(reanchored, false, async () => {
+				// would (a 428 is owed one refresh per push it re-anchors), never
+				// parked 'conflicted' — that would hide the server's real verdict.
+				const retried = await attempt(reanchored, async () => {
 					if (serverDocument) await input.reconcileConflict?.(reanchored, serverDocument);
 				});
 				if (retried.kind === 'aborted') break;

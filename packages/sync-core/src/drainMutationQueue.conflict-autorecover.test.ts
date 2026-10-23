@@ -374,11 +374,13 @@ describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
 	// the next row must not pay a second 401 to learn it. Each case scripts order-A's
 	// pushes by call number; a scripted status throws, any other call reaches the
 	// fake server (whose seeded revision answers the stale base with a real 409).
-	it.each<{ name: string; throws: Record<number, number> }>([
+	// The last case's 401 comes from the 428's revision refresh, not a push.
+	it.each<{ name: string; throws: Record<number, number>; refreshThrows?: number }>([
 		{ name: '409 re-anchored push', throws: { 2: 401 } },
 		{ name: '428 restamped push', throws: { 1: 428, 2: 401 } },
 		{ name: '409 then 428 restamped push', throws: { 2: 428, 3: 401 } },
-	])('a 401 on a re-push walls the rest of the pass ($name)', async ({ throws }) => {
+		{ name: 'revision refresh on a 428', throws: { 1: 428 }, refreshThrows: 401 },
+	])('a 401 on a re-push walls the rest of the pass ($name)', async ({ throws, refreshThrows }) => {
 		const { queue, server, push } = await harness(mut());
 		await queue.enqueue(
 			mut({ mutationId: 'm2', recordId: 'order-B', queuedAt: '2026-08-14T00:01:00.000Z' })
@@ -396,15 +398,20 @@ describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
 			queue,
 			push: scripted,
 			autoRecoverConflict: () => true,
-			refreshRevision: async () => 'sha256:server-moved',
+			refreshRevision: async () => {
+				if (refreshThrows === undefined) return 'sha256:server-moved';
+				throw Object.assign(new Error(`HTTP ${refreshThrows}`), { status: refreshThrows });
+			},
 		});
 
 		expect(pushed).not.toContain('order-B');
 		expect(result.sessionExpired).toBe(true);
 		expect(result.failed).toBe(1);
-		// The re-push's own failure stays out of `failures` (first-push only); the
-		// walled row is reported with the 401 so its waiter hears it now.
-		expect(result.failures.map((f) => [f.mutation.mutationId, f.status])).toEqual([['m2', 401]]);
+		// Both waiters hear the 401 now: the row that met it, and the row it walled.
+		expect(result.failures.map((f) => [f.mutation.mutationId, f.status])).toEqual([
+			['m1', 401],
+			['m2', 401],
+		]);
 		expect(result.rejected).toEqual([]);
 	});
 

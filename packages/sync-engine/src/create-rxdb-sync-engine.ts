@@ -897,12 +897,12 @@ export function createRxdbSyncEngine(
 		onPressureTransition: (transition) => cadence?.onServerPressureTransition(transition),
 		onPressureReadoutChanged: scheduleStatusChange,
 	});
-	// No lane given: the host-transport lane (the maintenance lanes pass their own).
+	// No lane given: the host-transport lane.
 	const fetcher: EngineFetcher = (url, init) => transport.request(url, init);
 	// The host's query-total probe runs on its own request: its lane's label and its
 	// one deadline, so a black-holed probe is one pressure strike. A latched upgrade
 	// refusal answers "unsupported" without even a local replay (woocommerce-pos#1752).
-	const queryTotalFetcher: EngineFetcher = (url, init) =>
+	const queryTotalRequest: EngineFetcher = (url, init) =>
 		transport.request(url, init, {
 			lane: 'query-total-retry',
 			deadlineMs: QUERY_TOTAL_REQUEST_DEADLINE_MS,
@@ -912,7 +912,7 @@ export function createRxdbSyncEngine(
 		fetchWooQueryTotal: async (input: { request: QueryTotalWooRequest; signal?: AbortSignal }) =>
 			transport.updateRequired()
 				? null
-				: hostQueryTotal.fetchWooQueryTotal({ ...input, fetcher: queryTotalFetcher }),
+				: hostQueryTotal.fetchWooQueryTotal({ ...input, engineRequest: queryTotalRequest }),
 	};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,

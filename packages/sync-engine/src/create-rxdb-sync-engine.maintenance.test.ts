@@ -294,8 +294,9 @@ describe('maintenance lanes through the public handle', () => {
 				diagnostics,
 				fetcher: blackHoleOr,
 				queryTotal: {
-					fetchWooQueryTotal: async ({ fetcher, signal }) => {
-						if (failure === 'deadline') return (await fetcher(BLACK_HOLE_URL, { signal })).status;
+					fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+						if (failure === 'deadline')
+							return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
 						throw new Error('HTTP 500');
 					},
 				},
@@ -328,8 +329,8 @@ describe('maintenance lanes through the public handle', () => {
 			mode: 'manual',
 			fetch: blackHoleOr,
 			queryTotal: {
-				fetchWooQueryTotal: async ({ fetcher, signal }) => {
-					if (hang) return (await fetcher(BLACK_HOLE_URL, { signal })).status;
+				fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+					if (hang) return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
 					throw new Error('census store write failed');
 				},
 			},
