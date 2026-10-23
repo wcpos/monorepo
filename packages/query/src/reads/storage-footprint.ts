@@ -10,7 +10,7 @@ import {
 import type { StorageFootprintEntry } from '@wcpos/database/measure-storage-types';
 import { SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
 
-import { readSiteApiUrls } from '../user-db';
+import { readSiteApiUrls } from '../user-db/reads';
 
 const RXDB_ENTRY_PREFIX = 'rxdb-';
 /**

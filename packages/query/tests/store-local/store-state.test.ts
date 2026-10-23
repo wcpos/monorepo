@@ -2,7 +2,8 @@ import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { openStoreState, StoreDatabaseUnavailableError } from '../../src/store-local';
+import { StoreDatabaseUnavailableError } from '../../src/commands/printer-profiles';
+import { openStoreState } from '../../src/store-local';
 
 addRxPlugin(RxDBStatePlugin);
 let db: RxDatabase;

@@ -1,4 +1,3 @@
-export { protectOrderMeta } from './protected-order-meta';
 export { applyLocalPatch } from './local-patch';
 export { createEngineResident, CreateScopeChangedTwiceError } from './create';
 export { ResidentWriteError } from './resident-write-error';
@@ -17,12 +16,7 @@ export {
 	type PayloadChanges,
 	type LocalPatchProps,
 } from './resident';
-export {
-	voidOrder,
-	restoreVoidedOrder,
-	type VoidOrderInput,
-	type VoidOrderResult,
-} from './void-order';
+export { voidOrder, restoreVoidedOrder, type VoidOrderResult } from './void-order';
 export { birthOrder, findBirthState } from './order-birth';
 export { observeOfflineDeviceAuthorizations } from '../reads/offline-device-authorizations';
 export {

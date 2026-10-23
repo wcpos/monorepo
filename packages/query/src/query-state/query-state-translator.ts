@@ -22,7 +22,7 @@ import {
 	sortAliasFor,
 	sortTiebreakFor,
 	wooOrderbyFor,
-} from '../collection-map';
+} from '../engine-adapter/collection-map';
 import { variationAttributesMatch } from '../engine-adapter/translate-selector';
 import { parseRemoteId } from './parse-remote-id';
 

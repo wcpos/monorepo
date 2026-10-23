@@ -8,13 +8,16 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { fillWithDefaultSettings, getQueryMatcher, normalizeMangoQuery } from 'rxdb';
 import { BehaviorSubject, map, type Observable, of, throwError } from 'rxjs';
 
-import { OPEN_ORDERS_SORT, openOrdersSelector } from '@wcpos/query';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import type { QueryHandle } from '@wcpos/query';
 import { useQuerySnapshot } from '@wcpos/query/query-state';
 
 import { useOpenOrdersHandle } from './use-open-orders-handle';
+import {
+	OPEN_ORDERS_SORT,
+	openOrdersSelector,
+} from '../../../../../../../query/src/open-orders-scope';
 
 import type { RxJsonSchema } from 'rxdb';
 

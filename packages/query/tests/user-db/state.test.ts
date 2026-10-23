@@ -7,8 +7,9 @@ import {
 	clearSessionPointer,
 	commitSessionPointer,
 	setExtraData,
-	type StateSlot,
 } from '../../src/user-db';
+
+import type { StateSlot } from '../../src/user-db/state';
 
 addRxPlugin(RxDBStatePlugin);
 let db: RxDatabase;

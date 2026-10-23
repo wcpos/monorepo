@@ -2,6 +2,8 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import * as query from '../src';
 
+import type { LocalCollectionReset } from '../src/use-local-collection';
+
 it('clears on every binding, projects plain rows, and follows only its own reset', () => {
 	const before = { id: 'before' };
 	const after = { id: 'after' };
@@ -9,7 +11,7 @@ it('clears on every binding, projects plain rows, and follows only its own reset
 	const newRows$ = new Subject<{ toJSON: () => typeof after }[]>();
 	const find = jest.fn(() => ({ $: oldRows$ }));
 	const replacementFind = jest.fn(() => ({ $: newRows$ }));
-	const reset$ = new Subject<query.LocalCollectionReset>();
+	const reset$ = new Subject<LocalCollectionReset>();
 	const database = { collections: { notifications: { find } }, reset$ };
 	const seen: unknown[] = [];
 	const sub = query
@@ -51,7 +53,7 @@ it('emits [] for absent databases and a null subscriber without querying', () =>
 });
 
 it('announces only this database’s notification replacements, never the initial binding', () => {
-	const reset$ = new Subject<query.LocalCollectionReset>();
+	const reset$ = new Subject<LocalCollectionReset>();
 	const database = { collections: {}, reset$ };
 	const seen: unknown[] = [];
 	const sub = query.observeNotificationsReplaced(database).subscribe((value) => seen.push(value));

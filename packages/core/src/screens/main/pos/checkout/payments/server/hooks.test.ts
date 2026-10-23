@@ -55,7 +55,6 @@ jest.mock('@wcpos/query', () => ({
 		}),
 	// The real completion asks before its second read; never adopted here, so it always refreshes.
 	answerAdopted: async () => false,
-	engineCollection: () => null,
 	useQueryRuntime: () => mockManager,
 	useRecordField: (
 		record: EngineRecord<'orders'> | undefined,

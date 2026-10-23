@@ -1,19 +1,15 @@
 export {
 	adoptCounters,
-	advancePerpetual,
 	bindRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
-	getRegisterId,
 	getRegisterSnapshot,
-	mintClosureNumber,
 	mintUuid,
 	nextSaleCounter,
 	observeRegister$,
 	readBoundRegister,
 	readCounters,
 	readRegister,
-	settleRegister,
 	unbindRegister,
 } from './register-document';
 export type { RegisterCounters, RegisterDocument } from './register-document';
@@ -25,21 +21,14 @@ export type {
 } from '@wcpos/database';
 
 export { recordRegisterFact, type RegisterFact } from './audit';
-export {
-	attributeRefunds,
-	deriveExpected,
-	deriveDrawerTerms,
-	deriveUnsyncedDelta,
-} from './expected';
+export { deriveExpected, deriveDrawerTerms } from './expected';
 export { failureFacts } from './failure-facts';
-export { drainRegisterSessionQueue, type SessionHttp } from './queue';
 export { refreshSessions, sessionRefreshRequests } from './refresh';
 export {
 	backToSelling,
 	closeSession,
 	findOpenSession,
 	openSession,
-	openSessionSelector,
 	recordMovement,
 	recordApproval,
 	RegisterSessionRequiredError,

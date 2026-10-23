@@ -27,8 +27,8 @@ import {
 	saveConnectedSite,
 	saveLoginCredentials,
 	SiteIdentityClashError,
-	upsertEmbeddedCredentials,
 } from '../../src/user-db';
+import { upsertEmbeddedCredentials } from '../../src/user-db/credentials';
 
 jest.mock('uuid', () => ({
 	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,

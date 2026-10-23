@@ -44,7 +44,9 @@ jest.mock('../../../../query', () => {
 	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
 		'@wcpos/query/query-state'
 	);
-	const { createQueryHandle } = jest.requireActual<typeof import('@wcpos/query')>('@wcpos/query');
+	const { createQueryHandle } = jest.requireActual<
+		typeof import('../../../../../../query/src/query-handle')
+	>('../../../../../../query/src/query-handle');
 	return {
 		useGuardedExtension: () => ({}),
 		useSearchSelect: () => ({}),

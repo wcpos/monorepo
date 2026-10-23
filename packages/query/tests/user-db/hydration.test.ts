@@ -1,6 +1,6 @@
 import { createUserDB } from '@wcpos/database/create-db';
 
-import { settleRegister } from '../../src/register-session';
+import { settleRegister } from '../../src/register-session/register-document';
 import {
 	applyEmbeddedBootPayload,
 	openUserDatabase,
@@ -8,8 +8,8 @@ import {
 	recordSiteTransport,
 } from '../../src/user-db';
 
-jest.mock('../../src/register-session', () => ({
-	...jest.requireActual('../../src/register-session'),
+jest.mock('../../src/register-session/register-document', () => ({
+	...jest.requireActual('../../src/register-session/register-document'),
 	settleRegister: jest.fn(),
 }));
 jest.mock('uuid', () => ({ v4: () => `uuid-${Math.random().toString(36).slice(2)}` }));

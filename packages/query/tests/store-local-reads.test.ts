@@ -1,11 +1,12 @@
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import {
-	type LocalCollectionReset,
 	observeActiveTemplates,
 	observePrinterProfiles,
 	observeTemplatePrinterOverrides,
 } from '../src';
+
+import type { LocalCollectionReset } from '../src/use-local-collection';
 
 const reads = {
 	observeTemplatePrinterOverrides,

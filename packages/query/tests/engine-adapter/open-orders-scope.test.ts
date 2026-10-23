@@ -6,7 +6,7 @@ import { NO_STORE, POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { OPEN_ORDERS_SORT, openOrdersSelector } from '../../src/open-orders-scope';
-import { acquireOpenOrdersQueryHandle, type OpenOrdersScope } from '../../src';
+import { acquireOpenOrdersQueryHandle, type OpenOrdersScope } from '../../src/open-orders-scope';
 import { queryHandleAnswers$ } from '../../src/query-handle';
 import { canonicalQueryKey } from '../../src/query-state';
 import { createFakeEngine, engineOrder } from '../../src/testing';

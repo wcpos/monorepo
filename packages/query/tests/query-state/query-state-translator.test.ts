@@ -1,10 +1,13 @@
 import { Query } from 'mingo';
 
 import { engineOrder, orderBrowserQueryKey } from '@wcpos/query/testing';
-import { engineCollectionNameFor, type EngineDocument } from '@wcpos/query/collection-map';
 import { mintRemoteId } from '@wcpos/sync-core';
 import { engineCollectionCreators, engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
+import {
+	engineCollectionNameFor,
+	type EngineDocument,
+} from '../../src/engine-adapter/collection-map';
 import {
 	compileQuery,
 	FILTER_TRANSLATORS,

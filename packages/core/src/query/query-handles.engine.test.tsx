@@ -25,7 +25,6 @@ import {
 } from '@wcpos/query/testing';
 import type { FakeEngine } from '@wcpos/query/testing';
 import {
-	EXISTENCE_RECHECK_MS,
 	useAllTermsHandle,
 	useCollectionQueryHandle,
 	useDrawnHandle,
@@ -39,6 +38,7 @@ import type { QueryStateOf } from '@wcpos/query/query-state';
 
 // Spies must target the defining modules, not the public barrel's re-export getters.
 import * as queryHandles from '../../../query/src/query-state/query-handles';
+import { EXISTENCE_RECHECK_MS } from '../../../query/src/query-state/terms-handles';
 import * as queryStateTranslator from '../../../query/src/query-state/query-state-translator';
 import { useSearchSelect } from './search-select';
 import { createStoreDatabase } from '../../../query/tests/helpers/db';

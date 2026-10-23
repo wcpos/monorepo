@@ -8,8 +8,8 @@ import {
 	saveScannerProfile,
 	type ScannerConnectionType,
 	type ScannerProfile,
-	StoreDatabaseUnavailableError,
 } from '../../src/store-local';
+import { StoreDatabaseUnavailableError } from '../../src/commands/printer-profiles';
 
 const keyboard: ScannerProfile = {
 	deviceKey: 'keyboard:1234:5678:acme scanner',
