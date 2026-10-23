@@ -86,7 +86,7 @@ import {
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
 import { createDemandFloodDetector } from './demand-flood-detector';
-import { withOrderReadopt } from './write-path/order-revision';
+import { withOrderReadopt } from './write-path/order-readopt';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';

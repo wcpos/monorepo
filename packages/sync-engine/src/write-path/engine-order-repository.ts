@@ -25,7 +25,8 @@ import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
-import { adoptedSync, readoptRequested } from './order-revision';
+import { readoptRequested } from './order-readopt';
+import { adoptedSync } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).

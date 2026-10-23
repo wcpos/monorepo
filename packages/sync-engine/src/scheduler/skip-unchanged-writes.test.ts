@@ -6,7 +6,7 @@ import { mintRemoteId, type OrderDocument } from '@wcpos/sync-core';
 import { createEngineHarness } from '../engine-harness';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
-import { withOrderReadopt } from '../write-path/order-revision';
+import { withOrderReadopt } from '../write-path/order-readopt';
 import { collectionSchedulerRepository } from './engine-scheduler-drain';
 
 import type { LocalReferenceDocument } from '../collections/reference-collection-schema';
