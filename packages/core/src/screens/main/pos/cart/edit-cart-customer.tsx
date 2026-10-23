@@ -6,14 +6,14 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
-import { Form } from '@wcpos/components/form';
+	Form,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
+} from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -47,6 +47,14 @@ const formSchema = z.object({
  * RxDocument .billing$ and .shipping$ emit Proxy(Object) which can't be used in react-hook-form
  */
 export function EditCartCustomerForm() {
+	return (
+		<SavedFieldProvider>
+			<EditCartCustomerFields />
+		</SavedFieldProvider>
+	);
+}
+
+function EditCartCustomerFields() {
 	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
 	const customerID = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
@@ -61,52 +69,45 @@ export function EditCartCustomerForm() {
 	);
 	const setCartCustomer = useSetCartCustomer();
 	const { saveCustomerAddresses } = useCartCustomerRecord();
-	const { close: closeDialog } = useDialog();
+	const markSaved = useMarkSaved();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const { caps } = useUserCapabilities();
 
 	/**
-	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
-	 * This makes the form reactive to external data changes (react-hook-form best practice).
+	 * This form writes what it shows: reactive values would reset the draft when a write lands.
+	 * The caller keys it by order UUID so switching orders remounts it with fresh defaults.
 	 */
 	type FormValues = z.infer<typeof formSchema>;
 
 	const form = useForm<FormValues, unknown, FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: { billing, shipping, tax_ids },
+		defaultValues: { billing, shipping, tax_ids },
 	});
 
-	/**
-	 *
-	 */
-	const handleSaveToOrder = async (data: FormValues) => {
-		// The customer stays who it is; the order's copy of the addresses and tax ids changes.
-		const written = await setCartCustomer(currentOrderRecord, {
-			billing: data.billing,
-			shipping: data.shipping,
-			taxIds: data.tax_ids ?? [],
+	const handleChange = (changes: Partial<FormValues>) => {
+		const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+		const values = form.getValues();
+		return setCartCustomer(currentOrderRecord, {
+			billing: values.billing,
+			shipping: values.shipping,
+			taxIds: values.tax_ids ?? [],
+		}).then((written) => {
+			if (written) markSaved([root]);
 		});
-		// A refused edit (false) keeps the dialog and the cashier's input; the reason was
-		// presented. A failed write (undefined) was already reported by localPatch: keep
-		// the dialog (and the edits) open too.
-		if (!written) return false;
-		closeDialog();
-		return true;
 	};
+	useFormChangeHandler({ form, onChange: handleChange });
 
 	/**
 	 * We need to get the customer document and patch it with the new address
 	 */
-	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
+	const handleUpdateCustomer = async (data: FormValues) => {
 		const wooCustomerId = Number(customerID ?? 0);
-		// Never say "Saved to the order" (below) for an order write that failed.
-		if (!(await handleSaveToOrder(data))) return;
 		setLoading(true);
 		try {
 			const result = await saveCustomerAddresses(wooCustomerId, data);
 			if (result.status === 'not-found') {
-				// The order's address is already saved above; only the profile copy could
+				// The order's address saves independently; only the profile copy could
 				// not be made, because the customer record is not on this device.
 				cartLogger.info('Customer record is not on this device; profile not updated', {
 					showToast: true,
@@ -127,7 +128,6 @@ export function EditCartCustomerForm() {
 					},
 				});
 			}
-			closeDialog();
 		} catch (error) {
 			// patch() and localPatch report their own failures (a scope that moved twice).
 			if (isErrorReported(error)) return;
@@ -149,16 +149,15 @@ export function EditCartCustomerForm() {
 	/**
 	 *
 	 */
+	// A named setValue is a change the handler sees (and validates, then writes) like any other.
 	const handleCopyBillingToShipping = React.useCallback(() => {
-		const billingAddress = form.getValues().billing;
-		form.setValue('shipping', billingAddress);
+		form.setValue('shipping', form.getValues().billing);
 	}, [form]);
 
 	/**
 	 * Form submission handlers that include validation
 	 */
-	const onSaveToOrder = form.handleSubmit(handleSaveToOrder);
-	const onSaveToOrderAndCustomer = form.handleSubmit(handleSaveToOrderAndToCustomer);
+	const onUpdateCustomer = form.handleSubmit(handleUpdateCustomer);
 
 	/**
 	 * Form doesn't have a ref? What else should I use?
@@ -169,43 +168,56 @@ export function EditCartCustomerForm() {
 				<VStack className="gap-4">
 					<FormErrors />
 					<Collapsible defaultOpen={true}>
-						<CollapsibleTrigger>
-							<Text>{t('common.billing_address')}</Text>
-						</CollapsibleTrigger>
+						<HStack className="justify-between">
+							<CollapsibleTrigger>
+								<Text>{t('common.billing_address')}</Text>
+							</CollapsibleTrigger>
+							<SavedMark name="billing" label={t('settings.saved')} />
+						</HStack>
 						<CollapsibleContent>
 							<BillingAddressForm />
 						</CollapsibleContent>
 					</Collapsible>
 					<Collapsible>
-						<HStack>
+						<HStack className="justify-between">
 							<CollapsibleTrigger>
 								<Text>{t('common.shipping_address')}</Text>
 							</CollapsibleTrigger>
+							<SavedMark name="shipping" label={t('settings.saved')} />
 						</HStack>
 						<CollapsibleContent>
 							<VStack className="gap-4">
-								<Button variant="outline" onPress={handleCopyBillingToShipping}>
+								<Button
+									testID="cart-address-copy-billing"
+									variant="outline"
+									onPress={handleCopyBillingToShipping}
+								>
 									<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
 								</Button>
 								<ShippingAddressForm />
 							</VStack>
 						</CollapsibleContent>
 					</Collapsible>
-					<TaxIdsForm />
+					<HStack className="items-start justify-between">
+						<VStack className="flex-1">
+							<TaxIdsForm />
+						</VStack>
+						<SavedMark name="tax_ids" label={t('settings.saved')} />
+					</HStack>
 				</VStack>
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.close')}</DialogClose>
 				{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
-					// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
-					<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
-						{t('pos_cart.save_to_order_customer')}
-					</DialogAction>
+					<Button
+						testID="cart-address-update-customer"
+						variant="outline"
+						onPress={() => void onUpdateCustomer()}
+						loading={loading}
+					>
+						{t('pos_cart.update_customer_too')}
+					</Button>
 				)}
-				{/* @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps */}
-				<DialogAction onPress={onSaveToOrder} loading={loading}>
-					{t('pos_cart.save_to_order')}
-				</DialogAction>
 			</DialogFooter>
 		</Form>
 	);

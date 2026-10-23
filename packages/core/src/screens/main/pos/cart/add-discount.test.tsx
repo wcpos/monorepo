@@ -47,6 +47,13 @@ jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	return {
 		Form: FormProvider,
+		useFormChangeHandler: jest.requireActual('@wcpos/components/form/use-form-change-handler')
+			.useFormChangeHandler,
+		SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+		SavedMark: () => null,
+		useMarkSaved: () => jest.fn(),
+		FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+		FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		FormField: Controller,
 		FormInput: ({
 			customComponent: Component,
@@ -213,10 +220,13 @@ it.each(['add', 'edit'])('rejects negative fees in the %s form', async (mode) =>
 			<EditFeeLineForm uuid="fee" item={{ name: 'Fee', meta_data: [] }} />
 		)
 	);
-	fireEvent.change(screen.getByTestId(mode === 'add' ? 'fee-amount-input' : 'Amount'), {
-		target: { value: '-5' },
-	});
-	fireEvent.click(screen.getByTestId(mode === 'add' ? 'add-to-cart-submit' : 'submit'));
+	fireEvent.change(
+		screen.getByTestId(mode === 'add' ? 'fee-amount-input' : 'edit-fee-line-amount-input'),
+		{
+			target: { value: '-5' },
+		}
+	);
+	if (mode === 'add') fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 	await screen.findByText('A fee cannot be negative. Use Add Discount instead.');
 	expect(mockFee).not.toHaveBeenCalled();
 	expect(mockUpdate).not.toHaveBeenCalled();

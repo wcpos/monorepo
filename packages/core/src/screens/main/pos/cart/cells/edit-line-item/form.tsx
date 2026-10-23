@@ -6,21 +6,21 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
 	FormTreeCombobox,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
@@ -64,10 +64,18 @@ interface Props {
 	item: import('@wcpos/query').OrderLineItem;
 }
 
-export function EditLineItemForm({ uuid, item }: Props) {
+export function EditLineItemForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditLineItemFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditLineItemFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
-	const { close: closeDialog } = useDialog();
+	const markSaved = useMarkSaved();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
 	const posData = parsePosData(item);
@@ -99,36 +107,24 @@ export function EditLineItemForm({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
-	const handleSave = React.useCallback(
-		async (data: FormValues) => {
-			await updateCartLine('line_items', uuid, {
-				name: data.name,
-				sku: data.sku,
-				quantity: data.quantity,
-				price: data.price,
-				regular_price: data.regular_price,
-				tax_status: data.tax_status,
-				tax_class: taxClassToWire(data.tax_class),
-				meta_data: data.meta_data as never,
-				virtual: data.virtual,
-				downloadable: data.downloadable,
-				categories: data.categories.map((opt) => ({
-					id: Number(opt.value),
-					name: opt.label,
-				})),
+	useFormChangeHandler({
+		form,
+		onChange: (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			const wireValue =
+				root === 'tax_class'
+					? taxClassToWire(form.getValues('tax_class'))
+					: root === 'categories'
+						? form
+								.getValues('categories')
+								.map((opt) => ({ id: Number(opt.value), name: opt.label }))
+						: value;
+			return updateCartLine('line_items', uuid, { [root]: wireValue }).then((written) => {
+				if (written) markSaved([root]);
 			});
-			closeDialog();
 		},
-		[updateCartLine, uuid, closeDialog]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
+	});
 
 	/**
 	 *
@@ -140,7 +136,15 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
+					render={({ field }) => (
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('common.name')}</FormLabel>
+								<SavedMark name="name" label={t('settings.saved')} />
+							</HStack>
+							<FormInput testID="edit-line-item-name-input" {...field} />
+						</FormItem>
+					)}
 				/>
 				{isMiscProductLine(item) && (
 					<FormField
@@ -166,25 +170,33 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						control={form.control}
 						name="sku"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.sku')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.sku')}</FormLabel>
+									<SavedMark name="sku" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="edit-line-item-sku-input" {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="quantity"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('pos_cart.quantity')}</FormLabel>
+									<SavedMark name="quantity" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									customComponent={NumberInput}
-									label={t('pos_cart.quantity')}
+									testID="edit-line-item-quantity-input"
 									type="numeric"
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -193,32 +205,40 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						control={form.control}
 						name="price"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.price')}</FormLabel>
+									<SavedMark name="price" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('common.price')}
+									testID="edit-line-item-price-input"
 									type="numeric"
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="regular_price"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.regular_price')}</FormLabel>
+									<SavedMark name="regular_price" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('common.regular_price')}
+									testID="edit-line-item-regular_price-input"
 									type="numeric"
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -274,7 +294,6 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.close')}</DialogClose>
-				<DialogAction onPress={() => void onSave()}>{t('common.save')}</DialogAction>
 			</DialogFooter>
 		</Form>
 	);

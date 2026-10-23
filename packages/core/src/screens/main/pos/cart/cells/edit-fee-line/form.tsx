@@ -6,20 +6,20 @@ import toNumber from 'lodash/toNumber';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
@@ -54,10 +54,18 @@ interface Props {
 	item: import('@wcpos/query').OrderFeeLine;
 }
 
-export function EditFeeLineForm({ uuid, item }: Props) {
+export function EditFeeLineForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditFeeLineFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditFeeLineFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
-	const { close: closeDialog } = useDialog();
+	const markSaved = useMarkSaved();
 	const { getFeeLineData } = useFeeLineData();
 	const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
 		getFeeLineData(item);
@@ -85,33 +93,22 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
-	const handleSave = React.useCallback(
-		async (data: FormValues) => {
-			await updateCartLine('fee_lines', uuid, {
-				name: data.name,
-				amount: String(data.amount),
-				tax_status: data.tax_status,
-				tax_class: taxClassToWire(data.tax_class),
-				percent: data.percent,
-				prices_include_tax: data.prices_include_tax,
-				percent_of_cart_total_with_tax: data.percent_of_cart_total_with_tax,
-				// This dialog renders <MetaDataForm/> and seeds it from the line, but used to
-				// drop the result on save — the cashier's meta edits went nowhere. The sibling
-				// shipping form has always submitted it.
-				meta_data: data.meta_data as import('@wcpos/query').OrderFeeLine['meta_data'],
+	useFormChangeHandler({
+		form,
+		onChange: (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			const wireValue =
+				root === 'tax_class'
+					? taxClassToWire(form.getValues('tax_class'))
+					: root === 'amount'
+						? String(value)
+						: value;
+			return updateCartLine('fee_lines', uuid, { [root]: wireValue }).then((written) => {
+				if (written) markSaved([root]);
 			});
-			closeDialog();
 		},
-		[updateCartLine, uuid, closeDialog]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
+	});
 
 	/**
 	 * Watch for changes to `percent`
@@ -129,7 +126,17 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput label={t('pos_cart.fee_name')} placeholder={t('pos_cart.fee')} {...field} />
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('pos_cart.fee_name')}</FormLabel>
+								<SavedMark name="name" label={t('settings.saved')} />
+							</HStack>
+							<FormInput
+								testID="edit-fee-line-name-input"
+								placeholder={t('pos_cart.fee')}
+								{...field}
+							/>
+						</FormItem>
 					)}
 				/>
 				<HStack className="gap-4">
@@ -137,16 +144,22 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 						control={form.control}
 						name="amount"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>
+										{togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
+									</FormLabel>
+									<SavedMark name="amount" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
-									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
+									testID="edit-fee-line-amount-input"
 									type="numeric"
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 					<VStack className="flex-1 justify-center">
@@ -202,7 +215,6 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.close')}</DialogClose>
-				<DialogAction onPress={() => void onSave()}>{t('common.save')}</DialogAction>
 			</DialogFooter>
 		</Form>
 	);
