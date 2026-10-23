@@ -1158,6 +1158,39 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('a typed search while a browse window is in flight neither aborts the browse nor re-sends page=1', async () => {
+		const server = heldBrowseServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		const window = {
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		} as const;
+		const boot = engine.require({ id: 'boot-browse', ...window });
+		await vi.waitFor(() => expect(server.state.browseRequests).toBe(1));
+
+		// The keystroke re-renders the grid: its browse handle releases and the identical
+		// window is redeclared in the same pass, beside the new search declaration.
+		boot.release();
+		const rerendered = engine.require({ id: 'rerendered-browse', ...window });
+		const search = engine.require({
+			id: 'typed-search',
+			collection: 'products',
+			kind: 'search',
+			term: 'widget',
+		});
+
+		await expect(search.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.browseRequests).toBe(1);
+		expect(server.state.browseSignals.some((signal) => signal.aborted)).toBe(false);
+
+		server.openBrowse();
+		await expect(rerendered.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.browseRequests).toBe(1);
+		await engine.dispose();
+	});
+
 	it('still runs two searches one at a time', async () => {
 		const first = Promise.withResolvers<Response>();
 		const server = heldBrowseServer(async (term) => (term === 'widget' ? first.promise : json([])));
