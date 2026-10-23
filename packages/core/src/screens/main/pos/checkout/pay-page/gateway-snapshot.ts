@@ -7,7 +7,7 @@ export interface JudgedGatewaySnapshot {
 	/** The status stored for the snapshot's OWN gateway; null when it has none or the catalog has not loaded. */
 	storedStatus: string | null;
 	/** Whether the sale is finished: `isSaleComplete`, never reimplemented here. */
-	settled: boolean;
+	complete: boolean;
 }
 
 /**
@@ -27,5 +27,5 @@ export function judgeGatewaySnapshot(
 		snapshot: snapshot as GatewaySnapshotOutcome['snapshot'],
 		settledOrderStatus: storedStatus,
 	};
-	return { outcome, storedStatus, settled: isSaleComplete(outcome, dp) };
+	return { outcome, storedStatus, complete: isSaleComplete(outcome, dp) };
 }

@@ -4,7 +4,7 @@ const STORED = { bacs: 'pending', cod: null, cheque: 'on-hold' };
 
 describe('judgeGatewaySnapshot', () => {
 	it.each([
-		// status, gateway, stored map, settled, storedStatus
+		// status, gateway, stored map, complete, storedStatus
 		['completed', 'cod', STORED, true, null],
 		['processing', 'stripe', STORED, true, null],
 		['pending', 'bacs', STORED, true, 'pending'],
@@ -19,13 +19,13 @@ describe('judgeGatewaySnapshot', () => {
 		['on-hold', 'cheque', STORED, true, 'on-hold'],
 		['pending', undefined, STORED, false, null],
 		['pending', 7, { 7: 'pending' }, false, null],
-	])('%s via %s → settled %s', (status, gateway, stored, settled, storedStatus) => {
+	])('%s via %s → complete %s', (status, gateway, stored, complete, storedStatus) => {
 		const snapshot = { id: 42, status, payment_method: gateway };
 		const judged = judgeGatewaySnapshot(snapshot, stored as Record<string, string | null>, 2);
 		expect(judged).toEqual({
 			outcome: { source: 'gateway-snapshot', snapshot, settledOrderStatus: storedStatus },
 			storedStatus,
-			settled,
+			complete,
 		});
 		expect(judged.outcome.snapshot).toBe(snapshot);
 	});

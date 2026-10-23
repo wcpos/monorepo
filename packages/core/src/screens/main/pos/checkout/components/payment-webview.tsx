@@ -199,7 +199,7 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
-	const { settled: isSettled, settle } = useSettleGatewaySnapshot(order, receiptHost, orderLogger);
+	const { isSettled, settle } = useSettleGatewaySnapshot(order, receiptHost, orderLogger);
 
 	// The "reopen the payment" warning is shown once per mount, whatever follows.
 	const reopenWarned = React.useRef(false);
@@ -374,7 +374,7 @@ export function PaymentWebview({
 				typeof localStatus === 'string' &&
 				localStored !== null &&
 				localStatus === localStored &&
-				local.settled;
+				local.complete;
 			// Sync can land the stored status locally before the gateway catalog has
 			// loaded, so nothing yet says it is settled. Returning here would skip the
 			// re-arm in `finally`, and the catalog arriving later would find no poll
@@ -413,7 +413,7 @@ export function PaymentWebview({
 				// cart they still have — unless it is the status the merchant configured the
 				// gateway to settle on, which is the sale finishing.
 				const server = judgeGatewaySnapshot(serverOrder, settledRef.current, ctx.dp);
-				if (!server.settled) {
+				if (!server.complete) {
 					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
 						context: {
 							serverStatus,
@@ -423,7 +423,7 @@ export function PaymentWebview({
 					});
 					return;
 				}
-				await settle(server, 'fallback-refresh', { orderId, orderNumberFallback: orderNumber });
+				await settle(server, 'fallback-refresh');
 			} catch (err) {
 				// Best-effort safety net only. Order completion is authoritatively
 				// delivered via the postMessage path, so a failed or premature poll
@@ -452,7 +452,7 @@ export function PaymentWebview({
 				}
 			}
 		},
-		[http, order, orderId, orderNumber, ctx.dp, settle, isSettled, setLoading, orderLogger]
+		[http, order, orderId, ctx.dp, settle, isSettled, setLoading, orderLogger]
 	);
 	const handleSessionExpired = async (messageOrderId: number) => {
 		if (messageOrderId !== orderId) {
@@ -491,53 +491,52 @@ export function PaymentWebview({
 		}
 	};
 
-	const handleReceived = React.useCallback(
-		async (message: Extract<PayPageMessage, { kind: 'received' | 'received-unreadable' }>) => {
-			// The fallback poll may have settled this sale first; a late message
-			// for the same order must not route and toast a second time.
-			if (isSettled()) return;
-			// Both deferrals below arm the server-truth poll, which completes the sale:
-			// lifecycle, not an amber row on a sale that finishes normally.
-			if (message.kind === 'received-unreadable') {
-				orderLogger.info('Payment received with an invalid order snapshot', {
-					context: { orderId },
-				});
-				setLoading(false);
-				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
-				return;
-			}
-			// A pre-hardening store's received page emits whenever the CONFIGURED
-			// gateway status is not pos-open — for an async gateway that can be
-			// before the provider confirms, with the order still unpaid. Don't
-			// complete on the message's say-so: leave the poll armed and let
-			// server truth decide. The exception is the status the merchant
-			// configured this gateway to settle on — reaching it IS the sale
-			// finishing, whatever WooCommerce calls it.
-			const judged = judgeGatewaySnapshot(message.snapshot, settledRef.current, ctx.dp);
-			if (!judged.settled) {
-				orderLogger.info('Payment received but the order is not paid; deferring to server truth', {
-					context: {
-						orderId,
-						status: message.snapshot.status,
-						settledOrderStatus: judged.storedStatus,
-					},
-				});
-				setLoading(false);
-				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
-				return;
-			}
-			if (fallbackTimerRef.current) {
-				clearTimeout(fallbackTimerRef.current);
-				fallbackTimerRef.current = null;
-			}
-			try {
-				await settle(judged, 'pay-page-message', { orderId, orderNumberFallback: orderNumber });
-			} finally {
-				setLoading(false);
-			}
-		},
-		[orderId, orderNumber, ctx.dp, settle, isSettled, setLoading, orderLogger, pollServerTruth]
-	);
+	const handleReceived = async (
+		message: Extract<PayPageMessage, { kind: 'received' | 'received-unreadable' }>
+	) => {
+		// The fallback poll may have settled this sale first; a late message
+		// for the same order must not route and toast a second time.
+		if (isSettled()) return;
+		// Both deferrals below arm the server-truth poll, which completes the sale:
+		// lifecycle, not an amber row on a sale that finishes normally.
+		if (message.kind === 'received-unreadable') {
+			orderLogger.info('Payment received with an invalid order snapshot', {
+				context: { orderId },
+			});
+			setLoading(false);
+			void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+			return;
+		}
+		// A pre-hardening store's received page emits whenever the CONFIGURED
+		// gateway status is not pos-open — for an async gateway that can be
+		// before the provider confirms, with the order still unpaid. Don't
+		// complete on the message's say-so: leave the poll armed and let
+		// server truth decide. The exception is the status the merchant
+		// configured this gateway to settle on — reaching it IS the sale
+		// finishing, whatever WooCommerce calls it.
+		const judged = judgeGatewaySnapshot(message.snapshot, settledRef.current, ctx.dp);
+		if (!judged.complete) {
+			orderLogger.info('Payment received but the order is not paid; deferring to server truth', {
+				context: {
+					orderId,
+					status: message.snapshot.status,
+					settledOrderStatus: judged.storedStatus,
+				},
+			});
+			setLoading(false);
+			void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+			return;
+		}
+		if (fallbackTimerRef.current) {
+			clearTimeout(fallbackTimerRef.current);
+			fallbackTimerRef.current = null;
+		}
+		try {
+			await settle(judged, 'pay-page-message');
+		} finally {
+			setLoading(false);
+		}
+	};
 
 	const onMessage = (event: { nativeEvent: { data: unknown } }) => {
 		const message = readPayPageMessage(event?.nativeEvent?.data);
@@ -573,6 +572,8 @@ export function PaymentWebview({
 				return;
 			case 'ignored':
 				return;
+			default:
+				return message satisfies never;
 		}
 	};
 

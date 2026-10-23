@@ -38,23 +38,21 @@ export function useSettleGatewaySnapshot(
 	// Whichever path sees the sale finish first settles it; a late message or poll answer for the
 	// same order must not route and toast a second time.
 	const latch = React.useRef(false);
-	const settled = React.useCallback(() => latch.current, []);
+	const isSettled = React.useCallback(() => latch.current, []);
 
 	const settle = React.useCallback(
 		async (
 			judged: JudgedGatewaySnapshot,
-			source: 'pay-page-message' | 'fallback-refresh',
-			extra: { orderId: number | undefined; orderNumberFallback: unknown }
+			source: 'pay-page-message' | 'fallback-refresh'
 		): Promise<void> => {
 			latch.current = true;
 			const fromMessage = source === 'pay-page-message';
 			const snapshot = judged.outcome.snapshot;
+			const local = order.getLatest().payload;
 			try {
-				// The poll clears the current order before its toast, the message after it.
-				if (!fromMessage && receiptHost === 'modal') setCurrentOrderID('');
 				orderLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
-						orderNumber: snapshot.number || extra.orderNumberFallback,
+						orderNumber: snapshot.number || local.number,
 					}),
 					{
 						showToast: true,
@@ -68,7 +66,7 @@ export function useSettleGatewaySnapshot(
 						},
 					}
 				);
-				if (fromMessage && receiptHost === 'modal') setCurrentOrderID('');
+				if (receiptHost === 'modal') setCurrentOrderID('');
 				if (receiptHost === 'stage') {
 					// completeOrderFlow('stage') enters the receipt itself (completeSale, before any await);
 					// it never leaves checkout for a gateway snapshot, so that half is ours.
@@ -86,7 +84,7 @@ export function useSettleGatewaySnapshot(
 				}
 				// Catch-up after a PAID sale that already routed; the order syncs on the next pass, so
 				// a miss is forensic, and only the message path has ever recorded it.
-				void adoptStoreOrderSnapshot(runtime.engine, snapshot, extra.orderId).then((result) => {
+				void adoptStoreOrderSnapshot(runtime.engine, snapshot, local.id).then((result) => {
 					if (!fromMessage) return;
 					if (result.adoption !== 'applied' && result.adoption !== 'rejected') {
 						orderLogger.debug('Checkout order snapshot was not applied', {
@@ -133,5 +131,5 @@ export function useSettleGatewaySnapshot(
 		]
 	);
 
-	return { settled, settle };
+	return { isSettled, settle };
 }
