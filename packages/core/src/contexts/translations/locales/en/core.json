@@ -2650,7 +2650,7 @@
 	"pos_checkout.return_cash": "Return {amount} cash to the customer",
 	"pos_checkout.void_on_method": "Void {amount} on {title}",
 	"pos_checkout.refund_on_method": "{amount} on {title} is already taken and cannot be voided: refund it from the order",
-	"pos_checkout.cancelled_refund_required": "Cancelled. Money already taken could not be voided: refund it from the order.",
+	"pos_checkout.cancel_refund_required": "Money already taken cannot be voided, so this sale stays open: refund it from the order.",
 	"pos_checkout.nothing_taken_yet": "Nothing has been taken yet.",
 	"pos_checkout.cancel_and_void": "Cancel and void",
 	"pos_checkout.keep_taking_payment": "Keep taking payment",

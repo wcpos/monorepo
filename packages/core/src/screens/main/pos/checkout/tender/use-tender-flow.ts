@@ -1782,8 +1782,10 @@ export function useTenderFlow(
 			}
 			// A leg the store keeps by its own rule (a captured card leg, a captured row a completion
 			// counted) was announced as a refund on the confirm and is never sent a void, so it is
-			// not a failed void: the cancel completes, the rows stay on the order, and the cashier
-			// refunds it from the order (tender flows §6 rule 6: a settled leg leaves through refund).
+			// not a failed void and "Try again" is wrong advice: it is reported once, as information.
+			// The sale stays in checkout, because money is still held (the stage is derived from the
+			// live ledger rows, #2861); the leg leaves through a refund from the order (tender flows
+			// §6 rule 6: a settled leg leaves through `refund`).
 			const retained = outcome.failed.filter(
 				({ message }) => message === 'captured_refund_required'
 			);
@@ -1813,23 +1815,22 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			logger.info(
-				retained.length > 0
-					? t('pos_checkout.cancelled_refund_required')
-					: `Sale ${order.uuid} cancelled`,
-				{
-					actor,
-					showToast: retained.length > 0,
+			if (retained.length > 0) {
+				logger.info(t('pos_checkout.cancel_refund_required'), {
+					showToast: true,
 					context: {
+						type: 'payment.void-refused',
 						...orderContext,
-						type: 'checkout.cancelled',
+						paymentId: retained.map((failure) => failure.paymentId).join(', '),
 						voided: outcome.rows.length,
-						...(retained.length > 0
-							? { paymentId: retained.map((failure) => failure.paymentId).join(', ') }
-							: {}),
 					},
-				}
-			);
+				});
+				return;
+			}
+			logger.info(`Sale ${order.uuid} cancelled`, {
+				actor,
+				context: { ...orderContext, type: 'checkout.cancelled', voided: outcome.rows.length },
+			});
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
