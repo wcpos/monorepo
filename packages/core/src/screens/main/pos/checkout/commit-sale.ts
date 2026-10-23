@@ -86,7 +86,8 @@ export function commitSale<R>(
 	options?: { queue?: OrderMutationContext; source?: 'user' | 'system' }
 ): Promise<ActionRefusal | R> {
 	const run = async (queue: OrderMutationContext): Promise<ActionRefusal | R> => {
-		const latest = order.getLatest().payload;
+		const record = queue.order ?? order; // the record that receives the write
+		const latest = record.getLatest().payload;
 		const retained = amounts.kind === 'retained-captures';
 		const balanceMinor = retained
 			? 0
@@ -108,7 +109,7 @@ export function commitSale<R>(
 		const whole = amounts.kind === 'whole-balance';
 		const amountMinor = amounts.kind === 'entry' ? amounts.amountMinor : balanceMinor;
 		const unmet = await countConditionsInSlot(
-			queue.order ?? order,
+			record,
 			ctx.actionCtx,
 			conditionRules(ctx.actionCtx.store.preventOverselling)
 		);
@@ -143,10 +144,7 @@ export function commitSale<R>(
 				// This pre-action write precedes the attempt and money; a replacement session refuses.
 				const sessionId = await requireOpenSession(ctx.storeDB, payload.registerId, ctx.sessionsOn);
 				if (sessionId !== payload.sessionId) throw new RegisterSessionRequiredError();
-				return write(
-					stampSale(payload, amounts, (queue.order ?? order).getLatest().payload.id),
-					queue
-				);
+				return write(stampSale(payload, amounts, record.getLatest().payload.id), queue);
 			},
 		}) as Promise<ActionRefusal | R>;
 	};

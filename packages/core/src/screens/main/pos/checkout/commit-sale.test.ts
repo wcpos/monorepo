@@ -401,18 +401,19 @@ describe('stampSale', () => {
 	});
 });
 
-it('the writer receives the lane from the order as the slot reads it', async () => {
+it('the writer receives the lane, the id and the balance from the order as the slot reads it', async () => {
 	payload = { ...payload, id: undefined };
+	// The saved record a first add left: it has the server id and a total the render record never saw.
 	const saved = {
 		uuid: order.uuid,
-		getLatest: () => ({ payload: { ...payload, id: 42 } }),
+		getLatest: () => ({ payload: { ...payload, id: 42, total: '11.00' } }),
 	} as unknown as typeof order;
 	const edit = enqueueOrderMutation(order.uuid, async (queue) => {
 		queue.order = saved;
 	});
 	const amounts: SaleAmounts = {
 		kind: 'entry',
-		expectedBalanceMinor: 600,
+		expectedBalanceMinor: 700,
 		amountMinor: 200,
 		tenderedMinor: 200,
 		captureMode: 'manual',
@@ -420,10 +421,12 @@ it('the writer receives the lane from the order as the slot reads it', async () 
 	};
 	const outcome = commitSale(ctx, { ...request, amounts }, write);
 	await edit;
-	await outcome;
+	// A balance read from the render record (600) would refuse the press as a changed order.
+	await expect(outcome).resolves.not.toHaveProperty('deny');
 	expect(write.mock.calls[0][0]).toMatchObject({
 		lane: 'online',
 		orderId: 42,
-		remainingMinor: 400,
+		balanceMinor: 700,
+		remainingMinor: 500,
 	});
 });
