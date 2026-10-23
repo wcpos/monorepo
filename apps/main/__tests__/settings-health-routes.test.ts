@@ -54,7 +54,10 @@ describe('settings and Store health route structure', () => {
 	});
 
 	it('routes settings entry points to the new area', () => {
-		expect(source('../../packages/core/src/screens/main/pos/cart/user-sheet.tsx')).toContain(
+		// The drawer is the one door to Settings; the cashier sheet carries no second copy
+		// (Paul, 2026-10-23), so it must not push the route itself.
+		expect(source('app/(app)/(drawer)/_layout.tsx')).toContain('name="settings"');
+		expect(source('../../packages/core/src/screens/main/pos/cart/user-sheet.tsx')).not.toContain(
 			"router.push('/settings')"
 		);
 	});
