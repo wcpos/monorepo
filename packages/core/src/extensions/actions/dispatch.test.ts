@@ -643,7 +643,6 @@ it('passes tender register and session rewrites to bottom', async () => {
 				tenderedMinor: 100,
 				balanceMinor: 100,
 				roundingMinor: 0,
-				completing: true,
 				bindingStatus: 'bound',
 				registerId: null,
 				sessionId: null,

@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -34,7 +33,7 @@ import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './rec
 const logger = getLogger(['wcpos', 'payments']);
 
 /**
- * Wire `recordManualPayment` to the till: REST client, online status, cashier/store
+ * Wire `recordManualPayment` to the till: REST client, cashier/store
  * identity, the local-mutation seam (offline rows ride the order write) and the
  * resident-only patch (online rows mirror the server's copy).
  *
@@ -44,16 +43,7 @@ const logger = getLogger(['wcpos', 'payments']);
  * so the cashier-readable sentence goes there, the machine reason beside it. The same sentence is
  * kept as the Orders screen's needs-attention row, which outlives the session's logs.
  */
-export function useRecordManualPayment(
-	options: {
-		/**
-		 * Record the local leg even while the till is online: the order's own save is still
-		 * queued (roadmap#171 rule 2), so the server copy — if there is one — is stale and a
-		 * payment posted against it would settle the wrong totals.
-		 */
-		offline?: boolean;
-	} = {}
-): (
+export function useRecordManualPayment(): (
 	order: EngineRecord<'orders'>,
 	method: PaymentMethodDescriptor,
 	input: RecordManualPaymentInput & {
@@ -64,8 +54,6 @@ export function useRecordManualPayment(
 	const http = useRestHttpClient();
 	const ctx = useSaleContext();
 	const { methods } = usePaymentMethods();
-	const onlineStatus = useOnlineStatus();
-	const forceOffline = options.offline === true;
 	const { wpCredentials, store, storeDB } = useStoreSession();
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
@@ -110,7 +98,6 @@ export function useRecordManualPayment(
 					);
 					return (sent?.body.payment as PaymentRow | undefined) ?? null;
 				},
-				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
 				registerId,
@@ -213,8 +200,6 @@ export function useRecordManualPayment(
 		[
 			ctx,
 			http,
-			forceOffline,
-			onlineStatus.status,
 			wpCredentials.id,
 			store,
 			storeCurrency,

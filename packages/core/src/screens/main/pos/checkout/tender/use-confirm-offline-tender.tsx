@@ -15,7 +15,7 @@ import { fromMinor, type PaymentMethodDescriptor } from '@wcpos/order-math';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-type Facts = { method: PaymentMethodDescriptor; amountMinor: number; queuedOffline: boolean };
+type Facts = { method: PaymentMethodDescriptor; amountMinor: number };
 
 /**
  * The cashier confirms a tender the store cannot hear yet (ADR 0040 Decided 1 rule 1: never

@@ -335,7 +335,8 @@ export function useTenderFlow(
 	// once connectivity is back and before the ack lands, tender must behave as offline —
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
 	const queuedOffline = saveState?.kind === 'queued-offline';
-	const recordManualPayment = useRecordManualPayment({ offline: queuedOffline });
+	const reachable = online && !queuedOffline;
+	const recordManualPayment = useRecordManualPayment();
 	const gateway = useGatewayPayment();
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
@@ -358,7 +359,7 @@ export function useTenderFlow(
 	// every action that opens or closes the keypad publishes the method back to the store.
 	const [initialState] = React.useState(() => {
 		const initialTiles = buildTenderTiles(methods, {
-			online: online && !queuedOffline,
+			online: reachable,
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
 			hasLiveLeg: rows.some(({ status }) => isLivePaymentStatus(status)),
@@ -411,7 +412,7 @@ export function useTenderFlow(
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
 	const readersInUse = service?.readersInUse();
 	const tiles = buildTenderTiles(methods, {
-		online: online && !queuedOffline,
+		online: reachable,
 		readersInUse,
 		currentOrderUuid: order.uuid,
 		transports:
@@ -781,7 +782,6 @@ export function useTenderFlow(
 					row &&
 					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
 				) {
-					const amountMinor = toMinor(row.amount, dp);
 					// A replay answers the stored row with the order as it now stands: an open order at
 					// a zero balance was reopened since (another till), so it is not finished here.
 					// A partial leg (a balance still due) runs the flow as a first answer would.
@@ -799,9 +799,7 @@ export function useTenderFlow(
 						row,
 						order: summary,
 						mirrorFailed: false,
-						preparedCompleting: amountMinor === balanceMinor,
-						preLegBalanceMinor: balanceMinor,
-						amountMinor,
+						remainingMinor: balanceMinor - toMinor(row.amount, dp),
 					}).finally(() => tenderRecorded(row, 'online'));
 				} else if (kind === 'submit' && data.outcome === 'sent' && summary) {
 					// A recovered send: a sent sale, from the stamp the refresh adopted with the
@@ -871,7 +869,6 @@ export function useTenderFlow(
 			const confirmed = await confirmOfflineTender({
 				method,
 				amountMinor: entryAppliedMinor,
-				queuedOffline,
 			}).catch(() => false);
 			if (!confirmed) {
 				busyRef.current = false;
@@ -897,17 +894,6 @@ export function useTenderFlow(
 		// The amounts the chain settled on (a hook may rewrite them, cash rounding does): every
 		// step after the dispatch, the mirror-error paths below included, reads these.
 		let committed = null as StampedSale | null;
-		const completionFacts = ({
-			amountMinor,
-			balanceMinor,
-		}: {
-			amountMinor: number;
-			balanceMinor: number;
-		}) => ({
-			preparedCompleting: amountMinor === balanceMinor,
-			preLegBalanceMinor: balanceMinor,
-			amountMinor,
-		});
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			committed = sale;
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
@@ -965,14 +951,14 @@ export function useTenderFlow(
 							: method?.capture.mode === 'gateway'
 								? 'gateway'
 								: 'terminal',
-				completing: amountMinor === balanceMinor,
+				completing: sale.completing,
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
 			});
 			const saveProvenance = async () => {
-				if (amountMinor !== balanceMinor) return;
+				if (!sale.completing) return;
 
-				savingProvenance = online && !queuedOffline && !!payload.id;
+				savingProvenance = sale.lane === 'online';
 				await persistSaleProvenance(ctx, {
 					order,
 					sessionId,
@@ -997,7 +983,7 @@ export function useTenderFlow(
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
-					online: () => online && !queuedOffline && !!payload.id,
+					online: () => sale.lane === 'online',
 					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
 				});
 				if (closed && typeof closed === 'object' && 'kind' in closed) {
@@ -1044,6 +1030,17 @@ export function useTenderFlow(
 				);
 				return;
 			}
+			// An order the store has not created has no route to journal a leg against (its own
+			// slice): refused before a reader starts or a rounding fee is written.
+			if (sale.lane === 'not-on-store') {
+				logger.info(t('pos_checkout.order_not_on_store_yet'), {
+					showToast: true,
+					context: orderContext,
+				});
+				return;
+			}
+			// The id the lane judged, read in the slot: the render's copy can lag a save that landed.
+			const orderId = Number(target.getLatest().payload.id);
 
 			if (method.capture.mode === 'device') {
 				const liveDriver = getDriver(method.capture.provider);
@@ -1065,7 +1062,7 @@ export function useTenderFlow(
 					return;
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
-				const offline = !online || queuedOffline || !payload.id;
+				const offline = sale.lane !== 'online';
 				const minted = mintDevicePayment({
 					readerId: status.reader.id,
 					registerId,
@@ -1073,7 +1070,7 @@ export function useTenderFlow(
 					method,
 					transport: deviceTransport,
 					recordedOffline: offline,
-					orderId: payload.id ?? null,
+					orderId,
 					amount: fromMinor(amountMinor, dp),
 					currency,
 					cashierId: wpCredentials.id ?? 0,
@@ -1088,7 +1085,7 @@ export function useTenderFlow(
 				service.begin({
 					dp,
 					orderUuid: order.uuid,
-					orderId: payload.id ?? 0,
+					orderId,
 					orderNumber: payload.number ?? '',
 					row: minted.row,
 					reader: status.reader.id,
@@ -1107,13 +1104,6 @@ export function useTenderFlow(
 				return;
 			}
 			if (method.capture.mode === 'server') {
-				if (!payload.id) {
-					logger.info(t('pos_checkout.order_not_on_store_yet'), {
-						showToast: true,
-						context: orderContext,
-					});
-					return;
-				}
 				const reader = selectableReaders(method, service?.readersInUse(), order.uuid).readers.find(
 					(reader) => reader.id === state.readerId
 				);
@@ -1131,7 +1121,7 @@ export function useTenderFlow(
 					registerId,
 					sessionId,
 					method,
-					orderId: payload.id,
+					orderId,
 					amount: fromMinor(amountMinor, dp),
 					currency,
 					cashierId: wpCredentials.id ?? 0,
@@ -1146,8 +1136,8 @@ export function useTenderFlow(
 				service.begin({
 					dp,
 					orderUuid: order.uuid,
-					orderId: payload.id,
-					orderNumber: payload.number ?? String(payload.id),
+					orderId,
+					orderNumber: payload.number ?? String(orderId),
 					row: minted.row,
 					reader: reader.id,
 					approval,
@@ -1158,13 +1148,6 @@ export function useTenderFlow(
 			}
 
 			if (method.capture.mode === 'gateway') {
-				if (!payload.id) {
-					logger.info(t('pos_checkout.order_not_on_store_yet'), {
-						showToast: true,
-						context: orderContext,
-					});
-					return;
-				}
 				const missing = fields ? firstMissingRequired(fields, fieldValues) : null;
 				if (missing) {
 					logger.info(t('pos_checkout.enter_field', { label: missing.label }), {
@@ -1224,7 +1207,7 @@ export function useTenderFlow(
 							row: outcome.row,
 							order: outcome.order,
 							mirrorFailed: false,
-							...completionFacts(sale),
+							remainingMinor: sale.remainingMinor,
 						},
 						queue
 					).finally(() => tenderRecorded(outcome.row, 'online'));
@@ -1286,15 +1269,6 @@ export function useTenderFlow(
 				return;
 			}
 
-			// An order the store has not created has no route to journal a record against (its own
-			// slice): refused before a rounding fee is written.
-			if (!payload.id) {
-				logger.info(t('pos_checkout.order_not_on_store_yet'), {
-					showToast: true,
-					context: orderContext,
-				});
-				return;
-			}
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
@@ -1303,6 +1277,7 @@ export function useTenderFlow(
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(amountMinor, dp),
 				tendered,
+				lane: sale.lane,
 				...(paymentId ? { paymentId } : {}),
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
@@ -1323,7 +1298,7 @@ export function useTenderFlow(
 						source: 'manual',
 						...outcome,
 						mirrorFailed: false,
-						...completionFacts(sale),
+						remainingMinor: sale.remainingMinor,
 					},
 					queue
 				).finally(() => tenderRecorded(outcome.row, outcome.via));
@@ -1359,6 +1334,7 @@ export function useTenderFlow(
 						amountMinor: enteredLegMinor,
 						tenderedMinor: entryMinor,
 						captureMode: method?.capture.mode ?? null,
+						reachable,
 					},
 				},
 				commitTender
@@ -1413,7 +1389,7 @@ export function useTenderFlow(
 						order: outcome.order,
 						mirrorFailed: true,
 						// A mirror error is thrown from inside the handler: the chain has settled the amounts.
-						...completionFacts(committed as StampedSale),
+						remainingMinor: (committed as StampedSale).remainingMinor,
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
@@ -1465,7 +1441,7 @@ export function useTenderFlow(
 					source: 'manual',
 					...outcome,
 					mirrorFailed: true,
-					...completionFacts(committed as StampedSale),
+					remainingMinor: (committed as StampedSale).remainingMinor,
 				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
@@ -1507,8 +1483,7 @@ export function useTenderFlow(
 		ctx,
 		balanceMinor,
 		deviceTransport,
-		online,
-		queuedOffline,
+		reachable,
 		blockIfDegraded,
 		completeOrderFlow,
 		closeSale,

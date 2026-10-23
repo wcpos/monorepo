@@ -146,9 +146,8 @@ export type SaleOutcome =
 			row: PaymentRow;
 			order: OrderPaymentSummary | null;
 			mirrorFailed: boolean;
-			preparedCompleting: boolean;
-			preLegBalanceMinor: number;
-			amountMinor: number;
+			/** The press's prediction (`StampedSale.remainingMinor`); a usable store balance overrules it. */
+			remainingMinor: number;
 	  }
 	| { source: 'terminal'; row: PaymentRow; order: OrderPaymentSummary | null; balance?: string }
 	/**
@@ -304,7 +303,7 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&
 				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
-				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
+				: !outcome.mirrorFailed && outcome.remainingMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
 			if (!outcome.row.recorded_offline && unpaidOnStore(outcome.order, dp, payload)) return false;
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
@@ -377,8 +376,7 @@ async function finishSale(
 			latest.id &&
 			((outcome.source === 'manual' &&
 				outcome.order &&
-				toMinor(outcome.order.balance, ctx.dp) !==
-					outcome.preLegBalanceMinor - outcome.amountMinor) ||
+				toMinor(outcome.order.balance, ctx.dp) !== outcome.remainingMinor) ||
 				isSaleComplete(outcome, ctx.dp))
 		) {
 			// ADR 0032: the server's balance stands; the till must SHOW it to collect it.
@@ -518,7 +516,7 @@ export async function completeSale(
 	// No entry snapshot: resolve/fail unconditionally belong to the current attempt, even in replay.
 	// A paid order cannot start a new completing attempt while its finish is running.
 	try {
-		if (outcome.source === 'manual' && !outcome.preparedCompleting) {
+		if (outcome.source === 'manual' && outcome.remainingMinor !== 0) {
 			// The choose-register gate cannot run retroactively; reportProvenanceGap reports missing attribution.
 			if (isSaleComplete(outcome, ctx.dp))
 				await recordCompletionAttempt(ctx.storeDB, {

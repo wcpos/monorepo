@@ -1353,9 +1353,7 @@ it('an unconfirmed sale is finished by the bridge once the paid order is adopted
 		row: { id: 'row-1', amount: '10.00' },
 		order: { status: 'completed', balance: '0.00' },
 		mirrorFailed: false,
-		preparedCompleting: true,
-		preLegBalanceMinor: 1000,
-		amountMinor: 1000,
+		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	expect(
 		await owner.completeSale(mockContext, resident('order', 'pos-open') as never, answer, {
@@ -1391,9 +1389,7 @@ it.each([
 		row: { id: 'row-1', amount: '10.00', recorded_offline: true },
 		order: null,
 		mirrorFailed: false,
-		preparedCompleting: true,
-		preLegBalanceMinor: 1000,
-		amountMinor: 1000,
+		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	expect(
 		await owner.completeSale(mockContext, resident() as never, answer, {
@@ -1439,9 +1435,7 @@ it('finishes an unconfirmed sale when a pull adopts the paid order mid-session',
 		row: { id: 'row-1', amount: '10.00' },
 		order: { status: 'completed', balance: '0.00' },
 		mirrorFailed: false,
-		preparedCompleting: true,
-		preLegBalanceMinor: 1000,
-		amountMinor: 1000,
+		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	const pos = resident('order', 'pos-open') as never;
 	const stage = { host: 'stage', autoShowReceipt: true } as const;
@@ -1473,9 +1467,7 @@ it('finishes an unconfirmed sale adopted after an offline restart whose replay f
 		row: { id: 'row-1', amount: '10.00' },
 		order: { status: 'completed', balance: '0.00' },
 		mirrorFailed: false,
-		preparedCompleting: true,
-		preLegBalanceMinor: 1000,
-		amountMinor: 1000,
+		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	const pos = resident('order', 'pos-open') as never;
 	const stage = { host: 'stage', autoShowReceipt: true } as const;

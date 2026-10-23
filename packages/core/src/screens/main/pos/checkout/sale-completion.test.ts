@@ -119,9 +119,7 @@ const manual = {
 	row,
 	order: null,
 	mirrorFailed: false,
-	preparedCompleting: true,
-	preLegBalanceMinor: 100,
-	amountMinor: 100,
+	remainingMinor: 0,
 } as const;
 const sent = {
 	source: 'gateway',
@@ -171,8 +169,8 @@ beforeEach(async () => {
 });
 it.each([
 	['manual online prediction', manual, true],
-	['manual online partial prediction without summary', { ...manual, amountMinor: 50 }, false],
-	['manual offline prediction', { ...manual, via: 'offline', amountMinor: 50 }, false],
+	['manual online partial prediction without summary', { ...manual, remainingMinor: 50 }, false],
+	['manual offline prediction', { ...manual, via: 'offline', remainingMinor: 50 }, false],
 	['manual offline full prediction', { ...manual, via: 'offline' }, true],
 	[
 		'manual online non-zero summary overrides a paid prediction',
@@ -181,13 +179,13 @@ it.each([
 	],
 	[
 		'manual online zero summary overrides an unpaid prediction',
-		{ ...manual, amountMinor: 50, order: { balance: '0.00' } },
+		{ ...manual, remainingMinor: 50, order: { balance: '0.00' } },
 		true,
 	],
 	['manual mirror recovery', { ...manual, mirrorFailed: true, order: { balance: '1.00' } }, false],
 	[
 		'manual mirror recovery with zero summary',
-		{ ...manual, mirrorFailed: true, amountMinor: 50, order: { balance: '0.00' } },
+		{ ...manual, mirrorFailed: true, remainingMinor: 50, order: { balance: '0.00' } },
 		true,
 	],
 	[
@@ -220,7 +218,7 @@ it.each([
 // offline leg) carries no store status and is judged by its balance as before.
 const reopened = { status: 'pos-open', balance: '0.00' } as OrderPaymentSummary;
 it.each([
-	['a manual store answer', { ...manual, amountMinor: 50, order: reopened }, false],
+	['a manual store answer', { ...manual, remainingMinor: 50, order: reopened }, false],
 	['a terminal store answer', { source: 'terminal', row, order: reopened }, false],
 	[
 		'an offline terminal leg',
@@ -229,7 +227,7 @@ it.each([
 	],
 	[
 		'a manual store answer that completed the sale',
-		{ ...manual, amountMinor: 50, order: { ...reopened, status: 'completed' } },
+		{ ...manual, remainingMinor: 50, order: { ...reopened, status: 'completed' } },
 		true,
 	],
 ] as [string, SaleOutcome, boolean][])(
@@ -426,7 +424,7 @@ it.each([
 });
 it('does not finish partial or unpaid sales', async () => {
 	expect(
-		await completeSale(ctx, order, { ...manual, amountMinor: 50 }, { host: 'background' })
+		await completeSale(ctx, order, { ...manual, remainingMinor: 50 }, { host: 'background' })
 	).toBe('partial');
 	expect(
 		await completeSale(
@@ -613,7 +611,7 @@ it('refuses the attempt if the journal cannot be written', async () => {
 });
 it.each([
 	[manual, 'completed'],
-	[{ ...manual, amountMinor: 50 }, 'partial'],
+	[{ ...manual, remainingMinor: 50 }, 'partial'],
 	[{ source: 'gateway-contract', status: 'failed' }, 'not-completed'],
 ] as const)('clears a decided %s only after the audit call', async (outcome, result) => {
 	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
@@ -694,16 +692,16 @@ it('recreates a concurrently cleared attempt when finishing throws, with source 
 it.each([undefined, '', 'n/a', ' ', 'Infinity', '0x00'])(
 	'manual unusable balance %p falls back only to a successful local prediction',
 	(balance) => {
-		for (const [amountMinor, mirrorFailed, expected] of [
-			[100, false, true],
+		for (const [remainingMinor, mirrorFailed, expected] of [
+			[0, false, true],
 			[50, false, false],
-			[100, true, false],
+			[0, true, false],
 		] as const) {
 			expect(
 				isSaleComplete(
 					{
 						...manual,
-						amountMinor,
+						remainingMinor,
 						mirrorFailed,
 						order: { status: 'completed', balance },
 					} as unknown as SaleOutcome,
@@ -748,8 +746,7 @@ it('does not refresh an unsettled manual sale when the store agrees with the til
 			{
 				...manual,
 				order: { balance: '1.00' },
-				preLegBalanceMinor: 150,
-				amountMinor: 50,
+				remainingMinor: 100,
 			} as unknown as SaleOutcome,
 			{ host: 'stage', autoShowReceipt: true }
 		)
@@ -782,12 +779,11 @@ it.each(['timed-out', 'rejected'])(
 );
 it.each([false, true])(
 	'journals server settlement before finish without recording twice (prepared %s)',
-	async (preparedCompleting) => {
+	async (prepared) => {
 		const context = { ...ctx, actor: { id: '7', name: 'Pat' } };
 		const record = jest.spyOn(journal, 'recordCompletionAttempt');
 		try {
-			if (preparedCompleting)
-				await recordSaleAttempt(context, { order, completing: true, source: 'manual' });
+			if (prepared) await recordSaleAttempt(context, { order, completing: true, source: 'manual' });
 			let atReceipt: ReturnType<typeof pendingCompletions> | undefined;
 			mockReceipt.mockImplementationOnce(() => {
 				atReceipt = pendingCompletions(ctx.storeDB);
@@ -798,8 +794,7 @@ it.each([false, true])(
 					order,
 					{
 						...manual,
-						preparedCompleting,
-						amountMinor: 50,
+						remainingMinor: prepared ? 0 : 50,
 						order: { balance: '0.00' },
 					} as unknown as SaleOutcome,
 					{ host: 'background' }

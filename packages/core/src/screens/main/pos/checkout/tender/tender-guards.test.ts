@@ -41,7 +41,6 @@ const e: ActionEventInput<'checkout.tender.commit'> = {
 		tenderedMinor: 100,
 		balanceMinor: 100,
 		roundingMinor: 0,
-		completing: true,
 		bindingStatus: 'bound',
 		registerId: null,
 		sessionId: null,
@@ -60,11 +59,11 @@ it.each(['bound', 'choose', 'none'] as const)(
 	async (bindingStatus) => {
 		for (const completing of [false, true]) {
 			bottom.mockClear();
-			// Completing is judged on the amounts the writer will write, not the caller's flag.
+			// Completing is judged on the amounts the writer will write.
 			const amountMinor = completing ? 100 : 40;
 			const event = {
 				...e,
-				payload: { ...e.payload, amountMinor, completing: true, bindingStatus },
+				payload: { ...e.payload, amountMinor, bindingStatus },
 			};
 			const result = await registerGate(ctx, event, bottom);
 			if (completing && bindingStatus === 'choose') {

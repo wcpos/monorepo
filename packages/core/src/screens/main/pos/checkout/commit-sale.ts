@@ -30,6 +30,8 @@ export type SaleAmounts =
 			amountMinor: number;
 			tenderedMinor: number;
 			captureMode: string | null;
+			/** `online && !queuedOffline` as the press saw it: the store can hear this tender now. */
+			reachable: boolean;
 	  };
 export interface SaleCommitRequest {
 	order: EngineRecord<'orders'>;
@@ -37,8 +39,36 @@ export interface SaleCommitRequest {
 	bindingStatus: 'bound' | 'choose' | 'none';
 	amounts: SaleAmounts;
 }
-/** The chain's payload, handed to the writer only after its stamped session is re-verified. */
-export type StampedSale = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'];
+type TenderCommitPayload = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'];
+export type PressLane = 'online' | 'settles-later' | 'not-on-store';
+/** The chain's payload after every hook, stamped once the session is re-verified: the press's facts. */
+export interface StampedSale extends TenderCommitPayload {
+	/** amountMinor === balanceMinor after every hook: the press completes the sale. */
+	completing: boolean;
+	/** balanceMinor - amountMinor: the till's prediction, which the store's summary overrules (ADR 0032). */
+	remainingMinor: number;
+	/** null when no keypad press stamped it (whole-balance, retained captures). */
+	lane: PressLane | null;
+}
+
+export function pressLane(reachable: boolean, serverId: number | null | undefined): PressLane {
+	if (!(Number.isInteger(serverId) && Number(serverId) > 0)) return 'not-on-store';
+	return reachable ? 'online' : 'settles-later';
+}
+
+/** Freeze the press's facts from the payload as the chain left it (cash rounding rewrites the amounts). */
+export function stampSale(
+	payload: TenderCommitPayload,
+	amounts: SaleAmounts,
+	serverId: number | null | undefined
+): StampedSale {
+	return {
+		...payload,
+		completing: payload.amountMinor === payload.balanceMinor,
+		remainingMinor: payload.balanceMinor - payload.amountMinor,
+		lane: amounts.kind === 'entry' ? pressLane(amounts.reachable, serverId) : null,
+	};
+}
 
 /**
  * One dispatch of `checkout.tender.commit`, inside the order's queue slot. Returns the refusal when a
@@ -100,7 +130,6 @@ export function commitSale<R>(
 					tenderedMinor: amounts.kind === 'entry' ? amounts.tenderedMinor : balanceMinor,
 					balanceMinor,
 					roundingMinor: 0,
-					completing: amountMinor === balanceMinor,
 					bindingStatus,
 					registerId: null,
 					sessionId: null,
@@ -111,7 +140,10 @@ export function commitSale<R>(
 				// This pre-action write precedes the attempt and money; a replacement session refuses.
 				const sessionId = await requireOpenSession(ctx.storeDB, payload.registerId, ctx.sessionsOn);
 				if (sessionId !== payload.sessionId) throw new RegisterSessionRequiredError();
-				return write(payload, queue);
+				return write(
+					stampSale(payload, amounts, (queue.order ?? order).getLatest().payload.id),
+					queue
+				);
 			},
 		}) as Promise<ActionRefusal | R>;
 	};

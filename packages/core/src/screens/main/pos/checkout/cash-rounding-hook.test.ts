@@ -62,7 +62,6 @@ const tender = (payload: Partial<Payload>): ActionEventInput<typeof TENDER_COMMI
 		tenderedMinor: 1005,
 		balanceMinor: 1003,
 		roundingMinor: 0,
-		completing: true,
 		bindingStatus: 'bound',
 		registerId: null,
 		sessionId: null,
