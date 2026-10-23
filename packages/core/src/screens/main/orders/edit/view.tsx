@@ -11,8 +11,8 @@ import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CreatedVia } from '../../components/order/created-via';
-import { useProAccess } from '../../contexts/pro-access';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { OrderStatusBadge } from '../cells/status';
 import { InvoiceActions } from '../invoice-actions';
@@ -35,7 +35,9 @@ export function OrderView({ order }: { order: EngineRecord<'orders'> }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const t = useT();
 	const router = useRouter();
-	const { readOnly } = useProAccess();
+	// The modal is its own route, outside the Pro guard's provider (the list page's): the
+	// guard's own derivation, as the attention notice reads it.
+	const readOnly = !useAppInfo().license?.isPro;
 	const { close } = useDialog();
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const actions = useOrderActions(order, { onDeleted: close });

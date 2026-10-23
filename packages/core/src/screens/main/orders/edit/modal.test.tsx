@@ -33,8 +33,8 @@ jest.mock('../../hooks/use-storage-health', () => ({
 }));
 jest.mock('../use-reopen-order', () => ({ useReopenOrder: () => ({ reopening: false }) }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../contexts/pro-access', () => ({
-	useProAccess: () => ({ readOnly: mockReadOnly }),
+jest.mock('../../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: !mockReadOnly } }),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
