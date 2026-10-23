@@ -3,22 +3,25 @@ import * as React from 'react';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { GUTTER_UNITS } from '@wcpos/components/lib/scale';
 
-/** The ground's gutter as class strings, one per side or use, and in spacing units for px sums. */
+/**
+ * The ground's gutter as class strings, one per side or use, and in spacing units for px sums.
+ * Plain strings: the whole literals live in the frozen objects below, the only place the class
+ * scanner needs them, so a new variant adds an object and nothing else.
+ */
 export type Ground = {
-	readonly p:
-		| 'p-gutter'
-		| 'p-4'
-		| 'pt-gutter pb-gutter pl-gutter pr-0'
-		| 'pt-gutter pb-gutter pl-0 pr-gutter';
-	readonly px: 'px-gutter' | 'px-4' | 'pl-gutter pr-0' | 'pl-0 pr-gutter';
-	readonly pt: 'pt-gutter' | 'pt-4';
-	readonly pl: 'pl-gutter' | 'pl-4' | 'pl-0';
-	readonly mt: 'mt-gutter' | 'mt-4';
-	readonly mx: 'mx-gutter' | 'mx-4' | 'ml-gutter mr-0' | 'ml-0 mr-gutter';
-	readonly gap: 'gap-gutter' | 'gap-4';
+	readonly p: string;
+	readonly px: string;
+	readonly pt: string;
+	readonly pl: string;
+	readonly mt: string;
+	readonly mx: string;
+	readonly gap: string;
 	/** Takes back the gutter of the row above (a chip row's bottom padding). */
-	readonly negMt: '-mt-gutter' | '-mt-4';
-	/** The same gutter in spacing units, for code that needs it in px (`units * unit`). */
+	readonly negMt: string;
+	/**
+	 * The OUTER edge's gutter in spacing units, for code that needs it in px (`units * unit`);
+	 * an inner edge (`GroundInnerEdge`) has none.
+	 */
 	readonly units: number;
 };
 
@@ -88,11 +91,17 @@ const InnerEdgeContext = React.createContext<InnerEdge | null>(null);
 
 /**
  * Marks the edge of a pane that faces another pane across the resize handle, so every surface
- * on its ground keeps no inset there: the handle is the gutter (`INNER_RIGHT`). The POS products
- * column provides it with the cart's side; the phone, whose panes are tabs, has no inner edge
+ * on its ground keeps no inset there: the handle is the gutter (`INNER_RIGHT`). Provided where
+ * the handle is placed (`pos-columns.tsx`, around the products column, with the cart's side), so
+ * the two halves of the rule sit in one file; the phone, whose panes are tabs, has no inner edge
  * and ignores it.
  */
 export const GroundInnerEdge = InnerEdgeContext.Provider;
+
+/** The pane's inner edge, for a surface that cannot read `useGround()` (the page bar's prop). */
+export function useGroundInnerEdge(): InnerEdge | null {
+	return React.useContext(InnerEdgeContext);
+}
 
 /**
  * The ground's gutter: the page-gutter token inside a window, 16 at the phone's screen edge

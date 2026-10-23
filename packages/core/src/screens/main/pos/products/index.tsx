@@ -35,7 +35,7 @@ import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
-import { GroundInnerEdge } from '../../components/ground';
+import { useGroundInnerEdge } from '../../components/ground';
 import { ListColumn, ListPage } from '../../components/list-frame';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
@@ -180,6 +180,8 @@ function POSProductsContent({
 	initialFilters: Record<string, unknown>;
 }) {
 	const side = usePanelSide('products');
+	// The edge facing the cart, from the column that places the resize handle (pos-columns.tsx).
+	const innerEdge = useGroundInnerEdge();
 	const { session, sessionsOn } = useRegisterSession();
 	// `pos.search.focus` focuses this input while the screen is mounted (roadmap#428). On a phone
 	// both tabs stay mounted, so an unfocused Products tab is brought forward first and the input
@@ -511,17 +513,17 @@ function POSProductsContent({
 
 	// The pages' frame at the pages' gutter: the bar, the chips, the rows the column adds, and the
 	// body on its card (the table) or on the ground (the tiles), one page gutter apart. The edge
-	// facing the cart (`side`: the cart's side, overlay-side ledger line 3) keeps no inset: the
-	// resize handle is the gutter, one page gutter wide (`ground.ts`, panels ledger line 5).
+	// facing the cart keeps no inset: the resize handle is the gutter, one page gutter wide
+	// (`ground.ts`, panels ledger line 5); the bar is told the edge, the rest read the ground.
 	return (
-		<GroundInnerEdge value={side}>
+		<>
 			<ListPage
 				insetBottom={false}
 				bar={
 					<ErrorBoundary>
 						<PageBar
 							insetTop={false}
-							innerEdge={side}
+							innerEdge={innerEdge ?? undefined}
 							search={
 								<ErrorBoundary>
 									<QuerySearchInput
@@ -632,7 +634,7 @@ function POSProductsContent({
 					</View>
 				</ListColumn>
 			</ListPage>
-		</GroundInnerEdge>
+		</>
 	);
 }
 
