@@ -6,6 +6,7 @@ import type { CategoryLogger } from '@wcpos/utils/logger';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, usePayFrame } from './use-pay-frame';
 
 type Input = Parameters<typeof usePayFrame>[0];
+type Handlers = { onLoad(): void; onLoadStart(): void; onError(event: object): void };
 const PAY_URL = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
 
 // The frame's key is its identity: a new key is a remount (a fresh navigation), which
@@ -32,7 +33,8 @@ const renderFrame = (overrides: Partial<Input> = {}) => {
 		},
 		{ initialProps }
 	);
-	const handlers = () => hook.result.current.handlers;
+	// Test events are partial literals; the engine types the real one.
+	const handlers = () => hook.result.current.handlers as unknown as Handlers;
 	const rerender = (next: Partial<Input>) => hook.rerender({ ...initialProps, ...next });
 	return {
 		...hook,
@@ -53,7 +55,7 @@ describe('usePayFrame load watchdog', () => {
 		jest.useRealTimers();
 	});
 
-	it('reloads the frame once when no load event arrives, then reports the stall as failed', () => {
+	it('reloads the frame once when no load event arrives, then reports the stall', () => {
 		// iOS simulators on the CI runners (runs 33750030091 tablet, 33758920470
 		// phone): the pay page reached the store five minutes late, or never,
 		// and the footer spun for the whole 180 s flow budget.
@@ -110,7 +112,7 @@ describe('usePayFrame load watchdog', () => {
 	// (Android phone, flow 04): net::ERR_SOCKET_NOT_CONNECTED on the pay page left
 	// Process Payment spinning with no Retry for 8 minutes.
 	describe('Android: a load the engine retracts', () => {
-		const failedNavigation = (handlers: () => ReturnType<typeof usePayFrame>['handlers']) => {
+		const failedNavigation = (handlers: () => Handlers) => {
 			act(() => {
 				handlers().onLoad();
 			});
@@ -160,6 +162,8 @@ describe('usePayFrame load watchdog', () => {
 			expect(report).toHaveBeenLastCalledWith('failed');
 		});
 
+		// Android sends no load-start before a failed navigation, so nothing between the two
+		// loads clears the earlier count: the ignored load must.
 		it('a retraction of a load ignored while held does not undo the load before it', () => {
 			const { report, handlers, result } = renderFrame();
 			act(() => {
@@ -167,10 +171,47 @@ describe('usePayFrame load watchdog', () => {
 			});
 			act(() => {
 				result.current.hold();
-				handlers().onLoadStart();
 			});
 			failedNavigation(handlers);
 			expect(report).toHaveBeenLastCalledWith('failed');
+		});
+
+		it('a retraction of a load ignored while expired stays failed, never a Retry', () => {
+			const { report, handlers, result } = renderFrame();
+			act(() => {
+				handlers().onLoad();
+			});
+			act(() => {
+				result.current.expire();
+			});
+			failedNavigation(handlers);
+			expect(report).toHaveBeenLastCalledWith('failed');
+		});
+	});
+
+	describe('while held (a session refresh in flight)', () => {
+		it('a load is ignored: the gate stays closed', () => {
+			const { report, handlers, result } = renderFrame();
+			act(() => {
+				result.current.hold();
+			});
+			act(() => {
+				handlers().onLoad();
+			});
+			expect(report).not.toHaveBeenCalledWith('ready');
+			expect(report).toHaveBeenLastCalledWith('loading');
+		});
+
+		it('the watchdog stays quiet: no reload, no stall', () => {
+			const { report, result, mounts } = renderFrame();
+			act(() => {
+				result.current.hold();
+			});
+			act(() => {
+				jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+			});
+			expect(mounts()).toBe(1);
+			expect(report).not.toHaveBeenCalledWith('stalled');
 		});
 	});
 

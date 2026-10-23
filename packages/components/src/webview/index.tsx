@@ -23,7 +23,8 @@ export interface WebViewContentSizeChangeEvent {
 	nativeEvent: { contentSize: { width: number; height: number } };
 }
 
-/** `retractsLoad`: the load since the last start was this failed document's synthetic finish. */
+/** `retractsLoad`: the load since the last start was this failed document's synthetic finish.
+ * The host receives a plain copy of the event, without SyntheticEvent methods. */
 export type WebViewLoadErrorEvent = WebViewErrorEvent & {
 	nativeEvent: WebViewErrorEvent['nativeEvent'] & { retractsLoad: boolean };
 };
@@ -166,7 +167,7 @@ function WebView({
 				const retractsLoad = url !== null && loadSinceStartRef.current === url;
 				loadSinceStartRef.current = null;
 				erroredURLRef.current = url ?? '';
-				if (!onError) console.error('WebView error:', error);
+				console.error('WebView error:', error);
 				onError?.({ ...error, nativeEvent: { ...error.nativeEvent, retractsLoad } });
 			}}
 			// react-native-webview types onContentSizeChange without `contentSize`,

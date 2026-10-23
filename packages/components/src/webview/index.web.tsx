@@ -21,7 +21,8 @@ export interface WebViewContentSizeChangeEvent {
 
 export type WebViewHandle = HTMLIFrameElement & { postMessage(message: any): void };
 
-/** The native engine's error event; never `retractsLoad` here: an iframe never loads a failed document. */
+/** The native engine's error event. Never `retractsLoad` here: a browser fires `load` for a failed
+ * iframe navigation and rarely `error`, so no error follows a load and nothing is retracted. */
 export type WebViewLoadErrorEvent = WebViewErrorEvent & {
 	nativeEvent: WebViewErrorEvent['nativeEvent'] & { retractsLoad?: boolean };
 };

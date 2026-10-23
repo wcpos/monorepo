@@ -160,22 +160,16 @@ export function PaymentWebview({
 
 	// Latest collaborators for the preparation effect, refreshed after every render so
 	// the effect can key on order identity rather than on revisions our own write emits.
-	const collaborators = React.useRef({
-		order,
-		ctx,
-		setFrameStatus,
-		orderLogger,
-		t,
-	});
+	const collaborators = React.useRef({ order, ctx, orderLogger, t });
 	React.useEffect(() => {
-		collaborators.current = { order, ctx, setFrameStatus, orderLogger, t };
+		collaborators.current = { order, ctx, orderLogger, t };
 	});
 	// Mounting the external pay page can complete the sale: prepare before exposing
 	// its URL, persisting attribution online. Key on order identity, not our writes.
 	// Cleanup only suppresses an obsolete view's readiness update.
 	React.useEffect(() => {
 		if ((!online && !sessionsOn) || !rawPaymentURL) return;
-		const { order: currentOrder, ctx, setFrameStatus, orderLogger, t } = collaborators.current;
+		const { order: currentOrder, ctx, orderLogger, t } = collaborators.current;
 		let active = true;
 		void (async () => {
 			try {
@@ -201,7 +195,6 @@ export function PaymentWebview({
 						status: 'failed',
 						sessionRequired: reason === SESSION_REQUIRED_REASON,
 					});
-					setFrameStatus('stalled');
 					return;
 				}
 				setPreparation({ key: preparationKey, status: 'ready', sessionId: committed.sessionId });
@@ -218,7 +211,6 @@ export function PaymentWebview({
 					status: 'failed',
 					sessionRequired: error instanceof RegisterSessionRequiredError,
 				});
-				setFrameStatus('stalled');
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(orderLogger, t);
 					return;
@@ -264,8 +256,7 @@ export function PaymentWebview({
 			.subscribe(() => {
 				if (!sessionId) return setSessionRetry((value) => value + 1);
 				setPreparation({ key: preparationKey, status: 'failed', sessionRequired: true });
-				const { setFrameStatus, orderLogger, t } = collaborators.current;
-				setFrameStatus('stalled');
+				const { orderLogger, t } = collaborators.current;
 				presentSessionRequired(orderLogger, t);
 			});
 		return () => subscription?.unsubscribe();
@@ -406,13 +397,6 @@ export function PaymentWebview({
 	/**
 	 * A later document loaded: schedule a fallback refresh in case the payment
 	 * gateway doesn't send a postMessage.
-	 *
-	 * The first load is the initial order-pay page, where a payment cannot have
-	 * completed yet — there is nothing to reconcile. We only poll on later
-	 * navigations (e.g. the post-payment redirect to the received page) where a
-	 * missed postMessage is actually possible. Polling on the initial load only
-	 * fires a request that races ahead of the payment and can never observe a
-	 * completed sale.
 	 */
 	const onLaterDocument = React.useCallback(() => {
 		if (fallbackTimerRef.current) {

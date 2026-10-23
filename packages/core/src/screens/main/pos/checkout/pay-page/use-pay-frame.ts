@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { WebViewLoadErrorEvent } from '@wcpos/components/webview';
 import type { CategoryLogger } from '@wcpos/utils/logger';
 
 import type { PaymentFrameStatus } from './use-pay-frame-gate';
@@ -28,8 +29,7 @@ interface PayFrameInput {
 export function usePayFrame(input: PayFrameInput) {
 	const { src, retryToken, prepared, report, onLaterDocument, logger } = input;
 	const loadCountRef = React.useRef(0);
-	// Whether the load the engine may retract is one this hook counted: a load ignored
-	// while held never counted, so its retraction must not undo an earlier one.
+	// Whether the engine's last load is one this hook counted; only that load may be retracted.
 	const countedSinceStartRef = React.useRef(false);
 	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
 	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
@@ -64,7 +64,10 @@ export function usePayFrame(input: PayFrameInput) {
 	 * completed yet; only later loads (the post-payment redirect) are reported.
 	 */
 	const onLoad = React.useCallback(() => {
-		if (heldRef.current || expiredRef.current) return;
+		if (heldRef.current || expiredRef.current) {
+			countedSinceStartRef.current = false;
+			return;
+		}
 		report('ready');
 		frameSettledRef.current = true;
 		countedSinceStartRef.current = true;
@@ -104,9 +107,8 @@ export function usePayFrame(input: PayFrameInput) {
 	 * more reason the honest readiness signal has to come from the store.
 	 */
 	const onError = React.useCallback(
-		(event: unknown) => {
-			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
-				?.nativeEvent;
+		(event: WebViewLoadErrorEvent) => {
+			const nativeEvent = event.nativeEvent;
 			// The engine says the load counted for this navigation was a synthetic finish for
 			// the document that just failed (Android): it never loaded, so it does not count.
 			if (nativeEvent?.retractsLoad === true && countedSinceStartRef.current) {
