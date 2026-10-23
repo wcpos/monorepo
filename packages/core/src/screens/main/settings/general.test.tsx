@@ -5,6 +5,11 @@ import { act, fireEvent, render } from '@testing-library/react';
 
 import { GeneralSettings } from './general';
 
+// The reset's confirm is its own suite; here the danger zone only needs its trigger.
+jest.mock('../pos/cart/clear-local-data', () => ({
+	ClearLocalData: ({ trigger }: { trigger: (onPress: () => void) => React.ReactNode }) =>
+		trigger(jest.fn()),
+}));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('expo-crypto', () => ({}));
 const mockLocalPatch = jest.fn().mockResolvedValue({});

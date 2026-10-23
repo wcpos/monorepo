@@ -33,6 +33,7 @@ import { LockedRow } from './components/locked-row';
 import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './components/saved-mark';
 import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
+import { ClearLocalData } from '../pos/cart/clear-local-data';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -401,6 +402,17 @@ function GeneralSettingsForm({
 						</Button>
 					</VStack>
 				)}
+				{/* The device's repair tool, beside the store's: it left the cashier sheet on 2026-10-23. */}
+				<ClearLocalData
+					trigger={(onPress) => (
+						<SettingsDangerZone
+							description={t('common.clear_all_local_data_body')}
+							buttonLabel={t('common.clear_all_local_data')}
+							onPress={onPress}
+							testID="settings-general-clear-local-data"
+						/>
+					)}
+				/>
 				<Alert.AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
 					<Alert.AlertDialogContent>
 						<Alert.AlertDialogHeader>
