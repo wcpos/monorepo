@@ -19,6 +19,7 @@ import {
 import { queueFor as defaultQueueFor, enqueueWriteIntent, type WriteIntent } from './write-intents';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
+import type { EngineRequest } from '../transport/engine-transport';
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
 
@@ -55,6 +56,9 @@ type WritePlaneDeps = {
 	settled: (kind: 'read' | 'write') => Promise<void>;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	/** The write-drain lane's requests. */
+	drainRequest: EngineRequest;
+	/** Conflict resolution's requests. */
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	syncBaseUrl: string;
 	mintUuid: () => string;
@@ -111,7 +115,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	const drainLane = createWriteDrainLane({
 		manager: deps.manager,
 		databaseFor: deps.databaseFor,
-		fetcher: deps.fetcher,
+		request: deps.drainRequest,
 		syncBaseUrl: deps.syncBaseUrl,
 		connectivity: deps.connectivity,
 		diagnostics: deps.diagnostics,

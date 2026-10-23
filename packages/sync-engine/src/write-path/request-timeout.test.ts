@@ -2,11 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Fetcher } from '@wcpos/sync-core';
 
-import {
-	RequestTimeoutError,
-	withRequestTimeout,
-	WRITE_DRAIN_REQUEST_TIMEOUT_MS,
-} from './request-timeout';
+import { RequestTimeoutError, withRequestTimeout } from './request-timeout';
+import { WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './write-drain-lane';
 
 const abortError = Object.assign(new Error('request aborted'), { name: 'AbortError' });
 const neverAnswers: Fetcher = (_url, init) =>

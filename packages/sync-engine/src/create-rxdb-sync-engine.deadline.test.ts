@@ -5,6 +5,7 @@ import { createAutomaticTickGate } from './automatic-tick-gate';
 import { createEngineHarness, type EngineHarness } from './testing';
 import { requestStatusOf } from './transport-failure';
 import { RequestTimeoutError } from './write-path/request-timeout';
+import { queueFor } from './write-path/write-intents';
 
 setPremiumFlag();
 let harness: EngineHarness;
@@ -304,4 +305,88 @@ it("keeps a timing-out path's streak when a healthy probe answers on the same la
 			.filter((event) => event.type === 'engine.request.deadline')
 			.map((event) => (event.fields as { consecutiveDeadlines?: number }).consecutiveDeadlines)
 	).toEqual([1, 2, 3]);
+});
+
+it('a black-holed push meets the drain deadline once, in the write-drain lane', async () => {
+	const uuid = '22222222-2222-4222-8222-222222222222';
+	fetch.mockImplementation((url) =>
+		url.includes('/push/') ? new Promise(() => {}) : Promise.resolve(new Response('[]'))
+	);
+	const scope = harness.engine.active();
+	if (!scope) throw new Error('no active scope');
+	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		posUserId: '',
+		posStoreId: '',
+		uuid,
+		remoteId: null,
+		remoteKey: '',
+		number: '',
+		dateCreatedGmt: '2026-07-10T00:00:00',
+		status: 'pending',
+		total: '0.00',
+		customerId: 0,
+		payload: { status: 'pos-open', meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid }] },
+		sync: { revision: '', partial: false, source: 'skeleton' },
+		local: { dirty: false, pendingMutationIds: [] },
+	});
+	await harness.engine.write({
+		collection: 'orders',
+		operation: 'create',
+		recordId: uuid,
+		payload: { status: 'pos-open', meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid }] },
+	});
+	vi.useFakeTimers();
+
+	const drain = harness.engine.sync('write-drain');
+	await vi.advanceTimersByTimeAsync(29_999);
+	expect(harness.diagnostics.some((event) => event.type === 'push.error')).toBe(false);
+	await vi.advanceTimersByTimeAsync(1);
+	expect(await drain).toMatchObject({ status: 'ran', pushed: 0 });
+
+	// One deadline layer: the drain's own 30 s is the row, not a silent outer abort.
+	expect(harness.diagnostics.filter((event) => event.type === 'engine.request.deadline')).toEqual([
+		expect.objectContaining({
+			fields: { lane: 'write-drain', elapsedMs: 30_000, consecutiveDeadlines: 1 },
+		}),
+	]);
+	expect(harness.diagnostics.filter((event) => event.type === 'push.error')).toEqual([
+		expect.objectContaining({
+			fields: expect.objectContaining({ reason: 'TimeoutError', phase: 'transport' }),
+		}),
+	]);
+});
+
+it('a black-holed conflict-resolution fetch is labelled conflict-resolution at 60 s', async () => {
+	fetch.mockImplementation((url) =>
+		url.includes('/products?include=42')
+			? new Promise(() => {})
+			: Promise.resolve(new Response('[]'))
+	);
+	const scope = harness.engine.active();
+	if (!scope) throw new Error('no active scope');
+	const queue = queueFor(scope.database);
+	const refused = await queue.enqueue({
+		mutationId: 'refused-product-update',
+		collectionName: 'products',
+		operation: 'update',
+		recordId: 'product-uuid-1',
+		origin: 'existing',
+		payload: { id: 42, name: 'local edit' },
+		baseRevision: 'sha256:server-r1',
+		queuedAt: '2026-01-05T00:00:00.000Z',
+	});
+	await queue.replace({ ...refused, status: 'rejected', rejectedStatus: 400 });
+	vi.useFakeTimers();
+
+	const discard = harness.engine
+		.resolveConflict('refused-product-update', 'discard')
+		.catch((error: unknown) => error);
+	await vi.advanceTimersByTimeAsync(60_000);
+
+	expect(await discard).toBeInstanceOf(RequestTimeoutError);
+	expect(harness.diagnostics.filter((event) => event.type === 'engine.request.deadline')).toEqual([
+		expect.objectContaining({
+			fields: { lane: 'conflict-resolution', elapsedMs: 60_000, consecutiveDeadlines: 1 },
+		}),
+	]);
 });

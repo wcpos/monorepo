@@ -27,6 +27,9 @@ async function fixture(assertUsable: () => void = () => undefined) {
 		settled,
 		manager,
 		databaseFor: () => database,
+		drainRequest: async () => {
+			throw new Error('not called');
+		},
 		fetcher: async () => {
 			throw new Error('not called');
 		},
@@ -85,6 +88,9 @@ describe('write-plane queue identity', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},
@@ -153,6 +159,9 @@ describe('write-plane status notifications', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},
@@ -226,6 +235,9 @@ describe('write-plane resolution after a scope switch', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},

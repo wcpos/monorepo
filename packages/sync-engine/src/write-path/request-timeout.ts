@@ -2,9 +2,6 @@ import type { Fetcher } from '@wcpos/sync-core';
 
 import { type EngineTimers, systemTimers } from '../engine-timers';
 
-/** Below the 60 s claim lease, but allows a slow store's order create to finish. */
-export const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
-
 export class RequestTimeoutError extends Error {
 	constructor(timeoutMs: number) {
 		super(`request timed out after ${timeoutMs} ms`);
