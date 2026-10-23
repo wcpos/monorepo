@@ -17,7 +17,6 @@ import { presentSessionRequired } from '../session-required';
 import { SESSION_REQUIRED_REASON } from '../tender/tender-guards';
 import { isActionRefusal } from '../../../../../extensions/actions';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
-import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 
@@ -36,16 +35,15 @@ interface PayPagePreparationInput {
 /**
  * The pay page's preparation: the session and register gates and the gateway sale's commit,
  * dispatched before the URL is exposed. `paymentURL` stays undefined until `prepared` is
- * `ready` whenever preparation applies, and for good once it has failed.
+ * `ready` whenever preparation applies, and while a failed preparation stands (Retry, a
+ * register switch and a reopened session prepare again).
  */
 export function usePayPagePreparation(input: PayPagePreparationInput) {
 	const { order, ctx, rawPaymentURL, retryToken, settledRef, logger: orderLogger } = input;
 	const { sessionsOn } = ctx;
 	const online = useOnlineStatus().status === 'online-website-available';
-	const { userDB, site, store } = useStoreSession();
 	const { status: bindingStatus, registerId } = useRegisterBinding();
 	const [sessionRetry, setSessionRetry] = React.useState(0);
-	const siteUuid = site.uuid!;
 	const t = useT();
 	const preparationKey = `${order.uuid}:${registerId}`;
 	const [preparation, setPreparation] = React.useState<{
@@ -133,9 +131,9 @@ export function usePayPagePreparation(input: PayPagePreparationInput) {
 		};
 	}, [
 		preparationKey,
-		userDB,
-		siteUuid,
-		store.id,
+		ctx.userDB,
+		ctx.siteUuid,
+		ctx.storeId,
 		online,
 		rawPaymentURL,
 		retryToken,

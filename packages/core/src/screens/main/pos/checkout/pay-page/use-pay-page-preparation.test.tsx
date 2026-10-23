@@ -21,8 +21,6 @@ const mockLocalPatch = jest.fn();
 const mockPushDocument = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
-const mockUserDB = {};
-const mockSite = { uuid: 'site', wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' };
 let mockOnlineStatus = 'offline';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnlineStatus }),
@@ -48,9 +46,6 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 		registers: [],
 		bind: jest.fn(),
 	}),
-}));
-jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite, store: { id: 1 } }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 

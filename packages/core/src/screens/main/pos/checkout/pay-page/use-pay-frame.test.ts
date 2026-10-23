@@ -436,6 +436,18 @@ describe('usePayFrame frame-status signal', () => {
 		});
 	});
 
+	it('reports a refused preparation at mount as stalled', () => {
+		const { report } = renderFrame({ src: '', prepared: 'failed' });
+		expect(report).toHaveBeenLastCalledWith('stalled');
+	});
+
+	it('reports stalled when a pending preparation is refused', () => {
+		const { report, rerender } = renderFrame({ src: '', prepared: null });
+		expect(report).toHaveBeenLastCalledWith('loading');
+		rerender({ src: '', prepared: 'failed' });
+		expect(report).toHaveBeenLastCalledWith('stalled');
+	});
+
 	it('reports only later documents, for the fallback poll', () => {
 		const { handlers, onLaterDocument } = renderFrame();
 		act(() => {

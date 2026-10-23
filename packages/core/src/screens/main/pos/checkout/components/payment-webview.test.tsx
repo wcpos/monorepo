@@ -10,6 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import { usePayPagePreparation } from '../pay-page/use-pay-page-preparation';
 import { isSettledOrderStatus } from '../sale-completion';
 import { PaymentWebview } from './payment-webview';
 
@@ -90,13 +91,12 @@ jest.mock('@wcpos/query', () => ({
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
-let mockRegisterId: string | null = null;
-// Offline with sessions off, preparation exposes the link at once: no commit, no gate.
+// By default as offline with sessions off: preparation exposes the link at once, no commit, no gate.
 jest.mock('../pay-page/use-pay-page-preparation', () => ({
-	usePayPagePreparation: ({ rawPaymentURL }: { rawPaymentURL?: string }) => ({
+	usePayPagePreparation: jest.fn(({ rawPaymentURL }: { rawPaymentURL?: string }) => ({
 		prepared: null,
 		paymentURL: rawPaymentURL,
-	}),
+	})),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
@@ -1622,19 +1622,11 @@ describe('PaymentWebview settled order status', () => {
 	});
 });
 
-const mockRegisterDB = {
-	getLocal: async () =>
-		mockRegisterId
-			? {
-					toJSON: () => ({
-						data: { sites: { site: { register_id: mockRegisterId, register_store_id: 1 } } },
-					}),
-				}
-			: null,
-};
+// No register is bound in this suite.
+const mockRegisterDB = { getLocal: async () => null };
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
-		actionActor: { userId: 7, registerId: mockRegisterId, sessionId: null },
+		actionActor: { userId: 7, registerId: null, sessionId: null },
 		actionCtx: jest
 			.requireActual<typeof import('../../../../../extensions/actions')>(
 				'../../../../../extensions/actions'
@@ -1659,13 +1651,13 @@ jest.mock('../hooks/use-sale-context', () => ({
 					const session = await findOpenSession(
 						{ collections: { register_sessions: mockSessions } },
 						registerId,
-						mockSessionsOn
+						false
 					);
 					return { registerId, sessionId: session?.id ?? null };
 				},
 			}),
 		userDB: mockRegisterDB,
-		sessionsOn: mockSessionsOn,
+		sessionsOn: false,
 		storeDB: mockSessionStoreDB,
 		siteUuid: 'site',
 		storeId: 1,
@@ -1696,7 +1688,6 @@ jest.mock('@wcpos/query/store-local', () => ({
 	failCompletionAttempt: jest.fn(async () => {}),
 }));
 
-let mockSessionsOn = false;
 const mockSessions = { findOne: jest.fn() };
 const mockSessionStoreDB = { collections: { register_sessions: mockSessions } };
 
@@ -1731,7 +1722,6 @@ describe('PaymentWebview session expiry', () => {
 			.requestStateManager.reset();
 		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
 		mockCredentials$.next({ access_token: 'jwt-token', refresh_token: 'refresh' });
-		mockSessionsOn = false;
 		webViewMounts = 0;
 		globalThis.fetch = mockRefreshFetch;
 		mockRefreshFetch.mockResolvedValue(response());
@@ -1954,5 +1944,30 @@ describe('PaymentWebview session expiry', () => {
 			getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn as jest.Mock
 		).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
 		expect(reopenWarnings).toHaveLength(1);
+	});
+});
+
+describe('PaymentWebview refused preparation', () => {
+	it('reports the frame stalled and mounts no WebView while preparation is refused', () => {
+		jest.clearAllMocks();
+		webViewMounts = 0;
+		const preparation = jest.mocked(usePayPagePreparation);
+		const exposeLink = preparation.getMockImplementation()!;
+		preparation.mockReturnValue({ prepared: 'failed', paymentURL: undefined });
+		try {
+			const setFrameStatus = jest.fn();
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			expect(webViewMounts).toBe(0);
+		} finally {
+			preparation.mockImplementation(exposeLink);
+		}
 	});
 });
