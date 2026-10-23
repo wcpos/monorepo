@@ -5,6 +5,7 @@ import {
 	MONEY_ANSWER_CODES,
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
+import { residentRevision } from '@wcpos/sync-engine';
 
 import { mintUuid } from '../mint-uuid';
 import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/mirror-server-order';
@@ -124,7 +125,6 @@ function classifyMoneyRoute(
 
 type ResidentOrder = {
 	payload: { id?: number; total?: unknown; currency?: unknown };
-	sync: { revision?: string; adopted?: { revision?: string; at?: number } };
 	local: { dirty?: boolean; pendingMutationIds?: string[] };
 };
 async function readOrder(runtime: QueryRuntime, orderUuid: string) {
@@ -135,10 +135,7 @@ async function readOrder(runtime: QueryRuntime, orderUuid: string) {
 
 /** A document adopted whole, under the revision it carries, after the chain's last answer. */
 function holdsAuthority(order: ResidentOrder, chain: RevisionChain | null): boolean {
-	const { revision, adopted } = order.sync ?? {};
-	return (
-		!!revision && adopted?.revision === revision && (!chain || (adopted.at ?? 0) > chain.answeredAt)
-	);
+	return residentRevision(order).holdsDocument(chain ? chain.answeredAt : undefined);
 }
 
 /**
@@ -169,7 +166,7 @@ async function readopt(
 	orderId: number
 ): Promise<{ order: ResidentOrder; chain: RevisionChain | null; refreshAdopted: boolean }> {
 	const prior = await readOrder(runtime, orderUuid);
-	const before = prior.order.sync?.adopted;
+	const before = residentRevision(prior.order).adopted;
 	const priorWrite = (prior.resident.getLatest() as { revision?: string }).revision;
 	const refreshed = await refreshRecordByWooId(runtime.engine, {
 		id: `money-command:readopt:${orderId}`,
@@ -182,19 +179,19 @@ async function readopt(
 	);
 	const { resident, order } = await readOrder(runtime, orderUuid);
 	const { chain } = await readOrderCommands(storeDB, orderUuid);
-	const adopted = order.sync?.adopted;
+	const { revision, adopted } = residentRevision(order);
 	// This refresh adopted: it succeeded and a whole document under its own stamp was written since
 	// it began. Never an older read landing while it failed, nor time alone (a pull in the same
 	// millisecond is indistinguishable by its stamp).
-	const whole = refreshed && !!adopted && adopted.revision === order.sync.revision;
+	const whole = refreshed && !!adopted && adopted.revision === revision;
 	const adoptedNow = whole && (adopted.at !== before?.at || adopted.revision !== before?.revision);
 	const refreshAdopted =
 		adoptedNow ||
 		(whole && (resident.getLatest() as { revision?: string }).revision !== priorWrite);
 	// A clock step back dates the answer ahead of this adoption (as a claim, 926d62a59c).
-	if (!chain || !adoptedNow || (adopted.at ?? 0) > chain.answeredAt)
+	if (!chain || !adoptedNow || adopted.at > chain.answeredAt)
 		return { order, chain, refreshAdopted };
-	const recorded = { ...chain, answeredAt: (adopted.at ?? 0) - 1 };
+	const recorded = { ...chain, answeredAt: adopted.at - 1 };
 	await settleCommand(storeDB, orderUuid, null, recorded);
 	return { order, chain: recorded, refreshAdopted };
 }
@@ -222,15 +219,14 @@ async function chooseRevision(
 	// settled the row: a void, capture or cancel goes out under it without a re-read (the refused
 	// 409 and its re-send are what the poll's revision removes). An approved kind still re-adopts,
 	// so its approval is checked against a fresh document.
-	const polled = !!chain?.polled && (order.sync?.adopted?.at ?? 0) <= chain.answeredAt;
+	const polled = !!chain?.polled && (residentRevision(order).adopted?.at ?? 0) <= chain.answeredAt;
 	if (!holdsAuthority(order, chain) && (approved || !polled)) {
 		({ order, chain } = await readopt(runtime, storeDB, entry.orderUuid, orderId));
 		if (approved && !holdsAuthority(order, chain))
 			throw new MoneyCommandError('revision_unavailable', entry);
 	}
-	const revision = holdsAuthority(order, chain)
-		? order.sync.revision
-		: (chain?.answerRevision ?? order.sync?.revision);
+	const current = residentRevision(order).revision ?? undefined;
+	const revision = holdsAuthority(order, chain) ? current : (chain?.answerRevision ?? current);
 	if (!revision) throw new MoneyCommandError('revision_unavailable', entry);
 	if (approved && !approvalHolds(entry.approval, order.payload))
 		throw new MoneyCommandError('order_changed', entry);
@@ -371,7 +367,7 @@ export async function settleMoneyCommand(
 		await settleCommand(storeDB, orderUuid, null, {
 			...read.chain,
 			adoptedAfterAnswer: true,
-			adoptedRevision: read.order.sync.revision,
+			adoptedRevision: residentRevision(read.order).revision ?? undefined,
 		});
 }
 
@@ -590,10 +586,10 @@ async function retireSettledChains(runtime: QueryRuntime, storeDB: StoreLocalDat
 		// A thrown read is not an absence: it propagates; only a null result is not resident.
 		const resident = await findEngineResident(runtime, 'orders', orderUuid);
 		if (!resident) continue;
-		const { adopted } = (resident.getLatest().toJSON() as unknown as ResidentOrder).sync ?? {};
+		const { adopted } = residentRevision(resident.getLatest().toJSON());
 		if (
 			adopted?.revision &&
-			(adopted.at ?? 0) > chain.answeredAt &&
+			adopted.at > chain.answeredAt &&
 			adopted.revision !== chain.adoptedRevision
 		)
 			await retireChain(storeDB, orderUuid, chain.answeredAt);
@@ -602,28 +598,6 @@ async function retireSettledChains(runtime: QueryRuntime, storeDB: StoreLocalDat
 
 function answerChain(revision: unknown, at: number): RevisionChain | undefined {
 	return typeof revision === 'string' ? { answerRevision: revision, answeredAt: at } : undefined;
-}
-
-/**
- * A poll's answer names the store's document NOW: the next order push goes out under it (the
- * drain re-stamps baseRevision from sync.revision; it never reads the chain). A naked stamp
- * (ADR 0040 §1.3): the adoption stays, so no authority is claimed and no re-read runs; an
- * adoption that landed after the poll wins. Measured: order 115073, dev-next 2026-10-23, a 409
- * on the cash push after a terminal cancel. Returns the revision it replaced, if it stamped.
- */
-async function stampPolledRevision(runtime: QueryRuntime, orderUuid: string, chain: RevisionChain) {
-	const { resident } = await readOrder(runtime, orderUuid);
-	// The guard and the write share one atomic modify over the CURRENT document: an adoption
-	// that lands between a snapshot and the write must never be overwritten by the poll's stamp.
-	let replaced: string | undefined;
-	await resident.incrementalModify((current: Record<string, unknown>) => {
-		const sync = (current.sync ?? {}) as { revision?: string; adopted?: { at?: number } };
-		if ((sync.adopted?.at ?? 0) > chain.answeredAt) return current;
-		if (sync.revision === chain.answerRevision) return current;
-		replaced = sync.revision;
-		return { ...current, sync: { ...sync, revision: chain.answerRevision } };
-	});
-	return replaced;
 }
 
 /**
@@ -800,7 +774,11 @@ export function moneyCommandPoster(input: {
 			const polled = answerChain(revision, answeredAt);
 			if (polled) {
 				await settleCommand(input.storeDB, input.orderUuid, null, { ...polled, polled: true });
-				const replaced = await stampPolledRevision(input.runtime, input.orderUuid, polled);
+				const { replaced } = await input.runtime.engine.orderRevision.stamp(
+					input.orderUuid,
+					polled.answerRevision,
+					polled.answeredAt
+				);
 				if (replaced && replaced === sentRevision) sentRevision = polled.answerRevision;
 			}
 			await settle();
