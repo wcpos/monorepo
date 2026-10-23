@@ -50,12 +50,12 @@ it('hands out the same frozen object every render', () => {
 	expect(Object.isFrozen(first)).toBe(true);
 });
 
-// A pane with another pane across the resize handle keeps 2 units on that edge: the handle's 4
-// plus the 8 make one page gutter between the two surfaces (CODING_STANDARDS § Gutters).
+// A pane with another pane across the resize handle keeps no inset on that edge: the handle is
+// the gutter, one page gutter wide (CODING_STANDARDS § Gutters).
 it.each([
-	['right', 'pl-gutter pr-2', 'ml-gutter mr-2', 'pt-gutter pb-gutter pl-gutter pr-2', 'pl-gutter'],
-	['left', 'pl-2 pr-gutter', 'ml-2 mr-gutter', 'pt-gutter pb-gutter pl-2 pr-gutter', 'pl-2'],
-] as const)('keeps 2 units on the inner edge (%s)', (edge, px, mx, p, pl) => {
+	['right', 'pl-gutter pr-0', 'ml-gutter mr-0', 'pt-gutter pb-gutter pl-gutter pr-0', 'pl-gutter'],
+	['left', 'pl-0 pr-gutter', 'ml-0 mr-gutter', 'pt-gutter pb-gutter pl-0 pr-gutter', 'pl-0'],
+] as const)('keeps no inset on the inner edge (%s)', (edge, px, mx, p, pl) => {
 	const wrapper = ({ children }: React.PropsWithChildren) =>
 		React.createElement(GroundInnerEdge, { value: edge }, children);
 	expect(renderHook(() => useGround(), { wrapper }).result.current).toMatchObject({

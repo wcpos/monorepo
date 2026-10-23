@@ -511,8 +511,8 @@ function POSProductsContent({
 
 	// The pages' frame at the pages' gutter: the bar, the chips, the rows the column adds, and the
 	// body on its card (the table) or on the ground (the tiles), one page gutter apart. The edge
-	// facing the cart (`side`: the cart's side, overlay-side ledger line 3) keeps 2 units, so the
-	// handle plus that inset make one page gutter between the cart and the card (`ground.ts`).
+	// facing the cart (`side`: the cart's side, overlay-side ledger line 3) keeps no inset: the
+	// resize handle is the gutter, one page gutter wide (`ground.ts`, panels ledger line 5).
 	return (
 		<GroundInnerEdge value={side}>
 			<ListPage

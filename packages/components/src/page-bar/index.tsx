@@ -37,9 +37,9 @@ export type PageBarProps = ViewProps & {
 	insetTop?: boolean;
 	/**
 	 * The side of this bar's pane that faces another pane across a resize handle: that side keeps
-	 * 2 units instead of the page gutter, so the handle's 4 px plus the 8 make one page gutter
-	 * between the two panes' surfaces (the POS products column, with the cart beside it; owner,
-	 * 2026-10-23). The rest of the bar's inset is unchanged.
+	 * no inset, because the handle is the gutter (one page gutter wide, `panels`), so the two
+	 * panes' surfaces sit one page gutter apart (the POS products column, with the cart beside
+	 * it; owner, 2026-10-23). The rest of the bar's inset is unchanged.
 	 */
 	innerEdge?: 'left' | 'right';
 };
@@ -83,9 +83,9 @@ export function PageBar({
 					phone
 						? 'h-ctl gap-2 pr-2 pl-4'
 						: innerEdge === 'right'
-							? 'pl-gutter pt-gutter gap-4 pr-2'
+							? 'pl-gutter pt-gutter gap-4 pr-0'
 							: innerEdge === 'left'
-								? 'pr-gutter pt-gutter gap-4 pl-2'
+								? 'pr-gutter pt-gutter gap-4 pl-0'
 								: 'px-gutter pt-gutter gap-4'
 				)}
 			>

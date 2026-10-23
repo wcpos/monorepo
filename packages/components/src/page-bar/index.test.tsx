@@ -81,10 +81,10 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	// no fixed height, with no rule under it (ledger lines 8, 11).
 	const row = screen.getByTestId('bar').firstElementChild;
 	expect(row).toHaveClass('pt-gutter', 'px-gutter');
-	// A pane with another pane across a handle keeps 2 units on that edge (ledger line 13).
+	// A pane with another pane across a handle keeps no inset on that edge (ledger line 13).
 	for (const [innerEdge, classes] of [
-		['right', ['pl-gutter', 'pr-2']],
-		['left', ['pl-2', 'pr-gutter']],
+		['right', ['pl-gutter', 'pr-0']],
+		['left', ['pl-0', 'pr-gutter']],
 	] as const) {
 		const { unmount } = render(<PageBar testID="inner" title="Inner" innerEdge={innerEdge} />);
 		expect(screen.getByTestId('inner').firstElementChild).toHaveClass(...classes);
