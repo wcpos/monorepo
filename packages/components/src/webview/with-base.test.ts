@@ -16,4 +16,13 @@ describe('withBase', () => {
 			'<base href="https://s.test/r?a=1&amp;b=&quot;x&quot;"><p>R</p>'
 		);
 	});
+
+	it('keeps a base the document already declares', () => {
+		const html = '<html><head><base href="https://cdn.test/"><title>R</title></head></html>';
+		expect(withBase(html, 'https://s.test/r')).toBe(html);
+	});
+
+	it('prepends the base when the head tag never closes', () => {
+		expect(withBase('<head', 'https://s.test/r')).toBe('<base href="https://s.test/r"><head');
+	});
 });
