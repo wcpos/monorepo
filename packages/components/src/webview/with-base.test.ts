@@ -17,8 +17,22 @@ describe('withBase', () => {
 		);
 	});
 
-	it('keeps a base the document already declares', () => {
+	it('keeps an absolute base the document already declares', () => {
 		const html = '<html><head><base href="https://cdn.test/"><title>R</title></head></html>';
+		expect(withBase(html, 'https://s.test/r')).toBe(html);
+	});
+
+	it('resolves a relative declared base against the page URL', () => {
+		expect(
+			withBase(
+				'<head><base target="_top" href="/receipts/?a=1&amp;b=2"></head>',
+				'https://s.test/r/x'
+			)
+		).toBe('<head><base target="_top" href="https://s.test/receipts/?a=1&amp;b=2"></head>');
+	});
+
+	it('leaves a declared base without an href alone', () => {
+		const html = '<head><base target="_top"><p>R</p></head>';
 		expect(withBase(html, 'https://s.test/r')).toBe(html);
 	});
 

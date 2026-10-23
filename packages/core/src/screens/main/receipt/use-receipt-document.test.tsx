@@ -1066,6 +1066,31 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
 		});
 
+		it("prints the frame's rendered document once it has a body, not the page source", async () => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+			const { result } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			await waitFor(() =>
+				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
+			);
+			// A script in the page filled the body after load; the source still reads empty.
+			(result.current.previewProps.iframeRef as React.MutableRefObject<unknown>).current = {
+				contentDocument: {
+					body: { childElementCount: 1 },
+					documentElement: { outerHTML: '<html><body><p>Scripted total</p></body></html>' },
+				},
+			};
+			await act(async () => {
+				await result.current.print();
+			});
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain('<p>Scripted total</p>');
+			expect(mockHtmlPrint.mock.calls[0][0]).not.toContain('Server receipt');
+			expect(pageReads().map(([url]) => url)).toEqual([templated]);
+		});
+
 		it('loads nothing while the templates are still arriving, then the fallback link once', async () => {
 			mockTemplatesSynced = false;
 			jest

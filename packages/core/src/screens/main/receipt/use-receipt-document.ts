@@ -249,11 +249,19 @@ export function useReceiptDocument({
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			// The page the preview read, printed as the URL print always was: uncounted.
-			// The dialog adapter loads inline HTML from a data: URL, so the page's own URL travels
-			// with it as <base> for relative stylesheets and logos; the preview frame does the same
-			// via `src`. pageURL is set whenever pageHtml is.
+			// The preview frame has run the page's scripts, so its DOM is the printable document,
+			// as the same-origin frame's DOM was before the page was read once (a receipt whose
+			// script fills the body prints empty from the source). Before the frame has a body,
+			// the source: the dialog adapter loads inline HTML from a data: URL, so the page's own
+			// URL travels with it as <base> for relative stylesheets and logos (the frame does the
+			// same via `src`). pageURL is set whenever pageHtml is.
 			if (pageHtml && pageURL && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
-				return { html: withBase(pageHtml, pageURL) };
+				const frameDocument = iframeRef.current?.contentDocument;
+				return {
+					html: frameDocument?.body?.childElementCount
+						? frameDocument.documentElement.outerHTML
+						: withBase(pageHtml, pageURL),
+				};
 			}
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
