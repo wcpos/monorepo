@@ -379,6 +379,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</Text>
 			) : null}
 			{flow.invoiceSent ? <InvoiceSentLine flow={flow} busy={busy} /> : null}
+			{flow.unansweredAttempt ? <AttemptUnansweredLine flow={flow} busy={busy} /> : null}
 			{plan ? (
 				<View
 					testID="checkout-plan"
@@ -655,7 +656,7 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 	return (
 		<View
 			testID="checkout-invoice-sent"
-			className="bg-muted w-full max-w-md flex-row flex-wrap items-center gap-2 rounded-md px-3 py-2"
+			className="bg-muted w-full max-w-md flex-row flex-wrap items-center gap-2 rounded-lg px-3 py-2"
 		>
 			<Icon name="pending" size="xs" className="text-muted-foreground" />
 			<Text className="text-foreground flex-1 text-sm" decodeHtml>
@@ -674,6 +675,35 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 				onPress={() => void flow.cancelInvoice()}
 			>
 				<ButtonText>{t('pos_checkout.cancel_invoice')}</ButtonText>
+			</Button>
+		</View>
+	);
+}
+
+/** An attempt the provider never answered (ADR 0040 rule 7): it may yet be paid, never "failed". */
+function AttemptUnansweredLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
+	const t = useT();
+	const attempt = flow.unansweredAttempt!;
+	const time = useDateFormat(attempt.sentAtGmt, 'MMM d, h:mm a', false);
+	return (
+		<View
+			testID="checkout-attempt-unanswered"
+			className="bg-muted w-full max-w-md flex-row flex-wrap items-center gap-2 rounded-lg px-3 py-2"
+		>
+			<Icon name="pending" size="xs" className="text-muted-foreground" />
+			<Text className="text-foreground flex-1 text-sm" decodeHtml>
+				{attempt.title && time
+					? t('pos_checkout.attempt_unanswered_known', { method: attempt.title, time })
+					: t('pos_checkout.attempt_unanswered')}
+			</Text>
+			<Button
+				variant="outline-destructive"
+				size="sm"
+				testID="checkout-clear-attempt"
+				disabled={busy || !flow.online}
+				onPress={() => void flow.clearAttempt()}
+			>
+				<ButtonText>{t('pos_checkout.clear_attempt')}</ButtonText>
 			</Button>
 		</View>
 	);

@@ -1,4 +1,6 @@
-import { type MetaDataEntry, parseMetaValue } from './ledger';
+import { parseMetaValue } from './meta-value';
+
+import type { MetaDataEntry } from './ledger';
 
 /**
  * The completion tuple. A sale on a till with no register bound (or one bound in another

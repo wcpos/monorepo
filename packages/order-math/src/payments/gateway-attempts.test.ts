@@ -1,6 +1,7 @@
 import {
 	GATEWAY_ATTEMPTS_META_KEY,
 	readGatewayAttempts,
+	withAttemptAnswer,
 	withGatewayAttempt,
 } from './gateway-attempts';
 import { withLedger } from './ledger';
@@ -65,6 +66,19 @@ describe('readGatewayAttempts', () => {
 	it.each(['cancelled', 'superseded', 'settled'])('a %s attempt is never unanswered', (fate) => {
 		expect(readGatewayAttempts(asString({ a: entry({ fate }) })).unanswered).toBeNull();
 	});
+	it.each([
+		['missing', { method_id: undefined }],
+		['empty', { method_id: '' }],
+		['not a string', { method_id: 7 }],
+	])('an entry whose method_id is %s is neither awaiting nor unanswered', (_, overrides) => {
+		const awaiting = { destination: null, at_gmt: '2026-10-23T10:50:00Z' };
+		const meta = asString({
+			a: entry({ ...overrides, awaiting }),
+			b: entry(overrides),
+			p: entry({ ...overrides, fate: 'paid' }),
+		});
+		expect(readGatewayAttempts(meta)).toEqual({ awaiting: null, unanswered: null });
+	});
 	it('flagged comes from attention_at_gmt', () => {
 		const meta = asString({ a: entry({ attention_at_gmt: '2026-10-23T11:00:00Z', asks: 3 }) });
 		expect(readGatewayAttempts(meta).unanswered?.flagged).toBe(true);
@@ -107,5 +121,67 @@ describe('withGatewayAttempt', () => {
 			schema: 1,
 			attempts: { a: { fate: 'cancelled' } },
 		});
+	});
+});
+
+describe('withAttemptAnswer', () => {
+	const awaiting = { destination: 'x@y.z', at_gmt: '2026-10-23T10:50:00Z' };
+	const fates = (meta: readonly { key?: string; value?: unknown }[]) =>
+		Object.fromEntries(
+			Object.entries(
+				(JSON.parse(meta[0].value as string) as { attempts: Record<string, { fate: string }> })
+					.attempts
+			).map(([id, { fate }]) => [id, fate])
+		);
+	const meta = asString({
+		stranded: entry(),
+		awaited: entry({ awaiting }),
+		cancelled: entry({ fate: 'cancelled' }),
+		paid: entry({ fate: 'paid' }),
+		Keep: entry(),
+	});
+	const others = { cancelled: 'cancelled', paid: 'paid' };
+
+	it.each([
+		['sent', 'sent'],
+		['settled', 'settled'],
+	] as const)(
+		'%s supersedes every other sent attempt, stranded or awaited; the attempt is %s',
+		(answer, fate) => {
+			const next = withAttemptAnswer(meta, 'keep', answer);
+			expect(fates(next)).toEqual({
+				...others,
+				stranded: 'superseded',
+				awaited: 'superseded',
+				Keep: fate,
+			});
+			expect(readGatewayAttempts(next).awaiting).toBeNull();
+		}
+	);
+	it.each([
+		['recorded', 'paid'],
+		['paid', 'sent'],
+	] as const)(
+		'%s supersedes only the awaited ones: a stranded sent beside the payment stays; the attempt is %s',
+		(answer, fate) => {
+			const next = withAttemptAnswer(meta, 'keep', answer);
+			expect(fates(next)).toEqual({
+				...others,
+				stranded: 'sent',
+				awaited: 'superseded',
+				Keep: fate,
+			});
+			// Beside the row the answer landed, the stranded attempt is still the one to clear.
+			const rows = ['keep', 'paid'].map((id) => ({ id, status: 'captured' }) as PaymentRow);
+			expect(readGatewayAttempts(withLedger(next, rows)).unanswered?.id).toBe(
+				answer === 'paid' ? 'Keep' : 'stranded'
+			);
+		}
+	);
+	it('returns the same meta when nothing matches', () => {
+		const resolved = asString({ a: entry({ fate: 'cancelled' }), b: entry({ awaiting: null }) });
+		expect(withAttemptAnswer(resolved, 'b', 'sent')).toBe(resolved);
+		const stranded = asString({ a: entry() });
+		expect(withAttemptAnswer(stranded, 'x', 'paid')).toBe(stranded);
 	});
 });

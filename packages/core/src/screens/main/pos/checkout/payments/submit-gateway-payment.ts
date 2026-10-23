@@ -5,6 +5,7 @@ import {
 	MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
+	withAttemptAnswer,
 	withAwaitingCustomer,
 	withGatewayAttempt,
 } from '@wcpos/order-math';
@@ -146,20 +147,26 @@ export async function submitGatewayPayment(
 		throw new Error('gateway_submit_malformed_response');
 	// Only the request is inside the try above: once the server has answered 2xx the outcome
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
+	// `answer` applies the store's supersede rules to the map (order-math `withAttemptAnswer`).
 	const mirror = async <const O extends { order: OrderPaymentSummary; row?: PaymentRow }>(
 		outcome: O,
-		awaiting: AwaitingCustomerStamp | null
+		awaiting: AwaitingCustomerStamp | null,
+		answer?: GatewaySubmitResponse['outcome']
 	) => ({
 		...outcome,
 		notMirrored: await deps.mirror({
 			payment: outcome.row,
 			order: outcome.order,
-			meta: (meta) => withAwaitingCustomer(meta, awaiting),
+			meta: (meta) =>
+				withAwaitingCustomer(
+					answer ? withAttemptAnswer(meta, input.attemptId, answer) : meta,
+					awaiting
+				),
 		}),
 	});
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
-		return mirror({ kind: 'recorded', via: 'online', row, order: data.order }, null);
+		return mirror({ kind: 'recorded', via: 'online', row, order: data.order }, null, 'recorded');
 	}
 	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
 	// the summary as the truth and no receipt number assumed.
@@ -171,7 +178,7 @@ export async function submitGatewayPayment(
 	if (data.outcome === 'settled' || data.outcome === 'paid') {
 		// The store settled the sale on the merchant's stored status and cleared any stamp an
 		// earlier send left (§3.1); the till's copy follows, with the summary's status.
-		return mirror({ kind: 'settled', order: data.order }, null);
+		return mirror({ kind: 'settled', order: data.order }, null, data.outcome);
 	}
 	if (data.outcome === 'sent') {
 		const stamp: AwaitingCustomerStamp = {
@@ -183,10 +190,9 @@ export async function submitGatewayPayment(
 		};
 		// A `sent` whose summary is still pos-open is a replay of an earlier send after a later
 		// one was cancelled elsewhere (§4.2): the order is open, and the stamp is not ours to write.
-		return mirror(
-			{ kind: 'sent', order: data.order, stamp },
-			data.order.status === 'pos-open' ? null : stamp
-		);
+		const sent = { kind: 'sent', order: data.order, stamp } as const;
+		if (data.order.status === 'pos-open') return mirror(sent, null);
+		return mirror(sent, stamp, 'sent');
 	}
 	throw new Error('gateway_submit_malformed_response');
 }

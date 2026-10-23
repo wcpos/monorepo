@@ -1,7 +1,10 @@
 /** `_wcpos_gateway_attempts` schema 1, read with the plugin's own predicates (`Attempt_Log`). */
 
-import { type MetaDataEntry, parseMetaValue, readLedger, samePaymentId } from './ledger';
+import { type MetaDataEntry, readLedger, samePaymentId } from './ledger';
+import { parseMetaValue } from './meta-value';
 import { withMetaReplaced } from './provenance';
+
+import type { GatewaySubmitResponse } from './types';
 
 export const GATEWAY_ATTEMPTS_META_KEY = '_wcpos_gateway_attempts';
 
@@ -25,7 +28,10 @@ const mapOf = (metaData: readonly MetaDataEntry[] | null | undefined) =>
 export function attemptEntries(metaData: readonly MetaDataEntry[] | null | undefined) {
 	const map = parseMetaValue(mapOf(metaData));
 	if (!isEntry(map) || map.schema !== 1 || !isEntry(map.attempts)) return null;
-	return Object.entries(map.attempts).filter((pair): pair is [string, Entry] => isEntry(pair[1]));
+	// An entry with no method is skipped: the till could never post its `{method}/cancel`.
+	return Object.entries(map.attempts).filter(
+		(pair): pair is [string, Entry] => isEntry(pair[1]) && !!text(pair[1].method_id)
+	);
 }
 
 function attemptOf([id, entry]: [string, Entry]): GatewayAttempt {
@@ -66,4 +72,26 @@ export function withGatewayAttempt(
 	const next = { schema: 1, attempts: { ...attempts, [id]: { ...attempts[id], ...patch } } };
 	const value = typeof mapOf(metaData) === 'string' ? JSON.stringify(next) : next;
 	return withMetaReplaced(metaData, [{ key: GATEWAY_ATTEMPTS_META_KEY, value }]);
+}
+
+/**
+ * A submit's answer, until the next adoption (`Attempts.php`): a send (`await()`) or a settle
+ * (`resolve('settled')`) supersedes every other `sent` attempt; a paid row or a replayed `paid`
+ * (`replace()`) only the awaited ones, never a stranded one beside it. A settle or a row also
+ * resolves the attempt itself.
+ */
+export function withAttemptAnswer(
+	metaData: readonly MetaDataEntry[] | null | undefined,
+	id: string,
+	answer: GatewaySubmitResponse['outcome']
+): readonly MetaDataEntry[] {
+	let result = metaData ?? [];
+	let own = id; // the attempt's key as stored (ids compare case-insensitively)
+	for (const [other, entry] of attemptEntries(metaData) ?? [])
+		if (samePaymentId(other, id)) own = other;
+		else if (entry.fate === 'sent')
+			if (answer === 'sent' || answer === 'settled' || entry.awaiting != null)
+				result = withGatewayAttempt(result, other, { fate: 'superseded', awaiting: null });
+	const fate = answer === 'recorded' ? 'paid' : answer === 'settled' ? 'settled' : null;
+	return fate ? withGatewayAttempt(result, own, { fate, awaiting: null }) : result;
 }
