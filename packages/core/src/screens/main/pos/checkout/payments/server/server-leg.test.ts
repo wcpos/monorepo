@@ -397,24 +397,24 @@ it.each(['captured', 'failed', 'voided'] as const)(
 		expect(c.onFinal).toHaveBeenCalledTimes(1);
 	}
 );
-it('cancel twice issues one void, invalidates stale polls and a late capture wins', async () => {
+it('cancel twice issues one void, after the in-flight poll, and a late capture wins', async () => {
 	const c = setup(true);
 	const old = deferred<{ data: unknown }>();
 	c.queue('status', () => old.promise);
 	await tick();
 	const cancel = deferred<{ data: unknown }>();
 	c.queue('void', () => cancel.promise);
-	const cancelling = c.leg.cancel();
-	void c.leg.cancel();
+	await c.leg.cancel();
+	await c.leg.cancel();
 	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
-	expect(c.count('void')).toBe(1);
 	await c.leg.checkNow();
 	expect(c.count('status')).toBe(1);
-	old.resolve({ data: response({ status: 'failed' }) });
+	expect(c.count('void')).toBe(0);
+	old.resolve({ data: response() });
 	await tick();
-	expect(c.mirror).not.toHaveBeenCalled();
+	expect(c.count('void')).toBe(1);
 	cancel.resolve({ data: response({ void_requested_at: new Date().toISOString() }) });
-	await cancelling;
+	await tick();
 	expect(c.leg.getState()).toMatchObject({ phase: 'polling', releaseAvailable: true });
 	c.answer('status', response({ status: 'captured' }));
 	await tick(2000);
@@ -422,6 +422,42 @@ it('cancel twice issues one void, invalidates stale polls and a late capture win
 	expect(c.leg.getState().clientEvents.map((e) => e.message)).toContain(
 		'Cancel requested by cashier'
 	);
+});
+it('a cancel while a status poll is in flight sends the void after the poll answer is mirrored', async () => {
+	const c = setup(true);
+	const poll = deferred<{ data: unknown }>();
+	c.queue('status', () => poll.promise);
+	c.answer('void', response({ status: 'voided' }));
+	c.mirror.mockImplementation(async () => {
+		c.calls.push({ route: 'mirror', at: Date.now() });
+	});
+	await tick();
+	await c.leg.cancel('cashier');
+	expect(c.count('void')).toBe(0);
+	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
+	const answered = { ...response(), revision: 'R2' };
+	poll.resolve({ data: answered });
+	await tick();
+	expect(c.mirror).toHaveBeenNthCalledWith(1, answered);
+	expect(c.calls.map((call) => call.route)).toEqual(['status', 'mirror', 'void', 'mirror']);
+	expect(c.leg.getState().outcome).toBe('voided');
+	await tick(10000);
+	expect(c.count('status')).toBe(1);
+	expect(c.count('void')).toBe(1);
+});
+it('a status poll that errors while a cancel is pending still voids', async () => {
+	const c = setup(true);
+	const poll = deferred<{ data: unknown }>();
+	c.queue('status', () => poll.promise);
+	c.answer('void', response({ status: 'voided' }));
+	await tick();
+	await c.leg.cancel('cashier');
+	expect(c.count('void')).toBe(0);
+	poll.reject(new Error('offline'));
+	await tick();
+	expect(c.calls.map((call) => call.route)).toEqual(['status', 'void']);
+	expect(c.calls[1].body).toEqual({ reason: 'cashier' });
+	expect(c.leg.getState().outcome).toBe('voided');
 });
 it('a void response reporting captured wins immediately', async () => {
 	const c = setup(true);

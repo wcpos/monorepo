@@ -208,13 +208,15 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		if (!state.captureFailed) schedule(route === 'intent' ? 0 : POLL_CADENCE_MS);
 	};
-	// A cancel pressed while the intent is still out waits here: a void that raced
-	// the intent could win on the server, be answered "not found", and leave the
-	// intent to create a live reader action nobody polls — a customer charged
-	// after the till said "cancelled". The void goes out once the intent settles.
+	// A cancel pressed while an intent or a status poll is out waits for its answer. A void that
+	// raced the intent could win on the server, be answered "not found", and leave the intent to
+	// create a live reader action nobody polls: a customer charged after the till said "cancelled".
+	// A void goes out under the revision of the last answer the till mirrored, and an in-flight
+	// poll's answer carries the revision the server moved to (its first poll always writes): a void
+	// sent ahead of it is answered stale and costs a second round trip (run 39887094457).
 	let pendingCancel: string | null = null;
-	let intentInFlight = false;
-	const voidAfterIntent = async () => {
+	let inFlight: Route | null = null;
+	const voidAfterAnswer = async () => {
 		const reason = pendingCancel;
 		pendingCancel = null;
 		if (reason === null || !active()) return false;
@@ -228,7 +230,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	// way: 200, or "not found") or the leg's deadline passed, whether it failed in transit or met a
 	// held lock (Codex 4338931660 on #2798, 4343940265 on #2834).
 	const intentEnds = async () => {
-		if (await voidAfterIntent()) return true;
+		if (await voidAfterAnswer()) return true;
 		if (state.cancelRequested || deps.now() < state.deadlineAt) return false;
 		setState({ phase: 'creating', capturing: false });
 		await cancel('deadline');
@@ -241,7 +243,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
 		if (route === 'void') voidReason = reason;
 		let data: ServerLegResponse;
-		if (route === 'intent') intentInFlight = true;
+		inFlight = route;
 		try {
 			let response: { data: unknown };
 			const release = route === 'capture' ? holdLiveTab('payment') : undefined;
@@ -267,11 +269,11 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
 				return;
 			}
-			intentInFlight = false;
+			if (seq === sequence) inFlight = null;
 			if (current(seq)) await handleError(error, route, seq);
 			return;
 		}
-		intentInFlight = false;
+		if (seq === sequence) inFlight = null;
 		// Answered: the poster settles the intent's journal entry with this answer.
 		if (route === 'intent') finality.intent = null;
 		if (!current(seq)) return;
@@ -284,7 +286,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			...(route === 'intent' ? { deadlineAt: deadline(data.payment, deps.now()) } : {}),
 			...(route === 'void' ? { releaseAvailable: true } : {}),
 		});
-		if (route === 'intent' && (await voidAfterIntent())) return;
+		if (await voidAfterAnswer()) return;
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
@@ -323,6 +325,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		)
 			return;
 		if (!current(seq)) return;
+		// A poll that failed while a cancel waited on it: the void answers either way.
+		if (route === 'status' && (await voidAfterAnswer())) return;
 		if (
 			route === 'intent' &&
 			code === 'wcpos_payment_in_flight' &&
@@ -342,7 +346,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 				deadlineAt: deadline(state.row, deps.now()),
 			});
 			event('Joined the payment already in progress', 'info');
-			if (await voidAfterIntent()) return;
+			if (await voidAfterAnswer()) return;
 			schedule(0);
 			return;
 		}
@@ -466,8 +470,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		)
 			return;
 		if (reason === 'cashier') event('Cancel requested by cashier');
-		if (intentInFlight) {
-			// The intent has not answered yet: remember the cancel, void when it does.
+		if (inFlight === 'intent' || inFlight === 'status') {
+			// Keep the in-flight answer current: remember the cancel, void once it is mirrored.
 			pendingCancel = reason;
 			setState({
 				phase: 'cancelling',
