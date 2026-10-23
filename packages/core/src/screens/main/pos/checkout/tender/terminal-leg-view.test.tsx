@@ -395,6 +395,7 @@ const tile = (method: PaymentMethodDescriptor) => ({
 	disabled: false,
 	reason: null,
 	worksOffline: false,
+	settlesLater: false,
 });
 it.each(['online', 'offline'] as const)(
 	'shows server connectivity only for an online reader (%s)',

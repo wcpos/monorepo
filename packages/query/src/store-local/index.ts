@@ -9,6 +9,7 @@ export {
 	CLAIM_LEASE_MS,
 	claimHeld,
 	claimRoute,
+	dropUnsent,
 	markSent,
 	nextClaimExpiry,
 	observeMoneyJournal,

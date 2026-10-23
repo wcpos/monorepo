@@ -16,6 +16,7 @@ const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockPosterInput = jest.fn();
 const mockSettle = jest.fn(async () => undefined);
+const mockDefer = jest.fn(async (_url: string, body: unknown) => body);
 const mockLoggerError = jest.fn();
 const mockT = jest.fn();
 const mockEngineRequire = jest.fn((_input: unknown) => ({
@@ -30,6 +31,9 @@ jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
 let mockJournal: { kind: string; sentAt: string | null; body: Record<string, unknown> }[] = [];
 jest.mock('@wcpos/query/store-local', () => ({
 	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
+}));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost, get: mockGet }),
@@ -71,6 +75,7 @@ jest.mock('@wcpos/query', () => ({
 					await mockSettle();
 				},
 				settle: mockSettle,
+				defer: mockDefer,
 			}
 		);
 	},
@@ -147,20 +152,50 @@ beforeEach(() => {
 	mockJournal = [];
 });
 
-// ADR 0040 PR A: a tender the server cannot hear is refused (CHECKOUT101); PR B queues it.
-it('refuses an offline row with CHECKOUT101 and writes nothing', async () => {
+// ADR 0040 Decided 1 rules 2-3 (replaces "refuses an offline row with CHECKOUT101"): the row is
+// journaled through the poster's defer, never posted, and the local mirror asserts its status.
+it('an offline row goes through post.defer with provenance, local mirror asserts status', async () => {
+	const calls: string[] = [];
+	mockLocalPatch.mockImplementationOnce(async ({ data }) => {
+		Object.assign(order.payload, data);
+		calls.push('stamped');
+		return { document: order };
+	});
+	mockDefer.mockImplementationOnce(async (_url, body) => {
+		calls.push('deferred');
+		return body;
+	});
 	const { result } = renderHook(() => useRecordManualPayment());
 
 	await expect(
-		result.current(order, method, { session: gateSession(), amount: 40, tendered: 50 })
-	).resolves.toEqual({ kind: 'failed', reason: 'offline_unavailable' });
+		result.current(order, method, { session: gateSession(), amount: 100, tendered: 100 })
+	).resolves.toMatchObject({ kind: 'recorded', via: 'offline', order: null });
 
-	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(calls.slice(0, 2)).toEqual(['stamped', 'deferred']);
+	expect(mockPosterInput.mock.calls[0][0].provenance).toEqual(expect.any(Function));
+	expect(mockDefer).toHaveBeenCalledWith('orders/1042/payments', {
+		payment: expect.objectContaining({ amount: '100.00', recorded_offline: true }),
+	});
 	expect(mockPost).not.toHaveBeenCalled();
-	expect(mockLoggerError).toHaveBeenCalledWith(
-		'Checkout failed',
-		expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({
+			changes: expect.objectContaining({ order: { status: 'completed' }, local: true }),
+		})
 	);
+	expect(mockLoggerError).not.toHaveBeenCalled();
+});
+
+it('offline completion stamps meta without a push', async () => {
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { session: gateSession(), amount: 100 }));
+
+	expect(mockLocalPatch.mock.calls[0][0]).toEqual({
+		document: order,
+		data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+	});
+	expect(jest.requireMock('../sale-completion').persistSaleProvenance).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
 });
 
 it('refreshes the order over REST when a refusal omits the server summary', async () => {

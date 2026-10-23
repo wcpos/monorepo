@@ -15,8 +15,9 @@ import { getSumUpReader } from '../../../modules/sumup-reader';
 //
 // KEPT ON PURPOSE (Paul, 2026-10-23; monorepo#2847 closed unmerged). Nothing starts a SumUp
 // offline session today: `startOfflineSession` has no caller because offline tenders do not
-// queue (`OFFLINE_TENDERS_QUEUE` in core's checkout/tender/tiles.ts is false until the offline
-// tender outbox of ADR 0040 §offline is designed). The session query, the upload before a
+// queue: the outbox's first slices journal manual records (`OFFLINE_TENDERS_QUEUE` in core's
+// checkout/tender/tiles.ts flips in slice B), and a device `queue` is a later slice (ADR 0040
+// Decided 1 rule 2). The session query, the upload before a
 // checkout, the reconnect sync and the `authorized` outcome for an in-session checkout below
 // still run; with no session ever started they find none and do nothing. They are the SumUp half
 // of that outbox, validated on a physical Solo in #2495: not dead code to delete, they wait for

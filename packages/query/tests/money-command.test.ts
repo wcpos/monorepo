@@ -347,6 +347,28 @@ describe('sendMoneyCommand: the envelope', () => {
 		expect(store.rows.size).toBe(1);
 	});
 
+	// ADR 0040 Decided 1 rule 3: the offline record's edits (its provenance stamp) go first.
+	it('a deferred record is re-sent after the pending push, same id and body, one row', async () => {
+		const deferred = await poster({
+			provenance: async () => ({ register_id: 'reg', sale_counter: '3' }),
+		}).defer('orders/5/payments', { payment: cash() });
+		await dirty();
+		jest.mocked(pushRecord).mockImplementation(clean);
+		const revision = store.revision;
+		expect(await recover()).toEqual([
+			{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'record' })] },
+		]);
+		expect(jest.mocked(pushRecord).mock.invocationCallOrder[0]).toBeLessThan(
+			store.post.mock.invocationCallOrder[0]
+		);
+		const [body] = sentBodies();
+		expect(JSON.stringify(body)).toBe(JSON.stringify({ ...deferred.body, revision }));
+		expect((body.payment as PaymentRow).id).toBe(deferred.id);
+		expect(body).not.toHaveProperty('command_id');
+		expect(store.rows.size).toBe(1);
+		expect(await entries()).toEqual([]);
+	});
+
 	it.each([
 		[404, 'rest_no_route', 0],
 		[422, 'wcpos_a_code_nobody_listed', 0],
@@ -891,6 +913,69 @@ describe('moneyCommandPoster', () => {
 		await post.mirror({ order: store.summary() as never });
 		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
 		expect(await chain()).toBeNull();
+	});
+});
+
+describe('defer: a record journaled offline (ADR 0040 Decided 1)', () => {
+	it('defer journals a record as sent-undispatched, no POST', async () => {
+		const deferred = await poster().defer('orders/5/payments', { payment: cash() });
+		expect(store.post).not.toHaveBeenCalled();
+		expect(deferred).toMatchObject({ id: 'row-1', kind: 'record', sentRevision: null });
+		expect(await entries()).toEqual([
+			expect.objectContaining({
+				id: 'row-1',
+				sentAt: expect.any(String),
+				sentRevision: null,
+				claimedBy: null,
+			}),
+		]);
+		await expect(poster().defer('orders/5/close', {})).rejects.toThrow(
+			'money_command_not_deferrable'
+		);
+	});
+
+	it('defer on an already-journaled row id returns it', async () => {
+		const first = await poster().defer('orders/5/payments', { payment: cash() });
+		const again = await poster().defer('orders/5/payments', { payment: cash('row-1', '99.00') });
+		expect(again).toMatchObject({ id: 'row-1', body: first.body, sentAt: first.sentAt });
+		expect(await entries()).toEqual([expect.objectContaining({ id: 'row-1', claimedBy: null })]);
+		expect(store.post).not.toHaveBeenCalled();
+	});
+
+	it('a failed re-send pre-flight keeps a deferred entry and reports unanswered', async () => {
+		await poster().defer('orders/5/payments', { payment: cash() });
+		await dirty();
+		jest.mocked(pushRecord).mockRejectedValue(httpError(422, 'rest_invalid_param'));
+		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(store.post).not.toHaveBeenCalled();
+		expect(await entries()).toEqual([
+			expect.objectContaining({ id: 'row-1', sentRevision: null, claimedBy: null }),
+		]);
+	});
+
+	it('a refused deferred record mirrors the failed row, settles, and is returned as refused', async () => {
+		await poster().defer('orders/5/payments', { payment: cash() });
+		const failed = { ...cash(), status: 'failed' } as PaymentRow;
+		store.rows.set('row-1', failed); // the store stored the refused row as failed
+		store.post.mockRejectedValueOnce(
+			httpError(409, 'wcpos_order_already_paid', { payment: failed, order: store.summary() })
+		);
+		expect(await recover()).toEqual([
+			{
+				orderUuid: 'order',
+				answers: [],
+				refused: {
+					code: 'wcpos_order_already_paid',
+					row: expect.objectContaining({ id: 'row-1', status: 'failed' }),
+					summary: expect.objectContaining({ status: 'pos-open' }),
+				},
+			},
+		]);
+		expect(await entries()).toEqual([]);
+		expect(readLedger((await residentJSON()).payload.meta_data as never)).toEqual([
+			expect.objectContaining({ id: 'row-1', status: 'failed' }),
+		]);
+		expect(await recover()).toEqual([]);
 	});
 });
 

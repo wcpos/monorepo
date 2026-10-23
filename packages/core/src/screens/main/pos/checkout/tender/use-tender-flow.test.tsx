@@ -14,7 +14,13 @@ import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { recordCompletionAttempt, rememberedReaders } from '@wcpos/query/store-local';
+import {
+	failCompletionAttempt,
+	readOrderCommands,
+	recordCompletionAttempt,
+	rememberedReaders,
+	resolveCompletionAttempt,
+} from '@wcpos/query/store-local';
 
 import {
 	createActionContext,
@@ -43,6 +49,7 @@ import {
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
+import * as tilesModule from './tiles';
 import { useTenderFlow } from './use-tender-flow';
 import { passThroughPoster } from '../../../../../services/terminal-payments/pass-through-poster.test-utils';
 
@@ -88,6 +95,7 @@ const mockResend = jest.fn(
 	): Promise<{ kind: string; data: Record<string, unknown> }[]> => []
 );
 const mockPosterInputs: { approval: unknown }[] = [];
+const mockDefer = jest.fn(async (_url: string, body: unknown) => body);
 const mockStoreDB = {
 	addState: jest.fn(async () => mockReaderState),
 	getLocal$: () => mockJournal$,
@@ -391,6 +399,7 @@ jest.mock('@wcpos/query', () => ({
 					});
 			},
 			settle: async () => undefined,
+			defer: (url: string, body: unknown) => mockDefer(url, body),
 		});
 	},
 	resendOpenCommands: (...args: Parameters<typeof import('@wcpos/query').resendOpenCommands>) =>
@@ -457,7 +466,8 @@ describe('useTenderFlow', () => {
 		mockSize = 'sm';
 		resetCheckoutMode();
 		jest.clearAllMocks();
-		mockPayload = { total: '92.95', meta_data: [] };
+		// A store order: a manual leg journals against `orders/{id}/payments` (ADR 0040 Decided 1).
+		mockPayload = { id: 42, total: '92.95', meta_data: [] };
 		mockMethods = methods;
 		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
@@ -1297,6 +1307,7 @@ describe('useTenderFlow', () => {
 	it('an offline device authorization never advances a split plan to its next leg', async () => {
 		const plan = { kind: 'even' as const, ways: 3, from: 0 };
 		mockPayload = {
+			id: 42,
 			total: '90.00',
 			meta_data: withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]),
 		};
@@ -4764,3 +4775,161 @@ jest.mock('@wcpos/query/mutations', () => ({
 		return mockManualMirror({ manager, collection: 'orders', recordId, changes });
 	},
 }));
+
+// ADR 0040 Decided 1, slice A: the switch ships off; these drive the envelope with it mocked on.
+describe('offline manual tenders (switch mocked on)', () => {
+	const switchOn = () =>
+		jest.replaceProperty(
+			tilesModule as { OFFLINE_TENDERS_QUEUE: boolean },
+			'OFFLINE_TENDERS_QUEUE',
+			true
+		);
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		switchOn();
+		mockBindingStatus = 'bound';
+		mockSessionsOn = false;
+		mockLeg = null;
+		mockSize = 'sm';
+		mockOnlineStatus = 'offline';
+		mockMethods = methods;
+		mockMethodsLoaded = true;
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockPayload = { id: 42, total: '10.00', meta_data: [] };
+		mockRecordManualPayment.mockResolvedValue({ ...recorded, via: 'offline' });
+		mockCompleteOrderFlow.mockResolvedValue(undefined);
+		mockLocalPatch.mockImplementation(async ({ document, data }) => {
+			if (data?.meta_data) mockPayload = { ...mockPayload, meta_data: data.meta_data };
+			return { document };
+		});
+		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
+			mockPayload = { ...mockPayload, ...changes };
+		});
+	});
+	afterEach(() => {
+		mockUseRealManual = false;
+		mockUseRealCompletion = false;
+		mockOnlineStatus = 'online-website-available';
+		mockManualMirror.mockReset();
+		mockLocalPatch.mockReset();
+		jest.mocked(readOrderCommands).mockResolvedValue({ entries: [], chain: null });
+		jest.restoreAllMocks();
+	});
+
+	it('offline manual record completes and keeps the attempt awaiting adoption', async () => {
+		mockUseRealManual = true;
+		mockUseRealCompletion = true;
+		enterCheckout(order.uuid);
+		const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+		view.unmount();
+
+		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
+			payment: expect.objectContaining({ amount: '10.00', recorded_offline: true }),
+		});
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockPayload.status).toBe('completed');
+		expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(true);
+		// The store has not answered: the bridge finishes the sale once it does (rule 3).
+		// The sale context's storeDB is undefined in this suite (as `recordCompletionAttempt` above).
+		expect(failCompletionAttempt).toHaveBeenCalledWith(undefined, order.uuid, 'unconfirmed', {
+			awaitingAdoption: true,
+		});
+		expect(resolveCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
+	it('a deferred record does not gate the tender; second leg mints a new row', async () => {
+		mockUseRealManual = true;
+		const first = payment({ id: 'row-a', amount: '4.00', tendered: null, recorded_offline: true });
+		mockPayload = { id: 42, total: '10.00', meta_data: withLedger([], [first]) };
+		const deferred = {
+			id: 'row-a',
+			kind: 'record',
+			sentAt: '2026-10-23T10:00:00Z',
+			sentRevision: null,
+			body: { payment: first },
+		};
+		jest.mocked(readOrderCommands).mockResolvedValue({ entries: [deferred], chain: null } as never);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() =>
+			mockJournal$.next({
+				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-a': deferred } } } } }),
+			})
+		);
+
+		expect(result.current.unansweredCommand).toBe(false);
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			disabled: false,
+			settlesLater: true,
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockDefer).toHaveBeenCalledTimes(1);
+		const [, body] = mockDefer.mock.calls[0] as [string, { payment: PaymentRow }];
+		expect(body.payment).toMatchObject({ amount: '6.00', recorded_offline: true });
+		expect(body.payment.id).not.toBe('row-a');
+	});
+
+	it('no store id → order_not_on_store_yet', async () => {
+		mockPayload = { total: '10.00', meta_data: [] };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_not_on_store_yet',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('confirmOfflineTender false → nothing journaled', async () => {
+		const confirmOfflineTender = jest.fn(async () => false);
+		const { result } = renderHook(() =>
+			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
+		);
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(confirmOfflineTender).toHaveBeenCalledWith({
+			method: cash,
+			amountMinor: 1000,
+			queuedOffline: false,
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
+		let answer: (confirmed: boolean) => void = () => {};
+		const confirmOfflineTender = jest.fn(
+			() => new Promise<boolean>((resolve) => (answer = resolve))
+		);
+		const { result } = renderHook(() =>
+			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
+		);
+		act(() => result.current.pickMethod('pos_cash'));
+		const first = result.current.takeTender();
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			answer(false);
+			await first;
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+
+		confirmOfflineTender.mockRejectedValueOnce(new Error('prompt lost'));
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(2);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		// Freed: the next press asks again.
+		confirmOfflineTender.mockResolvedValueOnce(false);
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(3);
+	});
+});

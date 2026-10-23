@@ -231,7 +231,9 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		liveRows: [],
 		hasLiveLeg: false,
 		online: true,
-		tiles: [{ method: method(), disabled: false, reason: null, worksOffline: true }],
+		tiles: [
+			{ method: method(), disabled: false, reason: null, worksOffline: true, settlesLater: false },
+		],
 		legacyMethods: [],
 		methodsLoaded: true,
 		unsupportedSchema: false,
@@ -337,6 +339,7 @@ describe('TenderCheckout', () => {
 					disabled: true,
 					reason: 'unsupported_mode',
 					worksOffline: false,
+					settlesLater: false,
 				},
 			],
 		});

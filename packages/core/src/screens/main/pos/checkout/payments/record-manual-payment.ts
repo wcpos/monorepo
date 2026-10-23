@@ -8,7 +8,13 @@ import {
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 } from '@wcpos/sync-core';
-import { derive, mintManualPayment, readLedger, toMinor } from '@wcpos/order-math';
+import {
+	derive,
+	mintManualPayment,
+	readLedger,
+	toMinor,
+	upsertPaymentRow,
+} from '@wcpos/order-math';
 import type {
 	MetaDataEntry,
 	OrderPaymentSummary,
@@ -20,9 +26,9 @@ import type {
  * Record a `manual` payment (cash, dummy card) against an order — Payments Contract v1
  * §5 / §7 (wcpos/roadmap#142). The ledger lives in the order's `_wcpos_payments`
  * typed meta, which the server owns: a row goes through `POST orders/{id}/payments` as a
- * journaled money command and the server's copy is mirrored back; offline it is refused
- * until the offline tender outbox exists (ADR 0040 §offline). Pure apart from the injected
- * deps so the decision tree is testable.
+ * journaled money command and the server's copy is mirrored back; offline the record is
+ * journaled for the recovery to send on reconnect and the till's own derivation is mirrored
+ * (ADR 0040 Decided 1). Pure apart from the injected deps so the decision tree is testable.
  */
 
 export interface RecordManualPaymentOrder {
@@ -47,9 +53,14 @@ export interface RecordManualPaymentDeps {
 	storeId: number | null;
 	registerId: string | null;
 	sessionId?: string | null;
-	persistProvenance?: () => Promise<void>;
+	/** `push: false` offline: the stamp is saved locally and rides the deferred record's push. */
+	persistProvenance?: (options: { push: boolean }) => Promise<void>;
+	/** Journal the record without sending it (the poster's `defer`): the offline path. */
+	journal: (url: string, body: unknown) => Promise<unknown>;
 	currency: string;
 	dp: number;
+	/** Every descriptor the till holds: the derived status reads the primary leg's method. */
+	methods?: readonly PaymentMethodDescriptor[];
 	sleep?: (ms: number) => Promise<void>;
 	/**
 	 * A record the store may hold but never answered (the journal keeps it sent): the press
@@ -60,7 +71,7 @@ export interface RecordManualPaymentDeps {
 	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
 	mirror: (
 		answer: { payment: PaymentRow; status?: string },
-		options: { accepted: boolean }
+		options: { accepted: boolean; local?: true }
 	) => Promise<void>;
 	/**
 	 * The order's status as the server holds it, for a refusal whose body omits the
@@ -123,13 +134,44 @@ export class RecordManualPaymentMirrorError extends Error {
 	}
 }
 
+/**
+ * ADR 0040 Decided 1 rules 2-3: journaled, never sent, and the till asserts its derived status
+ * (`local`). Only the journal says "unanswered": a reconnect can adopt the unpaid store document.
+ */
+async function recordOffline(
+	order: RecordManualPaymentOrder,
+	method: PaymentMethodDescriptor,
+	row: PaymentRow,
+	deps: RecordManualPaymentDeps
+): Promise<RecordManualPaymentOutcome> {
+	try {
+		await deps.journal(`orders/${order.id}/payments`, { payment: row });
+	} catch (error) {
+		const reason = error instanceof MoneyCommandError ? error.reason : 'preflight_failed';
+		return { kind: 'failed', reason, cause: error };
+	}
+	const rows = upsertPaymentRow(readLedger(order.meta_data), row);
+	// The primary (largest) leg may be an earlier one of another method: its descriptor decides
+	// the status (`defaults.order_status`), never a silent `completed` fallback.
+	const methods = [...(deps.methods ?? []), method];
+	const { status } = derive(order.total, rows, methods, { dp: deps.dp });
+	const outcome = { kind: 'recorded', via: 'offline', row, order: null } as const;
+	try {
+		await deps.mirror({ payment: row, status }, { accepted: true, local: true });
+	} catch (mirrorError) {
+		throw new RecordManualPaymentMirrorError(outcome, mirrorError);
+	}
+	return outcome;
+}
+
 export async function recordManualPayment(
 	order: RecordManualPaymentOrder,
 	method: PaymentMethodDescriptor,
 	input: RecordManualPaymentInput,
 	deps: RecordManualPaymentDeps
 ): Promise<RecordManualPaymentOutcome> {
-	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
+	const hasId = Number.isInteger(order.id) && Number(order.id) > 0;
+	const online = deps.isOnline() && hasId;
 	const minted = mintManualPayment({
 		method,
 		amount: input.amount,
@@ -146,20 +188,20 @@ export async function recordManualPayment(
 		dp: deps.dp,
 	});
 	if (!minted.ok) return { kind: 'invalid', reason: minted.reason };
-	// Offline cash is refused: offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false). A
-	// tender taken offline is money the store cannot see until reconnect, and the offline tender
-	// outbox is a separate change (ADR 0040 §offline).
-	if (!online) return { kind: 'failed', reason: 'offline_unavailable' };
+	// An order created offline has no `orders/{id}/payments` route to journal against: its own
+	// slice. The tender refuses it first (`order_not_on_store_yet`); this is the backstop.
+	if (!hasId) return { kind: 'failed', reason: 'offline_unavailable' };
 	const row = (await deps.unansweredRecord?.()) ?? minted.row;
 
 	const { balance } = derive(order.total, readLedger(order.meta_data), [method], { dp: deps.dp });
 	if (toMinor(row.amount, deps.dp) === toMinor(balance, deps.dp)) {
 		try {
-			await deps.persistProvenance?.();
+			await deps.persistProvenance?.({ push: online });
 		} catch {
 			return { kind: 'failed', reason: 'provenance_save_failed' };
 		}
 	}
+	if (!online) return recordOffline(order, method, row, deps);
 
 	// Only the request is inside the try: once the server has answered 2xx the row is
 	// recorded, and a failure while mirroring it locally must surface as that failure —

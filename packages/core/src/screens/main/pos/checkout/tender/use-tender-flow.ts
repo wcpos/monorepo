@@ -251,7 +251,21 @@ function closeMessage(
 	return t('pos_checkout.close_needs_connection');
 }
 
-export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost): TenderFlow {
+export interface TenderFlowOptions {
+	/** The cashier confirms a tender the store cannot hear yet (ADR 0040 D1 rule 1); false: none. */
+	confirmOfflineTender?: (facts: {
+		method: PaymentMethodDescriptor;
+		amountMinor: number;
+		queuedOffline: boolean;
+	}) => Promise<boolean>;
+}
+const confirmByDefault = async () => true;
+
+export function useTenderFlow(
+	order: EngineRecord<'orders'>,
+	host: CheckoutHost,
+	{ confirmOfflineTender = confirmByDefault }: TenderFlowOptions = {}
+): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
@@ -268,7 +282,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
 	React.useEffect(() => {
 		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
-			next: (entries) => setSentCommands(entries.filter(({ sentAt }) => sentAt !== null).length),
+			// A deferred offline record (sent, no revision) is journaled, not unanswered: gating on it
+			// would block an offline split's next leg (ADR 0040 Decided 1 rule 3).
+			next: (entries) =>
+				setSentCommands(entries.filter(({ sentRevision }) => sentRevision !== null).length),
 			error: () => undefined,
 		});
 		return () => subscription.unsubscribe();
@@ -836,7 +853,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 			service?.get(order.uuid)
 		)
 			return;
+		// Busy from here: a second press while the cashier is still answering the offline
+		// confirmation must not open a second prompt. A decline or a throwing prompt frees it.
 		busyRef.current = true;
+		if (method?.capture.mode === 'manual' && (!online || queuedOffline)) {
+			const confirmed = await confirmOfflineTender({
+				method,
+				amountMinor: enteredLegMinor,
+				queuedOffline,
+			}).catch(() => false);
+			if (!confirmed) {
+				busyRef.current = false;
+				return;
+			}
+		}
 		setBusy(true);
 		setPressing(true);
 		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
@@ -1245,6 +1275,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 				return;
 			}
 
+			// An order the store has not created has no route to journal a record against (its own
+			// slice): refused before a rounding fee is written.
+			if (!payload.id) {
+				logger.info(t('pos_checkout.order_not_on_store_yet'), {
+					showToast: true,
+					context: orderContext,
+				});
+				return;
+			}
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
@@ -1449,6 +1488,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		}
 	}, [
 		unansweredCommand,
+		confirmOfflineTender,
 		actionCtx,
 		actionActor,
 		ctx,

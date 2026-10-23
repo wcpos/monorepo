@@ -21,6 +21,7 @@ import {
 } from '../../src/store-local';
 import {
 	CHAIN_RETENTION_MS,
+	deferEntry,
 	dropUnsent,
 	readMoneyJournal,
 	retireChain,
@@ -223,4 +224,21 @@ it('the live reads follow the journal', async () => {
 	]);
 	expect(await firstValueFrom(observeOrderCommands(tab, 'order'))).toHaveLength(1);
 	expect(await firstValueFrom(observeOrderCommands(tab, 'elsewhere'))).toEqual([]);
+});
+
+// ADR 0040 Decided 1 rule 3: an offline record is journaled, never dispatched.
+it('deferEntry marks sent with no revision and releases the claim; nextClaimExpiry/observe treat it as unanswered', async () => {
+	const tab = await open();
+	await claimRoute(tab, route, 'tab-a', candidate('command-a'));
+	expect(await deferEntry(tab, 'order', 'command-a', 'tab-b')).toBeNull();
+	const deferred = await deferEntry(tab, 'order', 'command-a', 'tab-a');
+	expect(deferred).toMatchObject({ sentRevision: null, claimedBy: null, claimedAt: null });
+	expect(deferred?.sentAt).toEqual(expect.any(String));
+	// Unclaimed and sent: no lapse to wait for, re-sendable now, never dropped as a crash leftover.
+	expect(await nextClaimExpiry(tab, 'test-scope')).toBeNull();
+	await dropUnsent(tab, 'order', 'command-a', null);
+	expect(await firstValueFrom(observeOrderCommands(tab, 'order'))).toEqual([
+		expect.objectContaining({ id: 'command-a', sentAt: deferred?.sentAt, sentRevision: null }),
+	]);
+	expect(await claimRoute(tab, route, 'tab-b', null)).toMatchObject({ status: 'open' });
 });

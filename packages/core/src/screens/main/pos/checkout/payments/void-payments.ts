@@ -71,9 +71,9 @@ export async function voidPayments(
 	}
 
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
-	// A void the server cannot hear is not sent, and nothing is voided locally: offline tenders do
-	// not queue (OFFLINE_TENDERS_QUEUE is false); the offline tender outbox is a separate change
-	// (ADR 0040 §offline). A retained captured leg is reported once a cancel can reach the store.
+	// A void the server cannot hear is not sent, and nothing is voided locally: the offline tender
+	// outbox journals manual records only (ADR 0040 Decided 1; OFFLINE_TENDERS_QUEUE flips in slice
+	// B for those). A retained captured leg is reported once a cancel can reach the store.
 	if (!online) return { kind: 'offline', paymentIds: liveRows.map(({ id }) => id) };
 	const deviceHeld = liveRows.filter(
 		(row) => row.capture_mode === 'device' && row.recorded_offline && row.status === 'authorized'

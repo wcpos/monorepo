@@ -551,11 +551,17 @@ export async function completeSale(
 			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
 		// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
+		// An offline record completes at the till but the store has not answered it (ADR 0040
+		// Decided 1 rule 3): the attempt awaits adoption, and the bridge finishes it once answered.
+		const offline =
+			outcome.source === 'manual' && outcome.via === 'offline' && result.outcome === 'completed';
 		const kept =
+			offline ||
 			result.outcome === 'unconfirmed' ||
 			(outcome.source === 'replay' && result.outcome !== 'completed');
 		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
-		else if (result.outcome === 'unconfirmed') await awaitAdoption(ctx.storeDB, order.uuid);
+		else if (offline || result.outcome === 'unconfirmed')
+			await awaitAdoption(ctx.storeDB, order.uuid);
 		return result.outcome;
 	} catch (error) {
 		try {

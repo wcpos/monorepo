@@ -89,6 +89,8 @@ export interface TenderTile {
 	reason: TileDisabledReason | null;
 	/** capabilities.offline === 'record' — the tile carries a "works offline" flag. */
 	worksOffline: boolean;
+	/** Enabled offline: journaled, sent on reconnect; the tile must say so (ADR 0040 D1 rule 1). */
+	settlesLater: boolean;
 }
 /** The order the POS settings page assigns, then title, so the grid never reshuffles itself. */
 function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDescriptor): number {
@@ -97,18 +99,13 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
 }
 
 /**
- * Offline tenders do not queue yet (ADR 0040 §offline): a tender the store cannot hear is
- * refused. A manual `offline: 'record'` tile is disabled with the `offline` reason while the till
- * is offline or the order's save is queued, as every device tile is.
- *
- * This switch is the offline tender outbox's entry point, not a feature flag to tune: it flips
- * to true in the slice that lets a tender journal while the store cannot hear it (the money
- * command journal already re-sends on reconnect and the store replays a `record` by id, ADR 0040
- * rule 5). What that slice still needs, and the product question it waits on, is written in
- * woocommerce-pos ADR 0040, "Offline tenders: status". The SumUp offline-session code in
- * apps/main (driver and native module) is the device half of the same outbox and is kept for it
- * (Paul, 2026-10-23): nothing starts a session while this is false, and its session query,
- * upload and reconnect sync run and find none.
+ * The offline tender switch (ADR 0040 "Offline tenders: status", Decided 1); off, a manual
+ * `offline: 'record'` tile is disabled offline, as every device tile is. Slice A built what it
+ * enables: the poster's `defer`, the offline `recordManualPayment`, the attempt awaiting adoption,
+ * the recovery's re-send and refusal attention, `settlesLater` and the `confirmOfflineTender`
+ * seam. Slice B flips it once it renders `settlesLater`, the "awaiting store" marks (an open
+ * journal entry, never the status) and the dialog on that seam. A device `queue` (SumUp, whose
+ * kept offline-session code is its half, Paul 2026-10-23) is a later slice. Not a tunable flag.
  */
 export const OFFLINE_TENDERS_QUEUE = false;
 
@@ -172,15 +169,18 @@ export function buildTenderTiles(
 					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
 			} else if (
 				!options.online &&
-				(method.capabilities.offline === 'none' || !OFFLINE_TENDERS_QUEUE)
+				(method.capabilities.offline !== 'record' || !OFFLINE_TENDERS_QUEUE)
 			) {
 				reason = 'offline';
 			}
+			const worksOffline =
+				method.capture.mode === 'manual' && method.capabilities.offline === 'record';
 			return {
 				method,
 				disabled: reason !== null,
 				reason,
-				worksOffline: method.capture.mode === 'manual' && method.capabilities.offline === 'record',
+				worksOffline,
+				settlesLater: !options.online && reason === null && worksOffline,
 			};
 		});
 }

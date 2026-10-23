@@ -4,6 +4,7 @@ import { registerDriver } from '../../../../../services/payment-drivers/registry
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { driverReady } from './use-driver-status';
+import * as tilesModule from './tiles';
 import {
 	buildTenderTiles,
 	initialReaderId,
@@ -126,6 +127,54 @@ describe('buildTenderTiles', () => {
 			{ disabled: true, reason: 'offline' },
 			{ disabled: true, reason: 'offline' },
 		]);
+	});
+});
+
+// ADR 0040 Decided 1: the switch stays off in slice A; slice B flips it. Flipped here as a mock.
+describe('the offline tender switch', () => {
+	const switchOn = () =>
+		jest.replaceProperty(
+			tilesModule as { OFFLINE_TENDERS_QUEUE: boolean },
+			'OFFLINE_TENDERS_QUEUE',
+			true
+		);
+	afterEach(() => jest.restoreAllMocks());
+
+	it("with the switch on, a manual record-capable tile is enabled offline and settlesLater; device, gateway, server and offline:'none' stay offline", () => {
+		switchOn();
+		registerDriver(createSimulatedDriver());
+		const methods = [
+			makeMethod({ id: 'cash' }),
+			makeMethod({ id: 'online-only', order: 2, capabilities: { offline: 'none' } }),
+			{ ...deviceMethod, order: 3 },
+			makeMethod({ id: 'invoice', order: 4, capture: { mode: 'gateway' } }),
+			{ ...server, id: 'terminal', order: 5 },
+		];
+		const tiles = buildTenderTiles(methods, { online: false });
+		expect(
+			tiles.map(({ method, disabled, reason, settlesLater }) => [
+				method.id,
+				disabled,
+				reason,
+				settlesLater,
+			])
+		).toEqual([
+			['cash', false, null, true],
+			['online-only', true, 'offline', false],
+			[deviceMethod.id, true, 'offline', false],
+			['invoice', true, 'offline', false],
+			['terminal', true, 'offline', false],
+		]);
+	});
+
+	it('settlesLater is false online', () => {
+		switchOn();
+		const [cash] = buildTenderTiles([makeMethod()], { online: true });
+		expect(cash).toMatchObject({ disabled: false, worksOffline: true, settlesLater: false });
+		// And off (slice A ships it off), an offline manual tile is disabled and never settles later.
+		jest.restoreAllMocks();
+		const [offline] = buildTenderTiles([makeMethod()], { online: false });
+		expect(offline).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
 	});
 });
 

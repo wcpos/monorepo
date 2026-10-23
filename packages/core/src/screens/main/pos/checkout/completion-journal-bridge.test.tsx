@@ -32,6 +32,7 @@ const mockReceipt = jest.fn();
 const mockInfo = jest.fn();
 const mockDebug = jest.fn();
 const mockWarn = jest.fn();
+const mockError = jest.fn();
 let mockStartVersion = 0;
 const mockStartListeners = new Set<() => void>();
 const startService = () => {
@@ -84,8 +85,16 @@ jest.mock('@wcpos/utils/logger', () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
 		debug: (...args: unknown[]) => mockDebug(...args),
 		warn: (...args: unknown[]) => mockWarn(...args),
+		error: (...args: unknown[]) => mockError(...args),
 	}),
 }));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
+	const t = createTestT();
+	return { useT: () => t };
+});
 
 const resident = (uuid = 'order', status = 'completed') => ({
 	uuid,
@@ -1546,4 +1555,162 @@ it('waits for a whole-document adoption before finishing an adopted sale', async
 	act(() => adoptions.next(['order'])); // the pull adopts the whole document
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(mockHoldsAnswer).toHaveBeenCalledWith(mockManager, mockContext.storeDB, 'order');
+});
+
+// ADR 0040 Decided 1, slice A: an offline record is journaled sent-undispatched. Its order has an
+// open journal entry until the recovery answers it; the bridge reads that, never the status.
+const deferredRecord = (orderUuid: string) => ({
+	orderUuid,
+	scope: 'scope-1',
+	kind: 'record',
+	path: 'orders/42/payments',
+	target: null,
+	id: `${orderUuid}-row`,
+	body: { payment: { id: `${orderUuid}-row`, amount: '10.00' } },
+	approval: { total: '10.00', currency: 'USD' },
+	sentAt: '2026-10-23T10:00:00.000Z',
+	sentRevision: null,
+	claimedBy: null,
+	claimedAt: null,
+});
+/** The money journal's local document, written whole: the order's open entries. */
+async function setJournal(orderUuid: string, entries: { id: string }[]) {
+	await mockContext.storeDB.upsertLocal('money-commands', {
+		orders: {
+			[orderUuid]: { entries: Object.fromEntries(entries.map((e) => [e.id, e])), chain: null },
+		},
+	});
+}
+
+it('an awaiting-adoption sale is not finished while its record is open; finished once answered and adopted', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	mockOnline = 'offline';
+	render(<SaleCompletionBridge />);
+	await drain();
+	await setJournal('order', [deferredRecord('order')]);
+	await record();
+	await owner.awaitAdoption(mockContext.storeDB, 'order');
+	// The resident reads paid (the till's own derivation) and `residentHoldsAnswer` holds with no
+	// chain: only the open entry says the store has not answered.
+	act(() => adoptions.next(['order']));
+	await drain();
+	await drain();
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect(mockHoldsAnswer).not.toHaveBeenCalled();
+	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+		awaitingAdoption: true,
+	});
+	await setJournal('order', []); // the recovery's re-send answered and settled it
+	act(() => adoptions.next(['order'])); // the post-answer refresh adopts the paid order
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+	['unpaid', () => resident('order', 'pos-open')],
+	['not resident', () => null],
+])(
+	'an offline start neither counts unpaid nor abandons an attempt with an open record (%s)',
+	async (_case, found) => {
+		mockOnline = 'offline';
+		await setJournal('order', [deferredRecord('order')]);
+		await record();
+		mockFind.mockImplementation(async (_manager: unknown, uuid: string) =>
+			uuid === 'order' ? found() : resident(uuid)
+		);
+		let view: ReturnType<typeof render> | undefined;
+		for (const start of [1, 2, 3]) {
+			// Another attempt, with no open entry, proves each start's replay ran.
+			await record('other');
+			if (!view) view = render(<SaleCompletionBridge />);
+			else {
+				mockManager = {};
+				view.rerender(<SaleCompletionBridge />);
+			}
+			await waitFor(() => expect(owner.completeSale).toHaveBeenCalledTimes(start));
+		}
+		const { order } = await pendingCompletions(mockContext.storeDB);
+		expect(order).toBeDefined();
+		expect(order).not.toHaveProperty('unpaidStarts');
+		expect(order).not.toHaveProperty('missingStarts');
+		expect(mockCatchUp).not.toHaveBeenCalled();
+		expect(mockFind).not.toHaveBeenCalledWith(expect.anything(), 'order');
+	}
+);
+
+it('a refused record on recovery raises attention and resolves the attempt', async () => {
+	await record();
+	mockRecover.mockResolvedValueOnce([
+		{
+			orderUuid: 'order',
+			answers: [],
+			refused: {
+				code: 'wcpos_order_already_paid',
+				row: { id: 'order-row', amount: '10.00', method_id: 'pos_cash', order_id: 42 },
+				summary: { status: 'completed', balance: '0.00' },
+			},
+		},
+	]);
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect(mockError).toHaveBeenCalledWith(
+		expect.stringContaining('already paid online'),
+		expect.objectContaining({
+			code: ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE,
+			terminal: { operationType: 'sync.record', outcome: 'failed', operationId: 'order-row' },
+			context: expect.objectContaining({
+				type: 'payment.refused',
+				refusal: 'order_already_paid',
+				recordId: 'order',
+				orderId: 42,
+			}),
+		})
+	);
+});
+
+// Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
+// whose claim lapsed. It put nothing on the server: it is dropped, and blocks nothing.
+const crashLeftover = (orderUuid: string) => ({
+	...deferredRecord(orderUuid),
+	sentAt: null,
+	claimedBy: 'crashed-poster',
+	claimedAt: 1,
+});
+
+it('a crash leftover (unsent, claim expired) does not block finishing an adopted paid order', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	await setJournal('order', [crashLeftover('order')]);
+	await record();
+	await owner.awaitAdoption(mockContext.storeDB, 'order');
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
+});
+
+it('a crash leftover (unsent, claim expired) does not block the bounded abandonment of an unpaid attempt', async () => {
+	await record();
+	await setJournal('order', [crashLeftover('order')]);
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	const view = render(<SaleCompletionBridge />);
+	for (const count of [1, 2]) {
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				unpaidStarts: count,
+			})
+		);
+		mockManager = {};
+		view.rerender(<SaleCompletionBridge />);
+	}
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
 });

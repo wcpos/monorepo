@@ -14,6 +14,7 @@ import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
 	claimHeld,
 	claimRoute,
+	deferEntry,
 	dropUnsent,
 	markSent,
 	type MoneyCommandEntry,
@@ -84,6 +85,8 @@ export type MoneyCommandPoster = Post & {
 	settle(): Promise<void>;
 	/** Give up the answered entries' claims without settling them: they stay for a re-send. */
 	abandon(): Promise<void>;
+	/** Journal a record frozen, sent-undispatched, for the recovery (ADR 0040 D1); idempotent by row. */
+	defer(url: string, body: unknown): Promise<MoneyCommandEntry>;
 	/**
 	 * Retire the order's command for a route, unanswered, because another answer proved it never
 	 * ran (a locked intent whose cancel's void found no row, or voided it): never re-send it.
@@ -205,7 +208,9 @@ async function chooseRevision(
 ): Promise<string> {
 	let { resident, order } = await readOrder(runtime, entry.orderUuid);
 	const pending = order.local?.dirty || (order.local?.pendingMutationIds?.length ?? 0) > 0;
-	if (fresh && pending && !ENDS_MOTION.has(entry.kind)) {
+	// A deferred record (sent, never with a revision) was journaled offline: the edits made
+	// before it (its provenance stamp) reach the store before it, as a fresh command's would.
+	if ((fresh || entry.sentRevision === null) && pending && !ENDS_MOTION.has(entry.kind)) {
 		await pushRecord(runtime, resident as never);
 		({ resident, order } = await readOrder(runtime, entry.orderUuid));
 	}
@@ -505,6 +510,12 @@ interface RecoveredOrder {
 	 * unclaimed: the session retries it on `RECOVERY_RETRY_DELAYS_MS`.
 	 */
 	readonly unanswered?: true;
+	/** A definitive refusal that settled a re-send: owed a needs-attention entry (ADR 0040 D1 r4). */
+	readonly refused?: {
+		readonly code: string;
+		readonly row: PaymentRow | null;
+		readonly summary: OrderPaymentSummary | null;
+	};
 }
 
 /**
@@ -531,13 +542,33 @@ export async function recoverMoneyCommands(
 				orderUuid,
 				answers: await resendOpenCommands(runtime, storeDB, orderUuid, deps),
 			});
-		} catch {
-			// Not definitive, or refused: the poster kept or settled the entry accordingly. One
-			// still sent, unclaimed and ours is unanswered, for the session to try again.
-			const left = (await readOrderCommands(storeDB, orderUuid)).entries.filter(
+		} catch (error) {
+			// Not definitive, or refused: the poster kept or settled the entry accordingly. A
+			// refusal that settled a command is reported, never swallowed: an offline record refused
+			// on reconnect has no tender to tell. A refused pre-flight push settles nothing, so it is
+			// no refusal of the command. One still sent, unclaimed and ours is unanswered.
+			const journaled = (await readOrderCommands(storeDB, orderUuid)).entries;
+			const failure = moneyRefusalOf(error);
+			const refused =
+				failure?.code &&
+				isDefinitiveMoneyRefusal(failure) &&
+				sent.some(({ id }) => !journaled.some((entry) => entry.id === id))
+					? {
+							code: failure.code,
+							row: (failure.data?.payment as PaymentRow | undefined) ?? null,
+							summary: (failure.data?.order as OrderPaymentSummary | undefined) ?? null,
+						}
+					: undefined;
+			const left = journaled.filter(
 				(entry) => entry.sentAt !== null && inScope(entry, scope) && !claimHeld(entry, null)
 			);
-			if (left.length > 0) recovered.push({ orderUuid, answers: [], unanswered: true });
+			if (left.length > 0 || refused)
+				recovered.push({
+					orderUuid,
+					answers: [],
+					...(left.length > 0 ? { unanswered: true as const } : {}),
+					...(refused ? { refused } : {}),
+				});
 		}
 	}
 	// Housekeeping bounded by CHAIN_RETENTION_MS; the next run retries it; never fail a replay.
@@ -679,9 +710,10 @@ export function moneyCommandPoster(input: {
 			scope,
 		};
 	};
-	const poster = async (url: string, body: unknown) => {
+	/** Get or create, and claim, the route's command; null when the path is no money route. */
+	const claimFor = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);
-		if (!route) return input.post(url, body);
+		if (!route) return null;
 		const frozen = { ...(body as Record<string, unknown>) };
 		const rowId =
 			route.kind === 'record'
@@ -706,7 +738,24 @@ export function moneyCommandPoster(input: {
 			);
 		if (claim.status === 'busy') throw new MoneyCommandError('in_flight', claim.entry);
 		if (claim.status === 'none') throw new Error('money_command_unclaimed');
-		return dispatch(claim.entry);
+		return claim;
+	};
+	const poster = async (url: string, body: unknown) => {
+		const claim = await claimFor(url, body);
+		return claim ? dispatch(claim.entry) : input.post(url, body);
+	};
+	const defer = async (url: string, body: unknown) => {
+		if (classifyMoneyRoute(url)?.kind !== 'record') throw new Error('money_command_not_deferrable');
+		const claim = (await claimFor(url, body))!;
+		// Already journaled under this row id (a press after a crash between defer and mirror):
+		// the same record, never a second one for the same cash.
+		if (claim.status === 'open') {
+			await release(claim.entry.id);
+			return claim.entry;
+		}
+		const deferred = await deferEntry(input.storeDB, input.orderUuid, claim.entry.id, claimant);
+		if (!deferred) throw new MoneyCommandError('in_flight', claim.entry);
+		return deferred;
 	};
 	return Object.assign(poster, {
 		mirror: async ({
@@ -727,6 +776,7 @@ export function moneyCommandPoster(input: {
 			await settle();
 		},
 		settle,
+		defer,
 		retire: (kind: MoneyCommandKind, target: string | null) =>
 			retireRoute(input.storeDB, input.orderUuid, kind, target),
 		abandon: async () => {

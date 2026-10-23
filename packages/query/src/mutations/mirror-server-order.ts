@@ -49,6 +49,8 @@ export interface MoneyAnswer {
 	total?: string;
 	/** The revision the command was sent with: the summary is written only while it stands. */
 	sentRevision?: string | null;
+	/** An offline record's own summary, with no revision sent (ADR 0040 Decided 1 rule 2). */
+	local?: true;
 }
 
 /** pending → authorized → captured → voided; any live state → failed/voided; never backwards. */
@@ -167,7 +169,7 @@ export async function mirrorMoneyAnswer(manager: QueryRuntime, uuid: string, ans
 				// revision, like the summary: under a newer adopted document it never lands, or an old
 				// cancel would erase another till's newer invoice stamp.
 				meta_data: answer.meta && underSentRevision ? answer.meta(ledgerMeta) : ledgerMeta,
-				...(order && underSentRevision
+				...(order && (underSentRevision || answer.local)
 					? Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== undefined))
 					: {}),
 			};

@@ -239,6 +239,7 @@ function makeFlow(count = 1): TenderFlow {
 			disabled: false,
 			reason: null,
 			worksOffline: true,
+			settlesLater: false,
 		})),
 		legacyMethods: [],
 		methodsLoaded: true,
@@ -351,6 +352,7 @@ it('selects methods without committing and folds unavailable reasons', () => {
 				disabled: true,
 				reason: 'offline' as const,
 				worksOffline: false,
+				settlesLater: false,
 			},
 		],
 	};
@@ -382,6 +384,7 @@ it('lists an offline queue-capable device method as unavailable until offline te
 				disabled: true,
 				reason: 'offline',
 				worksOffline: false,
+				settlesLater: false,
 			},
 		],
 	};
@@ -457,7 +460,9 @@ it('says the amount once: the eyebrow and Full balance drop it while the entry i
 		...makeFlow(),
 		saveState: null,
 		method: card,
-		tiles: [{ method: card, disabled: false, reason: null, worksOffline: true }],
+		tiles: [
+			{ method: card, disabled: false, reason: null, worksOffline: true, settlesLater: false },
+		],
 		entryAppliedMinor: 9295,
 		state: { ...initialTenderState, view: 'amount' as const, methodId: card.id, entryMinor: 9295 },
 	};
@@ -711,7 +716,15 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 		...makeFlow(),
 		saveState: null,
 		method: deviceMethod,
-		tiles: [{ method: deviceMethod, disabled: false, reason: null, worksOffline: false }],
+		tiles: [
+			{
+				method: deviceMethod,
+				disabled: false,
+				reason: null,
+				worksOffline: false,
+				settlesLater: false,
+			},
+		],
 		deviceTransport: 'bluetooth' as const,
 		pickTransport: jest.fn(),
 		deviceReady: false,
@@ -756,7 +769,13 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 it('names the connected reader as Settings → Card readers does, never the SDK key or serial', async () => {
 	const driver = createSimulatedDriver();
 	registerDriver(driver);
-	const tile = { method: deviceMethod, disabled: false, reason: null, worksOffline: false };
+	const tile = {
+		method: deviceMethod,
+		disabled: false,
+		reason: null,
+		worksOffline: false,
+		settlesLater: false,
+	};
 	const flow = {
 		...makeFlow(),
 		saveState: null,
@@ -1095,7 +1114,15 @@ describe('declared UI (contract 1.2)', () => {
 			...makeFlow(),
 			saveState: null,
 			method: invoice,
-			tiles: [{ method: invoice, disabled: false, reason: null, worksOffline: false }],
+			tiles: [
+				{
+					method: invoice,
+					disabled: false,
+					reason: null,
+					worksOffline: false,
+					settlesLater: false,
+				},
+			],
 			state: { ...initialTenderState, view: 'amount', methodId: invoice.id, entryMinor: 9295 },
 			entryAppliedMinor: 9295,
 			fieldValues: {
@@ -1202,8 +1229,14 @@ describe('declared UI (contract 1.2)', () => {
 			method: null,
 			state: initialTenderState,
 			tiles: [
-				{ method, disabled: false, reason: null, worksOffline: true },
-				{ method: invoice, disabled: true, reason: 'not_with_split', worksOffline: false },
+				{ method, disabled: false, reason: null, worksOffline: true, settlesLater: false },
+				{
+					method: invoice,
+					disabled: true,
+					reason: 'not_with_split',
+					worksOffline: false,
+					settlesLater: false,
+				},
 			],
 		});
 		render(<TenderPane flow={flow} format={String} />);
