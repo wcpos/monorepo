@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Badge } from '@wcpos/components/badge';
 import { Chip } from '@wcpos/components/chip';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { Option } from '@wcpos/components/combobox/types';
@@ -14,6 +13,7 @@ import { AddCartItemsMenu } from './add-cart-items-menu';
 import { Customer } from './customer';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { usePanelSide } from '../contexts/overlay-side';
@@ -25,54 +25,49 @@ import type { CustomerData } from '../../hooks/use-customer-name-format/helpers'
 
 /**
  * The cart's head row. `stilled` is checkout and receipt: the same row at the same height,
- * the customer in the same slot as static text, the add and settings controls gone and the
- * order number in their place. Static, so a Badge, not a disabled Chip (decision 10).
+ * the controls gone, an identity line in their place (number, customer, time).
  */
 export function CartHeader({ stilled = false }: { stilled?: boolean }) {
 	return stilled ? <StilledCartHeader /> : <LiveCartHeader />;
 }
 
-/** The badges are as tall as the live chip, so the row does not move. */
-const STILLED_BADGE = 'h-ctl px-3';
-
+/**
+ * One identity line: `#115812 · Guest · Today · 21:28`. The number leads in the foreground;
+ * the rest is muted. No cashier: the till's own cashier is implicit here.
+ */
 function StilledCartHeader() {
-	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
 	const billing = useRecordField(currentOrderRecord, (order) => order.payload.billing);
 	const shipping = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
 	const customerId = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
 	const number = useRecordField(currentOrderRecord, (order) => order.payload.number);
+	const created = useRecordField(currentOrderRecord, (order) => order.payload.date_created_gmt);
 	const { format } = useCustomerNameFormat();
+	const { dateTime } = useStoreDayLabel();
 	return (
 		<HStack testID="checkout-ledger-header" className="border-border min-h-ctl border-b px-2 py-2">
-			<HStack className="h-ctl min-w-0 flex-1">
-				<Text className="text-muted-foreground" numberOfLines={1}>
-					{t('common.customer')}
-				</Text>
-				<View className="min-w-0 shrink">
-					<Badge
-						testID="checkout-ledger-customer"
-						variant="muted"
-						size="lg"
-						// The customer gives way to the number: a long name truncates in its slot.
-						className={`${STILLED_BADGE} max-w-full shrink`}
-					>
+			<HStack className="h-ctl min-w-0 flex-1 gap-0">
+				{/* An order with no number yet (saving, queued offline or refused): a placeholder,
+				    never an empty "#". */}
+				{!number ? (
+					<View
+						className="bg-muted h-4 w-16 rounded-full"
+						testID="checkout-ledger-number-skeleton"
+					/>
+				) : (
+					<Text testID="checkout-ledger-number" className="font-semibold">
+						{`#${number}`}
+					</Text>
+				)}
+				{/* The customer gives way to the number: a long name truncates on the line. */}
+				<Text className="text-muted-foreground min-w-0 shrink" numberOfLines={1}>
+					{' · '}
+					<Text testID="checkout-ledger-customer" className="text-muted-foreground">
 						{format({ billing, shipping, id: customerId })}
-					</Badge>
-				</View>
+					</Text>
+					{created ? ` · ${dateTime(created)}` : null}
+				</Text>
 			</HStack>
-			{/* An order with no number yet (saving, queued offline or refused): a placeholder,
-			    never an empty "#". */}
-			{!number ? (
-				<View
-					className="bg-muted h-ctl w-16 self-center rounded-full"
-					testID="checkout-ledger-number-skeleton"
-				/>
-			) : (
-				<Badge testID="checkout-ledger-number" variant="muted" size="lg" className={STILLED_BADGE}>
-					{`#${number ?? ''}`}
-				</Badge>
-			)}
 		</HStack>
 	);
 }

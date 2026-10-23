@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -16,14 +15,14 @@ import {
 	useCurrentOrder,
 } from '../contexts/current-order';
 import { CartHeader } from './cart-header';
-import { CheckoutTotals } from './checkout-totals';
 import { CartTable } from './table';
+import { Totals } from './totals';
 
 /**
- * Checkout and receipt: the cart itself, stilled. The same head row (customer in its slot,
- * the order number where the add and settings controls were), the same table with the
- * cashier's columns rendered read-only, the payments under it inside the same scroll, and
- * the totals pinned below. No Card: it is the cart's own frame (pos/cart ledger line 81).
+ * Checkout and receipt: the cart itself, stilled. The same head row (an identity line: number,
+ * customer, time, where the controls were), the same table with the
+ * cashier's columns rendered read-only, then Totals and the payments inside the same scroll;
+ * nothing pinned below. No Card: it is the cart's own frame (pos/cart ledger lines 81, 83).
  *
  * `order` may be a receipt that is no longer the current order, so the cells — which read
  * the current order — are given this one.
@@ -56,15 +55,17 @@ function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 						readOnly
 						paidBy={paidBy}
 						footer={
-							<View className="gap-2 p-4">
-								<Text className={TABLE_HEAD_TEXT}>{t('pos_checkout.payments_tab')}</Text>
-								<LedgerLegs view={view} format={view.format} />
+							<View>
+								<Totals readOnly />
+								<View className="border-border gap-2 border-t p-2">
+									<Text className="font-semibold">{t('pos_checkout.payments_tab')}</Text>
+									<LedgerLegs view={view} format={view.format} closing />
+								</View>
 							</View>
 						}
 					/>
 				</ErrorBoundary>
 			</View>
-			<CheckoutTotals view={view} />
 		</View>
 	);
 }

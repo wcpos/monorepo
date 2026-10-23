@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 
@@ -41,9 +41,23 @@ jest.mock('../checkout/tender/use-ledger-view', () => ({
 		format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
 	}),
 }));
-jest.mock('../checkout/tender/ledger-pane', () => ({
-	LedgerLegs: () => <div data-testid="ledger-legs" />,
+jest.mock('./totals', () => ({
+	Totals: ({ readOnly }: { readOnly?: boolean }) => (
+		<div data-testid="cart-totals" data-readonly={String(readOnly)} />
+	),
 }));
+jest.mock('../../../../hooks/use-store-day-label', () => ({
+	useStoreDayLabel: () => ({ dateTime: (iso: string) => `Today · ${iso.slice(11, 16)}` }),
+}));
+jest.mock('../../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => '9:28 PM' }),
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+}));
+jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
 jest.mock('./table', () => {
 	const { useCurrentOrder } = jest.requireMock('../contexts/current-order');
 	return {
@@ -61,12 +75,6 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'table-head-text' }));
-jest.mock('@wcpos/components/badge', () => ({
-	Badge: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<span data-testid={testID}>{children}</span>
-	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -96,15 +104,22 @@ jest.mock('../hooks/use-add-customer', () => ({
 }));
 
 beforeEach(() => {
-	mockPayload = { number: '1187', billing: { first_name: 'Ada' }, customer_id: 3 };
+	mockPayload = {
+		number: '1187',
+		billing: { first_name: 'Ada' },
+		customer_id: 3,
+		date_created_gmt: '2026-10-23T21:28:00',
+	};
 	mockCurrentOrder = { uuid: 'order-1' };
 	mockCartTable.mockClear();
 });
 
 describe('CartHeader stilled', () => {
-	it('keeps the customer in its slot as static text and puts the order number where the controls were', () => {
+	it('is one identity line, number · customer · time, where the controls were', () => {
 		render(<CartHeader stilled />);
-		expect(screen.getByTestId('checkout-ledger-header')).toBeTruthy();
+		expect(screen.getByTestId('checkout-ledger-header').textContent).toBe(
+			'#1187 · Ada · Today · 21:28'
+		);
 		expect(screen.getByTestId('checkout-ledger-customer').textContent).toBe('Ada');
 		expect(screen.getByTestId('checkout-ledger-number').textContent).toBe('#1187');
 		expect(screen.queryByTestId('add-cart-items')).toBeNull();
@@ -118,6 +133,8 @@ describe('CartHeader stilled', () => {
 		expect(screen.getByTestId('checkout-ledger-number-skeleton')).toBeTruthy();
 		expect(screen.queryByTestId('checkout-ledger-number')).toBeNull();
 		expect(screen.getByTestId('checkout-ledger-customer').textContent).toBe('Guest');
+		// No creation time yet: the line ends at the customer.
+		expect(screen.getByTestId('checkout-ledger-header').textContent).toBe(' · Guest');
 	});
 
 	it('is the live head without the prop', () => {
@@ -142,11 +159,16 @@ describe('StilledCart', () => {
 		expect(props.readOnly).toBe(true);
 		expect(props.paidBy).toEqual({ 'line-1': ['Cash'] });
 		expect(props.order).toBe(receipt);
-		// The payments block scrolls with the rows; the totals are pinned under them.
-		expect(screen.getByTestId('cart-table').textContent).toContain('pos_checkout.payments_tab');
-		expect(screen.getByTestId('ledger-legs')).toBeTruthy();
-		expect(screen.getByTestId('checkout-order-total').textContent).toBe('$50.00');
-		expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('$42.95');
-		expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('$7.05');
+		// Totals, then the payments and their closing rows, all inside the rows' scroll.
+		const table = screen.getByTestId('cart-table');
+		expect(within(table).getByTestId('cart-totals').dataset.readonly).toBe('true');
+		expect(table.textContent).toContain('pos_checkout.payments_tab');
+		expect(table.textContent).toContain('pos_checkout.no_payments_yet');
+		const closing = within(table).getByTestId('checkout-ledger-totals');
+		expect(within(closing).getByTestId('checkout-order-total').textContent).toBe('$50.00');
+		expect(within(closing).getByTestId('checkout-ledger-remaining').textContent).toBe('$42.95');
+		expect(closing.textContent).toContain('$7.05');
+		// Nothing pinned under the scroll.
+		expect(screen.getAllByTestId('checkout-ledger-totals')).toHaveLength(1);
 	});
 });

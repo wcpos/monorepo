@@ -78,18 +78,21 @@ const view: LedgerView = {
 	balanceMinor: 1000,
 };
 const format = (minor: number) => `£${minor / 100}`;
-it('shows paid and left, timeline dots, event times, Next, and cash-only change', () => {
+it('lists the legs without a bar or timeline: event times, Next, and cash-only change', () => {
 	render(<LedgerLegs view={view} format={format} />);
-	expect(screen.getByText('Paid £20 · £10 left')).toBeTruthy();
+	expect(screen.queryByText('Paid £20 · £10 left')).toBeNull();
+	for (const id of ['cash', 'card', 'next']) {
+		expect(screen.queryByTestId(`checkout-leg-dot-${id}`)).toBeNull();
+	}
 	for (const id of ['cash', 'card']) {
-		expect(screen.getByTestId(`checkout-leg-dot-${id}`).className).toContain('bg-success');
 		expect(within(screen.getByTestId(`checkout-leg-${id}`)).getByText('2:04 PM')).toBeTruthy();
 	}
-	expect(screen.getByTestId('checkout-leg-dot-next').className).toContain('bg-warning');
 	expect(within(screen.getByTestId('checkout-leg-next')).getByText('Next')).toBeTruthy();
 	expect(within(screen.getByTestId('checkout-leg-next')).queryByText('2:04 PM')).toBeNull();
 	expect(screen.getByTestId('checkout-leg-cash').textContent).toContain('Tendered');
 	expect(screen.getByTestId('checkout-leg-card').textContent).not.toContain('Tendered');
+	// Without `closing` (the phone pane) there are no closing rows.
+	expect(screen.queryByTestId('checkout-ledger-totals')).toBeNull();
 });
 it('shows paid in full at zero balance and keeps the empty state', () => {
 	const { rerender } = render(
@@ -98,6 +101,40 @@ it('shows paid in full at zero balance and keeps the empty state', () => {
 	expect(screen.getByText('Paid in full · 2:04 PM')).toBeTruthy();
 	rerender(<LedgerLegs view={{ ...view, rows: [] }} format={format} />);
 	expect(screen.getByText('No payments yet')).toBeTruthy();
+});
+it('closing ends the block with Total, Paid and Remaining, or Paid in full as the lead row', () => {
+	const { rerender } = render(<LedgerLegs view={view} format={format} closing />);
+	const closing = screen.getByTestId('checkout-ledger-totals');
+	expect(closing.textContent).toBe('Total£30Paid£20Remaining£10');
+	expect(screen.getByTestId('checkout-order-total').textContent).toBe('£30');
+	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('£10');
+
+	rerender(
+		<LedgerLegs
+			view={{ ...view, rows: view.rows.slice(0, 2), paidMinor: 3000, balanceMinor: 0 }}
+			format={format}
+			closing
+		/>
+	);
+	// The success line moves into the lead row; it is not printed twice.
+	expect(screen.getAllByText('Paid in full · 2:04 PM')).toHaveLength(1);
+	expect(screen.getByTestId('checkout-ledger-totals').textContent).not.toContain('Remaining');
+	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('£0');
+
+	// Nothing settled (the leg failed): a zero balance is not paid in full.
+	rerender(
+		<LedgerLegs
+			view={{ ...view, rows: [{ ...row, status: 'failed' }], paidMinor: 0, balanceMinor: 0 }}
+			format={format}
+			closing
+		/>
+	);
+	expect(screen.queryByText(/Paid in full/)).toBeNull();
+	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('Remaining£0');
+
+	rerender(<LedgerLegs view={{ ...view, rows: [], paidMinor: 0 }} format={format} closing />);
+	expect(screen.getByText('No payments yet')).toBeTruthy();
+	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('Paid£0');
 });
 it('a sent order with no money taken says where the invoice went instead of the empty state', () => {
 	render(

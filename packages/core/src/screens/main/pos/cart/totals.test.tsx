@@ -187,3 +187,11 @@ it('has no visible Total row and clears a coupon chip', () => {
 	fireEvent.click(screen.getByLabelText('Remove coupon SAVE10'));
 	expect(mockRemoveCoupon).toHaveBeenCalledWith('SAVE10');
 });
+
+it('read-only (the stilled cart) shows the coupon with no remove control', () => {
+	mockRemoveCoupon.mockClear();
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	render(<Totals readOnly />);
+	fireEvent.click(screen.getByTestId('coupon-chip'));
+	expect(mockRemoveCoupon).not.toHaveBeenCalled();
+});
