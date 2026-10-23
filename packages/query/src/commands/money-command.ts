@@ -9,7 +9,7 @@ import {
 import { mintUuid } from '../mint-uuid';
 import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/mirror-server-order';
 import { pushRecord } from '../mutations/push-record';
-import { findEngineResident, patchLocalResident } from '../mutations/resident';
+import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
 	claimHeld,
@@ -611,11 +611,18 @@ function answerChain(revision: unknown, at: number): RevisionChain | undefined {
  * on the cash push after a terminal cancel. Returns the revision it replaced, if it stamped.
  */
 async function stampPolledRevision(runtime: QueryRuntime, orderUuid: string, chain: RevisionChain) {
-	const { resident, order } = await readOrder(runtime, orderUuid);
-	if ((order.sync?.adopted?.at ?? 0) > chain.answeredAt) return undefined;
-	if (order.sync?.revision === chain.answerRevision) return undefined;
-	await patchLocalResident(resident, { sync: { ...order.sync, revision: chain.answerRevision } });
-	return order.sync?.revision;
+	const { resident } = await readOrder(runtime, orderUuid);
+	// The guard and the write share one atomic modify over the CURRENT document: an adoption
+	// that lands between a snapshot and the write must never be overwritten by the poll's stamp.
+	let replaced: string | undefined;
+	await resident.incrementalModify((current: Record<string, unknown>) => {
+		const sync = (current.sync ?? {}) as { revision?: string; adopted?: { at?: number } };
+		if ((sync.adopted?.at ?? 0) > chain.answeredAt) return current;
+		if (sync.revision === chain.answerRevision) return current;
+		replaced = sync.revision;
+		return { ...current, sync: { ...sync, revision: chain.answerRevision } };
+	});
+	return replaced;
 }
 
 /**
