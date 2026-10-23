@@ -11,6 +11,7 @@
  *  - `refresh` (greedy-prunable / upsert-refresh collections): one re-pull of
  *    the small collection (that IS the lane's coverage contract).
  *  - A higher-priority requirement enqueued behind a lower one runs FIRST
+ *    within its lane — typed searches and everything else pump separately
  *    (the queue re-sorts on every enqueue; only an explicit release aborts
  *    in-flight foreground scheduler work).
  *  - `release()` removes queued work or aborts an active foreground execution;
@@ -104,7 +105,7 @@ const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
  * A require execution that has made no drain progress for this long is STALLED and is
  * abandoned: its entry is aborted, its declarers are rejected, and the pump moves on.
  *
- * The pump below is a SERIAL loop, so before this existed one execution whose await never
+ * Each lane's pump below is a SERIAL loop, so before this existed one execution whose await never
  * settled starved every queued requirement forever, with no diagnostic at all. Run
  * 33445432662 (Android phone, flow 07, 2026-08-31): after the last search outcome at
  * 23:41:54 the pump completed ZERO requirements for the job's final 38 minutes — the
@@ -530,15 +531,27 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// and maintenance completions never count.
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
-	let running = false;
+	// Two lanes, each one execution at a time. A typed search must not queue behind the
+	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
+	// Searches stay serial among themselves, so a newer search still supersedes the older
+	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
+	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
+	type Lane = 'search' | 'durable';
+	const running: Record<Lane, boolean> = { search: false, durable: false };
+	const laneOf = (entry: QueuedRequirement): Lane =>
+		entry.requirement.kind === 'search' ? 'search' : 'durable';
 	// Requirement stalls with no requirement completing in between, stamped on
 	// coverage.require.stalled: the screen re-declares a stalled requirement, so
 	// one stall is an attempt; repeated ones (storage that never settles, a walk
 	// that never progresses) have no other row and must reach the merchant.
 	// Replaced on every scope activation; each execution settles the instance it
 	// started with, so a scope-A execution timing out after the switch to B
-	// never counts toward B's streak.
-	const stallStreaks = scopeBoundFailureStreak(deps.manager);
+	// never counts toward B's streak. One per lane: a search completing must not
+	// reset a durable lane's streak of stalls.
+	const stallStreaks = {
+		search: scopeBoundFailureStreak(deps.manager),
+		durable: scopeBoundFailureStreak(deps.manager),
+	};
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
@@ -1524,15 +1537,16 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		})();
 	}
 
-	async function pump(): Promise<void> {
-		if (running) return;
-		running = true;
+	async function pump(lane: Lane): Promise<void> {
+		if (running[lane]) return;
+		running[lane] = true;
 		try {
 			for (;;) {
 				// Re-sort each pass: a higher-priority requirement enqueued while this
-				// pump was busy PREEMPTS everything still queued.
+				// pump was busy PREEMPTS everything still queued in its lane.
 				queue.sort((a, b) => b.priority - a.priority || a.seq - b.seq);
-				const next = queue.shift();
+				const index = queue.findIndex((entry) => laneOf(entry) === lane);
+				const next = index < 0 ? undefined : queue.splice(index, 1)[0];
 				if (!next) return;
 				if (next.released) {
 					forgetSearch(next);
@@ -1554,10 +1568,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				next.started = true;
 				const startedAt = Date.now();
-				const executionStreak = stallStreaks();
+				const executionStreak = stallStreaks[lane]();
 				// The start line is the stall watchdog's evidence twin: when a stall IS hit, the
-				// artifact's last started-without-outcome pair names exactly which requirement
-				// wedged — the line run 33445432662 did not have.
+				// started-without-outcome line with the stalled line's requirementId and kind names
+				// exactly which requirement wedged — the line run 33445432662 did not have. Pair by
+				// id, not by "last started": the search lane runs beside the durable lane.
 				deps.diagnostics({
 					type: 'coverage.require.started',
 					level: 'debug',
@@ -1585,8 +1600,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				]);
 				watchdog.cancel();
 				if (raced === STALLED) {
-					// One hung await must never starve the queue (the serial pump IS the
-					// choke point): abandon this execution and keep draining.
+					// One hung await must never starve its lane (each lane's pump is serial):
+					// abandon this execution and keep draining.
 					abandonStalledExecution(next, startedAt, executionStreak, execution);
 					forgetSearch(next);
 					continue;
@@ -1717,12 +1732,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 			}
 		} finally {
-			running = false;
+			running[lane] = false;
 		}
 	}
 
 	return {
-		hasPendingWork: () => running || queue.length > 0,
+		hasPendingWork: () => running.search || running.durable || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		require: (requirement) => {
@@ -1846,7 +1861,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				};
 				if (dedupeKey) activeSearches.set(dedupeKey, entry);
 				queue.push(entry);
-				void pump();
+				void pump(laneOf(entry));
 			}
 			return {
 				ready,

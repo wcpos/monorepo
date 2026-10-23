@@ -1,5 +1,5 @@
 /**
- * The require-plane pump is a SERIAL loop, so a single execution whose await never settles
+ * Each require-plane lane's pump is a SERIAL loop, so a single execution whose await never settles
  * used to starve every queued requirement forever, silently. Run 33445432662 (Android
  * phone, flow 07, 2026-08-31): after the last search outcome the pump completed ZERO
  * requirements for the job's final 38 minutes — the variations popover's targeted pull and
@@ -72,6 +72,19 @@ function stubPlane(input: { readLane: LaneRead } & StubOverrides) {
 	return { plane, events };
 }
 
+/**
+ * The first search's coverage read never settles (the injected hang); every later read is a
+ * fresh complete lane, so a second search — same lane as the stalled one, which is what makes
+ * it wait on the watchdog — serves local.
+ */
+function hangFirstRead(): LaneRead {
+	let reads = 0;
+	return () =>
+		(reads += 1) === 1
+			? new Promise(() => undefined)
+			: Promise.resolve({ fresh: true, complete: true, expectedRecordIds: [] });
+}
+
 function eventTypes(events: SyncEvent[]): string[] {
 	return events.map((event) => event.type);
 }
@@ -83,9 +96,7 @@ afterEach(() => {
 describe('require-plane stall watchdog (pump survival)', () => {
 	it('abandons a stalled execution and still runs the requirement queued behind it', async () => {
 		vi.useFakeTimers();
-		const { plane, events } = stubPlane({
-			readLane: () => new Promise(() => undefined), // the injected hang: never settles
-		});
+		const { plane, events } = stubPlane({ readLane: hangFirstRead() });
 
 		const stalled = plane.require({
 			id: 'req-stalled',
@@ -96,8 +107,8 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		const behind = plane.require({
 			id: 'req-behind',
 			collection: 'variations',
-			kind: 'targeted-records',
-			remoteIds: [mintRemoteId(101, 'test remote id')],
+			kind: 'search',
+			term: 'behind',
 		});
 		const stalledSettled = stalled.ready.then(
 			(outcome) => `resolved:${outcome.action}`,
@@ -110,7 +121,7 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		await expect(stalledSettled).resolves.toMatch(/^require: stalled after \d+ms/);
 		await expect(behind.ready).resolves.toMatchObject({
 			action: 'serve-local',
-			reason: 'every required record is resident',
+			reason: 'variations search fetched within the coverage window',
 		});
 
 		const stallEvents = events.filter((event) => event.type === 'coverage.require.stalled');
@@ -239,9 +250,7 @@ describe('require-plane stall watchdog (pump survival)', () => {
 
 	it('still logs the stall for a released entry and keeps draining, without rejecting anyone', async () => {
 		vi.useFakeTimers();
-		const { plane, events } = stubPlane({
-			readLane: () => new Promise(() => undefined),
-		});
+		const { plane, events } = stubPlane({ readLane: hangFirstRead() });
 
 		const released = plane.require({
 			id: 'req-released',
@@ -253,8 +262,8 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		const behind = plane.require({
 			id: 'req-behind',
 			collection: 'variations',
-			kind: 'targeted-records',
-			remoteIds: [mintRemoteId(101, 'test remote id')],
+			kind: 'search',
+			term: 'behind',
 		});
 
 		await expect(released.ready).resolves.toMatchObject({ action: 'released' });
