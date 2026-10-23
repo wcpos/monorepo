@@ -1,12 +1,21 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
@@ -17,9 +26,20 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { usePanelSide } from '../contexts/overlay-side';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
+
+/**
+ * The panel is one list, as the cashier sheet is: every row starts at the MenuRow's inset
+ * (`px-2.5`) so the labels share one left edge, and each row draws the list's hairline.
+ */
+const STATIC_ROW =
+	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
+/** A pressable row of the same list: the MenuRow's surface, squared, with the hairline. */
+const ACTION_ROW = 'border-border rounded-none border-b';
+const NOTE = 'text-muted-foreground px-2.5 py-1 text-sm';
 
 function Opener({ id }: { id?: number | null }) {
 	const { site } = useStoreSession();
@@ -52,7 +72,6 @@ export function RegisterPanel({
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [expanded, setExpanded] = React.useState(false);
-	const [highlight, setHighlight] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
@@ -63,6 +82,14 @@ export function RegisterPanel({
 	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
 	const router = useRouter();
 	const side = usePanelSide('cart');
+	// The store's own name for each tender (the gateway title), never its id: the drawer
+	// lists what the cashier took money as, and `stripe_terminal_for_woocommerce` is not that.
+	// The same fallback as the closure document for a method the store no longer advertises.
+	const { byId } = usePaymentMethods();
+	const tenderLabel = (method: string) =>
+		method === 'cash'
+			? t('register.cash')
+			: (byId.get(method)?.title ?? method.charAt(0).toUpperCase() + method.slice(1));
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
 			await action();
@@ -94,10 +121,13 @@ export function RegisterPanel({
 					<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
 						{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
 					</DialogTitle>
+					{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
 					{blind ? (
-						<Text>{t('register.sales_count', { count: salesCount })}</Text>
+						<DialogDescription>
+							{t('register.sales_count', { count: salesCount })}
+						</DialogDescription>
 					) : (
-						<Text>
+						<DialogDescription>
 							{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
 							{t('register.opened_at_by', {
 								time: new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
@@ -111,7 +141,7 @@ export function RegisterPanel({
 							<React.Suspense fallback={null}>
 								<Opener id={session?.opened_by} />
 							</React.Suspense>
-						</Text>
+						</DialogDescription>
 					)}
 				</DialogHeader>
 				{refused.length > 0 && (
@@ -149,36 +179,32 @@ export function RegisterPanel({
 						</Tile>
 					))}
 				</View>
-				<ScrollView contentContainerClassName="bg-card px-4 py-2">
-					{Object.entries({ cash: '0', card: '0', ...expected }).map(([method, amount]) => (
-						<View
-							key={method}
-							className="min-h-row border-border flex-row items-center justify-between border-b"
-						>
-							<Text>
-								{method === 'cash'
-									? t('register.cash')
-									: method === 'card'
-										? t('register.card')
-										: method}
+				<DialogBody className="gap-0">
+					{/* Cash always has a row (the float lives there); every other tender only once it holds money. */}
+					{Object.entries({ cash: '0', ...expected }).map(([method, amount]) => (
+						<View key={method} className={STATIC_ROW}>
+							<Text numberOfLines={1} className="min-w-0 flex-1">
+								{tenderLabel(method)}
 							</Text>
 							{!blind && <Text className="tabular-nums">{format(Number(amount))}</Text>}
 						</View>
 					))}
-					<Button
+					<MenuRow
 						testID="register-panel-movements"
-						variant="ghost"
-						className={`border-border rounded-none border-b ${highlight ? 'bg-success/10' : ''}`}
+						className={ACTION_ROW}
 						onPress={() => setExpanded(!expanded)}
-					>
-						{t('register.paid_in_out')}
-					</Button>
+						label={t('register.paid_in_out')}
+						trailing={
+							<Icon
+								name={expanded ? 'chevronUp' : 'chevronDown'}
+								size="sm"
+								className="text-muted-foreground"
+							/>
+						}
+					/>
 					{expanded &&
 						activeMovements.map((row) => (
-							<View
-								key={row.id}
-								className="min-h-row border-border flex-row items-center gap-2 border-b"
-							>
+							<View key={row.id} className={STATIC_ROW}>
 								<Text
 									testID={`movement-row-${row.id}`}
 									className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
@@ -189,6 +215,7 @@ export function RegisterPanel({
 								</Text>
 								<Button
 									variant="ghost"
+									size="sm"
 									testID={`movement-void-${row.id}`}
 									disabled={session?.status !== 'open'}
 									onPress={() => attempt(() => actions.voidMovement(row.id))}
@@ -198,20 +225,18 @@ export function RegisterPanel({
 							</View>
 						))}
 					{!blind && !!session && (
-						<View className="border-border border-b">
-							<Button testID="register-panel-print" variant="ghost" onPress={() => attempt(print)}>
-								{t('register.print_x_report')}
-							</Button>
-						</View>
+						<MenuRow
+							testID="register-panel-print"
+							className={ACTION_ROW}
+							onPress={() => attempt(print)}
+							label={t('register.print_x_report')}
+							trailing={<Icon name="print" size="sm" className="text-muted-foreground" />}
+						/>
 					)}
 					{lastClosure && (
-						<View
-							testID="register-panel-last-closure"
-							className="min-h-row border-border gap-2 border-b"
-						>
-							<Button
+						<View testID="register-panel-last-closure" className="border-border border-b">
+							<MenuRow
 								testID="register-panel-open-closure"
-								variant="ghost"
 								disabled={reportsDenied}
 								onPress={() => {
 									router.push({
@@ -225,52 +250,58 @@ export function RegisterPanel({
 									});
 									onOpenChange(false);
 								}}
-							>
-								{t('register.closure_written_n', {
+								label={`${t('register.closure_written_n', {
 									n: lastClosure.server_number ?? lastClosure.number,
-								})}
-								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
-							</Button>
+								})}${blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}`}
+								trailing={<Icon name="chevronRight" size="sm" className="text-muted-foreground" />}
+							/>
 							{blind && (
-								<Text testID="register-panel-closure-restricted" className="text-muted-foreground">
+								<Text testID="register-panel-closure-restricted" className={NOTE}>
 									{t('register.closure_blind_restricted')}
 								</Text>
 							)}
 							{!lastClosure.synced_rows_at ? (
-								<Text testID="closure-unsynced" className="text-muted-foreground">
+								<Text testID="closure-unsynced" className={NOTE}>
 									{t('register.unsynced')}
 								</Text>
 							) : !blind ? (
-								<Button testID="closure-reprint" variant="ghost" onPress={() => attempt(reprint)}>
-									{t('register.reprint_copy')}
-								</Button>
+								<MenuRow
+									testID="closure-reprint"
+									onPress={() => attempt(reprint)}
+									label={t('register.reprint_copy')}
+									trailing={<Icon name="print" size="sm" className="text-muted-foreground" />}
+								/>
 							) : null}
 							{lastClosure.sync_status === 'failed' && (
-								<Text testID="closure-sync-error" className="text-destructive">
+								<Text testID="closure-sync-error" className="text-destructive px-2.5 py-1 text-sm">
 									{lastClosure.sync_error}
 								</Text>
 							)}
 							{lastClosure.server_findings &&
 								Object.keys(lastClosure.server_findings).length > 0 && (
-									<Text className="text-muted-foreground">{t('register.listed_in_health')}</Text>
+									<Text className={NOTE}>{t('register.listed_in_health')}</Text>
 								)}
 						</View>
 					)}
-				</ScrollView>
-				{!!error && <Text>{error}</Text>}
-				<Button
-					testID="register-panel-close-register"
-					disabled={!session}
-					size="lg"
-					onPress={() =>
-						attempt(async () => {
-							await actions.startCounting();
-							onOpenChange(false);
-						})
-					}
-				>
-					{t('register.close_register')}
-				</Button>
+					{!!error && <Text className="text-destructive px-2.5 py-2 text-sm">{error}</Text>}
+				</DialogBody>
+				<DialogFooter>
+					{/* Closing is not destructive: the primary, at the register's own height (decision 2). */}
+					<Button
+						testID="register-panel-close-register"
+						disabled={!session}
+						size="lg"
+						className="flex-1"
+						onPress={() =>
+							attempt(async () => {
+								await actions.startCounting();
+								onOpenChange(false);
+							})
+						}
+					>
+						{t('register.close_register')}
+					</Button>
+				</DialogFooter>
 				{movement && (
 					<MovementSheet
 						type={movement}
@@ -278,8 +309,6 @@ export function RegisterPanel({
 							if (!value) setMovement(null);
 						}}
 						onDone={(id, type, amount) => {
-							setHighlight(true);
-							setTimeout(() => setHighlight(false), 200);
 							Toast.show({
 								title: `${t(`register.${type}`)}${blind || type === 'no_sale' ? '' : ` ${format(Number(amount))}`}`,
 								action: (

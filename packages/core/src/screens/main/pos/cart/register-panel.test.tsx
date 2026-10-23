@@ -127,6 +127,8 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
+	// The real MenuRow wraps its row in the text recipe's provider.
+	TextClassContext: { Provider: ({ children }: { children: React.ReactNode }) => <>{children}</> },
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
@@ -138,6 +140,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<h2 data-testid={testID}>{children}</h2>
 	),
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+jest.mock('../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({
+		byId: new Map([['stripe_terminal_for_woocommerce', { title: 'Stripe Terminal' }]]),
+	}),
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
