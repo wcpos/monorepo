@@ -28,9 +28,20 @@ function mockButton({
 	testID,
 	onPress,
 	disabled,
-}: React.PropsWithChildren<{ testID?: string; onPress?: () => void; disabled?: boolean }>) {
+	accessibilityLabel,
+}: React.PropsWithChildren<{
+	testID?: string;
+	onPress?: () => void;
+	disabled?: boolean;
+	accessibilityLabel?: string;
+}>) {
 	return (
-		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+		<button
+			data-testid={testID}
+			onClick={onPress}
+			disabled={disabled}
+			aria-label={accessibilityLabel}
+		>
 			{children}
 		</button>
 	);
@@ -470,4 +481,23 @@ it('a completion adopted while the hand-off awaits confirmation is not sent as a
 	await confirm();
 	expect(mockPatch).toHaveBeenCalledTimes(1);
 	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+});
+
+it('a meta row deleted after the store numbered it is written as a tombstone', async () => {
+	// The draft (opened before a sync) holds the row without an id; the order now has it numbered.
+	const numbered = { id: 9, key: 'custom', value: 'x' };
+	const resident = { ...order, payload: { ...payload, meta_data: [...meta, numbered] } };
+	resident.getLatest = () => resident;
+	const formData = {
+		...payload,
+		status: 'pos-open',
+		cashier_id: '7',
+		meta_data: [...meta, { key: 'custom', value: 'x' }],
+	};
+	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByLabelText('common.remove_item')));
+	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
+	expect(resident.payload.meta_data).toEqual(
+		expect.arrayContaining([{ id: 9, key: 'custom', value: null }, ...meta])
+	);
 });

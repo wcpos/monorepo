@@ -73,11 +73,19 @@ const handOverSchema = z.object({ status: z.string(), cashier_id: z.string() });
 
 type MetaRow = { id?: number; key?: string; value?: unknown };
 
-/** The draft's rows with the id the order already holds for the same key, where the draft has none. */
-function withStoredMetaIds<Row extends MetaRow>(rows: Row[], stored: readonly MetaRow[]): Row[] {
+/**
+ * The draft's rows reconciled with the order's: a draft row with no id takes the id the order
+ * already holds for the same key (the store numbered it during a sync while the sheet stayed
+ * open), and a numbered row the draft no longer has (deleted after that sync, so the form saw no
+ * id and removed it instead of tombstoning it) goes out as a tombstone, or the store would keep it.
+ */
+function reconcileMetaWithOrder<Row extends MetaRow>(
+	rows: Row[],
+	stored: readonly MetaRow[]
+): (Row | MetaRow)[] {
 	const claimed = new Set<number>();
 	for (const row of rows) if (row.id != null) claimed.add(row.id);
-	return rows.map((row) => {
+	const reconciled: (Row | MetaRow)[] = rows.map((row) => {
 		if (row.id != null) return row;
 		const id = stored.find(
 			(entry) => entry.id != null && entry.key === row.key && !claimed.has(entry.id)
@@ -86,6 +94,12 @@ function withStoredMetaIds<Row extends MetaRow>(rows: Row[], stored: readonly Me
 		claimed.add(id);
 		return { ...row, id };
 	});
+	for (const entry of stored) {
+		if (entry.id == null || claimed.has(entry.id)) continue;
+		if (PROTECTED_ORDER_META_KEYS.includes(String(entry.key ?? ''))) continue;
+		reconciled.push({ id: entry.id, key: entry.key, value: null });
+	}
+	return reconciled;
 }
 type HandOverValues = z.infer<typeof handOverSchema>;
 
@@ -153,7 +167,7 @@ export function EditOrderMetaForm({
 			const patch = {
 				[root]:
 					root === 'meta_data' && Array.isArray(value)
-						? withStoredMetaIds(
+						? reconcileMetaWithOrder(
 								value.filter(
 									(row) =>
 										!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
@@ -199,10 +213,17 @@ export function EditOrderMetaForm({
 	async function handleSend() {
 		if (!pending || loading) return;
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
+		// Busy from here: the confirmation's buttons disable, so a Cancel pressed while a slow
+		// autosave is flushing cannot dismiss a send that then goes ahead anyway.
+		setLoading(true);
 		// A note still debounced or being written lands first, or the push would miss it and the
 		// rollback snapshot below would carry the value before it. A failed write stops the send;
 		// its failure was already reported.
-		if (!(await flush())) return;
+		if (!(await flush())) {
+			setLoading(false);
+			setPending(null);
+			return;
+		}
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, status, statusEdit: statusChanged } = pending;
@@ -220,7 +241,6 @@ export function EditOrderMetaForm({
 				tillId: identity.tillId,
 			}),
 		});
-		setLoading(true);
 		let patched = false;
 		try {
 			if (!(await writeOrderFields(order, patch))) return;

@@ -162,10 +162,11 @@ export function useFormChangeHandler<T extends FieldValues>({
 			if (isSameValue(value, get(lastSeen, name))) return;
 			set(lastSeen, name, cloneDeep(value));
 			const changes = { [name]: value } as unknown as Partial<T>;
-			// A nested path (meta_data.0.key) is validated at its root: the caller writes the whole
-			// root field, so a sibling row the gate refused earlier must not ride along.
-			const validated = name.split('.')[0] as FieldPath<T>;
-			const validate = () => form.trigger(validated);
+			// The changed path is what is validated, not its root: a root-wide gate refuses the edit
+			// for a sibling the cashier never touched (stored display settings predating a schema
+			// field blocked every column toggle). A caller that writes a whole root field owns the
+			// rest of that root (the order sheet filters its meta rows itself).
+			const validate = () => form.trigger(name as FieldPath<T>);
 
 			// Debounce text inputs to avoid saving on every keystroke
 			if (isTextValue(value) && debounceMs > 0 && debounced) {
