@@ -267,6 +267,8 @@ it('persists a switch change immediately (control)', async () => {
 
 	fireEvent.click(screen.getByLabelText('showOutOfStock'));
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ showOutOfStock: true });
 	await settle();
 });
@@ -279,6 +281,8 @@ it('persists a View Mode selection', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ viewMode: 'grid' });
 	await settle();
 });
@@ -287,6 +291,8 @@ it('persists the inline Variations selection', async () => {
 	render(<UISettingsForm />);
 	fireEvent.click(screen.getByTestId('products-variations-style-inline'));
 	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ variationsStyle: 'inline' });
 	await settle();
 });
@@ -331,10 +337,14 @@ it('offers Browse by with All products first and dims a source with nothing to s
 	expect(brands).toHaveTextContent('pos_products.no_brands_yet');
 	fireEvent.click(brands);
 	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).not.toHaveBeenCalled();
 
 	fireEvent.click(tags);
 	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'tags' });
 	await settle();
 	expect(screen.getByTestId('ui-settings-browse-by-tags')).toHaveAttribute('aria-checked', 'true');
@@ -348,6 +358,8 @@ it('persists a Sort By selection', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortBy: 'sku' });
 	await settle();
 });
@@ -360,6 +372,8 @@ it('persists a Sort Direction toggle', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortDirection: 'desc' });
 	await settle();
 });
@@ -372,6 +386,8 @@ it('persists a Panel Position toggle', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ position: 'right' });
 	await settle();
 });
