@@ -7,11 +7,7 @@ import { searchBlobFor } from '../src/search-blob';
 import { legacySearchSnapshot } from '../src/engine-adapter/search-snapshot';
 import { resolveLegacyField } from '../src/engine-adapter/collection-map';
 import { SEARCH_FIELDS } from '../src/search-fields';
-import {
-	projectionReaderFor,
-	registerProjectionReader,
-	storageQueryProjectionReader,
-} from '../src/projection-read';
+import { storageQueryProjectionReader } from '../src/projection-read';
 import { engineProduct } from '../src/testing';
 import { storages } from './helpers/storages';
 
@@ -57,21 +53,6 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 		await blob.ready;
 		expect(blob.search(['coffee'])).toEqual(['coffee']);
 		expect(find).not.toHaveBeenCalled();
-		blob.dispose();
-	});
-	it('uses the default until a reader is registered for this database', async () => {
-		expect(projectionReaderFor(database)).toBe(storageQueryProjectionReader);
-		const reader = { readLiveProjection: async () => [{ id: 'custom', values: ['Custom'] }] };
-		registerProjectionReader(database, reader);
-		expect(projectionReaderFor(database)).toBe(reader);
-		const blob = searchBlobFor(
-			database.products,
-			['name'],
-			(doc) => legacySearchSnapshot('products', doc),
-			'products'
-		);
-		await blob.ready;
-		expect(blob.search(['custom'])).toEqual(['custom']);
 		blob.dispose();
 	});
 });

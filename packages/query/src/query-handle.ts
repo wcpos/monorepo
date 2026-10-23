@@ -252,30 +252,10 @@ export function censusTotal$(
  * last count proves that count outdated, so the larger number wins — stated plainly, never
  * dressed up with a `N+` suffix (owner ruling 2026-08-20: the `+` read as noise, and every
  * locale translated it differently).
- */
-export function coverageProjection$(
-	engine: RxdbSyncEngine,
-	result$: Observable<QueryResult<RxCollection>>,
-	coverageTarget$: Observable<CoverageTarget | null>,
-	census$: Observable<number | null>,
-	coverage: 'exact' | 'superset' | undefined = 'exact'
-): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
-	return coverageProjectionWithResult$(engine, result$, coverageTarget$, census$, coverage).pipe(
-		map(({ total, laneProgress }) => ({ total, laneProgress })),
-		distinctUntilChanged(
-			(previous, current) =>
-				previous.total === current.total &&
-				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
-				previous.laneProgress?.total === current.laneProgress?.total
-		),
-		shareReplay({ bufferSize: 1, refCount: true })
-	);
-}
-
-/**
- * `coverageProjection$` carrying the result it was computed for, so a snapshot can take rows
- * and total from ONE emission: fed separately, a new result would first pair with the old
- * total and the reader would see two frames, one of them inconsistent.
+ *
+ * The numbers carry the result they were computed for, so a snapshot can take rows and total
+ * from ONE emission: fed separately, a new result would first pair with the old total and the
+ * reader would see two frames, one of them inconsistent.
  */
 export function coverageProjectionWithResult$<R extends QueryResult<RxCollection>>(
 	engine: RxdbSyncEngine,

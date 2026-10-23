@@ -9,7 +9,6 @@ import {
 	adoptCounters,
 	advancePerpetual,
 	bindRegister,
-	ensureRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,
@@ -24,6 +23,9 @@ import {
 import { markAnchored, remintRegister } from '../../src/register-session/register-document';
 
 jest.mock('uuid', () => ({ v4: () => 'ABCDEF00-0000-4000-8000-00000000ABCD' }));
+/** Hydration's read-or-mint: the register as stored, or a plain mint on an empty document. */
+const readOrMint = async (userDB: UserDatabase) =>
+	(await readRegister(userDB)) ?? (await remintRegister(userDB));
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: UserDatabase;
 beforeEach(async () => {
@@ -38,15 +40,15 @@ afterEach(async () => {
 	await db.remove();
 });
 it('mints once, including concurrent hydration, and reuses the document', async () => {
-	const [first, second] = await Promise.all([ensureRegister(db), ensureRegister(db)]);
+	const [first, second] = await Promise.all([readOrMint(db), readOrMint(db)]);
 	expect(first).toEqual(second);
-	expect(await ensureRegister(db)).toEqual(first);
+	expect(await readOrMint(db)).toEqual(first);
 	expect(first.id).toBe(first.id.toLowerCase());
 	expect(first.name).toBe('Register ABCD');
 	expect(first.sites).toEqual({});
 });
 it('increments atomically without duplicate counters', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	for (const counter of [1, 2, 3]) expect(await nextSaleCounter(db, 'site')).toBe(counter);
 	expect(
 		(await Promise.all([nextSaleCounter(db, 'site'), nextSaleCounter(db, 'site')])).sort()
@@ -55,7 +57,7 @@ it('increments atomically without duplicate counters', async () => {
 it('completion metadata is retained on retry without incrementing the counter', async () => {
 	const { completionMeta } =
 		await import('../../../core/src/screens/main/pos/checkout/provenance/stamp-completion');
-	await ensureRegister(db);
+	await readOrMint(db);
 	const first = await completionMeta(
 		{ meta_data: [{ key: 'custom', value: 'keep' }] },
 		{ userDB: db, siteUuid: 'site' }
@@ -66,13 +68,13 @@ it('completion metadata is retained on retry without incrementing the counter', 
 });
 
 it('returns each assigned counter even when RxDB batches concurrent modifiers', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	const counters = await Promise.all(Array.from({ length: 10 }, () => nextSaleCounter(db, 'site')));
 	expect(counters.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
 
 it('counts sites independently without changing the global identity', async () => {
-	const register = await ensureRegister(db);
+	const register = await readOrMint(db);
 	for (const counter of [1, 2, 3]) {
 		expect(await nextSaleCounter(db, 'site')).toBe(counter);
 		expect(await nextSaleCounter(db, 'other')).toBe(counter);
@@ -92,7 +94,7 @@ afterEach(() => jest.restoreAllMocks());
 it('caches the register identity and mints v4 with random bytes when randomUUID is absent', async () => {
 	const { getRegisterId } = await import('../../src/register-session/register-document');
 	jest.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(undefined as never);
-	const register = await ensureRegister(db);
+	const register = await readOrMint(db);
 	expect(register.id).toMatch(
 		/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 	);
@@ -102,7 +104,7 @@ it('caches the register identity and mints v4 with random bytes when randomUUID 
 });
 
 it('binds and unbinds independently per site without changing counters or the till', async () => {
-	const till = await ensureRegister(db);
+	const till = await readOrMint(db);
 	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
 	await bindRegister(db, 'site', { id: 'drawer-a', name: 'Front' }, 1);
 	await bindRegister(db, 'other', { id: 'drawer-b', name: 'Back' }, 1);
@@ -125,7 +127,7 @@ it.each([null, { id: 'server-register', name: 'Front' }])(
 	async (bound) => {
 		const { completionMeta } =
 			await import('../../../core/src/screens/main/pos/checkout/provenance/stamp-completion');
-		await ensureRegister(db);
+		await readOrMint(db);
 		if (bound) await bindRegister(db, 'site', bound, 1);
 		const meta = await completionMeta({}, { userDB: db, siteUuid: 'site' });
 		expect(meta.find(({ key }) => key === '_wcpos_register')?.value).toBe(bound?.id);
@@ -134,7 +136,7 @@ it.each([null, { id: 'server-register', name: 'Front' }])(
 );
 
 it('rejects another store pointer after hydration without resetting the site counter', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	await bindRegister(db, 'site', { id: 'a', name: 'A' }, 1);
 	await nextSaleCounter(db, 'site');
 	await bindRegister(db, 'site', { id: 'b', name: 'B' }, 2);
@@ -146,7 +148,7 @@ it('rejects another store pointer after hydration without resetting the site cou
 	expect(await nextSaleCounter(db, 'site')).toBe(2);
 });
 it('does not unbind a pointer another store of the site has written', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	await bindRegister(db, 'site', { id: 'drawer-a', name: 'Front' }, 1);
 	await bindRegister(db, 'site', { id: 'drawer-b', name: 'Back' }, 2);
 	await unbindRegister(db, 'site', 1);
@@ -155,7 +157,7 @@ it('does not unbind a pointer another store of the site has written', async () =
 	expect(await readBoundRegister(db, 'site', 2)).toBeNull();
 });
 it('accepts a legacy pointer until the next bind records its store', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	const doc = await db.getLocal('register');
 	await doc!.incrementalPatch({ sites: { site: { sale_counter: 4, register_id: 'old' } } });
 	expect(await readBoundRegister(db, 'site', 0)).toEqual({ id: 'old', name: '' });
@@ -168,7 +170,7 @@ it('accepts a legacy pointer until the next bind records its store', async () =>
 });
 
 it('mints unique closure numbers after the adopted floor, independently by site', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	await adoptCounters(db, 'site', 'a', {
 		last_closure_number: 12,
 		perpetual_sales_total: '100.01',
@@ -182,7 +184,7 @@ it('mints unique closure numbers after the adopted floor, independently by site'
 	expect(await mintClosureNumber(db, 'other', 'a')).toBe(1);
 });
 it('only raises each counter and adds perpetual amounts in minor units', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	await adoptCounters(db, 'site', 'a', {
 		last_closure_number: 3,
 		perpetual_sales_total: '0.1',
@@ -202,7 +204,7 @@ it('only raises each counter and adds perpetual amounts in minor units', async (
 });
 
 it('keeps register B independent of A and ignores legacy site counters', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	await (await db.getLocal('register'))!.incrementalPatch({
 		sites: { site: { sale_counter: 7, last_closure_number: 99, perpetual_sales_total: '999' } },
 	});
@@ -234,7 +236,7 @@ it('keeps register B independent of A and ignores legacy site counters', async (
 });
 
 it('a re-mint after adopting a newer server floor carries the period exactly once', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	const closure = {
 		id: 'c1',
 		period_sales_total: '20',
@@ -281,7 +283,7 @@ it('readCounters refuses payloads that cannot serve as a floor', () => {
 
 it('re-mints a cloned till: new id, counters back at zero, store bindings and floors kept', async () => {
 	const { remintRegister } = await import('../../src/register-session/register-document');
-	const cloned = await ensureRegister(db);
+	const cloned = await readOrMint(db);
 	await bindRegister(db, 'site', { id: 'server-register', name: 'Front' }, 1);
 	await adoptCounters(db, 'site', 'server-register', {
 		last_closure_number: 4,
@@ -342,7 +344,7 @@ it('re-minting without a document is a plain mint', async () => {
 });
 
 it('markAnchored sets the flag and a re-mint keeps it', async () => {
-	await ensureRegister(db);
+	await readOrMint(db);
 	expect((await readRegister(db))?.anchored).toBeUndefined();
 	expect((await markAnchored(db)).anchored).toBe(true);
 	expect(getRegisterSnapshot()?.anchored).toBe(true);
@@ -361,7 +363,7 @@ describe('settleRegister: the till anchor', () => {
 	};
 	const anchoredTill = async () => {
 		nextUuids('aaaaaaaa-0000-4000-8000-00000000000a');
-		await ensureRegister(db);
+		await readOrMint(db);
 		await nextSaleCounter(db, 'site');
 		return markAnchored(db);
 	};
@@ -391,7 +393,7 @@ describe('settleRegister: the till anchor', () => {
 	});
 
 	it('marks a matching till that lacks the flag', async () => {
-		const till = await ensureRegister(db);
+		const till = await readOrMint(db);
 		localStorage.setItem(ANCHOR, till.id);
 		const settled = await settleRegister(db);
 		expect(settled).toMatchObject({ id: till.id, anchored: true });
@@ -402,7 +404,7 @@ describe('settleRegister: the till anchor', () => {
 		['no anchor', null],
 		['a stale foreign anchor', 'other-till'],
 	])('adopts a till from before the anchor (%s), without re-minting', async (_, anchor) => {
-		const till = await ensureRegister(db);
+		const till = await readOrMint(db);
 		await nextSaleCounter(db, 'site');
 		if (anchor) localStorage.setItem(ANCHOR, anchor);
 		const settled = await settleRegister(db);
@@ -434,7 +436,7 @@ describe('settleRegister: the till anchor', () => {
 	it.each([true, false])(
 		'keeps the till as it is when the anchor cannot be written (anchored=%s)',
 		async (anchored) => {
-			const till = anchored ? await anchoredTill() : await ensureRegister(db);
+			const till = anchored ? await anchoredTill() : await readOrMint(db);
 			jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 				throw new DOMException('quota exceeded', 'QuotaExceededError');
 			});

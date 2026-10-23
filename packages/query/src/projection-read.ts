@@ -1,7 +1,7 @@
 import get from 'lodash/get';
 import { normalizeMangoQuery, prepareQuery } from 'rxdb';
 
-import type { RxCollection, RxDatabase } from 'rxdb';
+import type { RxCollection } from 'rxdb';
 
 export type ProjectionRow = { id: string; values: unknown[] };
 
@@ -9,13 +9,12 @@ export type ProjectionRow = { id: string; values: unknown[] };
  * The slice of an RxCollection a projection read needs. Structural on purpose: the search
  * plane types its collections narrowly (`SearchableCollection`) and hands them here.
  */
-export type ProjectionCollection = Pick<RxCollection, 'schema' | 'storageInstance' | 'database'>;
+export type ProjectionCollection = Pick<RxCollection, 'schema' | 'storageInstance'>;
 
 /**
  * A storage read that returns only the named paths of every LIVE document — the seam the
- * catalogue search index is built through (#2242). The engine-neutral reader below satisfies
- * it on every current engine; a SQLite engine registers one that issues
- * `SELECT id, json_extract(data, ...)` so opening a store never parses every product document.
+ * catalogue search index is built through (#2242). The engine-neutral reader below is the
+ * only reader, on every current engine.
  */
 export type ProjectionReader = {
 	/**
@@ -44,14 +43,3 @@ export const storageQueryProjectionReader: ProjectionReader = {
 		}));
 	},
 };
-
-const readers = new WeakMap<RxDatabase, ProjectionReader>();
-
-/** Registered per database by the platform that opens it; unregistered databases use the storage read. */
-export function registerProjectionReader(database: RxDatabase, reader: ProjectionReader): void {
-	readers.set(database, reader);
-}
-
-export function projectionReaderFor(database: RxDatabase): ProjectionReader {
-	return readers.get(database) ?? storageQueryProjectionReader;
-}

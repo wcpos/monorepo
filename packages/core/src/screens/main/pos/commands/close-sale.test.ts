@@ -49,7 +49,7 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
 }));
 jest.mock('@wcpos/query/mutations', () => ({
-	mirrorServerOrder: (...args: unknown[]) => mockMirror(...(args as [])),
+	fakeMirror: (...args: unknown[]) => mockMirror(...(args as [])),
 }));
 
 const order = {

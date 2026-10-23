@@ -2,9 +2,9 @@
  * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
  * commands. The scan asserts zero violations in core production sources; there is no allowlist.
  * A failure names the file, the rule, the enclosing declaration chain and the node text.
- * Raw queries, resident helper writes, engine aliases, cross-package relative imports and raw
- * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
- * evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
+ * Raw queries, resident helper writes, engine aliases, an active scope's `database` handle,
+ * cross-package relative imports and raw database/collection change streams are fenced
+ * syntactically: accidental leaks, not deliberate evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
  * bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
  * remains allowed (ADR 0028), including element access and destructuring. Stream fences
  * ($, eventBulks$ and collections$) share lifecycle/collection receiver names, including member
@@ -281,6 +281,16 @@ function isEngineReceiver(node: ts.Node | undefined): boolean {
 	);
 }
 
+/** `engine.active()`: the active scope, whose `database` member is the storage handle. */
+function isActiveScope(node: ts.Node | undefined): boolean {
+	node = unwrap(node);
+	return (
+		!!node &&
+		ts.isCallExpression(node) &&
+		isEngineReceiver(memberReceiver(node.expression, 'active'))
+	);
+}
+
 function bindsEngine(name: ts.BindingName): boolean {
 	return (
 		ts.isObjectBindingPattern(name) &&
@@ -419,6 +429,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			isEngineReceiver(receiver)
 		)
 			report('write plane outside a command module', node);
+		if (name === 'database' && isActiveScope(receiver))
+			report('storage handle outside a named read', node);
 		if (name === 'require' && isEngineReceiver(receiver))
 			report('require plane outside a named read', node);
 		if (name === 'resetCollection' && isEngineReceiver(memberReceiver(receiver, 'scope')))
@@ -1116,6 +1128,20 @@ it.each(
 	])
 )('fences collection receivers through transparent wrappers: %s', (source, rule) => {
 	expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([rule]);
+});
+
+it.each([
+	'runtime.engine.active()?.database;',
+	'(engine.active() as Scope).database;',
+	'const { database } = runtime.engine.active()!;',
+])('fences the storage handle on an active scope: %s', (source) => {
+	expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([
+		'storage handle outside a named read',
+	]);
+});
+
+it('allows a database member on anything but an active scope', () => {
+	expect(violations('site.database; error.database; runtime.engine.active()?.name;')).toEqual([]);
 });
 
 it('unwraps nested engine scope receivers', () => {

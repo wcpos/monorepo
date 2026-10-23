@@ -68,11 +68,11 @@ jest.mock('@wcpos/query', () => ({
 		return Object.assign(
 			(url: string, body: object) => input.post(url, { ...body, revision: 'sha256:sent' }),
 			{
-				// The mocked mirrorServerOrder under the revision the post went out with, then settle.
+				// The mocked fakeMirror under the revision the post went out with, then settle.
 				mirror: async (answer: object) => {
 					await jest
 						.requireMock('@wcpos/query/mutations')
-						.mirrorServerOrder(input.runtime, input.orderUuid, {
+						.fakeMirror(input.runtime, input.orderUuid, {
 							...answer,
 							sentRevision: 'sha256:sent',
 						});
@@ -663,6 +663,6 @@ it.each([
 );
 
 jest.mock('@wcpos/query/mutations', () => ({
-	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+	fakeMirror: (manager: unknown, recordId: string, changes: unknown) =>
 		mockPatchEngineResident({ manager, collection: 'orders', recordId, changes }),
 }));

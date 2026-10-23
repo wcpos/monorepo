@@ -382,11 +382,11 @@ jest.mock('@wcpos/query', () => ({
 	}) => {
 		mockPosterInputs.push(input);
 		return Object.assign((url: string, body: unknown) => input.post(url, body), {
-			// The mocked mirrorServerOrder under a fixed revision.
+			// The mocked fakeMirror under a fixed revision.
 			mirror: async (answer: object) => {
 				await jest
 					.requireMock('@wcpos/query/mutations')
-					.mirrorServerOrder(input.runtime, input.orderUuid, {
+					.fakeMirror(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
 					});
@@ -4906,7 +4906,7 @@ jest.mock('@wcpos/query/mutations', () => ({
 	...jest.requireActual('@wcpos/query/mutations'),
 	// The real mirror resolves the answer over the LATEST resident (ADR 0040); the spy sees the
 	// changes it would write: the row upserted into the current ledger, the asserted meta, the status.
-	mirrorServerOrder: (
+	fakeMirror: (
 		manager: unknown,
 		recordId: string,
 		answer: {

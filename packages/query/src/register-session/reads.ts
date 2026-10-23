@@ -111,18 +111,6 @@ function closureQuery(closures: RxCollection<ClosureRow>, identity: ClosureIdent
 	).$ as unknown as Observable<ReadonlyClosureDocument | null>;
 }
 
-/** Absent → null. Reports may know the local UUID, the server identity, or both. */
-export function observeClosure(
-	storeDB: RegisterStoreDatabase,
-	identity: ClosureIdentity
-): Observable<ReadonlyClosureDocument | null> {
-	return observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
-		switchMap((closures) =>
-			closures ? closureQuery(closures, identity).pipe(startWith(null)) : of(null)
-		)
-	);
-}
-
 /**
  * Fresh one-shot answer for print callbacks: the first ANSWERED query of the collection that
  * is current when it answers. A reset landing before the first answer moves the lookup to the

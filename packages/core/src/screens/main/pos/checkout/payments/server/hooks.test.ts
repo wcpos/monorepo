@@ -39,7 +39,7 @@ jest.mock('../../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('@wcpos/query', () => ({
-	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.
+	// Posts straight through; its mirror is the mocked fakeMirror under a fixed revision.
 	moneyCommandPoster: (input: {
 		post: (url: string, body: unknown) => Promise<unknown>;
 		runtime: unknown;
@@ -47,12 +47,10 @@ jest.mock('@wcpos/query', () => ({
 	}) =>
 		Object.assign((url: string, body: unknown) => input.post(url, body), {
 			mirror: (answer: object) =>
-				jest
-					.requireMock('@wcpos/query/mutations')
-					.mirrorServerOrder(input.runtime, input.orderUuid, {
-						...answer,
-						sentRevision: 'sha256:sent',
-					}),
+				jest.requireMock('@wcpos/query/mutations').fakeMirror(input.runtime, input.orderUuid, {
+					...answer,
+					sentRevision: 'sha256:sent',
+				}),
 			settle: async () => undefined,
 		}),
 	engineCollection: () => null,
@@ -346,7 +344,7 @@ jest.mock('@wcpos/query/store-local', () => ({
 }));
 
 jest.mock('@wcpos/query/mutations', () => ({
-	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
+	fakeMirror: (manager: unknown, recordId: string, changes: unknown) =>
 		mockPatch({ manager, collection: 'orders', recordId, changes }),
 	observeOfflineDeviceAuthorizations:
 		jest.requireActual('@wcpos/query/mutations').observeOfflineDeviceAuthorizations,
