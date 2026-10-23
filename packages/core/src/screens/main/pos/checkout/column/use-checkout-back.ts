@@ -5,7 +5,7 @@ export function useCheckoutBack(back: () => void, { escape = true } = {}) {
 	// Native hardware and DOM keyboard events are external sources; subscribe only
 	// while this checkout pane is mounted, and leave navigation itself unguarded.
 	React.useEffect(() => {
-		const hardware =
+		const hardwareSubscription =
 			Platform.OS === 'android'
 				? BackHandler.addEventListener('hardwareBackPress', () => {
 						back();
@@ -26,7 +26,7 @@ export function useCheckoutBack(back: () => void, { escape = true } = {}) {
 		};
 		if (escape && typeof document !== 'undefined') document.addEventListener('keydown', keydown);
 		return () => {
-			hardware?.remove();
+			hardwareSubscription?.remove();
 			if (escape && typeof document !== 'undefined')
 				document.removeEventListener('keydown', keydown);
 		};

@@ -215,7 +215,9 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: customer,
@@ -237,7 +239,9 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLoggerSuccess).toHaveBeenCalledWith(
 			'common.saved_2',
@@ -274,7 +278,9 @@ describe('useMutation', () => {
 		);
 
 		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLoggerSuccess).toHaveBeenCalledTimes(2);
 		for (const [, options] of mockLoggerSuccess.mock.calls) {

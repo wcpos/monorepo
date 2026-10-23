@@ -137,8 +137,7 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 		[collectionName, handleError, handleSuccess, runtime]
 	);
 
-	// `patchRecord` is the same function under the name a screen's /commands/ module calls it by:
-	// the seam fences the member name `patch` wherever core spells it, and a command module is
-	// the one place that may hold the resident write (ADR 0033 item 6).
-	return { patch, create, patchRecord: patch };
+	// Command modules call it `patchRecord` because the seam scan fences the member name `patch`;
+	// a command module is the one place that may hold the resident write (ADR 0033 item 6).
+	return { create, patchRecord: patch };
 };

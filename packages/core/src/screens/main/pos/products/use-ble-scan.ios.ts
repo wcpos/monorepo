@@ -247,9 +247,9 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				forensic('Failed to stop BLE scanner discovery', error);
 			});
 		}
-		const monitor = monitorRef.current;
+		const monitorSubscription = monitorRef.current;
 		monitorRef.current = null;
-		monitor?.remove();
+		monitorSubscription?.remove();
 		const unregister = unregisterRef.current;
 		unregisterRef.current = null;
 		unregister?.();
