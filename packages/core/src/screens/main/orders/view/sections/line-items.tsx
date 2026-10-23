@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import toNumber from 'lodash/toNumber';
 
 import { Image } from '@wcpos/components/image';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
@@ -25,7 +26,9 @@ function LineItemRow({
 	format,
 	t,
 	last,
+	phone,
 }: {
+	phone: boolean;
 	item: LineItem;
 	format: (n: number) => string;
 	t: ReturnType<typeof useT>;
@@ -77,17 +80,32 @@ function LineItemRow({
 								{String(entry.display_value ?? entry.value ?? '')}
 							</Text>
 						))}
+						{phone ? (
+							<Text className="text-muted-foreground text-xs tabular-nums">
+								{discounted ? `${format(unit)} · ` : ''}
+								{discounted ? (
+									<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
+										{format(originalUnit)}
+									</Text>
+								) : (
+									format(unit)
+								)}
+							</Text>
+						) : null}
 					</View>
 				</View>
 			</View>
-			<View className="w-20 items-end">
-				{discounted ? (
-					<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
-						{format(originalUnit)}
-					</Text>
-				) : null}
-				<Text className="text-muted-foreground text-sm tabular-nums">{format(unit)}</Text>
-			</View>
+			{/* A phone drops the Price column, as the cart does; the unit moves into the sub-line. */}
+			{phone ? null : (
+				<View className="w-20 items-end">
+					{discounted ? (
+						<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
+							{format(originalUnit)}
+						</Text>
+					) : null}
+					<Text className="text-muted-foreground text-sm tabular-nums">{format(unit)}</Text>
+				</View>
+			)}
 			<View className="w-20 items-end">
 				<Text className="text-foreground text-sm font-medium tabular-nums">{format(total)}</Text>
 			</View>
@@ -100,7 +118,9 @@ function FeeRow({
 	format,
 	t,
 	last,
+	phone,
 }: {
+	phone: boolean;
 	fee: FeeLine;
 	format: (n: number) => string;
 	t: ReturnType<typeof useT>;
@@ -125,7 +145,7 @@ function FeeRow({
 					</Text>
 				</View>
 			</View>
-			<View className="w-20" />
+			{phone ? null : <View className="w-20" />}
 			<View className="w-20 items-end">
 				<Text className="text-foreground text-sm font-medium tabular-nums">
 					{format(toNumber(fee.total))}
@@ -136,7 +156,7 @@ function FeeRow({
 }
 
 /** The cart's column head: Qty · Item · Price · Total, in the cart's own words. */
-function HeadRow({ t }: { t: ReturnType<typeof useT> }) {
+function HeadRow({ t, phone }: { t: ReturnType<typeof useT>; phone: boolean }) {
 	return (
 		<View className="border-border flex-row gap-3 border-b pb-2">
 			<View className="w-8">
@@ -145,9 +165,11 @@ function HeadRow({ t }: { t: ReturnType<typeof useT> }) {
 			<View className="min-w-0 flex-1">
 				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_item')}</Text>
 			</View>
-			<View className="w-20 items-end">
-				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_price')}</Text>
-			</View>
+			{phone ? null : (
+				<View className="w-20 items-end">
+					<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_price')}</Text>
+				</View>
+			)}
 			<View className="w-20 items-end">
 				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_total')}</Text>
 			</View>
@@ -157,6 +179,7 @@ function HeadRow({ t }: { t: ReturnType<typeof useT> }) {
 
 export function LineItemsSection({ order }: { order: OrderPayload }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const lineItems = order.line_items || [];
 	const fees = order.fee_lines || [];
@@ -172,13 +195,14 @@ export function LineItemsSection({ order }: { order: OrderPayload }) {
 	return (
 		<Section title={t('orders.items')}>
 			<View>
-				<HeadRow t={t} />
+				<HeadRow t={t} phone={phone} />
 				{lineItems.map((item, index) => (
 					<LineItemRow
 						key={`${item.id ?? item.name ?? 'line-item'}-${index}`}
 						item={item}
 						format={format}
 						t={t}
+						phone={phone}
 						last={fees.length === 0 && index === lineItems.length - 1}
 					/>
 				))}
@@ -188,6 +212,7 @@ export function LineItemsSection({ order }: { order: OrderPayload }) {
 						fee={fee}
 						format={format}
 						t={t}
+						phone={phone}
 						last={index === fees.length - 1}
 					/>
 				))}

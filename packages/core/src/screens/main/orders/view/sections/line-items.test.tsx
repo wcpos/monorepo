@@ -16,6 +16,8 @@ jest.mock('react-native', () => ({
 	),
 }));
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'head' }));
 // Mirrors the real Text, `decodeHtml` included — a mock that swallowed the prop
 // would make the entity assertions below unfailable.
@@ -82,5 +84,20 @@ describe('LineItemsSection', () => {
 		expect(text).not.toContain('×');
 		// The fee row: no qty, no unit price, its total last.
 		expect(text).toContain('Gift wrap & cardFees$5.00');
+	});
+
+	it('a phone drops the Price column as the cart does; the unit price joins the sub-line', () => {
+		mockPhone = true;
+		try {
+			const { container } = render(<LineItemsSection order={order} />);
+			const text = container.textContent ?? '';
+			expect(text).not.toContain('Price');
+			expect(text.indexOf('Item')).toBeLessThan(text.indexOf('Total'));
+			// Sub-line carries the unit, then the line total ends the row.
+			expect(text).toContain('Large$10.00$10.00');
+			expect(text.match(/\$10\.00/g)).toHaveLength(2);
+		} finally {
+			mockPhone = false;
+		}
 	});
 });

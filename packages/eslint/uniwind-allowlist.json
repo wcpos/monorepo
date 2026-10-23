@@ -1,169 +1,166 @@
 {
-  "apps/main/app/(app)/(drawer)/(pos)/(columns)/index.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/components/src/accordion/index.tsx": {
-    "duration-literal": 2,
-    "focus-visible:": 3
-  },
-  "packages/components/src/dnd/web/drop-indicator.tsx": {
-    "arbitrary-px": 13,
-    "before:/after:": 14
-  },
-  "packages/components/src/dnd/web/sortable-item.tsx": {
-    "duration-literal": 1,
-    "hover:": 2
-  },
-  "packages/components/src/table/pulse-row.tsx": {
-    "duration-literal": 2
-  },
-  "packages/core/src/screens/auth/connect.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/components/data-table/header.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/data-table/rows.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/drawer-content/rail/drawer-item.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/drawer-content/rail/index.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/drawer-content/version.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/notification-bell/notification-panel.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/product/variable-image.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/components/product/variable-product-row/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/components/product/variable-product-row/variations/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/coupons/cells/actions.tsx": {
-    "group-*": 1
-  },
-  "packages/core/src/screens/main/coupons/cells/status.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/coupons/edit/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/customers/cells/actions.tsx": {
-    "group-*": 1
-  },
-  "packages/core/src/screens/main/customers/edit/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/health/components/code-chip.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/health/components/stat.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/health/database.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
-    "duration-literal": 2
-  },
-  "packages/core/src/screens/main/hooks/use-print/use-print.web.ts": {
-    "hex-colour": 1
-  },
-  "packages/core/src/screens/main/logs/ledger.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/logs/row-detail.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/orders/cells/status.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/orders/view/sections/line-items.tsx": {
-    "arbitrary-px": 2
-  },
-  "packages/core/src/screens/main/pos/cart/cells/line-strip.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/cart/conditions-notice.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/cart/tabs.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/declared-fields-view.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/products/browse/gallery.tsx": {
-    "hex-colour": 2
-  },
-  "packages/core/src/screens/main/pos/products/cells/variable-image.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/pos/products/meta-data-keys-field.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/products/rows/in-cart-count.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/products/rows/variable-product-row.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/products/scan-sound-themes.ts": {
-    "duration-literal": 10
-  },
-  "packages/core/src/screens/main/pos/products/tiles/inline-variable-tile.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/products/cells/actions.tsx": {
-    "group-*": 1
-  },
-  "packages/core/src/screens/main/products/cells/stock-status.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/products/cells/variation-actions.tsx": {
-    "group-*": 1
-  },
-  "packages/core/src/screens/main/products/index.tsx": {
-    "bare-Suspense": 2
-  },
-  "packages/core/src/screens/main/receipt/components/receipt-preview-viewport.tsx": {
-    "arbitrary-px": 1,
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/receipt/components/receipt-preview-viewport.web.tsx": {
-    "arbitrary-px": 1,
-    "hover:": 2
-  },
-  "packages/core/src/screens/main/reports/cards/card.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/reports/index.tsx": {
-    "bare-Suspense": 2
-  },
-  "packages/core/src/screens/main/reports/report/generate-html.ts": {
-    "hex-colour": 2
-  },
-  "packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
-    "duration-literal": 3
-  },
-  "packages/core/src/screens/main/settings/printing/printer-row.tsx": {
-    "group-*": 1
-  },
-  "packages/core/src/screens/main/tax-rates/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/splash/index.tsx": {
-    "hex-colour": 1
-  }
+	"apps/main/app/(app)/(drawer)/(pos)/(columns)/index.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/components/src/accordion/index.tsx": {
+		"duration-literal": 2,
+		"focus-visible:": 3
+	},
+	"packages/components/src/dnd/web/drop-indicator.tsx": {
+		"arbitrary-px": 13,
+		"before:/after:": 14
+	},
+	"packages/components/src/dnd/web/sortable-item.tsx": {
+		"duration-literal": 1,
+		"hover:": 2
+	},
+	"packages/components/src/table/pulse-row.tsx": {
+		"duration-literal": 2
+	},
+	"packages/core/src/screens/auth/connect.tsx": {
+		"arbitrary-px": 1
+	},
+	"packages/core/src/screens/main/components/data-table/header.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/data-table/rows.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/drawer-content/rail/drawer-item.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/drawer-content/rail/index.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/drawer-content/version.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/notification-bell/notification-panel.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/product/variable-image.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/components/product/variable-product-row/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/main/components/product/variable-product-row/variations/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/main/coupons/cells/actions.tsx": {
+		"group-*": 1
+	},
+	"packages/core/src/screens/main/coupons/cells/status.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/coupons/edit/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/main/customers/cells/actions.tsx": {
+		"group-*": 1
+	},
+	"packages/core/src/screens/main/customers/edit/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/main/health/components/code-chip.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/health/components/stat.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/health/database.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
+		"duration-literal": 2
+	},
+	"packages/core/src/screens/main/hooks/use-print/use-print.web.ts": {
+		"hex-colour": 1
+	},
+	"packages/core/src/screens/main/logs/ledger.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/logs/row-detail.tsx": {
+		"arbitrary-px": 1
+	},
+	"packages/core/src/screens/main/orders/cells/status.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/cart/cells/line-strip.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/cart/conditions-notice.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/cart/tabs.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/checkout/tender/declared-fields-view.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/products/browse/gallery.tsx": {
+		"hex-colour": 2
+	},
+	"packages/core/src/screens/main/pos/products/cells/variable-image.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/main/pos/products/meta-data-keys-field.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/products/rows/in-cart-count.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/products/rows/variable-product-row.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/pos/products/scan-sound-themes.ts": {
+		"duration-literal": 10
+	},
+	"packages/core/src/screens/main/pos/products/tiles/inline-variable-tile.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/products/cells/actions.tsx": {
+		"group-*": 1
+	},
+	"packages/core/src/screens/main/products/cells/stock-status.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/products/cells/variation-actions.tsx": {
+		"group-*": 1
+	},
+	"packages/core/src/screens/main/products/index.tsx": {
+		"bare-Suspense": 2
+	},
+	"packages/core/src/screens/main/receipt/components/receipt-preview-viewport.tsx": {
+		"arbitrary-px": 1,
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/receipt/components/receipt-preview-viewport.web.tsx": {
+		"arbitrary-px": 1,
+		"hover:": 2
+	},
+	"packages/core/src/screens/main/reports/cards/card.tsx": {
+		"raw-pressable": 1
+	},
+	"packages/core/src/screens/main/reports/index.tsx": {
+		"bare-Suspense": 2
+	},
+	"packages/core/src/screens/main/reports/report/generate-html.ts": {
+		"hex-colour": 2
+	},
+	"packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
+		"duration-literal": 3
+	},
+	"packages/core/src/screens/main/settings/printing/printer-row.tsx": {
+		"group-*": 1
+	},
+	"packages/core/src/screens/main/tax-rates/index.tsx": {
+		"bare-Suspense": 1
+	},
+	"packages/core/src/screens/splash/index.tsx": {
+		"hex-colour": 1
+	}
 }

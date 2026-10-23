@@ -36,6 +36,9 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 	// Remaining), never a method row that reads as paid. A dead order owes nothing.
 	const dead = ['cancelled', 'failed', 'refunded', 'trash'].includes(payload.status ?? '');
 	const owing = !legs && !paidAt && view.balanceMinor > 0 && !dead;
+	// The ledger derives the balance from the journal alone; a cancelled or refunded order
+	// keeps its legs as history but owes nothing, so it never closes on Remaining.
+	const closing = view.balanceMinor > 0 && !dead;
 	const fallback = !legs && !owing && Boolean(method || paidAt || payload.transaction_id);
 
 	if (!legs && !owing && !fallback && refunded === 0 && !stamp) return null;
@@ -48,9 +51,7 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 					: t('common.payment', { _: 'Payment' })
 			}
 		>
-			{legs || owing ? (
-				<LedgerLegs view={view} format={view.format} closing={view.balanceMinor > 0} />
-			) : null}
+			{legs || owing ? <LedgerLegs view={view} format={view.format} closing={closing} /> : null}
 			{fallback ? (
 				<View testID="order-modal-payment" className="border-border gap-1 border-b py-2">
 					<View className="flex-row items-center justify-between gap-2">

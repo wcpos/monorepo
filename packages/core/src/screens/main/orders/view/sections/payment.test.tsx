@@ -102,6 +102,14 @@ describe('PaymentSection', () => {
 		expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('$7.70');
 	});
 
+	it('a refunded order keeps its legs as history but never closes on Remaining', () => {
+		mockView = viewWith([leg('a', '7.70')], 0);
+		mockView.balanceMinor = 770; // the journal counts the refund back as owed
+		render(<PaymentSection order={record({ status: 'refunded' })} />);
+		expect(screen.getByTestId('checkout-ledger')).not.toBeNull();
+		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
+	});
+
 	it('a cancelled order with a method set shows the method row with no Captured badge', () => {
 		mockView = viewWith([], 0);
 		render(

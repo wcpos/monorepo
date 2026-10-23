@@ -102,7 +102,8 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 			) : null}
 			{folded ? (
 				<Collapsible className="mt-3">
-					<CollapsibleTrigger testID="order-modal-addresses-trigger">
+					{/* The only way to the addresses on a phone: a full 44 pt target (§ Design 2). */}
+					<CollapsibleTrigger testID="order-modal-addresses-trigger" className="min-h-ctl">
 						<Text className="text-foreground text-sm font-medium">{t('common.addresses')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
