@@ -29,9 +29,12 @@ const SHOWN = 3;
 /**
  * The sales the store refused a payment on (ADR 0040 Decided 1 rule 4: one failed story, in
  * Orders, with the reason). The row under the page bar, in the hold banner's slot and gutter; full
- * width on a phone. It is store-wide: a refused payment is the store's money problem, so every
- * cashier sees it. Each entry offers Open order and Handled, and never a Retry: a refused row is
- * never retried on its own, the cashier settles it (a refund, or the balance) and says so.
+ * width on a phone. It is per cashier, not store-wide: `storeDB` is keyed by the signed-in
+ * credential (`generateStoreLocalID` hashes `wpCredentialsID`), so the money journal, the pending
+ * completions and these rows all belong to the cashier who took the sale; another cashier signing
+ * in does not see them (a cross-cashier view is the open question on ADR 0040 Decided 1). Each
+ * entry offers Open order and Handled, and never a Retry: a refused row is never retried on its
+ * own, the cashier settles it (a refund, or the balance) and says so.
  */
 export function PaymentAttentionNotice() {
 	const { storeDB } = useStoreSession();
