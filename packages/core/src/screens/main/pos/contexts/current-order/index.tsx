@@ -116,7 +116,9 @@ export function CurrentOrderProvider({
 	// Determine the current record from internal state. The temporary order has the same
 	// engine-shaped record face as resident orders since ADR 0028 stage I.
 	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
-	const [held, setHeld] = React.useState<OpenOrderHit | undefined>(undefined);
+	// The hit and the scope it came from: another cashier's or register's query must not keep
+	// showing this one's sale.
+	const [held, setHeld] = React.useState<(OpenOrderHit & { scope: string }) | undefined>(undefined);
 	// Subscribe only to this order's membership, not keypad/tender-plan updates.
 	const membership = () => inFlightFor(internalOrderId);
 	React.useSyncExternalStore(subscribeCheckoutMode, membership, membership);
@@ -126,9 +128,10 @@ export function CurrentOrderProvider({
 	const keepHeld =
 		held &&
 		held.id === internalOrderId &&
+		held.scope === scope &&
 		isReceiptStage(held.id, getCheckoutModeSnapshot(), latestHeldStatus);
-	if (selectedOrder && held !== selectedOrder) {
-		setHeld(selectedOrder);
+	if (selectedOrder && (held?.record !== selectedOrder.record || held.scope !== scope)) {
+		setHeld({ ...selectedOrder, scope });
 	} else if (!selectedOrder && held && !keepHeld) {
 		setHeld(undefined);
 	}

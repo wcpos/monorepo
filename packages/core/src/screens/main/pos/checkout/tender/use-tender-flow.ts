@@ -66,6 +66,7 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import {
+	enterCheckout,
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
@@ -1490,6 +1491,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		tiles,
 		reducerDispatch,
 	]);
+
+	// A mounted tender is a checkout member: a restart restores the tender from a live ledger
+	// row without Pay, and the stage derivation and the provider's hold read membership, not
+	// the mount. A confirmed receipt (the phone sheet still runs this hook) is left alone.
+	// Layout, not passive: a capture can land between this commit and passive effects.
+	React.useLayoutEffect(() => {
+		if (!getCheckoutModeSnapshot().receiptOrders.has(order.uuid)) enterCheckout(order.uuid);
+	}, [order.uuid]);
 
 	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
 	React.useEffect(() => {

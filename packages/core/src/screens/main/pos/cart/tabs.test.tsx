@@ -516,6 +516,10 @@ it('keeps a paid checkout member tab before confirmation', () => {
 	try {
 		render(<OpenOrderTabs />);
 		expect(screen.getByTestId('open-order-tab-late').textContent).toContain('Paid · receipt');
+		// Tapping it before confirmation selects the receipt, never the draft under its name.
+		fireEvent.click(screen.getByTestId('open-order-tab-late'));
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('late');
+		expect(mockSetOrder).not.toHaveBeenCalledWith('late');
 	} finally {
 		mockReceipts.late = record;
 	}

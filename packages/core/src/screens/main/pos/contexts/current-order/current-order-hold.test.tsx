@@ -43,11 +43,11 @@ function Probe() {
 	renders++;
 	return <span data-testid="displayed">{currentOrderRecord.uuid}</span>;
 }
-function App({ handle }: { handle: QueryHandle }) {
+function App({ handle, scope = '7:2:r1' }: { handle: QueryHandle; scope?: string }) {
 	return (
 		<CurrentOrderProvider
 			handle={handle}
-			scope="7:2:r1"
+			scope={scope}
 			defaultCustomerResource={{} as never}
 			currentOrderUUID="order-a"
 		>
@@ -132,4 +132,11 @@ it('keeps the latest paid record when the subscribed status still reads open', (
 		({ payload: { status: 'completed' } }) as EngineRecord<'orders'>;
 	view.rerender(<App handle={handleFor([])} />);
 	expectOrders('order-a', 'new-order');
+});
+it('a scope change releases the hold', () => {
+	const view = mountOrder();
+	view.leave();
+	expectOrders('order-a', 'new-order');
+	view.rerender(<App handle={handleFor([])} scope="8:2:r1" />);
+	expectOrders('new-order', 'new-order');
 });

@@ -30,6 +30,7 @@ import { method as deviceMethod, row as deviceRow } from '../payments/device/fix
 import {
 	claimReceiptAutoPrint,
 	enterCheckout,
+	enterReceipt,
 	getCheckoutModeSnapshot,
 	markOrderQueuedOffline,
 	markOrderSaving,
@@ -466,6 +467,14 @@ describe('useTenderFlow', () => {
 		mockVoidPayments.mockResolvedValue({ rows: [], failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
+	});
+	it('a mounted tender is a checkout member; a confirmed receipt is not re-entered', () => {
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(true);
+		resetCheckoutMode();
+		enterReceipt(order.uuid);
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
 	});
 	it.each([
 		['online', 'payment.recorded'],

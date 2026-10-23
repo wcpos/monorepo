@@ -82,14 +82,16 @@ export function OpenOrderTabs({
 	const fresh = activeValue === 'new';
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
-			if (receiptOrders.has(orderId)) {
+			// Every tab outside the open hits is a receipt (a paid checkout member renders only at
+			// receipt stage), confirmed or not: selecting it as a cart would show the draft.
+			if (receiptOrders.has(orderId) || extraIds.includes(orderId)) {
 				selectReceipt(orderId);
 				return;
 			}
 			selectReceipt(null);
 			setCurrentOrderID(orderId === 'new' ? '' : orderId);
 		},
-		[setCurrentOrderID, receiptOrders]
+		[setCurrentOrderID, receiptOrders, extraIds]
 	);
 	// Focus follows the open cart's tab: a step can take the focused tab off the row, and a
 	// cart picked from the list has no tab until the window moves to it. The tab's ref
