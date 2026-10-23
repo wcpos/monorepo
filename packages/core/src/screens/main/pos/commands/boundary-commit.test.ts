@@ -12,6 +12,7 @@ import {
 	withLedger,
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
+import type { OrderPaymentSummary } from '@wcpos/order-math';
 import type { EngineRecord, ReadonlyEngineRecord } from '@wcpos/query';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { pendingCompletions } from '@wcpos/query/store-local';
@@ -46,7 +47,7 @@ const closeSale = {
 	online: jest.fn(() => true),
 	close: jest.fn(async (target: ReadonlyEngineRecord<'orders'>) => {
 		Object.assign(target.getLatest().payload, { status: 'completed' });
-		return { kind: 'completed' as const, order: null, completion: null };
+		return { kind: 'answered' as const, order: { status: 'completed' } as OrderPaymentSummary };
 	}),
 };
 const write = jest.fn(
@@ -153,12 +154,12 @@ it.each(['4', '3'])(
 					configForOrder: () => config,
 					serverOwnsMoney: () => false,
 					bindingStatus: 'bound',
-					complete: async (target, slot) => {
+					complete: async (target, slot, summary) => {
 						expect(slot).toBe(queue);
 						await completeSale(
 							ctx,
 							target,
-							{ source: 'zero-balance' },
+							{ source: 'zero-balance', order: summary },
 							{ host: 'background' },
 							slot
 						);

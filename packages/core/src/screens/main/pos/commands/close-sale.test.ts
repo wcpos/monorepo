@@ -1,11 +1,9 @@
 import type { EngineRecord } from '@wcpos/query';
 
 import {
-	claimReceiptAutoPrint,
 	enterCheckout,
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
-	resolveStage,
 } from '../checkout/checkout-mode';
 import { closeSale } from './close-sale';
 
@@ -43,11 +41,6 @@ jest.mock('@wcpos/query', () => {
 		},
 	};
 });
-const mockRefresh = jest.fn(async (..._args: unknown[]): Promise<string> => 'refreshed');
-jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
-	...jest.requireActual('../checkout/hooks/reconcile-completed-order'),
-	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
-}));
 
 const order = {
 	uuid: 'order-1',
@@ -81,13 +74,14 @@ it('a zero-balance close carries the approval and is refused when the covered to
 	expect(mockMirror).not.toHaveBeenCalled();
 });
 
-it('a 2xx with a completion completes, mirroring the summary under the sent revision', async () => {
+// The completion judges the answer with the resident (sale-completion.test.ts, `zero-balance`).
+it('a 2xx with a completion is answered, mirroring the summary under the sent revision', async () => {
 	const summary = { status: 'completed' };
 	const post = jest.fn(async () => ({ data: { order: summary, completion: { n: 2, id: 'c2' } } }));
 
 	const outcome = await closeSale({} as never, {} as never, order, deps(post));
 
-	expect(outcome).toEqual({ kind: 'completed', order: summary, completion: { n: 2, id: 'c2' } });
+	expect(outcome).toEqual({ kind: 'answered', order: summary });
 	expect(mockMirror).toHaveBeenCalledWith({}, 'order-1', {
 		order: summary,
 		sentRevision: 'sha256:sent',
@@ -116,13 +110,13 @@ it.each([
 );
 
 // Server SPEC §4.3: a paid sale whose completion stamp could not persist answers no completion.
-it('a paid summary with a null completion completes, without a completion number', async () => {
+it('a paid summary with a null completion is answered, without a completion number', async () => {
 	const summary = { status: 'completed' };
 	const post = jest.fn(async () => ({ data: { order: summary, completion: null } }));
 
 	const outcome = await closeSale({} as never, {} as never, order, deps(post));
 
-	expect(outcome).toEqual({ kind: 'completed', order: summary, completion: null });
+	expect(outcome).toEqual({ kind: 'answered', order: summary });
 	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
@@ -175,111 +169,4 @@ it('an order the store has never seen sends nothing (connectivity is the caller�
 	});
 	expect(post).not.toHaveBeenCalled();
 	expect(mockPosterInput).not.toHaveBeenCalled();
-});
-
-// The resident after the mirror decides, as for every leg: a close answered after another till's
-// reopen was adopted settles its journal entry and mirrors, but is not reported completed, so the
-// zero-balance flow shows the reopened cart and prints no receipt.
-it('a close answered after another till’s reopen was adopted is reopened, settled, no receipt', async () => {
-	let status = 'pos-partial';
-	const resident = {
-		uuid: 'order-1',
-		getLatest: () => ({ payload: { id: 42, total: '0.00', currency: 'EUR', status } }),
-	} as unknown as EngineRecord<'orders'>;
-	const summary = { status: 'completed' };
-	const post = jest.fn(async () => {
-		status = 'pos-open'; // the reopen is adopted while the close is in flight
-		return { data: { order: summary, completion: { n: 1, id: 'c1' } } };
-	});
-
-	const outcome = await closeSale({} as never, {} as never, resident, deps(post));
-
-	expect(outcome).toEqual({ kind: 'reopened', order: summary });
-	expect(mockRefresh).toHaveBeenCalledWith({}, 42);
-	expect(mockMirror).toHaveBeenCalledTimes(1);
-	expect(mockSettle).toHaveBeenCalledTimes(1);
-});
-
-// Codex 4341491589 on #2798: a paid answer the revision-guarded mirror could not land is not a
-// reopen until a refresh says so. Without one the close is unconfirmed and its attempt stays.
-describe('a paid close the resident does not show', () => {
-	let status: string;
-	const resident = {
-		uuid: 'order-1',
-		getLatest: () => ({ payload: { id: 42, total: '0.00', currency: 'EUR', status } }),
-	} as unknown as EngineRecord<'orders'>;
-	const summary = { status: 'completed' };
-	const post = jest.fn(async () => ({ data: { order: summary, completion: { n: 1, id: 'c1' } } }));
-	beforeEach(() => {
-		status = 'pos-partial';
-	});
-
-	it.each(['failed', 'timed-out', 'throws'])('is unconfirmed when the refresh %s', async (how) => {
-		mockRefresh.mockImplementationOnce(async () => {
-			if (how === 'throws') throw new Error('engine unavailable');
-			return how;
-		});
-
-		const outcome = await closeSale({} as never, {} as never, resident, deps(post));
-
-		expect(outcome).toEqual({ kind: 'unconfirmed', order: summary });
-		expect(mockSettle).toHaveBeenCalledTimes(1);
-	});
-
-	it('completes when the refresh lands the paid order', async () => {
-		mockRefresh.mockImplementationOnce(async () => {
-			status = 'completed';
-			return 'refreshed';
-		});
-
-		expect(await closeSale({} as never, {} as never, resident, deps(post))).toEqual({
-			kind: 'completed',
-			order: summary,
-			completion: { n: 1, id: 'c1' },
-		});
-	});
-
-	it('is reopened when the refresh lands and the resident still reads unpaid', async () => {
-		expect(await closeSale({} as never, {} as never, resident, deps(post))).toEqual({
-			kind: 'reopened',
-			order: summary,
-		});
-	});
-});
-
-it('a paid close the resident already shows costs no refresh', async () => {
-	const post = jest.fn(async () => ({
-		data: { order: { status: 'completed' }, completion: { n: 3, id: 'c3' } },
-	}));
-	await closeSale({} as never, {} as never, order, deps(post));
-	expect(mockRefresh).not.toHaveBeenCalled();
-});
-
-it('a reopened close returns to checkout and releases its print claim', async () => {
-	let status = 'pos-open';
-	const resident = {
-		uuid: order.uuid,
-		getLatest: () => ({ payload: { id: 42, status } }),
-	} as EngineRecord<'orders'>;
-	enterCheckout(order.uuid);
-	const post = jest.fn(async () => ({
-		data: { order: { status: 'completed' }, completion: null },
-	}));
-	mockMirror.mockImplementationOnce(async () => {
-		status = 'completed';
-	});
-	mockSettle.mockImplementationOnce(async () => {
-		expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], status)).toBe('receipt');
-		expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
-		status = 'pos-open';
-	});
-	mockRefresh.mockResolvedValueOnce('refreshed');
-	expect(await closeSale({} as never, {} as never, resident, deps(post))).toMatchObject({
-		kind: 'reopened',
-	});
-	expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], status)).toBe('checkout');
-	expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
-	expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
-	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(true);
-	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 });

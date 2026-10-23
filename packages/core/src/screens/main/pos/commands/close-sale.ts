@@ -15,53 +15,27 @@ import type { OrderPaymentSummary } from '@wcpos/order-math';
 import {
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
-	isPaidStatus,
 	MONEY_ANSWER_CODES,
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { releaseUnconfirmedReceipt } from '../checkout/checkout-mode';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
-import { refreshOrderRecord, residentUnpaid, type SaleContext } from '../checkout/sale-completion';
+
+import type { SaleContext } from '../checkout/sale-completion';
 
 export type CloseOutcome =
-	| {
-			kind: 'completed';
-			order: OrderPaymentSummary | null;
-			completion: { n: number; id: string } | null;
-	  }
+	/**
+	 * The store's close answer, mirrored. The completion judges it (`zero-balance`): the answer and
+	 * the resident after the mirror must both read paid, and only a refresh tells a reopen from a
+	 * lag (Codex 4341491589, 4341491563 on #2798).
+	 */
+	| { kind: 'answered'; order: OrderPaymentSummary }
 	| { kind: 'outstanding'; order: OrderPaymentSummary | null }
-	/** Closed on the store, but the resident after the mirror reads a reopen adopted since. */
-	| { kind: 'reopened'; order: OrderPaymentSummary }
-	/** Closed on the store, but no refresh has confirmed the resident: the attempt stays. */
-	| { kind: 'unconfirmed'; order: OrderPaymentSummary }
 	| { kind: 'refused'; code: string; message: string }
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
-
-/**
- * A mirrored close answer finishes the sale only when the answer and the resident after the
- * mirror both read paid. A paid answer the resident does not show means the revision-guarded
- * mirror kept a newer adoption, or the poster's refresh failed: only a refresh that lands tells a
- * reopen from a lag, and without one the close is unconfirmed (Codex 4341491589 on #2798). The
- * first answer and Try again's replay both decide here (Codex 4341491563 on #2798).
- */
-export async function closeConfirmed(
-	runtime: SaleContext['runtime'],
-	order: ReadonlyEngineRecord<'orders'>,
-	summary: OrderPaymentSummary
-): Promise<'completed' | 'reopened' | 'unconfirmed'> {
-	if (!isPaidStatus(summary.status)) return 'reopened';
-	if (!residentUnpaid(order.getLatest().payload)) return 'completed';
-	// A close was sent, so the store has the order: it has an id.
-	const refreshed = await Promise.resolve()
-		.then(() => refreshOrderRecord(runtime, Number(order.getLatest().payload.id)))
-		.catch(() => 'failed' as const);
-	if (refreshed !== 'refreshed') return 'unconfirmed';
-	return residentUnpaid(order.getLatest().payload) ? 'reopened' : 'completed';
-}
 
 /**
  * Complete a covered sale through `POST orders/{id}/close` (ADR 0040 D2): the till never writes
@@ -92,12 +66,7 @@ export async function closeSale(
 		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
 		const summary = data.order as unknown as OrderPaymentSummary;
 		await post.mirror({ order: summary });
-		const closed = await closeConfirmed(runtime, order, summary);
-		if (closed !== 'completed') {
-			releaseUnconfirmedReceipt(order.uuid);
-			return { kind: closed, order: summary };
-		}
-		return { kind: 'completed', order: summary, completion: data.completion };
+		return { kind: 'answered', order: summary };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };

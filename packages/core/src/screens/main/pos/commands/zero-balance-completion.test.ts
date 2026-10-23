@@ -31,7 +31,7 @@ function run(online: boolean) {
 		}),
 		complete: jest.fn(async () => undefined),
 		online: () => online,
-		close: jest.fn(async () => ({ kind: 'completed' as const, order: null, completion: null })),
+		close: jest.fn(async () => ({ kind: 'answered' as const, order: { status: 'completed' } })),
 	};
 	const ctx = { storeDB: 'store-db' } as never;
 	return { input, written, result: writeZeroBalanceCompletion(ctx, input as never) };
@@ -49,7 +49,8 @@ it('completes through close and never writes status', async () => {
 	expect(written).toEqual([{ meta_data: [{ key: '_wcpos_sale_counter', value: '7' }] }]);
 	expect(written[0]).not.toHaveProperty('status');
 	expect(input.close).toHaveBeenCalledWith(order);
-	expect(input.complete).toHaveBeenCalledTimes(1);
+	// The completion judges the answer with the resident (`zero-balance`), in the caller's slot.
+	expect(input.complete).toHaveBeenCalledWith(order, input.queue, { status: 'completed' });
 	expect(input.write.mock.invocationCallOrder[0]).toBeLessThan(
 		input.close.mock.invocationCallOrder[0]
 	);
@@ -72,15 +73,15 @@ it('offline refuses before writing or allocating a sale counter', async () => {
 });
 
 // The callers journal the completing sale first: a close that cannot finish it resolves that
-// attempt, except `outstanding` (a settling leg may still cover it), `unconfirmed` (the store
-// closed it; the bridge finishes it, Codex 4341491589 on #2798) and a close with no answer.
+// attempt, except `outstanding` (a settling leg may still cover it) and a close with no answer.
+// An answered close, paid or reopened since, is the completion's to keep or resolve (`complete`).
 it.each([
 	['offline', null, true],
 	['refused', { kind: 'refused', code: 'wcpos_invalid_transition', message: 'm' }, true],
 	['order_changed', { kind: 'order_changed' }, true],
-	['reopened', { kind: 'reopened', order: { status: 'completed' } }, true],
+	['answered reopened', { kind: 'answered', order: { status: 'pos-open' } }, false],
 	['outstanding', { kind: 'outstanding', order: null }, false],
-	['unconfirmed', { kind: 'unconfirmed', order: { status: 'completed' } }, false],
+	['answered paid', { kind: 'answered', order: { status: 'completed' } }, false],
 ])('a %s close (%j) resolves the completion attempt: %s', async (kind, closed, resolves) => {
 	const { input, result } = run(kind !== 'offline');
 	if (closed) input.close.mockResolvedValueOnce(closed as never);

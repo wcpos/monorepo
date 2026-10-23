@@ -201,7 +201,8 @@ it.each([
 		{ source: 'gateway-snapshot', snapshot: { ...payload, status: 'on-hold' } },
 		true,
 	],
-	['zero balance', { source: 'zero-balance' }, true],
+	['zero balance', { source: 'zero-balance', order: { status: 'completed' } }, true],
+	['zero balance reopened', { source: 'zero-balance', order: { status: 'pos-open' } }, false],
 	[
 		'gateway sent is never paid',
 		{ source: 'gateway', order: sent.order, stamp: sent.stamp },
@@ -347,7 +348,7 @@ it.each([
 	[{ source: 'gateway-contract', status: 'completed' }, true],
 	[{ source: 'gateway-settled', order: sent.order }, true],
 	[{ source: 'gateway-snapshot', snapshot: payload }, false],
-	[{ source: 'zero-balance' }, false],
+	[{ source: 'zero-balance', order: { status: 'completed' } }, false],
 ] as [SaleOutcome, boolean][])('refresh and gap rule %j', async (outcome, refresh) => {
 	expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
 	expect(mockGap).toHaveBeenCalledTimes(1);
@@ -1197,4 +1198,74 @@ it('an unconfirmed paid answer keeps its completion attempt and enters no receip
 	);
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+});
+
+// Moved from close-sale.test.ts when the close-side judge folded into `finishSale`: a close answer
+// completes the sale only when the answer and the resident after the mirror both read paid, and
+// only a refresh that lands tells a reopen from a lag (Codex 4341491589, 4341491563 on #2798).
+describe('a zero balance the store answered closed', () => {
+	let status: string;
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, status } }),
+	} as never;
+	const closed = (answer = 'completed') =>
+		({ source: 'zero-balance', order: { status: answer } }) as SaleOutcome;
+	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	beforeEach(() => {
+		status = 'pos-partial';
+	});
+
+	it('answered after another till’s reopen was adopted is not completed: no receipt', async () => {
+		status = 'pos-open';
+		mockRefresh.mockResolvedValueOnce('refreshed');
+		expect(await completeSale(ctx, resident, closed(), stage)).toBe('not-completed');
+		expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
+		expect(mockReceipt).not.toHaveBeenCalled();
+	});
+
+	it.each(['failed', 'timed-out', 'throws'])(
+		'a paid answer the resident does not show is unconfirmed when the refresh %s',
+		async (how) => {
+			await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'zero-balance' });
+			mockRefresh.mockImplementationOnce(async () => {
+				if (how === 'throws') throw new Error('engine unavailable');
+				return how;
+			});
+			expect(await completeSale(ctx, resident, closed(), stage)).toBe('unconfirmed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+		}
+	);
+
+	it('completes when the refresh lands the paid order', async () => {
+		mockRefresh.mockImplementationOnce(async () => {
+			status = 'completed';
+			return 'refreshed';
+		});
+		expect(await completeSale(ctx, resident, closed(), stage)).toBe('completed');
+	});
+
+	it('is not completed when the refresh lands and the resident still reads unpaid', async () => {
+		mockRefresh.mockResolvedValueOnce('refreshed');
+		expect(await completeSale(ctx, resident, closed(), stage)).toBe('not-completed');
+	});
+
+	it('a paid close the resident already shows costs no refresh', async () => {
+		status = 'completed';
+		expect(await completeSale(ctx, resident, closed(), stage)).toBe('completed');
+		expect(mockRefresh).not.toHaveBeenCalled();
+	});
+
+	it('a reopened close returns to checkout and releases its print claim', async () => {
+		status = 'pos-open';
+		enterCheckout('order');
+		expect(claimReceiptAutoPrint('order')).toBe(true);
+		expect(await completeSale(ctx, resident, closed('pos-open'), stage)).toBe('not-completed');
+		// The answer itself reads open: nothing to confirm, so no refresh.
+		expect(mockRefresh).not.toHaveBeenCalled();
+		expect(claimReceiptAutoPrint('order')).toBe(true);
+		expect(resolveStage('order', getCheckoutModeSnapshot(), [], status)).toBe('checkout');
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	});
 });

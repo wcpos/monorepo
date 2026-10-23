@@ -12,7 +12,7 @@ import type {
 } from '@wcpos/query';
 
 import { commandProvenance } from './pos/checkout/provenance/command-provenance';
-import { closeConfirmed, closeSale, type useCloseSale } from './pos/commands/close-sale';
+import { closeSale, type useCloseSale } from './pos/commands/close-sale';
 
 import type { usePushDocument } from './contexts/use-push-document';
 import type { useCouponRecord } from './coupons/commands/use-coupon-record';
@@ -40,7 +40,6 @@ declare const ledger: ReturnType<typeof useOrderLedgerWrite>;
 declare const write: typeof writeOrderChanges;
 declare const close: ReturnType<typeof useCloseSale>['close'];
 declare const [runtime, storeDB, , deps]: Parameters<typeof closeSale>;
-declare const summary: Parameters<typeof closeConfirmed>[2];
 declare const [saleCtx, , , command]: Parameters<typeof commandProvenance>;
 
 void customers.saveCustomerFields(customer, {});
@@ -61,7 +60,6 @@ void write(manager, { document: order, changes: () => ({}) });
 // `useMutation().patchRecord` takes a RecordWriteTarget (the seam scan fences naming it here).
 const couponTarget: RecordWriteTarget = coupon;
 void couponTarget;
-void closeConfirmed(runtime, order, summary);
 void closeSale(runtime, storeDB, order, deps);
 void close(order, { sessionId: null });
 void commandProvenance(saleCtx, order, null, command);

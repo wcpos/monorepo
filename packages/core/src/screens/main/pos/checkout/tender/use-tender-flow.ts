@@ -16,12 +16,10 @@ import {
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
 	mintServerPayment,
-	type OrderPaymentSummary,
 	partitionVoidableRows,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
-	readAwaitingCustomer,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -53,12 +51,7 @@ import {
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
-import {
-	persistSaleProvenance,
-	recordSaleAttempt,
-	reopenedSince,
-	residentUnpaid,
-} from '../sale-completion';
+import { persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -91,7 +84,6 @@ import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
 import { getUuidFromLineItem } from '../../hooks/utils';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
-import { submitStillDone } from '../payments/submit-gateway-payment';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -127,7 +119,15 @@ import {
 	type TenderTile,
 } from './tiles';
 import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
-import { closeConfirmed, type CloseOutcome, useCloseSale } from '../../commands/close-sale';
+import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
+import {
+	answerOf,
+	type Arrival,
+	landAnswer,
+	type Landed,
+	type NotMirrored,
+	type StoreAnswer,
+} from '../../commands/land-answer';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
@@ -238,17 +238,17 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 }
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
-	closed: Exclude<CloseOutcome, { kind: 'completed' }>,
+	closed: Exclude<CloseOutcome, { kind: 'answered' }>,
 	t: ReturnType<typeof useT>
 ): string {
 	if (closed.kind === 'refused') return closed.message;
 	if (closed.kind === 'order_changed') return t('pos_checkout.order_changed_retry');
-	if (closed.kind === 'reopened') return t('pos_checkout.sale_reopened_elsewhere');
-	if (closed.kind === 'unconfirmed') return t('pos_checkout.payment_confirming');
 	if (closed.kind === 'outstanding')
 		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
 	return t('pos_checkout.close_needs_connection');
 }
+
+type LandOptions = { notMirrored?: NotMirrored; queue?: OrderMutationContext; method?: string };
 
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
@@ -737,10 +737,68 @@ export function useTenderFlow(
 		[order, state, dp, byId, actor, orderContext]
 	);
 
+	/** Every answer lands through one table (`landAnswer`), then says what it means. */
+	const land = React.useCallback(
+		async (
+			answer: StoreAnswer,
+			arrival: Arrival,
+			{ notMirrored = null, queue, method }: LandOptions = {}
+		) => {
+			const context = {
+				...orderContext,
+				...(method ? { method } : {}),
+				outcome: answer.kind,
+				status: answer.order?.status,
+			};
+			const toast = (sentence: string) => logger.info(sentence, { showToast: true, context });
+			/**
+			 * A reopen is said however the answer arrived; the press's own moments (paid for the
+			 * order, invoice sent, open again) only at the press, never over "not synced".
+			 */
+			const presentLanded = ({ result }: Landed) => {
+				if (result === 'reopened') return toast(t('pos_checkout.sale_reopened_elsewhere'));
+				if (arrival.via !== 'press' || notMirrored) return;
+				if (answer.kind === 'settled' && result === 'completed' && !uiSettings.autoShowReceipt)
+					toast(
+						t('pos_checkout.payment_completed_for_order', {
+							orderNumber: payload.number ?? String(payload.id),
+						})
+					);
+				if (answer.kind !== 'sent') return;
+				// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
+				if (answer.order.status === 'pos-open') toast(t('pos_checkout.order_open_send_again'));
+				else if (!uiSettings.autoShowReceipt)
+					toast(
+						answer.stamp.destination
+							? t('pos_checkout.invoice_sent_to', { destination: answer.stamp.destination })
+							: t('pos_checkout.invoice_sent')
+					);
+			};
+			const landed = await landAnswer(answer, arrival, {
+				finish: (outcome) => completeOrderFlow(outcome, queue),
+				resolveAttempt: () => resolveCompletionAttempt(storeDB, order.uuid),
+				dp,
+				notMirrored,
+			}).finally(() => answer.kind === 'recorded' && tenderRecorded(answer.row, answer.via));
+			presentLanded(landed);
+		},
+		[
+			orderContext,
+			t,
+			completeOrderFlow,
+			storeDB,
+			order.uuid,
+			dp,
+			tenderRecorded,
+			payload,
+			uiSettings,
+		]
+	);
+
 	/**
 	 * Try again: re-send the unanswered command under its own id, with its frozen body; the store
-	 * replays what it did. An answer finishes the sale exactly as a first answer would. A terminal
-	 * leg's capture is left to the terminal service, which owns that leg's completion.
+	 * replays what it did. An answer lands exactly as a first answer would. A terminal leg's
+	 * capture is left to the terminal service, which owns that leg's completion.
 	 */
 	const retryCommand = React.useCallback(async () => {
 		if (busyRef.current) return;
@@ -750,58 +808,15 @@ export function useTenderFlow(
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
 			});
-			for (const { kind, data } of answers) {
-				const row = data.payment as PaymentRow | undefined;
-				const summary = (data.order ?? null) as OrderPaymentSummary | null;
-				if (kind === 'close' && summary) {
-					// A replayed close answers its stored completion with the order as it now stands,
-					// and the resident after the mirror decides, as for a first answer (closeConfirmed).
-					const closed = await closeConfirmed(ctx.runtime, order, summary);
-					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
-					else {
-						// Let a later paid attempt auto-print again, as a first close attempt does.
-						releaseUnconfirmedReceipt(order.uuid);
-						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
-						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
-						logger.info(closeMessage({ kind: closed, order: summary }, t), {
-							showToast: true,
-							context: { ...orderContext, close: closed },
-						});
-					}
-				} else if (
-					row &&
-					(kind === 'record' || (kind === 'submit' && data.outcome === 'recorded'))
-				) {
-					// A replay answers the stored row with the order as it now stands: an open order at
-					// a zero balance was reopened since (another till), so it is not finished here.
-					// A partial leg (a balance still due) runs the flow as a first answer would.
-					if (reopenedSince(summary, dp)) {
-						tenderRecorded(row, 'online');
-						logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
-							showToast: true,
-							context: { ...orderContext, status: summary.status },
-						});
-						continue;
-					}
-					await completeOrderFlow({
-						source: 'manual',
-						via: 'online',
-						row,
-						order: summary,
-						mirrorFailed: false,
-						remainingMinor: balanceMinor - toMinor(row.amount, dp),
-					}).finally(() => tenderRecorded(row, 'online'));
-				} else if (kind === 'submit' && data.outcome === 'sent' && summary) {
-					// A recovered send: a sent sale, from the stamp the refresh adopted with the
-					// store's document (the replay settles only once that refresh adopted it).
-					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
-					// A recovered send whose adopted order carries no awaiting-customer stamp was already
-					// settled or cancelled by the store (the stamp goes with the invoice); there is
-					// nothing left to finish. A later paid attempt can auto-print again.
-					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
-					else releaseUnconfirmedReceipt(order.uuid);
-				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
-					await completeOrderFlow({ source: 'gateway-settled', order: summary });
+			for (const resent of answers) {
+				const answer = answerOf(resent, order.getLatest().payload);
+				if (answer) {
+					const legMinor = answer.kind === 'recorded' ? toMinor(answer.row.amount, dp) : 0;
+					await land(answer, { via: 'try-again', remainingMinor: balanceMinor - legMinor });
+				}
+				// A recovered send the store already settled or cancelled finishes nothing; a later
+				// paid attempt can auto-print again.
+				else if (resent.kind === 'submit') releaseUnconfirmedReceipt(order.uuid);
 			}
 		} catch (error) {
 			// The store stored nothing and the order moved: the cashier approves it again.
@@ -828,19 +843,7 @@ export function useTenderFlow(
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [
-		recordLedger,
-		ctx.runtime,
-		storeDB,
-		order,
-		http,
-		t,
-		completeOrderFlow,
-		dp,
-		balanceMinor,
-		tenderRecorded,
-		orderContext,
-	]);
+	}, [recordLedger, ctx.runtime, storeDB, order, http, t, land, dp, balanceMinor, orderContext]);
 
 	const takeTender = React.useCallback(async () => {
 		if (
@@ -992,7 +995,12 @@ export function useTenderFlow(
 					queue,
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
-					complete: (_order, slot) => completeOrderFlow({ source: 'zero-balance' }, slot),
+					complete: (_order, slot, summary) =>
+						land(
+							{ kind: 'close', order: summary },
+							{ via: 'press', remainingMinor: 0 },
+							{ queue: slot }
+						),
 					online: () => sale.lane === 'online',
 					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
 				});
@@ -1206,80 +1214,15 @@ export function useTenderFlow(
 					});
 					return;
 				}
-				const { notMirrored } = outcome;
 				answered = true;
 				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
-				if (notMirrored && outcome.kind !== 'reopened') warnNotMirrored(outcome, method.id);
-				if (outcome.kind === 'recorded') {
-					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
-					await completeOrderFlow(
-						{
-							source: 'manual',
-							via: 'online',
-							row: outcome.row,
-							order: outcome.order,
-							mirrorFailed: !!notMirrored,
-							remainingMinor: sale.remainingMinor,
-						},
-						queue
-					).finally(() => tenderRecorded(outcome.row, 'online'));
-					return;
-				}
-				if (outcome.kind === 'reopened') {
-					// A replayed attempt whose sale another till reopened since: nothing to finish.
-					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
-						showToast: true,
-						context: { ...orderContext, method: method.id, status: outcome.order.status },
-					});
-					return;
-				}
-				if (outcome.kind === 'settled') {
-					// No money, no stamp: the gateway landed the order on the status the merchant
-					// stored for it, which is the sale finishing (§3.1) — the paid completion, as is.
-					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order }, queue);
-					// The completion decides from the resident after the mirror, not the answer: a
-					// reopen adopted since is no finished sale, so no paid sentence (Codex 4340856695).
-					if (
-						!notMirrored &&
-						!uiSettings.autoShowReceipt &&
-						!residentUnpaid(order.getLatest().payload, outcome.order.status)
-					) {
-						logger.info(
-							t('pos_checkout.payment_completed_for_order', {
-								orderNumber: payload.number ?? String(payload.id),
-							}),
-							{
-								showToast: true,
-								context: {
-									...orderContext,
-									method: method.id,
-									outcome: 'settled',
-									status: outcome.order.status,
-								},
-							}
-						);
-					}
-					return;
-				}
-				await completeOrderFlow(
-					{ source: 'gateway', order: outcome.order, stamp: outcome.stamp },
-					queue
+				if (outcome.notMirrored && outcome.kind !== 'reopened') warnNotMirrored(outcome, method.id);
+				// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
+				await land(
+					outcome.kind === 'recorded' ? { ...outcome, via: 'online' } : outcome,
+					{ via: 'press', remainingMinor: sale.remainingMinor },
+					{ notMirrored: outcome.notMirrored, queue, method: method.id }
 				);
-				if (notMirrored) return;
-				if (outcome.order.status === 'pos-open') {
-					// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
-					logger.info(t('pos_checkout.order_open_send_again'), {
-						showToast: true,
-						context: { ...orderContext, method: method.id },
-					});
-				} else if (!uiSettings.autoShowReceipt) {
-					logger.info(
-						outcome.stamp.destination
-							? t('pos_checkout.invoice_sent_to', { destination: outcome.stamp.destination })
-							: t('pos_checkout.invoice_sent'),
-						{ showToast: true, context: { ...orderContext, method: method.id } }
-					);
-				}
 				return;
 			}
 
@@ -1307,19 +1250,14 @@ export function useTenderFlow(
 			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
 			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
-				const { notMirrored, ...recorded } = outcome;
 				answered = true;
-				if (notMirrored) warnNotMirrored(outcome, method.id);
+				if (outcome.notMirrored) warnNotMirrored(outcome, method.id);
 				// A failed mirror trusts only the store's summary: the pane stays on what is left to pay.
-				await completeOrderFlow(
-					{
-						source: 'manual',
-						...recorded,
-						mirrorFailed: !!notMirrored,
-						remainingMinor: sale.remainingMinor,
-					},
-					queue
-				).finally(() => tenderRecorded(outcome.row, outcome.via));
+				await land(
+					outcome,
+					{ via: 'press', remainingMinor: sale.remainingMinor },
+					{ notMirrored: outcome.notMirrored, queue, method: method.id }
+				);
 				return;
 			}
 			if (outcome.kind === 'refused') {
@@ -1414,7 +1352,7 @@ export function useTenderFlow(
 		deviceTransport,
 		reachable,
 		blockIfDegraded,
-		completeOrderFlow,
+		land,
 		closeSale,
 		dp,
 		enteredLegMinor,
@@ -1429,8 +1367,6 @@ export function useTenderFlow(
 		settledOrderStatus,
 		fields,
 		fieldValues,
-		uiSettings.autoShowReceipt,
-		tenderRecorded,
 		remember,
 		saveState,
 		bindingStatus,

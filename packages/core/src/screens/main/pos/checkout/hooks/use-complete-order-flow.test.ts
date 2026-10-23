@@ -17,6 +17,8 @@ import {
 } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
+import type { SaleOutcome } from '../sale-completion';
+
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();
 let mockRegister: RegisterDocument;
@@ -87,6 +89,9 @@ jest.mock('../../contexts/current-order/context', () => ({
 		getCurrentOrderID: () => mockSelectedOrder,
 	}),
 }));
+
+/** The store's close answer for a paid sale. */
+const closed = { source: 'zero-balance', order: { status: 'completed' } } as SaleOutcome;
 
 function makeOrder(id: number | null = 42) {
 	const reduced = { id: 1, meta_data: [{ key: '_reduced_stock', value: '1' }] };
@@ -161,7 +166,7 @@ describe('useCompleteOrderFlow', () => {
 		const { record, reduced } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current({ source: 'zero-balance' }));
+		await act(async () => result.current(closed));
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
@@ -314,9 +319,7 @@ it('completes inside the caller queue without waiting on itself', async () => {
 	const { record } = makeOrder();
 	const { result } = renderHook(() => useCompleteOrderFlow(record));
 	await act(async () => {
-		await enqueueOrderMutation('uuid-42', (queue) =>
-			result.current({ source: 'zero-balance' }, queue)
-		);
+		await enqueueOrderMutation('uuid-42', (queue) => result.current(closed, queue));
 	});
 	expect(mockInfo).toHaveBeenCalledWith(
 		'Sale uuid-42 completed',
@@ -434,7 +437,7 @@ it.each([null, 'B', 'uuid-42'])(
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
 		await act(async () => {
-			const finishing = result.current({ source: 'zero-balance' });
+			const finishing = result.current(closed);
 			selectReceipt(receipt);
 			await finishing;
 		});

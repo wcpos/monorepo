@@ -173,7 +173,8 @@ export type SaleOutcome =
 			 */
 			settledOrderStatus?: string | null;
 	  }
-	| { source: 'zero-balance' }
+	/** The store's close answer; the resident after the mirror must read paid too. */
+	| { source: 'zero-balance'; order: OrderPaymentSummary }
 	| {
 			source: 'replay';
 			refreshed?: boolean;
@@ -281,7 +282,7 @@ function unpaidOnStore(order: OrderPaymentSummary | null, dp: number, payload?: 
  * The resident after the mirror reads unpaid: neither paid nor the status the store settled on
  * (`settled`, a gateway's stored one). A resident with no status is unknown, not unpaid.
  */
-export function residentUnpaid(payload?: { status?: string | null }, settled?: string) {
+function residentUnpaid(payload?: { status?: string | null }, settled?: string) {
 	return !!payload?.status && !isPaidStatus(payload.status) && payload.status !== settled;
 }
 
@@ -319,8 +320,8 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			if (typeof status !== 'string' || status.trim() === '') return false;
 			return isSettledOrderStatus(status, outcome.settledOrderStatus);
 		}
-		case 'zero-balance': // No payment row exists for this route.
-			return true;
+		case 'zero-balance': // The close's answer and the resident after the mirror both read paid.
+			return isPaidStatus(outcome.order.status) && !residentUnpaid(payload);
 	}
 }
 export type Presentation =
@@ -504,6 +505,8 @@ async function finishSale(
  */
 export const awaitAdoption = (storeDB: StoreDatabase, orderUuid: string) =>
 	failCompletionAttempt(storeDB, orderUuid, 'unconfirmed', { awaitingAdoption: true });
+
+export type CompletionResult = Awaited<ReturnType<typeof completeSale>>;
 
 export async function completeSale(
 	ctx: SaleContext,
