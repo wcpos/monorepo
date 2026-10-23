@@ -7,6 +7,7 @@ import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
+	withSequence,
 	withTiming,
 } from 'react-native-reanimated';
 
@@ -42,13 +43,20 @@ export function Spin({ active, children }: { active: boolean; children: React.Re
 	React.useEffect(() => {
 		if (Platform.isNative) {
 			if (active) {
-				rotation.value = withRepeat(
-					withTiming(360, TURN),
-					-1,
-					false,
-					undefined,
-					ReduceMotion.Never
-				);
+				const spin = withRepeat(withTiming(360, TURN), -1, false, undefined, ReduceMotion.Never);
+				// Started again mid-turn (the finishing turn below was still running): finish that
+				// turn first and restart the laps from 0. `withRepeat` takes the value it starts at
+				// as every lap's start, so a repeat begun at 270 would play 270→360 over and over
+				// and jump back each lap (Codex review).
+				const from = rotation.value % 360;
+				rotation.value =
+					from === 0
+						? spin
+						: withSequence(
+								withTiming(360, { ...TURN, duration: (SPINNER * (360 - from)) / 360 }),
+								withTiming(0, { duration: 0 }),
+								spin
+							);
 				return () => cancelAnimation(rotation);
 			}
 			// Finish the turn at the same speed, then rest at 0. A glyph that never turned stays.
