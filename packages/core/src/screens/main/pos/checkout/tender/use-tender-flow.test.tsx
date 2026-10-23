@@ -2854,6 +2854,46 @@ it('reports a payment the store took but the till could not mirror, and never sa
 	}
 });
 
+// Codex on C1-S1: the payment stands once the store answered; a completion that throws after it
+// is a failed status check, never "nothing was taken, try again", and the fee stays.
+it('a recorded payment whose mirror and completion both fail warns status-check-failed, never PAYMENT999', async () => {
+	mockUseRealManual = true;
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockLocalPatch.mockResolvedValue(order);
+	mockPushDocument.mockResolvedValue(order);
+	mockCompleteOrderFlow.mockRejectedValueOnce(new Error('journal write failed'));
+	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
+	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.payment_recorded_not_synced',
+			expect.objectContaining({ code: 'PAYMENT111' })
+		);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'journal write failed',
+			expect.objectContaining({ code: 'PAYMENT101', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(view.result.current.busy).toBe(false);
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+		mockManualMirror.mockReset();
+		mockCompleteOrderFlow.mockReset();
+		mockCompleteOrderFlow.mockResolvedValue(undefined);
+	}
+});
+
 it('keeps the pane on the balance the store reports when a partial payment could not be mirrored', async () => {
 	mockUseRealManual = true;
 	jest.clearAllMocks();
@@ -3763,6 +3803,29 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect.objectContaining({ source: 'gateway', order: summary('pending') }),
 			expect.anything()
 		);
+	});
+
+	// Codex on C1-S1: the invoice stands once answered; a completion that throws after it is a
+	// failed status check, never the generic "nothing was taken, try again".
+	it('a sent answer whose mirror and completion both fail warns status-check-failed, never PAYMENT999', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		mockCompleteOrderFlow.mockRejectedValueOnce(new Error('journal write failed'));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.invoice_sent_not_synced',
+			expect.objectContaining({ code: 'PAYMENT113' })
+		);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'journal write failed',
+			expect.objectContaining({ code: 'PAYMENT101', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
 	});
 
 	it('a refusal belongs to the pill it came from', async () => {

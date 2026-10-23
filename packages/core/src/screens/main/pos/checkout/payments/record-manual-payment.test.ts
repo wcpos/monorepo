@@ -97,7 +97,7 @@ function createDeps(): RecordManualPaymentDeps & {
 		currency: 'EUR',
 		dp: 2,
 		sleep: jest.fn(async () => undefined),
-		mirror: jest.fn(async () => ({ mirrored: true as const })),
+		mirror: jest.fn(async (): Promise<{ cause: unknown } | null> => null),
 		fetchOrderStatus: jest.fn(async () => null),
 		raiseAttention: jest.fn(),
 		now: () => NOW,
@@ -240,7 +240,7 @@ describe('recordManualPayment', () => {
 
 		const unmirrored = createDeps();
 		const mirrorFailure = new Error('resident write failed');
-		unmirrored.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
+		unmirrored.mirror.mockResolvedValue({ cause: mirrorFailure });
 		const promise = recordManualPayment(
 			order,
 			cash,
@@ -261,7 +261,7 @@ describe('recordManualPayment', () => {
 		const summary = { status: 'completed', balance: '0.00' };
 		const mirrorFailure = new Error('resident write failed');
 		deps.post.mockResolvedValue({ data: { payment: serverRow, order: summary } });
-		deps.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
+		deps.mirror.mockResolvedValue({ cause: mirrorFailure });
 
 		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
@@ -445,7 +445,7 @@ describe('recordManualPayment', () => {
 				order: { status: 'completed', balance: '0.00' },
 			})
 		);
-		deps.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
+		deps.mirror.mockResolvedValue({ cause: mirrorFailure });
 
 		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
@@ -453,8 +453,9 @@ describe('recordManualPayment', () => {
 			kind: 'refused',
 			reason: 'order_already_paid',
 			row: expect.objectContaining({ id: UUID.toLowerCase(), status: 'failed' }),
-			notMirrored: { cause: mirrorFailure },
 		});
+		// The store took nothing: a refusal carries no "not synced" fact.
+		expect(await promise).not.toHaveProperty('notMirrored');
 		expect(deps.raiseAttention).toHaveBeenCalledWith(
 			expect.objectContaining({ reason: 'order_already_paid' })
 		);

@@ -37,8 +37,8 @@ export function useGatewayPayment() {
 	const { wpCredentials, storeDB, userDB, site, store } = useStoreSession();
 	const { stampCompletion } = useOrderLedgerWrite();
 	const ctx = React.useMemo(
-		() => ({ userDB, siteUuid: site.uuid ?? '', storeId: store.id }),
-		[userDB, site.uuid, store.id]
+		() => ({ userDB, siteUuid: site.uuid!, storeId: store.id, runtime: manager, stampCompletion }),
+		[userDB, site.uuid, store.id, manager, stampCompletion]
 	);
 
 	const deps = React.useCallback(
@@ -60,17 +60,16 @@ export function useGatewayPayment() {
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId ?? null, command),
 			});
 			const facts = { sessionId: options.sessionId };
-			const stampCtx = { ...ctx, runtime: manager, stampCompletion };
-			const land = mirrorAnswer({ ctx: stampCtx, order, poster: post, facts });
+			const mirror = mirrorAnswer({ ctx, order, poster: post, facts });
 			return {
 				post,
 				cashierId: wpCredentials.id ?? 0,
 				destination: options.destination ?? null,
-				mirror: ({ awaiting, ...answer }: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) =>
-					land({ ...answer, meta: (meta) => withAwaitingCustomer(meta, awaiting) }),
-			};
+				mirror: ({ awaiting, accepted, ...answer }) =>
+					mirror({ ...answer, meta: (meta) => withAwaitingCustomer(meta, awaiting) }, { accepted }),
+			} satisfies SubmitGatewayPaymentDeps;
 		},
-		[http, manager, ctx, storeDB, wpCredentials.id, stampCompletion]
+		[http, manager, ctx, storeDB, wpCredentials.id]
 	);
 
 	const gatewayOrder = (order: EngineRecord<'orders'>) => {

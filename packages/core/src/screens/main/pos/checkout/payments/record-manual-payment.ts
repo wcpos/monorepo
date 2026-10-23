@@ -22,7 +22,7 @@ import type {
 } from '@wcpos/order-math';
 
 import type { PressLane } from '../commit-sale';
-import type { Mirrored } from '../../commands/land-answer';
+import type { NotMirrored } from '../../commands/land-answer';
 
 /**
  * Record a `manual` payment (cash, dummy card) against an order — Payments Contract v1
@@ -71,11 +71,11 @@ export interface RecordManualPaymentDeps {
 	 * cash (Codex 4342921641 on #2832).
 	 */
 	unansweredRecord?: () => Promise<PaymentRow | null>;
-	/** Mirror the answered row onto the latest resident (never a pre-command snapshot). */
+	/** Mirror the answered row onto the latest resident; never rejects, a failure is `{ cause }`. */
 	mirror: (
 		answer: { payment: PaymentRow; status?: string },
 		options: { accepted: boolean; local?: true }
-	) => Promise<Mirrored>;
+	) => Promise<NotMirrored>;
 	/**
 	 * The order's status as the server holds it, for a refusal whose body omits the
 	 * summary. `null` when the server cannot be asked — the mirror then leaves the
@@ -93,11 +93,9 @@ export interface RecordManualPaymentDeps {
 type InvalidReason =
 	'not_manual' | 'amount_not_positive' | 'tendered_not_allowed' | 'tendered_below_amount';
 type RefusalReason = PaymentRowRefusal;
-/** `notMirrored`: the store answered and only the till's copy failed to save; the outcome stands. */
-type Answered = { row: PaymentRow; order: OrderPaymentSummary | null; notMirrored: NotMirrored };
-type NotMirrored = { cause: unknown } | null;
+type Answered = { row: PaymentRow; order: OrderPaymentSummary | null };
 export type RecordManualPaymentOutcome =
-	| ({ kind: 'recorded'; via: 'online' | 'offline' } & Answered)
+	| ({ kind: 'recorded'; via: 'online' | 'offline'; notMirrored: NotMirrored } & Answered)
 	| ({ kind: 'refused'; reason: RefusalReason } & Answered)
 	| { kind: 'failed'; reason: 'provenance_save_failed' | 'offline_unavailable' }
 	/** Never dispatched (pre-flight failed, no revision, order changed): nothing reached the store. */
@@ -123,8 +121,6 @@ export class RecordManualPaymentError extends Error {
 	}
 }
 
-const notMirroredOf = (m: Mirrored): NotMirrored => (m.mirrored ? null : { cause: m.cause });
-
 /**
  * ADR 0040 Decided 1 rules 2-3: journaled, never sent, and the till asserts its derived status
  * (`local`). Only the journal says "unanswered": a reconnect can adopt the unpaid store document.
@@ -146,8 +142,7 @@ async function recordOffline(
 	// the status (`defaults.order_status`), never a silent `completed` fallback.
 	const methods = [...(deps.methods ?? []), method];
 	const { status } = derive(order.total, rows, methods, { dp: deps.dp });
-	const mirrored = await deps.mirror({ payment: row, status }, { accepted: true, local: true });
-	const notMirrored = notMirroredOf(mirrored);
+	const notMirrored = await deps.mirror({ payment: row, status }, { accepted: true, local: true });
 	return { kind: 'recorded', via: 'offline', row, order: null, notMirrored };
 }
 
@@ -195,7 +190,6 @@ export async function recordManualPayment(
 	// never as a re-send, which the journal already holds for Try again.
 	// Every attempt is the same call: the poster re-sends the journaled record for this row id,
 	// its frozen body and identity, and the server replays a row it already stored.
-	// The poster returns only the store's own row and summary: a malformed 2xx throws.
 	let accepted: { payment: PaymentRow; order: OrderPaymentSummary } | undefined;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
@@ -237,9 +231,9 @@ export async function recordManualPayment(
 					}
 				}
 				const status = authoritativeStatus ? { status: authoritativeStatus } : {};
-				const mirrored = await deps.mirror({ payment: failedRow, ...status }, { accepted: false });
-				const notMirrored = notMirroredOf(mirrored);
-				return { kind: 'refused', reason, row: failedRow, order: serverOrder, notMirrored };
+				// No "not synced" for a refusal: the store took nothing, and the attention row says so.
+				await deps.mirror({ payment: failedRow, ...status }, { accepted: false });
+				return { kind: 'refused', reason, row: failedRow, order: serverOrder };
 			}
 			if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
 				// A definitive refusal the server will repeat (conflict, unknown method, bad
@@ -261,7 +255,6 @@ export async function recordManualPayment(
 	const serverRow = accepted.payment;
 	const serverOrder = accepted.order;
 	const status = serverOrder ? { status: serverOrder.status } : {};
-	const mirrored = await deps.mirror({ payment: serverRow, ...status }, { accepted: true });
-	const notMirrored = notMirroredOf(mirrored);
+	const notMirrored = await deps.mirror({ payment: serverRow, ...status }, { accepted: true });
 	return { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder, notMirrored };
 }

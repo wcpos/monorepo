@@ -6,7 +6,7 @@ import type { EngineRecord, MoneyCommandPoster } from '@wcpos/query';
 import { refreshOrderRecord } from '../checkout/hooks/reconcile-completed-order';
 import { completionMetaFor, type SaleContext } from '../checkout/sale-completion';
 
-export type Mirrored = { mirrored: true } | { mirrored: false; cause: unknown };
+export type NotMirrored = { cause: unknown } | null;
 
 /** A mirror that put a completing status on the order stamps its provenance, unless held. */
 export async function stampCompletionIfMissing(
@@ -22,30 +22,29 @@ export async function stampCompletionIfMissing(
 		throw new Error('provenance_save_failed');
 }
 
-type MirrorDeps = {
+/**
+ * The one mirror policy for a store answer (record, gateway): mirror, stamp an accepted answer, and
+ * pull the store's copy on any local failure. Never rejects: that failure is `{ cause }`.
+ */
+export function mirrorAnswer(deps: {
 	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId' | 'stampCompletion' | 'runtime'>;
 	order: EngineRecord<'orders'>;
 	poster: Pick<MoneyCommandPoster, 'mirror'>;
 	facts?: Parameters<typeof completionMetaFor>[2];
-};
-
-/**
- * The one mirror policy for a store answer (record, gateway): mirror, stamp, and pull the store's
- * copy on any local failure. That failure is an outcome ("recorded, not synced"); nothing throws.
- */
-export function mirrorAnswer({ ctx, order, poster, facts }: MirrorDeps) {
+}) {
+	const { ctx, order, poster, facts } = deps;
 	const pull = async () => refreshOrderRecord(ctx.runtime, Number(order.getLatest().payload.id));
 	return async (
 		answer: Parameters<MoneyCommandPoster['mirror']>[0],
-		{ stamp = true }: { stamp?: boolean } = {}
-	): Promise<Mirrored> => {
+		{ accepted = true }: { accepted?: boolean } = {}
+	): Promise<NotMirrored> => {
 		try {
 			await poster.mirror(answer);
-			if (stamp) await stampCompletionIfMissing(ctx, order, answer.order?.status, facts);
-			return { mirrored: true };
+			if (accepted) await stampCompletionIfMissing(ctx, order, answer.order?.status, facts);
+			return null;
 		} catch (cause) {
 			await pull().catch(() => undefined);
-			return { mirrored: false, cause };
+			return { cause };
 		}
 	};
 }

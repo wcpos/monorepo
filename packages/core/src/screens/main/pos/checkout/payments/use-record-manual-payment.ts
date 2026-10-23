@@ -83,7 +83,7 @@ export function useRecordManualPayment(): (
 				provenance: (command) => commandProvenance(ctx, order, sessionId, command),
 			});
 			const facts = { sessionId, extraMeta: input.extraMeta };
-			const land = mirrorAnswer({ ctx, order, poster: post, facts });
+			const mirror = mirrorAnswer({ ctx, order, poster: post, facts });
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
 				journal: post.defer,
@@ -137,10 +137,7 @@ export function useRecordManualPayment(): (
 					return typeof status === 'string' ? status : null;
 				},
 				mirror: ({ payment, status }, { accepted, local }) =>
-					land(
-						{ payment, order: status ? ({ status } as never) : null, local },
-						{ stamp: accepted }
-					),
+					mirror({ payment, order: status ? ({ status } as never) : null, local }, { accepted }),
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const { uuid: orderUuid, id: orderId, number: orderNumber } = paymentOrder;
 					const facts = { row, order: summary, reason, methodTitle: method.title };

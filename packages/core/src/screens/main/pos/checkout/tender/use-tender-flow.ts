@@ -884,7 +884,8 @@ export function useTenderFlow(
 		// never has one.
 		const journaledPlan = fixedAmount ? null : state.plan;
 		// The store answered; only this till's copy failed to save. PAYMENT111 names a payment.
-		const warnNotMirrored = (kind: string, cause: unknown, method: string, row?: PaymentRow) => {
+		type Answered = { kind: string; notMirrored: { cause: unknown } | null; row?: PaymentRow };
+		const warnNotMirrored = ({ kind, notMirrored, row }: Answered, method: string) => {
 			const sent = kind === 'sent';
 			const sentence = sent
 				? t('pos_checkout.invoice_sent_not_synced')
@@ -900,10 +901,12 @@ export function useTenderFlow(
 					method,
 					outcome: kind,
 					...(row ? { paymentId: row.id, amount: row.amount, status: row.status } : {}),
-					error: getErrorMessage(cause),
+					error: getErrorMessage(notMirrored?.cause),
 				},
 			});
 		};
+		// Once answered, a throw is a failed status check (PAYMENT101), never "nothing was taken".
+		let answered = false;
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
@@ -1206,9 +1209,9 @@ export function useTenderFlow(
 					return;
 				}
 				const { notMirrored } = outcome;
+				answered = true;
 				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
-				if (notMirrored && outcome.kind !== 'reopened')
-					warnNotMirrored(outcome.kind, notMirrored.cause, method.id);
+				if (notMirrored && outcome.kind !== 'reopened') warnNotMirrored(outcome, method.id);
 				if (outcome.kind === 'recorded') {
 					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
 					await completeOrderFlow(
@@ -1307,7 +1310,8 @@ export function useTenderFlow(
 			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				const { notMirrored, ...recorded } = outcome;
-				if (notMirrored) warnNotMirrored('recorded', notMirrored.cause, method.id, outcome.row);
+				answered = true;
+				if (notMirrored) warnNotMirrored(outcome, method.id);
 				// A failed mirror trusts only the store's summary: the pane stays on what is left to pay.
 				await completeOrderFlow(
 					{
@@ -1362,6 +1366,14 @@ export function useTenderFlow(
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) {
 				presentSessionRequired(logger, t, orderContext);
+				return;
+			}
+			if (answered) {
+				logger.warn(getErrorMessage(error), {
+					code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
+					showToast: true,
+					context: { ...orderContext, method: method?.id ?? null },
+				});
 				return;
 			}
 			if (savingProvenance) {

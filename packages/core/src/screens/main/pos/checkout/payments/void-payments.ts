@@ -91,6 +91,7 @@ export async function voidPayments(
 	for (const row of liveRows) {
 		let accepted: { payment: PaymentRow; order: OrderPaymentSummary };
 		try {
+			// The poster returns only the store's own answer: a malformed 2xx throws (money-command.ts).
 			const response = await deps.post(`orders/${order.id}/payments/${row.id}/void`, {});
 			accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 		} catch (error) {
