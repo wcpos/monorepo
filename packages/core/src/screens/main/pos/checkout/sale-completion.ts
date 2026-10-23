@@ -12,11 +12,10 @@ import {
 	toMinor,
 	withMetaReplaced,
 } from '@wcpos/order-math';
-import { type EngineRecord, residentHoldsAnswer, type useQueryRuntime } from '@wcpos/query';
+import { answerAdopted, type EngineRecord, type useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import {
 	failCompletionAttempt,
-	readOrderCommands,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
@@ -441,12 +440,7 @@ async function finishSale(
 	// the poster, so an earlier leg's adoption would read as this answer's. A read that throws
 	// proves nothing either way: the completion reads the store.
 	if (refresh && outcome.source !== 'replay' && outcome.source !== 'gateway-contract')
-		refresh = !(await readOrderCommands(ctx.storeDB, order.uuid)
-			.then(
-				({ entries }) =>
-					!entries.length && residentHoldsAnswer(ctx.runtime, ctx.storeDB, order.uuid)
-			)
-			.catch(() => false));
+		refresh = !(await answerAdopted(ctx.runtime, ctx.storeDB, order.uuid).catch(() => false));
 	if (outcome.source === 'replay' && refresh) {
 		// The cached status is suspect on replay; re-judge the store's copy before any receipt.
 		const refreshed = await reconcileCompletedOrder(

@@ -8,22 +8,29 @@ import { firstValueFrom } from 'rxjs';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
-	CLAIM_LEASE_MS,
 	claimHeld,
-	claimRoute,
-	markSent,
 	type MoneyCommandEntry,
 	nextClaimExpiry,
 	observeMoneyJournal,
-	observeOrderCommands,
-	readOrderCommands,
-	releaseClaim,
+	observeTenderGate,
+	readAwaitingAnswer,
+	readJournaledRecordIds,
 } from '../../src/store-local';
 import {
+	type AwaitedCommand,
 	CHAIN_RETENTION_MS,
+	CLAIM_LEASE_MS,
+	claimRoute,
+	type CommandState,
+	commandState,
 	deferEntry,
 	dropUnsent,
+	isDeferred,
+	markSent,
+	observeOrderCommands,
 	readMoneyJournal,
+	readOrderCommands,
+	releaseClaim,
 	retireChain,
 	retireRoute,
 	settleCommand,
@@ -241,4 +248,186 @@ it('deferEntry marks sent with no revision and releases the claim; nextClaimExpi
 		expect.objectContaining({ id: 'command-a', sentAt: deferred?.sentAt, sentRevision: null }),
 	]);
 	expect(await claimRoute(tab, route, 'tab-b', null)).toMatchObject({ status: 'open' });
+});
+
+// C2: the journal derives each entry's state once, and every read is a meaning over it. Every
+// row is built only by the real writers. The mark stays `isDeferred` (ADR 0040 Decided 1): a
+// deferred record mid-re-send is in flight, then unanswered, and still marked.
+describe('the entry state and the reads over it', () => {
+	const T = 1_000_000;
+	const row = { id: 'row-1', amount: '1.00' };
+	const recordRoute = { orderUuid: 'order', kind: 'record', target: null, rowId: 'row-1' } as const;
+	const record: MoneyCommandEntry = {
+		...candidate('row-1'),
+		kind: 'record',
+		path: 'orders/5/payments',
+		body: { payment: row },
+	};
+	let now: jest.SpyInstance<number, []>;
+	beforeEach(() => {
+		now = jest.spyOn(Date, 'now').mockReturnValue(T);
+	});
+	afterEach(() => now.mockRestore());
+
+	type Db = StoreDatabase;
+	const created = (db: Db) => claimRoute(db, recordRoute, 'poster', record);
+	const deferred = async (db: Db) => {
+		await created(db);
+		await deferEntry(db, 'order', 'row-1', 'poster');
+	};
+	const reclaimed = async (db: Db) => {
+		await deferred(db);
+		await claimRoute(db, recordRoute, 'resender', null);
+	};
+	const resent = async (db: Db) => {
+		await reclaimed(db);
+		await markSent(db, 'order', 'row-1', 'sha256:r1', 'resender');
+	};
+	const released = async (db: Db) => {
+		await resent(db);
+		await releaseClaim(db, 'order', 'row-1', 'resender');
+	};
+	const inFlight = (of: 'unsent' | 'deferred' | 'unanswered'): CommandState => ({
+		kind: 'in-flight',
+		of,
+		lapsesAt: T + CLAIM_LEASE_MS,
+	});
+	const awaitedRecord: AwaitedCommand[] = [{ kind: 'record', row }];
+
+	it.each<{
+		name: string;
+		build: (db: Db) => Promise<unknown>;
+		claimant?: string;
+		state: CommandState | null;
+		gate: boolean;
+		awaiting: AwaitedCommand[];
+		ids: string[];
+		mark: boolean;
+	}>([
+		{
+			name: '1 created and claimed',
+			build: created,
+			state: inFlight('unsent'),
+			gate: false,
+			awaiting: [],
+			ids: ['row-1'],
+			mark: false,
+		},
+		{
+			name: '2 its claim lapsed: a crash leftover',
+			build: async (db) => {
+				await created(db);
+				now.mockReturnValue(T + CLAIM_LEASE_MS);
+			},
+			state: { kind: 'unsent' },
+			gate: false,
+			awaiting: [],
+			ids: ['row-1'],
+			mark: false,
+		},
+		{
+			name: '3 deferred offline',
+			build: deferred,
+			state: { kind: 'deferred' },
+			gate: false,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: true,
+		},
+		{
+			name: '4 the deferred record re-claimed',
+			build: reclaimed,
+			state: inFlight('deferred'),
+			gate: false,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: true,
+		},
+		{
+			name: '5 the re-send marked sent',
+			build: resent,
+			state: inFlight('unanswered'),
+			gate: true,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: true,
+		},
+		{
+			name: '6 its claim released, no answer',
+			build: released,
+			state: { kind: 'unanswered' },
+			gate: true,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: true,
+		},
+		{
+			name: '7 settled by the answer',
+			build: async (db) => {
+				await released(db);
+				await settleCommand(db, 'order', 'row-1');
+			},
+			state: null,
+			gate: false,
+			awaiting: [],
+			ids: [],
+			mark: false,
+		},
+		{
+			name: '8 online: created, then sent',
+			build: async (db) => {
+				await created(db);
+				await markSent(db, 'order', 'row-1', 'sha256:r1', 'poster');
+			},
+			state: inFlight('unanswered'),
+			gate: true,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: false,
+		},
+		{
+			name: '9 a sent close carries no row',
+			build: async (db) => {
+				await claimRoute(db, route, 'poster', candidate('close-1'));
+				await markSent(db, 'order', 'close-1', 'sha256:r1', 'poster');
+				await releaseClaim(db, 'order', 'close-1', 'poster');
+			},
+			state: { kind: 'unanswered' },
+			gate: true,
+			awaiting: [{ kind: 'close', row: null }],
+			ids: [],
+			mark: false,
+		},
+		{
+			name: '10 the sender reading its own claim sees the phase, not in flight',
+			build: created,
+			claimant: 'poster',
+			state: { kind: 'unsent' },
+			gate: false,
+			awaiting: [],
+			ids: ['row-1'],
+			mark: false,
+		},
+		{
+			name: '11 a claim stamped in the future (the clock stepped back) is not in flight',
+			build: async (db) => {
+				await created(db);
+				now.mockReturnValue(T - 1);
+			},
+			state: { kind: 'unsent' },
+			gate: false,
+			awaiting: [],
+			ids: ['row-1'],
+			mark: false,
+		},
+	])('$name', async ({ build, claimant, state, gate, awaiting, ids, mark }) => {
+		const db = await open();
+		await build(db);
+		const [entry] = (await readOrderCommands(db, 'order')).entries;
+		expect(entry ? commandState(entry, claimant ?? null) : null).toEqual(state);
+		expect(await firstValueFrom(observeTenderGate(db, 'order'))).toBe(gate);
+		expect(await readAwaitingAnswer(db, 'order')).toEqual(awaiting);
+		expect([...(await readJournaledRecordIds(db, 'order'))]).toEqual(ids);
+		expect(!!entry && isDeferred(entry)).toBe(mark);
+	});
 });

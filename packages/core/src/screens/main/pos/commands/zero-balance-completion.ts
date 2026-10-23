@@ -1,5 +1,5 @@
 import type { EngineRecord } from '@wcpos/query';
-import { readOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
+import { readAwaitingAnswer, resolveCompletionAttempt } from '@wcpos/query/store-local';
 
 import { completionMetaFor, type SaleContext } from '../checkout/sale-completion';
 
@@ -62,9 +62,8 @@ export async function writeZeroBalanceCompletion(
 		// A close sent and never answered may have completed the sale on the store: its attempt
 		// stays for the bridge, which finishes the sale once the paid order is adopted (Codex
 		// 4343188027 on #2832).
-		const { entries } = await readOrderCommands(ctx.storeDB, order.uuid);
-		if (entries.some(({ kind, sentAt }) => kind === 'close' && sentAt !== null))
-			return { kind: 'offline' };
+		const awaiting = await readAwaitingAnswer(ctx.storeDB, order.uuid);
+		if (awaiting.some(({ kind }) => kind === 'close')) return { kind: 'offline' };
 		return unfinished({ kind: 'offline' });
 	}
 	const preflightReason = await revalidate?.();

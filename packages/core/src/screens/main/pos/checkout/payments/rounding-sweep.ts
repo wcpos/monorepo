@@ -1,6 +1,6 @@
 import { fromMinor, isFailedPaymentStatus, readLedger, toMinor } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
-import { readOrderCommands, type StoreLocalDatabase } from '@wcpos/query/store-local';
+import { readJournaledRecordIds, type StoreLocalDatabase } from '@wcpos/query/store-local';
 
 import { parsePosData } from '../../hooks/utils';
 
@@ -20,8 +20,7 @@ export async function sweepDeadRounding(
 	dp: number,
 	write: (changes: { fee_lines: object[]; total: string }) => Promise<unknown>
 ): Promise<void> {
-	const { entries } = await readOrderCommands(storeDB, order.uuid);
-	const kept = new Set(entries.map(({ id }) => id));
+	const kept = new Set(await readJournaledRecordIds(storeDB, order.uuid));
 	const latest = order.getLatest?.().payload ?? order.payload;
 	for (const { id, status } of readLedger(latest.meta_data ?? []))
 		if (!isFailedPaymentStatus(status)) kept.add(id);

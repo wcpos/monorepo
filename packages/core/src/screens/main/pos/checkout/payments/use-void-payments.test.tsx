@@ -28,7 +28,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
 jest.mock('@wcpos/query/store-local', () => ({
-	readOrderCommands: async () => ({ entries: [], chain: null }),
+	readJournaledRecordIds: async () => new Set(),
 }));
 jest.mock('@wcpos/query', () => ({
 	// Posts straight through; its mirror is the mocked mirrorServerOrder under a fixed revision.

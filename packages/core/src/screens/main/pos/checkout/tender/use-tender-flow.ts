@@ -36,7 +36,7 @@ import {
 	useDocField,
 	useRecordField,
 } from '@wcpos/query';
-import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
+import { observeTenderGate, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -267,15 +267,13 @@ export function useTenderFlow(
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
-	const [sentCommands, setSentCommands] = React.useState(0);
+	const [gated, setGated] = React.useState(false);
 	// The command journal is an external store: a command sent and never answered gates the
-	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3).
+	// tender to Try again across restarts, until a re-send settles it (ADR 0040 §1.3). A deferred
+	// offline record does not gate: it would block an offline split's next leg (Decided 1 rule 3).
 	React.useEffect(() => {
-		const subscription = observeOrderCommands(storeDB, order.uuid).subscribe({
-			// A deferred offline record (sent, no revision) is journaled, not unanswered: gating on it
-			// would block an offline split's next leg (ADR 0040 Decided 1 rule 3).
-			next: (entries) =>
-				setSentCommands(entries.filter(({ sentRevision }) => sentRevision !== null).length),
+		const subscription = observeTenderGate(storeDB, order.uuid).subscribe({
+			next: setGated,
 			error: () => undefined,
 		});
 		return () => subscription.unsubscribe();
@@ -283,7 +281,7 @@ export function useTenderFlow(
 	// While this till's own press is in flight its entry is sent too; that is not unanswered. A
 	// Try again in flight keeps the gate: its keypad is never shown (CodeRabbit 4346454764).
 	const [pressing, setPressing] = React.useState(false);
-	const unansweredCommand = sentCommands > 0 && !pressing;
+	const unansweredCommand = gated && !pressing;
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),

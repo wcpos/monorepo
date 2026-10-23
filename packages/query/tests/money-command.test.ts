@@ -11,6 +11,7 @@ import type { StoreDatabase } from '@wcpos/database';
 
 import * as mirrorServerOrder from '../src/mutations/mirror-server-order';
 import {
+	answerAdopted,
 	MoneyCommandError,
 	moneyCommandPoster,
 	recoverMoneyCommands,
@@ -1424,5 +1425,105 @@ describe('the store-session recovery', () => {
 		await adoptStore(false);
 		await recover();
 		expect(await chain()).not.toBeNull();
+	});
+});
+
+// The completion's guard (#2859): it skips its second whole-order read only when the answers
+// are adopted, which no open command and a resident holding the last answer prove together.
+describe('answerAdopted', () => {
+	it('is false while a command is still journaled', async () => {
+		await claim('orders/5/close', {});
+		expect(await answerAdopted(runtime, storeDB, 'order')).toBe(false);
+	});
+
+	it('is true once the answer is settled and its post-answer refresh adopted the document', async () => {
+		const post = poster();
+		const { data } = (await post('orders/5/payments', { payment: cash() })) as {
+			data: { payment: PaymentRow };
+		};
+		await post.mirror({ payment: data.payment });
+		expect(await entries()).toEqual([]);
+		expect(await answerAdopted(runtime, storeDB, 'order')).toBe(true);
+	});
+
+	it('is false once the answer is settled but the refresh adopted nothing', async () => {
+		const post = poster();
+		const { data } = (await post('orders/5/payments', { payment: cash() })) as {
+			data: { payment: PaymentRow };
+		};
+		refreshWorks = false;
+		await post.mirror({ payment: data.payment });
+		expect(await entries()).toEqual([]);
+		expect(await answerAdopted(runtime, storeDB, 'order')).toBe(false);
+	});
+});
+
+describe('MoneyCommandError.phase: the phase before this send', () => {
+	it('a fresh command refused in its pre-flight never left the till: unsent', async () => {
+		await dirty();
+		jest.mocked(pushRecord).mockRejectedValue(httpError(401, 'rest_not_logged_in'));
+		const error = await send('orders/5/payments', { payment: cash() }).catch((e: unknown) => e);
+		expect(error).toMatchObject({ reason: 'preflight_failed', phase: 'unsent' });
+	});
+
+	it('a re-send refused because another poster holds it was dispatched: unanswered', async () => {
+		store.modes = ['lose'];
+		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
+		await claim('orders/5/payments/leg/capture', {}, { claimant: 'other-tab' });
+		const error = await poster()('orders/5/payments/leg/capture', {}).catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(MoneyCommandError);
+		expect(error).toMatchObject({ reason: 'in_flight', phase: 'unanswered' });
+	});
+});
+
+// A crash between claimRoute and markSent leaves a never-sent entry: nothing reached the store,
+// so the online recovery drops it once its claim lapses (Codex 4355660786 on #2865).
+describe('the store-session recovery drops crash leftovers', () => {
+	const route = { orderUuid: 'order', kind: 'close', target: null, rowId: null } as const;
+	const leftover = (id: string, scope = 'test-scope'): MoneyCommandEntry => ({
+		orderUuid: 'order',
+		kind: 'close',
+		path: 'orders/5/close',
+		target: null,
+		id,
+		body: {},
+		approval,
+		sentAt: null,
+		sentRevision: null,
+		scope,
+	});
+
+	it('drops an unheld leftover of the active scope, sending nothing', async () => {
+		await claimRoute(storeDB, route, 'crashed-tab', leftover('left'));
+		clock += CLAIM_LEASE_MS;
+		expect(await recover()).toEqual([]);
+		expect(await entries()).toEqual([]);
+		expect(store.post).not.toHaveBeenCalled();
+	});
+
+	it('keeps one a live poster holds: its pre-flight is running', async () => {
+		await claimRoute(storeDB, route, 'cashier-tab', leftover('in-preflight'));
+		expect(await recover()).toEqual([]);
+		expect(await entries()).toEqual([expect.objectContaining({ id: 'in-preflight' })]);
+	});
+
+	// Codex on #2892: chains outlive their orders for days; a run over settled orders writes nothing.
+	it('makes no journal write over settled orders whose entries are empty', async () => {
+		for (let i = 0; i < 5; i++)
+			await settleCommand(storeDB, `settled-${i}`, null, {
+				answerRevision: 'r',
+				answeredAt: clock,
+			});
+		const revision = async () => (await storeDB.getLocal('money-commands'))!.revision;
+		const before = await revision();
+		expect(await recover()).toEqual([]);
+		expect(await revision()).toBe(before);
+	});
+
+	it("keeps another scope's: only its own session judges it", async () => {
+		await claimRoute(storeDB, route, 'crashed-tab', leftover('theirs', 'another-cashier'));
+		clock += CLAIM_LEASE_MS;
+		expect(await recover()).toEqual([]);
+		expect(await entries()).toEqual([expect.objectContaining({ id: 'theirs' })]);
 	});
 });
