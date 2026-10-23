@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { DeviceScope } from '../lib/device';
-import { QuantityKeypad, type QuantityKeypadProps } from './index';
+import { QuantityKeypad, type QuantityKeypadHandle, type QuantityKeypadProps } from './index';
 
 // The keypad is the web presentation: load the web primitive (Radix under react-native-web),
 // as the popover's outside-press suite does.
@@ -66,6 +66,13 @@ async function press(id: string) {
 	fireEvent.click(screen.getByTestId(id));
 	await act(async () => jest.runOnlyPendingTimers());
 }
+/** A pointer press as a browser makes it: focus lands on the key, then the click. */
+async function tap(id: string) {
+	screen.getByTestId(id).focus();
+	await press(id);
+}
+const panelNode = () => screen.getByTestId('quantity-keypad-value').closest('[tabindex]');
+const shown = () => screen.getByTestId('quantity-keypad-value').textContent;
 const isOpen = () => screen.queryByTestId('quantity-keypad-value') !== null;
 const panelKey = (keyName: string) => fireEvent.keyDown(document.activeElement!, { key: keyName });
 
@@ -167,6 +174,13 @@ it('grows down from the box, and up when the panel would leave the window', asyn
 	rect.mockReturnValue({ top: window.innerHeight - 100, height: 36 } as DOMRect);
 	await press('cart-quantity-input');
 	expect(panel()).toHaveAttribute('data-grow', 'up');
+	// Keys above in their usual order, the stepper row last, over the box.
+	const rows = Array.from(panelNode()!.children);
+	expect(rows[0].querySelector('[data-testid="numpad-key-1"]')).not.toBeNull();
+	expect(rows[rows.length - 1].querySelector('[data-testid="numpad-key-decrease"]')).not.toBeNull();
+	expect(
+		rows[rows.length - 1].querySelector('[data-testid="quantity-keypad-value"]')
+	).not.toBeNull();
 	rect.mockRestore();
 });
 
@@ -181,4 +195,82 @@ it('on a phone it is the sheet, with Done in ✓’s place', async () => {
 	await press('numpad-key-5');
 	await press('numpad-done-button');
 	expect(onChange).toHaveBeenCalledWith(5);
+});
+
+it('Enter after pointer presses is Done, not the last key again', async () => {
+	await open({ value: 3 });
+	await tap('numpad-key-1');
+	await tap('numpad-key-2');
+	expect(document.activeElement).toBe(panelNode());
+	panelKey('Enter');
+	await act(async () => jest.runOnlyPendingTimers());
+	expect(onChange).toHaveBeenCalledTimes(1);
+	expect(onChange).toHaveBeenCalledWith(12);
+});
+
+it('on the phone sheet the panel takes focus, so Enter is Done', async () => {
+	await open({ value: 3 }, true);
+	await act(async () => jest.advanceTimersByTime(1000)); // the sheet's rise, then its focus
+	expect(document.activeElement).toBe(panelNode());
+	panelKey('7');
+	panelKey('Enter');
+	await act(async () => jest.runOnlyPendingTimers());
+	expect(onRemove).not.toHaveBeenCalled();
+	expect(onChange).toHaveBeenCalledWith(7);
+});
+
+it('a typed number equal to the stored one still commits after a step', async () => {
+	await open({ value: 3 });
+	await press('numpad-key-increase'); // 4 committed, the store has not caught up
+	await press('numpad-key-3');
+	await press('numpad-done-button');
+	expect(onChange.mock.calls).toEqual([[4], [3]]);
+});
+
+it('+ and − count from the typed number', async () => {
+	await open({ value: 3 });
+	await press('numpad-key-5');
+	await press('numpad-key-increase');
+	expect(onChange).toHaveBeenLastCalledWith(6);
+	await press('numpad-key-5');
+	await press('numpad-key-decrease');
+	expect(onChange).toHaveBeenLastCalledWith(4);
+	expect(shown()).toBe('4');
+});
+
+it('a typed 1 shows the trash, and − removes without committing the 1', async () => {
+	await open({ value: 5 });
+	await press('numpad-key-1');
+	expect(screen.getByTestId('numpad-key-decrease')).toHaveAttribute('aria-label', 'Remove');
+	await press('numpad-key-decrease');
+	expect(onRemove).toHaveBeenCalledTimes(1);
+	expect(onChange).not.toHaveBeenCalled();
+});
+
+it('ArrowUp and ArrowDown step, and ArrowDown stops at 1', async () => {
+	await open({ value: 2 });
+	panelKey('ArrowUp');
+	expect(onChange).toHaveBeenLastCalledWith(3);
+	panelKey('ArrowDown');
+	panelKey('ArrowDown');
+	expect(onChange).toHaveBeenLastCalledWith(1);
+	panelKey('ArrowDown');
+	expect(onRemove).not.toHaveBeenCalled();
+	expect(onChange).toHaveBeenCalledTimes(3);
+	expect(isOpen()).toBe(true);
+});
+
+it("takes '.' as the decimal key on a ',' store", async () => {
+	await open({ value: 3, decimalSeparator: ',' });
+	for (const k of ['1', '.', '5']) panelKey(k);
+	expect(shown()).toBe('1,5');
+});
+
+it('dismiss() closes and keeps the stored quantity (a scanner burst)', async () => {
+	const ref = React.createRef<QuantityKeypadHandle>();
+	await open({ value: 3, ref });
+	await press('numpad-key-4');
+	await act(async () => ref.current?.dismiss());
+	expect(isOpen()).toBe(false);
+	expect(onChange).not.toHaveBeenCalled();
 });

@@ -16,6 +16,8 @@ export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
 
 // Three places: a typed fraction never commits under 0.001, the smallest quantity a line takes.
 const FRACTION_DIGITS = 3;
+// Four: a line never holds 10 000, and "9999" is what the 48 px cell fits.
+const INTEGER_DIGITS = 4;
 
 export function quantityEntryReducer(
 	entry: QuantityEntry,
@@ -27,7 +29,8 @@ export function quantityEntryReducer(
 			const point = buffer.indexOf('.');
 			if (point >= 0 && buffer.length - point > FRACTION_DIGITS) return entry;
 			// A lone 0 only ever starts a fraction: the next digit takes its place.
-			return { ...entry, buffer: buffer === '0' ? action.digit : buffer + action.digit };
+			const next = buffer === '0' ? action.digit : buffer + action.digit;
+			return point < 0 && next.length > INTEGER_DIGITS ? entry : { ...entry, buffer: next };
 		}
 		case 'decimal':
 			return buffer.includes('.') ? entry : { ...entry, buffer: `${buffer || '0'}.` };

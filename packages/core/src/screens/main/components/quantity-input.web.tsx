@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { QuantityKeypad } from '@wcpos/components/quantity-keypad';
+import { QuantityKeypad, type QuantityKeypadHandle } from '@wcpos/components/quantity-keypad';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -37,6 +37,25 @@ export function QuantityInput({
 		string | undefined;
 	const { format } = useNumberFormat();
 	const t = useT();
+	const keypad = React.useRef<QuantityKeypadHandle>(null);
+	React.useImperativeHandle(ref, () => ({ focus: () => keypad.current?.focus() }), []);
+	const [open, setOpen] = React.useState(false);
+	/**
+	 * A scanner burst while the keypad is open: the wedge detector (`use-barcode-detection`)
+	 * never latches a burst's first key, so that digit reaches the keypad, and it swallows the
+	 * rest. Its mark on a latched key is `defaultPrevented`, set in its own capture listener on
+	 * the document. This one is registered on open, after the route's detector, and same-node
+	 * listeners run in registration order whatever `stopPropagation` says, so it sees the mark:
+	 * the keypad closes, keeping the stored quantity. An effect: the document is outside React.
+	 */
+	React.useEffect(() => {
+		if (!open) return;
+		const onKey = (event: KeyboardEvent) => {
+			if (event.defaultPrevented) keypad.current?.dismiss();
+		};
+		document.addEventListener('keydown', onKey, true);
+		return () => document.removeEventListener('keydown', onKey, true);
+	}, [open]);
 	const labels = React.useMemo(
 		() => ({
 			decrease: t('pos_cart.quantity_decrease'),
@@ -49,7 +68,8 @@ export function QuantityInput({
 	);
 	return (
 		<QuantityKeypad
-			ref={ref}
+			ref={keypad}
+			onOpenChange={setOpen}
 			testID={testID}
 			className={className}
 			textClassName={textClassName}

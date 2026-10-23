@@ -3,7 +3,7 @@ import { type KeyDownEvent, Pressable, View, type ViewInstance } from 'react-nat
 
 import { Button, ButtonText } from '../button';
 import { Icon, type IconName } from '../icon';
-import { useOverlayPresentation } from '../lib/overlay';
+import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { Text } from '../text';
@@ -53,8 +53,16 @@ export type QuantityKeypadProps = {
 	testID?: string;
 	className?: string;
 	textClassName?: string;
-	/** `focus()` opens the keypad, as a press does. */
-	ref?: React.Ref<{ focus: () => void }>;
+	/** Told when the keypad opens and closes. */
+	onOpenChange?: (open: boolean) => void;
+	ref?: React.Ref<QuantityKeypadHandle>;
+};
+
+export type QuantityKeypadHandle = {
+	/** Opens the keypad, as a press does. */
+	focus: () => void;
+	/** Closes it keeping the stored quantity, as Escape does. */
+	dismiss: () => void;
 };
 
 /**
@@ -72,6 +80,7 @@ export function QuantityKeypad({
 	testID,
 	className,
 	textClassName,
+	onOpenChange: onOpenChangeProp,
 	ref,
 }: QuantityKeypadProps) {
 	const trigger = React.useRef<TriggerRef>(null);
@@ -81,13 +90,21 @@ export function QuantityKeypad({
 	// Escape is the one close that keeps the stored quantity; every other close commits.
 	const discard = React.useRef(false);
 	const isOpen = React.useRef(false);
-	React.useImperativeHandle(ref, () => ({ focus: () => !disabled && trigger.current?.open() }), [
-		disabled,
-	]);
-
 	const close = () => trigger.current?.close();
+	const dismiss = () => {
+		discard.current = true;
+		close();
+	};
+	React.useImperativeHandle(ref, () => ({
+		focus: () => !disabled && trigger.current?.open(),
+		dismiss,
+	}));
+	// A pointer press leaves focus on the key; back on the panel, the next Enter is Done.
+	const focusPanel = () =>
+		isWeb && (panel.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+
 	const base = typedQuantity(entry.buffer) ?? entry.stepped ?? value;
-	const trash = entry.buffer === '' && base <= 1;
+	const trash = base <= 1;
 	const step = (quantity: number) => {
 		dispatch({ type: 'step', quantity });
 		onChange(quantity);
@@ -96,6 +113,7 @@ export function QuantityKeypad({
 	const onOpenChange = (open: boolean) => {
 		if (open === isOpen.current) return;
 		isOpen.current = open;
+		onOpenChangeProp?.(open);
 		if (open) {
 			discard.current = false;
 			// Measured once per open: the first row's middle cell sits over the box.
@@ -106,22 +124,25 @@ export function QuantityKeypad({
 			setFrame({ open, grow: fits ? 'down' : 'up', offset: -(height + inset) });
 		} else {
 			const typed = typedQuantity(entry.buffer);
-			if (!discard.current && typed !== undefined && typed !== value) onChange(typed);
+			const shown = entry.stepped ?? value;
+			if (!discard.current && typed !== undefined && typed !== shown) onChange(typed);
 			setFrame((current) => ({ ...current, open }));
 		}
 		dispatch({ type: 'reset' });
 	};
 
 	const press = (name: string) => {
+		if (name === 'done') return close();
+		if (name === 'decrease' && trash) {
+			// The line goes: nothing typed is committed on the way out.
+			dismiss();
+			return onRemove();
+		}
 		if (name === 'backspace') dispatch({ type: 'backspace' });
-		else if (name === 'done') close();
 		else if (name === 'increase') step(base + 1);
-		else if (name === 'decrease') {
-			if (trash) {
-				close();
-				onRemove();
-			} else if (base - 1 > 0) step(base - 1);
-		} else dispatch({ type: 'digit', digit: name });
+		else if (name === 'decrease') step(base - 1);
+		else dispatch({ type: 'digit', digit: name });
+		focusPanel();
 	};
 
 	// Web: the physical keyboard while the panel holds focus.
@@ -134,9 +155,11 @@ export function QuantityKeypad({
 		// A focused key takes its own Enter; the panel's Enter is Done.
 		if (key === 'Enter' && event.target !== event.currentTarget) return;
 		const name = /^[0-9]$/.test(key) ? key : KEY_NAMES[key];
-		if (key === decimalSeparator) dispatch({ type: 'decimal' });
-		else if (name) press(name);
-		else return;
+		// Both: a numeric keypad types '.' on a ',' store.
+		if (key === '.' || key === ',' || key === decimalSeparator) dispatch({ type: 'decimal' });
+		// A held ArrowDown stops at 1; only a press on the trash removes the line.
+		else if (name && !(key === 'ArrowDown' && trash)) press(name);
+		else if (!name) return;
 		event.preventDefault();
 	};
 
@@ -225,11 +248,13 @@ function Keys({
 }) {
 	const sheet = useOverlayPresentation() === 'bottom';
 	// Growing up, the keys sit above and the stepper row lands on the box.
-	const ordered = grow === 'up' && !sheet ? [...rows].reverse() : rows;
+	const ordered = grow === 'up' && !sheet ? [...rows.slice(1), rows[0]] : rows;
 	return (
 		<View
 			ref={panel}
-			tabIndex={-1}
+			// The sheet has no primitive Content to focus it: tabbable, the panel is what the
+			// shell focuses once the sheet has risen, so Enter is Done there too, never the −.
+			tabIndex={sheet ? 0 : -1}
 			onKeyDown={onKeyDown}
 			className={cn('web:outline-none', sheet && 'gap-2')}
 		>

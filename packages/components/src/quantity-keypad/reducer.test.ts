@@ -45,6 +45,11 @@ describe('quantityEntryReducer', () => {
 		expect(typedQuantity('0.001')).toBe(0.001);
 	});
 
+	it('stops the whole number at four digits; a fraction may follow', () => {
+		expect(run(...digits('12345')).buffer).toBe('1234');
+		expect(run(...digits('1234.5')).buffer).toBe('1234.5');
+	});
+
 	it('a step clears the typing and remembers the committed number; reset forgets both', () => {
 		const stepped = run(...digits('7'), { type: 'step', quantity: 4 });
 		expect(stepped).toEqual({ buffer: '', stepped: 4 });

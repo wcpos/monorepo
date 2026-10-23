@@ -138,6 +138,7 @@ test.describe('POS Cart', () => {
 
 		await page.getByTestId('numpad-done-button').click();
 		await expect(numpad).toBeHidden();
+		await expect(quantityButton).toHaveText(/123/, { timeout: 15_000 });
 	});
 
 	test('should add multiple different products', async ({ posPage: page }, testInfo) => {
