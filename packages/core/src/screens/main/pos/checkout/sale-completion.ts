@@ -314,8 +314,13 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			return !residentUnpaid(payload, outcome.order.status);
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
-		case 'gateway-snapshot': // The blocklist, plus the status the merchant stored for the gateway.
-			return isSettledOrderStatus(outcome.snapshot.status ?? '', outcome.settledOrderStatus);
+		case 'gateway-snapshot': {
+			// The blocklist, plus the status the merchant stored for the gateway. A row with no
+			// status (a plugin filter's `{}`, a non-JSON body's first character) proves nothing.
+			const status = outcome.snapshot?.status;
+			if (typeof status !== 'string' || status.trim() === '') return false;
+			return isSettledOrderStatus(status, outcome.settledOrderStatus);
+		}
 		case 'zero-balance': // No payment row exists for this route.
 			return true;
 	}

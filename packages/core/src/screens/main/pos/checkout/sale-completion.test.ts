@@ -284,6 +284,21 @@ it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled', 'refunded'
 			isSaleComplete({ source: 'gateway-snapshot', snapshot: { ...payload, status } as never }, 2)
 		).toBe(false)
 );
+// A server row with no status proves nothing: a plugin filter's `{}`, `{ status: '' }`, or the first
+// character of a non-JSON 200 body read as `data[0]`. None of them settles the sale, even with a
+// stored gateway status in the catalog.
+it.each([
+	['missing', { ...payload, status: undefined }],
+	['empty', { ...payload, status: '' }],
+	['blank', { ...payload, status: '  ' }],
+	['a string character', '<'],
+	['null', null],
+])('snapshot with %s status never settles', (_name, snapshot) => {
+	expect(
+		isSaleComplete({ source: 'gateway-snapshot', snapshot, settledOrderStatus: '' } as never, 2)
+	).toBe(false);
+	expect(isSaleComplete({ source: 'gateway-snapshot', snapshot } as never, 2)).toBe(false);
+});
 it('online provenance stamps, patches, then awaits push', async () => {
 	let release!: () => void;
 	jest.mocked(ctx.pushDocument).mockImplementationOnce(
