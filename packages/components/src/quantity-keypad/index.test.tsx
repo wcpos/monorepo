@@ -274,3 +274,22 @@ it('dismiss() closes and keeps the stored quantity (a scanner burst)', async () 
 	expect(isOpen()).toBe(false);
 	expect(onChange).not.toHaveBeenCalled();
 });
+
+it('a step the store refuses is taken back: the stored quantity shows and + counts from it', async () => {
+	onChange.mockResolvedValueOnce(false);
+	await open({ value: 3 });
+	await press('numpad-key-increase');
+	expect(onChange).toHaveBeenLastCalledWith(4);
+	expect(shown()).toBe('3');
+	await press('numpad-key-increase');
+	expect(onChange).toHaveBeenLastCalledWith(4);
+});
+
+it('a step the store takes (true) stands', async () => {
+	onChange.mockResolvedValueOnce(true);
+	await open({ value: 3 });
+	await press('numpad-key-increase');
+	expect(shown()).toBe('4');
+	await press('numpad-key-increase');
+	expect(onChange).toHaveBeenLastCalledWith(5);
+});

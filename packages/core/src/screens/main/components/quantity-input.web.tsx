@@ -9,7 +9,8 @@ import { useNumberFormat } from '../hooks/use-number-format';
 
 export interface QuantityInputProps {
 	value?: number | string;
-	onChangeText: (quantity: number) => void;
+	/** Resolving `false`: the store refused the quantity, and the keypad takes its step back. */
+	onChangeText: (quantity: number) => void | boolean | Promise<void | boolean>;
 	/** − at 1: the line's own remove path. */
 	onRemove: () => void;
 	className?: string;

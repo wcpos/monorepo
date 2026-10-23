@@ -6,7 +6,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { Quantity } from './quantity-keypad';
 import { openLineQuantity, scrollToLine } from '../../conditions/use-cart-conditions';
 
-const mockUpdateCartLine = jest.fn();
+const mockUpdateCartLine = jest.fn().mockResolvedValue({});
+let mockOnChangeText: (value: number) => Promise<boolean>;
 const mockSplitLineItem = jest.fn();
 const mockRemoveLineItem = jest.fn();
 jest.mock('../../hooks/use-remove-line-item', () => ({
@@ -35,22 +36,25 @@ jest.mock('../../../components/quantity-input', () => ({
 	}: {
 		testID: string;
 		value: number;
-		onChangeText: (value: number) => void;
+		onChangeText: (value: number) => Promise<boolean>;
 		onRemove: () => void;
 		ref?: React.Ref<HTMLInputElement>;
 		className?: string;
-	}) => (
-		<input
-			ref={ref}
-			className={className}
-			data-testid={testID}
-			defaultValue={value}
-			onKeyDown={(event) => {
-				if (event.key === 'Enter') onChangeText(Number(event.currentTarget.value));
-				if (event.key === 'Delete') onRemove();
-			}}
-		/>
-	),
+	}) => {
+		mockOnChangeText = onChangeText;
+		return (
+			<input
+				ref={ref}
+				className={className}
+				data-testid={testID}
+				defaultValue={value}
+				onKeyDown={(event) => {
+					if (event.key === 'Enter') void onChangeText(Number(event.currentTarget.value));
+					if (event.key === 'Delete') onRemove();
+				}}
+			/>
+		);
+	},
 }));
 
 it('keeps the quantity id/value and commits the same hook arguments', () => {
@@ -107,4 +111,15 @@ it('the Split link passes its line uuid to the split hook', () => {
 	fireEvent.click(screen.getByTestId('cart-line-split'));
 	expect(mockSplitLineItem).toHaveBeenCalledTimes(1);
 	expect(mockSplitLineItem).toHaveBeenCalledWith('line-split');
+});
+
+it('tells the keypad whether the store took the quantity (the stock guard can refuse it)', async () => {
+	const props = {
+		row: { original: { uuid: 'line-s', type: 'line_items', item: { quantity: 3 } } },
+		column: { columnDef: { meta: { show: () => false } } },
+	} as unknown as React.ComponentProps<typeof Quantity>;
+	render(<Quantity {...props} />);
+	mockUpdateCartLine.mockResolvedValueOnce(false);
+	await expect(mockOnChangeText(4)).resolves.toBe(false);
+	await expect(mockOnChangeText(4)).resolves.toBe(true);
 });

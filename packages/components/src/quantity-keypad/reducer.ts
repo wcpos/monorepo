@@ -10,6 +10,7 @@ export type QuantityEntryAction =
 	| { type: 'decimal' }
 	| { type: 'backspace' }
 	| { type: 'step'; quantity: number }
+	| { type: 'unstep'; quantity: number }
 	| { type: 'reset' };
 
 export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
@@ -38,6 +39,9 @@ export function quantityEntryReducer(
 			return { ...entry, buffer: buffer.slice(0, -1) };
 		case 'step':
 			return { buffer: '', stepped: action.quantity };
+		// The store refused that step: show what it holds again, unless a later step moved on.
+		case 'unstep':
+			return entry.stepped === action.quantity ? { buffer } : entry;
 		case 'reset':
 			return EMPTY_ENTRY;
 	}

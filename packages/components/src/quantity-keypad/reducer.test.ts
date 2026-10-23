@@ -50,6 +50,15 @@ describe('quantityEntryReducer', () => {
 		expect(run(...digits('1234.5')).buffer).toBe('1234.5');
 	});
 
+	it('unstep forgets a refused step, keeps the typing, and ignores a step it no longer shows', () => {
+		const stepped: QuantityEntry = { buffer: '', stepped: 4 };
+		expect(quantityEntryReducer(stepped, { type: 'unstep', quantity: 4 })).toEqual({ buffer: '' });
+		expect(
+			quantityEntryReducer({ buffer: '7', stepped: 4 }, { type: 'unstep', quantity: 4 })
+		).toEqual({ buffer: '7' });
+		expect(quantityEntryReducer(stepped, { type: 'unstep', quantity: 5 })).toBe(stepped);
+	});
+
 	it('a step clears the typing and remembers the committed number; reset forgets both', () => {
 		const stepped = run(...digits('7'), { type: 'step', quantity: 4 });
 		expect(stepped).toEqual({ buffer: '', stepped: 4 });

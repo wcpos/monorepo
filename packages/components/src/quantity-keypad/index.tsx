@@ -41,8 +41,11 @@ export type QuantityKeypadProps = {
 	value: number;
 	/** The store's number format (separators). */
 	format: (value: number) => string;
-	/** A committed quantity: at least 1, or a fraction of at least 0.001. */
-	onChange: (quantity: number) => void;
+	/**
+	 * A committed quantity: at least 1, or a fraction of at least 0.001. Resolving `false`
+	 * says the store refused it (the stock guard), and a − or + step is taken back.
+	 */
+	onChange: (quantity: number) => void | boolean | Promise<void | boolean>;
 	/** − pressed at 1 (the trash). */
 	onRemove: () => void;
 	disabled?: boolean;
@@ -107,7 +110,8 @@ export function QuantityKeypad({
 	const trash = base <= 1;
 	const step = (quantity: number) => {
 		dispatch({ type: 'step', quantity });
-		onChange(quantity);
+		const unstep = () => dispatch({ type: 'unstep', quantity });
+		void Promise.resolve(onChange(quantity)).then((ok) => ok === false && unstep(), unstep);
 	};
 
 	const onOpenChange = (open: boolean) => {
@@ -125,7 +129,7 @@ export function QuantityKeypad({
 		} else {
 			const typed = typedQuantity(entry.buffer);
 			const shown = entry.stepped ?? value;
-			if (!discard.current && typed !== undefined && typed !== shown) onChange(typed);
+			if (!discard.current && typed !== undefined && typed !== shown) void onChange(typed);
 			setFrame((current) => ({ ...current, open }));
 		}
 		dispatch({ type: 'reset' });
