@@ -12,7 +12,6 @@ export async function fetchFreshRecords(
 		id: string;
 		collection: 'products' | 'variations' | 'customers' | 'orders';
 		wooIds: number[];
-		readopt?: boolean;
 	}[]
 ): Promise<void> {
 	const handles = [];
@@ -26,7 +25,6 @@ export async function fetchFreshRecords(
 					kind: 'targeted-records',
 					remoteIds: request.wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 					forceRefresh: true,
-					...(request.readopt ? { readopt: true } : {}),
 				})
 			);
 		}

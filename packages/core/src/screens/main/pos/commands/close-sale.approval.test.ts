@@ -84,7 +84,11 @@ beforeEach(async () => {
 	};
 	Object.assign(engine, {
 		require: () => ({
-			ready: adopt(server.document, server.revision).then(() => ({ action: 'fetched' })),
+			// Its simulated adoption always writes: the engine reports the order as applied.
+			ready: adopt(server.document, server.revision).then(() => ({
+				action: 'fetched',
+				appliedRecordIds: ['42'],
+			})),
 			release: () => undefined,
 			queryKey: '',
 		}),

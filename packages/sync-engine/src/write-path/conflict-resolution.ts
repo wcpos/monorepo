@@ -9,7 +9,7 @@ import {
 
 import { type CollectionWriteFacet, writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
-import { stampedSync } from './order-revision';
+import { type ResidentSync, stampedSync } from './order-revision';
 import { requeueRejectedMutation } from './write-intents';
 import { scopeBoundObserver } from '../scope-bound';
 import { removeRefundChildren } from './refund-children';
@@ -387,7 +387,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									await doc.incrementalModify((data) => ({
 										...data,
 										payload: reconcile((data.payload ?? {}) as Record<string, unknown>),
-										sync: stampedSync((data.sync ?? {}) as object, revision),
+										sync: stampedSync((data.sync ?? {}) as ResidentSync, revision),
 									}));
 								}
 							} else if (resolution === 'requeue-rebuilt') {

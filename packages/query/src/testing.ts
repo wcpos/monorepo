@@ -513,7 +513,10 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
-		orderRevision: createOrderRevisionDoor({ resolveDatabase: async () => database }),
+		orderRevision: createOrderRevisionDoor({
+			resolveDatabase: async () => database,
+			require: (requirement: EngineRequirement): RequirementHandle => engine.require(requirement),
+		}),
 		dispose: async () => undefined,
 	} as unknown as FakeEngine;
 

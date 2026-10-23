@@ -49,17 +49,10 @@ export function refreshRecordByWooId(
 		id: string;
 		collection: 'products' | 'variations' | 'customers' | 'orders';
 		wooId: number;
-		/** Adopt the document even under an equal stamp (ADR 0040's corrective refresh). */
-		readopt?: boolean;
 	}
 ): Promise<void> {
 	return fetchFreshRecords(engine, [
-		{
-			id: request.id,
-			collection: request.collection,
-			wooIds: [request.wooId],
-			...(request.readopt ? { readopt: true } : {}),
-		},
+		{ id: request.id, collection: request.collection, wooIds: [request.wooId] },
 	]);
 }
 

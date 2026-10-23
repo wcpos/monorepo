@@ -25,8 +25,7 @@ import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
-import { readoptRequested } from './order-readopt';
-import { adoptedSync, residentRevision } from './order-revision';
+import { adoptedSync, carriedFacts, readoptRequested, residentRevision } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -293,7 +292,7 @@ export class EngineOrderRepository {
 		// next pull or the change signal; it is never lost.
 		const holdsNewerDocument = (resident: unknown) =>
 			context?.source === 'pull' &&
-			residentRevision(resident as { sync?: unknown }).holdsDocument(context.requestedAt);
+			residentRevision(resident as { sync?: unknown }).adoptedAfter(context.requestedAt);
 		const keepsResident = (id: string, resident: unknown) =>
 			(id !== ack?.recordId && hasPendingLocalWork(resident)) || holdsNewerDocument(resident);
 		let applicable = documents.filter(
@@ -348,17 +347,13 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		// The resident's own `sync.adopted` rides the comparison, so an unchanged pull stays
+		// The resident's own revision facts ride the comparison, so an unchanged pull stays
 		// skipped; a document actually written is stamped as adopted now. A corrective refresh
 		// (`readopt`) writes even under an equal stamp (ADR 0040 §1.3).
 		const pulled = materialized.map(({ storedDocument }) => {
 			const document = withOrderColumns(storedDocument);
-			const resident = residents.get(document.uuid)?.toJSON() as
-				{ sync?: { adopted?: unknown } } | undefined;
-			const adopted = resident?.sync?.adopted;
-			return adopted === undefined
-				? document
-				: { ...document, sync: { ...document.sync, adopted } };
+			const resident = residents.get(document.uuid)?.toJSON();
+			return { ...document, sync: carriedFacts(document.sync, resident) };
 		});
 		const readopt = (document: { remoteId: unknown }) =>
 			readoptRequested(this.db, document.remoteId);

@@ -70,7 +70,7 @@ import { graftServerLineIdentity } from '../write-path/graft-server-line-identit
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
 import { removeRefundChildren } from '../write-path/refund-children';
-import { adoptedSync, stampedSync } from '../write-path/order-revision';
+import { adoptedSync, type ResidentSync, stampedSync } from '../write-path/order-revision';
 
 import type { RxDatabase } from 'rxdb';
 import type { WooReferencePayload } from './reference-collection-schema';
@@ -359,7 +359,7 @@ function ackBookkeeping(options: {
 				const pending = (
 					Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
 				).filter((id) => id !== ack.mutation.mutationId);
-				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
+				const sync = (data.sync ?? {}) as ResidentSync;
 				let adoptionPatch = ackDocumentPatch;
 				if (adoptionPatch && (preserveMetaKeys || adoptPayload) && pending.length === 0) {
 					const localPayload = (data.payload ?? {}) as Record<string, unknown>;

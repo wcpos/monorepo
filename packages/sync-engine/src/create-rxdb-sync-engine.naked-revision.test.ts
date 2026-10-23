@@ -286,3 +286,58 @@ describe("engine.orderRevision.stamp: a status poll's naked stamp", () => {
 		expect(updates.map((envelope) => envelope.baseRevision)).toEqual(['sha256:r1', 'sha256:r2']);
 	});
 });
+
+describe("engine.orderRevision.readopt: true only when this refresh's own task adopted it", () => {
+	it('re-adopts the store document under an equal stamp and reports it', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith(routedFetch(server, () => ADOPTED.revision));
+		try {
+			await engine.ready;
+			await insertAdoptedOrder(engine);
+			expect(await engine.orderRevision.readopt(42)).toBe(true);
+			const resident = await residentSync(engine);
+			expect(resident.payload).toMatchObject({ total: '120.00', currency: 'EUR' });
+			expect(resident.sync.adopted).toMatchObject({ revision: ADOPTED.revision });
+			expect((resident.sync.adopted as { at: number }).at).toBeGreaterThan(ADOPTED.at);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	// Moved from query's money-command suite ("a pull adopted in the same millisecond as the
+	// answer never confirms a replayed submit"): the proof is the refresh's own task, so no stamp
+	// or time on the resident can stand in for it.
+	it('a pull adopted before the readopt opens is not reported when the readopt writes nothing', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith(routedFetch(server, () => 'sha256:r2'));
+		try {
+			await engine.ready;
+			await insertAdoptedOrder(engine);
+			const pull = engine.require({
+				id: 'the-normal-pull',
+				collection: 'orders',
+				kind: 'targeted-records',
+				remoteIds: [42].map(remoteId),
+				forceRefresh: true,
+			});
+			await pull.ready;
+			pull.release();
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			// Local work the drain has not pushed: the guard keeps the resident from the readopt.
+			await (await scope.database.collections.orders.findOne(UUID_A).exec())!.incrementalModify(
+				(data: Record<string, unknown>) => ({
+					...data,
+					local: { dirty: true, pendingMutationIds: ['held'] },
+				})
+			);
+			const adoptedByPull = (await residentSync(engine)).sync.adopted;
+			expect(adoptedByPull).toMatchObject({ revision: 'sha256:r2' });
+
+			expect(await engine.orderRevision.readopt(42)).toBe(false);
+			expect((await residentSync(engine)).sync.adopted).toEqual(adoptedByPull);
+		} finally {
+			await engine.dispose();
+		}
+	});
+});
