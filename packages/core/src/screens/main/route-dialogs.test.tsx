@@ -119,6 +119,9 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./orders/edit/form', () => ({ EditOrderForm: () => null }));
 jest.mock('./orders/edit/view', () => ({ OrderView: () => null }));
+// The order modal reads the licence (it mounts outside the list page's Pro guard); the real
+// hook drags the app-state hydration chain in.
+jest.mock('../../hooks/use-app-info', () => ({ useAppInfo: () => ({ license: { isPro: true } }) }));
 jest.mock('./orders/refund/form', () => ({ RefundOrderForm: () => null }));
 
 jest.mock('./products/edit/product/form', () => ({ EditProductForm: () => null }));
