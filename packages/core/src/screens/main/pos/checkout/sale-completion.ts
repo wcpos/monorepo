@@ -553,6 +553,9 @@ export async function completeSale(
 		// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
 		// An offline record completes at the till but the store has not answered it (ADR 0040
 		// Decided 1 rule 3): the attempt awaits adoption, and the bridge finishes it once answered.
+		// That second completion is a REPLAY: audited with `replayed: true` (audit-hook), the
+		// receipt entered unselected; no drawer, no print, no haptic, which all belong to this,
+		// the till's paid moment.
 		const offline =
 			outcome.source === 'manual' && outcome.via === 'offline' && result.outcome === 'completed';
 		const kept =

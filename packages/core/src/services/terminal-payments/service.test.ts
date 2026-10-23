@@ -523,7 +523,8 @@ it('online device capture notifies once without tracking or writing an offline s
 	]);
 	service.stop();
 });
-// CodeRabbit 4343945871 on #2834: offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false).
+// CodeRabbit 4343945871 on #2834: a device tender does not queue offline (ADR 0040 Decided 1
+// rule 2: only manual `offline: 'record'` methods journal; a device `queue` is a later slice).
 // An offline reader payment would be authorized with no journaled row, so no leg starts.
 it('an offline device begin throws offline_unavailable and never asks the reader', async () => {
 	const c = setup();

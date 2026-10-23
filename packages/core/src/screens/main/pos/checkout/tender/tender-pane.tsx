@@ -692,6 +692,18 @@ function MethodStatus({ tile, selected }: { tile: TenderTile; selected: boolean 
 			? getDriver(method.capture.provider)
 			: undefined
 	);
+	// ADR 0040 Decided 1 rule 1: a tile taken offline says it is sent later, and the risk.
+	if (tile.settlesLater)
+		return (
+			<View testID={`checkout-method-sent-later-${method.id}`}>
+				<Text className="text-warn-text text-center text-xs">
+					{t('pos_checkout.tile_sent_later')}
+				</Text>
+				<Text className="text-warn-text text-center text-xs">
+					{t('pos_checkout.tile_store_may_refuse')}
+				</Text>
+			</View>
+		);
 	if (tile.disabled || (method.capture.mode !== 'server' && method.capture.mode !== 'device'))
 		return null;
 	const connected =

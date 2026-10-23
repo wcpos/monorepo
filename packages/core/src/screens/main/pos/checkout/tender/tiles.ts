@@ -98,17 +98,6 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
 	return left.title < right.title ? -1 : left.title > right.title ? 1 : 0;
 }
 
-/**
- * The offline tender switch (ADR 0040 "Offline tenders: status", Decided 1); off, a manual
- * `offline: 'record'` tile is disabled offline, as every device tile is. Slice A built what it
- * enables: the poster's `defer`, the offline `recordManualPayment`, the attempt awaiting adoption,
- * the recovery's re-send and refusal attention, `settlesLater` and the `confirmOfflineTender`
- * seam. Slice B flips it once it renders `settlesLater`, the "awaiting store" marks (an open
- * journal entry, never the status) and the dialog on that seam. A device `queue` (SumUp, whose
- * kept offline-session code is its half, Paul 2026-10-23) is a later slice. Not a tunable flag.
- */
-export const OFFLINE_TENDERS_QUEUE = false;
-
 export function buildTenderTiles(
 	methods: readonly PaymentMethodDescriptor[],
 	options: {
@@ -167,10 +156,10 @@ export function buildTenderTiles(
 				else if (!readers.length) reason = 'no_readers';
 				else if (readers.every((reader) => reader.inUseBy !== null))
 					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
-			} else if (
-				!options.online &&
-				(method.capabilities.offline !== 'record' || !OFFLINE_TENDERS_QUEUE)
-			) {
+			} else if (!options.online && method.capabilities.offline !== 'record') {
+				// ADR 0040 Decided 1 rule 2: a gateway with no offline option cannot complete offline;
+				// `record` journals and completes. Rule 1: the enabled offline tile carries
+				// `settlesLater`, which the pane renders as "Sent later · Store may refuse".
 				reason = 'offline';
 			}
 			const worksOffline =

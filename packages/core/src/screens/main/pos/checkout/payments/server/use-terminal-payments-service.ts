@@ -99,8 +99,8 @@ export function useTerminalPaymentsService(): void {
 				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
 			},
 			// An offline authorization is never written locally: the offline tender outbox journals
-			// manual records only (OFFLINE_TENDERS_QUEUE flips in slice B for those); a device
-			// `queue` is a later slice (ADR 0040 Decided 1 rule 2).
+			// manual `offline: 'record'` methods only; a device `queue` is a later slice (ADR 0040
+			// Decided 1 rule 2).
 			patchAndEnqueue: async () => {
 				throw new Error('offline_unavailable');
 			},

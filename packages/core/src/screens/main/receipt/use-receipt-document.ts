@@ -23,6 +23,7 @@ import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
+import { useAwaitsStore } from '../pos/checkout/use-awaiting-store';
 import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
@@ -78,8 +79,11 @@ export function useReceiptDocument({
 	// Get the WC order ID for the receipts API
 	const orderId = orderData?.id;
 
+	// ADR 0040 Decided 1 rule 1: a sale the store has not heard is never shown or printed from the
+	// store's page (it reads unpaid there); it renders locally, its line first on the paper.
+	const awaitsStore = useAwaitsStore(order?.uuid ?? '');
 	// Legacy receipt URL from order links
-	const baseReceiptURL = orderData?.links?.receipt?.[0]?.href;
+	const baseReceiptURL = awaitsStore ? undefined : orderData?.links?.receipt?.[0]?.href;
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
@@ -114,6 +118,7 @@ export function useReceiptDocument({
 		localReport,
 		formatReport,
 		order: orderData,
+		awaitingStoreLine: awaitsStore ? t('receipt.awaiting_store_line') : null,
 		nextLocalClosureCount: async () => {
 			const closure = await getLocalClosure?.();
 			return closure ? closure.getLatest().print_count + 1 : 0;

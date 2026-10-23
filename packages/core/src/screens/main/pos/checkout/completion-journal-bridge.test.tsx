@@ -1366,6 +1366,47 @@ it('an unconfirmed sale is finished by the bridge once the paid order is adopted
 	);
 });
 
+// ADR 0040 Decided 1 rule 3: an offline sale completes at the till (its paid moment: receipt
+// selected, audited once) and the bridge's second completion, once the store answers, is a
+// REPLAY: audited `replayed: true`, the receipt entered unselected, nothing else.
+it('an offline sale completes at the till, and the bridge finishes it as a replay', async () => {
+	await recordCompletionAttempt(mockContext.storeDB, { orderUuid: 'order', source: 'manual' });
+	const answer = {
+		source: 'manual',
+		via: 'offline',
+		row: { id: 'row-1', amount: '10.00', recorded_offline: true },
+		order: null,
+		mirrorFailed: false,
+		preparedCompleting: true,
+		preLegBalanceMinor: 1000,
+		amountMinor: 1000,
+	} as unknown as Parameters<typeof owner.completeSale>[2];
+	expect(
+		await owner.completeSale(mockContext, resident() as never, answer, {
+			host: 'stage',
+			autoShowReceipt: true,
+		})
+	).toBe('completed');
+	expect(await pendingCompletions(mockContext.storeDB)).toMatchObject({
+		order: { awaitingAdoption: true },
+	});
+	expect(mockReceipt).toHaveBeenCalledWith('order');
+	expect(mockInfo).toHaveBeenCalledTimes(1);
+	expect(mockInfo.mock.calls[0][1].context).toMatchObject({ type: 'checkout.completed' });
+	expect(mockInfo.mock.calls[0][1].context).not.toHaveProperty('replayed');
+	mockReceipt.mockClear();
+	mockFind.mockResolvedValue(resident()); // the store answered; the paid order is adopted
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockReceipt).toHaveBeenCalledTimes(1);
+	expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	expect(mockInfo).toHaveBeenCalledTimes(2);
+	expect(mockInfo.mock.calls[1][1].context).toMatchObject({
+		type: 'checkout.completed',
+		replayed: true,
+	});
+});
+
 // The same `unconfirmed` sale, finished mid-session: the pull adopts the paid order while the till
 // stays up, and the bridge writes the receipt and the audit then, without another recovery run.
 it('finishes an unconfirmed sale when a pull adopts the paid order mid-session', async () => {

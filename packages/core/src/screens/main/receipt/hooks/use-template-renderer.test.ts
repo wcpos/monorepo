@@ -781,3 +781,56 @@ it.each(['offline', 'online-website-available'])(
 		}
 	}
 );
+
+// ADR 0040 Decided 1 rule 1: a sale the store has not heard renders locally, its line first.
+it('renders an awaiting sale from local data with the awaiting-store line, and drops both once answered', async () => {
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	mockUseReceiptData.mockReturnValue({ data: null, isLoading: false, hasResponded: false });
+	mockUseActiveTemplates.mockReturnValue([
+		{
+			id: 'html',
+			engine: 'logicless',
+			offline_capable: true,
+			is_active: true,
+			content: '<html><body class="r"><b>R</b></body></html>',
+		},
+		{
+			id: 'thermal',
+			engine: 'thermal',
+			offline_capable: true,
+			content: '<receipt><text>R</text></receipt>',
+		},
+	] as never);
+	const line = 'Awaiting store · not yet confirmed';
+	const { result, rerender } = renderHook(
+		({ awaitingStoreLine }: { awaitingStoreLine: string | null }) =>
+			useTemplateRenderer({
+				...defaultOptions,
+				baseReceiptURL: 'https://store.test/receipt/42',
+				awaitingStoreLine,
+			}),
+		{ initialProps: { awaitingStoreLine: line as string | null } }
+	);
+	expect(result.current.isOffline).toBe(true);
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith(
+		expect.objectContaining({ orderId: undefined })
+	);
+	// The sanitized render is a fragment: the line is its first element.
+	expect(result.current.renderedHtml).toBe(
+		`<p class="wcpos-awaiting-store" style="text-align:center;font-weight:700;margin:0 0 8px">${line}</p><b>R</b>`
+	);
+	expect((await result.current.preparePrintContent(jest.fn(async () => 1))).html).toContain(
+		'wcpos-awaiting-store'
+	);
+	act(() => result.current.setSelectedTemplateId('thermal'));
+	expect(result.current.selectedTemplateContent).toBe(
+		`<receipt><align mode="center"><bold><text>${line}</text></bold></align><text>R</text></receipt>`
+	);
+
+	rerender({ awaitingStoreLine: null });
+	expect(result.current.isOffline).toBe(false);
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith(expect.objectContaining({ orderId: 42 }));
+	expect(result.current.selectedTemplateContent).toBe('<receipt><text>R</text></receipt>');
+	act(() => result.current.setSelectedTemplateId('html'));
+	expect(result.current.renderedHtml).not.toContain('wcpos-awaiting-store');
+});

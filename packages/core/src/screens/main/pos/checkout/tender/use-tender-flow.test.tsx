@@ -49,7 +49,6 @@ import {
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
-import * as tilesModule from './tiles';
 import { useTenderFlow } from './use-tender-flow';
 import { passThroughPoster } from '../../../../../services/terminal-payments/pass-through-poster.test-utils';
 
@@ -842,7 +841,7 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
-	it('treats a save queued offline as offline for tender, even once connectivity is back: no tile records it', async () => {
+	it('treats a save queued offline as offline for tender, even once connectivity is back: only a record tile takes it, settling later', async () => {
 		const onlineOnly = {
 			...card,
 			id: 'pos_online',
@@ -861,13 +860,12 @@ describe('useTenderFlow', () => {
 			reason: 'offline',
 		});
 		expect(mockRecordOptions).toHaveBeenLastCalledWith({ offline: true });
-		// ADR 0040 §offline: a tender the store cannot hear is refused, cash included.
+		// ADR 0040 Decided 1 rule 2: a `record` method journals; rule 1: its tile says it settles later.
 		expect(result.current.tiles.find((tile) => tile.method.id === 'pos_cash')).toMatchObject({
-			disabled: true,
-			reason: 'offline',
+			disabled: false,
+			reason: null,
+			settlesLater: true,
 		});
-		await act(async () => result.current.takeTender());
-		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it.each(['online-website-available', 'offline'])(
@@ -4776,18 +4774,12 @@ jest.mock('@wcpos/query/mutations', () => ({
 	},
 }));
 
-// ADR 0040 Decided 1, slice A: the switch ships off; these drive the envelope with it mocked on.
-describe('offline manual tenders (switch mocked on)', () => {
-	const switchOn = () =>
-		jest.replaceProperty(
-			tilesModule as { OFFLINE_TENDERS_QUEUE: boolean },
-			'OFFLINE_TENDERS_QUEUE',
-			true
-		);
+// ADR 0040 Decided 1: a manual `offline: 'record'` tender journals offline (rule 2) after the
+// cashier confirms it (rule 1).
+describe('offline manual tenders', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		resetCheckoutMode();
-		switchOn();
 		mockBindingStatus = 'bound';
 		mockSessionsOn = false;
 		mockLeg = null;
@@ -4903,6 +4895,32 @@ describe('offline manual tenders (switch mocked on)', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(recordCompletionAttempt).not.toHaveBeenCalled();
 		expect(result.current.busy).toBe(false);
+	});
+
+	it('confirmOfflineTender true → journaled via defer and logged as recorded offline', async () => {
+		mockUseRealManual = true;
+		const confirmOfflineTender = jest.fn(async () => true);
+		const { result } = renderHook(() =>
+			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
+		);
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(confirmOfflineTender).toHaveBeenCalledWith({
+			method: cash,
+			amountMinor: 1000,
+			queuedOffline: false,
+		});
+		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
+			payment: expect.objectContaining({ amount: '10.00', recorded_offline: true }),
+		});
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'Manual payment recorded',
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'payment.recorded-offline' }),
+			})
+		);
 	});
 
 	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {

@@ -177,6 +177,8 @@ jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		store: { wc_price_decimals$: new BehaviorSubject(2) },
 	}),
+	// No store database: no sale awaits the store here.
+	useStoreSession: () => ({ storeDB: undefined }),
 }));
 
 jest.mock('../../../contexts/translations', () => ({

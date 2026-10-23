@@ -59,6 +59,10 @@ jest.mock('../tender/use-ledger-view', () => ({
 	useLedgerView: () => ({ ...mockFlow, format: (minor: number) => `$${(minor / 100).toFixed(2)}` }),
 }));
 jest.mock('../tender/use-tender-flow', () => ({ useTenderFlow: () => mockUseFlow() }));
+// The dialog is its own suite (use-confirm-offline-tender.test); the flow is mocked here.
+jest.mock('../tender/use-confirm-offline-tender', () => ({
+	useConfirmOfflineTender: () => ({ confirmOfflineTender: async () => true, dialog: null }),
+}));
 jest.mock('../tender/legacy-tab', () => ({
 	LegacyTab: (props: unknown) => {
 		mockLegacyTab(props);

@@ -53,3 +53,13 @@ it.each([
 ] as const)('directory pill priority %j', (state, pill) => {
 	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
 });
+
+// ADR 0040 Decided 1 rule 1: the bar counts the sales the store has still to hear.
+it.each([
+	[{ online: true, awaitingStore: 0 }, null],
+	[{ online: false, awaitingStore: 0 }, 'register.offline'],
+	[{ online: false, awaitingStore: 2 }, 'register.offline_to_send'],
+	[{ online: true, awaitingStore: 1 }, 'register.awaiting_store'],
+] as const)('awaiting-store pill %j', (state, pill) => {
+	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
+});

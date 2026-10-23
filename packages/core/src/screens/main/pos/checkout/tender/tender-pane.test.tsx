@@ -1246,3 +1246,15 @@ describe('declared UI (contract 1.2)', () => {
 		);
 	});
 });
+
+// ADR 0040 Decided 1 rule 1: the tile taken offline says it is sent later, and the risk.
+it('a settlesLater tile says Sent later and Store may refuse; a plain manual tile says nothing', () => {
+	const flow = makeFlow(2);
+	flow.tiles[0] = { ...flow.tiles[0], settlesLater: true };
+	flow.tiles[1] = { ...flow.tiles[1], method: { ...method, id: 'other' } };
+	render(<TenderPane flow={flow} format={String} compact />);
+	expect(screen.getByTestId('checkout-method-sent-later-pos_cash').textContent).toBe(
+		'Sent laterStore may refuse'
+	);
+	expect(screen.queryByTestId('checkout-method-sent-later-other')).toBeNull();
+});

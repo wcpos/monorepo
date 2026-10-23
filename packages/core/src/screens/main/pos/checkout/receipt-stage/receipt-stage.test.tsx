@@ -14,6 +14,8 @@ import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { ReceiptStage } from './receipt-stage';
 
 jest.mock('../payments/server/use-terminal-leg', () => ({ useTerminalLeg: jest.fn() }));
+let mockAwaiting = false;
+jest.mock('../use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 // The unused asChild path imports untranspiled JSX; keep the real collapsible behavior.
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
@@ -148,6 +150,7 @@ beforeEach(() => {
 	mockPrintedTo = null;
 	mockAutoPrint = false;
 	mockAutoPrintPending = false;
+	mockAwaiting = false;
 	Platform.isNative = false;
 	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
 	mockOrder.payload.total = '92.95';
@@ -515,4 +518,27 @@ it('a stamp beside settled money is stale: the paid moment wins', () => {
 	render(<ReceiptStage orderUuid="paid" compact={false} />);
 	expect(screen.getByTestId('checkout-paid')).not.toBeNull();
 	expect(screen.queryByTestId('checkout-sent')).toBeNull();
+});
+
+// ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet.
+it('an awaiting sale shows the warning disc and the awaiting-store sub-line; the answer pops it green once, no second haptic', async () => {
+	Platform.isNative = true;
+	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+	mockAwaiting = true;
+	const { rerender } = render(<ReceiptStage orderUuid="paid" compact />);
+	await act(async () => {});
+	expect(screen.getByTestId('receipt-awaiting-store').textContent).toBe('Awaiting store · ');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toMatch(/^Awaiting store · /);
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-warning/15');
+	expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Change $7.05');
+	expect(withTiming).toHaveBeenCalledTimes(1);
+
+	mockAwaiting = false;
+	await act(async () => {
+		rerender(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(screen.queryByTestId('receipt-awaiting-store')).toBeNull();
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
+	expect(withTiming).toHaveBeenCalledTimes(2);
+	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
 });

@@ -2,6 +2,7 @@
 import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { type PaymentRow, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
@@ -25,8 +26,10 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
+	useStoreSession: () => ({ store: { price_num_decimals: 2 }, storeDB: {} }),
 }));
+const mockAwaiting$ = new BehaviorSubject<ReadonlySet<string>>(new Set());
+jest.mock('@wcpos/query/store-local', () => ({ observeAwaitingStore: () => mockAwaiting$ }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
@@ -48,7 +51,10 @@ jest.mock('@wcpos/components/status-badge', () => ({
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
-beforeEach(resetCheckoutMode);
+beforeEach(() => {
+	resetCheckoutMode();
+	mockAwaiting$.next(new Set());
+});
 it.each([
 	['cart', [], null, null],
 	['checkout', [], 'In checkout', 'info'],
@@ -197,5 +203,32 @@ it('labels a paid checkout member as Paid · receipt before confirmation', () =>
 		payload: { total: '10.00', status: 'completed', meta_data: [] },
 	} as unknown as EngineRecord<'orders'>;
 	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
+});
+
+// ADR 0040 Decided 1 rule 1: the mark is the journals (`observeAwaitingStore`), never the status.
+it('an awaiting sale keeps its mark while the status flickers back to open on reconnect', () => {
+	enterCheckout('a');
+	mockAwaiting$.next(new Set(['a']));
+	const order = (status: string, rows: unknown[]) =>
+		({
+			uuid: 'a',
+			payload: { total: '10.00', status, meta_data: withLedger([], rows as PaymentRow[]) },
+		}) as unknown as EngineRecord<'orders'>;
+	const paid = [{ id: 'cash', status: 'captured', amount: '10.00', tendered: null }];
+	const { rerender } = render(<TabChip order={order('completed', paid)} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · awaiting store');
+	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('warning');
+	// `readopt` adopts the still-unpaid server document before the record lands.
+	rerender(<TabChip order={order('pos-open', [])} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Awaiting store · $10.00 due');
+	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('warning');
+	// Active: plain text, no dot.
+	rerender(<TabChip order={order('pos-open', [])} active />);
+	expect(screen.queryByTestId('open-order-chip-a')).toBeNull();
+	expect(screen.getByTestId('open-order-status-a').textContent).toBe('Awaiting store · $10.00 due');
+	// The store answers: the mark goes.
+	act(() => mockAwaiting$.next(new Set()));
+	rerender(<TabChip order={order('completed', paid)} />);
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
 });

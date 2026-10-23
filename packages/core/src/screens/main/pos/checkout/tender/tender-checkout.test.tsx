@@ -71,6 +71,10 @@ jest.mock('../receipt-stage/use-finish-sale', () => ({
 }));
 jest.mock('./reader-connection', () => ({ ReaderConnection: () => null }));
 jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
+// The dialog is its own suite (use-confirm-offline-tender.test); the flow is mocked here.
+jest.mock('./use-confirm-offline-tender', () => ({
+	useConfirmOfflineTender: () => ({ confirmOfflineTender: async () => true, dialog: null }),
+}));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 jest.mock('../../../hooks/use-storage-health', () => ({

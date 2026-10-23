@@ -24,6 +24,7 @@ import { finishReceipt } from '../checkout-mode';
 import { useCheckoutBack } from '../column/use-checkout-back';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { CapturedUnfinishedNotice } from '../tender/captured-unfinished-notice';
+import { useAwaitsStore } from '../use-awaiting-store';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { ReceiptActions } from '../../../receipt/receipt-actions';
@@ -41,14 +42,68 @@ function StageAction(props: React.ComponentProps<typeof Button>) {
 /**
  * The moment after a sale. Paid is green with a tick and a success haptic; sent (contract 1.2,
  * spec §4.2) is the same surface in a neutral state: the money has not arrived, the customer
- * holds the link, so nothing celebrates.
+ * holds the link, so nothing celebrates. Awaiting (ADR 0040 Decided 1 rule 1): the money was
+ * taken but the store has not heard the sale, so the disc is the warning wash until it does.
  */
-function PaidMoment({ children, sent = false }: { children: React.ReactNode; sent?: boolean }) {
+function PaidMoment({
+	children,
+	sent = false,
+	awaiting = false,
+}: {
+	children: React.ReactNode;
+	sent?: boolean;
+	awaiting?: boolean;
+}) {
+	return (
+		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
+			{/* The till's paid moment, never the store's later answer (ADR 0040 Decided 1 rule 3). */}
+			{Platform.isNative && !sent ? <PaidHaptic /> : null}
+			{/* Re-keyed on the store's answer: an awaiting sale's disc pops again, green, when it
+			    lands (the completion beat, ADR 0040 Decided 1 rule 1). */}
+			<Stamp key={awaiting ? 'awaiting' : 'answered'}>
+				<View
+					testID="receipt-paid-disc"
+					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : awaiting ? 'bg-warning/15' : 'bg-success/15'}`}
+				>
+					<Icon
+						name={sent || awaiting ? 'pending' : 'check'}
+						size={sent || awaiting ? '4xl' : undefined}
+						className={
+							sent ? 'text-muted-foreground' : awaiting ? 'text-warn-text' : 'text-success'
+						}
+					/>
+				</View>
+				{children}
+			</Stamp>
+		</View>
+	);
+}
+
+/** A sent sale celebrates nothing; a paid one buzzes once, on mount. */
+function PaidHaptic() {
+	React.useEffect(() => {
+		void (async () => {
+			try {
+				// Pulled in lazily, as play-scan-sound does: a static import of expo-haptics
+				// is evaluated at app start and breaks the web build's connect screen.
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const Haptics = require('expo-haptics') as typeof import('expo-haptics');
+				await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			} catch {
+				// Missing haptic feedback must not interrupt a recorded sale.
+			}
+		})();
+	}, []);
+	return null;
+}
+
+/** The pop the banner lands with, once per mount. */
+function Stamp({ children }: { children: React.ReactNode }) {
 	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(null);
 	const pop = useSharedValue(0);
 	const animation = React.useRef({ pop });
-	// Accessibility and haptics are mount-only platform effects. Keep motion off until
-	// the async preference resolves, as in the terminal moment.
+	// Accessibility is a mount-only platform effect. Keep motion off until the async preference
+	// resolves, as in the terminal moment.
 	React.useEffect(() => {
 		const { pop } = animation.current;
 		void AccessibilityInfo.isReduceMotionEnabled().then(
@@ -60,43 +115,18 @@ function PaidMoment({ children, sent = false }: { children: React.ReactNode; sen
 			},
 			() => setReduceMotion(true)
 		);
-		if (Platform.isNative && !sent) {
-			void (async () => {
-				try {
-					// Pulled in lazily, as play-scan-sound does: a static import of expo-haptics
-					// is evaluated at app start and breaks the web build's connect screen.
-					// eslint-disable-next-line @typescript-eslint/no-require-imports
-					const Haptics = require('expo-haptics') as typeof import('expo-haptics');
-					await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-				} catch {
-					// Missing haptic feedback must not interrupt a recorded sale.
-				}
-			})();
-		}
 		return () => {
 			cancelAnimation(pop);
 		};
-	}, [sent]);
+	}, []);
 	const style = useAnimatedStyle(() => ({
 		opacity: reduceMotion === null ? 0 : reduceMotion ? 1 : pop.value,
 		transform: [{ scale: reduceMotion ? 1 : 0.6 + pop.value * 0.4 }],
 	}));
 	return (
-		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
-			<Animated.View testID="receipt-paid-banner" className="items-center gap-3 p-4" style={style}>
-				<View
-					testID="receipt-paid-disc"
-					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : 'bg-success/15'}`}
-				>
-					<Icon
-						name={sent ? 'pending' : 'check'}
-						size={sent ? '4xl' : undefined}
-						className={sent ? 'text-muted-foreground' : 'text-success'}
-					/>
-				</View>
-				{children}
-			</Animated.View>
-		</View>
+		<Animated.View testID="receipt-paid-banner" className="items-center gap-3 p-4" style={style}>
+			{children}
+		</Animated.View>
 	);
 }
 
@@ -163,12 +193,13 @@ function ReceiptStageDocument({
 	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
 	const stamp = activeAwaitingCustomer(payload.meta_data);
 	const sent = stamp && Number(derived.balance) > 0 ? stamp : null;
+	const awaiting = useAwaitsStore(order.uuid) && !sent;
 	return (
 		<View testID="checkout-receipt-stage" className="bg-card flex-1">
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
 				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
 			) : null}
-			<PaidMoment sent={sent !== null}>
+			<PaidMoment sent={sent !== null} awaiting={awaiting}>
 				<View testID={sent ? 'checkout-sent-headline' : 'checkout-paid-headline'}>
 					<Text
 						testID={change > 0 ? 'receipt-change-due' : undefined}
@@ -182,6 +213,11 @@ function ReceiptStageDocument({
 					</Text>
 				</View>
 				<Text testID="receipt-paid-with" className="text-muted-foreground text-center">
+					{awaiting ? (
+						<Text testID="receipt-awaiting-store" className="text-warn-text">
+							{`${t('pos_checkout.awaiting_store')} · `}
+						</Text>
+					) : null}
 					{sent
 						? sent.destination
 							? t('pos_checkout.sent_to_amount_due', {

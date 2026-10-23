@@ -8,6 +8,7 @@ import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
+import { useAwaitsStore } from '../checkout/use-awaiting-store';
 import { useOrderSaveState } from '../checkout/use-order-save-state';
 
 /**
@@ -35,6 +36,8 @@ export function TabChip({
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
 	const saveState = useOrderSaveState(order.uuid);
+	// ADR 0040 Decided 1 rule 1: the journals, never the status (which flickers on reconnect).
+	const awaits = useAwaitsStore(order.uuid);
 	const { methods } = usePaymentMethods();
 	const { store } = useStoreSession();
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
@@ -55,21 +58,28 @@ export function TabChip({
 	const label =
 		saveState?.kind === 'rejected'
 			? t('pos_checkout.chip_save_refused')
-			: stage === 'receipt'
-				? t(sent ? 'pos_checkout.chip_sent_receipt' : 'pos_checkout.chip_paid_receipt')
-				: waiting
-					? t('pos_checkout.chip_waiting_for_terminal', { amount: format(Number(waiting.amount)) })
-					: captured && Number(balance) > 0
-						? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
-						: stage === 'checkout' && !captured
-							? t(
-									saveState?.kind === 'saving'
-										? 'pos_checkout.saving_order'
-										: saveState?.kind === 'queued-offline'
-											? 'pos_checkout.chip_in_checkout_offline'
-											: 'pos_checkout.chip_in_checkout'
-								)
-							: (fallbackLabel ?? null);
+			: // ADR 0040 Decided 1 rule 1: a sale the store has not heard says so until it answers.
+				awaits && stage === 'receipt'
+				? t('pos_checkout.chip_paid_awaiting_store')
+				: awaits
+					? t('pos_checkout.chip_awaiting_store_due', { due: format(Number(balance)) })
+					: stage === 'receipt'
+						? t(sent ? 'pos_checkout.chip_sent_receipt' : 'pos_checkout.chip_paid_receipt')
+						: waiting
+							? t('pos_checkout.chip_waiting_for_terminal', {
+									amount: format(Number(waiting.amount)),
+								})
+							: captured && Number(balance) > 0
+								? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
+								: stage === 'checkout' && !captured
+									? t(
+											saveState?.kind === 'saving'
+												? 'pos_checkout.saving_order'
+												: saveState?.kind === 'queued-offline'
+													? 'pos_checkout.chip_in_checkout_offline'
+													: 'pos_checkout.chip_in_checkout'
+										)
+									: (fallbackLabel ?? null);
 	if (!label) return null;
 	// Plain muted text, no dot: the active tab carries no chip (ledger line 6) but keeps its
 	// status word so every tab reads "amount over status"; and the fallback ("Cart") is not a
@@ -89,7 +99,15 @@ export function TabChip({
 			testID={testIDs ? `open-order-chip-${order.uuid}` : undefined}
 			label={compact ? '' : label}
 			accessibilityLabel={label}
-			variant={saveState?.kind === 'rejected' ? 'error' : stage === 'receipt' ? 'success' : 'info'}
+			variant={
+				saveState?.kind === 'rejected'
+					? 'error'
+					: awaits
+						? 'warning'
+						: stage === 'receipt'
+							? 'success'
+							: 'info'
+			}
 		/>
 	);
 }

@@ -616,6 +616,9 @@ export function SaleCompletionBridge(): null {
 				// until one arrives the attempt stays pending.
 				if (!(await residentHoldsAnswer(manager, storeDB, uuid))) return;
 				const ctx = { ...current.ctx, actor: attempt.actor };
+				// An offline sale already had its paid moment at the till; this completion is a
+				// REPLAY (ADR 0040 Decided 1 rule 3): audited `replayed: true`, receipt entered
+				// unselected (`host: 'background'`), no drawer, no print, no haptic.
 				const finish = { ...outcome, refreshed: true };
 				await completeSale(ctx, resident, finish, { host: 'background' }, queue);
 			});
