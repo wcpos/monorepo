@@ -35,6 +35,7 @@ import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
+import { GroundInnerEdge } from '../../components/ground';
 import { ListColumn, ListPage } from '../../components/list-frame';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
@@ -509,121 +510,129 @@ function POSProductsContent({
 	);
 
 	// The pages' frame at the pages' gutter: the bar, the chips, the rows the column adds, and the
-	// body on its card (the table) or on the ground (the tiles), one page gutter apart.
+	// body on its card (the table) or on the ground (the tiles), one page gutter apart. The edge
+	// facing the cart (`side`: the cart's side, overlay-side ledger line 3) keeps 2 units, so the
+	// handle plus that inset make one page gutter between the cart and the card (`ground.ts`).
 	return (
-		<ListPage
-			insetBottom={false}
-			bar={
-				<ErrorBoundary>
-					<PageBar
-						insetTop={false}
-						search={
-							<ErrorBoundary>
-								<QuerySearchInput
-									ref={searchRef}
-									collectionName="products"
-									placeholder={t('pos_products.search_products')}
-									onKeyPress={onKeyPress}
-									testID="search-products"
-									clearTestID="search-products-clear"
-								/>
-							</ErrorBoundary>
-						}
-					>
-						<CameraScanButton open={scannerOpen} onToggle={() => setScannerOpen((open) => !open)} />
-						<ViewModeToggle />
-						<UISettingsDialog
-							side={side}
-							portalHost="pos"
-							title={t('pos_products.product_settings')}
-							triggerTestID="products-settings-button"
+		<GroundInnerEdge value={side}>
+			<ListPage
+				insetBottom={false}
+				bar={
+					<ErrorBoundary>
+						<PageBar
+							insetTop={false}
+							innerEdge={side}
+							search={
+								<ErrorBoundary>
+									<QuerySearchInput
+										ref={searchRef}
+										collectionName="products"
+										placeholder={t('pos_products.search_products')}
+										onKeyPress={onKeyPress}
+										testID="search-products"
+										clearTestID="search-products-clear"
+									/>
+								</ErrorBoundary>
+							}
 						>
-							<UISettingsForm />
-						</UISettingsDialog>
-					</PageBar>
-				</ErrorBoundary>
-			}
-		>
-			<ListColumn
-				chips={
-					<POSFilterBar
-						level={drilled || browseDrilled ? 'variations' : 'products'}
-						initialFilters={initialFilters}
-						place={browsePlace}
-					/>
-				}
-				rows={
-					<>
-						<ErrorBoundary>
-							<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
-						</ErrorBoundary>
-						{scannerOpen ? (
-							<ErrorBoundary>
-								<CameraScannerPanel onClose={() => setScannerOpen(false)} />
-							</ErrorBoundary>
-						) : null}
-						<ErrorBoundary>
-							<StorageOutageBanner />
-						</ErrorBoundary>
-						{lockedNotice}
-					</>
+							<CameraScanButton
+								open={scannerOpen}
+								onToggle={() => setScannerOpen((open) => !open)}
+							/>
+							<ViewModeToggle />
+							<UISettingsDialog
+								side={side}
+								portalHost="pos"
+								title={t('pos_products.product_settings')}
+								triggerTestID="products-settings-button"
+							>
+								<UISettingsForm />
+							</UISettingsDialog>
+						</PageBar>
+					</ErrorBoundary>
 				}
 			>
-				<View
-					className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
-					testID="register-products"
-					onLayout={(event) => {
-						handleProductsLayout(event);
-						setBody(event.nativeEvent.layout);
-					}}
+				<ListColumn
+					chips={
+						<POSFilterBar
+							level={drilled || browseDrilled ? 'variations' : 'products'}
+							initialFilters={initialFilters}
+							place={browsePlace}
+						/>
+					}
+					rows={
+						<>
+							<ErrorBoundary>
+								<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
+							</ErrorBoundary>
+							{scannerOpen ? (
+								<ErrorBoundary>
+									<CameraScannerPanel onClose={() => setScannerOpen(false)} />
+								</ErrorBoundary>
+							) : null}
+							<ErrorBoundary>
+								<StorageOutageBanner />
+							</ErrorBoundary>
+							{lockedNotice}
+						</>
+					}
 				>
-					{/* A failed products read is thrown here; the fallback's reset asks the handle again. */}
-					<ErrorBoundary onReset={() => handle.retry()}>
-						{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
+					<View
+						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
+						testID="register-products"
+						onLayout={(event) => {
+							handleProductsLayout(event);
+							setBody(event.nativeEvent.layout);
+						}}
+					>
+						{/* A failed products read is thrown here; the fallback's reset asks the handle again. */}
+						<ErrorBoundary onReset={() => handle.retry()}>
+							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
 						    a browse source on, the stage owns search too: a search drops the path and
 						    shows the catalogue-wide products at its root, drilling into the stage's
 						    own drill; a shortcut's own search keeps its level. Keyed by source and
 						    scope: either switch starts the stage afresh. */}
-						{browseBy !== 'all' ? (
-							<BrowseStage
-								key={stageKey}
-								source={browseBy}
-								viewMode={viewMode}
-								renderProducts={renderProducts}
-								empty={noDataMessage}
-								variationsStyle={variationsStyle}
-								stockStatus={stockStatusFilter}
-								handle={handle}
-								state={state}
-								actions={tableActions}
-								tableConfig={tableConfig}
-								onDrilledChange={setBrowseDrilled}
-								onLevelChange={setBrowsePlace}
-								persistKey={browsePersistKey}
-							/>
-						) : viewMode === 'grid' ? (
-							<DealStack
-								testID="products-pane-stack"
-								detail={drilled}
-								target={drill?.target}
-								renderDetail={renderDrillIn}
-							>
-								{products}
-							</DealStack>
-						) : (
-							<PaneStack
-								testID="products-pane-stack"
-								detail={drilled}
-								paneClassName="bg-background"
-								renderDetail={renderDrillIn}
-							>
-								{products}
-							</PaneStack>
-						)}
-					</ErrorBoundary>
-				</View>
-			</ListColumn>
-		</ListPage>
+							{browseBy !== 'all' ? (
+								<BrowseStage
+									key={stageKey}
+									source={browseBy}
+									viewMode={viewMode}
+									renderProducts={renderProducts}
+									empty={noDataMessage}
+									variationsStyle={variationsStyle}
+									stockStatus={stockStatusFilter}
+									handle={handle}
+									state={state}
+									actions={tableActions}
+									tableConfig={tableConfig}
+									onDrilledChange={setBrowseDrilled}
+									onLevelChange={setBrowsePlace}
+									persistKey={browsePersistKey}
+								/>
+							) : viewMode === 'grid' ? (
+								<DealStack
+									testID="products-pane-stack"
+									detail={drilled}
+									target={drill?.target}
+									renderDetail={renderDrillIn}
+								>
+									{products}
+								</DealStack>
+							) : (
+								<PaneStack
+									testID="products-pane-stack"
+									detail={drilled}
+									paneClassName="bg-background"
+									renderDetail={renderDrillIn}
+								>
+									{products}
+								</PaneStack>
+							)}
+						</ErrorBoundary>
+					</View>
+				</ListColumn>
+			</ListPage>
+		</GroundInnerEdge>
 	);
 }
 

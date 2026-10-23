@@ -35,6 +35,13 @@ export type PageBarProps = ViewProps & {
 	 * pads it (the POS products column's `EdgeColumn`).
 	 */
 	insetTop?: boolean;
+	/**
+	 * The side of this bar's pane that faces another pane across a resize handle: that side keeps
+	 * 2 units instead of the page gutter, so the handle's 4 px plus the 8 make one page gutter
+	 * between the two panes' surfaces (the POS products column, with the cart beside it; owner,
+	 * 2026-10-23). The rest of the bar's inset is unchanged.
+	 */
+	innerEdge?: 'left' | 'right';
 };
 
 export function PageBar({
@@ -46,6 +53,7 @@ export function PageBar({
 	back,
 	search,
 	insetTop = true,
+	innerEdge,
 	children,
 	testID,
 	className,
@@ -72,7 +80,13 @@ export function PageBar({
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'px-gutter pt-gutter gap-4'
+					phone
+						? 'h-ctl gap-2 pr-2 pl-4'
+						: innerEdge === 'right'
+							? 'pl-gutter pt-gutter gap-4 pr-2'
+							: innerEdge === 'left'
+								? 'pr-gutter pt-gutter gap-4 pl-2'
+								: 'px-gutter pt-gutter gap-4'
 				)}
 			>
 				{(phone || onMenu) &&

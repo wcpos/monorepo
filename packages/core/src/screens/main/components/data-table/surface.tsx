@@ -27,11 +27,12 @@ import { useGround } from '../ground';
  */
 export function TableSurface({ className, ...props }: ViewProps) {
 	const phone = useIsPhone();
+	const ground = useGround();
 	return (
 		<View
 			className={cn(
 				'bg-card border-border min-h-0 flex-1',
-				phone ? 'mb-2 border-t' : 'mx-gutter mb-2 overflow-hidden rounded-lg border',
+				phone ? 'mb-2 border-t' : cn(ground.mx, 'mb-2 overflow-hidden rounded-lg border'),
 				className
 			)}
 			{...props}
@@ -68,10 +69,11 @@ export function TileGround({ children }: { children: React.ReactNode }) {
  */
 export function CaptionRowInset({ children }: { children: React.ReactNode }) {
 	const phone = useIsPhone();
+	const ground = useGround();
 	return (
 		<View
 			testID="data-table-caption-inset"
-			className={phone ? 'pb-gutter px-1' : 'px-gutter pb-gutter'}
+			className={phone ? 'pb-gutter px-1' : cn(ground.px, 'pb-gutter')}
 		>
 			<View className="px-3">{children}</View>
 		</View>

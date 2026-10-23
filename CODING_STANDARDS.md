@@ -362,6 +362,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   sides, and the row under it (the chip row, a page body) brings the gutter between them. A bar
   that centres a 44 control in a fixed 64 puts 10 above the search and 26 under it; that is the
   tell (owner, 2026-10-20).
+- Two panes across a resize handle: the edge of a pane that faces the other keeps 2 units (8), so the 4 px handle plus the 8 make one page gutter (12) between the two panes' surfaces, the gap any two content areas get; the full gutter on both sides of the handle had put two there. The POS products column names the cart's side through `GroundInnerEdge` (`ground.ts`, which every surface on the ground reads) and `PageBar innerEdge`; the cart is flush with the handle (owner, 2026-10-23).
 - One page gutter at every width: a page does not double its inset on `md` while its neighbour
   keeps the page gutter (Settings sat at 32 beside Products at 16 until 2026-10-20).
 - A new container takes its gutter from this table. A mockup does not offer padding as an option.
