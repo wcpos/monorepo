@@ -3,6 +3,7 @@
  */
 
 import { fromMinor, toMinor } from './money';
+import { readCompletions } from './provenance';
 
 import type { PaymentMethodDescriptor, PaymentRow, PaymentTransport } from './types';
 
@@ -10,7 +11,7 @@ export const LEDGER_META_KEY = '_wcpos_payments';
 export const LEDGER_SCHEMA = 1;
 // Keep aligned with POS_META_KEYS.paymentMethod in sync-core/src/pos-carrier/carrier.ts.
 export const PAYMENT_METHOD_INDEX_META_KEY = '_wcpos_payment_method';
-export const LIVE_PAYMENT_STATUSES: readonly PaymentRow['status'][] = [
+const LIVE_PAYMENT_STATUSES: readonly PaymentRow['status'][] = [
 	'pending',
 	'authorized',
 	'captured',
@@ -21,6 +22,8 @@ export function isLivePaymentStatus(status: string): boolean {
 }
 
 /** Money settled locally, including authorizations recorded offline. */
+// No device check on purpose: an `authorized && recorded_offline` row is a device authorization by
+// construction, and the predicate stays narrow for the ledger's own summary.
 export function isSettledPaymentRow(row: Pick<PaymentRow, 'status' | 'recorded_offline'>): boolean {
 	return (
 		row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline === true)
@@ -33,6 +36,34 @@ export function isFailedPaymentStatus(status: string): status is 'failed' | 'voi
 
 export function isFinalPaymentStatus(status: string): status is 'captured' | 'failed' | 'voided' {
 	return status === 'captured' || isFailedPaymentStatus(status);
+}
+
+/**
+ * Money in motion: exactly pending | authorized. Row status only; the server's reopen gate also
+ * counts gateway attempts that are `sent` and refund allocations that are `pending`.
+ */
+export function isInMotionPaymentStatus(status: string): status is 'pending' | 'authorized' {
+	return status === 'pending' || status === 'authorized';
+}
+
+/**
+ * A reader authorization taken offline that settles later (descriptor `offline: 'queue'`): the
+ * Mango-selector form of the predicate `isOfflineDeviceAuthorization`.
+ */
+export const OFFLINE_DEVICE_AUTHORIZATION = Object.freeze({
+	capture_mode: 'device',
+	recorded_offline: true,
+	status: 'authorized',
+} as const);
+
+export function isOfflineDeviceAuthorization(
+	row: Pick<PaymentRow, 'capture_mode' | 'recorded_offline' | 'status'>
+): boolean {
+	return (
+		row.capture_mode === OFFLINE_DEVICE_AUTHORIZATION.capture_mode &&
+		row.recorded_offline === OFFLINE_DEVICE_AUTHORIZATION.recorded_offline &&
+		row.status === OFFLINE_DEVICE_AUTHORIZATION.status
+	);
 }
 
 /** One `meta_data` entry as the order document carries it (`key` is optional there). */
@@ -72,8 +103,25 @@ export function readLedger(metaData: readonly MetaDataEntry[] | null | undefined
 /** In-flight settlement gate, deliberately NOT the ledger's captured-inclusive live set. */
 export function hasLiveSettlementLeg(meta: readonly MetaDataEntry[] | null | undefined): boolean {
 	return readLedger(meta).some(
-		(row) => row.status === 'pending' || (row.status === 'authorized' && !isSettledPaymentRow(row))
+		(row) => isInMotionPaymentStatus(row.status) && !isSettledPaymentRow(row)
 	);
+}
+
+/**
+ * Ledger invariant §3.4 rule 2: live rows split into voidable and refund-only (a captured row a
+ * completion counted, or a captured non-manual row). For an order in progress (`pos-open |
+ * pos-partial | pending | failed`): the void route refuses a captured manual row once the order has
+ * left those statuses. One rule for the void command and any surface that announces its outcome.
+ */
+export function partitionVoidableRows(meta: readonly MetaDataEntry[] | null | undefined): {
+	voidable: PaymentRow[];
+	retained: PaymentRow[];
+} {
+	const counted = new Set(readCompletions(meta).flatMap(({ payment_ids }) => payment_ids ?? []));
+	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
+		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
+	const live = readLedger(meta).filter(({ status }) => isLivePaymentStatus(status));
+	return { voidable: live.filter(voidable), retained: live.filter((row) => !voidable(row)) };
 }
 
 export function withLedger(

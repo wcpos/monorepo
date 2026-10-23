@@ -59,3 +59,18 @@ it.each([
 			);
 	}
 );
+
+// The with-id half of the watch set: on a synced order the settler also watches a pending offline
+// row, so its settlement event finds an entry.
+it('with a server id a pending offline device row is tracked', () => {
+	jest.clearAllMocks();
+	const payment: PaymentRow = { ...row, status: 'pending', recorded_offline: true };
+	const order = {
+		uuid: 'order',
+		payload: { id: 42, meta_data: withLedger([], [payment]) },
+	} as EngineRecord<'orders'>;
+	renderHook(() => useResumeTerminalLegsForOrders([order]));
+	expect(mockService.trackOffline).toHaveBeenCalledWith(
+		expect.objectContaining({ orderId: 42, row: payment })
+	);
+});

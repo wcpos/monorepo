@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { derive, hasSaleProvenance, isCompletingStatus, readLedger } from '@wcpos/order-math';
+import {
+	derive,
+	hasSaleProvenance,
+	isCompletingStatus,
+	isOfflineDeviceAuthorization,
+	readLedger,
+} from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
@@ -164,11 +170,7 @@ export function useTerminalPaymentsService(): void {
 				if (stopped) return;
 				for (const document of documents)
 					for (const row of readLedger(document.payload.meta_data)) {
-						if (
-							row.capture_mode === 'device' &&
-							row.recorded_offline &&
-							row.status === 'authorized'
-						)
+						if (isOfflineDeviceAuthorization(row))
 							service.trackOffline({
 								dp: dp(),
 								orderUuid: document.uuid,

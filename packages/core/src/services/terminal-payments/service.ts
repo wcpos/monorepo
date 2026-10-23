@@ -2,6 +2,7 @@ import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import type { MoneyCommandPoster, OrderApproval } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { isFinalPaymentStatus, isOfflineDeviceAuthorization } from '@wcpos/order-math';
 import type {
 	OrderPaymentSummary,
 	PaymentMethodDescriptor,
@@ -160,7 +161,7 @@ export class TerminalPaymentsService {
 	}
 	trackOffline(input: ResumeInput): void {
 		const existing = this.offline.get(input.row.id);
-		if (['captured', 'failed', 'voided'].includes(input.row.status)) {
+		if (isFinalPaymentStatus(input.row.status)) {
 			if (existing?.timer !== undefined)
 				(this.options.clearTimeout ?? clearTimeout)(existing.timer);
 			this.offline.delete(input.row.id);
@@ -274,11 +275,7 @@ export class TerminalPaymentsService {
 						},
 					});
 				}
-				if (
-					data.payment.status === 'captured' ||
-					data.payment.status === 'failed' ||
-					data.payment.status === 'voided'
-				) {
+				if (isFinalPaymentStatus(data.payment.status)) {
 					if (entry.timer !== undefined) (this.options.clearTimeout ?? clearTimeout)(entry.timer);
 					this.offline.delete(row.id);
 				}
@@ -449,11 +446,7 @@ export class TerminalPaymentsService {
 		return this.create(input, false);
 	}
 	resume(input: ResumeInput): TerminalLeg | undefined {
-		if (
-			input.row.capture_mode === 'device' &&
-			input.row.recorded_offline &&
-			input.row.status === 'authorized'
-		) {
+		if (isOfflineDeviceAuthorization(input.row)) {
 			this.trackOffline(input);
 			void this.flushOffline();
 			return undefined;
@@ -500,7 +493,7 @@ export class TerminalPaymentsService {
 				}
 			},
 			onFinal: (state: ServerLegState | DeviceLegState) => {
-				if (state.row.recorded_offline && state.row.status === 'authorized') {
+				if (isOfflineDeviceAuthorization(state.row)) {
 					this.trackOffline({ ...input, row: state.row });
 					void this.flushOffline();
 				}

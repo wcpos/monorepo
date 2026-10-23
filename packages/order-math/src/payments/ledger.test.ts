@@ -6,11 +6,15 @@ import {
 	hasLiveSettlementLeg,
 	isFailedPaymentStatus,
 	isFinalPaymentStatus,
+	isInMotionPaymentStatus,
 	isLivePaymentStatus,
+	isOfflineDeviceAuthorization,
 	isSettledPaymentRow,
 	mintDevicePayment,
 	mintManualPayment,
 	mintServerPayment,
+	OFFLINE_DEVICE_AUTHORIZATION,
+	partitionVoidableRows,
 	readLedger,
 	upsertPaymentRow,
 	withLedger,
@@ -343,6 +347,20 @@ it.each(['pending', 'authorized', 'captured', 'failed', 'voided'] as const)(
 	}
 );
 
+it('an offline authorization is settled, so it is not a live settlement leg', () => {
+	expect(
+		hasLiveSettlementLeg(withLedger([], [row({ status: 'authorized', recorded_offline: true })]))
+	).toBe(false);
+});
+
+it('recognizes only pending and authorized as money in motion', () => {
+	expect(
+		['pending', 'authorized', 'captured', 'failed', 'voided', 'refunded', ''].map(
+			isInMotionPaymentStatus
+		)
+	).toEqual([true, true, false, false, false, false, false]);
+});
+
 // Settled money includes offline authorizations; terminal finality does not.
 it.each([
 	['captured', false, true, true, false],
@@ -355,4 +373,69 @@ it.each([
 	expect(isSettledPaymentRow(row({ status, recorded_offline: offline }))).toBe(settled);
 	expect(isFinalPaymentStatus(status)).toBe(final);
 	expect(isFailedPaymentStatus(status)).toBe(failed);
+});
+
+// One table for every row state (C6, ADR 0033 item 8). The states overlap on purpose: an offline
+// device authorization is in motion (a cancel must void it) and settled (the sale counts it).
+const STATES = ['pending', 'authorized', 'captured', 'failed', 'voided'] as const;
+it.each(
+	(['manual', 'server', 'device'] as const).flatMap((capture_mode) =>
+		STATES.flatMap((status) =>
+			[false, true].map((recorded_offline) => [capture_mode, status, recorded_offline] as const)
+		)
+	)
+)('row state %s %s offline=%s', (capture_mode, status, recorded_offline) => {
+	const payment = row({ capture_mode, status, recorded_offline });
+	const inMotion = status === 'pending' || status === 'authorized';
+	expect(isInMotionPaymentStatus(status)).toBe(inMotion);
+	expect(isOfflineDeviceAuthorization(payment)).toBe(
+		capture_mode === 'device' && recorded_offline && status === 'authorized'
+	);
+	expect(isLivePaymentStatus(status)).toBe(inMotion || status === 'captured');
+	expect(isSettledPaymentRow(payment)).toBe(
+		status === 'captured' || (status === 'authorized' && recorded_offline)
+	);
+	expect(isFinalPaymentStatus(status)).toBe(!inMotion);
+});
+
+it('the offline device authorization literal is the predicate, field for field', () => {
+	expect(isOfflineDeviceAuthorization(row({ ...OFFLINE_DEVICE_AUTHORIZATION }))).toBe(true);
+	for (const changed of [
+		{ capture_mode: 'server' },
+		{ recorded_offline: false },
+		{ status: 'pending' },
+	] as const)
+		expect(isOfflineDeviceAuthorization(row({ ...OFFLINE_DEVICE_AUTHORIZATION, ...changed }))).toBe(
+			false
+		);
+});
+
+// Ledger invariant §3.4 rule 2: a cancel voids what the store would void, and keeps for a refund
+// a captured non-manual row or a captured row a completion counted.
+it.each([
+	['device', 'pending', false, 'voidable'],
+	['device', 'authorized', false, 'voidable'],
+	['server', 'authorized', false, 'voidable'],
+	['manual', 'captured', false, 'voidable'],
+	['manual', 'captured', true, 'retained'],
+	['server', 'captured', false, 'retained'],
+	['device', 'captured', false, 'retained'],
+	['manual', 'failed', false, 'neither'],
+	['device', 'voided', false, 'neither'],
+] as const)('partitions %s %s (counted %s) as %s', (capture_mode, status, counted, expected) => {
+	const payment = row({ id: 'leg', capture_mode, status });
+	const completions = counted ? [{ payment_ids: ['leg'] }] : [];
+	for (const value of [completions, JSON.stringify(completions)]) {
+		const { voidable, retained } = partitionVoidableRows([
+			...withLedger([], [payment]),
+			{ key: '_wcpos_completions', value },
+		]);
+		expect({
+			voidable: voidable.map(({ id }) => id),
+			retained: retained.map(({ id }) => id),
+		}).toEqual({
+			voidable: expected === 'voidable' ? ['leg'] : [],
+			retained: expected === 'retained' ? ['leg'] : [],
+		});
+	}
 });

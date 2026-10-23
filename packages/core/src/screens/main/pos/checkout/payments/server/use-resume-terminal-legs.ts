@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-import { type PaymentRow, readLedger } from '@wcpos/order-math';
+import {
+	isInMotionPaymentStatus,
+	isOfflineDeviceAuthorization,
+	type PaymentRow,
+	readLedger,
+} from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import {
@@ -11,9 +16,9 @@ import {
 
 export function resumableTerminalRow(row: PaymentRow): boolean {
 	return (
-		(row.capture_mode === 'server' && (row.status === 'pending' || row.status === 'authorized')) ||
-		(row.capture_mode === 'device' &&
-			(row.status === 'pending' || (row.status === 'authorized' && !row.recorded_offline)))
+		isInMotionPaymentStatus(row.status) &&
+		(row.capture_mode === 'server' ||
+			(row.capture_mode === 'device' && !isOfflineDeviceAuthorization(row)))
 	);
 }
 
@@ -23,10 +28,11 @@ function resumeOrder(order: EngineRecord<'orders'>) {
 	if (!service) return;
 	const rows = readLedger(payload.meta_data);
 	for (const row of rows) {
+		// The settler also watches a pending offline row on a synced order, so its settlement
+		// event finds an entry.
 		if (
-			row.capture_mode === 'device' &&
-			row.recorded_offline &&
-			(payload.id || row.status === 'authorized')
+			isOfflineDeviceAuthorization(row) ||
+			(Boolean(payload.id) && row.capture_mode === 'device' && row.recorded_offline)
 		)
 			service.trackOffline({
 				orderUuid: order.uuid,
