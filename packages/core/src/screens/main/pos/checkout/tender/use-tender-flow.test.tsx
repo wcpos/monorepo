@@ -18,6 +18,7 @@ import {
 	failCompletionAttempt,
 	readOrderCommands,
 	recordCompletionAttempt,
+	recordPaymentAttention,
 	rememberedReaders,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
@@ -2735,6 +2736,11 @@ it('does not claim the store holds a payment it refused but could not mirror', a
 		// retry. The refusal row is the one that speaks.
 		expect(mockWarn).not.toHaveBeenCalled();
 		expect(view.result.current.state).toMatchObject({ view: 'select', methodId: null });
+		// The refusal is kept for Orders (ADR 0040 Decided 1 rule 4), mirror or no mirror.
+		expect(recordPaymentAttention).toHaveBeenCalledWith(
+			mockStoreDB,
+			expect.objectContaining({ orderUuid: order.uuid, orderId: 42 })
+		);
 	} finally {
 		view.unmount();
 		mockUseRealManual = false;
@@ -3074,6 +3080,7 @@ jest.mock('@wcpos/query/store-local', () => ({
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
 	readOrderCommands: jest.fn(async () => ({ entries: [], chain: null })),
+	recordPaymentAttention: jest.fn(async () => {}),
 }));
 
 describe('gateway capture mode (contract 1.2)', () => {

@@ -44,13 +44,14 @@ import {
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	getTerminalPaymentsServiceStartVersion,
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
-import { paymentRefusalAttention } from './payments/payment-refusal-attention';
+import { raisePaymentRefusal } from './payments/payment-refusal-attention';
 import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -93,12 +94,15 @@ export function SaleCompletionBridge(): null {
 	const httpRef = React.useRef(http);
 	const t = useT();
 	const tRef = React.useRef(t);
+	const { byId: methods } = usePaymentMethods();
+	const methodsRef = React.useRef(methods);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const onlineRef = React.useRef(online);
 	React.useLayoutEffect(() => {
 		httpRef.current = http;
 		tRef.current = t;
-	}, [http, t]);
+		methodsRef.current = methods;
+	}, [http, t, methods]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -306,17 +310,17 @@ export function SaleCompletionBridge(): null {
 			const reason = codes[refused.code];
 			if (!reason || !refused.row) return;
 			const payload = (await findOrder(uuid))?.getLatest().payload;
-			logger.error(
-				...paymentRefusalAttention(tRef.current, {
-					row: refused.row,
-					order: refused.summary,
-					reason,
-					methodTitle: refused.row.method_id,
-					orderUuid: uuid,
-					orderId: payload?.id ?? refused.row.order_id,
-					orderNumber: payload?.number,
-				})
-			);
+			await raisePaymentRefusal(storeDB, tRef.current, {
+				row: refused.row,
+				order: refused.summary,
+				reason,
+				// The tender as the cashier saw it on the tile (ADR 0040 Decided 1 rule 4: the row names
+				// what was taken); the id only for a method the store no longer lists.
+				methodTitle: methodsRef.current.get(refused.row.method_id)?.title ?? refused.row.method_id,
+				orderUuid: uuid,
+				orderId: payload?.id ?? refused.row.order_id,
+				orderNumber: payload?.number,
+			});
 			await resolveCompletionAttempt(storeDB, uuid);
 		};
 		/**

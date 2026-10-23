@@ -29,8 +29,10 @@ let onlineStatus = 'offline';
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
 // The order's journaled money commands; the journal itself is pinned in the query suites.
 let mockJournal: { kind: string; sentAt: string | null; body: Record<string, unknown> }[] = [];
+const mockRecordAttention = jest.fn(async (..._args: unknown[]) => undefined);
 jest.mock('@wcpos/query/store-local', () => ({
 	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
+	recordPaymentAttention: (...args: unknown[]) => mockRecordAttention(...args),
 }));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
@@ -41,8 +43,10 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: onlineStatus }),
 }));
+const mockStoreDB = { name: 'store-db' };
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
+		storeDB: mockStoreDB,
 		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
 		store: { register_sessions: mockSessionsOn, id: 9, currency: 'EUR', price_num_decimals: 2 },
@@ -259,6 +263,14 @@ it('logs a refused online payment as a failed sync record needing attention', as
 			}),
 		})
 	);
+	// Rule 4's one failed story outlives the session's logs: kept for Orders, same sentence.
+	expect(mockRecordAttention).toHaveBeenCalledWith(mockStoreDB, {
+		rowId: 'payment-id',
+		orderUuid: order.uuid,
+		orderId: 1042,
+		message:
+			'Order #1042 was already paid online; 40.00 Cash was also taken at the till — refund that payment.',
+	});
 });
 
 it('localizes an amount-exceeds-balance refusal with the server balance', async () => {

@@ -139,6 +139,11 @@ jest.mock('./filter-bar', () => ({
 	},
 }));
 
+// Its content is pinned in attention-notice.test.tsx (it reads the store session this suite does
+// not mount); here it is a marker, for where the page puts it.
+jest.mock('./attention-notice', () => ({
+	PaymentAttentionNotice: () => <div data-testid="orders-attention" />,
+}));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
 jest.mock('./cells/note', () => ({ Note: () => null }));
@@ -508,6 +513,15 @@ it('searches from the management bar and opens the selected pane beside the list
 	fireEvent.click(screen.getByTestId('order-pane'));
 	expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
 	expect(screen.getByTestId('search-orders')).toBeTruthy();
+});
+it('puts the attention notice under the page bar, above the chips, outside the Pro guard', () => {
+	render(<OrdersScreen />);
+	const notice = screen.getByTestId('orders-attention');
+	const bar = screen.getByTestId('search-orders');
+	const chips = screen.getByTestId('search-probe');
+	expect(bar.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	expect(notice.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	expect(screen.getByTestId('guard-orders').contains(notice)).toBe(false);
 });
 it('renders the selected order as a full page on the phone', () => {
 	mockPhone = true;

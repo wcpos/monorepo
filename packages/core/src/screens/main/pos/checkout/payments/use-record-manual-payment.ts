@@ -26,7 +26,7 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
-import { paymentRefusalAttention } from './payment-refusal-attention';
+import { raisePaymentRefusal } from './payment-refusal-attention';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -41,7 +41,8 @@ const logger = getLogger(['wcpos', 'payments']);
  * A refused row raises a needs-attention entry through the log ledger: the Store
  * health attention list is DERIVED from `sync.record` rows with a failed outcome
  * (`logs-logic.ts` `deriveStuckRecords`), and shows `context.reason` as its line —
- * so the cashier-readable sentence goes there, the machine reason beside it.
+ * so the cashier-readable sentence goes there, the machine reason beside it. The same sentence is
+ * kept as the Orders screen's needs-attention row, which outlives the session's logs.
  */
 export function useRecordManualPayment(
 	options: {
@@ -175,9 +176,7 @@ export function useRecordManualPayment(
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const { uuid: orderUuid, id: orderId, number: orderNumber } = paymentOrder;
 					const facts = { row, order: summary, reason, methodTitle: method.title };
-					logger.error(
-						...paymentRefusalAttention(t, { ...facts, orderUuid, orderId, orderNumber })
-					);
+					void raisePaymentRefusal(storeDB, t, { ...facts, orderUuid, orderId, orderNumber });
 				},
 			});
 			if (outcome.kind === 'failed') {

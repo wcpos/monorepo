@@ -1,25 +1,28 @@
+import { recordPaymentAttention, type StoreLocalDatabase } from '@wcpos/query/store-local';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import type { PaymentRowRefusal } from '@wcpos/sync-core';
 
 import type { useT } from '../../../../../contexts/translations';
 
+type RefusalFacts = {
+	row: PaymentRow;
+	order: OrderPaymentSummary | null;
+	reason: PaymentRowRefusal;
+	methodTitle: string;
+	orderUuid: string;
+	orderId: number | null;
+	orderNumber?: string;
+};
+
+const logger = getLogger(['wcpos', 'payments']);
+
 /**
  * The needs-attention entry for a refused row (ADR 0040 Decided 1 rule 4), as `logger.error`
  * arguments: the tender's refusal and the recovery's refusal of an offline record tell one story.
  */
-export function paymentRefusalAttention(
-	t: ReturnType<typeof useT>,
-	facts: {
-		row: PaymentRow;
-		order: OrderPaymentSummary | null;
-		reason: PaymentRowRefusal;
-		methodTitle: string;
-		orderUuid: string;
-		orderId: number | null;
-		orderNumber?: string;
-	}
-) {
+function paymentRefusalAttention(t: ReturnType<typeof useT>, facts: RefusalFacts) {
 	const { row, order: summary, reason } = facts;
 	const number = facts.orderNumber || facts.orderUuid.slice(0, 8);
 	const values = { number, amount: row.amount, method: facts.methodTitle };
@@ -58,4 +61,30 @@ export function paymentRefusalAttention(
 			},
 		},
 	] as const;
+}
+
+/**
+ * Tell a refused row's story once (ADR 0040 Decided 1 rule 4): log it (the toast and Store
+ * health's row) and keep the same sentence as the Orders screen's needs-attention entry, which
+ * outlives the session's logs until the cashier marks it handled. Never throws: the toast has
+ * told the cashier, and a failed local write must not undo the refusal's handling.
+ */
+export async function raisePaymentRefusal(
+	storeDB: StoreLocalDatabase,
+	t: ReturnType<typeof useT>,
+	facts: RefusalFacts
+): Promise<void> {
+	const attention = paymentRefusalAttention(t, facts);
+	logger.error(...attention);
+	const { row, orderUuid, orderId } = facts;
+	await recordPaymentAttention(storeDB, {
+		rowId: row.id,
+		orderUuid,
+		orderId,
+		message: attention[0],
+	}).catch((error: unknown) =>
+		logger.warn('Could not keep a refused payment for Orders', {
+			context: { paymentId: row.id, error: error instanceof Error ? error.message : String(error) },
+		})
+	);
 }

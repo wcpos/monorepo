@@ -10,13 +10,18 @@ import { Text } from '../text';
 import { VStack } from '../vstack';
 
 type NoticeAction = { label: string; onPress: () => void; testID?: string };
+type NoticeActions = readonly [NoticeAction] | readonly [NoticeAction, NoticeAction];
+/** One line of a list the band carries (one refused sale, say), with its own actions. */
+type NoticeItem = { id: string; text: string; actions: NoticeActions };
 type NoticeProps = ViewProps & {
 	tone: 'warn' | 'info' | 'bad';
 	icon?: IconName;
 	title: string;
 	description?: string;
 	children?: React.ReactNode;
-	actions?: readonly [NoticeAction] | readonly [NoticeAction, NoticeAction];
+	actions?: NoticeActions;
+	/** Lines under the description, each with its own actions in the band's action styling. */
+	items?: readonly NoticeItem[];
 	docs?: { label: string; href: string; testID?: string };
 };
 const tones = {
@@ -32,6 +37,7 @@ export function Notice({
 	description,
 	children,
 	actions,
+	items,
 	docs,
 	testID,
 	className,
@@ -68,23 +74,34 @@ export function Notice({
 						{description}
 					</Text>
 				)}
+				{items?.map((item) => (
+					<HStack
+						key={item.id}
+						testID={id(`row-${item.id}`)}
+						className="flex-wrap items-center gap-2"
+					>
+						<Text className="text-muted-foreground min-w-0 flex-1 basis-48">{item.text}</Text>
+						<HStack className="flex-wrap gap-2">
+							{item.actions.map((action, index) => (
+								<NoticeButton
+									key={index}
+									action={action}
+									testID={action.testID ?? id(`row-${item.id}-action-${index}`)}
+								/>
+							))}
+						</HStack>
+					</HStack>
+				))}
 				{children}
 			</VStack>
 			{(actions || docs) && (
 				<HStack className="flex-wrap gap-2">
 					{actions?.map((action, index) => (
-						<Button
+						<NoticeButton
 							key={index}
-							variant="ghost"
-							size="sm"
-							className="h-auto min-h-9 py-1"
+							action={action}
 							testID={action.testID ?? id(`action-${index}`)}
-							onPress={action.onPress}
-						>
-							<ButtonText numberOfLines={0} className="web:whitespace-normal text-clip">
-								{action.label}
-							</ButtonText>
-						</Button>
+						/>
 					))}
 					{docs && (
 						<DocsLink href={docs.href} testID={docs.testID ?? id('docs')}>
@@ -94,5 +111,22 @@ export function Notice({
 				</HStack>
 			)}
 		</View>
+	);
+}
+
+/** The band's one action style: a ghost small Button whose label wraps rather than clips. */
+function NoticeButton({ action, testID }: { action: NoticeAction; testID?: string }) {
+	return (
+		<Button
+			variant="ghost"
+			size="sm"
+			className="h-auto min-h-9 py-1"
+			testID={testID}
+			onPress={action.onPress}
+		>
+			<ButtonText numberOfLines={0} className="web:whitespace-normal text-clip">
+				{action.label}
+			</ButtonText>
+		</Button>
 	);
 }

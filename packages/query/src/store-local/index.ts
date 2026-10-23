@@ -19,6 +19,12 @@ export {
 	type MoneyCommandEntry,
 } from './money-commands';
 export {
+	observePaymentAttention,
+	recordPaymentAttention,
+	resolvePaymentAttention,
+	type PaymentAttentionEntry,
+} from './payment-attention';
+export {
 	customerLinkChanges,
 	dropCustomerLink,
 	pendingCustomerLinks,

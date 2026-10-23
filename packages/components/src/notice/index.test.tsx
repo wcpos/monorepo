@@ -105,3 +105,41 @@ it('announces a bad notice on iOS, where aria-live has no native live region', (
 	os.restore();
 	announce.mockRestore();
 });
+it('renders each item as its line with its own actions, in the band action styling', () => {
+	const open = jest.fn();
+	const handled = jest.fn();
+	render(
+		<Notice
+			tone="bad"
+			title="2 sales need attention"
+			testID="notice"
+			items={[
+				{
+					id: 'a',
+					text: 'Order #1 was already paid online.',
+					actions: [
+						{ label: 'Open order', onPress: open, testID: 'open-a' },
+						{ label: 'Handled', onPress: handled },
+					],
+				},
+				{
+					id: 'b',
+					text: 'Order #2 could not accept the payment.',
+					actions: [{ label: 'Handled', onPress: handled }],
+				},
+			]}
+		/>
+	);
+	expect(screen.getByTestId('notice-row-a')).toHaveTextContent('Order #1 was already paid online.');
+	expect(screen.getByTestId('notice-row-b')).toHaveTextContent(
+		'Order #2 could not accept the payment.'
+	);
+	// An action's own testID wins; otherwise it is named after its row.
+	fireEvent.click(screen.getByTestId('open-a'));
+	fireEvent.click(screen.getByTestId('notice-row-b-action-0'));
+	expect(open).toHaveBeenCalledTimes(1);
+	expect(handled).toHaveBeenCalledTimes(1);
+	expect(screen.queryByTestId('notice-action-0')).toBeNull();
+	// One action style for the band and its items (Uniwind classes are not compiled here).
+	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8').match(/min-h-9/g)).toHaveLength(1);
+});
