@@ -3,29 +3,34 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { useObservableState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { useQueryRuntime } from '@wcpos/query';
+import { readResidentOrder, refreshOrderRecord } from '@wcpos/query/record-readers';
 import {
 	observePaymentAttention,
 	type PaymentAttentionEntry,
 	resolvePaymentAttention,
 } from '@wcpos/query/store-local';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useGround } from '../components/ground';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
+const logger = getLogger(['wcpos', 'payments']);
 const NONE: PaymentAttentionEntry[] = [];
+/** The band stays a band: the newest few, then a count, so it never pushes the list off a till. */
+const SHOWN = 3;
 
 /**
  * The sales the store refused a payment on (ADR 0040 Decided 1 rule 4: one failed story, in
  * Orders, with the reason). The row under the page bar, in the hold banner's slot and gutter; full
- * width on a phone. Each entry offers Open order and Handled, and never a Retry: a refused row is
+ * width on a phone. It is store-wide: a refused payment is the store's money problem, so every
+ * cashier sees it. Each entry offers Open order and Handled, and never a Retry: a refused row is
  * never retried on its own, the cashier settles it (a refund, or the balance) and says so.
  */
 export function PaymentAttentionNotice() {
@@ -36,9 +41,36 @@ export function PaymentAttentionNotice() {
 	);
 	const t = useT();
 	const router = useRouter();
+	const runtime = useQueryRuntime();
+	// The bar stands outside the Pro guard's provider: the guard's own derivation. On Free the
+	// pane would open behind the preview blur, so only Handled is offered.
+	const readOnly = !useAppInfo().license?.isPro;
 	const phone = useIsPhone();
 	const ground = useGround();
 	if (entries.length === 0) return null;
+
+	// The pane reads the order on this device: one older than the loaded page, or gone after a
+	// reset, is demanded from the store first (the targeted refresh a reopen's undo uses).
+	const open = async ({ orderUuid, orderId }: PaymentAttentionEntry) => {
+		try {
+			if (orderId && !(await readResidentOrder(runtime, orderUuid)))
+				await refreshOrderRecord(runtime.engine, orderId);
+		} catch {
+			// Unreachable store: the pane says the order is not on this device, which is true.
+		}
+		router.setParams({ order: orderUuid });
+	};
+	const handled = ({ rowId }: PaymentAttentionEntry) =>
+		resolvePaymentAttention(storeDB, rowId).catch((error: unknown) =>
+			// The row stays: the cashier sees it was not taken.
+			logger.warn('Could not mark a refused payment handled', {
+				context: {
+					paymentId: rowId,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			})
+		);
+	const hidden = entries.length - SHOWN;
 
 	return (
 		<Notice
@@ -46,41 +78,30 @@ export function PaymentAttentionNotice() {
 			testID="orders-attention"
 			title={t('orders.attention', { count: entries.length })}
 			className={cn(!phone && cn(ground.mx, ground.mt))}
+			items={entries.slice(0, SHOWN).map((entry) => {
+				const handle = {
+					label: t('orders.attention_handled'),
+					onPress: () => void handled(entry),
+					testID: `orders-attention-handled-${entry.rowId}`,
+				};
+				const openOrder = {
+					label: t('orders.attention_open'),
+					onPress: () => void open(entry),
+					testID: `orders-attention-open-${entry.rowId}`,
+				};
+				return {
+					id: entry.rowId,
+					// The refusal's own sentence already names the order, amount and tender.
+					text: entry.message,
+					actions: readOnly ? ([handle] as const) : ([openOrder, handle] as const),
+				};
+			})}
 		>
-			<VStack className="mt-1 gap-1">
-				{entries.map((entry) => (
-					<HStack
-						key={entry.rowId}
-						testID={`orders-attention-row-${entry.rowId}`}
-						className="flex-wrap items-center gap-2"
-					>
-						<Text className="text-muted-foreground min-w-0 flex-1 basis-48">
-							{/* The refusal's own sentence already names the order, amount and tender. */}
-							{entry.message}
-						</Text>
-						<HStack className="gap-1">
-							<Button
-								variant="ghost"
-								size="sm"
-								testID={`orders-attention-open-${entry.rowId}`}
-								// As a row opens it: the order's pane on this page.
-								onPress={() => router.setParams({ order: entry.orderUuid })}
-							>
-								<ButtonText>{t('orders.attention_open')}</ButtonText>
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								testID={`orders-attention-handled-${entry.rowId}`}
-								// A failed write leaves the row showing: the cashier sees it was not taken.
-								onPress={() => void resolvePaymentAttention(storeDB, entry.rowId).catch(() => {})}
-							>
-								<ButtonText>{t('orders.attention_handled')}</ButtonText>
-							</Button>
-						</HStack>
-					</HStack>
-				))}
-			</VStack>
+			{hidden > 0 && (
+				<Text testID="orders-attention-more" className="text-muted-foreground">
+					{t('common.and_n_more', { count: hidden })}
+				</Text>
+			)}
 		</Notice>
 	);
 }

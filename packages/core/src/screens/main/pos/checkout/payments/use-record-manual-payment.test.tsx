@@ -268,12 +268,6 @@ it('logs a refused online payment as a failed sync record needing attention', as
 		rowId: 'payment-id',
 		orderUuid: order.uuid,
 		orderId: 1042,
-		orderNumber: '1042',
-		amount: '40.00',
-		currency: 'EUR',
-		methodId: 'pos_cash',
-		methodTitle: 'Cash',
-		reason: 'order_already_paid',
 		message:
 			'Order #1042 was already paid online; 40.00 Cash was also taken at the till — refund that payment.',
 	});

@@ -1687,16 +1687,10 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 		rowId: 'order-row',
 		orderUuid: 'order',
 		orderId: 42,
-		orderNumber: null,
-		amount: '10.00',
-		currency: 'USD',
-		methodId: 'pos_cash',
-		methodTitle: 'Cash',
-		reason: 'order_already_paid',
 		message: mockError.mock.calls.at(-1)?.[0],
 		refusedAt: expect.any(String),
-		resolvedAt: null,
 	});
+	expect(entry.message).toContain('10.00 Cash was also taken');
 });
 
 it('a refused record whose method the store no longer lists is named by its id', async () => {
@@ -1709,7 +1703,7 @@ it('a refused record whose method the store no longer lists is named by its id',
 		expect.anything()
 	);
 	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
-	expect(entry.methodTitle).toBe('pos_cheque');
+	expect(entry.message).toContain('10.00 pos_cheque was also taken');
 });
 
 // Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry

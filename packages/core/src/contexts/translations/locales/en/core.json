@@ -487,6 +487,8 @@
 	"common.address_on_the_order": "Address on the order",
 	"common.addresses": "Addresses",
 	"common.amount": "Amount",
+	"common.and_n_more_one": "and {count} more",
+	"common.and_n_more_other": "and {count} more",
 	"common.app_version": "App Version",
 	"common.application": "Application",
 	"common.apply": "Apply",

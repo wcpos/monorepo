@@ -12,7 +12,6 @@ import {
 	recordPaymentAttention,
 	resolvePaymentAttention,
 } from '../../src/store-local';
-import { RESOLVED_ATTENTION_RETENTION_MS } from '../../src/store-local/payment-attention';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -48,33 +47,22 @@ const entry = (rowId: string) => ({
 	rowId,
 	orderUuid: `order-${rowId}`,
 	orderId: 42,
-	orderNumber: '1042',
-	amount: '10.00',
-	currency: 'USD',
-	methodId: 'pos_cash',
-	methodTitle: 'Cash',
-	reason: 'order_already_paid' as const,
 	message: 'Order #1042 was already paid online',
 });
 const at = (iso: string) => jest.spyOn(Date.prototype, 'toISOString').mockReturnValue(iso);
-const unresolved = (database = db) => firstValueFrom(observePaymentAttention(database));
+const listed = (database = db) => firstValueFrom(observePaymentAttention(database));
 
 it('reads no entries before anything is refused', async () => {
-	expect(await unresolved()).toEqual([]);
+	expect(await listed()).toEqual([]);
 });
 
-it('a second refusal of the same row refreshes its message and time, never duplicates', async () => {
+it('a repeat refusal of the same row replaces its entry, never duplicates it', async () => {
 	at('2026-10-23T10:00:00.000Z');
 	await recordPaymentAttention(db, entry('row'));
 	at('2026-10-23T11:00:00.000Z');
 	await recordPaymentAttention(db, { ...entry('row'), message: 'Refused again' });
-	expect(await unresolved()).toEqual([
-		{
-			...entry('row'),
-			message: 'Refused again',
-			refusedAt: '2026-10-23T11:00:00.000Z',
-			resolvedAt: null,
-		},
+	expect(await listed()).toEqual([
+		{ ...entry('row'), message: 'Refused again', refusedAt: '2026-10-23T11:00:00.000Z' },
 	]);
 });
 
@@ -85,48 +73,31 @@ it('lists the newest refusal first', async () => {
 	await recordPaymentAttention(db, entry('newer'));
 	at('2026-10-23T11:00:00.000Z');
 	await recordPaymentAttention(db, entry('middle'));
-	expect((await unresolved()).map(({ rowId }) => rowId)).toEqual(['newer', 'middle', 'older']);
+	expect((await listed()).map(({ rowId }) => rowId)).toEqual(['newer', 'middle', 'older']);
 });
 
-it('resolve stamps the entry and the live list drops it; a later refusal keeps it handled', async () => {
+it('Handled deletes the entry and the live list drops it; a later refusal raises it again', async () => {
 	await recordPaymentAttention(db, entry('a'));
 	await recordPaymentAttention(db, entry('b'));
 	const seen: string[][] = [];
 	const subscription = observePaymentAttention(db).subscribe((entries) =>
 		seen.push(entries.map(({ rowId }) => rowId))
 	);
-	at('2026-10-23T12:00:00.000Z');
 	await resolvePaymentAttention(db, 'a');
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	subscription.unsubscribe();
 	expect(seen.at(-1)).toEqual(['b']);
-	const stored = (await db.getLocal<{ entries: Record<string, { resolvedAt: string }> }>(
+	const stored = (await db.getLocal<{ entries: Record<string, unknown> }>(
 		'payment-attention'
 	))!.toJSON(true).data.entries;
-	expect(stored.a.resolvedAt).toBe('2026-10-23T12:00:00.000Z');
+	expect(Object.keys(stored)).toEqual(['b']);
 	await recordPaymentAttention(db, entry('a'));
-	expect((await unresolved()).map(({ rowId }) => rowId)).toEqual(['b']);
-});
-
-it('prunes a handled entry once it is older than the retention, on the next write', async () => {
-	const now = Date.parse('2026-10-23T12:00:00.000Z');
-	// Both stamps before the spy: the spied toISOString would answer for them too.
-	const expired = new Date(now - RESOLVED_ATTENTION_RETENTION_MS - 1).toISOString();
-	const kept = new Date(now - RESOLVED_ATTENTION_RETENTION_MS + 60_000).toISOString();
-	jest.spyOn(Date, 'now').mockReturnValue(now);
-	at(expired);
-	await recordPaymentAttention(db, entry('old'));
-	await resolvePaymentAttention(db, 'old');
-	at(kept);
-	await recordPaymentAttention(db, entry('recent'));
-	await resolvePaymentAttention(db, 'recent');
-	const doc = await db.getLocal<{ entries: Record<string, unknown> }>('payment-attention');
-	expect(Object.keys(doc!.toJSON(true).data.entries)).toEqual(['recent']);
+	expect((await listed()).map(({ rowId }) => rowId).sort()).toEqual(['a', 'b']);
 });
 
 it('survives a fresh handle on the store database (a reload)', async () => {
 	await recordPaymentAttention(db, entry('row'));
 	await handles[0].close();
 	const reopened = await open();
-	expect((await unresolved(reopened)).map(({ rowId }) => rowId)).toEqual(['row']);
+	expect((await listed(reopened)).map(({ rowId }) => rowId)).toEqual(['row']);
 });

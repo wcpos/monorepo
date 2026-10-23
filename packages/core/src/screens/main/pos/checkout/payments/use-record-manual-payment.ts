@@ -26,7 +26,7 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
-import { paymentRefusalAttention, recordRefusalAttention } from './payment-refusal-attention';
+import { raisePaymentRefusal } from './payment-refusal-attention';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -175,18 +175,8 @@ export function useRecordManualPayment(
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const { uuid: orderUuid, id: orderId, number: orderNumber } = paymentOrder;
-					const facts = {
-						row,
-						order: summary,
-						reason,
-						methodTitle: method.title,
-						orderUuid,
-						orderId,
-						orderNumber,
-					};
-					const attention = paymentRefusalAttention(t, facts);
-					logger.error(...attention);
-					void recordRefusalAttention(storeDB, facts, attention[0]);
+					const facts = { row, order: summary, reason, methodTitle: method.title };
+					void raisePaymentRefusal(storeDB, t, { ...facts, orderUuid, orderId, orderNumber });
 				},
 			});
 			if (outcome.kind === 'failed') {

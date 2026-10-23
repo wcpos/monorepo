@@ -58,6 +58,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 46. Deduplicate billing/shipping locations using trimmed, case-normalized address fields rather than recipient names — equivalent delivery locations must not repeat solely because names or casing differ — evidence: `8fdcb93942 2026-05-01 fix: align refund eligibility and totals` — platform: all.
 47. Display tax IDs from the order’s sale-time snapshot, not the live customer — subsequent customer edits must not rewrite historical sale identity — evidence: “not the live customer record), since the order owns its own copy from” / “sale-time.” (`orders/view/sections/customer.tsx:118–119`) — platform: all.
 48. Resolve cashier/store metadata into labels rather than showing raw IDs — detail should identify who and where the sale belongs to — evidence: `bc8c2504a4 2026-05-03 Improve order modal metadata and address formatting` — platform: all.
+49. A refused payment is a needs-attention row on the Orders page (`attention-notice.tsx`, testID `orders-attention`): a `bad` Notice under the page bar, above the chip row and outside the Pro guard, in the hold banner's slot and gutter; the newest three with "and {count} more"; each row offers Open order (hidden on Free) and Handled, and never Retry — a refused row is never retried on its own — evidence: ADR 0040 Decided 1 rule 4; `index.test.tsx`: "puts the attention notice under the page bar, above the chips, outside the Pro guard"; `attention-notice.test.tsx` — platform: all.
 
 ## v2 detail pane motion (added 2026-10-02)
 
