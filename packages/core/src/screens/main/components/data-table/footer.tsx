@@ -40,9 +40,11 @@ export function DataTableFooter({
 	const actions = useQueryStateActions();
 	const t = useT();
 	return (
-		// A caption row on the ground under the card: no rule of its own. Its mount aligns the
-		// text with the card's cells (`CaptionRowInset`: the card's gutter + the cell's 12).
-		<HStack testID="data-table-caption-row" className="min-h-ctl items-center">
+		// A caption row on the ground under the card: no rule of its own, and no height of its own:
+		// it is its content's height (the `sm` sync button, 8 units; its hitSlop keeps the 44 touch
+		// target), not a control row. Its mount aligns the text with the card's cells
+		// (`CaptionRowInset`: the card's gutter + the cell's 12).
+		<HStack testID="data-table-caption-row" className="items-center">
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">

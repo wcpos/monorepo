@@ -122,7 +122,7 @@ export function DataTableSkeleton({ id, rowCount }: { id: UISettingID; rowCount?
 			{/* The footer's row sits in the caption row's inset, gutter below it included, so the
 			    card's bottom edge stays put when the table loads (CodeRabbit on #2795). */}
 			<CaptionRowInset>
-				<View className="min-h-ctl" />
+				<View className="h-8" />
 			</CaptionRowInset>
 		</View>
 	);
