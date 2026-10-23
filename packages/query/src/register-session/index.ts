@@ -13,17 +13,12 @@ export {
 	unbindRegister,
 } from './register-document';
 export type { RegisterCounters, RegisterDocument } from './register-document';
-export type {
-	CashMovementRow,
-	ClosureRow,
-	RefundDocumentType,
-	RegisterSessionRow,
-} from '@wcpos/database';
+export type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
 
 export { recordRegisterFact, type RegisterFact } from './audit';
 export { deriveExpected, deriveDrawerTerms } from './expected';
 export { failureFacts } from './failure-facts';
-export { refreshSessions, sessionRefreshRequests } from './refresh';
+export { sessionRefreshRequests } from './refresh';
 export {
 	backToSelling,
 	closeSession,

@@ -51,6 +51,5 @@ export {
 	saveScannerProfile,
 	removeScannerProfile,
 	type ScannerProfile,
-	type ScannerConnectionType,
 } from './scanner-profiles';
 export { openStoreState, type StoreState } from './store-state';

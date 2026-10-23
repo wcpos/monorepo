@@ -25,7 +25,6 @@ export {
 export { observeCoverage, readCoverageGeneration } from './engine-query';
 export { setSearchMetaKeys, type SearchMetaKeys } from './search-fields';
 export { useSearchFields } from './use-search-fields';
-export { searchRows } from './search-blob';
 export { warmSearchBlobs } from './search-warmup';
 export { resetCollectionsAndRefill } from './requirement-bridge';
 export { OPEN_ORDER_STATUSES, acquireOpenOrdersQueryHandle } from './open-orders-scope';
@@ -47,7 +46,6 @@ export {
 	observeQueueRows,
 	observeQueueCounts,
 	type EngineMutationCounts,
-	BACKLOG_QUEUE_STATUSES,
 	PARKED_QUEUE_STATUSES,
 	REJECTED_QUEUE_STATUSES,
 	TERMINAL_QUEUE_STATUSES,

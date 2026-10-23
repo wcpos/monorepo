@@ -23,10 +23,7 @@ export {
 	type PreparedStorePayload,
 	type ServerStorePayload,
 } from './stores';
-export {
-	AUTO_SYNCED_STORE_FIELDS,
-	SERVER_OWNED_STORE_FIELDS,
-} from '@wcpos/database/collections/schemas/stores';
+export { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 export type {
 	ReadonlySiteRecord,
 	ReadonlyStoreRecord,
@@ -44,14 +41,7 @@ export {
 	type SessionAppState,
 	type TranslationsState,
 } from './state';
-// Legacy callers outside hydration still use the document types.
-export type {
-	SiteDocument,
-	StoreDatabase,
-	StoreDocument,
-	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
-} from '@wcpos/database';
+// The database handle types core holds and hands back to these commands.
+export type { StoreDatabase, UserDatabase } from '@wcpos/database';
 export * from './hydration';
 export * from './store-settings';
