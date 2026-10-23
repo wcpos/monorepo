@@ -77,7 +77,7 @@ export function stampSale(
  * One dispatch of `checkout.tender.commit`, inside the order's queue slot. Returns the refusal when a
  * guard or the entry stale-balance check refuses; throws `RegisterSessionRequiredError` when the
  * pre-action session write lands on a different session. `write` never runs in either case. Any
- * error `write` throws is rethrown untouched, so the tender hook's mirror-error identity checks hold.
+ * error `write` throws is rethrown untouched.
  */
 export function commitSale<R>(
 	ctx: SaleCommitContext,

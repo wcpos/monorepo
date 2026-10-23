@@ -39,7 +39,7 @@ import {
 import { observeOrderCommands, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { isActionRefusal } from '../../../../../extensions/actions';
@@ -90,16 +90,8 @@ import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
 import { getUuidFromLineItem } from '../../hooks/utils';
-import {
-	RecordManualPaymentMirrorError,
-	useRecordManualPayment,
-	useVoidPayments,
-} from '../payments';
-import {
-	GatewayCancelMirrorError,
-	GatewayMirrorError,
-	submitStillDone,
-} from '../payments/submit-gateway-payment';
+import { useRecordManualPayment, useVoidPayments } from '../payments';
+import { submitStillDone } from '../payments/submit-gateway-payment';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -891,11 +883,28 @@ export function useTenderFlow(
 		// records its shares (activePlan is null once the legs are done). A whole-order gateway
 		// never has one.
 		const journaledPlan = fixedAmount ? null : state.plan;
-		// The amounts the chain settled on (a hook may rewrite them, cash rounding does): every
-		// step after the dispatch, the mirror-error paths below included, reads these.
-		let committed = null as StampedSale | null;
+		// The store answered; only this till's copy failed to save. PAYMENT111 names a payment.
+		const warnNotMirrored = (kind: string, cause: unknown, method: string, row?: PaymentRow) => {
+			const sent = kind === 'sent';
+			const sentence = sent
+				? t('pos_checkout.invoice_sent_not_synced')
+				: t('pos_checkout.payment_recorded_not_synced');
+			logger.warn(sentence, {
+				code: ERROR_CODES[sent ? 'PAYMENT_INVOICE_NOT_MIRRORED' : 'PAYMENT_RECORDED_NOT_MIRRORED'],
+				showToast: true,
+				...(sent ? { toast: { title: sentence } } : {}),
+				...(row ? { terminal: { operationId: row.id } } : {}),
+				context: {
+					type: 'payment.not-mirrored',
+					...orderContext,
+					method,
+					outcome: kind,
+					...(row ? { paymentId: row.id, amount: row.amount, status: row.status } : {}),
+					error: getErrorMessage(cause),
+				},
+			});
+		};
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
-			committed = sale;
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
 			const splitMeta = journaledPlan
@@ -1196,6 +1205,10 @@ export function useTenderFlow(
 					});
 					return;
 				}
+				const { notMirrored } = outcome;
+				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
+				if (notMirrored && outcome.kind !== 'reopened')
+					warnNotMirrored(outcome.kind, notMirrored.cause, method.id);
 				if (outcome.kind === 'recorded') {
 					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
 					await completeOrderFlow(
@@ -1204,7 +1217,7 @@ export function useTenderFlow(
 							via: 'online',
 							row: outcome.row,
 							order: outcome.order,
-							mirrorFailed: false,
+							mirrorFailed: !!notMirrored,
 							remainingMinor: sale.remainingMinor,
 						},
 						queue
@@ -1226,6 +1239,7 @@ export function useTenderFlow(
 					// The completion decides from the resident after the mirror, not the answer: a
 					// reopen adopted since is no finished sale, so no paid sentence (Codex 4340856695).
 					if (
+						!notMirrored &&
 						!uiSettings.autoShowReceipt &&
 						!residentUnpaid(order.getLatest().payload, outcome.order.status)
 					) {
@@ -1250,6 +1264,7 @@ export function useTenderFlow(
 					{ source: 'gateway', order: outcome.order, stamp: outcome.stamp },
 					queue
 				);
+				if (notMirrored) return;
 				if (outcome.order.status === 'pos-open') {
 					// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
 					logger.info(t('pos_checkout.order_open_send_again'), {
@@ -1283,21 +1298,22 @@ export function useTenderFlow(
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
 			}).catch(async (error: unknown) => {
-				const landed =
-					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
 				// A thrown refusal of a replay takes back its row's fee, as a returned one does.
-				if (!landed) await unround().catch(() => undefined);
+				await unround().catch(() => undefined);
 				throw error;
 			});
 			// An unanswered record keeps its rounding: the journal re-sends it at the rounded amount.
 			// A refused replay takes back the fee its own row carried (Codex 4343139031 on #2832).
 			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
+				const { notMirrored, ...recorded } = outcome;
+				if (notMirrored) warnNotMirrored('recorded', notMirrored.cause, method.id, outcome.row);
+				// A failed mirror trusts only the store's summary: the pane stays on what is left to pay.
 				await completeOrderFlow(
 					{
 						source: 'manual',
-						...outcome,
-						mirrorFailed: false,
+						...recorded,
+						mirrorFailed: !!notMirrored,
 						remainingMinor: sale.remainingMinor,
 					},
 					queue
@@ -1346,103 +1362,6 @@ export function useTenderFlow(
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) {
 				presentSessionRequired(logger, t, orderContext);
-				return;
-			}
-			if (error instanceof GatewayMirrorError) {
-				// The store answered: the money or the invoice is on the order there, and only this
-				// till's copy failed to save. "Try again" would send or charge a second time.
-				attemptRef.current = null;
-				const { outcome } = error;
-				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
-				if (outcome.kind === 'reopened') {
-					logger.info(t('pos_checkout.sale_reopened_elsewhere'), {
-						showToast: true,
-						context: { ...orderContext, status: outcome.order.status },
-					});
-					return;
-				}
-				// PAYMENT111's summary speaks of a recorded payment; a sent invoice needs its own sentence.
-				const sentence =
-					outcome.kind === 'sent'
-						? t('pos_checkout.invoice_sent_not_synced')
-						: t('pos_checkout.payment_recorded_not_synced');
-				logger.warn(sentence, {
-					code:
-						outcome.kind === 'sent'
-							? ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED
-							: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
-					showToast: true,
-					...(outcome.kind === 'sent' ? { toast: { title: sentence } } : {}),
-					context: {
-						type: 'payment.not-mirrored',
-						...orderContext,
-						method: method?.id ?? null,
-						outcome: outcome.kind,
-						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
-					},
-				});
-				if (outcome.kind === 'recorded') {
-					await completeOrderFlow({
-						source: 'manual',
-						via: 'online',
-						row: outcome.row,
-						order: outcome.order,
-						mirrorFailed: true,
-						// A mirror error is thrown from inside the handler: the chain has settled the amounts.
-						remainingMinor: (committed as StampedSale).remainingMinor,
-					}).finally(() => tenderRecorded(outcome.row, 'online'));
-				} else if (outcome.kind === 'settled') {
-					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
-				} else {
-					await completeOrderFlow({
-						source: 'gateway',
-						order: outcome.order,
-						stamp: outcome.stamp,
-					});
-				}
-				return;
-			}
-			if (error instanceof RecordManualPaymentMirrorError) {
-				const { outcome } = error;
-				// A refusal that could not be mirrored is NOT money the store holds: the
-				// server stored a `failed` row and took nothing. `raiseAttention` has already
-				// told the cashier what to do about it, and telling them the store has the
-				// payment would both contradict that and stop them retrying a corrected one.
-				if (outcome.kind === 'refused') {
-					reducerDispatch({ type: 'back' });
-					setTenderMethod(order.uuid, null);
-					return;
-				}
-				// The store answered 2xx: the money is on the order there, and only this
-				// till's copy failed to save. Reporting "payment not recorded" here reads as
-				// "take it again", which is how one mirror failure becomes two payments.
-				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
-					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
-					showToast: true,
-					terminal: { operationId: outcome.row.id },
-					context: {
-						type: 'payment.not-mirrored',
-						...orderContext,
-						paymentId: outcome.row.id,
-						amount: outcome.row.amount,
-						method: outcome.row.method_id,
-						status: outcome.row.status,
-						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
-					},
-				});
-				// Fold the accepted row into the pane's own view of the ledger. Without this
-				// the keypad goes back to the pre-payment balance and cheerfully offers the
-				// whole amount again — the recovery refresh may not have landed, and the
-				// resident order is exactly the copy that failed to save.
-				// The store's summary is the only balance worth trusting now. Complete only
-				// when it says the order is settled; otherwise stay on the pane, which is now
-				// showing what is actually left to pay.
-				await completeOrderFlow({
-					source: 'manual',
-					...outcome,
-					mirrorFailed: true,
-					remainingMinor: (committed as StampedSale).remainingMinor,
-				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
 			if (savingProvenance) {
@@ -1638,15 +1557,7 @@ export function useTenderFlow(
 		setBusy(true);
 		try {
 			attemptRef.current = null;
-			// An unchanged answer is that whether or not its mirror landed: the invoice stands, and the
-			// till's copy still carries its stamp (Codex 4346411064).
-			const outcome = await gateway
-				.cancel(order, invoiceSent)
-				.catch((error: unknown) =>
-					error instanceof GatewayCancelMirrorError && error.outcome.kind === 'unchanged'
-						? error.outcome
-						: Promise.reject(error)
-				);
+			const outcome = await gateway.cancel(order, invoiceSent);
 			if (outcome.kind === 'refused') {
 				logger.error(outcome.message, {
 					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
@@ -1665,7 +1576,7 @@ export function useTenderFlow(
 			}
 			logger.info(t('pos_checkout.invoice_cancelled'), {
 				actor,
-				showToast: true,
+				...(outcome.notMirrored ? {} : { showToast: true }),
 				context: {
 					...orderContext,
 					type: 'checkout.cancelled',
@@ -1674,19 +1585,8 @@ export function useTenderFlow(
 					voided: 0,
 				},
 			});
-		} catch (error) {
-			if (error instanceof GatewayCancelMirrorError) {
-				// The store cancelled it; only this till's copy is behind. "Try again" would 409.
-				logger.info(t('pos_checkout.invoice_cancelled'), {
-					actor,
-					context: {
-						...orderContext,
-						type: 'checkout.cancelled',
-						method: invoiceSent.method_id,
-						attemptId: invoiceSent.attempt_id,
-						voided: 0,
-					},
-				});
+			// The store cancelled it; only this till's copy is behind. "Try again" would 409.
+			if (outcome.notMirrored)
 				// The code's own summary would replace this sentence on the toast; name it explicitly.
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
 					code: ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED,
@@ -1694,11 +1594,10 @@ export function useTenderFlow(
 					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {
 						...orderContext,
-						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+						error: getErrorMessage(outcome.notMirrored.cause),
 					},
 				});
-				return;
-			}
+		} catch (error) {
 			logger.error(t('pos_checkout.invoice_cancel_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,

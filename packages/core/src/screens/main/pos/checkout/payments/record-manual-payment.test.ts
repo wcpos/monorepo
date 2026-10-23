@@ -6,7 +6,6 @@ import {
 	recordManualPayment,
 	type RecordManualPaymentDeps,
 	RecordManualPaymentError,
-	RecordManualPaymentMirrorError,
 } from './record-manual-payment';
 
 jest.mock('uuid', () => ({ v4: () => 'unused-default-uuid' }));
@@ -98,7 +97,7 @@ function createDeps(): RecordManualPaymentDeps & {
 		currency: 'EUR',
 		dp: 2,
 		sleep: jest.fn(async () => undefined),
-		mirror: jest.fn(async () => undefined),
+		mirror: jest.fn(async () => ({ mirrored: true as const })),
 		fetchOrderStatus: jest.fn(async () => null),
 		raiseAttention: jest.fn(),
 		now: () => NOW,
@@ -135,7 +134,13 @@ describe('recordManualPayment', () => {
 			{ payment: row, status: 'completed' },
 			{ accepted: true, local: true }
 		);
-		expect(result).toEqual({ kind: 'recorded', via: 'offline', row, order: null });
+		expect(result).toEqual({
+			kind: 'recorded',
+			via: 'offline',
+			row,
+			order: null,
+			notMirrored: null,
+		});
 	});
 
 	it('offline with no store id is refused, nothing journaled', async () => {
@@ -212,7 +217,7 @@ describe('recordManualPayment', () => {
 		);
 	});
 
-	it('offline journal/mirror failures: failed outcome / RecordManualPaymentMirrorError', async () => {
+	it('offline journal/mirror failures: failed outcome / recorded, not mirrored', async () => {
 		const refused = createDeps();
 		const cause = new Error('journal write failed');
 		refused.journal.mockRejectedValue(cause);
@@ -235,17 +240,18 @@ describe('recordManualPayment', () => {
 
 		const unmirrored = createDeps();
 		const mirrorFailure = new Error('resident write failed');
-		unmirrored.mirror.mockRejectedValue(mirrorFailure);
+		unmirrored.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
 		const promise = recordManualPayment(
 			order,
 			cash,
 			{ amount: '42.50', lane: 'settles-later' },
 			unmirrored
 		);
-		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
-		await expect(promise).rejects.toMatchObject({
-			outcome: { kind: 'recorded', via: 'offline', order: null },
-			cause: mirrorFailure,
+		await expect(promise).resolves.toMatchObject({
+			kind: 'recorded',
+			via: 'offline',
+			order: null,
+			notMirrored: { cause: mirrorFailure },
 		});
 	});
 
@@ -255,14 +261,16 @@ describe('recordManualPayment', () => {
 		const summary = { status: 'completed', balance: '0.00' };
 		const mirrorFailure = new Error('resident write failed');
 		deps.post.mockResolvedValue({ data: { payment: serverRow, order: summary } });
-		deps.mirror.mockRejectedValue(mirrorFailure);
+		deps.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
 
 		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
-		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
-		await expect(promise).rejects.toMatchObject({
-			outcome: { kind: 'recorded', via: 'online', row: serverRow, order: summary },
-			cause: mirrorFailure,
+		await expect(promise).resolves.toEqual({
+			kind: 'recorded',
+			via: 'online',
+			row: serverRow,
+			order: summary,
+			notMirrored: { cause: mirrorFailure },
 		});
 	});
 
@@ -306,7 +314,13 @@ describe('recordManualPayment', () => {
 			{ payment: serverRow, status: 'completed' },
 			{ accepted: true }
 		);
-		expect(result).toEqual({ kind: 'recorded', via: 'online', row: serverRow, order: summary });
+		expect(result).toEqual({
+			kind: 'recorded',
+			via: 'online',
+			row: serverRow,
+			order: summary,
+			notMirrored: null,
+		});
 	});
 
 	it('mirrors and raises attention for an already-paid refusal', async () => {
@@ -431,18 +445,15 @@ describe('recordManualPayment', () => {
 				order: { status: 'completed', balance: '0.00' },
 			})
 		);
-		deps.mirror.mockRejectedValue(mirrorFailure);
+		deps.mirror.mockResolvedValue({ mirrored: false, cause: mirrorFailure });
 
 		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
-		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
-		await expect(promise).rejects.toMatchObject({
-			outcome: {
-				kind: 'refused',
-				reason: 'order_already_paid',
-				row: expect.objectContaining({ id: UUID.toLowerCase(), status: 'failed' }),
-			},
-			cause: mirrorFailure,
+		await expect(promise).resolves.toMatchObject({
+			kind: 'refused',
+			reason: 'order_already_paid',
+			row: expect.objectContaining({ id: UUID.toLowerCase(), status: 'failed' }),
+			notMirrored: { cause: mirrorFailure },
 		});
 		expect(deps.raiseAttention).toHaveBeenCalledWith(
 			expect.objectContaining({ reason: 'order_already_paid' })
@@ -657,18 +668,5 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
-	expect(deps.mirror).not.toHaveBeenCalled();
-});
-
-// A malformed 2xx proves nothing: it is never replaced by the minted row (sync-core
-// `isMoneyAnswer`). It is re-sent like no answer, then ends unknown with the command journaled.
-it('a malformed 2xx records nothing locally and ends unknown after its re-sends', async () => {
-	const deps = createDeps();
-	deps.post.mockResolvedValue({ data: {} });
-
-	const result = await recordManualPayment(order, cash, { amount: '42.50', lane: 'online' }, deps);
-
-	expect(result).toMatchObject({ kind: 'unknown' });
-	expect(deps.post).toHaveBeenCalledTimes(4);
 	expect(deps.mirror).not.toHaveBeenCalled();
 });

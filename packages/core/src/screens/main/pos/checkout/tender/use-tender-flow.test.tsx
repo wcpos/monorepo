@@ -288,8 +288,6 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
 }));
 jest.mock('../payments', () => ({
-	RecordManualPaymentMirrorError: jest.requireActual('../payments/record-manual-payment')
-		.RecordManualPaymentMirrorError,
 	RecordManualPaymentError: jest.requireActual('../payments/record-manual-payment')
 		.RecordManualPaymentError,
 	useRecordManualPayment: () =>
@@ -2822,6 +2820,7 @@ it('reports a payment the store took but the till could not mirror, and never sa
 	mockBlockIfDegraded.mockReturnValue(false);
 	mockLocalPatch.mockResolvedValue(order);
 	mockPushDocument.mockResolvedValue(order);
+	mockCompleteOrderFlow.mockResolvedValue(undefined);
 	// The store answers 2xx and settles the order; only the local mirror fails.
 	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
@@ -2845,7 +2844,8 @@ it('reports a payment the store took but the till could not mirror, and never sa
 		expect(mockError).not.toHaveBeenCalled();
 		// The store said the order is settled, so the sale still finishes.
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			expect.objectContaining({ source: 'manual', via: 'online' })
+			expect.objectContaining({ source: 'manual', via: 'online' }),
+			expect.anything()
 		);
 	} finally {
 		view.unmount();
@@ -2865,6 +2865,7 @@ it('keeps the pane on the balance the store reports when a partial payment could
 	mockBlockIfDegraded.mockReturnValue(false);
 	mockLocalPatch.mockResolvedValue(order);
 	mockPushDocument.mockResolvedValue(order);
+	mockCompleteOrderFlow.mockResolvedValue(undefined);
 	mockManualPost.mockResolvedValue({ data: { order: { status: 'pos-open', balance: '5.00' } } });
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -2879,7 +2880,8 @@ it('keeps the pane on the balance the store reports when a partial payment could
 				source: 'manual',
 				mirrorFailed: true,
 				order: { status: 'pos-open', balance: '5.00' },
-			})
+			}),
+			expect.anything()
 		);
 		expect(provenance.isSaleComplete(mockCompleteOrderFlow.mock.calls[0][0], 2)).toBe(false);
 		// The resident order is the copy that failed to save, and the recovery refresh may
@@ -3349,10 +3351,11 @@ describe('gateway capture mode (contract 1.2)', () => {
 			})
 		);
 		expect(mockError).not.toHaveBeenCalled();
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
-			source: 'gateway-settled',
-			order: summary('pending'),
-		});
+		// Completed inside the commit's queue slot, like an answer that mirrored.
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'gateway-settled', order: summary('pending') },
+			expect.anything()
+		);
 		expect(result.current.busy).toBe(false);
 	});
 
@@ -3757,7 +3760,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		);
 		expect(mockError).not.toHaveBeenCalled();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			expect.objectContaining({ source: 'gateway', order: summary('pending') })
+			expect.objectContaining({ source: 'gateway', order: summary('pending') }),
+			expect.anything()
 		);
 	});
 
@@ -3918,7 +3922,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 					mirrorFailed: true,
 					// The chain's 9295 - 9290, not the keypad's 9295 - 9295.
 					remainingMinor: 5,
-				})
+				}),
+				expect.anything()
 			);
 		} finally {
 			registerActionHook(TENDER_COMMIT_EVENT, cashRounding, {
@@ -4512,7 +4517,8 @@ describe('cash rounding (#66, #84)', () => {
 				source: 'manual',
 				mirrorFailed: true,
 				remainingMinor: 0,
-			})
+			}),
+			expect.anything()
 		);
 		// The money landed: its rounding stays.
 		expect(mockPayload).toMatchObject({ total: '10.00' });

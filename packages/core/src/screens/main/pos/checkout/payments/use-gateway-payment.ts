@@ -16,8 +16,9 @@ import {
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import { mirrorAnswer } from '../../commands/land-answer';
+import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { commandProvenance } from '../provenance/command-provenance';
-import { refreshOrderRecord } from '../sale-completion';
 import {
 	cancelGatewayInvoice,
 	submitGatewayPayment,
@@ -34,6 +35,7 @@ export function useGatewayPayment() {
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { wpCredentials, storeDB, userDB, site, store } = useStoreSession();
+	const { stampCompletion } = useOrderLedgerWrite();
 	const ctx = React.useMemo(
 		() => ({ userDB, siteUuid: site.uuid ?? '', storeId: store.id }),
 		[userDB, site.uuid, store.id]
@@ -57,31 +59,18 @@ export function useGatewayPayment() {
 				approval: options.approval,
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId ?? null, command),
 			});
+			const facts = { sessionId: options.sessionId };
+			const stampCtx = { ...ctx, runtime: manager, stampCompletion };
+			const land = mirrorAnswer({ ctx: stampCtx, order, poster: post, facts });
 			return {
 				post,
 				cashierId: wpCredentials.id ?? 0,
 				destination: options.destination ?? null,
-				mirror: async ({
-					payment,
-					order: summary,
-					awaiting,
-				}: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) => {
-					try {
-						await post.mirror({
-							payment,
-							order: summary,
-							meta: (meta) => withAwaitingCustomer(meta, awaiting),
-						});
-					} catch (error) {
-						// The store has already answered; only this till's copy is behind. Pull it.
-						const id = order.getLatest().payload.id;
-						if (id) await refreshOrderRecord(manager, id).catch(() => undefined);
-						throw error;
-					}
-				},
+				mirror: ({ awaiting, ...answer }: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) =>
+					land({ ...answer, meta: (meta) => withAwaitingCustomer(meta, awaiting) }),
 			};
 		},
-		[http, manager, ctx, storeDB, wpCredentials.id]
+		[http, manager, ctx, storeDB, wpCredentials.id, stampCompletion]
 	);
 
 	const gatewayOrder = (order: EngineRecord<'orders'>) => {
