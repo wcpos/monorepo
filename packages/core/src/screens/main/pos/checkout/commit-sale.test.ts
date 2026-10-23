@@ -264,7 +264,7 @@ it('sessions off passes the nullable stamped ids without a session write', async
 	expect(patchSession).not.toHaveBeenCalled();
 });
 
-it('rethrows the write error untouched for caller mirror-error recovery', async () => {
+it('rethrows the write error untouched', async () => {
 	const error = new Error('mirror failed');
 	await expect(
 		commitSale(ctx, request, async () => {

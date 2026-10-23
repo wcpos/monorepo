@@ -122,7 +122,7 @@ export async function persistSaleProvenance(
 
 /** Metadata for the caller's existing atomic ledger/status write, never a second write. */
 export async function completionMetaFor(
-	ctx: SaleContext,
+	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId'>,
 	meta: MetaDataEntry[] | undefined,
 	facts: {
 		sessionId?: string | null;

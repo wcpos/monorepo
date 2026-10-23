@@ -529,7 +529,7 @@ it('mirrors a refused server status without allocating or patching provenance', 
 });
 
 it.each([false, true])(
-	'rejects with the accepted outcome when the mirror fails, after pulling the store copy (throws=%s)',
+	'returns the accepted outcome, not mirrored, when the stamp fails, after pulling the store copy (throws=%s)',
 	async (throws) => {
 		// The store has answered 2xx: the money is on the order there. Swallowing this used
 		// to report a generic "checkout failed" on a payment the store had taken, which is
@@ -542,9 +542,9 @@ it.each([false, true])(
 		const { result } = renderHook(() => useRecordManualPayment());
 		await expect(
 			result.current(order, method, { session: gateSession(), lane, amount: 40 })
-		).rejects.toMatchObject({
-			name: 'RecordManualPaymentMirrorError',
-			outcome: expect.objectContaining({ kind: 'recorded' }),
+		).resolves.toMatchObject({
+			kind: 'recorded',
+			notMirrored: { cause: expect.any(Error) },
 		});
 		expect(mockEngineRequire).toHaveBeenCalledWith(
 			expect.objectContaining({ collection: 'orders', forceRefresh: true })
