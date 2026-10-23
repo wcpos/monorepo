@@ -60,6 +60,30 @@ it('the queued-delete read retains void-marked deletes', async () => {
 	}
 });
 
+it('the queued-delete read answers only for orders, not another collection with the same id', async () => {
+	const db = await createRxDatabase({
+		name: 'customerdelete',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	try {
+		await db.addCollections({ recordMutations: { schema: recordMutationQueueSchema } });
+		await db.collections.recordMutations.insert({
+			mutationId: 'delete',
+			collectionName: 'customers',
+			recordId: 'order',
+			operation: 'delete',
+			origin: 'existing',
+			payload: {},
+			baseRevision: null,
+			queuedAt: new Date().toISOString(),
+		});
+		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(false);
+	} finally {
+		await db.remove();
+	}
+});
+
 it('the queued-delete read throws with no active scope', async () => {
 	await expect(orderHasQueuedDelete(engineOver(null), 'order')).rejects.toThrow(
 		'No active scope to read the write queue from'

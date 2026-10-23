@@ -40,7 +40,7 @@ beforeEach(async () => {
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
-	await ((await readRegister(userDB)) ?? remintRegister(userDB));
+	await remintRegister(userDB);
 });
 afterEach(async () => {
 	await db.remove();

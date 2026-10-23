@@ -251,11 +251,9 @@ export function censusTotal$(
  * The local resident count stays the floor in every branch: more residents than the server's
  * last count proves that count outdated, so the larger number wins — stated plainly, never
  * dressed up with a `N+` suffix (owner ruling 2026-08-20: the `+` read as noise, and every
- * locale translated it differently).
- *
- * The numbers carry the result they were computed for, so a snapshot can take rows and total
- * from ONE emission: fed separately, a new result would first pair with the old total and the
- * reader would see two frames, one of them inconsistent.
+ * locale translated it differently). The numbers carry the result they were computed for, so a
+ * snapshot takes rows and total from ONE emission: fed separately, a new result would first pair
+ * with the old total and the reader would see two frames, one of them inconsistent.
  */
 export function coverageProjectionWithResult$<R extends QueryResult<RxCollection>>(
 	engine: RxdbSyncEngine,

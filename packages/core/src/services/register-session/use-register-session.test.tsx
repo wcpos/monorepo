@@ -13,7 +13,6 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
-import { readRegister } from '@wcpos/query/register-session';
 import * as actions from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
@@ -702,7 +701,7 @@ it.each([false, true])(
 		});
 		try {
 			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
-			await ((await readRegister(userDB)) ?? remintRegister(userDB));
+			await remintRegister(userDB);
 			entries = [];
 			active = [{ ...active[0], server_expected: null }];
 			if (!missingParent) mockOrders.next([parentHit()]);
@@ -787,7 +786,7 @@ it.each([false, true])(
 		});
 		try {
 			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
-			await ((await readRegister(userDB)) ?? remintRegister(userDB));
+			await remintRegister(userDB);
 			entries = [];
 			active = [
 				{
@@ -1183,7 +1182,7 @@ it.each([
 		});
 		try {
 			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
-			await ((await readRegister(userDB)) ?? remintRegister(userDB));
+			await remintRegister(userDB);
 			if (!recovered)
 				jest.mocked(actions.closeSession).mockResolvedValueOnce({
 					...session,

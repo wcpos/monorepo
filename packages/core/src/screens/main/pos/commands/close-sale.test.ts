@@ -48,9 +48,6 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 	...jest.requireActual('../checkout/hooks/reconcile-completed-order'),
 	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
 }));
-jest.mock('@wcpos/query/mutations', () => ({
-	fakeMirror: (...args: unknown[]) => mockMirror(...(args as [])),
-}));
 
 const order = {
 	uuid: 'order-1',

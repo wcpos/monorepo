@@ -4,8 +4,8 @@
  * A failure names the file, the rule, the enclosing declaration chain and the node text.
  * Raw queries, resident helper writes, engine aliases, an active scope's `database` handle,
  * cross-package relative imports and raw database/collection change streams are fenced
- * syntactically: accidental leaks, not deliberate evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
- * bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
+ * syntactically: accidental leaks, not deliberate evasion. Transparent receiver/argument
+ * wrappers and baseUrl-rooted package imports do not bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
  * remains allowed (ADR 0028), including element access and destructuring. Stream fences
  * ($, eventBulks$ and collections$) share lifecycle/collection receiver names, including member
  * database handles. Engine aliases include destructuring assignments; helper re-exports are fenced,
@@ -56,7 +56,7 @@ const forbiddenQueryNames = new Set([
 	'CompiledQueryRead',
 	'EngineRxDocument',
 	'EngineDocument',
-	'storageQueryProjectionReader',
+	'readLiveProjection',
 	'openOrdersSelector',
 	'OPEN_ORDERS_SORT',
 	'promotedColumnsFor',
@@ -281,13 +281,19 @@ function isEngineReceiver(node: ts.Node | undefined): boolean {
 	);
 }
 
-/** `engine.active()`: the active scope, whose `database` member is the storage handle. */
+/**
+ * `engine.active()` or `await engine.whenActive()`: the active scope, whose `database` member is
+ * the storage handle. Accepted loss: the scope held in a local (`const scope = engine.active();
+ * scope.database`) is not followed.
+ */
 function isActiveScope(node: ts.Node | undefined): boolean {
 	node = unwrap(node);
+	if (node && ts.isAwaitExpression(node)) node = unwrap(node.expression);
 	return (
 		!!node &&
 		ts.isCallExpression(node) &&
-		isEngineReceiver(memberReceiver(node.expression, 'active'))
+		(isEngineReceiver(memberReceiver(node.expression, 'active')) ||
+			isEngineReceiver(memberReceiver(node.expression, 'whenActive')))
 	);
 }
 
@@ -1134,6 +1140,8 @@ it.each([
 	'runtime.engine.active()?.database;',
 	'(engine.active() as Scope).database;',
 	'const { database } = runtime.engine.active()!;',
+	'(await runtime.engine.whenActive()).database;',
+	'const { database } = await engine.whenActive();',
 ])('fences the storage handle on an active scope: %s', (source) => {
 	expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([
 		'storage handle outside a named read',

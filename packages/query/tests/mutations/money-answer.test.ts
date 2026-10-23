@@ -2,7 +2,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { insertEngineResident } from '../../src/mutations';
-import { mirrorMoneyAnswer } from '../../src/mutations/mirror-server-order';
+import { mirrorMoneyAnswer } from '../../src/mutations/money-answer';
 import { createEngineDatabase, createFakeEngine } from '../../src/testing';
 
 import type { QueryRuntime } from '../../src/provider';

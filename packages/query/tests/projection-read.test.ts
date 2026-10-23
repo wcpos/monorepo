@@ -7,7 +7,7 @@ import { searchBlobFor } from '../src/search-blob';
 import { legacySearchSnapshot } from '../src/engine-adapter/search-snapshot';
 import { resolveLegacyField } from '../src/engine-adapter/collection-map';
 import { SEARCH_FIELDS } from '../src/search-fields';
-import { storageQueryProjectionReader } from '../src/projection-read';
+import { readLiveProjection } from '../src/projection-read';
 import { engineProduct } from '../src/testing';
 import { storages } from './helpers/storages';
 
@@ -33,10 +33,7 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 		await database.close();
 	});
 	it('reads only live ids and requested values without building RxDocuments', async () => {
-		const rows = await storageQueryProjectionReader.readLiveProjection(database.products, [
-			'payload.name',
-			'payload.sku',
-		]);
+		const rows = await readLiveProjection(database.products, ['payload.name', 'payload.sku']);
 		expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
 			{ id: 'coffee', values: ['Coffee', 'C1'] },
 			{ id: 'tea', values: ['Tea', 'T1'] },

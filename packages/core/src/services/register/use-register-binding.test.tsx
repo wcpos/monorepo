@@ -52,7 +52,7 @@ beforeEach(async () => {
 		localDocuments: true,
 		multiInstance: false,
 	});
-	await ((await readRegister(mockDB)) ?? remintRegister(mockDB));
+	await remintRegister(mockDB);
 	mockStatus = 'online-website-available';
 	mockStoreId = 2;
 	mockHttp.get.mockReset();

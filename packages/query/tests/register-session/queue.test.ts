@@ -48,7 +48,7 @@ beforeEach(async () => {
 		localDocuments: true,
 		multiInstance: false,
 	});
-	await ((await readRegister(userDB)) ?? remintRegister(userDB));
+	await remintRegister(userDB);
 	await db.addCollections({
 		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },

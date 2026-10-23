@@ -81,8 +81,7 @@ export {
 } from './open-orders-scope';
 export { acquireOrderRefundsQueryHandle } from './order-refunds';
 
-export { storageQueryProjectionReader } from './projection-read';
-export type { ProjectionCollection, ProjectionReader, ProjectionRow } from './projection-read';
+export type { ProjectionCollection, ProjectionRow } from './projection-read';
 export {
 	acquireQueryHandle,
 	ATTEMPTED,

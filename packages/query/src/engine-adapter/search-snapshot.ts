@@ -6,7 +6,7 @@ import {
 	readLegacyField,
 	resolveLegacyField,
 } from './collection-map';
-import { type ProjectionCollection, storageQueryProjectionReader } from '../projection-read';
+import { type ProjectionCollection, readLiveProjection } from '../projection-read';
 import { searchFieldTopSegment } from '../search-fields';
 
 import type { RxDocument } from 'rxdb';
@@ -51,7 +51,7 @@ export async function searchProjection(
 		});
 	}
 	const entries = [...reads.values()];
-	const rows = await storageQueryProjectionReader.readLiveProjection(
+	const rows = await readLiveProjection(
 		collection,
 		entries.map((entry) => entry.path)
 	);

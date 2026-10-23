@@ -8,7 +8,7 @@ import {
 import { residentRevision } from '@wcpos/sync-engine';
 
 import { mintUuid } from '../mint-uuid';
-import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/mirror-server-order';
+import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/money-answer';
 import { pushRecord } from '../mutations/push-record';
 import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
