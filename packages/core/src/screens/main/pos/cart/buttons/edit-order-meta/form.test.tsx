@@ -307,6 +307,8 @@ it('does not write or push when storage is degraded', async () => {
 	expect(mockPatch).not.toHaveBeenCalled();
 	expect(mockPush).not.toHaveBeenCalled();
 });
+// A meta edit saves as it is made (never carrying the hidden identity rows, which the local
+// patch keeps); a hand-off afterwards stamps the identity onto the order's meta as it stands.
 it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
 	const protectedMeta = [...meta, { id: 42, key: '_wcpos_money_owner_hint', value: 'server' }];
 	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
@@ -316,25 +318,16 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 		...payload,
 		status,
 		cashier_id: '7',
-		meta_data: [
-			...protectedMeta,
-			{ ...custom, value: status === 'completed' ? 'edited' : 'before' },
-		],
+		meta_data: [...protectedMeta, { ...custom, value: 'before' }],
 	};
-	const view = render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
 	expect(screen.queryAllByDisplayValue('server')).toHaveLength(0);
 	expect(screen.getByDisplayValue('custom')).toBeTruthy();
-	const edited = {
-		...formData,
-		meta_data: [{ ...protectedMeta[4], value: null }, formData.meta_data.at(-1)!],
-	};
-	view.rerender(<EditOrderMetaForm order={resident as never} {...formProps(edited)} />);
+	fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
+	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 	if (status === 'completed') {
 		await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 		await confirm();
-	} else {
-		fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
-		await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 	}
 	expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...protectedMeta]));
 	expect(resident.payload.meta_data).toHaveLength(protectedMeta.length + 1);
@@ -354,15 +347,14 @@ it.each(['pos-open', 'completed'])(
 			...payload,
 			status,
 			cashier_id: '7',
-			meta_data: [...meta, { ...custom, value: status === 'completed' ? 'edited' : 'before' }],
+			meta_data: [...meta, { ...custom, value: 'before' }],
 		};
 		render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+		fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
+		await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 		if (status === 'completed') {
 			await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 			await confirm();
-		} else {
-			fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
-			await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 		}
 		expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...meta, hint]));
 		expect(resident.payload.meta_data).toHaveLength(meta.length + 2);

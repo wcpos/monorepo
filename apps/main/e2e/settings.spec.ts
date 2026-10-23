@@ -87,8 +87,8 @@ test.describe('Settings Area', () => {
 		const name = page.getByTestId('settings-general-name');
 		await expect(name).toBeVisible({ timeout: 10_000 });
 		const original = await name.inputValue();
-		const marks = page.locator('[data-testid^="settings-saved-"]');
-		const nameMark = page.getByTestId('settings-saved-name');
+		const marks = page.locator('[data-testid^="saved-"]');
+		const nameMark = page.getByTestId('saved-name');
 		const seen = new Set<string>();
 
 		try {
@@ -103,13 +103,13 @@ test.describe('Settings Area', () => {
 							els.map((el) => (el as HTMLElement).dataset.testid ?? '')
 						);
 						ids.forEach((id) => seen.add(id));
-						return seen.has('settings-saved-name') && ids.length === 0;
+						return seen.has('saved-name') && ids.length === 0;
 					},
 					// Debounced write, then the 1200 ms hold and its fade.
 					{ timeout: 4_000, intervals: [50] }
 				)
 				.toBe(true);
-			expect([...seen]).toEqual(['settings-saved-name']);
+			expect([...seen]).toEqual(['saved-name']);
 		} finally {
 			if ((await name.inputValue()) !== original) {
 				await name.click();

@@ -204,3 +204,102 @@ it('writes a valid value accepted by the resolver', async () => {
 	});
 	expect(onChange).toHaveBeenCalledWith({ name: 'Valid' });
 });
+
+function FlushHarness({
+	onChange,
+	onFlushReady,
+}: {
+	onChange: (changes: object) => Promise<void>;
+	onFlushReady: (flush: () => Promise<void>) => void;
+}) {
+	const form = useForm({ defaultValues: { name: 'Original' } });
+	const { flush } = useFormChangeHandler({ form, onChange });
+	React.useEffect(() => {
+		onFlushReady(flush);
+	}, [flush, onFlushReady]);
+	return <button data-testid="change" onClick={() => form.setValue('name', 'Typed')} />;
+}
+
+it('flush resolves after the pending write has landed', async () => {
+	let landed = false;
+	const onChange = jest.fn(
+		() =>
+			new Promise<void>((resolve) =>
+				setTimeout(() => {
+					landed = true;
+					resolve();
+				}, 50)
+			)
+	);
+	const flushRef: { current: (() => Promise<void>) | null } = { current: null };
+	const view = render(
+		<FlushHarness
+			onChange={onChange}
+			onFlushReady={(flush) => {
+				flushRef.current = flush;
+			}}
+		/>
+	);
+	await act(async () => {
+		view.getByTestId('change').click();
+	});
+	// Within the debounce window: nothing written yet, and flush must not wait for the timer.
+	expect(onChange).not.toHaveBeenCalled();
+	let flushed = false;
+	const flushing = flushRef.current!().then(() => {
+		flushed = true;
+	});
+	await act(async () => {
+		await Promise.resolve();
+	});
+	expect(onChange).toHaveBeenCalledWith({ name: 'Typed' });
+	expect(flushed).toBe(false);
+	await act(async () => {
+		jest.advanceTimersByTime(50);
+		await flushing;
+	});
+	expect(landed).toBe(true);
+	expect(flushed).toBe(true);
+});
+
+function ImmediateHarness({ value, onChange }: { value: number; onChange: (c: object) => void }) {
+	const form = useForm({
+		defaultValues: { qty: 1 },
+		resolver: zodResolver(z.object({ qty: z.number().min(1) })),
+	});
+	useFormChangeHandler({ form, onChange });
+	return <button data-testid="change" onClick={() => form.setValue('qty', value)} />;
+}
+
+it('gates the immediate (non-text) path too: an invalid number is never written', async () => {
+	const onChange = jest.fn();
+	const view = render(<ImmediateHarness value={0} onChange={onChange} />);
+	await act(async () => {
+		view.getByTestId('change').click();
+	});
+	expect(onChange).not.toHaveBeenCalled();
+});
+
+function TwoTextHarness({ onChange }: { onChange: (c: object) => void }) {
+	const form = useForm({ defaultValues: { name: 'a', city: 'b' } });
+	useFormChangeHandler({ form, onChange });
+	return (
+		<>
+			<button data-testid="name" onClick={() => form.setValue('name', 'Shop')} />
+			<button data-testid="city" onClick={() => form.setValue('city', 'Perth')} />
+		</>
+	);
+}
+
+it('a second text field edited inside the debounce window does not drop the first field’s write', async () => {
+	const onChange = jest.fn();
+	const view = render(<TwoTextHarness onChange={onChange} />);
+	await act(async () => {
+		view.getByTestId('name').click();
+		jest.advanceTimersByTime(100);
+		view.getByTestId('city').click();
+		jest.advanceTimersByTime(300);
+	});
+	expect(onChange).toHaveBeenCalledWith({ name: 'Shop' });
+	expect(onChange).toHaveBeenCalledWith({ city: 'Perth' });
+});

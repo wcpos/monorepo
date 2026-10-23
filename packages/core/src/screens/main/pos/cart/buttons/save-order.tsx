@@ -15,7 +15,12 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 /**
  *
  */
-export function SaveButton({ label }: { label?: string } = {}) {
+export function SaveButton({
+	onBeforePush,
+}: {
+	/** Awaited before the push: the order sheet's pending autosave, so the push carries it. */
+	onBeforePush?: () => Promise<void>;
+} = {}) {
 	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -38,6 +43,7 @@ export function SaveButton({ label }: { label?: string } = {}) {
 
 		setLoading(true);
 		try {
+			await onBeforePush?.();
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook
@@ -62,7 +68,7 @@ export function SaveButton({ label }: { label?: string } = {}) {
 		} finally {
 			setLoading(false);
 		}
-	}, [blockIfDegraded, currentOrderRecord, pushDocument, t]);
+	}, [blockIfDegraded, currentOrderRecord, onBeforePush, pushDocument, t]);
 
 	/**
 	 *
@@ -75,7 +81,7 @@ export function SaveButton({ label }: { label?: string } = {}) {
 				loading={loading}
 				disabled={loading || storageDegraded}
 			>
-				{label ?? t('pos_cart.sync_order')}
+				{t('pos_cart.sync_order')}
 			</Button>
 		</View>
 	);

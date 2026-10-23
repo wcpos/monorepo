@@ -351,7 +351,7 @@ describe('error registry', () => {
 		expect(entry.actionHint).not.toMatch(/Clear & re-download/);
 		const guidance = entry.troubleshooting.join(' ');
 		expect(guidance).toContain('changes waiting to send is 0');
-		expect(guidance).toContain('save every open cart with Save to Server');
+		expect(guidance).toContain('save every open cart with Sync order');
 	});
 
 	// A device that cannot open its data, or cannot start, may be holding the

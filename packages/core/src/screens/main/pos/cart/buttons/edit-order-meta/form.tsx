@@ -78,10 +78,16 @@ export function EditOrderMetaForm({
 	order,
 	formData,
 	handOverData,
+	flushRef,
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
 	handOverData: HandOverValues;
+	/**
+	 * Receives the autosave's flush, so an action outside the form that pushes the order
+	 * (the sheet's Sync order) carries the edit the cashier just made, not the one before.
+	 */
+	flushRef?: React.RefObject<(() => Promise<void>) | null>;
 }) {
 	const t = useT();
 	const { writeOrderFields } = useOrderFieldsWrite();
@@ -93,36 +99,60 @@ export function EditOrderMetaForm({
 	const storeID = useDocField(store, (value) => value.id);
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
 	// The staged hand-off, with whether the cashier changed the status (judged when staged).
-	const [pending, setPending] = React.useState<
-		(FormValues & HandOverValues & { statusEdit: boolean }) | null
-	>(null);
+	const [pending, setPending] = React.useState<(HandOverValues & { statusEdit: boolean }) | null>(
+		null
+	);
 	const [loading, setLoading] = React.useState(false);
 	const markSaved = useMarkSaved();
 
 	/**
-	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
-	 * This makes the form reactive to external data changes (react-hook-form best practice).
+	 * `defaultValues`, not reactive `values`: this form IS the writer of what it shows. Every
+	 * write it makes comes back as a payload change, and a reactive re-bind would reset the
+	 * form to the persisted snapshot under the cashier's hands, dropping the keystrokes typed
+	 * while the write was in flight and cancelling the debounce that held them. The sheet
+	 * remounts the form per order (its key), so a different order never shows stale values.
 	 */
 	const form = useForm<FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: formData,
+		defaultValues: formData,
 	});
 
+	// The hand-over is read, never written, until Send: reactive values are right here.
 	const handOverForm = useForm<HandOverValues>({
 		resolver: zodResolver(handOverSchema),
 		values: handOverData,
 	});
-	useFormChangeHandler({
+	const { flush } = useFormChangeHandler({
 		form,
 		// A nested path (meta_data.0.value) writes its whole root field; the mark lands on the root.
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const patch = { [root]: form.getValues(root) };
-			void writeOrderFields(order, () => patch).then((written) => {
+			const value = form.getValues(root);
+			// Autosave never writes the identity rows (the hand-over does, on Send; the local patch
+			// keeps the stored ones), and a row the cashier has only just added (no key yet) is not
+			// an edit: it would be pushed as blank meta.
+			const patch = {
+				[root]:
+					root === 'meta_data' && Array.isArray(value)
+						? value.filter(
+								(row) =>
+									!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
+									(row?.id != null || String(row?.key ?? '') !== '')
+							)
+						: value,
+			};
+			return writeOrderFields(order, () => patch).then((written) => {
 				if (written) markSaved([root]);
 			});
 		},
 	});
+	React.useEffect(() => {
+		if (!flushRef) return;
+		flushRef.current = flush;
+		return () => {
+			flushRef.current = null;
+		};
+	}, [flush, flushRef]);
 	const [status, cashierId] = useWatch({
 		control: handOverForm.control,
 		name: ['status', 'cashier_id'],
@@ -135,9 +165,11 @@ export function EditOrderMetaForm({
 		? PUSHABLE_ORDER_STATUSES
 		: [...PUSHABLE_ORDER_STATUSES, handOverData.status];
 	const { label: cashierLabel } = useCashierLabel(cashierId);
+	// Only the hand-over's own values are staged: the edit form's fields are already on the order
+	// (or refused by the gate), so the send never carries them.
 	const onSend = handOverForm.handleSubmit((data) => {
 		const statusEdit = data.status !== order.getLatest().payload.status;
-		setPending({ ...form.getValues(), ...data, statusEdit });
+		setPending({ ...data, statusEdit });
 	});
 
 	async function handleSend() {
@@ -145,16 +177,15 @@ export function EditOrderMetaForm({
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, status, ...rest } = pending;
-		const { statusEdit: statusChanged, ...fields } = rest;
+		const { cashier_id, status, statusEdit: statusChanged } = pending;
 		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
 		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
 		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till
-		// completed, and its rollback restores the cashier alone.
+		// completed, and its rollback restores the cashier alone. The identity is stamped onto the
+		// order's meta as it stands (the autosaved rows included), never onto a form snapshot.
 		const patch = () => ({
-			...fields,
 			...(statusChanged ? { status } : {}),
-			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
+			meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
@@ -258,7 +289,11 @@ export function EditOrderMetaForm({
 											customComponent={CashierSelect}
 											portalHost="pos"
 											{...field}
-											value={{ value: field.value, label: cashierLabel }}
+											// An order with no cashier names the choice, not an empty box.
+											value={{
+												value: field.value,
+												label: cashierLabel || t('common.select_cashier'),
+											}}
 										/>
 									</View>
 								)}
@@ -280,9 +315,13 @@ export function EditOrderMetaForm({
 					</View>
 				</Form>
 				<Collapsible>
-					<CollapsibleTrigger>
-						<Text>{t('common.more')}</Text>
-					</CollapsibleTrigger>
+					<HStack className="justify-between">
+						<CollapsibleTrigger>
+							<Text>{t('common.more')}</Text>
+						</CollapsibleTrigger>
+						{/* The meta rows have no label row of their own; their mark sits on the disclosure. */}
+						<SavedMark name="meta_data" label={t('settings.saved')} />
+					</HStack>
 					<CollapsibleContent className="gap-4">
 						<FormField
 							control={form.control}

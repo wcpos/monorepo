@@ -15,12 +15,14 @@ import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
 interface Props {
 	order: CurrentOrderRecord;
+	/** The autosave's flush, for the sheet's Sync order (see `EditOrderMetaForm`). */
+	flushRef?: React.RefObject<(() => Promise<void>) | null>;
 }
 
 /**
  *
  */
-export function EditOrderMeta({ order }: Props) {
+export function EditOrderMeta({ order, flushRef }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -57,10 +59,13 @@ export function EditOrderMeta({ order }: Props) {
 			</TabsList>
 			<TabsContent value="form" className="min-h-0 flex-1 gap-4">
 				<SavedFieldProvider>
+					{/* Keyed per order: the form holds its own draft (defaultValues) while it is open. */}
 					<EditOrderMetaForm
+						key={order.uuid}
 						order={order}
 						formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
 						handOverData={handOverData}
+						flushRef={flushRef}
 					/>
 				</SavedFieldProvider>
 			</TabsContent>

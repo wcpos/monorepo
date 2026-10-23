@@ -40,13 +40,13 @@ import {
 import { SettingsRow } from '../components/settings-row';
 
 const formSchema = z.object({
-	barcode_scanning_avg_time_input_threshold: z.number().default(24),
-	barcode_scanning_min_chars: z.number().default(8),
+	barcode_scanning_avg_time_input_threshold: z.coerce.number().default(24),
+	barcode_scanning_min_chars: z.coerce.number().default(8),
 	barcode_scanning_prefix: z.string().default(''),
 	barcode_scanning_suffix: z.string().default(''),
 	barcode_scanning_sound_enabled: z.boolean().default(false),
 	barcode_scanning_sound_theme: z.enum(['classic', 'checkout', 'soft']).default('classic'),
-	barcode_scanning_sound_volume: z.number().default(DEFAULT_SCAN_SOUND_VOLUME),
+	barcode_scanning_sound_volume: z.coerce.number().default(DEFAULT_SCAN_SOUND_VOLUME),
 	barcode_scanning_sound_success_enabled: z.boolean().default(true),
 	barcode_scanning_sound_failure_enabled: z.boolean().default(true),
 	barcode_scanning_sound_haptic_enabled: z.boolean().default(true),

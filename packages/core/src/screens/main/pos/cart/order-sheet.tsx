@@ -32,13 +32,16 @@ export function OrderSheet({
 	const side = usePanelSide('cart');
 	const t = useT();
 	const router = useRouter();
+	// The form's pending autosave, awaited before Sync order pushes (a debounced note write
+	// still in flight would otherwise be pushed as the value before it).
+	const flushRef = React.useRef<(() => Promise<void>) | null>(null);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="order-meta-dialog">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_details')}</DialogTitle>
 				</DialogHeader>
-				<EditOrderMeta order={order} />
+				<EditOrderMeta order={order} flushRef={flushRef} />
 				<DialogFooter className="flex-row justify-between gap-2">
 					<VoidButton onBeforeVoid={() => onOpenChange(false)} />
 					<HStack className="gap-2">
@@ -56,7 +59,7 @@ export function OrderSheet({
 						>
 							{t('common.print')}
 						</Button>
-						<SaveButton />
+						<SaveButton onBeforePush={() => flushRef.current?.() ?? Promise.resolve()} />
 					</HStack>
 				</DialogFooter>
 			</DialogContent>

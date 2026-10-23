@@ -185,9 +185,8 @@ test.describe('POS Cart - Order Actions', () => {
 		await expect(textarea).toBeVisible({ timeout: 15_000 });
 		await textarea.fill('Test order note from e2e');
 
-		const addNoteButton = page.getByTestId('order-meta-save');
-		await expect(addNoteButton).toBeVisible({ timeout: 15_000 });
-		await addNoteButton.click();
+		// The note saves as it is typed; the Saved mark beside the label is the write landing.
+		await expect(page.getByTestId('saved-customer_note')).toBeVisible({ timeout: 15_000 });
 	});
 });
 
