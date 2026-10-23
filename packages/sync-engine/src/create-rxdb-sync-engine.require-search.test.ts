@@ -1096,6 +1096,154 @@ describe('require() for search — the public search-demand verb', () => {
 		await harness.engine.dispose();
 	});
 
+	/**
+	 * A products server whose browse-window pages (no `search=`, no `sku=`) hang until the test
+	 * opens them, as the dev-next pool's 12–13 s boot pages did; search requests are recorded per
+	 * term and answered by `searchResponse` (immediately unless the test holds them).
+	 */
+	function heldBrowseServer(
+		searchResponse: (term: string, signal: AbortSignal) => Promise<Response> = async () => json([])
+	) {
+		const browse = Promise.withResolvers<Response>();
+		const state = {
+			browseRequests: 0,
+			browseSignals: [] as AbortSignal[],
+			searches: [] as string[],
+		};
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products') || parsed.searchParams.has('sku')) return json([]);
+			const term = parsed.searchParams.get('search');
+			if (term !== null) {
+				state.searches.push(term);
+				if (!init?.signal) throw new Error('search request missing abort signal');
+				return searchResponse(term, init.signal);
+			}
+			state.browseRequests += 1;
+			if (init?.signal) state.browseSignals.push(init.signal);
+			return browse.promise;
+		};
+		return { state, fetch, openBrowse: () => browse.resolve(json([productPayload(7, 'Widget')])) };
+	}
+
+	it('fetches a typed search while a product browse window is still in flight', async () => {
+		const server = heldBrowseServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		let browseSettled = false;
+		const browse = engine.require({
+			id: 'boot-browse',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		const browseReady = browse.ready.finally(() => {
+			browseSettled = true;
+		});
+		await vi.waitFor(() => expect(server.state.browseRequests).toBe(1));
+		const search = engine.require({
+			id: 'typed-search',
+			collection: 'products',
+			kind: 'search',
+			term: 'widget',
+		});
+
+		// Before the lanes split, this request waited for the whole browse execution.
+		await vi.waitFor(() => expect(server.state.searches).toEqual(['widget']));
+		await expect(search.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(browseSettled).toBe(false);
+
+		server.openBrowse();
+		await expect(browseReady).resolves.toMatchObject({ action: 'fetched' });
+		await engine.dispose();
+	});
+
+	it('still runs two searches one at a time', async () => {
+		const first = Promise.withResolvers<Response>();
+		const server = heldBrowseServer(async (term) => (term === 'widget' ? first.promise : json([])));
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		const older = engine.require({
+			id: 'older',
+			collection: 'products',
+			kind: 'search',
+			term: 'widget',
+		});
+		await vi.waitFor(() => expect(server.state.searches).toEqual(['widget']));
+		const newer = engine.require({
+			id: 'newer',
+			collection: 'products',
+			kind: 'search',
+			term: 'gadget',
+		});
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(server.state.searches).toEqual(['widget']);
+
+		first.resolve(json([]));
+		await expect(older.ready).resolves.toMatchObject({ action: 'fetched' });
+		await expect(newer.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.searches).toEqual(['widget', 'gadget']);
+		await engine.dispose();
+	});
+
+	it('superseding a search during a browse aborts only the older search; the browse records coverage', async () => {
+		const olderSignal = Promise.withResolvers<AbortSignal>();
+		const server = heldBrowseServer(async (term, signal) => {
+			if (term !== 'widget') return json([]);
+			olderSignal.resolve(signal);
+			return await new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+			});
+		});
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		let browseSettled = false;
+		const browse = engine.require({
+			id: 'boot-browse',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		const browseReady = browse.ready.finally(() => {
+			browseSettled = true;
+		});
+		await vi.waitFor(() => expect(server.state.browseRequests).toBe(1));
+		const older = engine.require({
+			id: 'older',
+			collection: 'products',
+			kind: 'search',
+			term: 'widget',
+		});
+		const signal = await olderSignal.promise;
+
+		// The screen's re-render: release the old term's handle, declare the new one.
+		older.release();
+		const newer = engine.require({
+			id: 'newer',
+			collection: 'products',
+			kind: 'search',
+			term: 'widgets',
+		});
+		await expect(older.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(newer.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(signal.aborted).toBe(true);
+		expect(server.state.searches).toEqual(['widget', 'widgets']);
+		expect(browseSettled).toBe(false);
+		expect(server.state.browseSignals.some((browseSignal) => browseSignal.aborted)).toBe(false);
+
+		server.openBrowse();
+		await expect(browseReady).resolves.toMatchObject({ action: 'fetched' });
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const lanes = await scope.database.collections.coverageLanes
+			.find({ selector: { queryKey: browse.queryKey } })
+			.exec();
+		expect(lanes.map((lane) => lane.toJSON())).toEqual([
+			expect.objectContaining({ queryKey: browse.queryKey, complete: true }),
+		]);
+		await engine.dispose();
+	});
+
 	it('dedupes concurrent identical search declarations in memory', async () => {
 		const server = scriptedProductSearchProxy([productPayload(321, 'Keyboard')]);
 		const engine = engineWith(server.fetch);
