@@ -22,6 +22,8 @@ import type {
 	PaymentRow,
 } from '@wcpos/order-math';
 
+import type { PressLane } from '../commit-sale';
+
 /**
  * Record a `manual` payment (cash, dummy card) against an order — Payments Contract v1
  * §5 / §7 (wcpos/roadmap#142). The ledger lives in the order's `_wcpos_payments`
@@ -45,10 +47,11 @@ export interface RecordManualPaymentInput {
 	tendered?: string | number | null;
 	/** The row's id when the caller has already named it (a rounding fee line points at it). */
 	paymentId?: string;
+	/** The press's frozen lane (`StampedSale.lane`): `online` posts, `settles-later` journals. */
+	lane: Exclude<PressLane, 'not-on-store'>;
 }
 export interface RecordManualPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
-	isOnline: () => boolean;
 	cashierId: number;
 	storeId: number | null;
 	registerId: string | null;
@@ -171,7 +174,7 @@ export async function recordManualPayment(
 	deps: RecordManualPaymentDeps
 ): Promise<RecordManualPaymentOutcome> {
 	const hasId = Number.isInteger(order.id) && Number(order.id) > 0;
-	const online = deps.isOnline() && hasId;
+	const online = input.lane === 'online';
 	const minted = mintManualPayment({
 		method,
 		amount: input.amount,

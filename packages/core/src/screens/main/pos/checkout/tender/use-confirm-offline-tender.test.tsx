@@ -70,7 +70,6 @@ function Host() {
 					asked.answer = offline.confirmOfflineTender({
 						method: cash,
 						amountMinor: 1050,
-						queuedOffline: false,
 					});
 				}}
 			/>

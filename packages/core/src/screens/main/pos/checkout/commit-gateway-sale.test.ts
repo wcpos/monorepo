@@ -127,7 +127,6 @@ it('dispatches the whole outstanding balance as a completing gateway tender', as
 			tenderedMinor: 600,
 			balanceMinor: 600,
 			roundingMinor: 0,
-			completing: true,
 			bindingStatus: 'bound',
 			registerId: null,
 			sessionId: null,

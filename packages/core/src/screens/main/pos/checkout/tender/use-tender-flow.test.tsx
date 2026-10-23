@@ -175,7 +175,6 @@ let mockUseRealVoid = false;
 const mockManualPost = jest.fn();
 const mockGatewaysGet = jest.fn();
 const mockManualMirror = jest.fn();
-const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
 let mockUseRealCompletion = false;
@@ -293,14 +292,10 @@ jest.mock('../payments', () => ({
 		.RecordManualPaymentMirrorError,
 	RecordManualPaymentError: jest.requireActual('../payments/record-manual-payment')
 		.RecordManualPaymentError,
-	useRecordManualPayment: (options: unknown) => {
-		mockRecordOptions(options);
-		if (mockUseRealManual)
-			return jest
-				.requireActual('../payments/use-record-manual-payment')
-				.useRecordManualPayment(options);
-		return mockRecordManualPayment;
-	},
+	useRecordManualPayment: () =>
+		mockUseRealManual
+			? jest.requireActual('../payments/use-record-manual-payment').useRecordManualPayment()
+			: mockRecordManualPayment,
 	useVoidPayments: () =>
 		mockUseRealVoid
 			? jest.requireActual('../payments/use-void-payments').useVoidPayments()
@@ -767,8 +762,7 @@ describe('useTenderFlow', () => {
 				via: 'online',
 				row,
 				order: summary,
-				preparedCompleting: true,
-				amountMinor: 9295,
+				remainingMinor: 0,
 			})
 		);
 		expect(mockError).not.toHaveBeenCalled();
@@ -869,13 +863,20 @@ describe('useTenderFlow', () => {
 			disabled: true,
 			reason: 'offline',
 		});
-		expect(mockRecordOptions).toHaveBeenLastCalledWith({ offline: true });
 		// ADR 0040 Decided 1 rule 2: a `record` method journals; rule 1: its tile says it settles later.
 		expect(result.current.tiles.find((tile) => tile.method.id === 'pos_cash')).toMatchObject({
 			disabled: false,
 			reason: null,
 			settlesLater: true,
 		});
+		// The press freezes the queued save as its lane: the record journals, it never posts.
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			cash,
+			expect.objectContaining({ lane: 'settles-later' })
+		);
 	});
 
 	it.each(['online-website-available', 'offline'])(
@@ -974,6 +975,7 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
 			amount: '92.95',
 			tendered: '100.00',
+			lane: 'online',
 			session: { registerId: 'register', sessionId: null },
 		});
 	});
@@ -1083,14 +1085,14 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
 			amount: '50.00',
 			tendered: '50.00',
+			lane: 'online',
 			session: { registerId: 'register', sessionId: null },
 		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
 				mirrorFailed: false,
-				preLegBalanceMinor: 9295,
-				amountMinor: 5000,
+				remainingMinor: 4295,
 			}),
 			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
@@ -1108,6 +1110,7 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, card, {
 			amount: '92.95',
 			tendered: null,
+			lane: 'online',
 			session: { registerId: 'register', sessionId: null },
 		});
 	});
@@ -2213,6 +2216,24 @@ describe('device tender', () => {
 		mockRealService.stop();
 		mockRealService = null;
 	});
+	it('refuses a press on an order the store has not created, before the reader starts', async () => {
+		delete mockPayload.id;
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod(deviceMethod.id));
+		await act(async () => {
+			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
+		});
+		expect(result.current.deviceReady).toBe(true);
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_not_on_store_yet',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
 	it('requires connection and stamps the session on device tender', async () => {
 		mockSessionsOn = true;
 		const driver = createSimulatedDriver();
@@ -3190,6 +3211,26 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockGatewaysGet.mockResolvedValue({ data: [] });
 	});
 
+	it.each(['pos_cash', 'wcpos_email_invoice'])(
+		'refuses %s on an order the store has not created: no fee, no record, no submit',
+		async (methodId) => {
+			const rounding = { increment: '0.05', mode: 'nearest' as const };
+			mockMethods = [{ ...cash, defaults: { ...cash.defaults, rounding } }, invoice];
+			mockPayload = { total: '10.02', meta_data: [], billing: mockPayload.billing };
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.pickMethod(methodId));
+			await act(async () => result.current.takeTender());
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.order_not_on_store_yet',
+				expect.objectContaining({ showToast: true })
+			);
+			expect(mockRecordManualPayment).not.toHaveBeenCalled();
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockError).not.toHaveBeenCalled();
+		}
+	);
+
 	it('a settled answer is the paid completion: no row, no stamp, the stored status journaled, the sale leaves the till', async () => {
 		// The gateway catalog names the status the merchant stored for the gateway.
 		mockGatewaysGet.mockResolvedValue({
@@ -3844,9 +3885,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				via: 'online',
 				row,
 				mirrorFailed: false,
-				preparedCompleting: true,
-				preLegBalanceMinor: 9295,
-				amountMinor: 9295,
+				remainingMinor: 0,
 			}),
 			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
@@ -3857,8 +3896,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		// registration is restored after.
 		registerActionHook(
 			TENDER_COMMIT_EVENT,
-			async (_ctx, e, next) =>
-				next({ ...e, payload: { ...e.payload, amountMinor: 9290, balanceMinor: 9290 } }),
+			async (_ctx, e, next) => next({ ...e, payload: { ...e.payload, amountMinor: 9290 } }),
 			{ id: 'cash.rounding', tier: 'extension', order: 0 }
 		);
 		const row = payment({ method_id: 'wcpos_email_invoice', amount: '92.90', tendered: null });
@@ -3878,9 +3916,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 				expect.objectContaining({
 					source: 'manual',
 					mirrorFailed: true,
-					preparedCompleting: true,
-					preLegBalanceMinor: 9290,
-					amountMinor: 9290,
+					// The chain's 9295 - 9290, not the keypad's 9295 - 9295.
+					remainingMinor: 5,
 				})
 			);
 		} finally {
@@ -4452,9 +4489,7 @@ describe('cash rounding (#66, #84)', () => {
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
-				preparedCompleting: true,
-				preLegBalanceMinor: 1205,
-				amountMinor: 1205,
+				remainingMinor: 0,
 			}),
 			expect.anything()
 		);
@@ -4468,15 +4503,15 @@ describe('cash rounding (#66, #84)', () => {
 		mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
+		// The keypad says 10.00 against 10.02 (2 left); the chain rounds the due to 10.00 (none left).
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
 		await act(async () => result.current.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
 				mirrorFailed: true,
-				preparedCompleting: true,
-				preLegBalanceMinor: 1000,
-				amountMinor: 1000,
+				remainingMinor: 0,
 			})
 		);
 		// The money landed: its rounding stays.
@@ -4945,9 +4980,7 @@ describe('offline manual tenders', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
-		expect(mockConfirmOffline).toHaveBeenCalledWith(
-			expect.objectContaining({ amountMinor: 1005, queuedOffline: false })
-		);
+		expect(mockConfirmOffline).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 1005 }));
 	});
 
 	it('the cashier declines the offline confirmation → nothing journaled', async () => {
@@ -4959,7 +4992,6 @@ describe('offline manual tenders', () => {
 		expect(mockConfirmOffline).toHaveBeenCalledWith({
 			method: cash,
 			amountMinor: 1000,
-			queuedOffline: false,
 		});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(recordCompletionAttempt).not.toHaveBeenCalled();
@@ -4975,7 +5007,6 @@ describe('offline manual tenders', () => {
 		expect(mockConfirmOffline).toHaveBeenCalledWith({
 			method: cash,
 			amountMinor: 1000,
-			queuedOffline: false,
 		});
 		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
 			payment: expect.objectContaining({ amount: '10.00', recorded_offline: true }),

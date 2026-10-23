@@ -75,8 +75,6 @@ export interface ActionContracts {
 			balanceMinor: number;
 			/** What a rounding hook added to (or took off) the balance; callers pass `0`. */
 			roundingMinor: number;
-			/** The caller's view before the chain; the gate and the writer judge `amountMinor === balanceMinor`. */
-			completing: boolean;
 			bindingStatus: 'bound' | 'choose' | 'none';
 			registerId: string | null;
 			sessionId: string | null;

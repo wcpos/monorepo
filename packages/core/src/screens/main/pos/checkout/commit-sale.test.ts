@@ -15,9 +15,11 @@ import {
 } from '../hooks/order-mutation-queue';
 import {
 	commitSale,
+	type SaleAmounts,
 	type SaleCommitContext,
 	type SaleCommitRequest,
 	type StampedSale,
+	stampSale,
 } from './commit-sale';
 import { row } from './payments/device/fixtures.test-utils';
 
@@ -77,6 +79,7 @@ it('refuses order_changed_retry before any gate when the slot balance moved', as
 				amountMinor: 1000,
 				tenderedMinor: 1000,
 				captureMode: 'manual',
+				reachable: true,
 			},
 		},
 		write
@@ -103,6 +106,9 @@ it('whole-balance dispatches the slot balance as every amount, completing, mode 
 			balanceMinor: 600,
 			roundingMinor: 0,
 			completing: true,
+			remainingMinor: 0,
+			lane: null,
+			orderId: 42,
 			bindingStatus: 'bound',
 			registerId: 'register',
 			sessionId: 'session',
@@ -129,6 +135,7 @@ it('an entry at a zero slot balance dispatches mode zero-balance', async () => {
 				amountMinor: 0,
 				tenderedMinor: 0,
 				captureMode: 'manual',
+				reachable: true,
 			},
 		},
 		write
@@ -161,6 +168,7 @@ it('a partial entry preserves the capture mode and tendered amount', async () =>
 				amountMinor: 200,
 				tenderedMinor: 500,
 				captureMode: 'device',
+				reachable: true,
 			},
 		},
 		write
@@ -325,3 +333,100 @@ it('reuses a held slot for a retained-captures completion without taking another
 		});
 	});
 }, 1000);
+
+describe('stampSale', () => {
+	const chained: Parameters<typeof stampSale>[0] = {
+		methodId: 'cash',
+		mode: 'manual',
+		amountMinor: 1000,
+		tenderedMinor: 1000,
+		balanceMinor: 1000,
+		roundingMinor: 0,
+		bindingStatus: 'bound',
+		registerId: null,
+		sessionId: null,
+		conditions: { unmet: [] },
+	};
+	const entry = (reachable: boolean): SaleAmounts => ({
+		kind: 'entry',
+		expectedBalanceMinor: 1000,
+		amountMinor: 998,
+		tenderedMinor: 1000,
+		captureMode: 'manual',
+		reachable,
+	});
+	it.each([
+		[
+			'a leg cash rounding moved onto the balance completes',
+			{ amountMinor: 1000, balanceMinor: 1000, roundingMinor: 2 },
+			entry(true),
+			42,
+			{ completing: true, remainingMinor: 0, lane: 'online', orderId: 42 },
+		],
+		[
+			'a short split leg leaves the remainder',
+			{ amountMinor: 400 },
+			entry(true),
+			42,
+			{ completing: false, remainingMinor: 600, lane: 'online' },
+		],
+		['a queued save settles later', {}, entry(false), 42, { lane: 'settles-later' }],
+		[
+			'no server id is not on the store',
+			{},
+			entry(true),
+			null,
+			{ lane: 'not-on-store', orderId: null },
+		],
+		[
+			'server id 0 is not on the store',
+			{},
+			entry(false),
+			0,
+			{ lane: 'not-on-store', orderId: null },
+		],
+		[
+			'a whole-balance commit has no press lane',
+			{},
+			{ kind: 'whole-balance' } as const,
+			42,
+			{ completing: true, remainingMinor: 0, lane: null },
+		],
+	])('%s', (_name, changes, amounts, serverId, expected) => {
+		expect(stampSale({ ...chained, ...changes }, amounts, serverId)).toMatchObject({
+			...chained,
+			...changes,
+			...expected,
+		});
+	});
+});
+
+it('the writer receives the lane, the id and the balance from the order as the slot reads it', async () => {
+	payload = { ...payload, id: undefined };
+	// The saved record a first add left: it has the server id and a total the render record never saw.
+	const saved = {
+		uuid: order.uuid,
+		getLatest: () => ({ payload: { ...payload, id: 42, total: '11.00' } }),
+	} as unknown as typeof order;
+	const edit = enqueueOrderMutation(order.uuid, async (queue) => {
+		queue.order = saved;
+	});
+	const amounts: SaleAmounts = {
+		kind: 'entry',
+		expectedBalanceMinor: 700,
+		amountMinor: 200,
+		tenderedMinor: 200,
+		captureMode: 'manual',
+		reachable: true,
+	};
+	const outcome = commitSale(ctx, { ...request, amounts }, write);
+	await edit;
+	// A balance read from the render record (600) would refuse the press as a changed order.
+	await expect(outcome).resolves.not.toHaveProperty('deny');
+	expect(write.mock.calls[0][0]).toMatchObject({
+		lane: 'online',
+		orderId: 42,
+		balanceMinor: 700,
+		remainingMinor: 500,
+	});
+});

@@ -81,7 +81,7 @@ const mintedCard: PaymentRow = {
 const echo = async (_url: string, body: unknown) => ({
 	data: { payment: (body as { payment: PaymentRow }).payment, order: { status: 'pos-partial' } },
 });
-function createDeps(online = true): RecordManualPaymentDeps & {
+function createDeps(): RecordManualPaymentDeps & {
 	post: jest.Mock;
 	sleep: jest.Mock;
 	mirror: jest.Mock;
@@ -92,7 +92,6 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 	return {
 		post: jest.fn(),
 		journal: jest.fn(async () => undefined),
-		isOnline: () => online,
 		cashierId: 7,
 		storeId: 9,
 		registerId: null,
@@ -115,9 +114,14 @@ describe('recordManualPayment', () => {
 	// ADR 0040 Decided 1 rules 2-3: an offline record is journaled, never posted, and the till
 	// asserts the status it derives (replaces "offline is refused and nothing is written").
 	it('offline journals the row, mirrors it with the derived status locally, via offline', async () => {
-		const deps = createDeps(false);
+		const deps = createDeps();
 
-		const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+		const result = await recordManualPayment(
+			order,
+			cash,
+			{ amount: '100.00', lane: 'settles-later' },
+			deps
+		);
 
 		const row = expect.objectContaining({
 			id: UUID.toLowerCase(),
@@ -135,9 +139,14 @@ describe('recordManualPayment', () => {
 	});
 
 	it('offline with no store id is refused, nothing journaled', async () => {
-		const deps = createDeps(false);
+		const deps = createDeps();
 
-		const result = await recordManualPayment({ ...order, id: null }, cash, { amount: 42.5 }, deps);
+		const result = await recordManualPayment(
+			{ ...order, id: null },
+			cash,
+			{ amount: 42.5, lane: 'settles-later' },
+			deps
+		);
 
 		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.journal).not.toHaveBeenCalled();
@@ -146,9 +155,14 @@ describe('recordManualPayment', () => {
 	});
 
 	it('offline partial leg mirrors pos-partial, no provenance', async () => {
-		const deps = { ...createDeps(false), persistProvenance: jest.fn(async () => undefined) };
+		const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
 
-		const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			cash,
+			{ amount: '42.50', lane: 'settles-later' },
+			deps
+		);
 
 		expect(deps.persistProvenance).not.toHaveBeenCalled();
 		expect(deps.mirror).toHaveBeenCalledWith(
@@ -161,7 +175,7 @@ describe('recordManualPayment', () => {
 	it('offline completing leg persists provenance before journaling', async () => {
 		const calls: string[] = [];
 		const deps = {
-			...createDeps(false),
+			...createDeps(),
 			persistProvenance: jest.fn(async (options: { push: boolean }) => {
 				calls.push(`persisted push=${options.push}`);
 			}),
@@ -169,7 +183,7 @@ describe('recordManualPayment', () => {
 		deps.journal.mockImplementation(async () => calls.push('journal'));
 		deps.mirror.mockImplementation(async () => calls.push('mirror'));
 
-		await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+		await recordManualPayment(order, cash, { amount: '100.00', lane: 'settles-later' }, deps);
 
 		expect(calls).toEqual(['persisted push=false', 'journal', 'mirror']);
 	});
@@ -188,9 +202,9 @@ describe('recordManualPayment', () => {
 				{ key: '_wcpos_payments', value: { schema: 1, payments: [earlier] } },
 			],
 		};
-		const deps = { ...createDeps(false), methods: [cash, processingCard] };
+		const deps = { ...createDeps(), methods: [cash, processingCard] };
 
-		await recordManualPayment(splitOrder, cash, { amount: '40.00' }, deps);
+		await recordManualPayment(splitOrder, cash, { amount: '40.00', lane: 'settles-later' }, deps);
 
 		expect(deps.mirror).toHaveBeenCalledWith(
 			{ payment: expect.objectContaining({ amount: '40.00' }), status: 'processing' },
@@ -199,10 +213,12 @@ describe('recordManualPayment', () => {
 	});
 
 	it('offline journal/mirror failures: failed outcome / RecordManualPaymentMirrorError', async () => {
-		const refused = createDeps(false);
+		const refused = createDeps();
 		const cause = new Error('journal write failed');
 		refused.journal.mockRejectedValue(cause);
-		expect(await recordManualPayment(order, cash, { amount: '42.50' }, refused)).toEqual({
+		expect(
+			await recordManualPayment(order, cash, { amount: '42.50', lane: 'settles-later' }, refused)
+		).toEqual({
 			kind: 'failed',
 			reason: 'preflight_failed',
 			cause,
@@ -210,15 +226,22 @@ describe('recordManualPayment', () => {
 		expect(refused.mirror).not.toHaveBeenCalled();
 		const inFlight = new MoneyCommandError('in_flight', { sentAt: null } as never);
 		refused.journal.mockRejectedValue(inFlight);
-		expect(await recordManualPayment(order, cash, { amount: '42.50' }, refused)).toMatchObject({
+		expect(
+			await recordManualPayment(order, cash, { amount: '42.50', lane: 'settles-later' }, refused)
+		).toMatchObject({
 			kind: 'failed',
 			reason: 'in_flight',
 		});
 
-		const unmirrored = createDeps(false);
+		const unmirrored = createDeps();
 		const mirrorFailure = new Error('resident write failed');
 		unmirrored.mirror.mockRejectedValue(mirrorFailure);
-		const promise = recordManualPayment(order, cash, { amount: '42.50' }, unmirrored);
+		const promise = recordManualPayment(
+			order,
+			cash,
+			{ amount: '42.50', lane: 'settles-later' },
+			unmirrored
+		);
 		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
 		await expect(promise).rejects.toMatchObject({
 			outcome: { kind: 'recorded', via: 'offline', order: null },
@@ -234,7 +257,7 @@ describe('recordManualPayment', () => {
 		deps.post.mockResolvedValue({ data: { payment: serverRow, order: summary } });
 		deps.mirror.mockRejectedValue(mirrorFailure);
 
-		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
 		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
 		await expect(promise).rejects.toMatchObject({
@@ -244,9 +267,14 @@ describe('recordManualPayment', () => {
 	});
 
 	it.each([0, null])('refuses an order the store has not seen (server id %s)', async (id) => {
-		const deps = createDeps(true);
+		const deps = createDeps();
 
-		const result = await recordManualPayment({ ...order, id }, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			{ ...order, id },
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
 		expect(deps.post).not.toHaveBeenCalled();
@@ -265,7 +293,12 @@ describe('recordManualPayment', () => {
 		};
 		deps.post.mockResolvedValue({ data: { payment: serverRow, order: summary } });
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
 		// The answered row, never a ledger rebuilt from the pre-command snapshot (ADR 0040).
@@ -288,7 +321,12 @@ describe('recordManualPayment', () => {
 			responseError(409, 'wcpos_order_already_paid', { payment: failedRow, order: summary })
 		);
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(deps.mirror.mock.calls[0][0].payment).toEqual(failedRow);
 		expect(deps.raiseAttention).toHaveBeenCalledWith({
@@ -307,7 +345,7 @@ describe('recordManualPayment', () => {
 			})
 		);
 
-		await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		await recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
 		expect(deps.mirror.mock.calls[0][0].payment).toEqual({
 			...mintedCard,
@@ -321,7 +359,12 @@ describe('recordManualPayment', () => {
 		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
 		deps.fetchOrderStatus.mockResolvedValue('completed');
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		// The refusal is the server saying the local copy is stale; mirroring the failed
 		// row must not leave a paid order sitting at its stale status.
@@ -335,7 +378,12 @@ describe('recordManualPayment', () => {
 		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
 		deps.fetchOrderStatus.mockRejectedValue(new Error('offline'));
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		// The money was taken: the row and the attention entry land regardless; only the
 		// status is left alone because we have nothing authoritative to set it to.
@@ -352,7 +400,7 @@ describe('recordManualPayment', () => {
 			})
 		);
 
-		await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		await recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
 		expect(deps.fetchOrderStatus).not.toHaveBeenCalled();
 		expect(deps.mirror.mock.calls[0][0].status).toBe('completed');
@@ -362,7 +410,12 @@ describe('recordManualPayment', () => {
 		const deps = createDeps();
 		deps.post.mockRejectedValue(responseError(400, 'wcpos_amount_exceeds_balance'));
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(deps.raiseAttention).toHaveBeenCalledWith(
 			expect.objectContaining({ reason: 'amount_exceeds_balance' })
@@ -380,7 +433,7 @@ describe('recordManualPayment', () => {
 		);
 		deps.mirror.mockRejectedValue(mirrorFailure);
 
-		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 
 		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
 		await expect(promise).rejects.toMatchObject({
@@ -400,7 +453,7 @@ describe('recordManualPayment', () => {
 		const deps = createDeps();
 		deps.post.mockRejectedValue(responseError(409, 'wcpos_payment_conflict'));
 
-		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentError);
 		await expect(promise).rejects.toMatchObject({
 			code: 'wcpos_payment_conflict',
@@ -417,7 +470,12 @@ describe('recordManualPayment', () => {
 			const deps = createDeps();
 			deps.post.mockRejectedValue(error);
 
-			const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+			const result = await recordManualPayment(
+				order,
+				card,
+				{ amount: '42.50', lane: 'online' },
+				deps
+			);
 
 			// Every attempt is the same call; the poster re-sends the journaled record for it.
 			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
@@ -443,14 +501,19 @@ describe('recordManualPayment', () => {
 		let journaled: PaymentRow | null = null;
 		deps.unansweredRecord = async () => journaled;
 		deps.post.mockRejectedValue(new Error('network'));
-		const first = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const first = await recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
 		expect(first.kind).toBe('unknown');
 		journaled = (first as { row: PaymentRow }).row;
 
 		deps.post.mockReset();
 		deps.post.mockImplementation(echo);
 		deps.uuid = () => 'ABCDEF00-0000-4000-8000-000000000002';
-		const second = await recordManualPayment(order, card, { amount: '10.00' }, deps);
+		const second = await recordManualPayment(
+			order,
+			card,
+			{ amount: '10.00', lane: 'online' },
+			deps
+		);
 
 		expect(deps.post).toHaveBeenCalledTimes(1);
 		expect(deps.post.mock.calls[0][1]).toEqual({ payment: journaled });
@@ -468,7 +531,12 @@ describe('recordManualPayment', () => {
 			new MoneyCommandError('preflight_failed', entry, undefined, { cause: refused })
 		);
 
-		const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			cash,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(result).toEqual({ kind: 'failed', reason: 'preflight_failed', cause: refused });
 		expect(deps.post).toHaveBeenCalledTimes(1);
@@ -481,7 +549,12 @@ describe('recordManualPayment', () => {
 		async (status) => {
 			const deps = createDeps();
 			deps.post.mockRejectedValue(responseError(status, 'rest_forbidden'));
-			const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+			const result = await recordManualPayment(
+				order,
+				cash,
+				{ amount: '42.50', lane: 'online' },
+				deps
+			);
 			expect(result).toMatchObject({ kind: 'unknown' });
 			expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
 		}
@@ -494,7 +567,12 @@ describe('recordManualPayment', () => {
 			data: { payment: serverRow, order: { status: 'pos-partial' } },
 		});
 
-		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
 
 		expect(deps.post).toHaveBeenCalledTimes(2);
 		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: serverRow });
@@ -504,7 +582,12 @@ describe('recordManualPayment', () => {
 	it('returns invalid for card tendered input without any side effect', async () => {
 		const deps = createDeps();
 
-		const result = await recordManualPayment(order, card, { amount: '42.50', tendered: 50 }, deps);
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', tendered: 50, lane: 'online' },
+			deps
+		);
 
 		expect(result).toEqual({ kind: 'invalid', reason: 'tendered_not_allowed' });
 		expect(deps.post).not.toHaveBeenCalled();
@@ -542,7 +625,7 @@ it.each(['0.00', '42.50'])(
 		const result = await recordManualPayment(
 			paymentOrder,
 			cash,
-			{ amount: paid === '0.00' ? '100.00' : '57.50' },
+			{ amount: paid === '0.00' ? '100.00' : '57.50', lane: 'online' },
 			deps
 		);
 
@@ -555,7 +638,7 @@ it('does not persist provenance for a partial online leg', async () => {
 	const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
 	deps.post.mockImplementation(echo);
 
-	await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+	await recordManualPayment(order, cash, { amount: '42.50', lane: 'online' }, deps);
 
 	expect(deps.persistProvenance).not.toHaveBeenCalled();
 	expect(deps.post).toHaveBeenCalledTimes(1);
@@ -570,7 +653,7 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 	};
 	deps.post.mockImplementation(echo);
 
-	const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+	const result = await recordManualPayment(order, cash, { amount: '100.00', lane: 'online' }, deps);
 
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
@@ -583,7 +666,7 @@ it('a malformed 2xx records nothing locally and ends unknown after its re-sends'
 	const deps = createDeps();
 	deps.post.mockResolvedValue({ data: {} });
 
-	const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+	const result = await recordManualPayment(order, cash, { amount: '42.50', lane: 'online' }, deps);
 
 	expect(result).toMatchObject({ kind: 'unknown' });
 	expect(deps.post).toHaveBeenCalledTimes(4);

@@ -40,7 +40,7 @@ unrelated queued writes.
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale`, through `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
-roundingMinor, completing, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`
+roundingMinor, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`
 judge completion as `amountMinor === balanceMinor` on the payload the chain hands them, and
 `cash.rounding` (#66, #84) rewrites a settling cash tender to the rounded due, the handler
 writing the difference as a fee line before the leg. Amounts are minor units: `amountMinor`
@@ -74,8 +74,8 @@ refusal through `presentActionRefusal` (unless already presented): `presentTende
 Every sale dispatches this event through `commitSale` (`screens/main/pos/checkout/commit-sale.ts`),
 the one dispatcher and bottom handler. The tender pane's `takeTender` supplies the keypad entry;
 `commitGatewaySale` supplies the whole-balance mode for the gateway-contract checkout
-(`use-checkout-session.ts`) and external pay page (`payment-webview.tsx`): `mode: 'gateway'`,
-`completing: true` and the outstanding balance as every amount. The bottom handler makes the
+(`use-checkout-session.ts`) and external pay page (`payment-webview.tsx`): `mode: 'gateway'`
+and the outstanding balance as every amount. The bottom handler makes the
 pre-action session write and re-checks the stamped id before calling the supplied writer with
 that verified payload. The gateway writer journals the attempt and stamps provenance, then the gateway runs. The two gates are
 therefore the only register and session rules in the app; there is no second gating path.

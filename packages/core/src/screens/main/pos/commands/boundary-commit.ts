@@ -71,8 +71,8 @@ export async function commitAtBoundary(
 			bindingStatus: ctx.bindingStatus,
 			amounts: { kind: 'retained-captures' },
 		},
-		async ({ registerId, sessionId }, slot) => {
-			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing: true });
+		async ({ registerId, sessionId, completing }, slot) => {
+			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing });
 			let conditionReason: string | undefined;
 			let session: Awaited<ReturnType<typeof findOpenSession>> | undefined;
 			let validatedGeneration: number | undefined;
