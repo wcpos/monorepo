@@ -161,10 +161,7 @@ jest.mock('../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: jest.fn() }),
 }));
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => {
-		const patch = jest.fn();
-		return { patch, patchRecord: patch };
-	},
+	useMutation: () => ({ patchRecord: jest.fn() }),
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

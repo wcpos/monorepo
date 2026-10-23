@@ -1,8 +1,7 @@
 /**
  * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
- * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
- * violation must be frozen and not retired; vanished fingerprints require pinned retirement.
- * Declaration chains distinguish identical accesses in different functions, methods and classes.
+ * commands. The scan asserts zero violations in core production sources; there is no allowlist.
+ * A failure names the file, the rule, the enclosing declaration chain and the node text.
  * Raw queries, resident helper writes, engine aliases, cross-package relative imports and raw
  * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
  * evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
@@ -10,24 +9,24 @@
  * remains allowed (ADR 0028), including element access and destructuring. Stream fences
  * ($, eventBulks$ and collections$) share lifecycle/collection receiver names, including member
  * database handles. Engine aliases include destructuring assignments; helper re-exports are fenced,
- * and collection-named find calls accept only inline callbacks without a query fingerprint.
+ * and collection-named find calls accept only inline callbacks. Resident helpers are allowed only
+ * in their defining modules and in `screens/main/<area>/commands/` modules.
+ *
+ * Four receiver rules keep member-name fences off objects that are not storage:
+ * - a parameter binding (`function Row({ collection })`) declares a prop, so it is never a
+ *   collection back-reference; every other fenced name stays fenced in parameter patterns;
+ * - `count` is raw query construction only on a collection-shaped receiver (`collection`, a
+ *   `*Collection` name reached directly or through a member, `collections.x`, `collections[…]`),
+ *   the same test `find` with a variable uses;
+ * - a record's `.collection` is a back-reference leak when something is reached through it or when
+ *   it is destructured, not when its value is read (a log row's `collection` string);
+ * - `remove` is a record mutator except on a receiver named `*Subscription` (or
+ *   `*SubscriptionRef.current`) or `*Element`, or a member destructured from `useFieldArray(...)`.
  */
-import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, posix, relative, sep } from 'node:path';
 
 import * as ts from 'typescript';
-
-import {
-	SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18,
-	SEAM_FROZEN_VIOLATIONS_2026_10_16,
-	SEAM_RETIRED_FINGERPRINTS,
-	SEAM_RETIRED_FLOOR,
-	SEAM_RETIRED_GENERIC_RESIDENT_DOOR,
-	SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR,
-	SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST,
-	SEAM_RETIRED_PREFIX_DIGEST,
-} from './seam-allowlist';
 
 /** Receiver names that mean an RxDatabase or RxCollection handle for the `close()` fence. */
 const LIFECYCLE_RECEIVERS = new Set([
@@ -40,8 +39,6 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 873;
-const FROZEN_DIGEST = '6b36420c2b47be4089dc7189a225e8842559d81c2889ccd42d29a97b6e4307a4';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -119,7 +116,6 @@ const mutatorNames = new Set([
 const rawQueryNames = new Set([
 	'findOne',
 	'findByIds',
-	'count',
 	'exportJSON',
 	'find$',
 	'findOne$',
@@ -140,6 +136,9 @@ const genericResidentDoorNames = new Set([
 	'findEngineResident',
 ]);
 const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
+const COMMAND_MODULE = /^packages\/core\/src\/screens\/main\/[^/]+\/commands\/[^/]+$/;
+const SUBSCRIPTION_OR_ELEMENT = /(?:^s|S)ubscription$|Element$/;
+const SUBSCRIPTION_REF = /(?:^s|S)ubscriptionRef$/;
 
 function staticName(node: ts.Node | undefined): string | undefined {
 	if (!node) return undefined;
@@ -179,10 +178,9 @@ function isCollectionReceiver(node: ts.Node | undefined): boolean {
 	node = unwrap(node);
 	if (!node) return false;
 	if (ts.isIdentifier(node)) return node.text === 'collection' || node.text.endsWith('Collection');
-	if (
-		ts.isPropertyAccessExpression(node) ||
-		(ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
-	) {
+	if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+		const name = terminalName(node);
+		if (name === 'collection' || name.endsWith('Collection')) return true;
 		const owner = unwrap(node.expression)!;
 		return (
 			(ts.isIdentifier(owner) && owner.text === 'collections') ||
@@ -190,6 +188,76 @@ function isCollectionReceiver(node: ts.Node | undefined): boolean {
 		);
 	}
 	return false;
+}
+
+/** Identifier text or member name at the end of an (unwrapped) receiver expression. */
+function terminalName(node: ts.Node | undefined): string {
+	node = unwrap(node);
+	if (!node) return '';
+	if (ts.isIdentifier(node)) return node.text;
+	if (ts.isPropertyAccessExpression(node)) return node.name.text;
+	if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
+		return node.argumentExpression.text;
+	return '';
+}
+
+/** A native subscription or DOM element, whose `remove()` is not a record mutator. */
+function isSubscriptionOrElement(receiver: ts.Node | undefined): boolean {
+	const name = terminalName(receiver);
+	if (SUBSCRIPTION_OR_ELEMENT.test(name)) return true;
+	const unwrapped = unwrap(receiver);
+	return (
+		name === 'current' &&
+		!!unwrapped &&
+		(ts.isPropertyAccessExpression(unwrapped) || ts.isElementAccessExpression(unwrapped)) &&
+		SUBSCRIPTION_REF.test(terminalName(unwrapped.expression))
+	);
+}
+
+/** `const { remove } = useFieldArray(...)`: react-hook-form's array helper, not a record. */
+function fromUseFieldArray(node: ts.Node): boolean {
+	if (!ts.isBindingElement(node) || !ts.isVariableDeclaration(node.parent.parent)) return false;
+	const initializer = unwrap(node.parent.parent.initializer);
+	return (
+		!!initializer &&
+		ts.isCallExpression(initializer) &&
+		ts.isIdentifier(initializer.expression) &&
+		initializer.expression.text === 'useFieldArray'
+	);
+}
+
+/** Something is reached through the access: `doc.collection.name`, `(doc.collection as X).find()`. */
+function isReachedThrough(node: ts.Node): boolean {
+	let climbed = node;
+	while (
+		climbed.parent &&
+		(ts.isParenthesizedExpression(climbed.parent) ||
+			ts.isAsExpression(climbed.parent) ||
+			ts.isNonNullExpression(climbed.parent) ||
+			ts.isSatisfiesExpression(climbed.parent) ||
+			ts.isTypeAssertionExpression(climbed.parent))
+	)
+		climbed = climbed.parent;
+	const parent = climbed.parent;
+	return (
+		!!parent &&
+		(ts.isPropertyAccessExpression(parent) ||
+			ts.isElementAccessExpression(parent) ||
+			ts.isCallExpression(parent)) &&
+		parent.expression === climbed
+	);
+}
+
+/** A binding element inside a parameter's pattern: `function Row({ collection })`. */
+function isParameterBinding(node: ts.BindingElement): boolean {
+	let top: ts.Node = node;
+	while (
+		ts.isBindingElement(top) ||
+		ts.isObjectBindingPattern(top) ||
+		ts.isArrayBindingPattern(top)
+	)
+		top = top.parent;
+	return ts.isParameter(top);
 }
 
 function isChangeStreamReceiver(node: ts.Node): boolean {
@@ -264,7 +332,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		'packages/core/src/screens/main/hooks/mutations/use-mutation.ts',
 	];
 	const allowsResidentHelpers =
-		filePath.includes('/commands/') || residentHelperModules.includes(filePath);
+		COMMAND_MODULE.test(filePath) || residentHelperModules.includes(filePath);
 	const root = ts.createSourceFile(
 		path,
 		source,
@@ -329,9 +397,21 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			(name === 'collections$' && receiver && isChangeStreamReceiver(receiver))
 		)
 			report('storage token', node);
-		if (name === 'collection') report('record collection back-reference', node);
-		if (mutatorNames.has(name)) report('record mutator', node);
-		if (rawQueryNames.has(name)) report('raw query construction', node);
+		// A parameter binding declares a prop named `collection`; only the back-reference check
+		// skips it. Every other fenced name stays fenced in parameter patterns.
+		const destructured =
+			(ts.isBindingElement(node) && !isParameterBinding(node)) ||
+			ts.isPropertyAssignment(node) ||
+			ts.isShorthandPropertyAssignment(node);
+		if (name === 'collection' && (destructured || isReachedThrough(node)))
+			report('record collection back-reference', node);
+		if (
+			mutatorNames.has(name) &&
+			!(name === 'remove' && (isSubscriptionOrElement(receiver) || fromUseFieldArray(node)))
+		)
+			report('record mutator', node);
+		if (rawQueryNames.has(name) || (name === 'count' && isCollectionReceiver(receiver)))
+			report('raw query construction', node);
 		if ((name === '$' || name === 'eventBulks$') && receiver && isChangeStreamReceiver(receiver))
 			report('raw change stream', node);
 		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
@@ -519,221 +599,50 @@ const violationsByFile = sourceFiles(__dirname).flatMap((path) => {
 	return matches.length ? [{ file: relative(__dirname, path).split(sep).join('/'), matches }] : [];
 });
 
-function fingerprints(file: string, matches: ReturnType<typeof violations>): string[] {
-	const occurrences = new Map<string, number>();
-	return matches.map(({ rule, declaration, text }) => {
-		const key = `${rule} :: ${declaration} :: ${text.replace(/\s+/g, ' ').trim()}`;
-		const occurrence = (occurrences.get(key) ?? 0) + 1;
-		occurrences.set(key, occurrence);
-		return `${file} :: ${key} :: ${occurrence}`;
-	});
-}
+const REMEDY = [
+	'Route each access through a named read or command in @wcpos/query (resident helpers: a',
+	'screens/main/<area>/commands/ module), adding the read or command if none exists. If the',
+	'access touches no storage, rename the receiver to *Subscription / *Element or destructure it',
+	'from useFieldArray(...); otherwise add a receiver rule to seam.test.ts with one allowed and',
+	'one fenced fixture. There is no list to add it to.',
+].join('\n');
 
-const allCurrent = violationsByFile
-	.flatMap(({ file, matches }) => fingerprints(file, matches))
-	.sort();
-const genericCurrent = allCurrent.filter((fingerprint) =>
-	fingerprint.includes(' :: generic resident door :: ')
-);
-const current = allCurrent.filter((fingerprint) => !genericCurrent.includes(fingerprint));
-const frozen = new Set(SEAM_FROZEN_VIOLATIONS_2026_10_16);
-console.log(
-	`Seam progress: ${SEAM_RETIRED_FINGERPRINTS.length}/${frozen.size} frozen violations retired; ${current.length} remain`
-);
-console.log(
-	`Generic resident door: ${SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length}/${SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18.length} retired; ${genericCurrent.length} remain`
-);
-if (process.env.SEAM_PROGRESS === '1') console.log(current.join('\n'));
-
-// `SEAM_DUMP=<path>` writes sorted current fingerprints as JSON for an explicit re-freeze.
-if (process.env.SEAM_DUMP)
-	writeFileSync(process.env.SEAM_DUMP, JSON.stringify(allCurrent, null, '\t'));
-
-function fingerprintIssues(
-	current: string[],
-	frozen: ReadonlySet<string>,
-	retired: readonly string[] = []
-): string[] {
-	const retiredSet = new Set(retired);
-	const effective = new Set([...frozen].filter((fingerprint) => !retiredSet.has(fingerprint)));
-	const currentSet = new Set(current);
-	return [
-		...current
-			.filter((fingerprint) => !effective.has(fingerprint))
-			.map((fingerprint) => `${fingerprint} — route this access through a named read or command`),
-		...[...effective]
-			.filter((fingerprint) => !currentSet.has(fingerprint))
-			.map((fingerprint) => `retire fingerprint: ${fingerprint}`),
-	];
-}
-
-it('requires current violations to match the frozen set minus explicit retirements', () => {
-	expect(fingerprintIssues(current, frozen, SEAM_RETIRED_FINGERPRINTS)).toEqual([]);
-});
-
-it('keeps retirements within the frozen set and pins every append-only entry', () => {
-	expect(SEAM_RETIRED_FINGERPRINTS.filter((fingerprint) => !frozen.has(fingerprint))).toEqual([]);
-	// A fingerprint retired twice (a conflict resolution that appended what the other side had
-	// already appended) would over-report progress and hide a real retirement under its ordinal.
-	expect(new Set(SEAM_RETIRED_FINGERPRINTS).size).toBe(SEAM_RETIRED_FINGERPRINTS.length);
-	expect(SEAM_RETIRED_FINGERPRINTS.length).toBeGreaterThanOrEqual(SEAM_RETIRED_FLOOR);
-	expect(
-		createHash('sha256')
-			.update(SEAM_RETIRED_FINGERPRINTS.slice(0, SEAM_RETIRED_FLOOR).join('\n'))
-			.digest('hex')
-	).toBe(SEAM_RETIRED_PREFIX_DIGEST);
-	expect(SEAM_RETIRED_FLOOR).toBe(SEAM_RETIRED_FINGERPRINTS.length);
-});
-
-it('keeps the frozen fingerprints immutable', () => {
-	expect(SEAM_FROZEN_VIOLATIONS_2026_10_16.length).toBe(FROZEN_LENGTH);
-	expect(
-		createHash('sha256').update(SEAM_FROZEN_VIOLATIONS_2026_10_16.join('\n')).digest('hex')
-	).toBe(FROZEN_DIGEST);
-});
-
-it('normalises whitespace and numbers repeated rule/text pairs independently per file', () => {
-	const matches = [
-		{ rule: 'storage import', declaration: '', text: "import {\n Thing\t} from 'storage';" },
-		{ rule: 'other rule', declaration: '', text: "import { Thing } from 'storage';" },
-		{ rule: 'storage import', declaration: '', text: "import { Thing } from 'storage';" },
-	];
-	expect(fingerprints('file.ts', matches)).toEqual([
-		"file.ts :: storage import ::  :: import { Thing } from 'storage'; :: 1",
-		"file.ts :: other rule ::  :: import { Thing } from 'storage'; :: 1",
-		"file.ts :: storage import ::  :: import { Thing } from 'storage'; :: 2",
-	]);
-	expect(fingerprints('other.ts', matches.slice(2))).toEqual([
-		"other.ts :: storage import ::  :: import { Thing } from 'storage'; :: 1",
-	]);
-});
-
-it.each([
-	'patchEngineResident',
-	'useLocalMutation',
-	'insertEngineResident',
-	'helpers.patchEngineResident',
-])('keeps %s fingerprints stable when arguments change', (callee) => {
-	const expected = [`file.ts :: resident helper write ::  :: ${callee} :: 1`];
-	for (const args of ['record', 'record, patch, options'])
-		expect(fingerprints('file.ts', violations(`${callee}(${args});`))).toEqual(expected);
-});
-
-it.each([
-	['storage import', 'rxdb', 'DeepReadonly', 'RxDocument, RxCollection'],
-	[
-		'query escape hatch',
-		'@wcpos/query',
-		'EngineDocument',
-		'EngineDocument, EngineQueryDescriptor, type EngineRecord',
-	],
-	[
-		'mutation queue',
-		'@wcpos/sync-engine',
-		'MUTATION_QUEUE_RXDB_COLLECTION',
-		'MUTATION_QUEUE_RXDB_COLLECTION as queue, type EngineRecord',
-	],
-	['cross-package relative import', '../../query/src/safe', 'first', 'second, third'],
-])('keeps %s fingerprints stable when imported names change', (rule, module, before, after) => {
-	const expected = [`file.ts :: ${rule} ::  :: from '${module}' :: 1`];
-	for (const names of [before, after]) {
-		const current = fingerprints('file.ts', violations(`import { ${names} } from '${module}';`));
-		expect(current).toEqual(expected);
-		expect(fingerprintIssues(current, new Set(expected))).toEqual([]);
-	}
-});
-
-it('numbers separate imports from the same module as separate occurrences', () => {
-	expect(
-		fingerprints(
-			'file.ts',
-			violations(`
-		import type { DeepReadonly } from 'rxdb';
-		import { RxDocument, RxCollection } from 'rxdb';
-	`)
+function formatViolations(byFile: typeof violationsByFile): string {
+	const lines = byFile.flatMap(({ file, matches }) =>
+		matches.map(
+			({ rule, declaration, text }) =>
+				`${file}: ${rule} — ${text.replace(/\s+/g, ' ').trim()} (${declaration || 'top level'})`
 		)
-	).toEqual([
-		"file.ts :: storage import ::  :: from 'rxdb' :: 1",
-		"file.ts :: storage import ::  :: from 'rxdb' :: 2",
-	]);
+	);
+	return [`ADR 0033 seam violations in packages/core:`, ...lines, '', REMEDY].join('\n');
+}
+
+it('finds no seam violation in packages/core production sources', () => {
+	if (violationsByFile.length) throw new Error(formatViolations(violationsByFile));
 });
 
-it('rejects a new rxdb import in a file without a frozen crossing', () => {
-	const frozen = new Set(["other.ts :: storage import ::  :: from 'rxdb' :: 1"]);
-	const current = fingerprints('file.ts', violations("import type { DeepReadonly } from 'rxdb';"));
-	expect(fingerprintIssues([...frozen, ...current], frozen)).toEqual([
-		"file.ts :: storage import ::  :: from 'rxdb' :: 1 — route this access through a named read or command",
-	]);
-});
-
-it('rejects same-count substitutions and extra occurrences', () => {
-	const frozen = new Set(['file.ts :: record mutator ::  :: doc.remove :: 1']);
-	for (const source of ['doc.save;', 'doc.remove; doc.remove;']) {
-		const issues = fingerprintIssues(fingerprints('file.ts', violations(source)), frozen);
-		expect(issues.filter((issue) => issue.includes('route this access'))).toHaveLength(1);
-		expect(issues[0]).toContain('route this access through a named read or command');
-	}
-	expect(fingerprintIssues(fingerprints('file.ts', violations('\n doc.remove;')), frozen)).toEqual(
-		[]
+it('formats a failing scan as one line per match followed by the remedy', () => {
+	const byFile = [
+		{ file: 'a.ts', matches: violations('function save() {\n doc.remove(); }\ndoc.patch;') },
+	];
+	expect(formatViolations(byFile)).toBe(
+		[
+			'ADR 0033 seam violations in packages/core:',
+			'a.ts: record mutator — doc.remove (save)',
+			'a.ts: record mutator — doc.patch (top level)',
+			'',
+			REMEDY,
+		].join('\n')
 	);
 });
 
-it('requires explicit retirement of vanished fingerprints', () => {
-	const fingerprint = 'file.ts :: record mutator ::  :: doc.remove :: 1';
-	expect(fingerprintIssues([], new Set([fingerprint]))).toEqual([
-		`retire fingerprint: ${fingerprint}`,
-	]);
-	expect(fingerprintIssues([], new Set([fingerprint]), [fingerprint])).toEqual([]);
-});
-
-it('rejects reintroducing the exact text of a retired violation', () => {
-	const fingerprint = 'file.ts :: record mutator ::  :: doc.remove :: 1';
-	const current = fingerprints('file.ts', violations('doc.remove;'));
-	expect(fingerprintIssues(current, new Set([fingerprint]), [fingerprint])).toEqual([
-		`${fingerprint} — route this access through a named read or command`,
-	]);
-});
-
-it('fingerprints the enclosing declaration chain, outermost first', () => {
+it('names the enclosing declaration chain, outermost first', () => {
 	const source = `function outer() {
 		class Store { refresh() { const reload = () => {
 			function inner() { doc.remove(); }
 		}; } }
 	}`;
-	expect(fingerprints('file.ts', violations(source))).toEqual([
-		'file.ts :: record mutator :: outer>Store>refresh>reload>inner :: doc.remove :: 1',
-	]);
-});
-
-it.each([
-	[
-		'function before() { doc.remove(); } function after() {}',
-		'function before() {} function after() { doc.remove(); }',
-	],
-	['const before = () => doc.remove();', 'const after = () => doc.remove();'],
-	['class Store { before() { doc.remove(); } }', 'class Store { after() { doc.remove(); } }'],
-	['class Before { run() { doc.remove(); } }', 'class After { run() { doc.remove(); } }'],
-])('rejects moving a frozen access to a different declaration: %s', (before, after) => {
-	const frozen = new Set(fingerprints('file.ts', violations(before)));
-	const issues = fingerprintIssues(fingerprints('file.ts', violations(after)), frozen);
-	expect(issues.filter((issue) => issue.includes('route this access'))).toHaveLength(1);
-	expect(issues.filter((issue) => issue.startsWith('retire fingerprint:'))).toHaveLength(1);
-});
-
-it('numbers repeated accesses within their declaration, independent of other declarations', () => {
-	expect(
-		fingerprints(
-			'file.ts',
-			violations(`
-			function first() { doc.remove(); doc.remove(); }
-			function second() { doc.remove(); }
-		`)
-		)
-	).toEqual([
-		'file.ts :: record mutator :: first :: doc.remove :: 1',
-		'file.ts :: record mutator :: first :: doc.remove :: 2',
-		'file.ts :: record mutator :: second :: doc.remove :: 1',
-	]);
+	expect(violations(source)[0].declaration).toBe('outer>Store>refresh>reload>inner');
 });
 
 // These fixtures catch syntax bypasses without executing imported modules or mutators.
@@ -809,15 +718,32 @@ it.each(
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
 });
 
-it.each(['db$', 'collections', 'storageInstance', 'localDB', 'collection'])(
+it.each(['db$', 'collections', 'storageInstance', 'localDB'])(
 	'fences all storage accesses of %s',
 	(name) => {
 		for (const source of [`doc?.${name};`, `doc?.['${name}'];`, `const { ${name}: value } = doc;`])
-			expect(violations(source).map(({ rule }) => rule)).toEqual([
-				name === 'collection' ? 'record collection back-reference' : 'storage token',
-			]);
+			expect(violations(source).map(({ rule }) => rule)).toEqual(['storage token']);
 	}
 );
+
+it('fences a record collection back-reference only when chained or destructured', () => {
+	for (const source of [
+		'doc?.collection.name;',
+		"doc?.['collection']?.name;",
+		'const { collection: value } = doc;',
+		'({ collection: value } = doc);',
+	])
+		expect(violations(source).map(({ rule }) => rule)).toEqual([
+			'record collection back-reference',
+		]);
+	// A query through the back-reference is also a raw query: the receiver is collection-shaped.
+	expect(violations("doc?.['collection']?.find(query);").map(({ rule }) => rule)).toEqual([
+		'raw query construction',
+		'record collection back-reference',
+	]);
+	for (const source of ['doc?.collection;', "doc?.['collection'];"])
+		expect(violations(source)).toEqual([]);
+});
 
 it.each([
 	'rxdb',
@@ -866,7 +792,7 @@ it('walks TSX and nested template expressions but ignores string and comment con
 	).toEqual([{ rule: 'record mutator', declaration: '', text: 'doc.save' }]);
 });
 
-it('reports the full accessed AST text so fingerprints distinguish long accesses', () => {
+it('reports the full accessed AST text so failures name long accesses', () => {
 	const source = `${'receiver'.repeat(20)}.remove`;
 	expect(violations(`${source}()`)).toEqual([
 		{ rule: 'record mutator', declaration: '', text: source },
@@ -965,7 +891,6 @@ it.each(['fixture.ts', 'fixture.tsx'])('fails the scan on parse errors in %s', (
 it.each([
 	'findOne',
 	'findByIds',
-	'count',
 	'exportJSON',
 	'find$',
 	'findOne$',
@@ -985,6 +910,27 @@ it.each([
 	]) {
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['raw query construction']);
 	}
+});
+
+it.each([
+	'collection',
+	'ordersCollection',
+	'collections.orders',
+	"collections['orders']",
+	'collections[name]',
+	'db.collections.orders',
+])('fences raw query member count on collection receiver %s including extraction', (receiver) => {
+	for (const source of [
+		`${receiver}.count({});`,
+		`${receiver}['count']();`,
+		`${receiver}?.['count']?.();`,
+		`const query = ${receiver}.count;`,
+		`const { count: query } = ${receiver};`,
+		`({ count: query } = ${receiver});`,
+	])
+		expect(violations(source).filter(({ rule }) => rule === 'raw query construction')).toHaveLength(
+			1
+		);
 });
 
 it.each([
@@ -1032,12 +978,22 @@ it.each([
 it.each([
 	'screens/main/hooks/mutations/use-local-mutation.ts',
 	'screens/main/hooks/mutations/use-mutation.ts',
-	'extensions/commands/example.ts',
-	'screens/main/commands/example.ts',
+	'screens/main/pos/commands/example.ts',
 ])('allows resident helpers in defining/command module %s', (path) => {
 	expect(
 		violations("import { patchEngineResident } from './helpers'; patchEngineResident({});", path)
 	).toEqual([]);
+});
+
+it.each([
+	'extensions/commands/example.ts',
+	'screens/main/commands/example.ts',
+	'screens/main/pos/commands/nested/example.ts',
+	'screens/main/pos/other/commands/example.ts',
+])('fences resident helpers outside screens/main/<area>/commands/: %s', (path) => {
+	expect(violations('patchEngineResident({});', path).map(({ rule }) => rule)).toEqual([
+		'resident helper write',
+	]);
 });
 
 it('does not exempt other modules alongside the defining mutation helpers', () => {
@@ -1350,7 +1306,7 @@ it.each([
 	for (const path of [
 		'screens/main/hooks/mutations/use-mutation.ts',
 		'screens/main/hooks/mutations/use-local-mutation.ts',
-		'screens/main/commands/example.ts',
+		'screens/main/pos/commands/example.ts',
 	]) {
 		expect(violations(source, path)).toEqual([]);
 	}
@@ -1501,29 +1457,55 @@ it.each(['applyLocalPatch', 'createEngineResident', 'findEngineResident'])(
 	}
 );
 
-it('pins the independent generic resident door baseline and append-only retirements', () => {
-	const frozen = new Set(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18);
-	expect(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18).toHaveLength(20);
-	expect(
-		createHash('sha256')
-			.update(SEAM_FROZEN_GENERIC_RESIDENT_DOOR_2026_10_18.join('\n'))
-			.digest('hex')
-	).toBe('113e2fb079e9353a130415b9251595f1dedfabc15dc012264634cbedbe09c97d');
-	expect(fingerprintIssues(genericCurrent, frozen, SEAM_RETIRED_GENERIC_RESIDENT_DOOR)).toEqual([]);
-	expect(
-		SEAM_RETIRED_GENERIC_RESIDENT_DOOR.filter((fingerprint) => !frozen.has(fingerprint))
-	).toEqual([]);
-	expect(SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length).toBeGreaterThanOrEqual(
-		SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR
-	);
-	expect(
-		createHash('sha256')
-			.update(
-				SEAM_RETIRED_GENERIC_RESIDENT_DOOR.slice(0, SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR).join(
-					'\n'
-				)
-			)
-			.digest('hex')
-	).toBe(SEAM_RETIRED_GENERIC_RESIDENT_DOOR_PREFIX_DIGEST);
-	expect(SEAM_RETIRED_GENERIC_RESIDENT_DOOR_FLOOR).toBe(SEAM_RETIRED_GENERIC_RESIDENT_DOOR.length);
+// Member-name false positives the receiver rules recognise (the 56 retired with the allowlist).
+it.each([
+	'term.count;',
+	'React.Children.count(children);',
+	'hit.record.payload.count;',
+	'function Row({ count, collection }) {}',
+	'const f = ({ status, count }) => count;',
+	'label(first.collection);',
+	'const s = `${stuck.collection}`;',
+	"typeof context.collection === 'string';",
+	'subscription.remove();',
+	'subscriptionRef.current?.remove();',
+	'hardwareSubscription?.remove();',
+	'anchorElement.remove();',
+	'const { fields, append, remove } = useFieldArray({ control, name });',
+	// Intended asymmetry: see the fenced `const { collection } = props;` fixture below.
+	'function P({ collection }) {}',
+])('allows a member that shares a fenced name but touches no storage: %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+// The historic true positives stay fenced under the receiver rules.
+it.each([
+	['logsCollection.count();', 'raw query construction'],
+	['collection.count({ selector: {} });', 'raw query construction'],
+	['collections.orders.count();', 'raw query construction'],
+	['collections[name].count();', 'raw query construction'],
+	['db.collections.orders.count();', 'raw query construction'],
+	['const { count } = ordersCollection;', 'raw query construction'],
+	['doc.collection.name;', 'record collection back-reference'],
+	['doc.collection?.find(query);', 'record collection back-reference'],
+	['(doc.collection as X).insert({});', 'record collection back-reference'],
+	["doc['collection']['name'];", 'record collection back-reference'],
+	['const { collection } = doc;', 'record collection back-reference'],
+	['doc.remove();', 'record mutator'],
+	['latest(doc).remove();', 'record mutator'],
+	['profile.getLatest().remove();', 'record mutator'],
+	['const { remove } = doc;', 'record mutator'],
+	['const { remove } = useRecord();', 'record mutator'],
+	['hardware?.remove();', 'record mutator'],
+	['function Row({ doc: { remove } }) {}', 'record mutator'],
+	['const f = ({ collections }) => 0;', 'storage token'],
+	['function Row({ patch }) {}', 'record mutator'],
+	['promise.then(({ collections }) => 0);', 'storage token'],
+	['runtime.logsCollection.count();', 'raw query construction'],
+	['this.ordersCollection.count();', 'raw query construction'],
+	['rows[anchorElement].remove();', 'record mutator'],
+	// Intended asymmetry: a `collection` prop is a declaration, destructuring it from a value reads it.
+	['function P(props) { const { collection } = props; }', 'record collection back-reference'],
+])('still fences %s', (source, rule) => {
+	expect(violations(source, 'fixture.ts').map((match) => match.rule)).toContain(rule);
 });

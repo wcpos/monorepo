@@ -178,7 +178,7 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 	}),
 }));
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ patch: mockPatch, patchRecord: mockPatch }),
+	useMutation: () => ({ patchRecord: mockPatch }),
 }));
 jest.mock('../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: jest.fn() }),
