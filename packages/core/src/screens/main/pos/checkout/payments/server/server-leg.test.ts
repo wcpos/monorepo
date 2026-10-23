@@ -617,6 +617,19 @@ it('a locked intent is re-sent after retry_after, never polled', async () => {
 	expect(c.calls.slice(0, 2).map(({ route }) => route)).toEqual(['intent', 'intent']);
 	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
 });
+// #2900 D1: the store could not verify the intent's write; it may have run, so the leg is not
+// ended and the journaled intent is re-sent, as for a dropped connection.
+it('an intent answered 409 woo_rxdb_sync_record_locked is not final and is re-sent', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'woo_rxdb_sync_record_locked'));
+	await c.leg.start();
+	expect(c.leg.getState().phase).not.toBe('final');
+	expect(c.leg.getState().row.status).not.toBe('failed');
+	await tick(2000);
+	expect(c.count('intent')).toBe(2);
+	expect(c.calls[1].body).toEqual(c.calls[0].body);
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
+});
 // The lock ran nothing, so a cancel pressed while that intent was out goes out now as the void
 // (answered 200 or not-found either way); the intent is never re-sent to the reader.
 it('a cancel pending over a locked intent is resolved as the void, never an intent re-send', async () => {

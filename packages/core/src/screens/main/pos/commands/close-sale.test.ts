@@ -159,16 +159,15 @@ it.each([
 	expect(mockMirror).not.toHaveBeenCalled();
 });
 
-it('a 409 wcpos_payment_in_flight naming an attempt is in_flight, its summary mirrored and settled', async () => {
+it('a 409 wcpos_payment_in_flight naming an attempt is unanswered, its summary mirrored and settled', async () => {
 	const summary = { status: 'pos-partial', balance: '0.00' };
 	const post = jest.fn(async () => {
 		throw refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'a-1', order: summary });
 	});
 
 	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
-		kind: 'in_flight',
+		kind: 'unanswered',
 		attemptId: 'a-1',
-		order: summary,
 	});
 	expect(post).toHaveBeenCalledTimes(1);
 	expect(mockMirror).toHaveBeenCalledWith(

@@ -62,7 +62,7 @@ interface MoneyRefusal {
 }
 
 /** What a 409 `wcpos_payment_in_flight` names: a live row, or a gateway attempt with no outcome yet. */
-export type MoneyInMotion = { kind: 'payment'; id: string } | { kind: 'attempt'; id: string };
+type MoneyInMotion = { kind: 'payment'; id: string } | { kind: 'attempt'; id: string };
 
 /** Read by the key the answer names, never by the route; a row (`payment_id`) is the stronger fact. */
 export function moneyInMotionOf(refusal: MoneyRefusal | null): MoneyInMotion | null {

@@ -227,23 +227,12 @@ describe('submitGatewayPayment', () => {
 		await expect(submitGatewayPayment(order, 'g', input, deps)).rejects.toThrow('down');
 	});
 	// #2900: an attempt with no outcome yet is not a refusal; a live row stays one.
-	it('a 409 wcpos_payment_in_flight naming an attempt is in_flight; mine when it is the input’s', async () => {
+	it('a 409 wcpos_payment_in_flight naming an attempt is unanswered; naming a row, refused', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'other' }));
 		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
-			kind: 'in_flight',
+			kind: 'unanswered',
 			attemptId: 'other',
-			mine: false,
-		});
-		// The store lowercases the id it stores.
-		post.mockRejectedValueOnce(
-			refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'abc-def-1' })
-		);
-		const upper = { ...input, attemptId: 'ABC-DEF-1' };
-		expect(await submitGatewayPayment(order, 'g', upper, deps)).toEqual({
-			kind: 'in_flight',
-			attemptId: 'abc-def-1',
-			mine: true,
 		});
 		post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'p-1' }));
 		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
