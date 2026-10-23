@@ -221,13 +221,35 @@ it('refuses a recovery POST once its session is suspended', async () => {
 	expect(http.post).not.toHaveBeenCalled();
 });
 
+// The client is read once per run: a client swapped mid-run (a store or site switch the run has
+// not seen yet) does not take that run's posts.
+it('reads the client once per run', async () => {
+	let preflight!: () => void;
+	mockRecover.mockImplementationOnce(async (_runtime, _db, deps) => {
+		await new Promise<void>((resolve) => {
+			preflight = resolve;
+		});
+		await deps.post('orders/42/close', {});
+		return [];
+	});
+	const { recovery } = session();
+	const run = recovery.recover();
+	await until(() => mockRecover.mock.calls.length === 1);
+	const before = http;
+	http = { post: jest.fn() };
+	preflight();
+	await run;
+	expect(before.post).toHaveBeenCalledWith('orders/42/close', {});
+	expect(http.post).not.toHaveBeenCalled();
+});
+
 // Codex 4344063834 on #2836: a real transient failure releases the poster's claim (the journal
-// watch arms a step) and then reports unanswered (the run arms again). Scheduling twice must
+// watch arms a step) and the run then finds it still owed (it arms again). Scheduling twice must
 // not advance the ladder; only an executed retry does.
 it('advances the ladder only when a retry runs, whoever schedules it', async () => {
 	const failedResend = async (claimant: string) => {
 		await journalUnanswered('order', claimant);
-		return [{ orderUuid: 'order', answers: [], unanswered: true as const }];
+		return [];
 	};
 	const timers = ladderTimers(true);
 	try {
@@ -244,23 +266,39 @@ it('advances the ladder only when a retry runs, whoever schedules it', async () 
 	}
 });
 
+// #2836: a re-run keeps the ladder's place. Past one executed step (`retries` 1) with the next held,
+// ten seconds on, `resume` re-arms the 2 min step for its remaining ~110 s, not afresh.
 it('keeps the armed step and its deadline across suspend and resume', async () => {
-	mockRecover.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }]);
-	const timers = ladderTimers(false);
+	await journalUnanswered('order', 'tender');
+	const realSetTimeout = global.setTimeout;
+	const delays: number[] = [];
+	const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
+		callback: () => void,
+		ms?: number
+	) => {
+		// The first step runs at once; any later long timer is recorded and held.
+		if ((ms ?? 0) >= 20_000) {
+			delays.push(ms!);
+			return realSetTimeout(ms === RECOVERY_RETRY_DELAYS_MS[0] ? callback : () => undefined, 0);
+		}
+		return realSetTimeout(callback, ms);
+	}) as never);
 	try {
 		const { mount, recovery } = session();
 		mount();
-		await until(() => timers.delays.length === 1);
-		expect(timers.delays).toEqual([30_000]);
+		await until(
+			() => delays.includes(RECOVERY_RETRY_DELAYS_MS[1]) && mockRecover.mock.calls.length === 2
+		);
+		await drain();
+		const armed = delays.length;
+		jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 10_000);
 		recovery.suspend();
 		recovery.resume();
-		await drain();
-		expect(timers.delays).toHaveLength(2);
-		expect(timers.delays[1]).toBeLessThanOrEqual(30_000);
-		expect(timers.delays[1]).toBeGreaterThan(25_000);
-		expect(mockRecover).toHaveBeenCalledTimes(1);
+		await until(() => delays.length === armed + 1);
+		expect(delays[armed]).toBeGreaterThan(100_000);
+		expect(delays[armed]).toBeLessThanOrEqual(110_000);
 	} finally {
-		timers.restore();
+		timers.mockRestore();
 	}
 });
 
@@ -273,17 +311,22 @@ it('backs off and re-runs a recovery whose re-send failed, until one answers', a
 		callback: () => void,
 		ms?: number
 	) => {
-		if ((ms ?? 0) >= 30_000) {
+		// Only the ladder's steps run at once: the re-send's own claim may arm a lapse.
+		if (RECOVERY_RETRY_DELAYS_MS.includes(ms ?? 0)) {
 			delays.push(ms!);
 			return realSetTimeout(callback, 0);
 		}
 		return realSetTimeout(callback, ms);
 	}) as never);
 	try {
+		const failedResend = async (claimant: string) => {
+			await journalUnanswered('order', claimant);
+			return [];
+		};
 		mockRecover
-			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
-			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
-			.mockResolvedValue([]);
+			.mockImplementationOnce(() => failedResend('start'))
+			.mockImplementationOnce(() => failedResend('retry-1'))
+			.mockImplementation(journalAnswered);
 		session().mount();
 		await until(() => mockRecover.mock.calls.length === 3);
 		await drain();
@@ -362,35 +405,20 @@ it('keeps the retry for a command that lost its answer during a recovery run', a
 
 // #2871 (Paul, 2026-10-23): the store database is per credential, so a deferred record is
 // re-sent only by its own cashier's session, while its scope is active, never by a suspended one.
-type DeferredRow = {
-	scope: string;
-	reports: boolean;
-	suspended?: true;
-	otherDB?: true;
-	owed: boolean;
-};
+type DeferredRow = { scope: string; suspended?: true; otherDB?: true; owed: boolean };
 it.each<[string, DeferredRow]>([
-	[
-		'(a) its own session, online, after a run that reports it unanswered',
-		{ scope: 'scope-1', reports: true, owed: true },
-	],
-	['(b) not another scope', { scope: 'other-scope', reports: false, owed: false }],
-	[
-		'(c) not a suspended session',
-		{ scope: 'scope-1', reports: true, suspended: true, owed: false },
-	],
+	['(a) its own session, online', { scope: 'scope-1', owed: true }],
+	['(b) not another scope', { scope: 'other-scope', owed: false }],
+	['(c) not a suspended session', { scope: 'scope-1', suspended: true, owed: false }],
 	[
 		"(d) not another credential's session (its own store database)",
-		{ scope: 'scope-1', reports: false, otherDB: true, owed: false },
+		{ scope: 'scope-1', otherDB: true, owed: false },
 	],
 ])('a deferred record is re-sent only by its own session: %s', async (_, row) => {
 	await claimRoute(storeDB, closeRoute('order'), 'tender', command('order', 'close-1', row.scope));
 	await deferEntry(storeDB, 'order', 'close-1', 'tender');
-	mockRecover
-		.mockResolvedValueOnce(
-			row.reports ? [{ orderUuid: 'order', answers: [], unanswered: true }] : []
-		)
-		.mockImplementation(journalAnswered);
+	// The start's run leaves it journaled (its re-send unanswered); the next one answers it.
+	mockRecover.mockResolvedValueOnce([]).mockImplementation(journalAnswered);
 	const timers = ladderTimers(true);
 	try {
 		const { mount, recovery, due } = session(row.otherDB ? await openStoreDB() : storeDB);
@@ -414,7 +442,8 @@ it.each<[string, DeferredRow]>([
 // Codex 4333265115 on #2798: offline nothing can be sent, so a step that comes due fires nothing;
 // the reconnect re-runs the recovery. The ladder stays on its step.
 it('offline, a ladder step that comes due fires nothing and does not advance the ladder', async () => {
-	mockRecover.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }]);
+	await journalUnanswered('order', 'tender');
+	mockRecover.mockResolvedValueOnce([]).mockImplementation(journalAnswered);
 	const timers = ladderTimers(true);
 	try {
 		const { recovery, due } = session();

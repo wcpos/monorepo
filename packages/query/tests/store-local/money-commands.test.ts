@@ -127,7 +127,7 @@ it('a claim stamped in the future is expired, and schedules no lapse', async () 
 		now.mockReturnValue(1_000_000); // the clock stepped back
 		const [entry] = (await readOrderCommands(tab, 'order')).entries;
 		expect(claimHeld(entry, null)).toBe(false);
-		expect(await nextClaimExpiry(tab, 'test-scope')).toBeNull();
+		expect(nextClaimExpiry([entry], 'test-scope')).toBeNull();
 		expect(await claimRoute(tab, route, 'tab-b', null)).toMatchObject({ status: 'open' });
 	} finally {
 		now.mockRestore();
@@ -243,7 +243,7 @@ it('deferEntry marks sent with no revision and releases the claim; nextClaimExpi
 	expect(deferred).toMatchObject({ sentRevision: null, claimedBy: null, claimedAt: null });
 	expect(deferred?.sentAt).toEqual(expect.any(String));
 	// Unclaimed and sent: no lapse to wait for, re-sendable now, never dropped as a crash leftover.
-	expect(await nextClaimExpiry(tab, 'test-scope')).toBeNull();
+	expect(nextClaimExpiry((await readOrderCommands(tab, 'order')).entries, 'test-scope')).toBeNull();
 	await dropUnsent(tab, 'order', 'command-a', null);
 	expect(await firstValueFrom(observeOrderCommands(tab, 'order'))).toEqual([
 		expect.objectContaining({ id: 'command-a', sentAt: deferred?.sentAt, sentRevision: null }),

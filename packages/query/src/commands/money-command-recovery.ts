@@ -43,29 +43,19 @@ export function moneyCommandRecovery(input: {
 	online: () => boolean;
 	/** A claim lapsed or a ladder step came due: the caller runs `recover` in its own run queue. */
 	due: () => void;
-}) {
+}): { recover(): Promise<readonly RecoveredOrder[]>; suspend(): void; resume(): void } {
 	const { runtime, storeDB, online, due } = input;
 	let suspended = false;
-	// A command the recovery skipped because a live claim held it is tried again when that claim
-	// lapses (a crashed process's claim survives it), not only at the next start or reconnect.
+	// The claim-lapse re-run: a crashed process's claim survives it, so its command is tried then.
 	let lapse: ReturnType<typeof setTimeout> | undefined;
 	// The backoff re-run after an unanswered re-send (`RECOVERY_RETRY_DELAYS_MS`).
 	let retry: ReturnType<typeof setTimeout> | undefined;
-	// The armed step's deadline, kept across an effect re-run's suspend; `retries` counts the
-	// re-runs that executed, so scheduling twice never advances the ladder (Codex 4344063834
-	// on #2836).
+	// The armed step's deadline survives `suspend`; `retries` counts the steps that ran, so
+	// scheduling twice never advances the ladder (Codex 4344063834 on #2836).
 	let retryAt: number | null = null;
 	let retries = 0;
 	let retryPending = false;
 	let journalWatch: { unsubscribe: () => void } | undefined;
-	/**
-	 * The active scope owes a command a re-send. Read off the CURRENT journal, so a command that
-	 * lost its answer while a run iterated its snapshot keeps its retry (Codex 4345589102 on #2836).
-	 */
-	const owed = (entries: readonly MoneyCommandEntry[]) => {
-		const scope = runtime.engine?.active()?.scopeId ?? null;
-		return entries.some((entry) => owedResend(entry, scope));
-	};
 	const armRetry = () => {
 		if (retry !== undefined || !retryPending || suspended) return;
 		const now = Date.now();
@@ -84,35 +74,36 @@ export function moneyCommandRecovery(input: {
 			Math.max(0, retryAt - now)
 		);
 	};
-	const recoverWhenClaimsLapse = async () => {
+	/**
+	 * Arm from the CURRENT journal, never a run's snapshot (Codex 4345589102 on #2836): the ladder
+	 * while the active scope owes a re-send, the lapse of its earliest live claim (Codex 4332957976
+	 * on #2798). Another scope's command waits for that scope (Codex 4333124076 on #2798). A journal
+	 * that could not be read counts as owed: a step is armed, never a stall.
+	 */
+	const schedule = (entries: readonly MoneyCommandEntry[] | null) => {
 		const scope = runtime.engine?.active()?.scopeId ?? null;
-		const expiry = await nextClaimExpiry(storeDB, scope).catch(() => null);
+		if (!entries || entries.some((entry) => owedResend(entry, scope))) {
+			retryPending = true;
+			armRetry();
+		}
+		const expiry = entries && nextClaimExpiry(entries, scope);
 		if (lapse !== undefined) clearTimeout(lapse);
 		lapse = undefined;
 		if (expiry === null || suspended) return;
-		lapse = setTimeout(() => due(), Math.max(0, expiry - Date.now()) + 1);
+		lapse = setTimeout(due, Math.max(0, expiry - Date.now()) + 1);
 	};
-	// A command whose answers are lost after this session's first recovery, while the till
-	// stays online: no reconnect will come for it, and a pull may close its tender. Watching
-	// the journal schedules its recovery: a sent command nobody holds arms the first backoff
-	// step, a live claim its lapse. Another scope's command waits for that scope (Codex
-	// 4333124076 on #2798).
+	// A command whose answers are lost after this session's first recovery, while the till stays
+	// online: no reconnect will come for it, and a pull may close its tender. The watch schedules
+	// its recovery; it emits the current journal on subscribe.
 	const watch = () => {
 		journalWatch ??= observeMoneyJournal(storeDB).subscribe({
-			next: (entries) => {
-				if (suspended) return;
-				if (owed(entries)) {
-					retryPending = true;
-					armRetry();
-				}
-				void recoverWhenClaimsLapse();
-			},
+			next: schedule,
 			error: () => undefined,
 		});
 	};
 	return {
 		/** Re-send what the active scope owes, then re-arm from the current journal. Throws to the caller. */
-		async recover(): Promise<readonly RecoveredOrder[]> {
+		async recover() {
 			// Bound to this session (Codex 4344063828 on #2836): a store or site switch swaps the
 			// client, and an old journal's command must not go out through the new store. Refused
 			// once the session is suspended, a send stays journaled for its own session's recovery.
@@ -123,17 +114,16 @@ export function moneyCommandRecovery(input: {
 						? Promise.reject(new Error('money_command_session_stopped'))
 						: http.post(url, body),
 			});
-			await recoverWhenClaimsLapse();
-			retryPending =
-				recovered.some(({ unanswered }) => unanswered) ||
-				owed(await firstValueFrom(observeMoneyJournal(storeDB)));
+			const entries = await firstValueFrom(observeMoneyJournal(storeDB)).catch(() => null);
+			retryPending = false;
+			schedule(entries);
+			// The ladder resets only when a run leaves nothing owed.
 			if (!retryPending) {
 				retries = 0;
 				retryAt = null;
 				if (retry !== undefined) clearTimeout(retry);
 				retry = undefined;
 			}
-			armRetry();
 			return recovered;
 		},
 		/** Effect cleanup: timers and the watch end, posts refuse; the ladder position is kept (#2836). */
@@ -146,17 +136,10 @@ export function moneyCommandRecovery(input: {
 			journalWatch?.unsubscribe();
 			journalWatch = undefined;
 		},
-		/**
-		 * First mount and every same-session re-run: React re-runs effects on remount and HMR, so the
-		 * watch and timers are re-armed and no interval goes unwatched (#2798 R9).
-		 */
+		/** First mount and every same-session re-run: the watch re-arms from the journal (#2798 R9). */
 		resume() {
 			suspended = false;
 			watch();
-			if (online()) {
-				void recoverWhenClaimsLapse();
-				armRetry();
-			}
 		},
 	};
 }

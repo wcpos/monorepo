@@ -394,20 +394,19 @@ export function owedResend(entry: MoneyCommandEntry, scope: string | null, now =
  * The recovery skips a claimed command, so the session runs it again at this time: a claim a
  * crashed process left behind must not keep its command unanswered while the till stays online.
  */
-export async function nextClaimExpiry(
-	storeDB: StoreLocalDatabase,
+export function nextClaimExpiry(
+	entries: readonly MoneyCommandEntry[],
 	scope: string | null,
 	now = Date.now()
 ) {
 	let next: number | null = null;
-	for (const { entries } of Object.values(await readMoneyJournal(storeDB)))
-		for (const entry of entries)
-			// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
-			if (entry.scope === scope) {
-				const state = commandState(entry, null, now);
-				if (state.kind === 'in-flight' && state.of !== 'unsent')
-					if (next === null || state.lapsesAt < next) next = state.lapsesAt;
-			}
+	for (const entry of entries)
+		// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
+		if (entry.scope === scope) {
+			const state = commandState(entry, null, now);
+			if (state.kind === 'in-flight' && state.of !== 'unsent')
+				if (next === null || state.lapsesAt < next) next = state.lapsesAt;
+		}
 	return next;
 }
 

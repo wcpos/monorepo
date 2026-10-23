@@ -23,7 +23,6 @@ import {
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
-	owedResend,
 	phaseOf,
 	readMoneyJournal,
 	readOrderCommands,
@@ -474,11 +473,6 @@ export async function resendOpenCommands(
 export interface RecoveredOrder {
 	readonly orderUuid: string;
 	readonly answers: ResentCommand[];
-	/**
-	 * The re-send failed without a definitive answer and the command is still journaled and
-	 * unclaimed: the session retries it on `RECOVERY_RETRY_DELAYS_MS`.
-	 */
-	readonly unanswered?: true;
 	/** A definitive refusal that settled a re-send: owed a needs-attention entry (ADR 0040 D1 r4). */
 	readonly refused?: {
 		readonly code: string;
@@ -519,7 +513,7 @@ export async function recoverMoneyCommands(
 			// Not definitive, or refused: the poster kept or settled the entry accordingly. A
 			// refusal that settled a command is reported, never swallowed: an offline record refused
 			// on reconnect has no tender to tell. A refused pre-flight push settles nothing, so it is
-			// no refusal of the command. One still sent, unclaimed and ours is unanswered.
+			// no refusal of the command. One left journaled is retried by the session's schedule.
 			const journaled = (await readOrderCommands(storeDB, orderUuid)).entries;
 			const failure = moneyRefusalOf(error);
 			const refused =
@@ -532,14 +526,7 @@ export async function recoverMoneyCommands(
 							summary: (failure.data?.order as OrderPaymentSummary | undefined) ?? null,
 						}
 					: undefined;
-			const left = journaled.filter((entry) => owedResend(entry, scope));
-			if (left.length > 0 || refused)
-				recovered.push({
-					orderUuid,
-					answers: [],
-					...(left.length > 0 ? { unanswered: true as const } : {}),
-					...(refused ? { refused } : {}),
-				});
+			if (refused) recovered.push({ orderUuid, answers: [], refused });
 		}
 	}
 	// Housekeeping bounded by CHAIN_RETENTION_MS; the next run retries it; never fail a replay.
