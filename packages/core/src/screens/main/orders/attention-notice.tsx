@@ -32,7 +32,8 @@ const SHOWN = 3;
  * width on a phone. It is per cashier, not store-wide: `storeDB` is keyed by the signed-in
  * credential (`generateStoreLocalID` hashes `wpCredentialsID`), so the money journal, the pending
  * completions and these rows all belong to the cashier who took the sale; another cashier signing
- * in does not see them (a cross-cashier view is the open question on ADR 0040 Decided 1). Each
+ * in does not see them (ADR 0040 Decided 2: the sale stays with its cashier, who is told in the
+ * cashier sheet; a cross-cashier view would be its own design). Each
  * entry offers Open order and Handled, and never a Retry: a refused row is never retried on its
  * own, the cashier settles it (a refund, or the balance) and says so.
  */
