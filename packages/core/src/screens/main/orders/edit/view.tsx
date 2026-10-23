@@ -113,9 +113,11 @@ export function OrderView({
 				// Everything but the receipt changes the order (ledger line 8).
 				receipt && <DialogFooter>{receipt}</DialogFooter>
 			) : (
-				<DialogFooter className="justify-between">
+				// Up to seven actions (the invoice's two included) share a 640 panel: the row and
+				// both groups wrap, so a long translation reflows instead of leaving the panel.
+				<DialogFooter className="flex-wrap justify-between">
 					{/* Destructive on the left, apart from the constructive actions. */}
-					<View className="flex-row flex-wrap gap-2">
+					<View className="min-w-0 shrink flex-row flex-wrap gap-2">
 						<Button
 							variant="outline-destructive"
 							testID="order-modal-delete"
@@ -135,7 +137,7 @@ export function OrderView({
 							</Button>
 						)}
 					</View>
-					<View className="flex-row flex-wrap gap-2">
+					<View className="min-w-0 shrink flex-row flex-wrap gap-2">
 						{invoiceStamp ? <InvoiceActions order={order} stamp={invoiceStamp} /> : null}
 						{!!payload.id && (
 							<Button variant="outline" testID="order-modal-sync" onPress={actions.sync}>
