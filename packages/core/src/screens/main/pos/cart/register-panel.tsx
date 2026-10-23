@@ -180,15 +180,19 @@ export function RegisterPanel({
 					))}
 				</View>
 				<DialogBody className="gap-0">
-					{/* Cash always has a row (the float lives there); every other tender only once it holds money. */}
-					{Object.entries({ cash: '0', ...expected }).map(([method, amount]) => (
-						<View key={method} className={STATIC_ROW}>
-							<Text numberOfLines={1} className="min-w-0 flex-1">
-								{tenderLabel(method)}
-							</Text>
-							{!blind && <Text className="tabular-nums">{format(Number(amount))}</Text>}
-						</View>
-					))}
+					{/* Cash always has a row (the float lives there); every other tender only once it holds
+					    money, so a server baseline's `card: '0.0000'` draws nothing. A negative (refunds
+					    over sales) is money and stays. */}
+					{Object.entries({ cash: '0', ...expected })
+						.filter(([method, amount]) => method === 'cash' || Number(amount) !== 0)
+						.map(([method, amount]) => (
+							<View key={method} className={STATIC_ROW}>
+								<Text numberOfLines={1} className="min-w-0 flex-1">
+									{tenderLabel(method)}
+								</Text>
+								{!blind && <Text className="tabular-nums">{format(Number(amount))}</Text>}
+							</View>
+						))}
 					<MenuRow
 						testID="register-panel-movements"
 						className={ACTION_ROW}

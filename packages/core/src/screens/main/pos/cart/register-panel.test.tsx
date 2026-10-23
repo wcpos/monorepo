@@ -12,6 +12,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let expected: Record<string, string> = { cash: '155', card: '30' };
 let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
@@ -31,7 +32,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		blind,
 		session: currentSession,
 		binding: { registerName: 'Front' },
-		expected: { cash: '155', card: '30' },
+		expected,
 		salesCount: 2,
 		movements,
 		refusedMovements,
@@ -152,6 +153,7 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
 	blind = false;
+	expected = { cash: '155', card: '30' };
 	capabilities = ['view_woocommerce_pos_reports'];
 	currentSession = {
 		id: 'session',
@@ -166,6 +168,14 @@ beforeEach(() => {
 	syncStatus = 'pending';
 	jest.clearAllMocks();
 });
+it('draws a non-cash tender only while it holds money; cash always has its row', () => {
+	expected = { cash: '0.0000', card: '0.0000', stripe_terminal_for_woocommerce: '-5.0000' };
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByText('register.cash')).toBeTruthy();
+	expect(screen.queryByText('Card')).toBeNull();
+	expect(screen.getByText('Stripe Terminal')).toBeTruthy();
+});
+
 it('hides every amount and the X report for blind cashiers', () => {
 	blind = true;
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
