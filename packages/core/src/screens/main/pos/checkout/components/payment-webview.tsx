@@ -37,6 +37,8 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 
+import type { PaymentFrameStatus } from '../pay-page/use-pay-frame-gate';
+
 // A pre-hardening store or an async gateway can report "not paid yet" while the
 // provider's confirmation is still in flight. Re-read server truth on a short
 // cadence — a webhook round-trip is seconds — but stop after a bound: past it the
@@ -91,24 +93,6 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 		)
 	);
 }
-/**
- * Whether the store's payment document is in a position to receive
- * `wcpos-process-payment`.
- *
- * - `loading` — no document yet, or the frame is navigating to a new one.
- * - `ready` — a document finished loading in the frame.
- * - `stalled` — the FIRST document never arrived: its load timed out (after the
- *   one silent reload) or errored. Nothing has been posted into it, so a retry
- *   that navigates to the pay page again is safe, and the checkout offers one.
- * - `failed` — a LATER navigation (the gateway's redirect, the post-payment hop)
- *   errored, so no load event is coming. Distinct from `loading` because a gate
- *   with no failure state leaves the button disabled behind a spinner forever,
- *   which is the very stall this gate exists to stop — and distinct from
- *   `stalled` because a retry here would put the pay page back under a sale
- *   that may already be paid; the fallback poll owns that outcome.
- */
-export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
-
 /** The URL a native WebView navigation event names, when it names one. */
 function navigationURL(event: unknown): string | null {
 	const url = (event as { nativeEvent?: { url?: unknown } } | undefined)?.nativeEvent?.url;

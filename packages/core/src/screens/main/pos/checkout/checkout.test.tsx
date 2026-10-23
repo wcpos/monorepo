@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Checkout } from './checkout';
 
-import type { PaymentFrameStatus } from './components/payment-webview';
+import type { PaymentFrameStatus } from './pay-page/use-pay-frame-gate';
 
 const mockUseCheckoutSession = jest.fn();
 const mockBlockIfDegraded = jest.fn(() => false);

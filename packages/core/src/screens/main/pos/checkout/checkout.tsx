@@ -21,12 +21,13 @@ import { Button } from '@wcpos/components/button';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { WebViewHandle } from '@wcpos/components/webview';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
+import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
+import { PayFrameNotice } from './pay-page/pay-frame-notice';
+import { usePayFrameGate } from './pay-page/use-pay-frame-gate';
 import { TenderCheckout } from './tender/tender-checkout';
 import { returnToTill } from './till-route';
 import { useTheme } from '../../../../contexts/theme';
@@ -95,27 +96,9 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const t = useT();
-	const webViewRef = React.useRef<WebViewHandle>(null);
-	const [legacyLoading, setLegacyLoading] = React.useState(false);
-	// `wcpos-process-payment` is fire-and-forget: no ack, no retry. Posted before
-	// the store's order-pay document has loaded, it is dropped silently and the
-	// cashier is left with a button that spins forever (#1024). The payment frame
-	// reports its load event; until then the footer stays gated.
-	//
-	// The status is mirrored into a ref because the render state alone cannot be
-	// trusted by the handler: when the frame's src is swapped (JWT refresh, a new
-	// payment link) the press already in flight still carries the closure from the
-	// render that said `ready`. The ref is written the moment the frame re-gates,
-	// so the guard reads live state rather than a snapshot.
-	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
-	const frameStatusRef = React.useRef<PaymentFrameStatus>('loading');
-	const reportFrameStatus = React.useCallback((next: PaymentFrameStatus) => {
-		frameStatusRef.current = next;
-		setFrameStatus(next);
-	}, []);
-	// Each Retry press hands the frame a new token; the frame remounts on it.
-	const [frameRetryToken, setFrameRetryToken] = React.useState(0);
-	const retryPaymentFrame = React.useCallback(() => setFrameRetryToken((n) => n + 1), []);
+	// The legacy frame's footer gate (#1024): see usePayFrameGate.
+	const frameGate = usePayFrameGate();
+	const { status: frameStatus, press: pressPaymentFrame } = frameGate;
 	const {
 		loading,
 		mode,
@@ -139,12 +122,10 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// frame, so it has nothing to wait for. When the link is missing no frame is
 	// rendered at all, and `paymentLinkMissing` is already the reason shown.
 	const frameGateApplies = mode === 'webview' && !paymentLinkMissing && !gatewayError;
+	// Anything but `ready` blocks the press, so a new status blocks by default;
+	// `loading` alone also spins.
+	const paymentFrameBlocked = frameGateApplies && frameStatus !== 'ready';
 	const paymentFrameLoading = frameGateApplies && frameStatus === 'loading';
-	// Stalled = the first document never came; retrying its navigation is safe.
-	// Failed = a later navigation broke; a retry would reload the pay page under
-	// a sale that may already be paid, so none is offered.
-	const paymentFrameStalled = frameGateApplies && frameStatus === 'stalled';
-	const paymentFrameFailed = frameGateApplies && frameStatus === 'failed';
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
@@ -168,19 +149,10 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 			return;
 		}
 
-		// Refuse rather than post into a document that cannot be listening yet: the
-		// message would vanish with no ack and no retry. `disabled` covers the
-		// render; the ref covers a press that beats the re-render, including one
-		// held over from before the frame's src was swapped.
-		if (frameStatusRef.current !== 'ready') {
-			return;
-		}
-
-		setLegacyLoading(true);
-		if (webViewRef.current && webViewRef.current.postMessage) {
-			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
-		}
-	}, [blockIfDegraded, mode, order.uuid, startCheckout]);
+		// The frame gate last: it refuses silently, so every guard that explains
+		// itself (the storage toast above all) has to have had its turn first.
+		pressPaymentFrame();
+	}, [blockIfDegraded, mode, order.uuid, pressPaymentFrame, startCheckout]);
 
 	/**
 	 *
@@ -211,29 +183,10 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						{storageDegraded && !showStockRejection ? (
 							<StorageOutageBanner testID="checkout-storage-unavailable" />
 						) : null}
-						{(paymentLinkMissing || paymentFrameStalled || paymentFrameFailed) &&
-						!gatewayError &&
-						!showStockRejection ? (
-							<Notice
-								tone="bad"
-								title={
-									paymentLinkMissing
-										? t('pos_checkout.payment_form_unavailable')
-										: paymentFrameStalled
-											? t('pos_checkout.payment_form_load_failed_retry')
-											: t('pos_checkout.payment_form_navigation_failed')
-								}
-								actions={
-									paymentFrameStalled
-										? [
-												{
-													label: t('common.retry'),
-													onPress: retryPaymentFrame,
-													testID: 'checkout-payment-form-retry',
-												},
-											]
-										: undefined
-								}
+						{mode === 'webview' && !gatewayError && !showStockRejection ? (
+							<PayFrameNotice
+								status={paymentLinkMissing ? 'link-missing' : frameStatus}
+								onRetry={frameGate.retry}
 								testID="checkout-payment-form-unavailable"
 							/>
 						) : null}
@@ -253,10 +206,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						) : mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
 								order={order}
-								ref={webViewRef}
-								setLoading={setLegacyLoading}
-								setFrameStatus={reportFrameStatus}
-								retryToken={frameRetryToken}
+								{...frameGate.frameProps}
 								settledOrderStatuses={settledOrderStatuses}
 								onStockRejection={handleStockRejection}
 							/>
@@ -317,13 +267,11 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								error === 'payment_gateways_fetch_failed' ||
 								paymentLinkMissing ||
 								(mode === 'contract' && loading) ||
-								paymentFrameLoading ||
-								paymentFrameStalled ||
-								paymentFrameFailed
+								paymentFrameBlocked
 							}
 						>
 							<Button
-								loading={mode === 'contract' ? loading : legacyLoading || paymentFrameLoading}
+								loading={mode === 'contract' ? loading : frameGate.busy || paymentFrameLoading}
 							>
 								{t('pos_checkout.process_payment')}
 							</Button>
