@@ -101,6 +101,37 @@ it("Cancel invoice names the stamp's attempt and reports the order open again", 
 	expect(screen.getByTestId('orders-cancel-invoice').hasAttribute('disabled')).toBe(false);
 });
 
+// As the till's own cancel does: an answer with the order not open again did not cancel the
+// invoice, whether or not its mirror landed.
+it.each([
+	[
+		'answered',
+		() => mockCancel.mockResolvedValue({ kind: 'unchanged', order: { status: 'completed' } }),
+	],
+	[
+		'answered but not mirrored',
+		() =>
+			mockCancel.mockRejectedValue(
+				new GatewayCancelMirrorError(
+					{ kind: 'unchanged', order: { status: 'completed' } as never },
+					new Error('disk')
+				)
+			),
+	],
+])('an unchanged cancel (%s) says the invoice was not cancelled', async (_label, arrange) => {
+	arrange();
+	render(<InvoiceActions order={order} stamp={stamp} />);
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('orders-cancel-invoice'));
+	});
+	expect(mockWarn).toHaveBeenCalledWith(
+		'pos_checkout.invoice_not_cancelled',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(mockInfo).not.toHaveBeenCalledWith('pos_checkout.invoice_cancelled', expect.anything());
+	expect(mockError).not.toHaveBeenCalled();
+});
+
 it('a cancel the store applied but the till could not save is still a cancel', async () => {
 	mockCancel.mockRejectedValue(
 		new GatewayCancelMirrorError({ status: 'pos-open' } as never, new Error('disk'))
