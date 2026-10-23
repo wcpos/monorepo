@@ -85,6 +85,7 @@ export {
 	isMoneyAnswer,
 	isPaidStatus,
 	MONEY_ANSWER_CODES,
+	moneyInMotionOf,
 	moneyRefusalOf,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,

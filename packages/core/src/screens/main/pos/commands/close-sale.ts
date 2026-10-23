@@ -16,6 +16,7 @@ import {
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
 	MONEY_ANSWER_CODES,
+	moneyInMotionOf,
 	moneyRefusalOf,
 } from '@wcpos/sync-core';
 
@@ -33,6 +34,8 @@ export type CloseOutcome =
 	 */
 	| { kind: 'answered'; order: OrderPaymentSummary }
 	| { kind: 'outstanding'; order: OrderPaymentSummary | null }
+	/** A gateway attempt on this sale has no outcome yet (409 `wcpos_payment_in_flight`). */
+	| { kind: 'unanswered'; attemptId: string }
 	| { kind: 'refused'; code: string; message: string }
 	| { kind: 'order_changed' }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
@@ -75,6 +78,12 @@ export async function closeSale(
 			const summary = refusal.data?.order as OrderPaymentSummary | undefined;
 			await post.mirror({ order: summary });
 			return { kind: 'outstanding', order: summary ?? null };
+		}
+		const inMotion = moneyInMotionOf(refusal);
+		if (inMotion?.kind === 'attempt') {
+			const summary = refusal?.data?.order as OrderPaymentSummary | undefined;
+			await post.mirror({ order: summary }); // mirror ends in the settle and its refresh
+			return { kind: 'unanswered', attemptId: inMotion.id };
 		}
 		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
 		// rule): the cashier reads its sentence, and the resident is refreshed, since the refusal

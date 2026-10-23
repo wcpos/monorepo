@@ -215,6 +215,20 @@ it('a different wcpos 409 on intent remains a refusal, not a rejoin', async () =
 	expect(c.count('status')).toBe(0);
 });
 
+// #2900: only a row id is a payment to rejoin; a gateway attempt id is not.
+it('an intent 409 wcpos_payment_in_flight naming only an attempt does not rejoin', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'attempt-1' }));
+	await c.leg.start();
+	await tick(10000);
+	expect(c.leg.getState()).toMatchObject({ row: { id: 'leg', status: 'failed' }, phase: 'final' });
+	expect(c.leg.getState().clientEvents).not.toContainEqual(
+		expect.objectContaining({ message: 'Joined the payment already in progress' })
+	);
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('status')).toBe(0);
+});
+
 it('a rejoined cancelled authorization keeps polling without capture until voided', async () => {
 	const c = setupRejoin();
 	c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
@@ -601,6 +615,19 @@ it('a locked intent is re-sent after retry_after, never polled', async () => {
 	expect(c.count('intent')).toBe(2);
 	expect(c.calls[1].body).toEqual(c.calls[0].body);
 	expect(c.calls.slice(0, 2).map(({ route }) => route)).toEqual(['intent', 'intent']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
+});
+// #2900 D1: the store could not verify the intent's write; it may have run, so the leg is not
+// ended and the journaled intent is re-sent, as for a dropped connection.
+it('an intent answered 409 woo_rxdb_sync_record_locked is not final and is re-sent', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'woo_rxdb_sync_record_locked'));
+	await c.leg.start();
+	expect(c.leg.getState().phase).not.toBe('final');
+	expect(c.leg.getState().row.status).not.toBe('failed');
+	await tick(2000);
+	expect(c.count('intent')).toBe(2);
+	expect(c.calls[1].body).toEqual(c.calls[0].body);
 	expect(c.leg.getState()).toMatchObject({ phase: 'polling', row: { status: 'pending' } });
 });
 // The lock ran nothing, so a cancel pressed while that intent was out goes out now as the void

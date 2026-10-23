@@ -3758,9 +3758,10 @@ describe('gateway capture mode (contract 1.2)', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		await act(async () => result.current.takeTender());
+		// #2900: the journal keeps an unanswered submit; it may have taken money.
 		expect(mockError).toHaveBeenCalledWith(
-			'pos_checkout.payment_not_recorded',
-			expect.objectContaining({ showToast: true })
+			'pos_checkout.payment_unanswered',
+			expect.objectContaining({ code: 'PAYMENT201', showToast: true })
 		);
 		await act(async () => result.current.takeTender());
 		await act(async () => result.current.takeTender());
@@ -3770,6 +3771,26 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(ids).toHaveLength(3);
 		expect(ids[0]).toBe(ids[1]);
 		expect(ids[2]).not.toBe(ids[1]);
+	});
+
+	// #2900 D1: the store could not verify the submit's write; the gateway may have taken money.
+	it('a submit answered 409 woo_rxdb_sync_record_locked is unanswered, never "nothing was taken"', async () => {
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new Error('locked'), {
+				response: { status: 409, data: { code: 'woo_rxdb_sync_record_locked', message: 'Retry.' } },
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.objectContaining({ code: 'PAYMENT201', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
 	});
 
 	it('a mirror failure after the store answered sent completes the sale and warns, never "try again"', async () => {
@@ -3916,6 +3937,85 @@ describe('gateway capture mode (contract 1.2)', () => {
 		);
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 		expect(result.current.busy).toBe(false);
+	});
+
+	// #2900: a 409 wcpos_payment_in_flight {attempt_id} is an attempt that may have taken money.
+	describe('an attempt with no answer yet', () => {
+		const inFlight = (data: object = { attempt_id: 'attempt-9' }) =>
+			Object.assign(new Error('in flight'), {
+				response: {
+					status: 409,
+					data: { code: 'wcpos_payment_in_flight', message: 'No outcome yet.', data },
+				},
+			});
+		const unanswered = () =>
+			mockWarn.mock.calls.filter(([message]) => message === 'pos_checkout.attempt_unanswered');
+		const expectOneWarning = (context: object) => {
+			expect(unanswered()).toEqual([
+				[
+					'pos_checkout.attempt_unanswered',
+					{ showToast: true, context: expect.objectContaining(context) },
+				],
+			]);
+			expect(mockError).not.toHaveBeenCalled();
+			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		};
+
+		it('a press answered in flight warns once, never PAYMENT212 or "send again"', async () => {
+			mockManualPost.mockRejectedValue(inFlight());
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.takeTender());
+			expectOneWarning({ attemptId: 'attempt-9' });
+			// The pressed method may not be the attempt's: the row names none.
+			expect(unanswered()[0][1].context).not.toHaveProperty('method');
+			expect(mockInfo).not.toHaveBeenCalledWith(
+				'pos_checkout.order_open_send_again',
+				expect.anything()
+			);
+			expect(result.current.busy).toBe(false);
+		});
+
+		it('a zero-balance close answered in flight warns the same, never CHECKOUT101', async () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValue(
+				inFlight({ attempt_id: 'attempt-9', order: summary('pos-partial') })
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.takeTender());
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expectOneWarning({ attemptId: 'attempt-9' });
+		});
+
+		it('a Try again answered in flight warns the same, never PAYMENT201', async () => {
+			mockResend.mockRejectedValueOnce(inFlight());
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.retryCommand());
+			expectOneWarning({ attemptId: 'attempt-9' });
+		});
+
+		it('a Try again the store refused says its refusal (PAYMENT212), never PAYMENT201', async () => {
+			mockResend.mockRejectedValueOnce(
+				Object.assign(new Error('refused'), {
+					response: {
+						status: 409,
+						data: { code: 'wcpos_payment_conflict', message: 'The attempt was closed.' },
+					},
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.retryCommand());
+			expect(mockError).toHaveBeenCalledTimes(1);
+			expect(mockError).toHaveBeenCalledWith(
+				'The attempt was closed.',
+				// The title outranks PAYMENT212's summary in the toast (`resolveMerchantToastText`).
+				expect.objectContaining({
+					code: 'PAYMENT212',
+					showToast: true,
+					toast: { title: 'The attempt was closed.' },
+				})
+			);
+		});
 	});
 
 	it('a recorded answer is a manual leg: the returned row completes the sale', async () => {

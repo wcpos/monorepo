@@ -36,7 +36,13 @@ import {
 } from '@wcpos/query';
 import { observeTenderGate, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	isDefinitiveMoneyRefusal,
+	moneyInMotionOf,
+	moneyRefusalOf,
+	POS_META_KEYS,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -241,7 +247,7 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 }
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
-	closed: Exclude<CloseOutcome, { kind: 'answered' }>,
+	closed: Exclude<CloseOutcome, { kind: 'answered' | 'unanswered' }>,
 	t: ReturnType<typeof useT>
 ): string {
 	if (closed.kind === 'refused') return closed.message;
@@ -249,6 +255,13 @@ function closeMessage(
 	if (closed.kind === 'outstanding')
 		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
 	return t('pos_checkout.close_needs_connection');
+}
+/**
+ * An attempt the provider has not answered (press, close, Try again): it may have taken money,
+ * so never a code whose text says nothing was charged.
+ */
+function noteUnanswered(t: ReturnType<typeof useT>, context: Record<string, unknown>) {
+	logger.warn(t('pos_checkout.attempt_unanswered'), { showToast: true, context });
 }
 
 type LandOptions = { notMirrored?: NotMirrored; queue?: OrderMutationContext; method?: string };
@@ -827,11 +840,23 @@ export function useTenderFlow(
 				else if (resent.kind === 'submit') releaseUnconfirmedReceipt(order.uuid);
 			}
 		} catch (error) {
+			const refusal = moneyRefusalOf(error);
+			const inMotion = moneyInMotionOf(refusal);
 			// The store stored nothing and the order moved: the cashier approves it again.
 			if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 				logger.info(t('pos_checkout.order_changed_retry'), {
 					showToast: true,
 					context: { ...orderContext, retry: 'order_changed' },
+				});
+			else if (inMotion?.kind === 'attempt')
+				noteUnanswered(t, { ...orderContext, attemptId: inMotion.id });
+			// The store answered, and refused: its sentence is the toast title, over the code's summary.
+			else if (refusal?.code && isDefinitiveMoneyRefusal(refusal))
+				logger.error(refusal.message ?? refusal.code, {
+					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
+					showToast: true,
+					toast: { title: refusal.message ?? refusal.code },
+					context: { ...orderContext, refusal: refusal.code },
 				});
 			else
 				logger.error(t('pos_checkout.payment_unanswered'), {
@@ -997,7 +1022,9 @@ export function useTenderFlow(
 						close: closed.kind,
 					};
 					// The store's answer on this sale is a notice; no close at all is a failed checkout.
-					if (closed.kind === 'offline' || closed.kind === 'refused')
+					if (closed.kind === 'unanswered')
+						noteUnanswered(t, { ...context, attemptId: closed.attemptId });
+					else if (closed.kind === 'offline' || closed.kind === 'refused')
 						logger.error(closeMessage(closed, t), {
 							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 							showToast: true,
@@ -1190,6 +1217,10 @@ export function useTenderFlow(
 					setErrorsFor({ methodId: method.id, errors: outcome.errors });
 					return;
 				}
+				if (outcome.kind === 'unanswered') {
+					noteUnanswered(t, { ...orderContext, attemptId: outcome.attemptId });
+					return;
+				}
 				if (outcome.kind === 'refused') {
 					// The gateway's own sentence is the cashier copy; a contract refusal gets its code's summary.
 					logger.error(outcome.message, {
@@ -1309,8 +1340,14 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			logger.error(t('pos_checkout.payment_not_recorded'), {
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+			// A gateway submit the store did not answer stays journaled: it may have taken money.
+			const lost =
+				method?.capture.mode === 'gateway' && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+			const sentence = lost
+				? t('pos_checkout.payment_unanswered')
+				: t('pos_checkout.payment_not_recorded');
+			logger.error(sentence, {
+				code: lost ? ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN : ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
 				context: {
 					...orderContext,

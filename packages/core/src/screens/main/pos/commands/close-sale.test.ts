@@ -139,12 +139,13 @@ it('balance outstanding mirrors the summary and says what is due', async () => {
 	);
 });
 
+// #2900: a live row in motion stays a refusal; an attempt with no outcome is in_flight.
 it.each([
-	[409, 'wcpos_payment_in_flight'],
-	[400, 'wcpos_insufficient_stock'],
-])('a %s %s is refused with the store message and never retried', async (status, code) => {
+	[409, 'wcpos_payment_in_flight', { payment_id: 'p-1', order: { status: 'pos-partial' } }],
+	[400, 'wcpos_insufficient_stock', undefined],
+])('a %s %s is refused with the store message and never retried', async (status, code, data) => {
 	const post = jest.fn(async () => {
-		throw refusal(status, code);
+		throw refusal(status, code, data);
 	});
 
 	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
@@ -156,6 +157,25 @@ it.each([
 	// The refusal says the till's view is stale: the corrective refresh runs, nothing is mirrored.
 	expect(mockSettle).toHaveBeenCalledTimes(1);
 	expect(mockMirror).not.toHaveBeenCalled();
+});
+
+it('a 409 wcpos_payment_in_flight naming an attempt is unanswered, its summary mirrored and settled', async () => {
+	const summary = { status: 'pos-partial', balance: '0.00' };
+	const post = jest.fn(async () => {
+		throw refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'a-1', order: summary });
+	});
+
+	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+		kind: 'unanswered',
+		attemptId: 'a-1',
+	});
+	expect(post).toHaveBeenCalledTimes(1);
+	expect(mockMirror).toHaveBeenCalledWith(
+		{},
+		'order-1',
+		expect.objectContaining({ order: summary })
+	);
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
 it('an order the store has never seen sends nothing (connectivity is the caller’s check)', async () => {

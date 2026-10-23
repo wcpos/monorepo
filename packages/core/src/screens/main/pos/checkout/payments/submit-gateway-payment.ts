@@ -6,7 +6,12 @@ import {
 	type OrderPaymentSummary,
 	type PaymentRow,
 } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, isPaidStatus, moneyRefusalOf } from '@wcpos/sync-core';
+import {
+	isDefinitiveMoneyRefusal,
+	isPaidStatus,
+	moneyInMotionOf,
+	moneyRefusalOf,
+} from '@wcpos/sync-core';
 
 import type { NotMirrored } from '../../commands/land-answer';
 
@@ -49,6 +54,8 @@ export type SubmitGatewayPaymentOutcome =
 	| ({ kind: 'reopened' } & Answered)
 	/** `wcpos_fields_invalid`: a message per component id, `_form` for the gateway's own line. */
 	| { kind: 'fields_invalid'; errors: Record<string, string> }
+	/** 409 `wcpos_payment_in_flight`: an attempt the provider has not answered yet. */
+	| { kind: 'unanswered'; attemptId: string }
 	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
 	| { kind: 'refused'; code: string; message: string; provider: boolean };
 
@@ -112,6 +119,8 @@ export async function submitGatewayPayment(
 						: { _form: response?.data?.message ?? '' },
 			};
 		}
+		const inMotion = moneyInMotionOf(moneyRefusalOf(error));
+		if (inMotion?.kind === 'attempt') return { kind: 'unanswered', attemptId: inMotion.id };
 		// The money answer rule (sync-core): a named 4xx is the store's decision, and so is a 502
 		// `wcpos_provider_error`, the gateway's own refusal (a notice, an exception, a redirect
 		// elsewhere: Free took nothing and put the previous method back). The poster has settled
