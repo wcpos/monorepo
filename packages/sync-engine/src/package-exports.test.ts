@@ -71,6 +71,9 @@ describe('package exports', () => {
 				'isReportedRequestStatus',
 				'markTransportFailure',
 				'requestStatusOf',
+				// The one reader of an order resident's revision and adoption (#2879): @wcpos/query's
+				// money poster and birth path read through it, so no copy re-spells `sync.adopted`.
+				'residentRevision',
 			].sort()
 		);
 	});
@@ -79,6 +82,8 @@ describe('package exports', () => {
 		const testing = await import('./testing');
 		expect(Object.keys(testing).sort()).toEqual([
 			'createEngineHarness',
+			// @wcpos/query's fake engine runs the real revision door over its in-memory database.
+			'createOrderRevisionDoor',
 			'customerBrowseWindowQueryKeyFromDimensions',
 			'drainableGenerationCollectionCreators',
 			'engineCollectionCreators',

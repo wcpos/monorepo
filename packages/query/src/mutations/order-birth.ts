@@ -1,4 +1,4 @@
-import { hasPendingLocalWork } from '@wcpos/sync-engine';
+import { hasPendingLocalWork, residentRevision } from '@wcpos/sync-engine';
 
 import { removeTemporaryOrder } from '../temporary-order';
 import { findEngineResident, insertEngineResident, patchEngineResident } from './resident';
@@ -23,13 +23,10 @@ import type { EngineRecord } from '../records/engine-record';
  * enqueue, and queueing updates against it would 404 forever.
  */
 function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
-	const record = resident as unknown as {
-		sync?: { revision?: unknown };
-		remoteId?: unknown;
-	};
+	const record = resident as unknown as { sync?: unknown; remoteId?: unknown };
 	if (hasPendingLocalWork(resident)) return true;
 	if (record.remoteId !== null && record.remoteId !== undefined) return true;
-	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
+	return !!residentRevision(record).revision;
 }
 
 // Carry the born record too: the caller must check stock against this same lookup.

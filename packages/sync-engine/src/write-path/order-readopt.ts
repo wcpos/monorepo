@@ -29,14 +29,3 @@ export async function withOrderReadopt<T>(
 export function readoptRequested(database: object, remoteId: unknown): boolean {
 	return typeof remoteId === 'string' && (requested.get(database)?.has(remoteId) ?? false);
 }
-
-/**
- * `sync.adopted` marks a whole-document adoption and binds it to the revision adopted. A naked
- * writer that replaces `sync.revision` while spreading `...sync` leaves it behind, so the
- * inequality alone revokes the authority (ADR 0040 §1.3); no writer needs to clear it.
- */
-export function withAdoption<T extends { sync?: unknown }>(document: T, at: number): T {
-	const sync = (document.sync ?? {}) as { revision?: unknown };
-	if (typeof sync.revision !== 'string' || sync.revision === '') return document;
-	return { ...document, sync: { ...sync, adopted: { revision: sync.revision, at } } };
-}

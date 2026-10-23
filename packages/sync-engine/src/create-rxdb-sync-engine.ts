@@ -129,6 +129,7 @@ import {
 } from './write-path/write-plane';
 import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { createOrderRevisionDoor, type OrderRevisionDoor } from './write-path/order-revision';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
 import { createAutomaticTickGate } from './automatic-tick-gate';
@@ -578,6 +579,9 @@ export type RxdbSyncEngine = {
 	 */
 	whenActive(): Promise<ActiveScope>;
 	adoptOrderSnapshot(payload: unknown): Promise<'applied' | 'protected' | 'invalid'>;
+	/** The money poster's door to an order resident's revision: a status poll's naked stamp, which
+	 * the next order push goes out under (ADR 0040 §1.3; write-path/order-revision.ts). */
+	orderRevision: OrderRevisionDoor;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
@@ -2131,6 +2135,9 @@ export function createRxdbSyncEngine(
 			const { database } = await engine.whenActive();
 			return adoptActiveOrderSnapshot(database as unknown as SchedulerDrainDatabase, payload);
 		},
+		orderRevision: createOrderRevisionDoor({
+			resolveDatabase: async () => (await engine.whenActive()).database,
+		}),
 		hostTransport: () => hostTransport,
 		reconfigure: (config) => cadenceController.reconfigure(config),
 		db$: (cb) => {

@@ -25,7 +25,8 @@ import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
-import { readoptRequested, withAdoption } from './order-readopt';
+import { readoptRequested } from './order-readopt';
+import { adoptedSync } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -355,7 +356,7 @@ export class EngineOrderRepository {
 				pulled.filter((document) => !readopt(document))
 			),
 			...pulled.filter(readopt),
-		].map((document) => withAdoption(document, adoptedAt));
+		].map((document) => ({ ...document, sync: adoptedSync(document.sync, adoptedAt) }));
 		// A new order is inserted in bulk. An order already resident is written through its OWN
 		// incremental write, whose modifier reads the document CURRENT at the write — so a receipt
 		// count raised since the residency read above (a receipt printed, the previous-generation

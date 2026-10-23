@@ -12,6 +12,7 @@ import type {
 	PaymentRefundEntry,
 	PaymentRow,
 } from '@wcpos/order-math';
+import { residentRevision } from '@wcpos/sync-engine';
 
 import {
 	applyEngineResidentChanges,
@@ -157,8 +158,8 @@ export async function mirrorMoneyAnswer(manager: QueryRuntime, uuid: string, ans
 						)
 					)
 				: meta;
-			const sync = current?.sync as { revision?: unknown } | undefined;
-			const underSentRevision = !!answer.sentRevision && sync?.revision === answer.sentRevision;
+			const underSentRevision =
+				!!answer.sentRevision && residentRevision(current).revision === answer.sentRevision;
 			const summary = {
 				status: order?.status,
 				payment_method: order?.payment_method,

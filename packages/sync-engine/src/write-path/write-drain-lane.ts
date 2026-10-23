@@ -10,9 +10,12 @@
  * each attempt re-stamps its baseRevision from the record's CURRENT
  * sync.revision (the `currentRevision` port below reads it) so an edit queued
  * behind an in-flight ack pushes against the re-anchored base; a 409
- * stale-revision conflict transitions the row to durable 'conflicted' (server
- * truth stored on it — the facade's conflicts()/resolveConflict surface) and
- * LEAVES the drain, holding later edits to the record; an unrecoverable 428
+ * stale-revision conflict on an order is recovered once (the SAME intent
+ * re-pushed under the 409's currentRevision, `autoRecoverConflict` below,
+ * #1204); any other 409, or an order's second, transitions the row to durable
+ * 'conflicted' (server truth stored on it — the facade's
+ * conflicts()/resolveConflict surface) and LEAVES the drain, holding later
+ * edits to the record; an unrecoverable 428
  * (the revision refresh below finds nothing) parks
  * as durable 'needs-revision' on the same surface (#516 item 4 — resolution
  * refreshes the revision first, never a same-base retry); a 428 that persists
@@ -60,6 +63,7 @@ import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/b
 import { scopeBoundFailureStreak } from '../failure-streak';
 import { deadLetterOutcomesForTick } from './dead-letter-outcome';
 import { fetchOrderServerRevision } from './order-server-revision';
+import { residentRevision, stampedSync } from './order-revision';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineRequest } from '../transport/engine-transport';
@@ -515,8 +519,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
 									.exec();
-								const row = doc?.toJSON() as { sync?: { revision?: string } } | undefined;
-								return row?.sync?.revision;
+								return residentRevision(doc?.toJSON()).revision ?? undefined;
 							},
 							// DRAIN-TIME ANNIHILATION (#1059): drop the local resident when the
 							// drain cancels a never-pushed create→delete chain. `onDeleteAck` is
@@ -593,7 +596,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								if (!revision) return null;
 								await doc?.incrementalModify((data: Record<string, unknown>) => ({
 									...data,
-									sync: { ...((data.sync ?? {}) as object), revision },
+									sync: stampedSync((data.sync ?? {}) as object, revision),
 								}));
 								return revision;
 							},
