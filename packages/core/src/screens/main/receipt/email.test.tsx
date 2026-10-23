@@ -166,6 +166,15 @@ describe('EmailForm', () => {
 		expect(queueRows).toHaveLength(1);
 	});
 
+	// ADR 0040 Decided 1 rule 1: the store has not heard the sale, so the email queues as offline.
+	it('queues while the sale awaits the store, though the till is online', async () => {
+		render(<EmailForm order={order} localOnly />);
+		await send();
+
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(queueRows).toHaveLength(1);
+	});
+
 	it('posts straight away when online and reports success', async () => {
 		mockPost.mockResolvedValue({ data: { success: true } });
 		render(<EmailForm order={order} />);

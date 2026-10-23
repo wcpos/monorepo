@@ -9,7 +9,6 @@ import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useConfirmOfflineTender } from '../tender/use-confirm-offline-tender';
 import { useTenderFlow } from '../tender/use-tender-flow';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useCheckoutBack } from './use-checkout-back';
@@ -22,15 +21,9 @@ import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
 
 export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
-	const payload = useRecordField(order, (record) => record.payload);
 	// The POS screen's overlays paint in its "pos" host, as the cart's confirmations do.
-	const offline = useConfirmOfflineTender({
-		currencySymbol: payload.currency_symbol,
-		portalHost: 'pos',
-	});
-	const flow = useTenderFlow(order, 'columns', {
-		confirmOfflineTender: offline.confirmOfflineTender,
-	});
+	const flow = useTenderFlow(order, 'columns', { portalHost: 'pos' });
+	const payload = useRecordField(order, (record) => record.payload);
 	const { format: formatCurrency } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const format = React.useCallback(
 		(minor: number) => formatCurrency(Number(fromMinor(minor, flow.dp))),
@@ -118,7 +111,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				<StorageOutageBanner testID="checkout-storage-unavailable" />
 			</View>
 			<View className="flex-1 p-4">{body}</View>
-			{offline.dialog}
+			{flow.offlineDialog}
 		</View>
 	);
 }

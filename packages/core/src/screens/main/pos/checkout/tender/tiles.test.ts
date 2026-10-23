@@ -162,6 +162,13 @@ describe('offline tenders', () => {
 		]);
 	});
 
+	it('an order the store has never seen is not offered offline: no route for the record', () => {
+		const [offline] = buildTenderTiles([makeMethod()], { online: false, hasServerId: false });
+		expect(offline).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
+		const [online] = buildTenderTiles([makeMethod()], { online: true, hasServerId: false });
+		expect(online).toMatchObject({ disabled: false, reason: null });
+	});
+
 	it('settlesLater only offline, enabled and record', () => {
 		const [online] = buildTenderTiles([makeMethod()], { online: true });
 		expect(online).toMatchObject({ disabled: false, worksOffline: true, settlesLater: false });

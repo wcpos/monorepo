@@ -45,8 +45,15 @@ jest.mock('@wcpos/query/mutations', () => ({
 			...(args as Parameters<typeof import('@wcpos/query/mutations').recordReceiptPrint>)
 		),
 }));
+let mockPrintOptions: Record<string, unknown> = {};
+let mockRendererOptions: Record<string, unknown> = {};
+let mockAwaiting: boolean | null = false;
+jest.mock('../pos/checkout/use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
 jest.mock('@wcpos/printer', () => ({
-	usePrint: () => ({ print: mockPrint, isPrinting: false }),
+	usePrint: (options: Record<string, unknown>) => {
+		mockPrintOptions = options;
+		return { print: mockPrint, isPrinting: false };
+	},
 	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
 		.isOrderBasedCloudProfile,
 	usesSystemPrintDialog: jest.requireActual('@wcpos/printer/transport/device-key')
@@ -59,15 +66,18 @@ jest.mock('@wcpos/components/toast', () => ({
 // A preview loaded from a URL with no rendered HTML: the dialog print reads the loaded frame,
 // so auto-print waits for it (#2806). The server's receipt data has arrived by default.
 jest.mock('./hooks/use-template-renderer', () => ({
-	useTemplateRenderer: () => ({
-		templates: [{ id: 7 }],
-		selectedTemplateId: 7,
-		renderedHtml: null,
-		receiptUrl: 'https://shop.test/receipt',
-		receiptData: mockReceiptData,
-		hasFinalData: mockFinal,
-		receiptDataIsServer: mockServerData,
-	}),
+	useTemplateRenderer: (options: Record<string, unknown>) => {
+		mockRendererOptions = options;
+		return {
+			templates: [{ id: 7 }],
+			selectedTemplateId: 7,
+			renderedHtml: null,
+			receiptUrl: 'https://shop.test/receipt',
+			receiptData: mockReceiptData,
+			hasFinalData: mockFinal,
+			receiptDataIsServer: mockServerData,
+		};
+	},
 }));
 jest.mock('./hooks/use-resolved-printer', () => ({
 	useResolvedPrinter: () => mockPrinter,
@@ -143,6 +153,7 @@ beforeEach(() => {
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockFinal = true;
 	mockAutoPrint = true;
+	mockAwaiting = false;
 	mockServerData = true;
 	mockReceiptData = undefined;
 	mockGateway = null;
@@ -162,6 +173,30 @@ it('waits for final data and frame load, then auto-prints once', async () => {
 	expect(result.current.printedTo).toBe('Till printer');
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+// ADR 0040 Decided 1 rule 1: one local-only rule; a journal not read yet holds the document.
+it('a sale the store has not heard renders locally with its line: no store page, no order cloud print', async () => {
+	mockAwaiting = null;
+	const { result, rerender } = renderHook(() =>
+		useReceiptDocument({ order, autoPrintAllowed: true })
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(result.current.previewProps.pending).toBe(true);
+	expect(result.current.autoPrintPending).toBe(true);
+	expect(mockPrint).not.toHaveBeenCalled();
+	mockAwaiting = true;
+	await act(async () => rerender());
+	expect(mockRendererOptions).toMatchObject({
+		localOnly: true,
+		awaitingStoreLine: 'receipt.awaiting_store_line',
+	});
+	expect(mockRendererOptions.baseReceiptURL).toBeUndefined();
+	expect(mockPrintOptions).toMatchObject({ awaitingStoreLine: 'receipt.awaiting_store_line' });
+	expect(mockPrintOptions.orderId).toBeUndefined();
+	mockAwaiting = false;
+	await act(async () => rerender());
+	expect(mockRendererOptions).toMatchObject({ localOnly: false, awaitingStoreLine: null });
+	expect(mockPrintOptions).toMatchObject({ orderId: 42, awaitingStoreLine: undefined });
 });
 it('waits for a frame even when final data is ready first', async () => {
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));

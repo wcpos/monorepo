@@ -31,22 +31,22 @@ export function describeRegisterBar({
 				? ('register.choose_register' as const)
 				: bindingStatus === 'none'
 					? ('register.no_register' as const)
-					: // ADR 0040 Decided 1 rule 1: the cashier is never unaware. Offline, the pill counts the
-						// sales still to send; online, it stays until the store has answered every one.
-						(!online || directoryFailed) && awaitingStore > 0
-						? ('register.offline_to_send' as const)
-						: !online || directoryFailed
-							? ('register.offline' as const)
-							: awaitingStore > 0
-								? ('register.awaiting_store' as const)
-								: sessionStatus === 'counting' && !approvalRequired
-									? ('register.counting' as const)
-									: approvalRequired
-										? ('register.approval_needed' as const)
-										: sessionStatus === 'open' && overdue
-											? ('register.overdue' as const)
-											: sessionsOn && !sessionStatus
-												? ('register.closed' as const)
-												: null,
+					: !online || directoryFailed
+						? // ADR 0040 Decided 1 rule 1: offline, the pill counts the sales still to send.
+							awaitingStore > 0
+							? ('register.offline_to_send' as const)
+							: ('register.offline' as const)
+						: sessionStatus === 'counting' && !approvalRequired
+							? ('register.counting' as const)
+							: approvalRequired
+								? ('register.approval_needed' as const)
+								: sessionStatus === 'open' && overdue
+									? ('register.overdue' as const)
+									: sessionsOn && !sessionStatus
+										? ('register.closed' as const)
+										: // Online, the sales the store has not answered rank last: they need no action.
+											awaitingStore > 0
+											? ('register.awaiting_store' as const)
+											: null,
 	};
 }

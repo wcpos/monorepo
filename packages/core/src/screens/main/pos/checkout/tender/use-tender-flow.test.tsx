@@ -460,6 +460,15 @@ function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 	};
 }
 
+// The flow asks the cashier through `useConfirmOfflineTender` (its own suite); yes by default.
+const mockConfirmOffline = jest.fn();
+jest.mock('./use-confirm-offline-tender', () => ({
+	useConfirmOfflineTender: () => ({
+		confirmOfflineTender: (facts: unknown) => mockConfirmOffline(facts) ?? Promise.resolve(true),
+		dialog: null,
+	}),
+}));
+
 describe('useTenderFlow', () => {
 	beforeEach(() => {
 		mockSize = 'sm';
@@ -4866,28 +4875,47 @@ describe('offline manual tenders', () => {
 		expect(body.payment.id).not.toBe('row-a');
 	});
 
-	it('no store id → order_not_on_store_yet', async () => {
+	// No route for the record (orders created offline are a later slice): never offered, never asked.
+	it('an order the store has never seen is not offered offline; the cashier is never asked', async () => {
 		mockPayload = { total: '10.00', meta_data: [] };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+			settlesLater: false,
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockConfirmOffline).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+
+	// Cash rounding: the dialog names what is recorded, 10.05 for a 10.03 balance, not the keyed 10.03.
+	it('the confirmation names the rounded amount that will be recorded', async () => {
+		mockMethods = [
+			{
+				...cash,
+				defaults: { ...cash.defaults, rounding: { increment: '0.05', mode: 'nearest' as const } },
+			},
+		];
+		mockPayload = { id: 42, total: '10.03', meta_data: [] };
+		mockConfirmOffline.mockResolvedValueOnce(false);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockConfirmOffline).toHaveBeenCalledWith(
+			expect.objectContaining({ amountMinor: 1005, queuedOffline: false })
+		);
+	});
+
+	it('the cashier declines the offline confirmation → nothing journaled', async () => {
+		mockConfirmOffline.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).not.toHaveBeenCalled();
-		expect(mockInfo).toHaveBeenCalledWith(
-			'pos_checkout.order_not_on_store_yet',
-			expect.objectContaining({ showToast: true })
-		);
-	});
-
-	it('confirmOfflineTender false → nothing journaled', async () => {
-		const confirmOfflineTender = jest.fn(async () => false);
-		const { result } = renderHook(() =>
-			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
-		);
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
-
-		expect(confirmOfflineTender).toHaveBeenCalledWith({
+		expect(mockConfirmOffline).toHaveBeenCalledWith({
 			method: cash,
 			amountMinor: 1000,
 			queuedOffline: false,
@@ -4897,16 +4925,13 @@ describe('offline manual tenders', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
-	it('confirmOfflineTender true → journaled via defer and logged as recorded offline', async () => {
+	it('the cashier confirms offline → journaled via defer and logged as recorded offline', async () => {
 		mockUseRealManual = true;
-		const confirmOfflineTender = jest.fn(async () => true);
-		const { result } = renderHook(() =>
-			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
-		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 
-		expect(confirmOfflineTender).toHaveBeenCalledWith({
+		expect(mockConfirmOffline).toHaveBeenCalledWith({
 			method: cash,
 			amountMinor: 1000,
 			queuedOffline: false,
@@ -4925,29 +4950,27 @@ describe('offline manual tenders', () => {
 
 	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
 		let answer: (confirmed: boolean) => void = () => {};
-		const confirmOfflineTender = jest.fn(
+		mockConfirmOffline.mockImplementationOnce(
 			() => new Promise<boolean>((resolve) => (answer = resolve))
 		);
-		const { result } = renderHook(() =>
-			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
-		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		const first = result.current.takeTender();
 		await act(async () => result.current.takeTender());
-		expect(confirmOfflineTender).toHaveBeenCalledTimes(1);
+		expect(mockConfirmOffline).toHaveBeenCalledTimes(1);
 		await act(async () => {
 			answer(false);
 			await first;
 		});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 
-		confirmOfflineTender.mockRejectedValueOnce(new Error('prompt lost'));
+		mockConfirmOffline.mockRejectedValueOnce(new Error('prompt lost'));
 		await act(async () => result.current.takeTender());
-		expect(confirmOfflineTender).toHaveBeenCalledTimes(2);
+		expect(mockConfirmOffline).toHaveBeenCalledTimes(2);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Freed: the next press asks again.
-		confirmOfflineTender.mockResolvedValueOnce(false);
+		mockConfirmOffline.mockResolvedValueOnce(false);
 		await act(async () => result.current.takeTender());
-		expect(confirmOfflineTender).toHaveBeenCalledTimes(3);
+		expect(mockConfirmOffline).toHaveBeenCalledTimes(3);
 	});
 });

@@ -33,7 +33,7 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
-import { enterReceipt, releaseUnconfirmedReceipt } from './checkout-mode';
+import { enterReceipt, getCheckoutModeSnapshot, releaseUnconfirmedReceipt } from './checkout-mode';
 import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
 import { persistProvenance } from './provenance/persist-provenance';
@@ -462,7 +462,13 @@ async function finishSale(
 			return { outcome: 'not-completed', summary: null };
 		}
 	}
-	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
+	// ADR 0040 Decided 1 rule 3: the till's paid moment owns the receipt, its print and haptic; a
+	// replay owns nothing visible. It refreshes a receipt tab that still exists, and never adds
+	// back one the cashier finished (that tab would auto-print an unmarked copy).
+	const tabOpen = ({ receiptOrders, checkoutOrders } = getCheckoutModeSnapshot()) =>
+		receiptOrders.has(order.uuid) || checkoutOrders.has(order.uuid);
+	if (presentation.host === 'background' && (outcome.source !== 'replay' || tabOpen()))
+		enterReceipt(order.uuid, { select: false });
 	if (presentation.host === 'stage' && presentation.autoShowReceipt) {
 		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });
 		else enterReceipt(order.uuid);

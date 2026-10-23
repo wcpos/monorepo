@@ -173,12 +173,15 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({}),
 }));
 
+// No sale awaits the store here (its own suites cover the mark).
+jest.mock('../pos/checkout/use-awaiting-store', () => ({ useAwaitsStore: () => false }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		store: { wc_price_decimals$: new BehaviorSubject(2) },
 	}),
-	// No store database: no sale awaits the store here.
-	useStoreSession: () => ({ storeDB: undefined }),
 }));
 
 jest.mock('../../../contexts/translations', () => ({

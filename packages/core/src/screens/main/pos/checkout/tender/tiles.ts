@@ -107,6 +107,8 @@ export function buildTenderTiles(
 		transports?: Record<string, PaymentTransport>;
 		/** The ledger holds pending, authorized or captured money. */
 		hasLiveLeg?: boolean;
+		/** false: the store has never seen the order (no `payload.id`). */
+		hasServerId?: boolean;
 	}
 ): TenderTile[] {
 	return methods
@@ -156,10 +158,15 @@ export function buildTenderTiles(
 				else if (!readers.length) reason = 'no_readers';
 				else if (readers.every((reader) => reader.inUseBy !== null))
 					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
-			} else if (!options.online && method.capabilities.offline !== 'record') {
+			} else if (
+				!options.online &&
+				(method.capabilities.offline !== 'record' || options.hasServerId === false)
+			) {
 				// ADR 0040 Decided 1 rule 2: a gateway with no offline option cannot complete offline;
 				// `record` journals and completes. Rule 1: the enabled offline tile carries
-				// `settlesLater`, which the pane renders as "Sent later · Store may refuse".
+				// `settlesLater`, which the pane renders as "Sent later · Store may refuse". An order
+				// the store has never seen has no route for the record (orders created offline are a
+				// later slice), so it is never offered, never confirmed, never refused later.
 				reason = 'offline';
 			}
 			const worksOffline =

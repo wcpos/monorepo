@@ -247,7 +247,8 @@ export class PrinterService {
 		receiptData: ReceiptData,
 		profile?: PrinterProfile,
 		html?: string,
-		decimals?: number
+		decimals?: number,
+		awaitingStoreLine?: string
 	): Promise<void> {
 		// Anything that ends in the OS print dialog shares one queue, so two dialogs never open at once;
 		// winspool queues are raw jobs and keep their own.
@@ -274,6 +275,7 @@ export class PrinterService {
 				openDrawer: profile.autoOpenDrawer,
 				codePage: profile.codePage,
 				decimals,
+				awaitingStoreLine,
 			};
 			if (await transport.supportsMarkup?.()) {
 				await this.dispatchMarkup(

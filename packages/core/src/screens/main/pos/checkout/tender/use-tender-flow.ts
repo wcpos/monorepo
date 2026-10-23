@@ -58,6 +58,7 @@ import {
 	residentUnpaid,
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
+import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -142,6 +143,8 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	/** The offline tender confirmation (ADR 0040 Decided 1 rule 1); the host renders it. */
+	offlineDialog: React.ReactNode;
 	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
 	unansweredCommand: boolean;
 	retryCommand: () => Promise<void>;
@@ -251,20 +254,11 @@ function closeMessage(
 	return t('pos_checkout.close_needs_connection');
 }
 
-export interface TenderFlowOptions {
-	/** The cashier confirms a tender the store cannot hear yet (ADR 0040 D1 rule 1); false: none. */
-	confirmOfflineTender?: (facts: {
-		method: PaymentMethodDescriptor;
-		amountMinor: number;
-		queuedOffline: boolean;
-	}) => Promise<boolean>;
-}
-const confirmByDefault = async () => true;
-
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
 	host: CheckoutHost,
-	{ confirmOfflineTender = confirmByDefault }: TenderFlowOptions = {}
+	/** The host's overlay layer for the offline confirmation (see `useConfirmOfflineTender`). */
+	{ portalHost }: { portalHost?: string } = {}
 ): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
@@ -322,6 +316,11 @@ export function useTenderFlow(
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const currency = payload.currency || storeCurrency;
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
+	const { confirmOfflineTender, dialog: offlineDialog } = useConfirmOfflineTender({
+		currencySymbol: payload.currency_symbol,
+		dp,
+		portalHost,
+	});
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -359,6 +358,7 @@ export function useTenderFlow(
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
 			hasLiveLeg: rows.some(({ status }) => isLivePaymentStatus(status)),
+			hasServerId: !!payload.id,
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
@@ -409,6 +409,7 @@ export function useTenderFlow(
 		transports:
 			state.methodId && state.transport ? { [state.methodId]: state.transport } : undefined,
 		hasLiveLeg: liveRows.length > 0,
+		hasServerId: !!payload.id,
 	});
 	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
 	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
@@ -856,10 +857,12 @@ export function useTenderFlow(
 		// Busy from here: a second press while the cashier is still answering the offline
 		// confirmation must not open a second prompt. A decline or a throwing prompt frees it.
 		busyRef.current = true;
-		if (method?.capture.mode === 'manual' && (!online || queuedOffline)) {
+		// Only a tile that settles later asks (rule 1); a disabled one is refused below, with its reason.
+		if (tiles.find((tile) => tile.method.id === method?.id)?.settlesLater && method) {
+			// The amount that will be RECORDED: cash rounding's, not the keyed entry.
 			const confirmed = await confirmOfflineTender({
 				method,
-				amountMinor: enteredLegMinor,
+				amountMinor: entryAppliedMinor,
 				queuedOffline,
 			}).catch(() => false);
 			if (!confirmed) {
@@ -1489,6 +1492,8 @@ export function useTenderFlow(
 	}, [
 		unansweredCommand,
 		confirmOfflineTender,
+		entryAppliedMinor,
+		tiles,
 		actionCtx,
 		actionActor,
 		ctx,
@@ -1888,6 +1893,7 @@ export function useTenderFlow(
 			cancelInvoice,
 			unansweredCommand,
 			retryCommand,
+			offlineDialog,
 		}),
 		[
 			plan,
@@ -1944,6 +1950,7 @@ export function useTenderFlow(
 			cancelInvoice,
 			unansweredCommand,
 			retryCommand,
+			offlineDialog,
 		]
 	);
 }

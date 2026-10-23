@@ -247,3 +247,19 @@ it('a journal not read yet is not awaiting: no tab flashes amber as it mounts', 
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
 	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('success');
 });
+
+it('an awaiting sale with nothing due reads Paid · awaiting store whatever its stage', () => {
+	mockAwaiting$.next(new Set(['a']));
+	const order = {
+		uuid: 'a',
+		payload: {
+			total: '10.00',
+			status: 'pos-open',
+			meta_data: withLedger([], [
+				{ id: 'cash', status: 'captured', amount: '10.00', tendered: null },
+			] as PaymentRow[]),
+		},
+	} as unknown as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · awaiting store');
+});

@@ -552,7 +552,8 @@ it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green
 	await act(async () => {});
 	expect(screen.getByTestId('receipt-awaiting-store').textContent).toBe('Awaiting store · ');
 	expect(screen.getByTestId('receipt-paid-with').textContent).toMatch(/^Awaiting store · /);
-	expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Change $7.05');
+	const headline = screen.getByTestId('checkout-paid-headline');
+	expect(headline.textContent).toBe('Change $7.05');
 	expect(withTiming).toHaveBeenCalledTimes(1);
 
 	mockAwaiting = false;
@@ -561,6 +562,8 @@ it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green
 	});
 	expect(screen.queryByTestId('receipt-awaiting-store')).toBeNull();
 	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
+	// The disc alone re-pops; the headline never unmounts.
 	expect(withTiming).toHaveBeenCalledTimes(2);
+	expect(screen.getByTestId('checkout-paid-headline')).toBe(headline);
 	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
 });

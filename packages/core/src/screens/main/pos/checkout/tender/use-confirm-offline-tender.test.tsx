@@ -9,12 +9,6 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 
-jest.mock('@wcpos/query', () => ({
-	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
-}));
-jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
-}));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
@@ -67,7 +61,7 @@ const cash = { id: 'pos_cash', title: 'Cash' } as PaymentMethodDescriptor;
 const asked: { answer?: Promise<boolean> } = {};
 // The flow asks from an event (the Take press), as here.
 function Host() {
-	const offline = useConfirmOfflineTender({ currencySymbol: '$' });
+	const offline = useConfirmOfflineTender({ currencySymbol: '$', dp: 2 });
 	return (
 		<>
 			<button

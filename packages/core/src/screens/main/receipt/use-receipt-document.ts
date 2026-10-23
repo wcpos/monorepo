@@ -6,6 +6,7 @@ import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/r
 import { isOrderBasedCloudProfile, usePrint, usesSystemPrintDialog } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { withBase } from '@wcpos/components/webview/with-base';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -79,11 +80,16 @@ export function useReceiptDocument({
 	// Get the WC order ID for the receipts API
 	const orderId = orderData?.id;
 
-	// ADR 0040 Decided 1 rule 1: a sale the store has not heard is never shown or printed from the
-	// store's page (it reads unpaid there); it renders locally, its line first on the paper.
-	const awaitsStore = useAwaitsStore(order?.uuid ?? '') === true;
+	// ADR 0040 Decided 1 rule 1, the ONE local-only rule: offline, or a sale the store has not heard
+	// (its page and receipts API read it unpaid), the receipt renders locally, its line first: no
+	// store page, no order-based cloud print, no PDF; email queues. Not read yet (null) HOLDS the
+	// document and the auto-print. A document with no order never awaits.
+	const awaiting = useAwaitsStore(order?.uuid ?? '');
+	const awaits = order ? awaiting : false;
+	const localOnly = useOnlineStatus().status !== 'online-website-available' || awaits !== false;
+	const awaitingStoreLine = awaits ? t('receipt.awaiting_store_line') : undefined;
 	// Legacy receipt URL from order links
-	const baseReceiptURL = awaitsStore ? undefined : orderData?.links?.receipt?.[0]?.href;
+	const baseReceiptURL = localOnly ? undefined : orderData?.links?.receipt?.[0]?.href;
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
@@ -118,7 +124,8 @@ export function useReceiptDocument({
 		localReport,
 		formatReport,
 		order: orderData,
-		awaitingStoreLine: awaitsStore ? t('receipt.awaiting_store_line') : null,
+		localOnly,
+		awaitingStoreLine: awaitingStoreLine ?? null,
 		nextLocalClosureCount: async () => {
 			const closure = await getLocalClosure?.();
 			return closure ? closure.getLatest().print_count + 1 : 0;
@@ -165,7 +172,8 @@ export function useReceiptDocument({
 	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
 	const previewHtml = renderedHtml ?? pageHtml ?? null;
 	const previewPending =
-		previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL));
+		awaits === null ||
+		(previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL)));
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
@@ -323,12 +331,13 @@ export function useReceiptDocument({
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
+		awaitingStoreLine,
 		iframeRef,
 		cloudEnqueueFactory,
 		// Order-based cloud providers (Epson/PrintNode) send these instead of bytes;
 		// the server renders + delivers. templateInfo.id is the server template id
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
-		orderId: document ? undefined : orderId,
+		orderId: document || localOnly ? undefined : orderId,
 		templateId: document ? undefined : templateInfo?.id,
 		onBeforePrint: () => {
 			if (reportSystemDialog) Toast.show({ title: t('register.report_system_print') });
@@ -501,6 +510,7 @@ export function useReceiptDocument({
 			uiSettings.autoPrintReceipt &&
 			autoPrintAllowed &&
 			!isResolvingPrinter &&
+			awaits !== null &&
 			(!needsLoadedPreview || frameLoaded) &&
 			hasFinalData &&
 			(receiptDataIsServer || localOrderSettled) &&
@@ -518,6 +528,7 @@ export function useReceiptDocument({
 		hasFinalData,
 		frameKey,
 		isResolvingPrinter,
+		awaits,
 		localOrderSettled,
 		needsLoadedPreview,
 		printAndReport,
@@ -552,6 +563,7 @@ export function useReceiptDocument({
 		frameState !== 'failed' &&
 		(isSyncing ||
 			isResolvingPrinter ||
+			awaits === null ||
 			(needsLoadedPreview && hasDocument && frameState !== 'loaded') ||
 			(awaitingSettledData && !dataWaitExpired));
 

@@ -1,50 +1,35 @@
-import { combineLatest } from 'rxjs';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { type Observable } from 'rxjs';
+import { distinctUntilChanged, map, shareReplay } from 'rxjs/operators';
 
-import { observePendingCompletions } from './completion-journal';
-import { type MoneyCommandEntry, observeMoneyJournal } from './money-commands';
+import { storeDatabase } from './ensure-local-document';
+import { isDeferred, observeMoneyJournal } from './money-commands';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
 
 /**
- * Whether the store has still to hear a sale the till has taken (ADR 0040 Decided 1 rule 1: the
- * cashier is never unaware). The mark is never read from the order STATUS: on reconnect the
- * still-unpaid server document is adopted before the record lands, so the status flickers. Not
- * every sent entry marks: an online sale's POST is an open sent entry for its round trip too and
- * would flash "awaiting store" on every sale, so only a DEFERRED record (sent, no revision) does.
- * A completed offline sale stays marked through its re-send by the attempt's `awaitingAdoption`,
- * which ends only when the store session finishes the sale.
+ * The orders whose sale the store has still to hear (ADR 0040 Decided 1 rule 1: the cashier is
+ * never unaware): those with an open offline record (`isDeferred`). The mark lives exactly as
+ * long as that record: `markSent` keeps `deferredAt` through the re-send, and the store's answer
+ * settles (deletes) the entry. Never the order STATUS (on reconnect the still-unpaid server
+ * document is adopted before the record lands, so it flickers), and never an online sale: its
+ * POST, or an `unconfirmed` close the store already took, is not a sale the store has not heard.
  */
-export function awaitsStore({
-	attempt,
-	entries,
-}: {
-	attempt: { awaitingAdoption?: true } | undefined;
-	entries: readonly Pick<MoneyCommandEntry, 'sentAt' | 'sentRevision'>[];
-}): boolean {
-	return (
-		attempt?.awaitingAdoption === true ||
-		entries.some((entry) => entry.sentAt !== null && entry.sentRevision === null)
-	);
-}
+const shared = new WeakMap<object, Observable<ReadonlySet<string>>>();
 
 const sameSet = (left: ReadonlySet<string>, right: ReadonlySet<string>) =>
 	left.size === right.size && [...left].every((uuid) => right.has(uuid));
 
-/** The uuids of every order awaiting the store, live; emits only when the set changes. */
-export function observeAwaitingStore(storeDB: StoreLocalDatabase) {
-	return combineLatest([observePendingCompletions(storeDB), observeMoneyJournal(storeDB)]).pipe(
-		map(([pending, journal]) => {
-			const byOrder = new Map<string, MoneyCommandEntry[]>();
-			for (const entry of journal)
-				byOrder.set(entry.orderUuid, [...(byOrder.get(entry.orderUuid) ?? []), entry]);
-			const uuids = new Set([...Object.keys(pending), ...byOrder.keys()]);
-			return new Set(
-				[...uuids].filter((uuid) =>
-					awaitsStore({ attempt: pending[uuid], entries: byOrder.get(uuid) ?? [] })
-				)
-			) as ReadonlySet<string>;
-		}),
-		distinctUntilChanged(sameSet)
-	);
+/** The awaiting uuids, live; ONE stream per store database, replaying its last set. */
+export function observeAwaitingStore(storeDB: StoreLocalDatabase): Observable<ReadonlySet<string>> {
+	const database = storeDatabase(storeDB);
+	let stream = shared.get(database);
+	if (!stream) {
+		stream = observeMoneyJournal(storeDB).pipe(
+			map((entries) => new Set(entries.filter(isDeferred).map((entry) => entry.orderUuid))),
+			distinctUntilChanged(sameSet),
+			shareReplay({ bufferSize: 1, refCount: true })
+		);
+		shared.set(database, stream);
+	}
+	return stream;
 }

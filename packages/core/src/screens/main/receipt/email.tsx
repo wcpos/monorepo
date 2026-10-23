@@ -35,6 +35,8 @@ const formSchema = z.object({
 
 interface Props {
 	order: EngineRecord<'orders'>;
+	/** The receipt document's local-only rule: a sale the store has not heard queues as offline. */
+	localOnly?: boolean;
 }
 
 /**
@@ -48,7 +50,7 @@ interface Props {
  * with time — a rejected address earns the same 400 forever, and hiding it
  * behind "queued" would be a lie.
  */
-export function EmailForm({ order }: Props) {
+export function EmailForm({ order, localOnly = false }: Props) {
 	const http = useRestHttpClient();
 	const { storeDB } = useAppState();
 	const { status } = useOnlineStatus();
@@ -61,7 +63,7 @@ export function EmailForm({ order }: Props) {
 
 	// 'online-website-unavailable' counts as offline here: the device has a
 	// network but the store cannot be reached, which fails exactly the same way.
-	const isOffline = status !== 'online-website-available';
+	const isOffline = localOnly || status !== 'online-website-available';
 
 	/**
 	 * Persist the send so it survives an app restart, and tell the cashier what

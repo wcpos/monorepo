@@ -1,26 +1,34 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
+import { catchError, startWith } from 'rxjs/operators';
+
 import { observeAwaitingStore } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 
 const NONE: ReadonlySet<string> = new Set();
 
-/** The orders the store has still to hear (ADR 0040 Decided 1 rule 1), live; null until the
- *  journals first answer, so a mark is never drawn from a guess. No store database: none. */
+/**
+ * The orders the store has still to hear (ADR 0040 Decided 1 rule 1), from the store's one
+ * shared stream: warm (the register bar holds it), a reader gets the set on its first render;
+ * null only before the stream's first-ever answer, so a mark is never drawn from a guess.
+ */
 function useAwaitingStore(): ReadonlySet<string> | null {
 	const { storeDB } = useStoreSession();
-	const [read, setRead] = React.useState<{ db: unknown; awaiting: ReadonlySet<string> }>();
-	React.useEffect(() => {
-		if (!storeDB) return;
-		const subscription = observeAwaitingStore(storeDB).subscribe({
-			next: (awaiting) => setRead({ db: storeDB, awaiting }),
-			error: () => setRead({ db: storeDB, awaiting: NONE }),
-		});
-		return () => subscription.unsubscribe();
-	}, [storeDB]);
-	if (!storeDB) return NONE;
-	return read?.db === storeDB ? read.awaiting : null;
+	return useObservableEagerState(
+		React.useMemo(
+			() =>
+				storeDB
+					? observeAwaitingStore(storeDB).pipe(
+							startWith(null),
+							catchError(() => of(NONE))
+						)
+					: of(NONE),
+			[storeDB]
+		)
+	);
 }
 
 /** This sale is taken but the store has not heard it (null: not read yet). */

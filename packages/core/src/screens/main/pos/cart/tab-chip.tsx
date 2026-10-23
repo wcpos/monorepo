@@ -60,7 +60,7 @@ export function TabChip({
 		saveState?.kind === 'rejected'
 			? t('pos_checkout.chip_save_refused')
 			: // ADR 0040 Decided 1 rule 1: a sale the store has not heard says so until it answers.
-				awaits && stage === 'receipt'
+				awaits && Number(balance) <= 0
 				? t('pos_checkout.chip_paid_awaiting_store')
 				: awaits
 					? t('pos_checkout.chip_awaiting_store_due', { due: format(Number(balance)) })

@@ -91,7 +91,6 @@
     "./virtualized-list": "./src/virtualized-list/index.ts",
     "./vstack": "./src/vstack/index.tsx",
     "./webview": "./src/webview/index.tsx",
-    "./webview/mark-awaiting-store": "./src/webview/mark-awaiting-store.ts",
     "./webview/with-base": "./src/webview/with-base.ts"
   },
   "scripts": {

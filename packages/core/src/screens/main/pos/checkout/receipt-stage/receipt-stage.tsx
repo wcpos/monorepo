@@ -55,25 +55,36 @@ function PaidMoment({
 	/** null: the journal has not answered yet; the moment waits, unseen, for its tone. */
 	awaiting: boolean | null;
 }) {
+	// The tone the moment first showed: the disc pops again only when it changes (the answer).
+	const [firstTone, setFirstTone] = React.useState<boolean | null>(null);
+	if (firstTone === null && awaiting !== null) setFirstTone(awaiting);
+	const ready = awaiting !== null;
 	return (
 		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
 			{/* The till's paid moment, never the store's later answer (ADR 0040 Decided 1 rule 3). */}
-			{Platform.isNative && !sent && awaiting !== null ? <PaidHaptic /> : null}
-			{/* Re-keyed: ONE pop once the tone is known (never green, then amber), and again, green,
-			    when the store answers (the completion beat, ADR 0040 Decided 1 rule 1). */}
-			<Stamp key={String(awaiting)} ready={awaiting !== null}>
-				<View
-					testID="receipt-paid-disc"
-					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : awaiting ? 'bg-warning/15' : 'bg-success/15'}`}
-				>
-					<Icon
-						name={sent || awaiting ? 'pending' : 'check'}
-						size={sent || awaiting ? '4xl' : undefined}
-						className={
-							sent ? 'text-muted-foreground' : awaiting ? 'text-warn-text' : 'text-success'
-						}
-					/>
-				</View>
+			{Platform.isNative && !sent && ready ? <PaidHaptic /> : null}
+			{/* Unseen until the tone is known, then ONE pop (never green, then amber); the answer
+			    re-pops the disc alone, green, and the headline stays (ADR 0040 Decided 1 rule 1). */}
+			<Stamp
+				key={String(ready)}
+				mode={ready ? 'pop' : 'hold'}
+				testID="receipt-paid-banner"
+				className="items-center gap-3 p-4"
+			>
+				<Stamp key={String(awaiting)} mode={awaiting === firstTone ? 'still' : 'pop'}>
+					<View
+						testID="receipt-paid-disc"
+						className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : awaiting ? 'bg-warning/15' : 'bg-success/15'}`}
+					>
+						<Icon
+							name={sent || awaiting ? 'pending' : 'check'}
+							size={sent || awaiting ? '4xl' : undefined}
+							className={
+								sent ? 'text-muted-foreground' : awaiting ? 'text-warn-text' : 'text-success'
+							}
+						/>
+					</View>
+				</Stamp>
 				{children}
 			</Stamp>
 		</View>
@@ -98,16 +109,27 @@ function PaidHaptic() {
 	return null;
 }
 
-/** The pop the banner lands with, once per mount; unseen until `ready`. */
-function Stamp({ children, ready }: { children: React.ReactNode; ready: boolean }) {
-	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(null);
+/** A pop, once per mount: `hold` keeps it unseen, `still` shows it without motion. */
+function Stamp({
+	children,
+	mode,
+	...props
+}: {
+	children: React.ReactNode;
+	mode: 'hold' | 'still' | 'pop';
+	testID?: string;
+	className?: string;
+}) {
+	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(
+		mode === 'still' ? true : null
+	);
 	const pop = useSharedValue(0);
-	const animation = React.useRef({ pop });
+	const animation = React.useRef({ pop, mode });
 	// Accessibility is a mount-only platform effect. Keep motion off until the async preference
 	// resolves, as in the terminal moment.
 	React.useEffect(() => {
-		const { pop } = animation.current;
-		if (!ready) return;
+		const { pop, mode } = animation.current;
+		if (mode !== 'pop') return;
 		void AccessibilityInfo.isReduceMotionEnabled().then(
 			(enabled) => {
 				setReduceMotion(enabled);
@@ -120,13 +142,13 @@ function Stamp({ children, ready }: { children: React.ReactNode; ready: boolean 
 		return () => {
 			cancelAnimation(pop);
 		};
-	}, [ready]);
+	}, []);
 	const style = useAnimatedStyle(() => ({
 		opacity: reduceMotion === null ? 0 : reduceMotion ? 1 : pop.value,
 		transform: [{ scale: reduceMotion ? 1 : 0.6 + pop.value * 0.4 }],
 	}));
 	return (
-		<Animated.View testID="receipt-paid-banner" className="items-center gap-3 p-4" style={style}>
+		<Animated.View {...props} style={style}>
 			{children}
 		</Animated.View>
 	);

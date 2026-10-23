@@ -60,6 +60,21 @@ it.each([
 	[{ online: false, awaitingStore: 0 }, 'register.offline'],
 	[{ online: false, awaitingStore: 2 }, 'register.offline_to_send'],
 	[{ online: true, awaitingStore: 1 }, 'register.awaiting_store'],
+	// Offline-to-send outranks every session pill; online awaiting ranks below them (no action).
+	[
+		{ online: false, awaitingStore: 1, sessionsOn: true, sessionStatus: 'counting' },
+		'register.offline_to_send',
+	],
+	[{ awaitingStore: 1, sessionsOn: true, sessionStatus: 'counting' }, 'register.counting'],
+	[
+		{ awaitingStore: 1, sessionStatus: 'counting', approvalRequired: true },
+		'register.approval_needed',
+	],
+	[
+		{ awaitingStore: 1, sessionsOn: true, sessionStatus: 'open', overdue: true },
+		'register.overdue',
+	],
+	[{ awaitingStore: 1, sessionsOn: true, sessionStatus: null }, 'register.closed'],
 ] as const)('awaiting-store pill %j', (state, pill) => {
 	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
 });

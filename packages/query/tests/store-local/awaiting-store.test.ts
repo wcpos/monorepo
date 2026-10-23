@@ -5,14 +5,12 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
-	awaitsStore,
 	claimRoute,
 	failCompletionAttempt,
 	markSent,
 	type MoneyCommandEntry,
 	observeAwaitingStore,
 	recordCompletionAttempt,
-	resolveCompletionAttempt,
 } from '../../src/store-local';
 import { deferEntry, settleCommand } from '../../src/store-local/money-commands';
 
@@ -30,20 +28,6 @@ afterEach(async () => {
 	await db.remove();
 });
 
-const entry = (sentAt: string | null, sentRevision: string | null) => ({ sentAt, sentRevision });
-
-// ADR 0040 Decided 1 rule 1: the mark is the journals, never the order status.
-it.each([
-	['an attempt awaiting adoption', { awaitingAdoption: true as const }, [], true],
-	['a deferred record (sent, no revision)', undefined, [entry('2026-10-23T10:00:00Z', null)], true],
-	['a sent online entry with a revision', undefined, [entry('2026-10-23T10:00:00Z', 'r1')], false],
-	['an unsent crash leftover', undefined, [entry(null, null)], false],
-	['a pending attempt not awaiting adoption', {}, [], false],
-	['nothing', undefined, [], false],
-])('%s → %s', (_label, attempt, entries, expected) => {
-	expect(awaitsStore({ attempt, entries })).toBe(expected);
-});
-
 const record = (orderUuid: string, id: string): MoneyCommandEntry => ({
 	orderUuid,
 	kind: 'record',
@@ -58,30 +42,47 @@ const record = (orderUuid: string, id: string): MoneyCommandEntry => ({
 });
 const route = (orderUuid: string, id: string) =>
 	({ orderUuid, kind: 'record', target: null, rowId: id }) as const;
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-it('observeAwaitingStore emits the awaiting set and only when it changes', async () => {
+// ADR 0040 Decided 1 rule 1: the mark lives exactly as long as the offline record.
+it('marks a deferred record through its re-send until the store answers; online sales never mark', async () => {
 	const emissions: string[][] = [];
 	const subscription = observeAwaitingStore(db).subscribe((set) => emissions.push([...set].sort()));
-	const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 	await settle();
 
-	// A deferred offline record marks its order.
+	// An online POST in flight (sent with a revision), and an `unconfirmed` online close the
+	// store already took, are not sales the store has not heard.
+	await claimRoute(db, route('online', 'row-o'), 'me', record('online', 'row-o'));
+	await markSent(db, 'online', 'row-o', 'r1', 'me');
+	await recordCompletionAttempt(db, { orderUuid: 'online', source: 'manual' });
+	await failCompletionAttempt(db, 'online', 'unconfirmed', { awaitingAdoption: true });
+	await settle();
+	// The offline record marks its order, and keeps it through the re-send.
 	await claimRoute(db, route('a', 'row-a'), 'me', record('a', 'row-a'));
 	await settle();
 	await deferEntry(db, 'a', 'row-a', 'me');
 	await settle();
-	// An online POST in flight (sent with a revision) does not mark, and does not re-emit.
-	await claimRoute(db, route('b', 'row-b'), 'me', record('b', 'row-b'));
-	await markSent(db, 'b', 'row-b', 'r1', 'me');
+	await claimRoute(db, route('a', 'row-a'), 'me', null);
+	await markSent(db, 'a', 'row-a', 'r2', 'me');
 	await settle();
-	// The completed offline sale stays marked through its re-send by awaitingAdoption.
-	await recordCompletionAttempt(db, { orderUuid: 'a', source: 'manual' });
-	await failCompletionAttempt(db, 'a', 'unconfirmed', { awaitingAdoption: true });
+	// The store answers: the entry settles and the mark goes.
 	await settleCommand(db, 'a', 'row-a');
-	await settle();
-	await resolveCompletionAttempt(db, 'a');
 	await settle();
 	subscription.unsubscribe();
 
 	expect(emissions).toEqual([[], ['a'], []]);
+});
+
+it('shares one stream per store database, replaying its last set to a later subscriber', async () => {
+	expect(observeAwaitingStore(db)).toBe(observeAwaitingStore(db));
+	const first = observeAwaitingStore(db).subscribe();
+	await claimRoute(db, route('a', 'row-a'), 'me', record('a', 'row-a'));
+	await deferEntry(db, 'a', 'row-a', 'me');
+	await settle();
+	let replayed: ReadonlySet<string> | null = null;
+	observeAwaitingStore(db)
+		.subscribe((set) => (replayed = set))
+		.unsubscribe();
+	first.unsubscribe();
+	expect(replayed).toEqual(new Set(['a']));
 });

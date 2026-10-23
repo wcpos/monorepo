@@ -49,7 +49,7 @@ export function ReceiptActions({
 							<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 						</DialogHeader>
 						<DialogBody>
-							<EmailForm order={order} />
+							<EmailForm order={order} localOnly={doc.isOffline} />
 						</DialogBody>
 					</DialogContent>
 				</Dialog>

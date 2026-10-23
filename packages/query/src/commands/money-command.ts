@@ -16,6 +16,7 @@ import {
 	claimRoute,
 	deferEntry,
 	dropUnsent,
+	isDeferred,
 	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
@@ -208,9 +209,9 @@ async function chooseRevision(
 ): Promise<string> {
 	let { resident, order } = await readOrder(runtime, entry.orderUuid);
 	const pending = order.local?.dirty || (order.local?.pendingMutationIds?.length ?? 0) > 0;
-	// A deferred record (sent, never with a revision) was journaled offline: the edits made
-	// before it (its provenance stamp) reach the store before it, as a fresh command's would.
-	if ((fresh || entry.sentRevision === null) && pending && !ENDS_MOTION.has(entry.kind)) {
+	// A deferred record was journaled offline: the edits made before it (its provenance stamp)
+	// reach the store before it, as a fresh command's would.
+	if ((fresh || isDeferred(entry)) && pending && !ENDS_MOTION.has(entry.kind)) {
 		await pushRecord(runtime, resident as never);
 		({ resident, order } = await readOrder(runtime, entry.orderUuid));
 	}

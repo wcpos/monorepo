@@ -1,4 +1,4 @@
-export { awaitsStore, observeAwaitingStore } from './awaiting-store';
+export { observeAwaitingStore } from './awaiting-store';
 export {
 	failCompletionAttempt,
 	observePendingCompletions,
@@ -11,6 +11,7 @@ export {
 	claimHeld,
 	claimRoute,
 	dropUnsent,
+	isDeferred,
 	markSent,
 	nextClaimExpiry,
 	observeMoneyJournal,

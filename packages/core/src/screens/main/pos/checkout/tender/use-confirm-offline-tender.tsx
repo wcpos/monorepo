@@ -10,35 +10,31 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { fromMinor } from '@wcpos/order-math';
-import { useDocField } from '@wcpos/query';
+import { fromMinor, type PaymentMethodDescriptor } from '@wcpos/order-math';
 
-import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-import type { TenderFlowOptions } from './use-tender-flow';
-
-type Facts = Parameters<NonNullable<TenderFlowOptions['confirmOfflineTender']>>[0];
+type Facts = { method: PaymentMethodDescriptor; amountMinor: number; queuedOffline: boolean };
 
 /**
  * The cashier confirms a tender the store cannot hear yet (ADR 0040 Decided 1 rule 1: never
- * unaware): the amount and method in the title, the risk in one line. A host passes
- * `confirmOfflineTender` to `useTenderFlow` and renders `dialog` in its own tree. Closing the
- * question any way but the confirm (Cancel, or the host unmounting) answers no.
+ * unaware): the amount and method in the title, the risk in one line. `useTenderFlow` asks it
+ * and returns `dialog` for its host to render. Closing the question any way but the confirm
+ * (Cancel, or the host unmounting) answers no.
  */
 export function useConfirmOfflineTender({
 	currencySymbol,
+	dp,
 	portalHost,
 }: {
 	currencySymbol?: string;
+	/** The tender's decimals: the amount arrives in its minor units. */
+	dp: number;
 	/** The host's overlay layer: the checkout column paints in the POS host, the modal at the root. */
 	portalHost?: string;
 }) {
 	const t = useT();
-	const { store } = useStoreSession();
-	// The tender's own figures (see use-tender-flow): minor units at the store's decimals.
-	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol });
 	// The facts stay while the dialog animates out; `open` is the question.
 	const [question, setQuestion] = React.useState<{ facts: Facts; open: boolean } | null>(null);

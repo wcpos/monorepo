@@ -25,7 +25,6 @@ import { CancelPaymentView } from './cancel-payment-view';
 import { LegacyTab } from './legacy-tab';
 import { LedgerPane } from './ledger-pane';
 import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
-import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useTheme } from '../../../../../contexts/theme';
@@ -46,12 +45,9 @@ interface Props {
  * same flow works from a phone at a market stall to a desktop till.
  */
 export function TenderCheckout({ order }: Props) {
-	const payload = useRecordField(order, (record) => record.payload);
 	// The routed modal's confirmations paint at the root host, above it (as the refund form's).
-	const offline = useConfirmOfflineTender({ currencySymbol: payload.currency_symbol });
-	const flow = useTenderFlow(order, 'modal', {
-		confirmOfflineTender: offline.confirmOfflineTender,
-	});
+	const flow = useTenderFlow(order, 'modal');
+	const payload = useRecordField(order, (record) => record.payload);
 	const { screenSize } = useTheme();
 	const { format: formatCurrency } = useCurrencyFormat({
 		currencySymbol: payload.currency_symbol,
@@ -231,7 +227,7 @@ export function TenderCheckout({ order }: Props) {
 						{body}
 					</VStack>
 				</DialogBody>
-				{offline.dialog}
+				{flow.offlineDialog}
 			</DialogContent>
 		</Dialog>
 	);
