@@ -4,31 +4,18 @@ import type { CategoryLogger } from '@wcpos/utils/logger';
 
 import type { PaymentFrameStatus } from './use-pay-frame-gate';
 
-// How long the checkout waits for the store's order-pay document before it
-// treats the navigation as stalled and reloads the frame once.
-//
-// The document is one WordPress page. A healthy store serves it in about a
-// second; a starved CI simulator was measured at 8 s from dialog to enabled
-// (run 33750030091, iOS phone) and, at the very worst, 71 s to the first
-// WebView commit (run 33319523590). The stall this guards against is a
-// different animal: WebKit never sends the request at all — the pay page
-// reached the store five minutes after the tap (run 33758920470, iOS phone)
-// or never (run 33750030091, iPad), and WebKit's own 60 s request timeout
-// cannot fire for a request that never left the process. Without a way out
-// the cashier is left with the spinner #1024 was meant to end. 90 s sits past
-// every real load ever measured and well short of the stall. A reload
-// restarts the navigation WebKit dropped; a second stall is reported as a
-// failure with a Retry rather than hidden behind more waiting.
+// How long the first order-pay document may take before the frame reloads once. A healthy
+// store answers in about a second; the slowest real load measured was 71 s (run 33319523590).
+// The stall is WebKit never sending the request at all (runs 33758920470, 33750030091), which
+// its own 60 s timeout cannot see. 90 s sits past every real load and short of the stall; a
+// second stall is reported with a Retry rather than hidden behind more waiting (#1024).
 export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
 
 interface PayFrameInput {
-	/** The tokenized pay-page URL; empty while there is no frame. */
 	src: string;
-	/** Bumped by the host's Retry: a remount, and the silent reload is spent. */
 	retryToken: number;
 	prepared: 'ready' | 'failed' | null;
 	report: (status: PaymentFrameStatus) => void;
-	/** A load after the first: a later document (the post-payment hop) that may need reconciling. */
 	onLaterDocument: () => void;
 	logger: CategoryLogger;
 }
@@ -139,19 +126,13 @@ export function usePayFrame(input: PayFrameInput) {
 	);
 
 	/**
-	 * A new payment URL swaps the document under the frame, so the gate closes
-	 * until the replacement reports its own load. The unmount cleanup means a
-	 * remounted frame (mode change, stock rejection cleared) never starts open.
-	 *
-	 * The load counter resets with it: the fallback poll deliberately skips the
-	 * *first* load because a payment cannot have completed yet, and a re-hosted
-	 * document is a first load, not a post-payment navigation.
-	 *
-	 * `useLayoutEffect`, not `useEffect`: the new `src` is committed to the DOM in
-	 * the same commit, and a passive effect would leave the gate reporting `ready`
-	 * against the replacement document until after paint — a window in which a
-	 * press posts into a document that is still loading. This closes it before the
-	 * cashier can see, let alone touch, the frame.
+	 * A new payment URL (or a remount) swaps the document under the frame: the gate
+	 * closes until the replacement loads, and the unmount cleanup means a remounted
+	 * frame never starts open. The load count resets too: a re-hosted document is a
+	 * first load, which the fallback poll skips, not a post-payment navigation.
+	 * `useLayoutEffect`, not `useEffect`: a passive effect would leave the gate
+	 * reporting `ready` against the replacement document until after paint, a window
+	 * in which a press posts into a document that is still loading.
 	 */
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
