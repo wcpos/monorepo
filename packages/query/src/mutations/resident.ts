@@ -17,21 +17,21 @@ import {
 	type WriteableCollection,
 } from '../engine-adapter/collection-map';
 import { engineCollection } from '../records/engine-collection';
+import { recordCollectionName } from '../records/engine-record';
 import { getRegisterId } from '../register-session/register-document';
 import { protectOrderMeta } from './protected-order-meta';
 
-import type { EngineRecord } from '../records/engine-record';
 import type { QueryRuntime } from '../provider';
+import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
+import type { TemporaryOrderRecord } from '../temporary-order';
 import type { RxDocument } from 'rxdb';
 
-export type MutationDocument =
-	| EngineRecord<'orders'>
-	| EngineRecord<'products'>
-	| EngineRecord<'variations'>
-	| EngineRecord<'customers'>
-	| EngineRecord<'coupons'>
-	| import('@wcpos/database').TemporaryOrderDocument
-	| import('@wcpos/database').StoreDocument;
+/** A record the push doors can serve: it carries its own collection. An identity-only order needs `applyLocalPatch`'s `collectionName`. */
+export type RecordWriteTarget =
+	| { [C in WriteableCollection]: ReadonlyEngineRecord<C> }[WriteableCollection]
+	| TemporaryOrderRecord;
+type OrderIdentity = { readonly uuid: string; readonly isNew: boolean };
+export type MutationDocument = RecordWriteTarget | OrderIdentity;
 
 const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
 	Object.entries(COLLECTION_VOCABULARY)
@@ -70,6 +70,14 @@ export function documentRecordId(document: unknown): string | null {
 	const value = document as Record<string, unknown>;
 	const identity = value.uuid ?? value.id;
 	return typeof identity === 'string' && identity.length > 0 ? identity : null;
+}
+
+/** The validated engine collection a write target lives in: the caller's explicit name first, else the record's own. */
+export function writeTargetCollection(
+	target: MutationDocument,
+	explicit?: string
+): WriteableCollection | null {
+	return writeableCollection(explicit ?? recordCollectionName(target));
 }
 
 function withPromotedFields(
@@ -424,14 +432,4 @@ export async function insertEngineResident(input: {
 		remoteId,
 	});
 	return (await residentCollection.insert(resident)) as unknown as EngineResident;
-}
-
-export async function patchLocalResident<T extends EngineResident>(
-	document: T,
-	changes: Record<string, unknown>
-): Promise<T> {
-	return (await document.incrementalModify(((old: Record<string, unknown>) => ({
-		...old,
-		...changes,
-	})) as never)) as T;
 }

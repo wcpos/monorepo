@@ -5,36 +5,27 @@ import {
 	WRITEABLE_REMOTE_ID_FIELD,
 	type WriteableCollection,
 } from '../engine-adapter/collection-map';
+import { recordCollectionName } from '../records/engine-record';
 import {
 	documentRecordId,
 	type EngineResident,
 	findEngineResident,
 	type QueryManager,
+	type RecordWriteTarget,
+	writeTargetCollection,
 } from './resident';
 
 // Slow stores answer order pushes after 15 s (Sentry CHECKOUT101); 45 s covers the
 // write drain's 30 s request timeout plus its first retry. Pay spins and stays disabled.
 const ORDER_WRITE_OUTCOME_TIMEOUT_MS = 45_000;
 
-type AnyRxDocument = {
-	id?: unknown;
-	uuid?: string;
-	collection: { name: string };
-	getLatest(): AnyRxDocument;
-};
-
 const REMOTE_ID_FIELD = WRITEABLE_REMOTE_ID_FIELD;
 
-function isWriteableCollection(name: string): name is WriteableCollection {
-	return Object.prototype.hasOwnProperty.call(REMOTE_ID_FIELD, name);
-}
-
-export async function enqueueRecordWrite(runtime: QueryManager, document: AnyRxDocument) {
-	const latest = document.getLatest();
-	const collectionName = latest.collection.name;
-	if (!isWriteableCollection(collectionName))
-		throw new Error(`Collection "${collectionName}" is not engine-writeable`);
-	const recordId = documentRecordId(latest);
+export async function enqueueRecordWrite(runtime: QueryManager, document: RecordWriteTarget) {
+	const collectionName = writeTargetCollection(document);
+	if (!collectionName)
+		throw new Error(`Collection "${recordCollectionName(document)}" is not engine-writeable`);
+	const recordId = documentRecordId(document);
 	if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
 	const resident = await findEngineResident(runtime, collectionName, recordId);
 	if (!resident) {
@@ -88,17 +79,12 @@ export async function readWrittenResident(
  */
 export async function pushRecord(
 	runtime: QueryManager,
-	document: AnyRxDocument
+	document: RecordWriteTarget
 ): Promise<EngineResident> {
-	const latest = document.getLatest();
-	const collectionName = latest.collection.name;
-	if (!isWriteableCollection(collectionName)) {
-		throw new Error(`Collection "${collectionName}" is not engine-writeable`);
-	}
-	const recordId = documentRecordId(latest);
-	if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
-
-	const { receipt, resident } = await enqueueRecordWrite(runtime, document);
+	const { collectionName, recordId, receipt, resident } = await enqueueRecordWrite(
+		runtime,
+		document
+	);
 
 	let currentResident = resident;
 	if (collectionName === 'orders') {
