@@ -838,3 +838,37 @@ describe('receiptEmailPostRequest', () => {
 		expect(receiptEmailPostRequest(pendingRow({ saveTo: 'billing' }))[1].save_to).toBe('billing');
 	});
 });
+
+// ADR 0040 Decided 1 rule 1: the store's copy would show a sale it has not heard as unpaid.
+it('keeps an email queued, unpenalised, while its order awaits the store; sends it once it settles', async () => {
+	const { drainReceiptEmailQueue: drainForStore } = jest.requireActual<
+		typeof import('../../src/receipt-email-queue/commands')
+	>('../../src/receipt-email-queue/commands');
+	const collection = createFakeCollection([pendingRow()]);
+	const deferred = {
+		orderUuid: 'u',
+		path: 'orders/42/payments',
+		sentAt: '2026-10-23T10:00:00Z',
+		deferredAt: '2026-10-23T10:00:00Z',
+	};
+	let journal: object | null = { orders: { u: { entries: { r: deferred }, chain: null } } };
+	const storeDB = {
+		collections: { receipt_email_queue: collection },
+		getLocal: async () => journal && { toJSON: () => ({ data: journal }) },
+	} as never;
+	const post = jest.fn(async () => ({ data: { success: true } }));
+	const deps = {
+		storeDB,
+		post,
+		logger: silentLogger(),
+		now: () => Date.parse('2026-08-06T10:05:00.000Z'),
+		sleep: async () => undefined,
+	};
+
+	expect(await drainForStore(deps)).toEqual({ sent: 0, failed: 0, deferred: 1 });
+	expect(post).not.toHaveBeenCalled();
+	expect(collection.docs[0]).toMatchObject({ status: 'pending', attempts: 0 });
+	journal = null; // the store answered: the entry settled
+	expect(await drainForStore(deps)).toEqual({ sent: 1, failed: 0, deferred: 0 });
+	expect(post).toHaveBeenCalledTimes(1);
+});

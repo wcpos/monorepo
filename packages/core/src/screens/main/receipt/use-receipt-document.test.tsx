@@ -184,7 +184,13 @@ it('a sale the store has not heard renders locally with its line: no store page,
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(result.current.previewProps.pending).toBe(true);
 	expect(result.current.autoPrintPending).toBe(true);
+	// A manual print waits too, silently: whether the paper needs the line is not known yet.
+	expect(result.current.printHeld).toBe(true);
+	await act(async () => {
+		expect(await result.current.printAndReport()).toBe(false);
+	});
 	expect(mockPrint).not.toHaveBeenCalled();
+	expect(mockToast).not.toHaveBeenCalled();
 	mockAwaiting = true;
 	await act(async () => rerender());
 	expect(mockRendererOptions).toMatchObject({

@@ -2,7 +2,7 @@ import { type Observable } from 'rxjs';
 import { distinctUntilChanged, map, shareReplay } from 'rxjs/operators';
 
 import { storeDatabase } from './ensure-local-document';
-import { isDeferred, observeMoneyJournal } from './money-commands';
+import { isDeferred, observeMoneyJournal, readMoneyJournal } from './money-commands';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
 
@@ -32,4 +32,14 @@ export function observeAwaitingStore(storeDB: StoreLocalDatabase): Observable<Re
 		shared.set(database, stream);
 	}
 	return stream;
+}
+
+/** The store ids of those orders, read once (a record's path is `orders/{id}/…`). */
+export async function readAwaitingStoreOrderIds(storeDB: StoreLocalDatabase) {
+	const journal = await readMoneyJournal(storeDB);
+	return new Set(
+		Object.values(journal).flatMap(({ entries }) =>
+			entries.filter(isDeferred).map((entry) => Number(/^orders\/(\d+)\//.exec(entry.path)?.[1]))
+		)
+	);
 }

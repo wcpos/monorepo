@@ -229,6 +229,8 @@ export interface DrainDeps {
 	/** Performs the actual `POST /orders/{id}/email`. */
 	post: (row: ReceiptEmailRow) => Promise<ReceiptEmailPostResponse>;
 	logger: DrainLogger;
+	/** A row to keep queued this pass, with no attempt spent (its order awaits the store). */
+	holds?: (row: ReceiptEmailRow) => boolean;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
 	maxAttempts?: number;
@@ -359,6 +361,10 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 
 	let posted = 0;
 	for (const [index, snapshot] of rows.entries()) {
+		if (deps.holds?.(snapshot)) {
+			summary.deferred += 1;
+			continue;
+		}
 		if (snapshot.nextAttemptAt && Date.parse(snapshot.nextAttemptAt) > now()) {
 			summary.deferred += 1;
 			continue;

@@ -358,6 +358,8 @@ export function useReceiptDocument({
 	// nor the reverse.
 	const runPrint = React.useCallback(
 		async (onFailure: (error: unknown) => void) => {
+			// Not read yet: whether the paper needs the awaiting-store line is unknown (rule 1).
+			if (awaits === null) return false;
 			if (
 				(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
 				(!selectedTemplate?.offline_capable || !selectedTemplate.content)
@@ -392,7 +394,7 @@ export function useReceiptDocument({
 			if (dispatched) setPrintedTo(printDestination);
 			return dispatched;
 		},
-		[printReceipt, printDestination, document, selectedTemplate, t, cloudAwaiting]
+		[printReceipt, printDestination, document, selectedTemplate, t, cloudAwaiting, awaits]
 	);
 	// For hosts that show their own inline error (reports, closures): the row only, no
 	// toast. A closed print dialog is a cancel (debug); a real failure carries its
@@ -600,6 +602,8 @@ export function useReceiptDocument({
 		printAndReport,
 		isPrinting,
 		printedTo,
+		/** The journal has not said whether this sale awaits the store: Print waits too. */
+		printHeld: awaits === null,
 		canDownloadPdf,
 		downloadReceiptPdf,
 		isDownloadingPdf,
