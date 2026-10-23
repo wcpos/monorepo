@@ -5,7 +5,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import {
 	type AwaitingCustomerStamp,
 	type DeclaredValues,
-	withAwaitingCustomer,
+	type GatewayAttempt,
 } from '@wcpos/order-math';
 import {
 	type EngineRecord,
@@ -20,7 +20,7 @@ import { mirrorAnswer } from '../../commands/land-answer';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { commandProvenance } from '../provenance/command-provenance';
 import {
-	cancelGatewayInvoice,
+	cancelGatewayAttempt,
 	submitGatewayPayment,
 	type SubmitGatewayPaymentDeps,
 } from './submit-gateway-payment';
@@ -65,8 +65,7 @@ export function useGatewayPayment() {
 				post,
 				cashierId: wpCredentials.id ?? 0,
 				destination: options.destination ?? null,
-				mirror: ({ awaiting, accepted, ...answer }) =>
-					mirror({ ...answer, meta: (meta) => withAwaitingCustomer(meta, awaiting) }, { accepted }),
+				mirror: ({ accepted, ...answer }) => mirror(answer, { accepted }),
 			} satisfies SubmitGatewayPaymentDeps;
 		},
 		[http, manager, ctx, storeDB, wpCredentials.id]
@@ -96,8 +95,17 @@ export function useGatewayPayment() {
 	);
 	const cancel = React.useCallback(
 		(order: EngineRecord<'orders'>, stamp: AwaitingCustomerStamp) =>
-			cancelGatewayInvoice(gatewayOrder(order), stamp, deps(order)),
+			cancelGatewayAttempt(
+				gatewayOrder(order),
+				{ methodId: stamp.method_id, attemptId: stamp.attempt_id, awaiting: stamp },
+				deps(order)
+			),
 		[deps]
 	);
-	return React.useMemo(() => ({ submit, cancel }), [submit, cancel]);
+	const clear = React.useCallback(
+		(order: EngineRecord<'orders'>, { id, methodId }: GatewayAttempt) =>
+			cancelGatewayAttempt(gatewayOrder(order), { methodId, attemptId: id }, deps(order)),
+		[deps]
+	);
+	return React.useMemo(() => ({ submit, cancel, clear }), [submit, cancel, clear]);
 }

@@ -5,7 +5,12 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { type MetaDataEntry, type OrderPaymentSummary, withLedger } from '@wcpos/order-math';
+import {
+	type MetaDataEntry,
+	type OrderPaymentSummary,
+	withAwaitingCustomer,
+	withLedger,
+} from '@wcpos/order-math';
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -250,7 +255,7 @@ it.each([
 	const resident = {
 		...payload,
 		status,
-		meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+		meta_data: stamps.flatMap((value) => withAwaitingCustomer([], value)),
 	};
 	expect(
 		isSaleComplete(
@@ -528,7 +533,7 @@ it('replay never completes a sent order, whatever status its gateway chose', () 
 	const onHold = {
 		...payload,
 		status: 'on-hold',
-		meta_data: [{ key: '_wcpos_awaiting_customer', value: sent.stamp }],
+		meta_data: withAwaitingCustomer([], sent.stamp),
 	};
 	expect(isSaleComplete({ source: 'replay' }, 2, onHold as never)).toBe(false);
 	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status: 'on-hold' } as never)).toBe(

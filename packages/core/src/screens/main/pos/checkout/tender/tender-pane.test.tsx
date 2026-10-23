@@ -261,6 +261,8 @@ function makeFlow(count = 1): TenderFlow {
 		fieldErrors: {},
 		invoiceSent: null,
 		cancelInvoice: jest.fn(),
+		unansweredAttempt: null,
+		clearAttempt: jest.fn(),
 		unansweredCommand: false,
 		retryCommand: jest.fn(async () => undefined),
 		offlineDialog: null,

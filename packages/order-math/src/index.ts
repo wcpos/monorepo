@@ -98,10 +98,11 @@ export {
 	KNOWN_KINDS,
 	KNOWN_PREFILLS,
 	FIELDS_SCHEMA,
-	AWAITING_CUSTOMER_META_KEY,
 	activeAwaitingCustomer,
 	readAwaitingCustomer,
 	withAwaitingCustomer,
+	readGatewayAttempts,
+	withGatewayAttempt,
 } from './payments';
 export type {
 	MetaDataEntry,
@@ -132,6 +133,7 @@ export type {
 	PosOrderStatus,
 	DerivedOrderView,
 	AwaitingCustomerStamp,
+	GatewayAttempt,
 	DeclaredComponent,
 	DeclaredFields,
 	DeclaredValues,

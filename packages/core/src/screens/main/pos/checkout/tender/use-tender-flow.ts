@@ -12,6 +12,7 @@ import {
 	type DeclaredValues,
 	derive,
 	fromMinor,
+	type GatewayAttempt,
 	isLivePaymentStatus,
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
@@ -20,6 +21,7 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readGatewayAttempts,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -227,6 +229,9 @@ export interface TenderFlow {
 	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	cancelInvoice: () => Promise<void>;
+	/** The newest gateway attempt the provider has not answered, and its staff clear. */
+	unansweredAttempt: GatewayAttempt | null;
+	clearAttempt: () => Promise<void>;
 }
 
 type OrderPayload = EngineRecord<'orders'>['payload'];
@@ -429,6 +434,10 @@ export function useTenderFlow(
 	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
 	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
 	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
+	const unansweredAttempt = React.useMemo(
+		() => readGatewayAttempts(payload.meta_data).unanswered,
+		[payload.meta_data]
+	);
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
@@ -1578,6 +1587,40 @@ export function useTenderFlow(
 		}
 	}, [gateway, invoiceSent, order, orderContext, actor, t]);
 
+	const clearAttempt = React.useCallback(async () => {
+		if (busyRef.current || !unansweredAttempt) return;
+		busyRef.current = true;
+		setBusy(true);
+		const { id: attemptId, methodId: method } = unansweredAttempt;
+		const context = { ...orderContext, attemptId, method };
+		try {
+			attemptRef.current = null;
+			const outcome = await gateway.clear(order, unansweredAttempt);
+			if (outcome.kind === 'refused') {
+				const invalid = outcome.code === 'wcpos_invalid_transition';
+				logger.warn(invalid ? t('pos_checkout.attempt_not_cleared') : outcome.message, {
+					showToast: true,
+					context: { ...context, refusal: outcome.code },
+				});
+				return;
+			}
+			const said =
+				outcome.kind === 'cleared' && outcome.reopened
+					? t('pos_checkout.attempt_cleared_reopened')
+					: t('pos_checkout.attempt_cleared_covered');
+			logger.info(said, { actor, showToast: true, context });
+		} catch (error) {
+			logger.error(t('pos_checkout.payment_unanswered'), {
+				code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+				showToast: true,
+				context: { ...context, error: getErrorMessage(error) },
+			});
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [gateway, unansweredAttempt, order, orderContext, actor, t]);
+
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
 			return;
@@ -1759,6 +1802,8 @@ export function useTenderFlow(
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredAttempt,
+			clearAttempt,
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,
@@ -1817,6 +1862,8 @@ export function useTenderFlow(
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredAttempt,
+			clearAttempt,
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,

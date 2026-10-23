@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { type PaymentRow, withLedger } from '@wcpos/order-math';
+import { type PaymentRow, withAwaitingCustomer, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { TabChip } from './tab-chip';
@@ -161,12 +161,13 @@ it('a sent order at its receipt moment reads Invoice sent, not Paid', () => {
 		uuid: 'a',
 		payload: {
 			total: '10.00',
-			meta_data: [
-				{
-					key: '_wcpos_awaiting_customer',
-					value: { method_id: 'wcpos_email_invoice', attempt_id: 'x', destination: 'b@c.d' },
-				},
-			],
+			meta_data: withAwaitingCustomer([], {
+				method_id: 'wcpos_email_invoice',
+				attempt_id: 'x',
+				destination: 'b@c.d',
+				sent_at_gmt: '',
+				cashier_id: 0,
+			}),
 		},
 	} as unknown as EngineRecord<'orders'>;
 	render(<TabChip order={order} />);

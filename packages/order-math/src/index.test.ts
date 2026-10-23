@@ -37,6 +37,9 @@ test('public value surface is exactly the spec', () => {
 		'partitionVoidableRows',
 		'readAwaitingCustomer',
 		'readCompletions',
+		// Added 2026-10-23 (#2900 S2a): the order's gateway attempts, read and patched in one place;
+		// the awaiting stamp is derived from them, as the plugin's Attempt_Log::awaiting() does.
+		'readGatewayAttempts',
 		'readLedger',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then
 		// deducts a total. Without a shared rule for "what one refund is worth" the
@@ -64,6 +67,7 @@ test('public value surface is exactly the spec', () => {
 		'toMinor',
 		'upsertPaymentRow',
 		'withAwaitingCustomer',
+		'withGatewayAttempt',
 		'withLedger',
 		'withMetaReplaced',
 		'withSaleProvenance',

@@ -3,7 +3,7 @@ import { setImmediate } from 'node:timers';
 
 import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
 
-import type { CouponContext } from '@wcpos/order-math';
+import { type CouponContext, withAwaitingCustomer } from '@wcpos/order-math';
 
 import { createSettlementCoordinator } from './settlement-coordinator';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
@@ -98,7 +98,7 @@ const payloadCases: [string, OrderPayload, boolean][] = [
 	['pending leg', { meta_data: ledger('pending') }, true],
 	['authorized leg', { meta_data: ledger('authorized') }, true],
 	['completed ledger', { total: '0.004', meta_data: ledger('captured', '0.004') }, true],
-	['awaiting customer', { meta_data: [{ key: '_wcpos_awaiting_customer', value: { method_id: 'invoice', attempt_id: 'one' } }] }, true],
+	['awaiting customer', { meta_data: withAwaitingCustomer([], { method_id: 'invoice', destination: null, attempt_id: 'one', sent_at_gmt: '', cashier_id: 0 }) }, true],
 	['server hint', { meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }, true],
 	['epoch-era stamp', { meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] }, false],
 	['partial capture', { meta_data: ledger('captured') }, false],
