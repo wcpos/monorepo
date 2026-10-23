@@ -14,7 +14,7 @@ import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { ReceiptStage } from './receipt-stage';
 
 jest.mock('../payments/server/use-terminal-leg', () => ({ useTerminalLeg: jest.fn() }));
-let mockAwaiting = false;
+let mockAwaiting: boolean | null = false;
 jest.mock('../use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 // The unused asChild path imports untranspiled JSX; keep the real collapsible behavior.
@@ -520,8 +520,31 @@ it('a stamp beside settled money is stale: the paid moment wins', () => {
 	expect(screen.queryByTestId('checkout-sent')).toBeNull();
 });
 
-// ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet.
-it('an awaiting sale shows the warning disc and the awaiting-store sub-line; the answer pops it green once, no second haptic', async () => {
+// ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet. The moment
+// waits, unseen, for the journal's first answer: one pop in the right tone, never green then amber.
+it.each([
+	[true, 'bg-warning/15'],
+	[false, 'bg-success/15'],
+])('a sale read as awaiting=%s pops once, in its tone, with one haptic', async (awaiting, tone) => {
+	Platform.isNative = true;
+	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+	mockAwaiting = null;
+	const { rerender } = render(<ReceiptStage orderUuid="paid" compact />);
+	await act(async () => {});
+	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('0');
+	expect(withTiming).not.toHaveBeenCalled();
+	expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+	mockAwaiting = awaiting;
+	await act(async () => {
+		rerender(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain(tone);
+	expect(screen.queryByTestId('receipt-awaiting-store') !== null).toBe(awaiting);
+	expect(withTiming).toHaveBeenCalledTimes(1);
+	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+});
+
+it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green once more, no second haptic', async () => {
 	Platform.isNative = true;
 	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
 	mockAwaiting = true;
@@ -529,7 +552,6 @@ it('an awaiting sale shows the warning disc and the awaiting-store sub-line; the
 	await act(async () => {});
 	expect(screen.getByTestId('receipt-awaiting-store').textContent).toBe('Awaiting store · ');
 	expect(screen.getByTestId('receipt-paid-with').textContent).toMatch(/^Awaiting store · /);
-	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-warning/15');
 	expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Change $7.05');
 	expect(withTiming).toHaveBeenCalledTimes(1);
 

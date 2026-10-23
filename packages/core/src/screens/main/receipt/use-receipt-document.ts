@@ -81,7 +81,7 @@ export function useReceiptDocument({
 
 	// ADR 0040 Decided 1 rule 1: a sale the store has not heard is never shown or printed from the
 	// store's page (it reads unpaid there); it renders locally, its line first on the paper.
-	const awaitsStore = useAwaitsStore(order?.uuid ?? '');
+	const awaitsStore = useAwaitsStore(order?.uuid ?? '') === true;
 	// Legacy receipt URL from order links
 	const baseReceiptURL = awaitsStore ? undefined : orderData?.links?.receipt?.[0]?.href;
 

@@ -36,8 +36,9 @@ export function TabChip({
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
 	const saveState = useOrderSaveState(order.uuid);
-	// ADR 0040 Decided 1 rule 1: the journals, never the status (which flickers on reconnect).
-	const awaits = useAwaitsStore(order.uuid);
+	// ADR 0040 Decided 1 rule 1: the journals, never the status (which flickers on reconnect);
+	// not read yet reads as not awaiting, so no tab flashes amber as it mounts.
+	const awaits = useAwaitsStore(order.uuid) === true;
 	const { methods } = usePaymentMethods();
 	const { store } = useStoreSession();
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
@@ -81,6 +82,7 @@ export function TabChip({
 										)
 									: (fallbackLabel ?? null);
 	if (!label) return null;
+	const tone = awaits ? 'warning' : stage === 'receipt' ? 'success' : 'info';
 	// Plain muted text, no dot: the active tab carries no chip (ledger line 6) but keeps its
 	// status word so every tab reads "amount over status"; and the fallback ("Cart") is not a
 	// status at all, so it never gets a dot on any tab.
@@ -99,15 +101,7 @@ export function TabChip({
 			testID={testIDs ? `open-order-chip-${order.uuid}` : undefined}
 			label={compact ? '' : label}
 			accessibilityLabel={label}
-			variant={
-				saveState?.kind === 'rejected'
-					? 'error'
-					: awaits
-						? 'warning'
-						: stage === 'receipt'
-							? 'success'
-							: 'info'
-			}
+			variant={saveState?.kind === 'rejected' ? 'error' : tone}
 		/>
 	);
 }

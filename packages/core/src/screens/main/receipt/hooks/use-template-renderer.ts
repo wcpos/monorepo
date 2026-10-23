@@ -57,6 +57,16 @@ export function renderOfflineTemplatePreview({
 	return result.html;
 }
 
+type Template = { engine?: string | null; content: string };
+/**
+ * The awaiting-store line goes first on the paper (ADR 0040 Decided 1 rule 1): in a thermal
+ * template's XML, which the encoder prints, and after the rendered HTML's <body> otherwise.
+ */
+const markThermal = (template: Template, line: string | null) =>
+	line !== null && template.engine === 'thermal'
+		? markAwaitingStoreXml(template.content, line)
+		: template.content;
+
 interface UseTemplateRendererOptions {
 	nextLocalClosureCount?: () => Promise<number>;
 	isReprint?: boolean;
@@ -255,20 +265,15 @@ export function useTemplateRenderer({
 
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
 
-	// The awaiting-store line goes first on the paper: into a thermal template's XML (so the
-	// encoder prints it too), after the rendered HTML's <body> otherwise.
 	const renderTemplate = React.useCallback(
-		(template: { engine?: string | null; content: string }, data: Record<string, unknown>) => {
-			const thermal = template.engine === 'thermal';
+		(template: Template, data: Record<string, unknown>) => {
+			const content = markThermal(template, awaitingStoreLine);
 			const html = renderOfflineTemplatePreview({
 				engine: template.engine,
-				content:
-					awaitingStoreLine !== null && thermal
-						? markAwaitingStoreXml(template.content, awaitingStoreLine)
-						: template.content,
+				content,
 				receiptData: data,
 			});
-			return awaitingStoreLine !== null && !thermal
+			return awaitingStoreLine !== null && template.engine !== 'thermal'
 				? markAwaitingStore(html, awaitingStoreLine)
 				: html;
 		},
@@ -439,11 +444,9 @@ export function useTemplateRenderer({
 				? 'thermal'
 				: (selectedTemplate?.engine ?? null),
 		selectedTemplateContent: selectedTemplate?.offline_capable
-			? selectedTemplate.content &&
-				awaitingStoreLine !== null &&
-				selectedTemplate.engine === 'thermal'
-				? markAwaitingStoreXml(selectedTemplate.content, awaitingStoreLine)
-				: (selectedTemplate.content ?? null)
+			? selectedTemplate.content
+				? markThermal({ ...selectedTemplate, content: selectedTemplate.content }, awaitingStoreLine)
+				: null
 			: reportContent
 				? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
 				: (selectedTemplate?.content ?? null),

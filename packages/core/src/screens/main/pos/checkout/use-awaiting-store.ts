@@ -6,28 +6,29 @@ import { useStoreSession } from '../../../../contexts/app-state';
 
 const NONE: ReadonlySet<string> = new Set();
 
-/** The orders the store has still to hear (ADR 0040 Decided 1 rule 1), live. */
-function useAwaitingStore(): ReadonlySet<string> {
+/** The orders the store has still to hear (ADR 0040 Decided 1 rule 1), live; null until the
+ *  journals first answer, so a mark is never drawn from a guess. No store database: none. */
+function useAwaitingStore(): ReadonlySet<string> | null {
 	const { storeDB } = useStoreSession();
-	const [awaiting, setAwaiting] = React.useState(NONE);
-	// The journals are an external store, subscribed as the tender subscribes to its commands.
+	const [read, setRead] = React.useState<{ db: unknown; awaiting: ReadonlySet<string> }>();
 	React.useEffect(() => {
 		if (!storeDB) return;
 		const subscription = observeAwaitingStore(storeDB).subscribe({
-			next: setAwaiting,
-			error: () => undefined,
+			next: (awaiting) => setRead({ db: storeDB, awaiting }),
+			error: () => setRead({ db: storeDB, awaiting: NONE }),
 		});
 		return () => subscription.unsubscribe();
 	}, [storeDB]);
-	return awaiting;
+	if (!storeDB) return NONE;
+	return read?.db === storeDB ? read.awaiting : null;
 }
 
-/** This sale is taken but the store has not heard it: the receipt stage and chip mark it. */
-export function useAwaitsStore(orderUuid: string): boolean {
-	return useAwaitingStore().has(orderUuid);
+/** This sale is taken but the store has not heard it (null: not read yet). */
+export function useAwaitsStore(orderUuid: string): boolean | null {
+	return useAwaitingStore()?.has(orderUuid) ?? null;
 }
 
 /** How many sales the store has still to hear: the register bar's pill counts them. */
 export function useAwaitingStoreCount(): number {
-	return useAwaitingStore().size;
+	return useAwaitingStore()?.size ?? 0;
 }

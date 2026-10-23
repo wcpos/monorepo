@@ -48,19 +48,20 @@ function StageAction(props: React.ComponentProps<typeof Button>) {
 function PaidMoment({
 	children,
 	sent = false,
-	awaiting = false,
+	awaiting,
 }: {
 	children: React.ReactNode;
 	sent?: boolean;
-	awaiting?: boolean;
+	/** null: the journal has not answered yet; the moment waits, unseen, for its tone. */
+	awaiting: boolean | null;
 }) {
 	return (
 		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
 			{/* The till's paid moment, never the store's later answer (ADR 0040 Decided 1 rule 3). */}
-			{Platform.isNative && !sent ? <PaidHaptic /> : null}
-			{/* Re-keyed on the store's answer: an awaiting sale's disc pops again, green, when it
-			    lands (the completion beat, ADR 0040 Decided 1 rule 1). */}
-			<Stamp key={awaiting ? 'awaiting' : 'answered'}>
+			{Platform.isNative && !sent && awaiting !== null ? <PaidHaptic /> : null}
+			{/* Re-keyed: ONE pop once the tone is known (never green, then amber), and again, green,
+			    when the store answers (the completion beat, ADR 0040 Decided 1 rule 1). */}
+			<Stamp key={String(awaiting)} ready={awaiting !== null}>
 				<View
 					testID="receipt-paid-disc"
 					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : awaiting ? 'bg-warning/15' : 'bg-success/15'}`}
@@ -97,8 +98,8 @@ function PaidHaptic() {
 	return null;
 }
 
-/** The pop the banner lands with, once per mount. */
-function Stamp({ children }: { children: React.ReactNode }) {
+/** The pop the banner lands with, once per mount; unseen until `ready`. */
+function Stamp({ children, ready }: { children: React.ReactNode; ready: boolean }) {
 	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(null);
 	const pop = useSharedValue(0);
 	const animation = React.useRef({ pop });
@@ -106,6 +107,7 @@ function Stamp({ children }: { children: React.ReactNode }) {
 	// resolves, as in the terminal moment.
 	React.useEffect(() => {
 		const { pop } = animation.current;
+		if (!ready) return;
 		void AccessibilityInfo.isReduceMotionEnabled().then(
 			(enabled) => {
 				setReduceMotion(enabled);
@@ -118,7 +120,7 @@ function Stamp({ children }: { children: React.ReactNode }) {
 		return () => {
 			cancelAnimation(pop);
 		};
-	}, []);
+	}, [ready]);
 	const style = useAnimatedStyle(() => ({
 		opacity: reduceMotion === null ? 0 : reduceMotion ? 1 : pop.value,
 		transform: [{ scale: reduceMotion ? 1 : 0.6 + pop.value * 0.4 }],
@@ -193,7 +195,8 @@ function ReceiptStageDocument({
 	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
 	const stamp = activeAwaitingCustomer(payload.meta_data);
 	const sent = stamp && Number(derived.balance) > 0 ? stamp : null;
-	const awaiting = useAwaitsStore(order.uuid) && !sent;
+	const awaitsStore = useAwaitsStore(order.uuid);
+	const awaiting = sent ? false : awaitsStore;
 	return (
 		<View testID="checkout-receipt-stage" className="bg-card flex-1">
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (

@@ -25,11 +25,13 @@ jest.mock('../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { price_num_decimals: 2 }, storeDB: {} }),
-}));
+const mockSession = { store: { price_num_decimals: 2 }, storeDB: {} };
+jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => mockSession }));
 const mockAwaiting$ = new BehaviorSubject<ReadonlySet<string>>(new Set());
-jest.mock('@wcpos/query/store-local', () => ({ observeAwaitingStore: () => mockAwaiting$ }));
+let mockUnread = false;
+jest.mock('@wcpos/query/store-local', () => ({
+	observeAwaitingStore: () => (mockUnread ? jest.requireActual('rxjs').NEVER : mockAwaiting$),
+}));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
@@ -53,6 +55,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 beforeEach(() => {
 	resetCheckoutMode();
+	mockUnread = false;
 	mockAwaiting$.next(new Set());
 });
 it.each([
@@ -231,4 +234,16 @@ it('an awaiting sale keeps its mark while the status flickers back to open on re
 	act(() => mockAwaiting$.next(new Set()));
 	rerender(<TabChip order={order('completed', paid)} />);
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
+});
+
+it('a journal not read yet is not awaiting: no tab flashes amber as it mounts', () => {
+	mockUnread = true;
+	enterReceipt('a');
+	const order = {
+		uuid: 'a',
+		payload: { total: '10.00', status: 'completed', meta_data: [] },
+	} as unknown as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
+	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('success');
 });
