@@ -50,7 +50,10 @@ import {
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
-import { paymentRefusalAttention } from './payments/payment-refusal-attention';
+import {
+	paymentRefusalAttention,
+	recordRefusalAttention,
+} from './payments/payment-refusal-attention';
 import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -306,17 +309,18 @@ export function SaleCompletionBridge(): null {
 			const reason = codes[refused.code];
 			if (!reason || !refused.row) return;
 			const payload = (await findOrder(uuid))?.getLatest().payload;
-			logger.error(
-				...paymentRefusalAttention(tRef.current, {
-					row: refused.row,
-					order: refused.summary,
-					reason,
-					methodTitle: refused.row.method_id,
-					orderUuid: uuid,
-					orderId: payload?.id ?? refused.row.order_id,
-					orderNumber: payload?.number,
-				})
-			);
+			const facts = {
+				row: refused.row,
+				order: refused.summary,
+				reason,
+				methodTitle: refused.row.method_id,
+				orderUuid: uuid,
+				orderId: payload?.id ?? refused.row.order_id,
+				orderNumber: payload?.number,
+			};
+			const attention = paymentRefusalAttention(tRef.current, facts);
+			logger.error(...attention);
+			await recordRefusalAttention(storeDB, facts, attention[0]);
 			await resolveCompletionAttempt(storeDB, uuid);
 		};
 		/**

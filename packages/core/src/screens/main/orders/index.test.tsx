@@ -139,6 +139,8 @@ jest.mock('./filter-bar', () => ({
 	},
 }));
 
+// Pinned in attention-notice.test.tsx; it reads the store session this suite does not mount.
+jest.mock('./attention-notice', () => ({ PaymentAttentionNotice: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
 jest.mock('./cells/note', () => ({ Note: () => null }));

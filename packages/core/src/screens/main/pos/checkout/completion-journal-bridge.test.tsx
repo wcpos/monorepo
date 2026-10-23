@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
-import { concat, NEVER, of, Subject } from 'rxjs';
+import { concat, firstValueFrom, NEVER, of, Subject } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
@@ -1648,7 +1648,13 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 			answers: [],
 			refused: {
 				code: 'wcpos_order_already_paid',
-				row: { id: 'order-row', amount: '10.00', method_id: 'pos_cash', order_id: 42 },
+				row: {
+					id: 'order-row',
+					amount: '10.00',
+					currency: 'USD',
+					method_id: 'pos_cash',
+					order_id: 42,
+				},
 				summary: { status: 'completed', balance: '0.00' },
 			},
 		},
@@ -1669,6 +1675,22 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 			}),
 		})
 	);
+	// Rule 4's one failed story outlives the session's logs: kept for Orders, same sentence.
+	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
+	expect(entry).toEqual({
+		rowId: 'order-row',
+		orderUuid: 'order',
+		orderId: 42,
+		orderNumber: null,
+		amount: '10.00',
+		currency: 'USD',
+		methodId: 'pos_cash',
+		methodTitle: 'pos_cash',
+		reason: 'order_already_paid',
+		message: mockError.mock.calls.at(-1)?.[0],
+		refusedAt: expect.any(String),
+		resolvedAt: null,
+	});
 });
 
 // Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry

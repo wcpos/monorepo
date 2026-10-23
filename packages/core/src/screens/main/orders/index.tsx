@@ -20,6 +20,7 @@ import { UpgradeNotice } from '../components/upgrade-notice';
 import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useTheme } from '../../../contexts/theme';
+import { PaymentAttentionNotice } from './attention-notice';
 import { DisplayOptions } from './display-options';
 import { OrderPane } from './order-pane';
 import { Actions } from './cells/actions';
@@ -376,6 +377,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 					>
 						<DisplayOptions />
 					</ManagementBar>
+					<PaymentAttentionNotice />
 					{showUpgrade && !license?.isPro && (
 						<UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />
 					)}
