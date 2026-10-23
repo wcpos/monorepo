@@ -899,8 +899,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							const bornLocalCreate =
 								dead.operation === 'create' &&
 								doc !== null &&
-								typeof rejectedRemoteId !== 'number' &&
-								typeof rejectedPayloadId !== 'number' &&
+								// A zero or non-numeric id is no server identity (the #2693 class):
+								// counting it would discard the only copy of a born-local record.
+								remoteIdOrNull(rejectedRemoteId) === null &&
+								remoteIdOrNull(rejectedPayloadId) === null &&
 								!rejectionSuggestsServerRecord(reason);
 							deps.emitWriteEvent({
 								type: 'write-rejected',

@@ -50,7 +50,9 @@ export function deadLetterOutcomesForTick(deps: {
 	const rejectionOutcome = (
 		log: SyncObserver,
 		{ mutation, status, reason, serverMessage }: DeadLetter,
-		marker: 'revertFailed' | 'revertSkipped'
+		marker: 'revertFailed' | 'revertSkipped',
+		// Why the revert failed, so the log row says more than that it did.
+		cause?: unknown
 	) =>
 		log({
 			type: 'push.rejected',
@@ -63,6 +65,9 @@ export function deadLetterOutcomesForTick(deps: {
 				...(status !== undefined ? { status } : {}),
 				...(reason !== undefined ? { reason } : {}),
 				...(serverMessage !== undefined ? { serverMessage } : {}),
+				...(cause !== undefined
+					? { message: cause instanceof Error ? cause.message : String(cause) }
+					: {}),
 				[marker]: true,
 			},
 		});
@@ -128,9 +133,9 @@ export function deadLetterOutcomesForTick(deps: {
 							...(serverMessage !== undefined ? { serverMessage } : {}),
 						},
 					});
-				} catch {
+				} catch (error) {
 					// The revert failed: the rejected row stays parked for Store Health.
-					rejectionOutcome(log, deadLetter, 'revertFailed');
+					rejectionOutcome(log, deadLetter, 'revertFailed', error);
 				}
 			})();
 		},

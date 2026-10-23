@@ -180,6 +180,13 @@ describe('deadLetterOutcomesForTick', () => {
 		expect(emitted.map(summary)).toEqual(expected);
 		const reverts = row.steps.includes('settle') && row.expected.length > 1 && !row.bornLocalCreate;
 		expect(revert).toHaveBeenCalledTimes(reverts ? 1 : 0);
+		// A failed revert says why: the revert's own error rides on the row.
+		if (row.revert === 'rejects' && row.scope === 'current') {
+			expect(emitted.at(-1)?.fields).toMatchObject({
+				revertFailed: true,
+				message: 'revert fetch failed',
+			});
+		}
 	});
 
 	it.each(['resolves', 'rejects'] as const)(

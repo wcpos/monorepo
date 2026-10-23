@@ -1729,6 +1729,62 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each([
+		{ id: 0, outcome: 'born-local: revertSkipped, the only copy kept' },
+		{ id: PRODUCT_ID, outcome: 'a server identity: auto-reverted' },
+	])('judges a rejected catalogue create whose ids are $id as $outcome', async ({ id }) => {
+		// A zero id is no server identity (the #2693 class): counting it would
+		// auto-discard the only local copy of a born-local record.
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			const resident = await engine.active()?.database.collections.products.findOne(UUID_A).exec();
+			await resident?.incrementalModify((data: Record<string, unknown>) => ({
+				...data,
+				remoteId: String(id), // the column holds decimal strings
+			}));
+			const receipt = await engine.write({
+				collection: 'products',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { ...productPayload(2), id },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+			const rejections = () =>
+				diagnostics
+					.filter((event) => event.type === 'push.rejected')
+					.map((event) => [event.fields?.revertPending, event.fields?.revertSkipped]);
+			if (id === 0) {
+				await vi.waitFor(() => expect(rejections()).toHaveLength(2));
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				expect(rejections()).toEqual([
+					[true, undefined],
+					[undefined, true],
+				]);
+				expect(route.pulls).toEqual([]);
+				expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+				expect(await productJson(engine)).not.toBeNull();
+				expect(await engine.conflicts()).toEqual([
+					expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+				]);
+			} else {
+				await vi.waitFor(() =>
+					expect(diagnostics.map((event) => event.type)).toContain('queue.write.auto-reverted')
+				);
+				expect(rejections()).toEqual([[true, undefined]]);
+			}
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('adopts the update ack document so server-derived catalog fields land at ack time', async () => {
 		// The cashier zeroes stock_quantity; WooCommerce recomputes stock_status
 		// server-side and returns it in the push ack envelope. The resident (and
