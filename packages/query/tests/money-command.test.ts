@@ -9,6 +9,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 
+import * as mirrorServerOrder from '../src/mutations/mirror-server-order';
 import {
 	MoneyCommandError,
 	moneyCommandPoster,
@@ -841,6 +842,26 @@ describe('the answer chain and the post-answer refresh', () => {
 		const polled = await pollSettles();
 		expect((await residentJSON()).sync.revision).toBe(adopted);
 		expect(await chain()).toMatchObject({ answerRevision: polled, polled: true });
+	});
+
+	it('an adoption that lands while the poll is being mirrored keeps its revision', async () => {
+		store.n += 1;
+		const payment = { ...cash('leg-1', '10.00'), status: 'authorized' } as PaymentRow;
+		const polledRevision = store.revision;
+		// The answer has arrived; a pull adopts a newer document during the mirror's own awaits.
+		const original = mirrorServerOrder.mirrorMoneyAnswer;
+		let adopted = '';
+		jest.spyOn(mirrorServerOrder, 'mirrorMoneyAnswer').mockImplementationOnce(async (...args) => {
+			const out = await original(...args);
+			store.n += 1;
+			await adoptStore(false);
+			adopted = store.revision;
+			return out;
+		});
+		await poster().mirror({ payment, order: store.summary() as never, revision: polledRevision });
+		expect(adopted).not.toBe(polledRevision);
+		expect((await residentJSON()).sync.revision).toBe(adopted);
+		expect(await chain()).toMatchObject({ answerRevision: polledRevision, polled: true });
 	});
 
 	it('a command answer’s post-answer refresh re-adopts over a poll’s stamp', async () => {

@@ -784,6 +784,9 @@ export function moneyCommandPoster(input: {
 			revision,
 			...answer
 		}: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }) => {
+			// Dated at arrival, before the mirror's awaits: an adoption that lands during them is
+			// newer than this answer and must keep its revision (the stamp guard compares the two).
+			const answeredAt = Date.now();
 			try {
 				await mirrorMoneyAnswer(input.runtime, input.orderUuid, { ...answer, sentRevision });
 			} catch (error) {
@@ -793,7 +796,7 @@ export function moneyCommandPoster(input: {
 			}
 			// A poll that settled the row moved the order: record its revision and stamp it for the
 			// next push, never a refresh. The next poll's summary lands under the stamp this one made.
-			const polled = answerChain(revision, Date.now());
+			const polled = answerChain(revision, answeredAt);
 			if (polled) {
 				await settleCommand(input.storeDB, input.orderUuid, null, { ...polled, polled: true });
 				const replaced = await stampPolledRevision(input.runtime, input.orderUuid, polled);
