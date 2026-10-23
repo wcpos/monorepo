@@ -1158,6 +1158,39 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('a typed search while a browse window is in flight neither aborts the browse nor re-sends page=1', async () => {
+		const server = heldBrowseServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		const window = {
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		} as const;
+		const boot = engine.require({ id: 'boot-browse', ...window });
+		await vi.waitFor(() => expect(server.state.browseRequests).toBe(1));
+
+		// The keystroke re-renders the grid: its browse handle releases and the identical
+		// window is redeclared in the same pass, beside the new search declaration.
+		boot.release();
+		const rerendered = engine.require({ id: 'rerendered-browse', ...window });
+		const search = engine.require({
+			id: 'typed-search',
+			collection: 'products',
+			kind: 'search',
+			term: 'widget',
+		});
+
+		await expect(search.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.browseRequests).toBe(1);
+		expect(server.state.browseSignals.some((signal) => signal.aborted)).toBe(false);
+
+		server.openBrowse();
+		await expect(rerendered.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.browseRequests).toBe(1);
+		await engine.dispose();
+	});
+
 	it('still runs two searches one at a time', async () => {
 		const first = Promise.withResolvers<Response>();
 		const server = heldBrowseServer(async (term) => (term === 'widget' ? first.promise : json([])));
@@ -1348,6 +1381,44 @@ describe('require() for search — the public search-demand verb', () => {
 		await expect(second.ready).resolves.toMatchObject({ action: 'fetched' });
 		expect(signal.aborted).toBe(false);
 		expect(searchPulls).toBe(1);
+		await engine.dispose();
+	});
+
+	it("a search declared after a scope switch does not join the previous scope's in-flight search (it fetches for its own scope)", async () => {
+		let searches = 0;
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products') || !parsed.searchParams.has('search')) {
+				return json([]);
+			}
+			searches += 1;
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			// The old scope's request hangs until the switch aborts it; the new scope's answers.
+			if (searches > 1) return json([productPayload(321, 'Keyboard')]);
+			return await new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+			});
+		});
+		await engine.ready;
+		const search = { collection: 'products', kind: 'search', term: 'keyboard' } as const;
+		const before = engine.require({ id: 'search-scope-a', ...search });
+		const beforeSettled = before.ready.catch(() => undefined);
+		await vi.waitFor(() => expect(searches).toBe(1));
+
+		// Declared the instant the switch lands, while the old scope's execution is still
+		// unwinding: the new scope's screen re-renders on the switch event.
+		let after: ReturnType<RxdbSyncEngine['require']> | undefined;
+		const stop = engine.events((event) => {
+			if (event.type === 'scope-switched')
+				after = engine.require({ id: 'search-scope-b', ...search });
+		});
+		await engine.scope.switch(freshIdentity());
+		stop();
+
+		await expect(after!.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(searches).toBe(2);
+		await beforeSettled;
 		await engine.dispose();
 	});
 

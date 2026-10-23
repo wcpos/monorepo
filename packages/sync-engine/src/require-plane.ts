@@ -353,7 +353,7 @@ type QueuedRequirement = {
 	priority: number;
 	seq: number;
 	subscribers: Set<RequirementSubscriber>;
-	searchDedupeKey: string | null;
+	dedupeKey: string | null;
 	predecessor?: QueuedRequirement;
 	released: boolean;
 	started: boolean;
@@ -516,7 +516,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		...(deps.now !== undefined ? { now: deps.now } : {}),
 	});
 	const queue: QueuedRequirement[] = [];
-	const activeSearches = new Map<string, QueuedRequirement>();
+	const activeByDedupeKey = new Map<string, QueuedRequirement>();
 	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfills' ordering signal. */
 	const activeScope = () => deps.manager.activeScope;
 	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
@@ -561,20 +561,31 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// its walk already covers. Wider-than-started declarations queue a successor instead.
 	// Invalid limits stay outside coalescing so every declaration keeps its own validation
 	// outcome; force-refresh is part of identity because it must never inherit serve-local.
-	const searchDedupeKey = (requirement: InternalRequirement): string | null => {
+	const dedupeKeyOf = (requirement: InternalRequirement): string | null => {
+		// Browse windows get the same rejoin-within-grace as searches: they are UI-declared
+		// (re-declared on every render) and their queryKey IS the wire identity, so a grid
+		// re-render while the boot window is in flight rejoins it instead of aborting it and
+		// re-sending page=1. Kinds with no such key (targeted-records, refresh, refunds-by-
+		// parent) keep the immediate abort: nothing could rejoin them within the grace.
+		// The (scope, epoch) ticket guardWrite checks: a declaration after a store switch must
+		// never join the previous scope's execution, whose writes that switch drops.
+		const scope = `${deps.manager.activeScope}\u0000${deps.manager.epoch}`;
+		if (requirement.kind === 'query') {
+			return `${scope}\u0000query\u0000${requirement.collection}\u0000${requirement.queryKey}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+		}
 		if (requirement.kind !== 'search') return null;
 		const limit = searchLimitOf(requirement);
 		if (!Number.isSafeInteger(limit) || limit <= 0) return null;
-		return `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+		return `${scope}\u0000${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
 	};
-	const forgetSearch = (item: QueuedRequirement): void => {
-		if (item.searchDedupeKey && activeSearches.get(item.searchDedupeKey) === item) {
-			activeSearches.delete(item.searchDedupeKey);
+	const forgetDedupeKey = (item: QueuedRequirement): void => {
+		if (item.dedupeKey && activeByDedupeKey.get(item.dedupeKey) === item) {
+			activeByDedupeKey.delete(item.dedupeKey);
 		}
 	};
 	const abandon = (entry: QueuedRequirement): void => {
 		entry.released = true;
-		forgetSearch(entry);
+		forgetDedupeKey(entry);
 		entry.abortController.abort(
 			new DOMException('Requirement released during drain', 'AbortError')
 		);
@@ -587,7 +598,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		}
 	};
 	/**
-	 * The deferred half of `release()` for dedupeable searches (#1221). By the time this
+	 * The deferred half of `release()` for dedupeable entries (#1221). By the time this
 	 * microtask runs, a same-tick redeclare (React releases the old handles and redeclares
 	 * in one synchronous effect pass) has either rejoined the entry — keep it — or queued a
 	 * wider successor behind it — let the in-flight walk finish, because its pages record
@@ -598,8 +609,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		if (entry.released || entry.subscribers.size > 0) return;
 		if (
 			entry.started &&
-			entry.searchDedupeKey !== null &&
-			activeSearches.get(entry.searchDedupeKey) !== entry
+			entry.dedupeKey !== null &&
+			activeByDedupeKey.get(entry.dedupeKey) !== entry
 		) {
 			return;
 		}
@@ -1549,7 +1560,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				const next = index < 0 ? undefined : queue.splice(index, 1)[0];
 				if (!next) return;
 				if (next.released) {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue; // release() already resolved it — just drop the entry.
 				}
 				// Startup/activation waits are not stalls. Admission failures use the
@@ -1563,7 +1574,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					admissionError = error;
 				}
 				if (next.released) {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue; // released while waiting for readiness — same drop as above.
 				}
 				next.started = true;
@@ -1603,7 +1614,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					// One hung await must never starve its lane (each lane's pump is serial):
 					// abandon this execution and keep draining.
 					abandonStalledExecution(next, startedAt, executionStreak, execution);
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue;
 				}
 				try {
@@ -1728,7 +1739,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						}
 					}
 				} finally {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 				}
 			}
 		} finally {
@@ -1812,8 +1823,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								: {}),
 						}
 					: requirement;
-			const dedupeKey = searchDedupeKey(queuedRequirement);
-			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
+			const dedupeKey = dedupeKeyOf(queuedRequirement);
+			let entry = dedupeKey ? activeByDedupeKey.get(dedupeKey) : undefined;
 			let predecessor: QueuedRequirement | undefined;
 			// A started walk only absorbs declarations it already covers; a wider request gets
 			// its own successor entry below, queued behind the in-flight one — never aborting it.
@@ -1853,13 +1864,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					priority: requirement.priority ?? 500,
 					seq: (seq += 1),
 					subscribers: new Set([subscriber!]),
-					searchDedupeKey: dedupeKey,
+					dedupeKey,
 					...(predecessor ? { predecessor } : {}),
 					released: false,
 					started: false,
 					abortController: new AbortController(),
 				};
-				if (dedupeKey) activeSearches.set(dedupeKey, entry);
+				if (dedupeKey) activeByDedupeKey.set(dedupeKey, entry);
 				queue.push(entry);
 				void pump(laneOf(entry));
 			}
@@ -1878,7 +1889,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						reason: entry.started ? 'released during drain' : 'released before execution',
 					});
 					if (entry.subscribers.size === 0) {
-						if (entry.searchDedupeKey !== null) {
+						if (entry.dedupeKey !== null) {
 							// Defer one microtask (#1221): React releases the old handles and
 							// redeclares in the same synchronous effect pass, so an identical
 							// redeclare must find this entry still alive and rejoin it instead
