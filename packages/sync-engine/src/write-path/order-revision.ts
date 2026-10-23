@@ -13,16 +13,16 @@ import type { RxDatabase } from 'rxdb';
 type RevisionFacts = { revision?: unknown; adopted?: { revision?: unknown; at?: unknown } };
 
 export interface ResidentRevision {
-	readonly revision: string | null;
+	readonly revision: string | undefined;
 	readonly adopted: { revision: string; at: number } | null;
 	/** Adopted whole, under the revision it carries, and after `answeredAt` when one is given. */
 	holdsDocument(answeredAt?: number): boolean;
 }
 
-/** One snapshot of `record.sync`. Any object: a reader's own record type need not name `sync`. */
-export function residentRevision(record: object | null | undefined): ResidentRevision {
-	const sync = ((record as { sync?: unknown } | null | undefined)?.sync ?? {}) as RevisionFacts;
-	const revision = typeof sync.revision === 'string' ? sync.revision : null;
+/** One snapshot of `record.sync`. */
+export function residentRevision(record: { sync?: unknown } | null | undefined): ResidentRevision {
+	const sync = (record?.sync ?? {}) as RevisionFacts;
+	const revision = typeof sync.revision === 'string' ? sync.revision : undefined;
 	const adopted =
 		typeof sync.adopted?.revision === 'string'
 			? {
@@ -47,22 +47,8 @@ export function adoptedSync<S extends object>(sync: S, at: number): S {
 	return { ...sync, adopted: { revision, at } };
 }
 
-/**
- * A naked stamp: moves the revision and keeps the adoption. With an `answer`, it yields (null)
- * to an adoption that landed after that answer.
- */
-export function stampedSync<S extends object>(sync: S, revision: string): S;
-export function stampedSync<S extends object>(
-	sync: S,
-	revision: string,
-	answer: { at: number }
-): S | null;
-export function stampedSync<S extends object>(
-	sync: S,
-	revision: string,
-	answer?: { at: number }
-): S | null {
-	if (answer && (residentRevision({ sync }).adopted?.at ?? 0) > answer.at) return null;
+/** A naked stamp: moves the revision and keeps the adoption. */
+export function stampedSync<S extends object>(sync: S, revision: string): S {
 	return { ...sync, revision };
 }
 
@@ -93,12 +79,12 @@ export function createOrderRevisionDoor(deps: {
 			let replaced: string | null = null;
 			await resident.incrementalModify((current: Record<string, unknown>) => {
 				replaced = null;
-				const before = residentRevision(current).revision;
-				if (before === revision) return current;
-				const sync = stampedSync((current.sync ?? {}) as object, revision, { at: answeredAt });
-				if (!sync) return current;
-				replaced = before;
-				return { ...current, sync };
+				const facts = residentRevision(current);
+				// An adoption that landed after this answer wins; an equal revision is a no-op.
+				if ((facts.adopted?.at ?? 0) > answeredAt) return current;
+				if (facts.revision === revision) return current;
+				replaced = facts.revision ?? null;
+				return { ...current, sync: stampedSync((current.sync ?? {}) as object, revision) };
 			});
 			return { replaced };
 		},

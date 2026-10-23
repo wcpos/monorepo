@@ -29,38 +29,24 @@ describe('stampedSync', () => {
 		{
 			name: 'moves the revision and keeps adopted',
 			sync: SYNC,
-			answer: { at: 200 },
 			expected: { ...SYNC, revision: 'sha256:r2' },
 		},
 		{
-			name: 'yields to an adoption newer than the answer',
-			sync: SYNC,
-			answer: { at: 99 },
-			expected: null,
-		},
-		{
-			name: 'stamps over an adoption at the same instant as the answer',
-			sync: SYNC,
-			answer: { at: 100 },
-			expected: { ...SYNC, revision: 'sha256:r2' },
-		},
-		{
-			name: 'is unconditional without an answer',
-			sync: SYNC,
-			answer: undefined,
-			expected: { ...SYNC, revision: 'sha256:r2' },
+			name: "is unconditional: the yield to a newer adoption is the door's",
+			sync: { ...SYNC, adopted: { ...ADOPTED, at: Number.MAX_SAFE_INTEGER } },
+			expected: {
+				...SYNC,
+				revision: 'sha256:r2',
+				adopted: { ...ADOPTED, at: Number.MAX_SAFE_INTEGER },
+			},
 		},
 		{
 			name: 'stamps a resident that was never adopted',
 			sync: { revision: 'sha256:r1' },
-			answer: { at: 0 },
 			expected: { revision: 'sha256:r2' },
 		},
-	])('$name', ({ sync, answer, expected }) => {
-		const stamped = answer
-			? stampedSync(sync, 'sha256:r2', answer)
-			: stampedSync(sync, 'sha256:r2');
-		expect(stamped).toEqual(expected);
+	])('$name', ({ sync, expected }) => {
+		expect(stampedSync(sync, 'sha256:r2')).toEqual(expected);
 	});
 });
 
@@ -105,8 +91,8 @@ describe('residentRevision', () => {
 	});
 
 	it('reads a record without sync as no revision and no adoption', () => {
-		expect(residentRevision({})).toMatchObject({ revision: null, adopted: null });
-		expect(residentRevision(null)).toMatchObject({ revision: null, adopted: null });
+		expect(residentRevision({})).toMatchObject({ revision: undefined, adopted: null });
+		expect(residentRevision(null)).toMatchObject({ revision: undefined, adopted: null });
 	});
 });
 
@@ -152,10 +138,19 @@ describe('the door: stamp', () => {
 		expect(await residentSync()).toEqual(SYNC);
 	});
 
-	it('yields to an adoption newer than the answer', async () => {
+	it.each([
+		{ name: 'yields to an adoption newer than the answer', answeredAt: 99, stamps: false },
+		{
+			name: 'stamps over an adoption at the same instant as the answer',
+			answeredAt: 100,
+			stamps: true,
+		},
+	])('$name', async ({ answeredAt, stamps }) => {
 		const { door, residentSync } = await doorOver(SYNC);
-		expect(await door.stamp(UUID, 'sha256:r2', 99)).toEqual({ replaced: null });
-		expect(await residentSync()).toEqual(SYNC);
+		expect(await door.stamp(UUID, 'sha256:r2', answeredAt)).toEqual({
+			replaced: stamps ? 'sha256:r1' : null,
+		});
+		expect(await residentSync()).toEqual(stamps ? { ...SYNC, revision: 'sha256:r2' } : SYNC);
 	});
 
 	it('throws when the resident is missing', async () => {

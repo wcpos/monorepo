@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 
 import { foldSearchText } from '@wcpos/sync-core';
 import {
+	createOrderRevisionDoor,
 	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
 	memoryEngineStorage,
@@ -13,7 +14,6 @@ import {
 	refundBrowserQueryKey,
 	searchLaneQueryKey,
 } from '@wcpos/sync-engine/testing';
-import { createOrderRevisionDoor } from '@wcpos/sync-engine';
 import type {
 	CensusTotals,
 	CoverageTarget,

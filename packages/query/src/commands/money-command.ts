@@ -125,6 +125,7 @@ function classifyMoneyRoute(
 
 type ResidentOrder = {
 	payload: { id?: number; total?: unknown; currency?: unknown };
+	sync: unknown;
 	local: { dirty?: boolean; pendingMutationIds?: string[] };
 };
 async function readOrder(runtime: QueryRuntime, orderUuid: string) {
@@ -225,7 +226,7 @@ async function chooseRevision(
 		if (approved && !holdsAuthority(order, chain))
 			throw new MoneyCommandError('revision_unavailable', entry);
 	}
-	const current = residentRevision(order).revision ?? undefined;
+	const current = residentRevision(order).revision;
 	const revision = holdsAuthority(order, chain) ? current : (chain?.answerRevision ?? current);
 	if (!revision) throw new MoneyCommandError('revision_unavailable', entry);
 	if (approved && !approvalHolds(entry.approval, order.payload))
@@ -367,7 +368,7 @@ export async function settleMoneyCommand(
 		await settleCommand(storeDB, orderUuid, null, {
 			...read.chain,
 			adoptedAfterAnswer: true,
-			adoptedRevision: residentRevision(read.order).revision ?? undefined,
+			adoptedRevision: residentRevision(read.order).revision,
 		});
 }
 

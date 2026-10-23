@@ -88,12 +88,7 @@ export { hasPendingLocalWork } from './write-path/local-work-guard';
 
 export { mergeProtectedOrderMeta } from './write-path/merge-protected-order-meta';
 
-export {
-	createOrderRevisionDoor,
-	type OrderRevisionDoor,
-	type ResidentRevision,
-	residentRevision,
-} from './write-path/order-revision';
+export { residentRevision } from './write-path/order-revision';
 
 export {
 	type QueueRow,

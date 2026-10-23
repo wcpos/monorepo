@@ -411,23 +411,21 @@ function ackBookkeeping(options: {
 						? { source: createAckSource }
 						: {}),
 				};
+				const stamped = ack.currentRevision ? stampedSync(base, ack.currentRevision) : base;
+				// Only an ack adopting the whole document certifies it (ADR 0040 §1.3): the orders
+				// adoption keeps the local value of every key a trimmed ack omits, so stamping one
+				// would certify the till's own money as the server's.
+				const wholeAdoption =
+					adopting &&
+					collection === 'orders' &&
+					!!ack.currentRevision &&
+					carriesWholeOrder(ack.document);
 				return {
 					...data,
 					...(adopting && adoptionPatch ? adoptionPatch : identityPatch),
 					[remoteIdField]: remoteId,
 					remoteKey: remoteKeyFor(remoteId as string | null),
-					// Only an ack adopting the whole document certifies it (ADR 0040 §1.3): the orders
-					// adoption keeps the local value of every key a trimmed ack omits, so stamping one
-					// would certify the till's own money as the server's.
-					sync:
-						adopting &&
-						collection === 'orders' &&
-						ack.currentRevision &&
-						carriesWholeOrder(ack.document)
-							? adoptedSync({ ...base, revision: ack.currentRevision }, Date.now())
-							: ack.currentRevision
-								? stampedSync(base, ack.currentRevision)
-								: base,
+					sync: wholeAdoption ? adoptedSync(stamped, Date.now()) : stamped,
 					local: { ...local, pendingMutationIds: pending, dirty: pending.length > 0 },
 				};
 			});
