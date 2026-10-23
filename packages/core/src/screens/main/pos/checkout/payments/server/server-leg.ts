@@ -1,5 +1,5 @@
 import { isFinalPaymentStatus } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
+import { isDefinitiveMoneyRefusal, moneyInMotionOf, moneyRefusalOf } from '@wcpos/sync-core';
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -336,16 +336,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!current(seq)) return;
 		// A poll that failed while a cancel waited on it: the void answers either way.
 		if (route === 'status' && (await voidAfterAnswer())) return;
-		if (
-			route === 'intent' &&
-			code === 'wcpos_payment_in_flight' &&
-			typeof body?.data?.payment_id === 'string'
-		) {
+		const inMotion = moneyInMotionOf(moneyRefusalOf(error));
+		if (route === 'intent' && inMotion?.kind === 'payment') {
 			// A definitive answer (the poster settled this intent): the leg follows the live one.
 			finality.intent = null;
 			awaitingRejoinedStatus = true;
 			setState({
-				row: { ...state.row, id: body.data.payment_id },
+				row: { ...state.row, id: inMotion.id },
 				phase: 'polling',
 				consecutiveErrors: 0,
 				unstable: false,

@@ -386,6 +386,7 @@
 	"pos_checkout.invoice_not_cancelled": "The store did not cancel the invoice, so it still stands. Check the order before taking another payment.",
 	"pos_checkout.void_needs_connection": "Cancelling these payments needs the store. Nothing was cancelled; try again when you are online.",
 	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
+	"pos_checkout.attempt_unanswered": "An earlier payment attempt on this order has no answer from the provider yet. Check the provider's dashboard before taking payment again; the store keeps checking and records it if the money was taken.",
 	"pos_checkout.hide_log": "Hide log",
 	"pos_checkout.log_copied": "Log copied",
 	"pos_checkout.chip_waiting_for_terminal": "Waiting for terminal · {amount}",

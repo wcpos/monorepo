@@ -3918,6 +3918,60 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
+	// #2900: a 409 wcpos_payment_in_flight {attempt_id} is an attempt that may have taken money.
+	describe('an attempt with no answer yet', () => {
+		const inFlight = (data: object = { attempt_id: 'attempt-9' }) =>
+			Object.assign(new Error('in flight'), {
+				response: {
+					status: 409,
+					data: { code: 'wcpos_payment_in_flight', message: 'No outcome yet.', data },
+				},
+			});
+		const unanswered = () =>
+			mockWarn.mock.calls.filter(([message]) => message === 'pos_checkout.attempt_unanswered');
+		const expectOneWarning = (context: object) => {
+			expect(unanswered()).toEqual([
+				[
+					'pos_checkout.attempt_unanswered',
+					{ showToast: true, context: expect.objectContaining(context) },
+				],
+			]);
+			expect(mockError).not.toHaveBeenCalled();
+			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		};
+
+		it('a press answered in flight warns once, never PAYMENT212 or "send again"', async () => {
+			mockManualPost.mockRejectedValue(inFlight());
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.takeTender());
+			expectOneWarning({ attemptId: 'attempt-9', method: 'wcpos_email_invoice' });
+			expect(mockInfo).not.toHaveBeenCalledWith(
+				'pos_checkout.order_open_send_again',
+				expect.anything()
+			);
+			expect(result.current.busy).toBe(false);
+		});
+
+		it('a zero-balance close answered in flight warns the same, never CHECKOUT101', async () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValue(
+				inFlight({ attempt_id: 'attempt-9', order: summary('pos-partial') })
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.takeTender());
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expectOneWarning({ attemptId: 'attempt-9' });
+		});
+
+		it('a Try again answered in flight warns the same, never PAYMENT201', async () => {
+			mockResend.mockRejectedValueOnce(inFlight());
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.retryCommand());
+			expectOneWarning({ attemptId: 'attempt-9' });
+		});
+	});
+
 	it('a recorded answer is a manual leg: the returned row completes the sale', async () => {
 		const row = payment({
 			id: 'payment-9',

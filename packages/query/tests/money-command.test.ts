@@ -637,6 +637,31 @@ describe('sendMoneyCommand: the answer', () => {
 		expect(await entries()).toEqual([]);
 	});
 
+	// #2900: the re-send names an attempt still in flight, the truer answer than the 502.
+	it('a 502 re-sent and answered 409 wcpos_payment_in_flight throws the 409', async () => {
+		store.post.mockImplementationOnce(async () => {
+			throw httpError(502, 'wcpos_provider_error');
+		});
+		store.post.mockImplementationOnce(async () => {
+			throw httpError(409, 'wcpos_payment_in_flight', { status: 409, attempt_id: 'a-0' });
+		});
+		const sent = send('orders/5/payment-methods/g/submit', { attempt_id: 'a-1' });
+		await expect(sent).rejects.toMatchObject({
+			response: { status: 409, data: { code: 'wcpos_payment_in_flight' } },
+		});
+		expect(store.post).toHaveBeenCalledTimes(2);
+		expect(await entries()).toEqual([]);
+	});
+
+	// #2900 D1: the store could not verify the write in storage; it may have run.
+	it('a 409 woo_rxdb_sync_record_locked leaves the entry journaled', async () => {
+		store.post.mockRejectedValueOnce(httpError(409, 'woo_rxdb_sync_record_locked'));
+		await expect(send('orders/5/payment-methods/g/submit', { attempt_id: 'a-1' })).rejects.toThrow(
+			'woo_rxdb_sync_record_locked'
+		);
+		expect(await entries()).toHaveLength(1);
+	});
+
 	// The store answers a gateway that threw after dispatch with the same 502, its attempt `sent`
 	// (adversarial finding 3 on #2798).
 	it('an ambiguous 502 is re-sent under the same command, and a stored sent is its answer', async () => {

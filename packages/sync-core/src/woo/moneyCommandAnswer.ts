@@ -11,7 +11,12 @@
  */
 
 /** A 4xx code that is not the server's decision on the command: re-send it. */
-const RESENDABLE_MONEY_CODES: readonly string[] = ['wcpos_payment_locked', 'wcpos_revision_stale'];
+const RESENDABLE_MONEY_CODES: readonly string[] = [
+	'wcpos_payment_locked',
+	'wcpos_revision_stale',
+	// A write the store could not verify in storage, "retry" (wiki `routes.md`): it may have run.
+	'woo_rxdb_sync_record_locked',
+];
 /**
  * A 4xx status that is the session's, the proxy's or the rate limiter's: re-send it. 407 is an
  * authenticating proxy (the terminal leg reads it the same way, `server-leg.ts` INTENT_REFUSAL).
@@ -45,6 +50,7 @@ export const MONEY_ANSWER_CODES = {
 	revisionStale: 'wcpos_revision_stale',
 	balanceOutstanding: 'wcpos_balance_outstanding',
 	moneyInMotion: 'wcpos_money_in_motion',
+	paymentInFlight: 'wcpos_payment_in_flight',
 } as const;
 
 interface MoneyRefusal {
@@ -53,6 +59,18 @@ interface MoneyRefusal {
 	readonly code?: string;
 	readonly message?: string;
 	readonly data?: Record<string, unknown>;
+}
+
+/** What a 409 `wcpos_payment_in_flight` names: a live row, or a gateway attempt with no outcome yet. */
+export type MoneyInMotion = { kind: 'payment'; id: string } | { kind: 'attempt'; id: string };
+
+/** Read by the key the answer names, never by the route; a row (`payment_id`) is the stronger fact. */
+export function moneyInMotionOf(refusal: MoneyRefusal | null): MoneyInMotion | null {
+	if (refusal?.code !== MONEY_ANSWER_CODES.paymentInFlight) return null;
+	const { payment_id: payment, attempt_id: attempt } = refusal.data ?? {};
+	if (typeof payment === 'string' && payment !== '') return { kind: 'payment', id: payment };
+	if (typeof attempt === 'string' && attempt !== '') return { kind: 'attempt', id: attempt };
+	return null;
 }
 
 /** The refusal an HTTP client error carries, or null when no response arrived (network). */

@@ -215,6 +215,20 @@ it('a different wcpos 409 on intent remains a refusal, not a rejoin', async () =
 	expect(c.count('status')).toBe(0);
 });
 
+// #2900: only a row id is a payment to rejoin; a gateway attempt id is not.
+it('an intent 409 wcpos_payment_in_flight naming only an attempt does not rejoin', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'attempt-1' }));
+	await c.leg.start();
+	await tick(10000);
+	expect(c.leg.getState()).toMatchObject({ row: { id: 'leg', status: 'failed' }, phase: 'final' });
+	expect(c.leg.getState().clientEvents).not.toContainEqual(
+		expect.objectContaining({ message: 'Joined the payment already in progress' })
+	);
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('status')).toBe(0);
+});
+
 it('a rejoined cancelled authorization keeps polling without capture until voided', async () => {
 	const c = setupRejoin();
 	c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));

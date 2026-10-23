@@ -36,7 +36,7 @@ import {
 } from '@wcpos/query';
 import { observeTenderGate, resolveCompletionAttempt } from '@wcpos/query/store-local';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { moneyInMotionOf, moneyRefusalOf, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -241,7 +241,7 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 }
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
-	closed: Exclude<CloseOutcome, { kind: 'answered' }>,
+	closed: Exclude<CloseOutcome, { kind: 'answered' | 'in_flight' }>,
 	t: ReturnType<typeof useT>
 ): string {
 	if (closed.kind === 'refused') return closed.message;
@@ -740,6 +740,19 @@ export function useTenderFlow(
 		[order, state, dp, byId, actor, orderContext]
 	);
 
+	/**
+	 * An attempt the provider has not answered (press, close, Try again): it may have taken
+	 * money, so never a code whose text says nothing was charged.
+	 */
+	const noteUnanswered = React.useCallback(
+		(attemptId: string, method?: string) =>
+			logger.warn(t('pos_checkout.attempt_unanswered'), {
+				showToast: true,
+				context: { ...orderContext, attemptId, method },
+			}),
+		[t, orderContext]
+	);
+
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
 	const land = React.useCallback(
 		async (answer: StoreAnswer, arrival: Arrival, options: LandOptions = {}) => {
@@ -827,12 +840,14 @@ export function useTenderFlow(
 				else if (resent.kind === 'submit') releaseUnconfirmedReceipt(order.uuid);
 			}
 		} catch (error) {
+			const inMotion = moneyInMotionOf(moneyRefusalOf(error));
 			// The store stored nothing and the order moved: the cashier approves it again.
 			if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 				logger.info(t('pos_checkout.order_changed_retry'), {
 					showToast: true,
 					context: { ...orderContext, retry: 'order_changed' },
 				});
+			else if (inMotion?.kind === 'attempt') noteUnanswered(inMotion.id);
 			else
 				logger.error(t('pos_checkout.payment_unanswered'), {
 					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
@@ -851,7 +866,19 @@ export function useTenderFlow(
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [recordLedger, ctx.runtime, storeDB, order, http, t, land, dp, balanceMinor, orderContext]);
+	}, [
+		recordLedger,
+		ctx.runtime,
+		storeDB,
+		order,
+		http,
+		t,
+		land,
+		dp,
+		balanceMinor,
+		orderContext,
+		noteUnanswered,
+	]);
 
 	const takeTender = React.useCallback(async () => {
 		if (
@@ -997,7 +1024,8 @@ export function useTenderFlow(
 						close: closed.kind,
 					};
 					// The store's answer on this sale is a notice; no close at all is a failed checkout.
-					if (closed.kind === 'offline' || closed.kind === 'refused')
+					if (closed.kind === 'in_flight') noteUnanswered(closed.attemptId);
+					else if (closed.kind === 'offline' || closed.kind === 'refused')
 						logger.error(closeMessage(closed, t), {
 							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 							showToast: true,
@@ -1190,6 +1218,10 @@ export function useTenderFlow(
 					setErrorsFor({ methodId: method.id, errors: outcome.errors });
 					return;
 				}
+				if (outcome.kind === 'in_flight') {
+					noteUnanswered(outcome.attemptId, method.id);
+					return;
+				}
 				if (outcome.kind === 'refused') {
 					// The gateway's own sentence is the cashier copy; a contract refusal gets its code's summary.
 					logger.error(outcome.message, {
@@ -1336,6 +1368,7 @@ export function useTenderFlow(
 		reachable,
 		blockIfDegraded,
 		land,
+		noteUnanswered,
 		closeSale,
 		dp,
 		enteredLegMinor,

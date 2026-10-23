@@ -115,6 +115,7 @@ describe('stampCompletionIfMissing', () => {
 });
 
 const row = { id: 'payment-1', amount: '10.00' } as never;
+const minted = { id: 'a1', amount: '10.00', status: 'captured' } as never;
 const stamp = {
 	method_id: 'wcpos_email_invoice',
 	destination: 'a@b.c',
@@ -304,6 +305,14 @@ describe('answerOf', () => {
 			{ outcome: 'recorded', payment: row, order: summary('completed') },
 			[],
 			{ kind: 'recorded', via: 'online', row, order: summary('completed') },
+		],
+		[
+			// #2900 (c5-2): the resolver minted the attempt's row; its id is the attempt id.
+			'a submit replay recorded with the row the resolver minted',
+			'submit',
+			{ outcome: 'recorded', payment: minted, order: summary('completed') },
+			[],
+			{ kind: 'recorded', via: 'online', row: minted, order: summary('completed') },
 		],
 		[
 			'a submit sent, the resident stamped',

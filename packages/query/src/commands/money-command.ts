@@ -299,7 +299,8 @@ export async function sendMoneyCommand(
 				throw new MoneyCommandError('in_flight', entry);
 			// A gateway's 502 is ambiguous: the store answers the same after a gateway that threw past
 			// dispatch, its attempt left `sent`. Re-sent once, a stored `sent` replays; a refused attempt
-			// is answered `wcpos_payment_conflict`, and the gateway's own refusal then stands.
+			// is answered `wcpos_payment_conflict`, and the gateway's own refusal then stands. An
+			// attempt still in flight (409 `wcpos_payment_in_flight`) is the truer answer: it is thrown.
 			if (failure?.code === 'wcpos_provider_error' && entry.kind === 'submit' && !stale) {
 				refusal = error;
 				continue;
@@ -332,7 +333,7 @@ export async function sendMoneyCommand(
 				if (payment)
 					await mirrorMoneyAnswer(runtime, entry.orderUuid, { payment, sentRevision: revision });
 				await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
-				throw refusal ?? error;
+				throw failure?.code === MONEY_ANSWER_CODES.paymentInFlight ? error : (refusal ?? error);
 			}
 			throw error;
 		}

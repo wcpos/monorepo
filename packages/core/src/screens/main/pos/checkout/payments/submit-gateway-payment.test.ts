@@ -226,6 +226,45 @@ describe('submitGatewayPayment', () => {
 		post.mockRejectedValueOnce(Object.assign(new Error('down'), { response: { status: 503 } }));
 		await expect(submitGatewayPayment(order, 'g', input, deps)).rejects.toThrow('down');
 	});
+	// #2900: an attempt with no outcome yet is not a refusal; a live row stays one.
+	it('a 409 wcpos_payment_in_flight naming an attempt is in_flight; mine when it is the input’s', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'other' }));
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind: 'in_flight',
+			attemptId: 'other',
+			mine: false,
+		});
+		// The store lowercases the id it stores.
+		post.mockRejectedValueOnce(
+			refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'abc-def-1' })
+		);
+		const upper = { ...input, attemptId: 'ABC-DEF-1' };
+		expect(await submitGatewayPayment(order, 'g', upper, deps)).toEqual({
+			kind: 'in_flight',
+			attemptId: 'abc-def-1',
+			mine: true,
+		});
+		post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'p-1' }));
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind: 'refused',
+			code: 'wcpos_payment_in_flight',
+			message: 'm:wcpos_payment_in_flight',
+			provider: false,
+		});
+		expect(mirror).not.toHaveBeenCalled();
+	});
+	it('a replay the resolver minted (row id = the attempt id) is recorded', async () => {
+		const { post, order, deps } = harness();
+		const minted = row({ id: input.attemptId });
+		post.mockResolvedValue({
+			data: { outcome: 'recorded', payment: minted, order: summary('completed') },
+		});
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toMatchObject({
+			kind: 'recorded',
+			row: { id: input.attemptId },
+		});
+	});
 	it("a 502's detail is the gateway's own sentence; a _form list is joined", async () => {
 		const { post, order, deps } = harness();
 		post.mockRejectedValueOnce(

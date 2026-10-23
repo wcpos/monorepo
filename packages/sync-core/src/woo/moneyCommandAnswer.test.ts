@@ -5,6 +5,7 @@ import {
 	isDefinitiveMoneyRefusal,
 	isMoneyAnswer,
 	isPaidStatus,
+	moneyInMotionOf,
 	moneyRefusalOf,
 } from './moneyCommandAnswer';
 
@@ -30,6 +31,8 @@ describe('the money command answer rule', () => {
 	it.each([
 		[409, 'wcpos_payment_locked'],
 		[409, 'wcpos_revision_stale'],
+		// A write the store could not verify in storage: it may have run (#2900 D1).
+		[409, 'woo_rxdb_sync_record_locked'],
 		[401, 'rest_not_logged_in'],
 		[403, 'rest_forbidden'],
 		[407, 'proxy_authentication_required'],
@@ -53,6 +56,39 @@ describe('the money command answer rule', () => {
 		expect(
 			moneyRefusalOf(answer(422, { code: 'c', message: 'm', data: { payment_id: 'p' } }))
 		).toEqual({ status: 422, code: 'c', message: 'm', data: { payment_id: 'p' } });
+	});
+});
+
+describe('what a 409 wcpos_payment_in_flight names (#2900)', () => {
+	const inFlight = (data: Record<string, unknown>) =>
+		moneyRefusalOf(answer(409, { code: 'wcpos_payment_in_flight', message: 'm', data }));
+
+	it.each([
+		['an attempt', { attempt_id: 'a-1' }, { kind: 'attempt', id: 'a-1' }],
+		['a payment', { payment_id: 'p-1' }, { kind: 'payment', id: 'p-1' }],
+		[
+			'both: the row wins',
+			{ attempt_id: 'a-1', payment_id: 'p-1' },
+			{ kind: 'payment', id: 'p-1' },
+		],
+		[
+			'an empty payment id: the attempt',
+			{ payment_id: '', attempt_id: 'a-1' },
+			{ kind: 'attempt', id: 'a-1' },
+		],
+		['neither', { status: 409 }, null],
+	])('%s', (_name, data, expected) => {
+		expect(moneyInMotionOf(inFlight(data))).toEqual(expected);
+	});
+
+	it('is null for another code, or no refusal at all', () => {
+		expect(
+			moneyInMotionOf(
+				moneyRefusalOf(answer(409, { code: 'wcpos_payment_conflict', data: { attempt_id: 'a' } }))
+			)
+		).toBeNull();
+		expect(moneyInMotionOf(null)).toBeNull();
+		expect(moneyInMotionOf(moneyRefusalOf(new Error('Network Error')))).toBeNull();
 	});
 });
 
