@@ -4008,7 +4008,12 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect(mockError).toHaveBeenCalledTimes(1);
 			expect(mockError).toHaveBeenCalledWith(
 				'The attempt was closed.',
-				expect.objectContaining({ code: 'PAYMENT212', showToast: true })
+				// The title outranks PAYMENT212's summary in the toast (`resolveMerchantToastText`).
+				expect.objectContaining({
+					code: 'PAYMENT212',
+					showToast: true,
+					toast: { title: 'The attempt was closed.' },
+				})
 			);
 		});
 	});

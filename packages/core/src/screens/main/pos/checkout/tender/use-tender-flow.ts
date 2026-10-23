@@ -850,11 +850,12 @@ export function useTenderFlow(
 				});
 			else if (inMotion?.kind === 'attempt')
 				noteUnanswered(t, { ...orderContext, attemptId: inMotion.id });
-			// The store answered, and refused: its sentence, as the press says a refusal.
+			// The store answered, and refused: its sentence is the toast title, over the code's summary.
 			else if (refusal?.code && isDefinitiveMoneyRefusal(refusal))
 				logger.error(refusal.message ?? refusal.code, {
 					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
 					showToast: true,
+					toast: { title: refusal.message ?? refusal.code },
 					context: { ...orderContext, refusal: refusal.code },
 				});
 			else
