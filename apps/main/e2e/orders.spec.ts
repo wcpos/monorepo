@@ -178,7 +178,9 @@ test.describe('Orders Page (Pro)', () => {
 			.toBeGreaterThanOrEqual(1);
 	});
 
-	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
+	test('should open the order modal with its actions from the row', async ({
+		posPage: page,
+	}, testInfo) => {
 		await addOrderProbeProduct(page);
 		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
 		const { uuid, surface } = await openCheckout(page);
@@ -188,11 +190,10 @@ test.describe('Orders Page (Pro)', () => {
 		const screen = await navigateToOrders(page);
 		const createdRow = screen.getByTestId(`data-table-row-${uuid}`);
 		await expect(createdRow).toBeVisible({ timeout: 30_000 });
-		const actionsButton = createdRow.getByTestId('order-actions-button');
-		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
-		await actionsButton.click();
+		await createdRow.click();
 
-		await expect(page.getByTestId('order-delete-menu-item')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-modal-delete')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

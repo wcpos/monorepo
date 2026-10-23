@@ -169,9 +169,9 @@ function OrdersList({
 					tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
 					onFocus={() => keyboard.setFocusIndex(focusIndex)}
 					ref={(node) => keyboard.focusRow(focusIndex, node)}
-					className={
-						focused ? 'web:outline-2 web:outline-primary web:-outline-offset-2' : undefined
-					}
+					// The ring marks keyboard focus only (`focus-visible`): a click focuses the row's
+					// pressable, not this view, so the pointer never draws it.
+					className="web:focus-visible:outline-2 web:focus-visible:outline-primary web:focus-visible:-outline-offset-2"
 				>
 					{pointer === 'coarse' ? (
 						<OrderRow record={record} onSelect={open} />

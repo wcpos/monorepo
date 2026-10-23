@@ -85,3 +85,9 @@ The detail pane (`order-pane.tsx`) and its `order` search param are deleted. The
 The View tab (`edit/view.tsx`) stacks the pane's sections, and its footer carries Delete and Refund on the left, then the invoice actions, Sync, Re-open and Receipt on the right; read-only shows only Receipt (line 8). The actions are `useOrderActions` and `DeleteOrderDialog` in `order-actions.tsx`, shared with the ⋮ menu, so their guards and toasts are the menu's. Line 45's evidence now lives in `edit/view.tsx`.
 
 Struck: line 40 (the pane is gone; the modal's footer replaces it) and the whole "v2 detail pane motion" section (no pane slides) — evidence: `edit/modal.test.tsx`, `order-menu.test.tsx`, `index.test.tsx` "navigates from the actual focused coarse row…".
+
+## The row is the only door (added 2026-10-23, later the same day)
+
+The ⋮ menu (`order-menu.tsx`) is deleted: every item it held is a footer button in the modal, so it was a second door to the same room. The web table's last column trails the same muted right caret the touch row trails (`cells/actions.tsx`), an affordance and not a control; the row press opens the order. `useOrderActions`'s guards and toasts are covered on the hook itself (`order-actions.test.tsx`, moved from `cells/storage-degraded-block.test.tsx`), wired as `edit/view.tsx` wires them.
+
+The keyboard focus ring on a web row is `focus-visible` only: a click focuses the row's pressable, so the pointer never draws the ring — evidence: Paul's screenshot 2026-10-23, a clicked row outlined in primary.

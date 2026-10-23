@@ -1,24 +1,11 @@
 import * as React from 'react';
 
-import { IconButton } from '@wcpos/components/icon-button';
+import { Icon } from '@wcpos/components/icon';
 import type { EngineRecord } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { OrderActionsMenu } from '../order-menu';
-import { useT } from '../../../../contexts/translations';
-
-export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> }, 'actions'>) {
-	const t = useT();
-	return (
-		<OrderActionsMenu
-			order={row.original.record}
-			trigger={
-				<IconButton
-					testID="order-actions-button"
-					name="more"
-					accessibilityLabel={t('orders.order_actions')}
-				/>
-			}
-		/>
-	);
+// The same caret the touch row trails with: the row opens the order, and the modal's
+// footer carries every action, so the column is an affordance, not a menu.
+export function Actions(_: CellContext<{ record: EngineRecord<'orders'> }, 'actions'>) {
+	return <Icon name="chevronRight" className="text-muted-foreground" />;
 }
