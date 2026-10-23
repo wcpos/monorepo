@@ -34,6 +34,7 @@ import { ClearLocalData } from './clear-local-data';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
+import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -74,6 +75,29 @@ function SalesToday() {
 		>
 			<Text>{t('register.your_sales_today')}</Text>
 			<Text className="tabular-nums">{format(total)}</Text>
+		</View>
+	);
+}
+
+/**
+ * ADR 0040 Decided 1 rule 1: the cashier is never unaware of a sale the store has not heard.
+ * The money journal is per cashier (the store database is keyed by credential), so per Paul's
+ * 2026-10-23 ruling a deferred sale is sent only by its own cashier's session, never under
+ * another. This sheet is where a switch or sign-out happens, so it tells the cashier who holds it.
+ */
+function AwaitingStore() {
+	const count = useAwaitingStoreCount();
+	const t = useT();
+	if (count === 0) return null;
+	return (
+		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b py-3">
+			<View className="flex-row items-center justify-between gap-2">
+				<Text>{t('register.awaiting_store_label')}</Text>
+				<Text className="text-warn-text tabular-nums">{t('register.sales_count', { count })}</Text>
+			</View>
+			<Text className="text-muted-foreground text-sm">
+				{t('register.awaiting_store_kept_for_you')}
+			</Text>
 		</View>
 	);
 }
@@ -174,6 +198,7 @@ export function UserSheet({
 							{open && (
 								<ScrollView contentContainerClassName="grow px-4 pb-4">
 									<SalesToday />
+									<AwaitingStore />
 									<View testID="user-sheet-switch-user">
 										<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
 										<Suspense>
