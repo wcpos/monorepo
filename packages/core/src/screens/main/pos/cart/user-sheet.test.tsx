@@ -426,9 +426,7 @@ describe('awaiting store', () => {
 		expect(row.textContent).toContain('Awaiting store');
 		expect(row.textContent).toContain('1 sale');
 		expect(row.textContent).not.toContain('1 sales');
-		expect(row.textContent).toContain(
-			'Kept for you on this till. Sent when you are signed in and the store is reachable.'
-		);
+		expect(row.textContent).toContain('Sent when you are signed in online.');
 	});
 
 	it('counts several sales', () => {

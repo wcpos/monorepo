@@ -215,7 +215,7 @@
 	"register.awaiting_store_one": "{count} sale awaiting store",
 	"register.awaiting_store_other": "{count} sales awaiting store",
 	"register.awaiting_store_label": "Awaiting store",
-	"register.awaiting_store_kept_for_you": "Kept for you on this till. Sent when you are signed in and the store is reachable.",
+	"register.awaiting_store_sent_when_signed_in": "Sent when you are signed in online.",
 	"register.no_register": "No register",
 	"register.cannot_reach_registers": "Can't reach this store's registers",
 	"register.check_connection_then_try_again": "Check the connection, then try again.",
