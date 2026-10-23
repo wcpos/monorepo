@@ -858,7 +858,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			expect(ledgerRows(server), 'a sent order carries no payment leg').toHaveLength(0);
 			const firstAttempt = awaitingCustomer(server)!.attempt_id;
 
-			// 2. Send again from Orders: the pane lists the invoice line and re-opens the till on
+			// 2. Send again from Orders: the modal lists the invoice line and re-opens the till on
 			//    the gateway, under a new attempt.
 			await navigateToPage(page, 'orders');
 			const screen = page.getByTestId('screen-orders');
@@ -866,7 +866,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			const row = screen.getByTestId(`data-table-row-${uuid}`);
 			await expect(row).toBeVisible({ timeout: 30_000 });
 			await row.click();
-			await expect(page.getByTestId('order-pane')).toBeVisible({ timeout: 15_000 });
+			await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
 			await expect(page.getByTestId('orders-send-again')).toBeVisible({ timeout: 15_000 });
 			await page.getByTestId('orders-send-again').click();
 			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });

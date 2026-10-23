@@ -77,3 +77,11 @@ The order detail's refunds read (`view/use-order-refunds.ts`) is a query handle 
 One owner component, `view/refunds-boundary.tsx` (`RefundsBoundary`), serves the modal and the pane; its `onReset` acts only on the fallback's Retry (`details.reason === 'imperative-api'`), since a keys-driven reset already holds a new handle with its own forced pull.
 
 Status 2026-10-16 (B2): edit/refund route shells and their form parts now use `v2/dialog` (`Dialog route`); save/close contracts in lines 17–18 remain covered. The legacy view route already redirects to the list selection, so its dead shell/header/status pill and obsolete layout tests (line 40) were removed; live refund navigation and suspense tests now mount the shared `RefundsBoundary` directly. Line 45's evidence now lives in `order-pane.tsx:105–109`.
+
+## One order surface (added 2026-10-23)
+
+The detail pane (`order-pane.tsx`) and its `order` search param are deleted. The route modal at `/orders/edit/[orderId]` (`edit/modal.tsx`, `OrderModal`) is the one place an order is looked at or changed: tabs View (the default), Edit and JSON, opened on the route's `tab` param. A row press, Enter on a focused row, the attention notice's Open order and the legacy `view/[orderId]` redirect all open it; the ⋮ menu's View and Edit open it on their tab.
+
+The View tab (`edit/view.tsx`) stacks the pane's sections, and its footer carries Delete and Refund on the left, then the invoice actions, Sync, Re-open and Receipt on the right; read-only shows only Receipt (line 8). The actions are `useOrderActions` and `DeleteOrderDialog` in `order-actions.tsx`, shared with the ⋮ menu, so their guards and toasts are the menu's. Line 45's evidence now lives in `edit/view.tsx`.
+
+Struck: line 40 (the pane is gone; the modal's footer replaces it) and the whole "v2 detail pane motion" section (no pane slides) — evidence: `edit/modal.test.tsx`, `order-menu.test.tsx`, `index.test.tsx` "navigates from the actual focused coarse row…".

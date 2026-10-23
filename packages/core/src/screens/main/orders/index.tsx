@@ -1,13 +1,11 @@
 import React from 'react';
-import { Platform, useWindowDimensions, View, type ViewInstance } from 'react-native';
+import { Platform, View } from 'react-native';
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import isEqual from 'lodash/isEqual';
 
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { EmptyState } from '@wcpos/components/empty-state';
-import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/device';
-import { SlideOver } from '@wcpos/components/slide-over';
+import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 import { queryHandleAnswers$ } from '@wcpos/query';
@@ -19,10 +17,8 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { UpgradeNotice } from '../components/upgrade-notice';
 import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { useTheme } from '../../../contexts/theme';
 import { PaymentAttentionNotice } from './attention-notice';
 import { DisplayOptions } from './display-options';
-import { OrderPane } from './order-pane';
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Note } from './cells/note';
@@ -100,9 +96,6 @@ const DEFAULT_ORDER_SORT = {
 	direction: 'desc',
 } as const;
 
-// The pane takes 480 px; under this width the remaining list is too narrow for the table.
-const ROWS_BESIDE_PANE_BELOW = 1280;
-
 function isOrderSortField(field: unknown): field is SortFieldsByCollection['orders'] {
 	return ORDER_SORT_FIELDS.some((sortField) => sortField === field);
 }
@@ -122,11 +115,9 @@ const ANSWER_ONLY: SnapshotFields = [];
 function OrdersList({
 	handle,
 	initialFilters,
-	onSelectedRow,
 }: {
 	/** The orders query handle (roadmap#423): the list and its table read its snapshot. */
 	handle: QueryHandle;
-	onSelectedRow: (node: ViewInstance | null) => void;
 	initialFilters: Partial<FiltersOf<'orders'>>;
 }) {
 	const state = useQueryState<'orders'>();
@@ -140,15 +131,14 @@ function OrdersList({
 	const { heading } = useStoreDayLabel();
 	const pointer = usePointer();
 	const router = useRouter();
-	const { order: selected } = useLocalSearchParams<{ order?: string }>();
 	const t = useT();
 	const data = groupOrders(deferredResult.hits, state.sort.field, timezone, heading);
 	const ids = deferredResult.hits.map((hit) => hit.record.uuid);
 	const listRef = React.useRef<VirtualizedListHandle>(null);
-	const select = (uuid: string | null) => {
-		if (uuid !== selected) router.setParams({ order: uuid ?? undefined });
-	};
-	const keyboard = useRowKeyboard(ids, select, (index) => {
+	// A row opens the order modal (the one order surface), on its View tab.
+	const open = (uuid: string) =>
+		router.push({ pathname: '/orders/edit/[orderId]', params: { orderId: uuid } });
+	const keyboard = useRowKeyboard(ids, open, (index) => {
 		const itemIndex = data.findIndex((item) => !isDay(item) && item.record.uuid === ids[index]);
 		listRef.current?.scrollToIndex({ index: itemIndex, align: 'center', animated: false });
 	});
@@ -176,19 +166,17 @@ function OrdersList({
 			<VirtualizedList.Item>
 				<View
 					testID={pointer === 'coarse' ? `data-table-row-${record.uuid}` : undefined}
-					aria-selected={selected === record.uuid}
 					tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
 					onFocus={() => keyboard.setFocusIndex(focusIndex)}
-					ref={(node) => {
-						keyboard.focusRow(focusIndex, node);
-						if (selected === record.uuid) onSelectedRow(node);
-					}}
-					className={`${selected === record.uuid ? 'bg-muted' : ''} ${focused ? 'web:outline-2 web:outline-primary web:-outline-offset-2' : ''}`}
+					ref={(node) => keyboard.focusRow(focusIndex, node)}
+					className={
+						focused ? 'web:outline-2 web:outline-primary web:-outline-offset-2' : undefined
+					}
 				>
 					{pointer === 'coarse' ? (
-						<OrderRow record={record} onSelect={select} />
+						<OrderRow record={record} onSelect={open} />
 					) : (
-						<DataTableRow item={item} onPress={() => select(record.uuid)} />
+						<DataTableRow item={item} onPress={() => open(record.uuid)} />
 					)}
 				</View>
 			</VirtualizedList.Item>
@@ -215,7 +203,7 @@ function OrdersList({
 					tableConfig={{
 						data,
 						getRowId: (item) => (isDay(item) ? item.id : item.record.uuid),
-						extraData: { selected, focusIndex: keyboard.focusIndex },
+						extraData: { focusIndex: keyboard.focusIndex },
 					}}
 					getItemType={(item: Row<OrderListItem, DataTableFeatures>) =>
 						isDay(item.original) ? 'day' : 'order'
@@ -246,7 +234,7 @@ function OrdersList({
 	);
 }
 
-/** The list and the pane: the part of the page the Free preview overlay covers. */
+/** The list: the part of the page the Free preview overlay covers. */
 function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
@@ -257,99 +245,15 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	// failed read, so it is still listening after the boundary's retry.
 	const results$ = React.useMemo(() => queryHandleAnswers$(handle), [handle]);
 	useReferencedCustomerDemand(results$);
-	const t = useT();
-	const phone = useIsPhone();
-	const { width } = useWindowDimensions();
-	const { roomy } = useTheme();
-	const { order: selected } = useLocalSearchParams<{ order?: string }>();
-	const router = useRouter();
-	const selectedRow = React.useRef<ViewInstance>(null);
-	const close = () => {
-		router.setParams({ order: undefined });
-		// The pane is still sliding out beside the list: a plain focus scrolls a row that is
-		// just out of view into it, and the list jumps.
-		if (Platform.OS === 'web') {
-			(selectedRow.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
-		}
-	};
-	// The pane that is leaving keeps the order it showed until it has slid out.
-	const [shown, setShown] = React.useState(selected);
-	if (selected && selected !== shown) setShown(selected);
-	// The list keeps its narrow rows for as long as the pane's frame is beside it, which is
-	// until the pane has slid out, not until the selection clears.
-	const [beside, setBeside] = React.useState(Boolean(selected));
-	if (selected && !beside) setBeside(true);
-	// The phone has no pane frame to report that it left.
-	if (phone && !selected && beside) setBeside(false);
-	const pane = shown ? <OrderPane key={shown} selected={shown} onClose={close} /> : null;
 	return (
-		<View
-			testID="orders-body"
-			className="flex-1 flex-row"
-			onKeyDown={
-				Platform.OS === 'web'
-					? (event) => {
-							if (selected && event.nativeEvent.key === 'Escape' && !event.defaultPrevented) {
-								event.preventDefault();
-								close();
-							}
-						}
-					: undefined
-			}
-		>
-			{/* The list column stands beside the pane: the chips never span over it. */}
-			<View className="min-w-0 flex-1">
-				<ListColumn
-					chips={<FilterBar initialFilters={initialFilters} />}
-					handle={handle}
-					skeleton={<DataTableSkeleton id="orders" />}
-				>
-					{/* Beside the pane the list has the pane's width left: below the desktop
-						    breakpoint nine columns cannot share it, so the list keeps the row grammar
-						    (number, customer, status, total) until the pane closes. */}
-					<DeviceScope
-						pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
-					>
-						<OrdersList
-							handle={handle}
-							initialFilters={initialFilters}
-							onSelectedRow={(node) => {
-								selectedRow.current = node;
-							}}
-						/>
-					</DeviceScope>
-				</ListColumn>
-			</View>
-			{phone ? (
-				selected &&
-				pane && (
-					<Dialog route onClose={close}>
-						<DialogContent
-							side="right"
-							size="full"
-							className="gap-0 p-0"
-							closeButtonProps={{ className: 'hidden' }}
-						>
-							{/* The pane's own bar is the visible title; the dialog needs one for its
-							    accessible name and the primitive's title check. */}
-							<DialogTitle className="hidden">{t('common.order')}</DialogTitle>
-							{pane}
-						</DialogContent>
-					</Dialog>
-				)
-			) : (
-				// The pane slides out of the right edge, solid, and back into it. Its frame holds
-				// the pane's place beside the list until it has left.
-				<SlideOver
-					open={Boolean(selected)}
-					from="right"
-					onLeft={() => setBeside(false)}
-					className={roomy ? 'w-120' : 'w-2/5 max-w-110'}
-					coverClassName="border-border bg-card border-l"
-				>
-					{pane}
-				</SlideOver>
-			)}
+		<View testID="orders-body" className="flex-1">
+			<ListColumn
+				chips={<FilterBar initialFilters={initialFilters} />}
+				handle={handle}
+				skeleton={<DataTableSkeleton id="orders" />}
+			>
+				<OrdersList handle={handle} initialFilters={initialFilters} />
+			</ListColumn>
 		</View>
 	);
 }

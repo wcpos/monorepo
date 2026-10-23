@@ -26,8 +26,8 @@ jest.mock(
 );
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ orderId: 'order-uuid' }),
-	Redirect: ({ href }: { href: { pathname: string; params: { order: string } } }) => (
-		<a data-testid="redirect" href={`${href.pathname}?order=${href.params.order}`} />
+	Redirect: ({ href }: { href: { pathname: string; params: { orderId: string } } }) => (
+		<a data-testid="redirect" href={href.pathname.replace('[orderId]', href.params.orderId)} />
 	),
 }));
 // The screen guards its own body (the bar stays reachable on Free), so the route no longer wraps it.
@@ -36,7 +36,7 @@ it('switches the index to the v2 orders screen, unwrapped', async () => {
 	expect(await screen.findByTestId('new-orders')).toBeTruthy();
 	expect(screen.queryByTestId('guard-orders')).toBeNull();
 });
-it('redirects legacy detail links to the list selection', () => {
+it('redirects legacy detail links to the order modal', () => {
 	render(<ViewRoute />);
-	expect(screen.getByTestId('redirect').getAttribute('href')).toBe('/orders?order=order-uuid');
+	expect(screen.getByTestId('redirect').getAttribute('href')).toBe('/orders/edit/order-uuid');
 });

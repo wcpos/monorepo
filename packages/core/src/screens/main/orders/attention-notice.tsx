@@ -47,22 +47,22 @@ export function PaymentAttentionNotice() {
 	const router = useRouter();
 	const runtime = useQueryRuntime();
 	// The bar stands outside the Pro guard's provider: the guard's own derivation. On Free the
-	// pane would open behind the preview blur, so only Handled is offered.
+	// modal would open over the preview blur, so only Handled is offered.
 	const readOnly = !useAppInfo().license?.isPro;
 	const phone = useIsPhone();
 	const ground = useGround();
 	if (entries.length === 0) return null;
 
-	// The pane reads the order on this device: one older than the loaded page, or gone after a
+	// The modal reads the order on this device: one older than the loaded page, or gone after a
 	// reset, is demanded from the store first (the targeted refresh a reopen's undo uses).
 	const open = async ({ orderUuid, orderId }: PaymentAttentionEntry) => {
 		try {
 			if (orderId && !(await readResidentOrder(runtime, orderUuid)))
 				await refreshOrderRecord(runtime.engine, orderId);
 		} catch {
-			// Unreachable store: the pane says the order is not on this device, which is true.
+			// Unreachable store: the modal says the order is not on this device, which is true.
 		}
-		router.setParams({ order: orderUuid });
+		router.push({ pathname: '/orders/edit/[orderId]', params: { orderId: orderUuid } });
 	};
 	const handled = ({ rowId }: PaymentAttentionEntry) =>
 		resolvePaymentAttention(storeDB, rowId).catch((error: unknown) =>

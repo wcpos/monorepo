@@ -11,13 +11,13 @@ import type { StoreDatabase } from '@wcpos/database';
 
 import { PaymentAttentionNotice } from './attention-notice';
 
-const mockSetParams = jest.fn();
+const mockPush = jest.fn();
 const mockResident = jest.fn();
 const mockRefresh = jest.fn();
 const mockWarn = jest.fn();
 let mockIsPro = true;
 let mockStoreDB: StoreDatabase;
-jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockSetParams }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: 'engine' }) }));
 jest.mock('@wcpos/query/record-readers', () => ({
 	readResidentOrder: (...args: unknown[]) => mockResident(...args),
@@ -157,7 +157,12 @@ it('Open order opens a resident order the way a row does', async () => {
 	await refuse('a');
 	render(<PaymentAttentionNotice />);
 	fireEvent.click(await screen.findByTestId('orders-attention-open-a'));
-	await waitFor(() => expect(mockSetParams).toHaveBeenCalledWith({ order: 'order-uuid-a' }));
+	await waitFor(() =>
+		expect(mockPush).toHaveBeenCalledWith({
+			pathname: '/orders/edit/[orderId]',
+			params: { orderId: 'order-uuid-a' },
+		})
+	);
 	expect(mockResident).toHaveBeenCalledWith({ engine: 'engine' }, 'order-uuid-a');
 	expect(mockRefresh).not.toHaveBeenCalled();
 });
@@ -170,12 +175,15 @@ it('Open order demands an order not on this device from the store before opening
 	render(<PaymentAttentionNotice />);
 	fireEvent.click(await screen.findByTestId('orders-attention-open-a'));
 	await waitFor(() => expect(mockRefresh).toHaveBeenCalledWith('engine', 42));
-	expect(mockSetParams).not.toHaveBeenCalled();
+	expect(mockPush).not.toHaveBeenCalled();
 	await act(async () => land('refreshed'));
-	expect(mockSetParams).toHaveBeenCalledWith({ order: 'order-uuid-a' });
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/orders/edit/[orderId]',
+		params: { orderId: 'order-uuid-a' },
+	});
 });
 
-it('on Free offers only Handled: the pane would open behind the Pro preview', async () => {
+it('on Free offers only Handled: the modal would open over the Pro preview', async () => {
 	mockIsPro = false;
 	await refuse('a');
 	render(<PaymentAttentionNotice />);

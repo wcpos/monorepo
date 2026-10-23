@@ -36,13 +36,12 @@ const mockLocalPatch = jest.fn();
 const mockRelease = jest.fn();
 const mockRequire = jest.fn(() => ({ ready: Promise.resolve(), release: mockRelease }));
 const mockPush = jest.fn();
-const mockSetParams = jest.fn();
 let mockReadOnly = false;
 const mockHandlers = new Map<string, () => unknown>();
 const mockDisabled = new Map<string, boolean>();
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+	useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -279,11 +278,19 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 
 jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
 
-// A View push here would detach the order from the selected row and pane.
-it('View selects the pane instead of pushing a detail route', () => {
+// The route modal is the one order surface: View and Edit open it on their tab.
+it('View and Edit open the order modal on their tab', () => {
 	render(<Actions {...cellProps} />);
 	fireEvent.click(screen.getByText('common.view'));
-	expect(mockSetParams).toHaveBeenCalledWith({ order: 'order-1' });
+	expect(mockPush).toHaveBeenLastCalledWith({
+		pathname: '/orders/edit/[orderId]',
+		params: { orderId: 'order-1', tab: 'view' },
+	});
+	fireEvent.click(screen.getByText('common.edit'));
+	expect(mockPush).toHaveBeenLastCalledWith({
+		pathname: '/orders/edit/[orderId]',
+		params: { orderId: 'order-1', tab: 'edit' },
+	});
 });
 it.each([
 	'completed',
@@ -316,7 +323,7 @@ it('keeps edit and receipt route targets', () => {
 	fireEvent.click(screen.getByText('common.edit'));
 	expect(mockPush).toHaveBeenLastCalledWith({
 		pathname: '/orders/edit/[orderId]',
-		params: { orderId: 'order-1' },
+		params: { orderId: 'order-1', tab: 'edit' },
 	});
 	fireEvent.click(screen.getByText('common.receipt'));
 	expect(mockPush).toHaveBeenLastCalledWith({

@@ -116,19 +116,13 @@ for (const [device, viewport] of Object.entries({
 						if (device === 'tablet') await state('row-hovered', () => rows.first().hover());
 						await state('pane-open', async () => {
 							await rows.first().click();
-							await expect(page.getByTestId('order-pane')).toBeVisible();
-							await expect(page.getByTestId('order-pane-close')).toBeVisible();
+							await expect(page.getByTestId('order-modal')).toBeVisible();
+							await expect(page.getByTestId('order-modal-close')).toBeVisible();
+							// The order's actions are the modal's footer, not a ⋮ menu.
+							await expect(page.getByTestId('order-modal-reopen')).toBeVisible();
 						});
 						if (device === 'phone') await state('pane-as-page', async () => {});
-						await state(
-							'pane-menu',
-							async () => {
-								await page.getByTestId('order-pane').getByTestId('order-actions-button').click();
-								await expect(page.getByTestId('order-reopen-menu-item')).toBeVisible();
-							},
-							closePopover
-						);
-						const paneClose = page.getByTestId('order-pane-close');
+						const paneClose = page.getByTestId('order-modal-close');
 						if (await paneClose.isVisible()) await paneClose.click();
 					} else {
 						skipState(

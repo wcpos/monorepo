@@ -5,7 +5,7 @@ import { render } from '@testing-library/react';
 
 import { EditCouponScreen } from './coupons/edit';
 import { EditCustomerScreen } from './customers/edit';
-import { EditOrderScreen } from './orders/edit';
+import { OrderScreen } from './orders/edit';
 import { RefundOrderScreen } from './orders/refund';
 import { CheckoutScreen } from './pos/checkout';
 import { EditProductScreen } from './products/edit/product';
@@ -30,7 +30,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 
 jest.mock('./coupons/edit/edit-coupon', () => ({ EditCoupon: () => null }));
 jest.mock('./customers/edit/edit-customer', () => ({ EditCustomer: () => null }));
-jest.mock('./orders/edit/modal', () => ({ EditOrderModal: () => null }));
+jest.mock('./orders/edit/modal', () => ({ OrderModal: () => null }));
 jest.mock('./orders/refund/modal', () => ({ RefundOrderModal: () => null }));
 jest.mock('./pos/checkout/checkout', () => ({ Checkout: () => null }));
 // The checkout route decides between the modal and the in-column redirect from the payment
@@ -53,7 +53,7 @@ describe('engine modal/detail reads', () => {
 	it.each([
 		['coupon', EditCouponScreen, 'couponId', 'coupon-uuid', 'coupons'],
 		['customer', EditCustomerScreen, 'customerId', 'customer-uuid', 'customers'],
-		['order edit', EditOrderScreen, 'orderId', 'edit-order-uuid', 'orders'],
+		['order', OrderScreen, 'orderId', 'edit-order-uuid', 'orders'],
 		['order refund', RefundOrderScreen, 'orderId', 'refund-order-uuid', 'orders'],
 		['checkout', CheckoutScreen, 'orderId', 'checkout-order-uuid', 'orders'],
 		['product', EditProductScreen, 'productId', 'product-uuid', 'products'],
