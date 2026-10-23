@@ -459,6 +459,24 @@ it('releases finishing when the frame fails to load', async () => {
 	expect(mockPrint).not.toHaveBeenCalled();
 });
 
+// Android reports a failed URL load as a finish, then the error (react-native-webview 14.0.1);
+// the engine marks that error `retractsLoad`. The frame never loaded, so the auto-print waiting
+// on it must not fire when the data arrives later.
+it('a load the engine retracts does not count as the frame loading', async () => {
+	mockFinal = false;
+	const { result, rerender } = renderHook(() =>
+		useReceiptDocument({ order, autoPrintAllowed: true })
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	await act(async () =>
+		result.current.previewProps.handleError({ nativeEvent: { retractsLoad: true } } as never)
+	);
+	mockFinal = true;
+	await act(async () => rerender());
+	expect(mockPrint).not.toHaveBeenCalled();
+	expect(result.current.autoPrintPending).toBe(false);
+});
+
 it('never blocks finishing in a host that does not auto-print', () => {
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
 	expect(result.current.autoPrintPending).toBe(false);

@@ -29,6 +29,7 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { judgeGatewaySnapshot } from '../pay-page/gateway-snapshot';
 import { type PayPageMessage, readPayPageMessage } from '../pay-page/pay-page-message';
+import { usePayFrame } from '../pay-page/use-pay-frame';
 import { useSettleGatewaySnapshot } from '../pay-page/use-settle-gateway-snapshot';
 
 import type { PaymentFrameStatus } from '../pay-page/use-pay-frame-gate';
@@ -43,33 +44,10 @@ import type { PaymentFrameStatus } from '../pay-page/use-pay-frame-gate';
 const ASYNC_PAYMENT_POLL_INTERVAL_MS = 3_000;
 const ASYNC_PAYMENT_POLL_WINDOW_MS = 120_000;
 
-// How long the checkout waits for the store's order-pay document before it
-// treats the navigation as stalled and reloads the frame once.
-//
-// The document is one WordPress page. A healthy store serves it in about a
-// second; a starved CI simulator was measured at 8 s from dialog to enabled
-// (run 33750030091, iOS phone) and, at the very worst, 71 s to the first
-// WebView commit (run 33319523590). The stall this guards against is a
-// different animal: WebKit never sends the request at all — the pay page
-// reached the store five minutes after the tap (run 33758920470, iOS phone)
-// or never (run 33750030091, iPad), and WebKit's own 60 s request timeout
-// cannot fire for a request that never left the process. Without a way out
-// the cashier is left with the spinner #1024 was meant to end. 90 s sits past
-// every real load ever measured and well short of the stall. A reload
-// restarts the navigation WebKit dropped; a second stall is reported as a
-// failure with a Retry rather than hidden behind more waiting.
-export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
-
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 /** The catalog before it loads, and the prop default: no gateway has a stored status. */
 const NO_SETTLED_ORDER_STATUSES: Record<string, string | null> = {};
-
-/** The URL a native WebView navigation event names, when it names one. */
-function navigationURL(event: unknown): string | null {
-	const url = (event as { nativeEvent?: { url?: unknown } } | undefined)?.nativeEvent?.url;
-	return typeof url === 'string' && url !== '' ? url : null;
-}
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
@@ -153,42 +131,13 @@ export function PaymentWebview({
 	// Set on unmount so a poll or a session refresh that is still awaiting a
 	// response cannot settle the sale, or arm another poll, after checkout closed.
 	const unmountedRef = React.useRef(false);
-	const loadCountRef = React.useRef(0);
-	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
-	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
-	// `frameSettledRef` is set by the load or error event that ends a navigation,
-	// so a timer that fires after one is a no-op. The frame's key derives from
-	// the retry token and the reload count: a remount is a fresh navigation on
-	// both platforms (the web iframe has no reload API) and drops whatever
-	// WebKit was, or was not, doing with the old one.
-	const [autoReloads, setAutoReloads] = React.useState(0);
-	const [navigationStarts, setNavigationStarts] = React.useState(0);
-	const frameSettledRef = React.useRef(false);
-	const [sessionReloads, setSessionReloads] = React.useState(0);
 	// Ref-backed so a message arriving before the next render still sees the real count.
 	const sessionReloadsRef = React.useRef(0);
 	const sessionRefreshInFlight = React.useRef(false);
-	// Two separate facts. `frameExpired`: the frame holds an expired token (any failed refresh,
-	// or the reload cap), so it stays failed — no load event may report it ready and the
-	// watchdog must not remount the same expired URL — until the URL itself changes (a new
-	// token, from this component or a background refresh). `sessionRefreshRefused`: no further
-	// refresh may be attempted (the refresh token itself was rejected, or the cap was reached);
-	// a transient failure (network, 5xx, cooldown) leaves it clear so a later message may retry.
-	const frameExpired = React.useRef(false);
+	// No further refresh may be attempted (the refresh token itself was rejected, or the cap
+	// was reached); a transient failure (network, 5xx, cooldown) leaves it clear so a later
+	// message may retry. The frame's own expiry is `usePayFrame`'s `expire`.
 	const sessionRefreshRefused = React.useRef(false);
-
-	// Android's react-native-webview (13.16.1, RNCWebViewClient.onReceivedError)
-	// reports a failed navigation as a FINISH and then an error, so `onLoad` fires
-	// for a document that never loaded. `loadSinceStartRef` holds the URL of a load
-	// counted since the last navigation start, so an error naming that same URL can
-	// take it back (iOS and web errors never follow a load of their own URL — the
-	// web iframe names no URL at all);
-	// `erroredURLRef` is the URL that failed, whose error page then fires a
-	// load-start of its own (doUpdateVisitedHistory) that must not re-gate the
-	// frame behind a spinner. iOS and web never load a failed document.
-	const loadSinceStartRef = React.useRef<string | null>(null);
-	const erroredURLRef = React.useRef<string | null>(null);
-	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -334,8 +283,7 @@ export function PaymentWebview({
 	}, [paymentURL, jwt]);
 
 	React.useEffect(() => {
-		// A new token (this refresh or a background one) makes the frame live again.
-		frameExpired.current = false;
+		// A new token (this refresh or a background one) allows a refresh again.
 		sessionRefreshRefused.current = false;
 	}, [paymentURLWithToken]);
 
@@ -454,6 +402,36 @@ export function PaymentWebview({
 		},
 		[http, order, orderId, ctx.dp, settle, isSettled, setLoading, orderLogger]
 	);
+
+	/**
+	 * A later document loaded: schedule a fallback refresh in case the payment
+	 * gateway doesn't send a postMessage.
+	 *
+	 * The first load is the initial order-pay page, where a payment cannot have
+	 * completed yet — there is nothing to reconcile. We only poll on later
+	 * navigations (e.g. the post-payment redirect to the received page) where a
+	 * missed postMessage is actually possible. Polling on the initial load only
+	 * fires a request that races ahead of the payment and can never observe a
+	 * completed sale.
+	 */
+	const onLaterDocument = React.useCallback(() => {
+		if (fallbackTimerRef.current) {
+			clearTimeout(fallbackTimerRef.current);
+		}
+		fallbackTimerRef.current = setTimeout(
+			() => void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
+			1000
+		);
+	}, [pollServerTruth]);
+	const frame = usePayFrame({
+		src: paymentURLWithToken,
+		retryToken,
+		prepared,
+		report: setFrameStatus,
+		onLaterDocument,
+		logger: orderLogger,
+	});
+
 	const handleSessionExpired = async (messageOrderId: number) => {
 		if (messageOrderId !== orderId) {
 			orderLogger.debug('Ignoring session expiry for another order');
@@ -463,30 +441,29 @@ export function PaymentWebview({
 		if (sessionReloadsRef.current >= 2) {
 			// The reloaded frame expired again: close the gate so nothing submits to it.
 			sessionRefreshRefused.current = true;
-			frameExpired.current = true;
-			setFrameStatus('failed');
+			frame.expire();
 			warnReopen();
 			return;
 		}
 		sessionRefreshInFlight.current = true;
-		setFrameStatus('loading');
+		frame.hold();
 		try {
 			const token = await refreshAccessToken();
 			if (unmountedRef.current) return;
 			if (token) {
 				sessionReloadsRef.current += 1;
-				setSessionReloads(sessionReloadsRef.current);
+				frame.remount();
 				// The remount resets the load count, so its first load never arms the poll.
 				// Still detect a payment that settled during the refresh.
 				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
 			} else {
 				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
-				frameExpired.current = true;
-				setFrameStatus('failed');
+				frame.expire();
 				warnReopen();
 			}
 		} finally {
 			sessionRefreshInFlight.current = false;
+			frame.release();
 			setLoading(false);
 		}
 	};
@@ -577,179 +554,6 @@ export function PaymentWebview({
 		}
 	};
 
-	/**
-	 * When the webview loads, schedule a fallback refresh in case the payment
-	 * gateway doesn't send a postMessage.
-	 *
-	 * The first load is the initial order-pay page, where a payment cannot have
-	 * completed yet — there is nothing to reconcile. We only poll on later
-	 * navigations (e.g. the post-payment redirect to the received page) where a
-	 * missed postMessage is actually possible. Polling on the initial load only
-	 * fires a request that races ahead of the payment and can never observe a
-	 * completed sale.
-	 */
-	const onWebViewLoaded = React.useCallback(
-		(event: unknown) => {
-			// The store's order-pay template registers its `wcpos-process-payment`
-			// listener in a synchronous <head> script, so the frame's load event is
-			// strictly after that listener exists. It is the strongest readiness
-			// signal either platform exposes — the template sends no ready message —
-			// so the checkout footer gates on it (#1024).
-			if (sessionRefreshInFlight.current || frameExpired.current) return;
-			setFrameStatus('ready');
-			frameSettledRef.current = true;
-			loadSinceStartRef.current = navigationURL(event);
-			erroredURLRef.current = null;
-
-			loadCountRef.current += 1;
-			if (loadCountRef.current < 2) {
-				return;
-			}
-
-			if (fallbackTimerRef.current) {
-				clearTimeout(fallbackTimerRef.current);
-			}
-
-			fallbackTimerRef.current = setTimeout(
-				() => void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
-				1000
-			);
-		},
-		[setFrameStatus, pollServerTruth]
-	);
-
-	/**
-	 * Navigating away — a gateway redirect, the post-payment hop — puts a document
-	 * under the frame that has no `wcpos-process-payment` listener until it, too,
-	 * has loaded. Re-gate so a second press cannot post into it.
-	 *
-	 * Native only: the web WebView renders an <iframe>, which exposes no
-	 * navigation-start event for a cross-origin document. Passing the prop there
-	 * is inert. That residual web gap is one of the reasons a store-side ack is
-	 * the real fix rather than this gate.
-	 */
-	const onWebViewLoadStart = React.useCallback(
-		(event?: unknown) => {
-			// An expired frame stays failed: its navigation must not reopen the gate.
-			if (frameExpired.current) return;
-			const url = navigationURL(event);
-			// The error page of the navigation that just failed (Android): the frame
-			// stays in the state the error reported, so the cashier keeps the Retry or
-			// the failure notice instead of a spinner nothing will end.
-			if (
-				erroredURLRef.current !== null &&
-				url !== null &&
-				(url === erroredURLRef.current || url.startsWith('chrome-error://'))
-			) {
-				return;
-			}
-			erroredURLRef.current = null;
-			loadSinceStartRef.current = null;
-			setFrameStatus('loading');
-			// Only the first document is watched. Later navigations are the gateway's
-			// (a redirect, the post-payment hop); a stalled one is the fallback poll's
-			// business, and a remount there would put the pay page back under a sale
-			// that may already be paid.
-			if (loadCountRef.current === 0) {
-				frameSettledRef.current = false;
-				setNavigationStarts((n) => n + 1);
-			}
-		},
-		[setFrameStatus]
-	);
-
-	/**
-	 * A load that errors produces no load event, so the gate has to be told or it
-	 * stays shut forever. Native surfaces this reliably; on web an <iframe> only
-	 * fires `error` for a hard failure (a 404 *page* still loads), which is one
-	 * more reason the honest readiness signal has to come from the store.
-	 */
-	const onWebViewError = React.useCallback(
-		(event: unknown) => {
-			// A load counted for this navigation was Android's synthetic finish for
-			// the document that just failed: it never loaded, so it does not count.
-			const failedURL = navigationURL(event);
-			if (failedURL !== null && loadSinceStartRef.current === failedURL) {
-				loadCountRef.current = Math.max(0, loadCountRef.current - 1);
-			}
-			loadSinceStartRef.current = null;
-			erroredURLRef.current = failedURL ?? '';
-			setFrameStatus(loadCountRef.current === 0 ? 'stalled' : 'failed');
-			frameSettledRef.current = true;
-			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
-				?.nativeEvent;
-			orderLogger.warn('Payment form failed to load in the checkout frame', {
-				context: {
-					description: nativeEvent?.description,
-					code: nativeEvent?.code,
-				},
-			});
-		},
-		[orderLogger, setFrameStatus]
-	);
-
-	/**
-	 * A new payment URL swaps the document under the frame, so the gate closes
-	 * until the replacement reports its own load. The unmount cleanup means a
-	 * remounted frame (mode change, stock rejection cleared) never starts open.
-	 *
-	 * The load counter resets with it: the fallback poll deliberately skips the
-	 * *first* load because a payment cannot have completed yet, and a re-hosted
-	 * document is a first load, not a post-payment navigation.
-	 *
-	 * `useLayoutEffect`, not `useEffect`: the new `src` is committed to the DOM in
-	 * the same commit, and a passive effect would leave the gate reporting `ready`
-	 * against the replacement document until after paint — a window in which a
-	 * press posts into a document that is still loading. This closes it before the
-	 * cashier can see, let alone touch, the frame.
-	 */
-	React.useLayoutEffect(() => {
-		loadCountRef.current = 0;
-		frameSettledRef.current = false;
-		loadSinceStartRef.current = null;
-		erroredURLRef.current = null;
-		setFrameStatus(prepared === 'failed' ? 'stalled' : 'loading');
-		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, frameKey, prepared, setFrameStatus]);
-
-	/**
-	 * The load watchdog. Runs for every navigation of the first document (a new
-	 * URL, a remount, a load-start event); the load or error event that ends the
-	 * navigation settles it, so a timer that fires afterwards does nothing.
-	 * Firing unsettled means neither event arrived: the navigation stalled
-	 * before it reached the network, the case WebKit's own timeout never sees.
-	 * The silent reload is spent by the cashier's Retry — the attempt they asked
-	 * for either loads or is reported.
-	 */
-	React.useEffect(() => {
-		// No link, no frame, no navigation to watch: the banner already says so.
-		if (!paymentURLWithToken) return;
-		const timer = setTimeout(() => {
-			if (frameSettledRef.current || sessionRefreshInFlight.current || frameExpired.current) return;
-			if (autoReloads === 0 && retryToken === 0) {
-				// An automatic retry; the row that matters is the one below if it fails too.
-				orderLogger.debug('Payment form did not load in time; reloading it once', {
-					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
-				});
-				setAutoReloads(1);
-				return;
-			}
-			orderLogger.warn('Payment form did not load after a reload; waiting for the cashier', {
-				context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS, retryToken },
-			});
-			setFrameStatus('stalled');
-		}, PAYMENT_FRAME_LOAD_TIMEOUT_MS);
-		return () => clearTimeout(timer);
-	}, [
-		paymentURLWithToken,
-		frameKey,
-		navigationStarts,
-		autoReloads,
-		retryToken,
-		orderLogger,
-		setFrameStatus,
-	]);
-
 	// A layout effect: its cleanup runs in the commit that removes the frame, so a
 	// poll response arriving before the passive cleanups flush already sees the flag.
 	React.useLayoutEffect(() => {
@@ -766,15 +570,13 @@ export function PaymentWebview({
 	// mounting leaves the boundary in its fallback, and re-keying a child inside
 	// a fallback mounts nothing. A retry has to reset both.
 	return (
-		<ErrorBoundary key={frameKey}>
+		<ErrorBoundary key={frame.key}>
 			{paymentURL ? (
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
 					targetOrigin={frameOrigin}
-					onLoad={onWebViewLoaded}
-					onLoadStart={onWebViewLoadStart}
-					onError={onWebViewError}
+					{...frame.handlers}
 					onMessage={onMessage}
 					className="h-full flex-1"
 				/>

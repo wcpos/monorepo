@@ -10,6 +10,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
+import type { WebViewLoadErrorEvent } from '@wcpos/components/webview';
 
 import { getReceiptPreviewPaperWidth } from './components/receipt-preview-viewport';
 import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
@@ -560,7 +561,11 @@ export function useReceiptDocument({
 		setFrame({ key: frameKey, state: 'loaded' });
 		attemptAutoPrint();
 	};
-	const handleError = () => setFrame({ key: frameKey, state: 'failed' });
+	const handleError = (event?: WebViewLoadErrorEvent) => {
+		// Android reports a failed URL load as a finish first: a later attempt must not print on it.
+		if (event?.nativeEvent.retractsLoad) iframeLoadedRef.current = { key: frameKey, loaded: false };
+		setFrame({ key: frameKey, state: 'failed' });
+	};
 
 	// True while a configured auto-print is still waiting: on the store round-trip, on the
 	// printer, on the preview frame that has a document but has not loaded yet, or on settled
