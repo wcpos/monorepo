@@ -1,7 +1,7 @@
 import cloneDeep from 'lodash/cloneDeep';
-import get from 'lodash/get';
 import set from 'lodash/set';
 
+import { recordCollectionName } from '../records/engine-record';
 import { getTemporaryOrder, patchTemporaryOrderPayload } from '../temporary-order';
 import { convertLocalDateToUTCString } from './date';
 import { ResidentWriteError } from './resident-write-error';
@@ -13,7 +13,6 @@ import {
 	type LocalPatchProps,
 	type MutationDocument,
 	patchAndEnqueueEngineResident,
-	patchLocalResident,
 	type PayloadChanges,
 	type QueryManager,
 	residentPayload,
@@ -21,18 +20,19 @@ import {
 	scopeBarcodeSelectors,
 	type ScopedEngineResident,
 	syncableChanges,
-	writeableCollection,
+	writeTargetCollection,
 } from './resident';
+
+import type { WriteableCollection } from '../engine-adapter/collection-map';
 
 async function applyPayloadChanges<TDocument extends MutationDocument>(
 	manager: QueryManager,
-	collectionName: string | undefined,
+	collection: WriteableCollection,
 	{ document, changes: resolveChanges }: { document: TDocument; changes: PayloadChanges },
 	registerId?: string
 ) {
-	const collection = writeableCollection(collectionName);
 	const recordId = documentRecordId(document);
-	if (!collection || !recordId) throw new Error('Payload changes require an engine record');
+	if (!recordId) throw new Error('Payload changes require an engine record');
 	let changes: Record<string, unknown> = {};
 	const resolve: PayloadChanges = (payload) => {
 		changes = cloneDeep(
@@ -68,7 +68,7 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 	{ document, data, changes: resolveChanges }: LocalPatchProps<TDocument, TData>,
 	{
 		registerId,
-		collectionName = document.collection?.name,
+		collectionName,
 		explicit,
 	}: {
 		registerId?: string;
@@ -77,11 +77,14 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 		explicit?: boolean;
 	} = {}
 ): Promise<{ changes: Record<string, unknown>; document: TDocument; mutationId?: string }> {
+	const named = collectionName ?? recordCollectionName(document);
+	const engineCollection = writeTargetCollection(document, collectionName);
 	try {
+		if (!engineCollection) throw new Error(`No write door for collection "${named}"`);
 		if (resolveChanges)
 			return await applyPayloadChanges(
 				manager,
-				collectionName,
+				engineCollection,
 				{ document, changes: resolveChanges },
 				registerId
 			);
@@ -93,43 +96,30 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 		// the patch with "#<Object> could not be cloned". Callers pass plain
 		// snapshots; this makes a slip a wasted copy instead of a dead write.
 		const patchData = cloneDeep(data as Record<string, unknown>);
-		const engineCollection = writeableCollection(collectionName);
 		const isTemporaryOrder =
 			engineCollection === 'orders' && Boolean((document as unknown as { isNew?: boolean }).isNew);
-		// Engine-writeable documents (including the engine-shaped temporary order,
-		// whose date lives inside its payload) always stamp; genuinely-local
-		// documents consult their own schema.
-		const hasDate = engineCollection
-			? true
-			: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
-		if (hasDate) {
-			patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
-		}
-
 		const patchEntries = Object.entries(patchData).filter(([, value]) => value !== undefined);
 		if (patchEntries.length === 0) {
 			return { changes: {}, document };
 		}
+		patchEntries.push(['date_modified_gmt', convertLocalDateToUTCString(new Date())]);
 
-		const recordId = engineCollection ? documentRecordId(document) : null;
-		if (engineCollection && !recordId) {
+		const recordId = documentRecordId(document);
+		if (!recordId) {
 			throw new Error(`Missing uuid for ${engineCollection} mutation`);
 		}
 		let snapshot: Record<string, unknown>;
 		let scopedEngineResident: ScopedEngineResident | null = null;
 		if (isTemporaryOrder) {
-			const resident = await getTemporaryOrder(recordId!);
+			const resident = await getTemporaryOrder(recordId);
 			if (!resident) throw new Error('Temporary order is missing from the temporary DB');
 			snapshot = residentPayload(resident as unknown as EngineResident);
-		} else if (engineCollection) {
-			scopedEngineResident = await resolveEngineResident(manager, engineCollection, recordId!);
+		} else {
+			scopedEngineResident = await resolveEngineResident(manager, engineCollection, recordId);
 			if (!scopedEngineResident) {
 				throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
 			}
 			snapshot = residentPayload(scopedEngineResident.resident);
-		} else {
-			const latest = document.getLatest();
-			snapshot = latest.toMutableJSON?.() ?? (latest as unknown as Record<string, unknown>);
 		}
 		const changes: Record<string, unknown> = {};
 		for (const [key, value] of patchEntries) {
@@ -150,7 +140,7 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 			// The temporary order is engine-shaped (ADR 0028 stage I); the context
 			// hands out the record face, so the write resolves the RAW template
 			// through the temp-order repository and merges into its payload.
-			const patched = await patchTemporaryOrderPayload(recordId!, changes);
+			const patched = await patchTemporaryOrderPayload(recordId, changes);
 			if (!patched) throw new Error('Temporary order is missing from the temporary DB');
 			return {
 				changes,
@@ -158,40 +148,34 @@ export async function applyLocalPatch<TDocument extends MutationDocument, TData 
 			};
 		}
 
-		if (engineCollection) {
-			const syncChanges = syncableChanges(engineCollection, changes);
-			let patched: EngineResident;
-			let mutationId: string | undefined;
-			if (
-				Object.keys(syncChanges).length > 0 &&
-				assertsSomething(engineCollection, syncChanges, snapshot)
-			) {
-				patched = await patchAndEnqueueEngineResident({
-					manager,
-					collection: engineCollection,
-					recordId: recordId!,
-					changes: syncChanges,
-					initial: scopedEngineResident!,
-					registerId: registerId,
-					...(explicit ? { explicit: true } : {}),
-					onEnqueued: (id) => (mutationId = id),
-				});
-			} else {
-				patched = await applyEngineResidentChanges(
-					scopedEngineResident!.resident,
-					engineCollection,
-					syncChanges,
-					scopeBarcodeSelectors(scopedEngineResident!.scope, engineCollection)
-				);
-			}
-			// The queued row's id, when this patch queued one: a caller can await its verdict.
-			return { changes, document: patched as TDocument, mutationId };
+		const syncChanges = syncableChanges(engineCollection, changes);
+		let patched: EngineResident;
+		let mutationId: string | undefined;
+		if (
+			Object.keys(syncChanges).length > 0 &&
+			assertsSomething(engineCollection, syncChanges, snapshot)
+		) {
+			patched = await patchAndEnqueueEngineResident({
+				manager,
+				collection: engineCollection,
+				recordId,
+				changes: syncChanges,
+				initial: scopedEngineResident!,
+				registerId: registerId,
+				...(explicit ? { explicit: true } : {}),
+				onEnqueued: (id) => (mutationId = id),
+			});
+		} else {
+			patched = await applyEngineResidentChanges(
+				scopedEngineResident!.resident,
+				engineCollection,
+				syncChanges,
+				scopeBarcodeSelectors(scopedEngineResident!.scope, engineCollection)
+			);
 		}
-
-		const latest = document.getLatest() as unknown as EngineResident;
-		const doc = await patchLocalResident(latest, changes);
-		return { changes, document: doc as TDocument };
+		// The queued row's id, when this patch queued one: a caller can await its verdict.
+		return { changes, document: patched as TDocument, mutationId };
 	} catch (error) {
-		throw new ResidentWriteError(error, collectionName, documentRecordId(document));
+		throw new ResidentWriteError(error, named, documentRecordId(document));
 	}
 }

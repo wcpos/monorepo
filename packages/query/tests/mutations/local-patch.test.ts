@@ -8,7 +8,7 @@ import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { act, waitFor } from '@testing-library/react';
 
-import { applyLocalPatch } from '../../src/mutations';
+import { applyLocalPatch, ResidentWriteError } from '../../src/mutations';
 
 import type { LocalPatchProps, MutationDocument } from '../../src/mutations';
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
@@ -417,44 +417,57 @@ it('patches a brand-new temporary order through the temp-order repository payloa
 	expect(stored.payload).not.toHaveProperty('date_created_gmt');
 });
 
-it('ignores undefined values in patch data', async () => {
-	const persistedDoc = {
-		barcode_scanning_prefix: '',
-		barcode_scanning_suffix: '',
+it.each([
+	['an all-undefined patch writes nothing', { name: undefined }, 0],
+	['a real field beside an undefined one writes once', { name: undefined, sku: 'SKU-1' }, 1],
+] as const)('ignores undefined values in patch data: %s', async (_label, data, writes) => {
+	const stored: Record<string, unknown> = {
+		uuid: 'product-uuid',
+		remoteId: '42',
+		remoteKey: '42',
+		payload: { id: 42, name: 'Kept' },
+		sync: { revision: 'rev-1' },
+		local: { dirty: false, pendingMutationIds: [] },
 	};
-
-	const incrementalModify = jest.fn(async (modifier: (old: Record<string, unknown>) => unknown) => {
-		modifier(persistedDoc);
-		return persistedDoc;
-	});
-
-	const document = {
-		id: 'store_1',
-		collection: {
-			name: 'stores',
-			schema: {
-				jsonSchema: {
-					properties: {
-						date_modified_gmt: { type: 'string' },
-					},
-				},
-			},
+	mockFindOneExec.mockResolvedValue({
+		incrementalModify: async (
+			modifier: (old: Record<string, unknown>) => Record<string, unknown>
+		) => {
+			Object.assign(stored, modifier(stored));
+			return stored;
 		},
-		getLatest: () => ({ incrementalModify }),
+		toJSON: () => JSON.parse(JSON.stringify(stored)),
+	});
+	const document = {
+		uuid: 'product-uuid',
+		id: 42,
+		collection: { name: 'products' },
+		getLatest: () => document,
 	};
 
 	const patchResult = await act(async () => {
-		return localPatch({
-			document: document as never,
-			data: {
-				barcode_scanning_prefix: undefined,
-			} as never,
-		});
+		return localPatch({ document: document as never, data: data as never });
 	});
 
-	expect(persistedDoc.barcode_scanning_prefix).toBe('');
-	expect(patchResult?.changes).not.toHaveProperty('barcode_scanning_prefix');
-	expect(mockConvertLocalDateToUTCString).toHaveBeenCalledTimes(1);
+	expect(stored.payload).toMatchObject({ name: 'Kept' });
+	expect(patchResult?.changes).not.toHaveProperty('name');
+	expect(mockWrite).toHaveBeenCalledTimes(writes);
+	expect(mockConvertLocalDateToUTCString).toHaveBeenCalledTimes(writes);
+	if (writes === 0) expect(patchResult?.changes).toEqual({});
+	else
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: { sku: 'SKU-1', date_modified_gmt: '2026-03-02T00:00:00' },
+			})
+		);
+});
+
+it('a target with no engine collection is refused', async () => {
+	const refusal = localPatch({ document: { uuid: 'x', isNew: false }, data: { name: 'x' } });
+	await expect(refusal).rejects.toBeInstanceOf(ResidentWriteError);
+	await expect(refusal).rejects.toThrow('No write door for collection "undefined"');
+	expect(mockFindOneExec).not.toHaveBeenCalled();
+	expect(mockWrite).not.toHaveBeenCalled();
 });
 
 it('optimistically patches a server-born resident and enqueues syncable fields', async () => {

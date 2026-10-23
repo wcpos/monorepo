@@ -115,3 +115,8 @@ export function isVariationRecord(
 export function isRecordClosed(record: object): boolean {
 	return (record as { collection?: { closed?: boolean } }).collection?.closed === true;
 }
+
+/** The collection a record lives in. The record IS the RxDocument (ADR 0028); only its read-only type hides `collection` from UI (ADR 0033 item 3). */
+export function recordCollectionName(record: object): string | undefined {
+	return (record as { collection?: { name?: string } }).collection?.name;
+}
