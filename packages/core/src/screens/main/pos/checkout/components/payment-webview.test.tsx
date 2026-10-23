@@ -1209,6 +1209,17 @@ describe('PaymentWebview settled order status', () => {
 				expect(isSettledOrderStatus(status, null)).toBe(false);
 			}
 		);
+
+		it.each([undefined, null, '', '  ', 0, {}])(
+			'never settles a blank or non-string status (%p), even with a stored status',
+			(status) => {
+				// The fallback poll reads `response.data[0].status` raw: a plugin filter's `{}` or a
+				// non-JSON body's first character has no status and must not open the receipt.
+				expect(isSettledOrderStatus(status, null)).toBe(false);
+				expect(isSettledOrderStatus(status, '')).toBe(false);
+				expect(isSettledOrderStatus(status, 'completed')).toBe(false);
+			}
+		);
 	});
 
 	it('completes from the fallback poll when background sync already moved the local order to the stored status', async () => {

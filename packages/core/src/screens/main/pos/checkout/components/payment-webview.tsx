@@ -86,9 +86,12 @@ const NO_SETTLED_ORDER_STATUSES: Record<string, string | null> = {};
  * sends no `settledOrderStatus`, and this reduces to the blocklist it always was.
  */
 export function isSettledOrderStatus(
-	status: string,
+	status: unknown,
 	settledOrderStatus: string | null | undefined
 ): boolean {
+	// A row with no status proves nothing: a plugin filter's `{}`, `{ status: '' }`, or the first
+	// character of a non-JSON 200 body read as `data[0]`. It never settles the sale.
+	if (typeof status !== 'string' || status.trim() === '') return false;
 	if (NEVER_SETTLED_STATUSES.includes(status)) return false;
 	if (!UNPAID_ORDER_STATUSES.includes(status)) return true;
 	return typeof settledOrderStatus === 'string' && settledOrderStatus === status;
