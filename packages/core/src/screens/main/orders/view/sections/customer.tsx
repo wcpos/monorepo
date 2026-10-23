@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormatAddress } from '@wcpos/components/format';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
-import { RailSection, Section } from './_section';
+import { Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
 import { TAX_ID_LABEL_KEYS, type TaxId, type TaxIdType } from '../../../../../lib/tax-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
@@ -44,9 +45,21 @@ function hasAddress(address?: Address) {
 }
 
 /**
- * Compact customer card for the right rail.
+ * The tax IDs are the snapshotted `order.tax_ids` (not the live customer record), since the order owns its own copy from
+ * sale-time.
  */
-export function CustomerRail({ order, last }: { order: OrderPayload; last?: boolean }) {
+function orderTaxIds(order: OrderPayload) {
+	const rawTaxIds = (order as { tax_ids?: unknown }).tax_ids;
+	return Array.isArray(rawTaxIds) ? (rawTaxIds as TaxId[]) : [];
+}
+
+const LABEL = 'text-muted-foreground mb-1 text-xs tracking-wide uppercase';
+
+/**
+ * The customer, last as on a receipt: avatar and name, the customer's note right under it,
+ * then the addresses and tax ids folded behind one disclosure, closed by default.
+ */
+export function CustomerSection({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const { format: formatCustomerName } = useCustomerNameFormat();
 	const name = formatCustomerName({
@@ -54,9 +67,14 @@ export function CustomerRail({ order, last }: { order: OrderPayload; last?: bool
 		shipping: order.shipping,
 		id: order.customer_id,
 	});
+	const billing = order.billing;
+	const shipping = order.shipping;
+	const same = addressKey(billing) === addressKey(shipping);
+	const taxIds = orderTaxIds(order);
+	const folded = hasAddress(billing) || hasAddress(shipping) || taxIds.length > 0;
 
 	return (
-		<RailSection title={t('common.customer')} last={last}>
+		<Section title={t('common.customer')} last={last}>
 			<View className="flex-row items-center gap-2">
 				<CustomerAvatar
 					customer={{ billing: order.billing, shipping: order.shipping, id: order.customer_id }}
@@ -76,86 +94,55 @@ export function CustomerRail({ order, last }: { order: OrderPayload; last?: bool
 			{order.billing?.phone ? (
 				<Text className="text-muted-foreground mt-2 text-xs">{order.billing.phone}</Text>
 			) : null}
-		</RailSection>
-	);
-}
-
-/**
- * Addresses block for the right rail.
- */
-export function AddressesRail({ order, last }: { order: OrderPayload; last?: boolean }) {
-	const t = useT();
-	const billing = order.billing;
-	const shipping = order.shipping;
-	const same = addressKey(billing) === addressKey(shipping);
-
-	if (!hasAddress(billing) && !hasAddress(shipping)) return null;
-
-	return (
-		<RailSection title={t('common.addresses')} last={last}>
-			<View className="gap-3">
-				{hasAddress(billing) ? (
-					<View>
-						<Text className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
-							{t('common.billing_address')}
-						</Text>
-						<FormatAddress address={billing as Record<string, string>} showName />
-					</View>
-				) : null}
-				{!same && hasAddress(shipping) ? (
-					<View>
-						<Text className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
-							{t('common.shipping_address')}
-						</Text>
-						<FormatAddress address={shipping as Record<string, string>} showName />
-					</View>
-				) : null}
-			</View>
-		</RailSection>
-	);
-}
-
-/**
- * Tax IDs block for the right rail. Displays the snapshotted `order.tax_ids`
- * (not the live customer record), since the order owns its own copy from
- * sale-time. Hidden when the order has none.
- */
-export function TaxIdsRail({ order, last }: { order: OrderPayload; last?: boolean }) {
-	const t = useT();
-	const rawTaxIds = (order as { tax_ids?: unknown }).tax_ids;
-	const taxIds = Array.isArray(rawTaxIds) ? (rawTaxIds as TaxId[]) : [];
-	if (taxIds.length === 0) return null;
-	return (
-		<RailSection title={t('tax_id.section_label', { _: 'Tax IDs' })} last={last}>
-			<View className="gap-1">
-				{taxIds.map((entry, index) => {
-					const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
-					return (
-						<View key={`${entry.type}-${entry.value}-${index}`} className="flex-row gap-2">
-							<Text className="text-muted-foreground text-xs">
-								{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
-							</Text>
-							<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
+			{order.customer_note ? (
+				<View className="border-l-primary bg-primary/5 border-border mt-3 rounded-r-md border border-l-4 px-3 py-2.5">
+					<Text className="text-foreground text-xs font-semibold">{t('common.customer_note')}</Text>
+					<Text className="text-foreground/80 mt-0.5 text-xs">{order.customer_note}</Text>
+				</View>
+			) : null}
+			{folded ? (
+				<Collapsible className="mt-3">
+					{/* The only way to the addresses on a phone: a full 44 pt target (§ Design 2). */}
+					<CollapsibleTrigger testID="order-modal-addresses-trigger" className="min-h-ctl">
+						<Text className="text-foreground text-sm font-medium">{t('common.addresses')}</Text>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<View className="gap-3 pt-1">
+							{hasAddress(billing) ? (
+								<View>
+									<Text className={LABEL}>{t('common.billing_address')}</Text>
+									<FormatAddress address={billing as Record<string, string>} showName />
+								</View>
+							) : null}
+							{!same && hasAddress(shipping) ? (
+								<View>
+									<Text className={LABEL}>{t('common.shipping_address')}</Text>
+									<FormatAddress address={shipping as Record<string, string>} showName />
+								</View>
+							) : null}
+							{taxIds.length > 0 ? (
+								<View className="gap-1">
+									<Text className={LABEL}>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
+									{taxIds.map((entry, index) => {
+										const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
+										return (
+											<View
+												key={`${entry.type}-${entry.value}-${index}`}
+												className="flex-row gap-2"
+											>
+												<Text className="text-muted-foreground text-xs">
+													{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
+												</Text>
+												<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
+											</View>
+										);
+									})}
+								</View>
+							) : null}
 						</View>
-					);
-				})}
-			</View>
-		</RailSection>
-	);
-}
-
-/**
- * Customer note callout in the main column.
- */
-export function CustomerNoteSection({ order }: { order: OrderPayload }) {
-	const t = useT();
-	if (!order.customer_note) return null;
-	return (
-		<Section>
-			<View className="border-l-primary bg-primary/5 border-border rounded-r-md border border-l-4 px-3 py-2.5">
-				<Text className="text-foreground text-xs font-semibold">{t('common.customer_note')}</Text>
-				<Text className="text-foreground/80 mt-0.5 text-xs">{order.customer_note}</Text>
-			</View>
+					</CollapsibleContent>
+				</Collapsible>
+			) : null}
 		</Section>
 	);
 }

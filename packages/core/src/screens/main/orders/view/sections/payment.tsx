@@ -1,67 +1,98 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
-import type { EngineRecord } from '@wcpos/query';
+import { isPaidStatus } from '@wcpos/sync-core';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { RailSection } from './_section';
+import { Section } from './_section';
 import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
+import { useStoreDayLabel } from '../../../../../hooks/use-store-day-label';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
+import { LedgerLegs } from '../../../pos/checkout/tender/ledger-pane';
+import { useLedgerView } from '../../../pos/checkout/tender/use-ledger-view';
 
-type OrderPayload = EngineRecord<'orders'>['payload'];
-
-function KV({
-	k,
-	v,
-	tone = 'default',
-}: {
-	k: string;
-	v?: React.ReactNode;
-	tone?: 'default' | 'destructive';
-}) {
-	if (v == null || v === '') return null;
-	const valueClass = tone === 'destructive' ? 'text-destructive' : 'text-foreground';
-	return (
-		<View className="flex-row items-baseline justify-between gap-3 py-1">
-			<Text className="text-muted-foreground text-xs">{k}</Text>
-			{typeof v === 'string' ? <Text className={`text-xs font-medium ${valueClass}`}>{v}</Text> : v}
-		</View>
-	);
-}
-
-export function PaymentSection({ order, last }: { order: OrderPayload; last?: boolean }) {
+/**
+ * The order's payments in the cart's own words: the same `LedgerLegs` the tender cart draws,
+ * closing on Total · Paid · Remaining while money is owed. An order with no POS journal (paid
+ * online, or older than the journal) gets one row in the leg recipe from Woo's own fields.
+ */
+export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
-	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
-	const datePaid = useDateFormat(order.date_paid_gmt);
-
-	const method = order.payment_method_title || order.payment_method;
-	const refunded = totalRefunded(order.refunds);
-	const stamp = activeAwaitingCustomer(order.meta_data);
+	const payload = useRecordField(order, (record) => record.payload);
+	const view = useLedgerView(order);
+	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
+	const { dateTime } = useStoreDayLabel();
+	const method = payload.payment_method_title || payload.payment_method;
+	const paidAt = payload.date_paid_gmt ? dateTime(payload.date_paid_gmt) : null;
+	const refunded = totalRefunded(payload.refunds);
+	const stamp = activeAwaitingCustomer(payload.meta_data);
 	const sentOn = useDateFormat(stamp?.sent_at_gmt, 'MMM d, h:mm a', false);
+	const legs = view.rows.length > 0;
+	// Nothing taken yet: the ledger's own words ("No payments yet", then Total · Paid ·
+	// Remaining), never a method row that reads as paid. A dead order owes nothing.
+	const dead = ['cancelled', 'failed', 'refunded', 'trash'].includes(payload.status ?? '');
+	// Settled is the store's word (`isPaidStatus`: completed, processing, a custom paid status)
+	// or a `date_paid`; the ledger derives the balance from the journal alone (a refund counts
+	// back as owed), so only an open sale closes on Remaining. A dead order owes nothing.
+	const settled = Boolean(paidAt) || isPaidStatus(payload.status);
+	const owing = !legs && !settled && view.balanceMinor > 0 && !dead;
+	const closing = view.balanceMinor > 0 && !dead && !settled;
+	const fallback = !legs && !owing && Boolean(method || paidAt || payload.transaction_id);
 
-	if (!method && !order.transaction_id && !datePaid && refunded === 0 && !stamp) {
-		return null;
-	}
+	if (!legs && !owing && !fallback && refunded === 0 && !stamp) return null;
 
 	return (
-		<RailSection title={t('common.payment_method')} last={last}>
-			<KV k={t('common.payment_method')} v={method} />
+		<Section
+			title={
+				view.rows.length > 1
+					? t('pos_checkout.payments_tab')
+					: t('common.payment', { _: 'Payment' })
+			}
+		>
+			{legs || owing ? <LedgerLegs view={view} format={view.format} closing={closing} /> : null}
+			{fallback ? (
+				<View testID="order-modal-payment" className="border-border gap-1 border-b py-2">
+					<View className="flex-row items-center justify-between gap-2">
+						<Text className="flex-1 text-sm font-medium" decodeHtml>
+							{method ?? ''}
+						</Text>
+						<Text className="text-sm tabular-nums">{format(Number(payload.total || 0))}</Text>
+						{paidAt ? (
+							<StatusBadge label={t('pos_checkout.status_captured')} variant="success" />
+						) : null}
+					</View>
+					{paidAt ? (
+						<Text className="text-muted-foreground text-xs tabular-nums">
+							{`${t('orders.captured')} ${paidAt}`}
+						</Text>
+					) : null}
+					{payload.transaction_id ? (
+						<Text className="text-muted-foreground text-xs">
+							{`${t('common.transaction_id')} ${payload.transaction_id}`}
+						</Text>
+					) : null}
+				</View>
+			) : null}
 			{stamp ? (
-				<KV
-					k={t('pos_checkout.invoice_sent')}
-					v={
+				<Text className="text-muted-foreground mt-2 text-xs">
+					{`${t('pos_checkout.invoice_sent')} ${
 						stamp.destination
 							? t('pos_checkout.sent_to_on', { destination: stamp.destination, date: sentOn ?? '' })
 							: t('pos_checkout.sent_on', { date: sentOn ?? '' })
-					}
-				/>
+					}`}
+				</Text>
 			) : null}
-			<KV k={t('common.transaction_id')} v={order.transaction_id} />
-			<KV k={t('orders.captured')} v={datePaid ?? undefined} />
-			{refunded > 0 ? <KV k={t('orders.refund')} v={format(-refunded)} tone="destructive" /> : null}
-		</RailSection>
+			{refunded > 0 ? (
+				<View className="mt-2 flex-row items-baseline justify-between gap-3">
+					<Text className="text-destructive text-sm">{t('orders.refund')}</Text>
+					<Text className="text-destructive text-sm tabular-nums">{format(-refunded)}</Text>
+				</View>
+			) : null}
+		</Section>
 	);
 }
