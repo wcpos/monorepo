@@ -1,8 +1,11 @@
-import { map } from 'rxjs/operators';
+import { distinctUntilChanged, map } from 'rxjs/operators';
+
+import type { PaymentRow } from '@wcpos/order-math';
 
 import { ensureLocalDocument, storeDatabase } from './ensure-local-document';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
+import type { Observable } from 'rxjs';
 
 /**
  * The money command journal (ADR 0040 §1.3): every money command's frozen envelope, from before
@@ -104,6 +107,31 @@ export function claimHeld(entry: MoneyCommandEntry, claimant: string | null, now
 	return !!entry.claimedBy && entry.claimedBy !== claimant && age >= 0 && age < CLAIM_LEASE_MS;
 }
 
+/**
+ * Where a command stands, read from its send fields and nowhere else: never dispatched (a crash
+ * leftover, or a pre-flight still running), journaled offline and never dispatched (`deferEntry`),
+ * or dispatched under a revision and not answered. An answer deletes the entry, so there is no
+ * answered phase. Not the offline mark: that is `isDeferred`, which outlasts the re-send.
+ */
+export type CommandPhase = 'unsent' | 'deferred' | 'unanswered';
+export const phaseOf = (entry: Pick<MoneyCommandEntry, 'sentAt' | 'sentRevision'>): CommandPhase =>
+	entry.sentRevision != null ? 'unanswered' : entry.sentAt != null ? 'deferred' : 'unsent';
+export type CommandState =
+	| { readonly kind: CommandPhase }
+	| { readonly kind: 'in-flight'; readonly of: CommandPhase; readonly lapsesAt: number };
+
+/** The entry's state: its phase, or in flight while another poster's claim on it is live. */
+export function commandState(
+	entry: MoneyCommandEntry,
+	claimant: string | null = null,
+	now = Date.now()
+): CommandState {
+	const phase = phaseOf(entry);
+	return claimHeld(entry, claimant, now)
+		? { kind: 'in-flight', of: phase, lapsesAt: (entry.claimedAt ?? 0) + CLAIM_LEASE_MS }
+		: { kind: phase };
+}
+
 /** A command route: its kind and target, or for `record` the row id that is its identity. */
 interface CommandRoute {
 	readonly orderUuid: string;
@@ -142,12 +170,12 @@ export async function claimRoute(
 				entry.kind === route.kind &&
 				(route.rowId === null ? entry.target === route.target : entry.id === route.rowId)
 		);
-		const held = same.find((entry) => claimHeld(entry, claimant, now));
+		const held = same.find((entry) => commandState(entry, claimant, now).kind === 'in-flight');
 		if (held) {
 			claim = { status: 'busy', entry: held };
 			return;
 		}
-		const sent = same.find((entry) => entry.sentAt !== null);
+		const sent = same.find((entry) => phaseOf(entry) !== 'unsent');
 		if (sent) {
 			order.entries[sent.id] = { ...sent, claimedBy: claimant, claimedAt: now };
 			claim = { status: 'open', entry: order.entries[sent.id] };
@@ -174,7 +202,7 @@ export function dropUnsent(
 ) {
 	return modifyOrder(storeDB, orderUuid, (order) => {
 		const entry = order.entries[id];
-		if (entry && entry.sentAt === null && !claimHeld(entry, claimant)) delete order.entries[id];
+		if (entry && commandState(entry, claimant).kind === 'unsent') delete order.entries[id];
 	});
 }
 
@@ -340,9 +368,10 @@ export async function nextClaimExpiry(
 	for (const { entries } of Object.values(await readMoneyJournal(storeDB)))
 		for (const entry of entries)
 			// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
-			if (entry.sentAt !== null && entry.scope === scope && claimHeld(entry, null, now)) {
-				const expiry = (entry.claimedAt ?? 0) + CLAIM_LEASE_MS;
-				if (next === null || expiry < next) next = expiry;
+			if (entry.scope === scope) {
+				const state = commandState(entry, null, now);
+				if (state.kind === 'in-flight' && state.of !== 'unsent')
+					if (next === null || state.lapsesAt < next) next = state.lapsesAt;
 			}
 	return next;
 }
@@ -365,4 +394,42 @@ export function observeOrderCommands(storeDB: StoreLocalDatabase, orderUuid: str
 	return storeDatabase(storeDB)
 		.getLocal$<Journal>(ID)
 		.pipe(map((doc) => Object.values(doc?.toJSON(true).data.orders[orderUuid]?.entries ?? {})));
+}
+
+/** A command was dispatched and has no answer, whoever holds it: a Try again in flight keeps the gate. */
+export function observeTenderGate(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Observable<boolean> {
+	return observeOrderCommands(storeDB, orderUuid).pipe(
+		map((entries) => entries.some((entry) => phaseOf(entry) === 'unanswered')),
+		distinctUntilChanged()
+	);
+}
+
+/** A command the store owes an answer, and the row a `record` carries (else null). */
+export interface AwaitedCommand {
+	readonly kind: MoneyCommandKind;
+	readonly row: PaymentRow | null;
+}
+/** What the store owes an answer: deferred or dispatched, held or not; never a never-dispatched entry. */
+export async function readAwaitingAnswer(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<readonly AwaitedCommand[]> {
+	return (await readOrderCommands(storeDB, orderUuid)).entries
+		.filter((entry) => phaseOf(entry) !== 'unsent')
+		.map(({ kind, body }) => ({
+			kind,
+			row: kind === 'record' ? ((body.payment as PaymentRow | undefined) ?? null) : null,
+		}));
+}
+
+/** Row ids of the order's `record` entries in any state: a journaled record (even mid-pre-flight) keeps its rounding fee. */
+export async function readJournaledRecordIds(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<ReadonlySet<string>> {
+	const { entries } = await readOrderCommands(storeDB, orderUuid);
+	return new Set(entries.filter(({ kind }) => kind === 'record').map(({ id }) => id));
 }

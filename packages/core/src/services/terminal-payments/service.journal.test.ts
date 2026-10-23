@@ -9,8 +9,12 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { moneyCommandPoster, recoverMoneyCommands, type useQueryRuntime } from '@wcpos/query';
-import { readOrderCommands } from '@wcpos/query/store-local';
-import { createEngineDatabase, createFakeEngine, engineOrder } from '@wcpos/query/testing';
+import {
+	createEngineDatabase,
+	createFakeEngine,
+	engineOrder,
+	readOrderCommands,
+} from '@wcpos/query/testing';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { PaymentRow } from '@wcpos/order-math';
 

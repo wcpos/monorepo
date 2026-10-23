@@ -3,6 +3,7 @@ import { distinctUntilChanged, map, shareReplay } from 'rxjs/operators';
 
 import { storeDatabase } from './ensure-local-document';
 import { isDeferred, observeMoneyJournal, readMoneyJournal } from './money-commands';
+import { classifyMoneyRoute } from '../commands/money-command';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
 
@@ -39,7 +40,7 @@ export async function readAwaitingStoreOrderIds(storeDB: StoreLocalDatabase) {
 	const journal = await readMoneyJournal(storeDB);
 	return new Set(
 		Object.values(journal).flatMap(({ entries }) =>
-			entries.filter(isDeferred).map((entry) => Number(/^orders\/(\d+)\//.exec(entry.path)?.[1]))
+			entries.filter(isDeferred).map((entry) => Number(classifyMoneyRoute(entry.path)?.orderId))
 		)
 	);
 }

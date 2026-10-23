@@ -7,17 +7,12 @@ export {
 	resolveCompletionAttempt,
 } from './completion-journal';
 export {
-	CLAIM_LEASE_MS,
 	claimHeld,
-	claimRoute,
-	dropUnsent,
-	isDeferred,
-	markSent,
 	nextClaimExpiry,
 	observeMoneyJournal,
-	observeOrderCommands,
-	readOrderCommands,
-	releaseClaim,
+	observeTenderGate,
+	readAwaitingAnswer,
+	readJournaledRecordIds,
 	type MoneyCommandEntry,
 } from './money-commands';
 export {

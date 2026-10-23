@@ -13,8 +13,9 @@ import { pushRecord } from '../mutations/push-record';
 import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
-	claimHeld,
 	claimRoute,
+	type CommandPhase,
+	commandState,
 	deferEntry,
 	dropUnsent,
 	isDeferred,
@@ -22,6 +23,7 @@ import {
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
+	phaseOf,
 	readMoneyJournal,
 	readOrderCommands,
 	releaseClaim,
@@ -62,14 +64,17 @@ export interface ProvenanceCommand {
 export type MoneyCommandErrorReason =
 	'revision_unavailable' | 'order_changed' | 'preflight_failed' | 'in_flight';
 export class MoneyCommandError extends Error {
+	/** The phase of the command it names: `unsent` = it never left the till. */
+	public readonly before: CommandPhase;
 	public constructor(
 		public readonly reason: MoneyCommandErrorReason,
-		public readonly entry: MoneyCommandEntry,
+		entry: MoneyCommandEntry,
 		public readonly order?: OrderPaymentSummary,
 		options?: { cause?: unknown }
 	) {
 		super(`money_command_${reason}`, options);
 		this.name = 'MoneyCommandError';
+		this.before = phaseOf(entry);
 	}
 }
 export type MoneyCommandPoster = Post & {
@@ -114,7 +119,7 @@ const PROVENANCE_KINDS = new Set<MoneyCommandKind>([
 const ROUTE =
 	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
 
-function classifyMoneyRoute(
+export function classifyMoneyRoute(
 	path: string
 ): { kind: MoneyCommandKind; orderId: number; target: string | null } | null {
 	const match = ROUTE.exec(path.replace(/^\/+/, ''));
@@ -151,6 +156,18 @@ export async function residentHoldsAnswer(
 ): Promise<boolean> {
 	const { order } = await readOrder(runtime, orderUuid);
 	return holdsAuthority(order, (await readOrderCommands(storeDB, orderUuid)).chain);
+}
+
+/** The order's answers are adopted: no command is open and the resident holds the last answer. */
+export async function answerAdopted(
+	runtime: QueryRuntime,
+	storeDB: StoreLocalDatabase,
+	orderUuid: string
+): Promise<boolean> {
+	return (
+		(await readOrderCommands(storeDB, orderUuid)).entries.length === 0 &&
+		(await residentHoldsAnswer(runtime, storeDB, orderUuid))
+	);
 }
 
 function approvalHolds(approval: OrderApproval, order: { total?: unknown; currency?: unknown }) {
@@ -249,7 +266,7 @@ export async function sendMoneyCommand(
 		throw new MoneyCommandError('preflight_failed', entry, undefined, {
 			cause: new Error(`Not a money command route: "${entry.path}"`),
 		});
-	const fresh = entry.sentAt === null;
+	const fresh = phaseOf(entry) === 'unsent';
 	// A re-send of an approved command goes out under the revision it was first sent with. The
 	// server checks the replay before the revision, so a stored command replays; one it never
 	// stored is refused as stale, and the stale path re-checks the approval against the document
@@ -444,7 +461,7 @@ export async function resendOpenCommands(
 	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post, replay: true });
 	const answers: ResentCommand[] = [];
 	for (const entry of entries) {
-		if (entry.sentAt === null) {
+		if (phaseOf(entry) === 'unsent') {
 			// A crash leftover put nothing on the server. One a live poster holds is its pre-flight's,
 			// and stays (CodeRabbit 4332935302 on #2798).
 			await dropUnsent(storeDB, orderUuid, entry.id, null);
@@ -533,8 +550,15 @@ export async function recoverMoneyCommands(
 	const recovered: RecoveredOrder[] = [];
 	const scope = await activeScopeId(runtime);
 	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
-		const sent = entries.filter((entry) => entry.sentAt !== null && inScope(entry, scope));
-		if (sent.length === 0) continue;
+		const sent = entries.filter((entry) => phaseOf(entry) !== 'unsent' && inScope(entry, scope));
+		if (sent.length === 0) {
+			// Only crash leftovers: nothing on the server and nothing to re-send (`dropUnsent`); one a
+			// live poster holds is its pre-flight's, and stays. Housekeeping never fails the run.
+			for (const entry of entries)
+				if (inScope(entry, scope) && commandState(entry).kind === 'unsent')
+					await dropUnsent(storeDB, orderUuid, entry.id, null).catch(() => undefined);
+			continue;
+		}
 		try {
 			recovered.push({
 				orderUuid,
@@ -557,9 +581,10 @@ export async function recoverMoneyCommands(
 							summary: (failure.data?.order as OrderPaymentSummary | undefined) ?? null,
 						}
 					: undefined;
-			const left = journaled.filter(
-				(entry) => entry.sentAt !== null && inScope(entry, scope) && !claimHeld(entry, null)
-			);
+			const left = journaled.filter((entry) => {
+				const { kind } = commandState(entry);
+				return (kind === 'deferred' || kind === 'unanswered') && inScope(entry, scope);
+			});
 			if (left.length > 0 || refused)
 				recovered.push({
 					orderUuid,
@@ -700,7 +725,7 @@ export function moneyCommandPoster(input: {
 			id: rowId ?? mintUuid(),
 			body: provenance ? { ...frozen, provenance } : frozen,
 			approval: await freezeApproval(
-				entries.filter(({ sentAt }) => sentAt !== null),
+				entries.filter((entry) => phaseOf(entry) !== 'unsent'),
 				route.target
 			),
 			sentAt: null,

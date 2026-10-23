@@ -198,7 +198,7 @@ export async function recordManualPayment(
 		} catch (error) {
 			// Refused before it left the till (the pre-flight failed, no revision, the order
 			// changed): nothing was sent, so it is terminal, never the unknown re-send path.
-			if (error instanceof MoneyCommandError && error.entry.sentAt === null)
+			if (error instanceof MoneyCommandError && error.before === 'unsent')
 				return { kind: 'failed', reason: error.reason, cause: error.cause };
 			const refusal = moneyRefusalOf(error);
 			const refused = refusal?.data as

@@ -5,13 +5,8 @@ import cloneDeep from 'lodash/cloneDeep';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import {
-	type PaymentMethodDescriptor,
-	type PaymentRow,
-	readLedger,
-	samePaymentId,
-} from '@wcpos/order-math';
-import { readOrderCommands } from '@wcpos/query/store-local';
+import { type PaymentMethodDescriptor, readLedger, samePaymentId } from '@wcpos/order-math';
+import { readAwaitingAnswer } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -91,13 +86,13 @@ export function useRecordManualPayment(): (
 				// one deferred and not yet mirrored (a crash between the two). A deferred record already
 				// in the ledger is the earlier leg's: the next offline leg mints its own row.
 				unansweredRecord: async () => {
-					const { entries } = await readOrderCommands(storeDB, order.uuid);
+					const awaiting = await readAwaitingAnswer(storeDB, order.uuid);
 					const ledger = readLedger(order.getLatest().payload.meta_data ?? []);
-					const sent = entries.find(
-						({ kind, sentAt, id }) =>
-							kind === 'record' && sentAt !== null && !ledger.some((r) => samePaymentId(r.id, id))
+					const sent = awaiting.find(
+						({ kind, row }) =>
+							kind === 'record' && !ledger.some((r) => !!row && samePaymentId(r.id, row.id))
 					);
-					return (sent?.body.payment as PaymentRow | undefined) ?? null;
+					return sent?.row ?? null;
 				},
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,

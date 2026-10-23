@@ -8,8 +8,12 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { readOrderCommands } from '@wcpos/query/store-local';
-import { createEngineDatabase, createFakeEngine, engineOrder } from '@wcpos/query/testing';
+import {
+	createEngineDatabase,
+	createFakeEngine,
+	engineOrder,
+	readOrderCommands,
+} from '@wcpos/query/testing';
 import type { EngineRecord } from '@wcpos/query';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 

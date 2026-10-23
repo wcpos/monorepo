@@ -7,10 +7,10 @@ jest.mock('../checkout/sale-completion', () => ({
 	completionMetaFor: jest.fn(async () => [{ key: '_wcpos_sale_counter', value: '7' }]),
 }));
 const mockResolve = jest.fn(async (..._args: unknown[]) => undefined);
-let mockJournal: { kind: string; sentAt: string | null }[] = [];
+let mockAwaiting: { kind: string; row: null }[] = [];
 jest.mock('@wcpos/query/store-local', () => ({
 	resolveCompletionAttempt: (...args: unknown[]) => mockResolve(...args),
-	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
+	readAwaitingAnswer: async () => mockAwaiting,
 }));
 
 const payload = { id: 42, total: '0.00', status: 'pos-partial', meta_data: [] };
@@ -39,7 +39,7 @@ function run(online: boolean) {
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockJournal = [];
+	mockAwaiting = [];
 });
 
 // ADR 0040 D2: the server completes the sale through close; the till never writes `completed`.
@@ -92,10 +92,7 @@ it.each([
 // Codex 4343188027 on #2832: a close sent and never answered may have completed the sale; a press
 // made offline since must not resolve the attempt the bridge finishes once the paid order lands.
 it('offline with a sent, unanswered close keeps the completion attempt', async () => {
-	mockJournal = [
-		{ kind: 'record', sentAt: null },
-		{ kind: 'close', sentAt: '2026-10-22T00:00:00Z' },
-	];
+	mockAwaiting = [{ kind: 'close', row: null }];
 	const { input, result } = run(false);
 	expect(await result).toEqual({ kind: 'offline' });
 	expect(mockResolve).not.toHaveBeenCalled();

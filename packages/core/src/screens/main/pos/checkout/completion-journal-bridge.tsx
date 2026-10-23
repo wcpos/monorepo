@@ -30,14 +30,13 @@ import {
 } from '@wcpos/utils/unsent-changes';
 import {
 	claimHeld,
-	dropUnsent,
 	failCompletionAttempt,
 	type MoneyCommandEntry,
 	nextClaimExpiry,
 	observeMoneyJournal,
 	observePendingCompletions,
 	pendingCompletions,
-	readOrderCommands,
+	readAwaitingAnswer,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
 
@@ -324,16 +323,12 @@ export function SaleCompletionBridge(): null {
 			await resolveCompletionAttempt(storeDB, uuid);
 		};
 		/**
-		 * The order has a command awaiting the store's answer: sent, or deferred offline (sent, no
-		 * revision). A never-sent crash leftover no live claim holds put nothing on the server and is
-		 * dropped (`dropUnsent`): it must not hold an adopted sale or its bounded abandonment.
+		 * The order has a command awaiting the store's answer: sent, or deferred offline. A
+		 * never-sent crash leftover awaits nothing, so it holds neither an adopted sale nor its
+		 * bounded abandonment; the online recovery drops it.
 		 */
-		const awaitsAnswer = async (uuid: string) => {
-			const { entries } = await readOrderCommands(storeDB, uuid);
-			for (const { id, sentAt } of entries)
-				if (sentAt === null) await dropUnsent(storeDB, uuid, id, null);
-			return entries.some(({ sentAt }) => sentAt !== null);
-		};
+		const awaitsAnswer = async (uuid: string) =>
+			(await readAwaitingAnswer(storeDB, uuid)).length > 0;
 		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
 		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
 			if (current.stopped) return new Map();

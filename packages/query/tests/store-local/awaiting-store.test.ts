@@ -5,14 +5,17 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
-	claimRoute,
 	failCompletionAttempt,
-	markSent,
 	type MoneyCommandEntry,
 	observeAwaitingStore,
 	recordCompletionAttempt,
 } from '../../src/store-local';
-import { deferEntry, settleCommand } from '../../src/store-local/money-commands';
+import {
+	claimRoute,
+	deferEntry,
+	markSent,
+	settleCommand,
+} from '../../src/store-local/money-commands';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;

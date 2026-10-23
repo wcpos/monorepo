@@ -18,6 +18,7 @@ import {
 import { RECOVERY_RETRY_DELAYS_MS } from '@wcpos/query';
 import * as journal from '@wcpos/query/store-local';
 import { pendingCompletions, recordCompletionAttempt } from '@wcpos/query/store-local';
+import * as moneyJournal from '@wcpos/query/testing';
 
 import { createActionContext } from '../../../../extensions/actions';
 import { SaleCompletionBridge } from './completion-journal-bridge';
@@ -71,6 +72,13 @@ jest.mock('./hooks/use-sale-context', () => ({ useSaleContext: () => mockContext
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockContext.storeDB }),
 }));
+// What the journal says the store owes an answer; the real read unless a test says otherwise.
+const mockAwaiting = jest.fn();
+jest.mock('@wcpos/query/store-local', () => ({
+	__esModule: true,
+	...jest.requireActual('@wcpos/query/store-local'),
+	readAwaitingAnswer: (...args: unknown[]) => mockAwaiting(...args),
+}));
 jest.mock('@wcpos/query/record-readers', () => ({
 	readResidentOrder: (...args: unknown[]) => mockFind(...args),
 }));
@@ -118,6 +126,9 @@ beforeEach(async () => {
 	mockTabOpen = true;
 	jest.resetAllMocks();
 	mockRecover.mockResolvedValue([]);
+	mockAwaiting.mockImplementation(
+		jest.requireActual('@wcpos/query/store-local').readAwaitingAnswer
+	);
 	mockHoldsAnswer.mockResolvedValue(true);
 	mockHttp = { post: jest.fn() };
 	mockResidentOrders.mockReturnValue(NEVER);
@@ -315,8 +326,8 @@ it('a reconnect re-sends what the outage left unanswered and finishes only the o
 async function claimLapsingIn(ms: number) {
 	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
 	const real = Date.now();
-	const now = jest.spyOn(Date, 'now').mockReturnValue(real - journal.CLAIM_LEASE_MS + ms);
-	await journal.claimRoute(
+	const now = jest.spyOn(Date, 'now').mockReturnValue(real - moneyJournal.CLAIM_LEASE_MS + ms);
+	await moneyJournal.claimRoute(
 		mockContext.storeDB,
 		{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
 		'crashed-tab',
@@ -333,7 +344,7 @@ async function claimLapsingIn(ms: number) {
 			sentRevision: null,
 		}
 	);
-	await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'crashed-tab');
+	await moneyJournal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'crashed-tab');
 	now.mockRestore();
 }
 
@@ -434,7 +445,7 @@ function ladderTimers(fire: boolean) {
 async function journalUnanswered(orderUuid: string, claimant: string) {
 	const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
 	const route = { orderUuid, kind: 'close' as const, target: null, rowId: null };
-	await journal.claimRoute(mockContext.storeDB, route, claimant, {
+	await moneyJournal.claimRoute(mockContext.storeDB, route, claimant, {
 		orderUuid,
 		scope: 'scope-1',
 		kind: 'close',
@@ -446,14 +457,14 @@ async function journalUnanswered(orderUuid: string, claimant: string) {
 		sentAt: null,
 		sentRevision: null,
 	});
-	await journal.markSent(
+	await moneyJournal.markSent(
 		mockContext.storeDB,
 		orderUuid,
 		`${orderUuid}-close`,
 		'sha256:r1',
 		claimant
 	);
-	await journal.releaseClaim(mockContext.storeDB, orderUuid, `${orderUuid}-close`, claimant);
+	await moneyJournal.releaseClaim(mockContext.storeDB, orderUuid, `${orderUuid}-close`, claimant);
 	now.mockRestore();
 }
 
@@ -568,7 +579,7 @@ it.each([
 			expect(delays).toEqual([]);
 			// The tender's send lost its answer: sent, its claim given up.
 			now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
-			await journal.claimRoute(
+			await moneyJournal.claimRoute(
 				mockContext.storeDB,
 				{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
 				'tender',
@@ -585,8 +596,8 @@ it.each([
 					sentRevision: null,
 				}
 			);
-			await journal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'tender');
-			await journal.releaseClaim(mockContext.storeDB, 'order', 'close-1', 'tender');
+			await moneyJournal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'tender');
+			await moneyJournal.releaseClaim(mockContext.storeDB, 'order', 'close-1', 'tender');
 			now.mockRestore();
 			await drain();
 			await drain();
@@ -1605,30 +1616,12 @@ it('waits for a whole-document adoption before finishing an adopted sale', async
 	expect(mockHoldsAnswer).toHaveBeenCalledWith(mockManager, mockContext.storeDB, 'order');
 });
 
-// ADR 0040 Decided 1, slice A: an offline record is journaled sent-undispatched. Its order has an
-// open journal entry until the recovery answers it; the bridge reads that, never the status.
-const deferredRecord = (orderUuid: string) => ({
-	orderUuid,
-	scope: 'scope-1',
+// ADR 0040 Decided 1, slice A: an offline record is journaled sent-undispatched. Its order awaits
+// the store's answer until the recovery answers it; the bridge reads that, never the status.
+const awaitedRecord = {
 	kind: 'record',
-	path: 'orders/42/payments',
-	target: null,
-	id: `${orderUuid}-row`,
-	body: { payment: { id: `${orderUuid}-row`, amount: '10.00' } },
-	approval: { total: '10.00', currency: 'USD' },
-	sentAt: '2026-10-23T10:00:00.000Z',
-	sentRevision: null,
-	claimedBy: null,
-	claimedAt: null,
-});
-/** The money journal's local document, written whole: the order's open entries. */
-async function setJournal(orderUuid: string, entries: { id: string }[]) {
-	await mockContext.storeDB.upsertLocal('money-commands', {
-		orders: {
-			[orderUuid]: { entries: Object.fromEntries(entries.map((e) => [e.id, e])), chain: null },
-		},
-	});
-}
+	row: { id: 'order-row', amount: '10.00' },
+};
 
 it('an awaiting-adoption sale is not finished while its record is open; finished once answered and adopted', async () => {
 	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
@@ -1637,7 +1630,7 @@ it('an awaiting-adoption sale is not finished while its record is open; finished
 	mockOnline = 'offline';
 	render(<SaleCompletionBridge />);
 	await drain();
-	await setJournal('order', [deferredRecord('order')]);
+	mockAwaiting.mockResolvedValue([awaitedRecord]);
 	await record();
 	await owner.awaitAdoption(mockContext.storeDB, 'order');
 	// The resident reads paid (the till's own derivation) and `residentHoldsAnswer` holds with no
@@ -1650,7 +1643,7 @@ it('an awaiting-adoption sale is not finished while its record is open; finished
 	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 		awaitingAdoption: true,
 	});
-	await setJournal('order', []); // the recovery's re-send answered and settled it
+	mockAwaiting.mockResolvedValue([]); // the recovery's re-send answered and settled it
 	act(() => adoptions.next(['order'])); // the post-answer refresh adopts the paid order
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(owner.completeSale).toHaveBeenCalledTimes(1);
@@ -1663,7 +1656,9 @@ it.each([
 	'an offline start neither counts unpaid nor abandons an attempt with an open record (%s)',
 	async (_case, found) => {
 		mockOnline = 'offline';
-		await setJournal('order', [deferredRecord('order')]);
+		mockAwaiting.mockImplementation(async (_db: unknown, uuid: string) =>
+			uuid === 'order' ? [awaitedRecord] : []
+		);
 		await record();
 		mockFind.mockImplementation(async (_manager: unknown, uuid: string) =>
 			uuid === 'order' ? found() : resident(uuid)
@@ -1749,48 +1744,4 @@ it('a refused record whose method the store no longer lists is named by its id',
 	);
 	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
 	expect(entry.message).toContain('10.00 pos_cheque was also taken');
-});
-
-// Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
-// whose claim lapsed. It put nothing on the server: it is dropped, and blocks nothing.
-const crashLeftover = (orderUuid: string) => ({
-	...deferredRecord(orderUuid),
-	sentAt: null,
-	claimedBy: 'crashed-poster',
-	claimedAt: 1,
-});
-
-it('a crash leftover (unsent, claim expired) does not block finishing an adopted paid order', async () => {
-	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-	const adoptions = new Subject<string[]>();
-	mockResidentOrders.mockReturnValue(adoptions);
-	render(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-	await drain();
-	await setJournal('order', [crashLeftover('order')]);
-	await record();
-	await owner.awaitAdoption(mockContext.storeDB, 'order');
-	act(() => adoptions.next(['order']));
-	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(owner.completeSale).toHaveBeenCalledTimes(1);
-	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
-});
-
-it('a crash leftover (unsent, claim expired) does not block the bounded abandonment of an unpaid attempt', async () => {
-	await record();
-	await setJournal('order', [crashLeftover('order')]);
-	mockFind.mockResolvedValue(resident('order', 'pos-open'));
-	const view = render(<SaleCompletionBridge />);
-	for (const count of [1, 2]) {
-		await waitFor(async () =>
-			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
-				unpaidStarts: count,
-			})
-		);
-		mockManager = {};
-		view.rerender(<SaleCompletionBridge />);
-	}
-	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(owner.completeSale).not.toHaveBeenCalled();
-	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
 });

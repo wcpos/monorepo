@@ -30,11 +30,11 @@ const manager = { engine: { require: (input: unknown) => mockEngineRequire(input
 let lane: RecordManualPaymentInput['lane'] = 'settles-later';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
-// The order's journaled money commands; the journal itself is pinned in the query suites.
-let mockJournal: { kind: string; sentAt: string | null; body: Record<string, unknown> }[] = [];
+// What the journal says the store owes an answer; the journal itself is pinned in the query suites.
+let mockAwaiting: { kind: string; row: Record<string, unknown> | null }[] = [];
 const mockRecordAttention = jest.fn(async (..._args: unknown[]) => undefined);
 jest.mock('@wcpos/query/store-local', () => ({
-	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
+	readAwaitingAnswer: async () => mockAwaiting,
 	recordPaymentAttention: (...args: unknown[]) => mockRecordAttention(...args),
 }));
 jest.mock('../../../hooks/use-payment-methods', () => ({
@@ -153,7 +153,7 @@ beforeEach(() => {
 		return { document: order };
 	});
 	lane = 'settles-later';
-	mockJournal = [];
+	mockAwaiting = [];
 });
 
 // ADR 0040 Decided 1 rules 2-3 (replaces "refuses an offline row with CHECKOUT101"): the row is
@@ -410,10 +410,7 @@ it('posts the record through the command poster with the order revision', async 
 it('replays the journaled unanswered record instead of minting a new row', async () => {
 	lane = 'online';
 	const journaled = { id: 'lost-row', method_id: 'pos_cash', amount: '25.00', status: 'captured' };
-	mockJournal = [
-		{ kind: 'close', sentAt: null, body: {} },
-		{ kind: 'record', sentAt: '2026-10-22T00:00:00Z', body: { payment: journaled } },
-	];
+	mockAwaiting = [{ kind: 'record', row: journaled }];
 	mockPost.mockImplementationOnce(answer({ status: 'pos-partial', balance: '75.00' }));
 	const { result } = renderHook(() => useRecordManualPayment());
 	await act(() => result.current(order, method, { session: gateSession(), lane, amount: 40 }));

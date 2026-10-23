@@ -16,7 +16,7 @@ import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import {
 	failCompletionAttempt,
-	readOrderCommands,
+	readAwaitingAnswer,
 	recordCompletionAttempt,
 	recordPaymentAttention,
 	rememberedReaders,
@@ -87,8 +87,8 @@ const mockReaderState = {
 		mockReaderChanges.next();
 	},
 };
-// The money command journal's local document (ADR 0040): null until a command is journaled.
-const mockJournal$ = new BehaviorSubject<unknown>(null);
+// The money command journal's tender gate (ADR 0040): a command dispatched and not answered.
+const mockGate$ = new BehaviorSubject(false);
 const mockResend = jest.fn(
 	async (
 		..._args: Parameters<typeof import('@wcpos/query').resendOpenCommands>
@@ -98,10 +98,9 @@ const mockPosterInputs: { approval: unknown }[] = [];
 const mockDefer = jest.fn(async (_url: string, body: unknown) => body);
 const mockStoreDB = {
 	addState: jest.fn(async () => mockReaderState),
-	getLocal$: () => mockJournal$,
 };
 beforeEach(() => {
-	mockJournal$.next(null);
+	mockGate$.next(false);
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 });
@@ -374,6 +373,8 @@ jest.mock('@wcpos/query', () => ({
 	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 	MoneyCommandError: class MoneyCommandError extends Error {},
+	// The real completion asks before its second read; never adopted here, so it always refreshes.
+	answerAdopted: async () => false,
 	moneyCommandPoster: (input: {
 		post: (url: string, body: unknown) => Promise<unknown>;
 		runtime: unknown;
@@ -520,12 +521,7 @@ describe('useTenderFlow', () => {
 	it('an entry with sentAt hides the tiles and Try again re-sends it', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.tiles.length).toBeGreaterThan(0);
-		const entry = { id: 'row-1', sentAt: '2026-10-20T10:00:00Z' };
-		act(() =>
-			mockJournal$.next({
-				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-1': entry } } } } }),
-			})
-		);
+		act(() => mockGate$.next(true));
 		expect(result.current.unansweredCommand).toBe(true);
 		expect(result.current.tiles).toEqual([]);
 		await act(async () => result.current.takeTender());
@@ -551,12 +547,7 @@ describe('useTenderFlow', () => {
 	// CodeRabbit 4346454764 on #2837: a re-send in flight never shows the keypad.
 	it('Try again in flight keeps the gate: no tiles until the re-send settles', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		const entry = { id: 'row-1', kind: 'record', sentAt: '2026-10-20T10:00:00Z' };
-		act(() =>
-			mockJournal$.next({
-				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-1': entry } } } } }),
-			})
-		);
+		act(() => mockGate$.next(true));
 		let answer!: (value: { kind: string; data: Record<string, unknown> }[]) => void;
 		mockResend.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
 		let retried!: Promise<void>;
@@ -3183,7 +3174,9 @@ jest.mock('@wcpos/query/store-local', () => ({
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
-	readOrderCommands: jest.fn(async () => ({ entries: [], chain: null })),
+	observeTenderGate: () => mockGate$,
+	readAwaitingAnswer: jest.fn(async () => []),
+	readJournaledRecordIds: jest.fn(async () => new Set()),
 	recordPaymentAttention: jest.fn(async () => {}),
 }));
 
@@ -4676,7 +4669,7 @@ describe('cash rounding (#66, #84)', () => {
 	])(
 		'a Try again whose rounded record is %s (journaled: %s) leaves the total at %s',
 		async (_, journaled, total) => {
-			const { readOrderCommands } = jest.requireMock('@wcpos/query/store-local');
+			const { readJournaledRecordIds } = jest.requireMock('@wcpos/query/store-local');
 			mockPayload = sale('10.03');
 			let rowId = '';
 			mockRecordManualPayment.mockImplementationOnce(
@@ -4690,13 +4683,8 @@ describe('cash rounding (#66, #84)', () => {
 			await act(async () => result.current.takeTender());
 			expect(mockPayload).toMatchObject({ total: '10.05' });
 
-			const entry = { id: rowId, kind: 'record', sentAt: '2026-10-20T10:00:00Z' };
-			act(() =>
-				mockJournal$.next({
-					toJSON: () => ({ data: { orders: { 'order-1': { entries: { [rowId]: entry } } } } }),
-				})
-			);
-			readOrderCommands.mockResolvedValueOnce({ entries: journaled ? [entry] : [], chain: null });
+			act(() => mockGate$.next(true));
+			readJournaledRecordIds.mockResolvedValueOnce(new Set(journaled ? [rowId] : []));
 			mockResend.mockRejectedValueOnce(new Error('wcpos_amount_exceeds_balance'));
 			await act(async () => result.current.retryCommand());
 			expect(mockPayload).toMatchObject({ total });
@@ -4717,12 +4705,7 @@ describe('cash rounding (#66, #84)', () => {
 		await act(async () => result.current.takeTender());
 		expect(mockPayload).toMatchObject({ total: '10.05' });
 
-		const entry = { id: 'void-1', kind: 'void', sentAt: '2026-10-20T10:00:00Z' };
-		act(() =>
-			mockJournal$.next({
-				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'void-1': entry } } } } }),
-			})
-		);
+		act(() => mockGate$.next(true));
 		mockResend.mockImplementationOnce(async () => {
 			const voided = payment({ id: rowId, amount: '10.05', status: 'voided' });
 			mockPayload = { ...mockPayload, meta_data: withLedger([], [voided]) };
@@ -4959,7 +4942,7 @@ describe('offline manual tenders', () => {
 		mockOnlineStatus = 'online-website-available';
 		mockManualMirror.mockReset();
 		mockLocalPatch.mockReset();
-		jest.mocked(readOrderCommands).mockResolvedValue({ entries: [], chain: null });
+		jest.mocked(readAwaitingAnswer).mockResolvedValue([]);
 		jest.restoreAllMocks();
 	});
 
@@ -4991,20 +4974,9 @@ describe('offline manual tenders', () => {
 		mockUseRealManual = true;
 		const first = payment({ id: 'row-a', amount: '4.00', tendered: null, recorded_offline: true });
 		mockPayload = { id: 42, total: '10.00', meta_data: withLedger([], [first]) };
-		const deferred = {
-			id: 'row-a',
-			kind: 'record',
-			sentAt: '2026-10-23T10:00:00Z',
-			sentRevision: null,
-			body: { payment: first },
-		};
-		jest.mocked(readOrderCommands).mockResolvedValue({ entries: [deferred], chain: null } as never);
+		// Journaled, awaiting the store, and not gating: the gate stays false.
+		jest.mocked(readAwaitingAnswer).mockResolvedValue([{ kind: 'record', row: first }]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() =>
-			mockJournal$.next({
-				toJSON: () => ({ data: { orders: { 'order-1': { entries: { 'row-a': deferred } } } } }),
-			})
-		);
 
 		expect(result.current.unansweredCommand).toBe(false);
 		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({

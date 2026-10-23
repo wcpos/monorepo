@@ -170,6 +170,7 @@ export {
 } from './commands/printer-profiles';
 export { setTemplatePrinterOverride } from './commands/template-printer-overrides';
 export {
+	answerAdopted,
 	MoneyCommandError,
 	moneyCommandPoster,
 	RECOVERY_RETRY_DELAYS_MS,
