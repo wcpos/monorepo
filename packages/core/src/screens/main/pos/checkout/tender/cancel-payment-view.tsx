@@ -38,6 +38,10 @@ export function CancelPaymentView({ flow, format }: Props) {
 						const title =
 							flow.tiles.find(({ method }) => method.id === row.method_id)?.method.title ??
 							row.method_id;
+						// The same rule `voidPayments` applies: a captured card leg, or a captured
+						// row a completion counted, is kept and reported `captured_refund_required`,
+						// so the screen says refund, never a void it will not get.
+						const retained = flow.retainedRows.some(({ id }) => id === row.id);
 
 						return (
 							<Text
@@ -46,9 +50,11 @@ export function CancelPaymentView({ flow, format }: Props) {
 								className="border-border bg-background rounded-md border p-2 text-sm"
 								decodeHtml
 							>
-								{row.kind === 'cash' && row.capture_mode !== 'server'
-									? t('pos_checkout.return_cash', { amount })
-									: t('pos_checkout.void_on_method', { amount, title })}
+								{retained
+									? t('pos_checkout.refund_on_method', { amount, title })
+									: row.kind === 'cash' && row.capture_mode !== 'server'
+										? t('pos_checkout.return_cash', { amount })
+										: t('pos_checkout.void_on_method', { amount, title })}
 							</Text>
 						);
 					})}

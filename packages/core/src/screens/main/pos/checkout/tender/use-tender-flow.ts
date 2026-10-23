@@ -98,6 +98,7 @@ import {
 	GatewayMirrorError,
 	submitStillDone,
 } from '../payments/submit-gateway-payment';
+import { partitionLiveRows } from '../payments/void-payments';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -186,6 +187,8 @@ export interface TenderFlow {
 	rows: PaymentRow[];
 	/** Rows with status pending | authorized | captured — money that is currently held. */
 	liveRows: PaymentRow[];
+	/** The live rows a cancel keeps for a refund instead of voiding (`partitionLiveRows`). */
+	retainedRows: PaymentRow[];
 	hasLiveLeg: boolean;
 	online: boolean;
 
@@ -399,6 +402,10 @@ export function useTenderFlow(
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]
+	);
+	const retainedRows = React.useMemo(
+		() => partitionLiveRows(payload.meta_data ?? []).retained,
+		[payload.meta_data]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
 	const readersInUse = service?.readersInUse();
@@ -1867,6 +1874,7 @@ export function useTenderFlow(
 			linesPaidBy: state.linesPaidBy,
 			rows,
 			liveRows,
+			retainedRows,
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
 			hasLiveLeg: liveRows.length > 0,
 			online,
@@ -1927,6 +1935,7 @@ export function useTenderFlow(
 			afterThisPaymentMinor,
 			rows,
 			liveRows,
+			retainedRows,
 			online,
 			tiles,
 			legacyMethods,
