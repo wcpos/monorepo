@@ -12,15 +12,16 @@ import {
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,
+	markAnchored,
 	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
 	readCounters,
 	readRegister,
+	remintRegister,
 	settleRegister,
 	unbindRegister,
-} from '../../src/register-session';
-import { markAnchored, remintRegister } from '../../src/register-session/register-document';
+} from '../../src/register-session/register-document';
 
 jest.mock('uuid', () => ({ v4: () => 'ABCDEF00-0000-4000-8000-00000000ABCD' }));
 addRxPlugin(RxDBLocalDocumentsPlugin);

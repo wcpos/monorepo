@@ -7,7 +7,7 @@ export {
 export type { ReceiptEmailStoreDatabase } from './commands';
 export { observeQueuedEmails, observeReceiptEmailQueueAvailability } from './reads';
 export type { QueuedEmail } from './reads';
-export { receiptEmailPostRequest, SEND_SPACING_MS } from './queue';
-export type { ReceiptEmailRow, ReceiptEmailStatus } from './queue';
+export { receiptEmailPostRequest } from './queue';
+export type { ReceiptEmailRow } from './queue';
 export { classifyEmailSendError } from './classify';
-export type { EmailSendFailure, EmailSendFailureKind } from './classify';
+export type { EmailSendFailure } from './classify';

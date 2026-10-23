@@ -8,38 +8,26 @@ export {
 	useQuerySnapshot,
 	acquireDemandQueryHandle,
 	acquireEmptyQueryHandle,
-	acquireEngineQueryHandle,
-	acquireProductsQueryHandle,
 	canonicalQueryKey,
-	demandPlanFor,
 } from './query-handles';
 export type { SnapshotFields } from './query-handles';
 export {
 	useAllCategoriesHandle,
 	useAllTermsHandle,
 	useProductsCarryingTermsHandle,
-	EXISTENCE_RECHECK_MS,
 } from './terms-handles';
-export { useScopeKey, useCoverageGeneration, engineKeyOf } from './scope-key';
+export { useScopeKey, useCoverageGeneration } from './scope-key';
 export type {
 	CollectionKey,
 	DateRangeFilter,
 	VariationMatch,
-	LogKindFilter,
-	FiltersByCollection,
 	SortFieldsByCollection,
 	FiltersOf,
 	SortFieldOf,
 	QueryStateOf,
 	QueryStateActions,
 } from './query-state-types';
-export {
-	compileQuery,
-	FILTER_TRANSLATORS,
-	normalizeQuerySortField,
-	requirementsForCompiledQuery,
-	translateLogsQueryState,
-} from './query-state-translator';
+export { compileQuery, normalizeQuerySortField } from './query-state-translator';
 export { parseRemoteId } from './parse-remote-id';
 export { acquireSearchSelectHandle, SEARCH_SELECT_COLLECTIONS } from './search-select';
 export type { SearchSelectCollection } from './search-select';

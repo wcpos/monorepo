@@ -111,7 +111,6 @@ jest.mock('@wcpos/query', () => ({
 	// The real completion asks before its second read; never adopted here, so it always refreshes.
 	answerAdopted: async () => false,
 	useQueryRuntime: () => mockRuntime,
-	engineCollection: () => ({ find: mockFind }),
 }));
 // Mutable so a test can change the cashier without remounting the hook.
 const mockSession = { wpCredentials: { id: 7, display_name: 'Pat' } };

@@ -1,4 +1,5 @@
 import * as query from '../src';
+import { StoreDatabaseUnavailableError } from '../src/commands/printer-profiles';
 
 // Named map: eslint's import/namespace cannot validate a computed `commands[name]`.
 const commands = {
@@ -68,7 +69,7 @@ it.each([
 			name === 'upsertNotification'
 				? commands[name](database, row, { preserveLocalState: false })
 				: commands[name](database, row.id);
-		await expect(result).rejects.toBeInstanceOf(query.StoreDatabaseUnavailableError);
+		await expect(result).rejects.toBeInstanceOf(StoreDatabaseUnavailableError);
 	}
 });
 

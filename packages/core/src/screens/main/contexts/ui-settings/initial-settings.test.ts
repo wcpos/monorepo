@@ -1,4 +1,4 @@
-import { wooOrderbyFor } from '@wcpos/query/collection-map';
+import { wooOrderbyFor } from '@wcpos/query';
 import { normalizeQuerySortField } from '@wcpos/query/query-state';
 
 import { defaultProductBrowseSort } from './default-product-browse-sort';

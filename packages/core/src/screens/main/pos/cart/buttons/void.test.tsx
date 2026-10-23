@@ -875,13 +875,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 it('stamps the original register through the real writer when binding switches during the outcome wait', async () => {
 	const query = jest.requireMock('@wcpos/query');
 	const realQuery = jest.requireActual('@wcpos/query');
-	for (const key of [
-		'COLLECTION_VOCABULARY',
-		'adapterDerivedFieldsFor',
-		'promotedColumnsFor',
-		'engineCollection',
-	])
-		query[key] = realQuery[key];
+	query.COLLECTION_VOCABULARY = realQuery.COLLECTION_VOCABULARY;
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
 		'../../../../../../../query/src/mutations/resident'
 	);

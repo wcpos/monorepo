@@ -2,7 +2,7 @@ import type { UserDatabase } from '@wcpos/database';
 import { createUserDB } from '@wcpos/database/create-db';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { settleRegister } from '../register-session';
+import { settleRegister } from '../register-session/register-document';
 import { upsertEmbeddedCredentials } from './credentials';
 import { upsertSiteData } from './sites';
 import {

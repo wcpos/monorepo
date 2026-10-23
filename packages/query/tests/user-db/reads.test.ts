@@ -15,11 +15,11 @@ import {
 	observeStoreByRemoteId,
 	observeUserSites,
 	PENDING_USER_DB_READ,
-	readSiteApiUrls,
 	recordCashierProfile,
 	recordSiteInfo,
-	SiteRemovedError,
 } from '../../src/user-db';
+import { readSiteApiUrls } from '../../src/user-db/reads';
+import { SiteRemovedError } from '../../src/user-db/sites';
 
 jest.mock('uuid', () => ({ v4: () => `uuid-${Math.random().toString(36).slice(2)}` }));
 let db: RxDatabase<import('@wcpos/database').UserDatabase['collections']>;

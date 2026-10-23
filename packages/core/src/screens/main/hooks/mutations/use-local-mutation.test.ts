@@ -76,15 +76,7 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
-	// The write-direction projections are the code under test here (parity with the
-	// old hand-written promotion switch) — pull the real implementations, mock the rest.
-	...(() => {
-		const { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor } =
-			jest.requireActual('@wcpos/query');
-		return { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor };
-	})(),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({
 		engine: {
 			events: (callback: typeof divergenceListener) => {

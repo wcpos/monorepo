@@ -143,20 +143,7 @@ let mockStoreDB: StoreDatabase;
 
 jest.mock('@wcpos/query', () => ({
 	orderHasQueuedDelete: jest.requireActual('@wcpos/query').orderHasQueuedDelete,
-	...(() => {
-		const {
-			COLLECTION_VOCABULARY,
-			promotedColumnsFor,
-			adapterDerivedFieldsFor,
-			WRITEABLE_REMOTE_ID_FIELD,
-		} = jest.requireActual('@wcpos/query');
-		return {
-			COLLECTION_VOCABULARY,
-			promotedColumnsFor,
-			adapterDerivedFieldsFor,
-			WRITEABLE_REMOTE_ID_FIELD,
-		};
-	})(),
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => mockRuntime,
 }));
 

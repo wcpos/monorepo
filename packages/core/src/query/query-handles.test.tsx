@@ -8,14 +8,11 @@ import { act, render, renderHook, screen } from '@testing-library/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Observable, of, Subject } from 'rxjs';
 
-import {
-	createQueryHandle,
-	type QueryHandle,
-	type QueryResult,
-	type QuerySnapshot,
-} from '@wcpos/query';
+import { type QueryHandle, type QueryResult, type QuerySnapshot } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import { useDrawnHandle, useQueryHandleFields, useQuerySnapshot } from '@wcpos/query/query-state';
+
+import { createQueryHandle } from '../../../query/src/query-handle';
 
 import type { RxCollection } from 'rxdb';
 

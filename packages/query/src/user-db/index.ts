@@ -1,12 +1,29 @@
-export * from './credentials';
-export * from './reads';
-export * from './sites';
-export * from './stores';
 export {
-	AUTO_SYNCED_STORE_FIELDS,
-	SERVER_OWNED_STORE_FIELDS,
-} from '@wcpos/database/collections/schemas/stores';
-export { UserDatabaseUnavailableError } from '../commands/printer-profiles';
+	credentialsTokenOwner,
+	recordCashierProfile,
+	removeCredentials,
+	saveLoginCredentials,
+} from './credentials';
+export {
+	observeCredentialStores,
+	observeSiteCredentials,
+	observeStoreByRemoteId,
+	observeUserSites,
+	PENDING_USER_DB_READ,
+} from './reads';
+export {
+	migrateSiteApiUrl,
+	recordSiteInfo,
+	removeSite,
+	saveConnectedSite,
+	SiteIdentityClashError,
+} from './sites';
+export {
+	getServerOwnedStorePatch,
+	type PreparedStorePayload,
+	type ServerStorePayload,
+} from './stores';
+export { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 export type {
 	ReadonlySiteRecord,
 	ReadonlyStoreRecord,
@@ -14,15 +31,17 @@ export type {
 	ReadonlyWpCredentialsRecord,
 } from './records';
 export * from './session';
-export * from './state';
-// Legacy callers outside hydration still use the document types.
-export type {
-	SiteDocument,
-	StoreDatabase,
-	StoreDocument,
-	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
-} from '@wcpos/database';
+export {
+	cacheTranslations,
+	clearSessionPointer,
+	commitSessionPointer,
+	setExtraData,
+	type CurrentSessionIDs,
+	type ExtraDataSlot,
+	type SessionAppState,
+	type TranslationsState,
+} from './state';
+// The database handle types core holds and hands back to these commands.
+export type { StoreDatabase, UserDatabase } from '@wcpos/database';
 export * from './hydration';
 export * from './store-settings';

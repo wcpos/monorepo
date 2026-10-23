@@ -862,8 +862,8 @@ it.each(['unchanged', 'locale', 'engine'] as const)(
 		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
 			const { attributeRefunds } = jest.requireActual<
-				typeof import('@wcpos/query/register-session')
-			>('@wcpos/query/register-session');
+				typeof import('../../../../query/src/register-session/expected')
+			>('../../../../query/src/register-session/expected');
 			const { readLedger } =
 				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 			const attributed = attributeRefunds(
@@ -918,9 +918,9 @@ it('ignores an unrelated resident parent emission while awaiting the missing par
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
-			'@wcpos/query/register-session'
-		);
+		const { attributeRefunds } = jest.requireActual<
+			typeof import('../../../../query/src/register-session/expected')
+		>('../../../../query/src/register-session/expected');
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(
@@ -966,8 +966,8 @@ it.each([false, true])(
 		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
 			const { attributeRefunds } = jest.requireActual<
-				typeof import('@wcpos/query/register-session')
-			>('@wcpos/query/register-session');
+				typeof import('../../../../query/src/register-session/expected')
+			>('../../../../query/src/register-session/expected');
 			const { readLedger } =
 				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 			const attributed = attributeRefunds(
@@ -1029,9 +1029,9 @@ it('follows replacement refund parent handles before computing the closure tende
 	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
-		const { attributeRefunds } = jest.requireActual<typeof import('@wcpos/query/register-session')>(
-			'@wcpos/query/register-session'
-		);
+		const { attributeRefunds } = jest.requireActual<
+			typeof import('../../../../query/src/register-session/expected')
+		>('../../../../query/src/register-session/expected');
 		const { readLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const attributed = attributeRefunds(

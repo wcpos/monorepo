@@ -5,11 +5,12 @@ import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { of, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { drainRegisterSessionQueue, refreshSessions } from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
 import { RegisterSessionBridge } from './bridge';
 import { sameStore } from '../../../../query/src/register-session/cycle';
+import { drainRegisterSessionQueue } from '../../../../query/src/register-session/queue';
+import { refreshSessions } from '../../../../query/src/register-session/refresh';
 
 const sessions = {
 	find: () => ({ $: of([]) }),
