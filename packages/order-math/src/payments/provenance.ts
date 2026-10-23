@@ -1,4 +1,4 @@
-import type { MetaDataEntry } from './ledger';
+import { type MetaDataEntry, parseMetaValue } from './ledger';
 
 /**
  * The completion tuple. A sale on a till with no register bound (or one bound in another
@@ -91,14 +91,7 @@ interface SaleCompletion {
 export function readCompletions(
 	meta: readonly MetaDataEntry[] | null | undefined
 ): SaleCompletion[] {
-	let value = meta?.find(({ key }) => key === COMPLETIONS_META_KEY)?.value;
-	if (typeof value === 'string') {
-		try {
-			value = JSON.parse(value);
-		} catch {
-			return [];
-		}
-	}
+	const value = parseMetaValue(meta?.find(({ key }) => key === COMPLETIONS_META_KEY)?.value);
 	return Array.isArray(value)
 		? value.filter(
 				(entry): entry is SaleCompletion =>

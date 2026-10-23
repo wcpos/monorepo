@@ -49,7 +49,7 @@ export function InvoiceActions({
 			}
 			// Answered, but the order is not open again: the invoice stands (it may have been paid),
 			// whether or not the mirror landed.
-			if (outcome.kind === 'unchanged') {
+			if (!outcome.reopened) {
 				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
 					showToast: true,
 					context: { orderId: order.uuid, method: stamp.method_id, status: outcome.order.status },

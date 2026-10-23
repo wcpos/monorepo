@@ -101,4 +101,11 @@ describe('withGatewayAttempt', () => {
 		});
 		expect(readGatewayAttempts(meta).unanswered?.id).toBe('b');
 	});
+	it('a map that is not schema 1 starts fresh, as the reader ignores it', () => {
+		const meta = withGatewayAttempt(asString({ old: entry() }, 2), 'a', { fate: 'cancelled' });
+		expect(JSON.parse(meta[0].value as string)).toEqual({
+			schema: 1,
+			attempts: { a: { fate: 'cancelled' } },
+		});
+	});
 });

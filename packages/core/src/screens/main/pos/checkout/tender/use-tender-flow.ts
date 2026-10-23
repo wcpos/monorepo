@@ -229,7 +229,6 @@ export interface TenderFlow {
 	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	cancelInvoice: () => Promise<void>;
-	/** The newest gateway attempt the provider has not answered, and its staff clear. */
 	unansweredAttempt: GatewayAttempt | null;
 	clearAttempt: () => Promise<void>;
 }
@@ -1542,7 +1541,7 @@ export function useTenderFlow(
 				return;
 			}
 			// Answered, but the order is not open again: the invoice stands (it may have been paid).
-			if (outcome.kind === 'unchanged') {
+			if (!outcome.reopened) {
 				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
 					showToast: true,
 					context: { ...orderContext, method: invoiceSent.method_id, status: outcome.order.status },
@@ -1604,14 +1603,12 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			const said =
-				outcome.kind === 'cleared' && outcome.reopened
-					? t('pos_checkout.attempt_cleared_reopened')
-					: t('pos_checkout.attempt_cleared_covered');
+			const said = outcome.reopened
+				? t('pos_checkout.attempt_cleared_reopened')
+				: t('pos_checkout.attempt_cleared');
 			logger.info(said, { actor, showToast: true, context });
 		} catch (error) {
-			logger.error(t('pos_checkout.payment_unanswered'), {
-				code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+			logger.warn(t('pos_checkout.attempt_clear_unanswered'), {
 				showToast: true,
 				context: { ...context, error: getErrorMessage(error) },
 			});

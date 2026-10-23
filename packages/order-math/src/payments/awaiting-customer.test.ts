@@ -78,8 +78,16 @@ describe('withAwaitingCustomer', () => {
 		expect(readAwaitingCustomer(meta)).toEqual(stamp);
 		const moved = withAwaitingCustomer(meta, { ...stamp, attempt_id: 'attempt-2' });
 		expect(readAwaitingCustomer(moved)).toEqual({ ...stamp, attempt_id: 'attempt-2' });
-		// The earlier attempt is still sent, no longer awaited: the store owes its outcome.
+		// The earlier attempt is still sent, no longer awaited (S2b marks it superseded).
 		expect(readGatewayAttempts(moved).unanswered?.id).toBe('attempt-1');
+	});
+	it('matches the stamp attempt case-insensitively, as the store keys it', () => {
+		const meta = map({ 'attempt-1': { fate: 'sent', method_id: 'm', awaiting: null } });
+		const value = JSON.parse(
+			withAwaitingCustomer(meta, { ...stamp, attempt_id: 'ATTEMPT-1' })[0].value as string
+		);
+		expect(Object.keys(value.attempts)).toEqual(['attempt-1']);
+		expect(value.attempts['attempt-1'].fate).toBe('sent');
 	});
 	it('keeps an entry the store already holds, adding only `awaiting`', () => {
 		const meta = map({

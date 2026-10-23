@@ -197,10 +197,7 @@ export async function cancelGatewayAttempt(
 	target: { methodId: string; attemptId: string; awaiting?: AwaitingCustomerStamp },
 	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
 ): Promise<
-	| ({ kind: 'cancelled' } & Answered)
-	/** Answered, but the order is not open again: the invoice was not cancelled. */
-	| ({ kind: 'unchanged' } & Answered)
-	| ({ kind: 'cleared'; reopened: boolean } & Answered)
+	| ({ kind: 'answered'; reopened: boolean } & Answered)
 	| { kind: 'refused'; code: string; message: string }
 > {
 	let summary: OrderPaymentSummary;
@@ -226,10 +223,9 @@ export async function cancelGatewayAttempt(
 	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
 	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
 	const meta = (m: MetaDataEntry[]) =>
-		target.awaiting
-			? withAwaitingCustomer(m, reopened ? null : target.awaiting)
-			: withGatewayAttempt(m, target.attemptId, { fate: 'cancelled' });
+		target.awaiting && !reopened
+			? withAwaitingCustomer(m, target.awaiting)
+			: withGatewayAttempt(m, target.attemptId, { fate: 'cancelled', awaiting: null });
 	const notMirrored = await deps.mirror({ order: summary, meta, accepted: false });
-	if (!target.awaiting) return { kind: 'cleared', reopened, order: summary, notMirrored };
-	return { kind: reopened ? 'cancelled' : 'unchanged', order: summary, notMirrored };
+	return { kind: 'answered', reopened, order: summary, notMirrored };
 }

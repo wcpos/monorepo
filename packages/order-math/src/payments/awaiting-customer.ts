@@ -1,10 +1,10 @@
 /**
- * The awaiting-customer stamp (contract 1.2 §3.2), the plugin's `Attempt_Log::awaiting()`: a
+ * The awaiting-customer stamp (contract 1.2 §3.2): Free writes it on a `sent` outcome so a
  * projection never drags the order back to pos-open while the customer still holds the link.
  */
 
 import { attemptEntries, readGatewayAttempts, withGatewayAttempt } from './gateway-attempts';
-import { type MetaDataEntry, readLedger } from './ledger';
+import { type MetaDataEntry, readLedger, samePaymentId } from './ledger';
 
 export interface AwaitingCustomerStamp {
 	method_id: string;
@@ -51,14 +51,15 @@ export function withAwaitingCustomer(
 	stamp: AwaitingCustomerStamp | null
 ): MetaDataEntry[] {
 	const entries = attemptEntries(metaData) ?? [];
+	const mine = (id: string) => !!stamp && samePaymentId(id, stamp.attempt_id);
 	let result = [...(metaData ?? [])];
 	for (const [id, entry] of entries)
-		if (entry.awaiting != null && id !== stamp?.attempt_id)
+		if (entry.awaiting != null && !mine(id))
 			result = withGatewayAttempt(result, id, { awaiting: null });
 	if (!stamp) return result;
 	const { method_id, cashier_id, sent_at_gmt } = stamp;
 	const awaiting = { destination: stamp.destination, at_gmt: sent_at_gmt };
-	const known = entries.some(([id]) => id === stamp.attempt_id);
+	const known = entries.find(([id]) => mine(id))?.[0];
 	const fresh = known ? {} : { fate: 'sent', method_id, cashier_id, sent_at_gmt };
-	return withGatewayAttempt(result, stamp.attempt_id, { ...fresh, awaiting });
+	return withGatewayAttempt(result, known ?? stamp.attempt_id, { ...fresh, awaiting });
 }

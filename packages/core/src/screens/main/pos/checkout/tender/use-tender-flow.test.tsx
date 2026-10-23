@@ -4055,13 +4055,14 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 
 		it.each([
-			['pos-open', 'pos_checkout.attempt_cleared_reopened'],
-			['on-hold', 'pos_checkout.attempt_cleared_covered'],
+			['pos-open', '92.95', 'pos_checkout.attempt_cleared_reopened'],
+			['on-hold', '0.00', 'pos_checkout.attempt_cleared'],
+			['on-hold', '92.95', 'pos_checkout.attempt_cleared'],
 		])(
-			'clearAttempt answered %s says %s, with the cashier and the attempt',
-			async (status, copy) => {
+			'clearAttempt answered %s with balance %s says %s, with the cashier and the attempt',
+			async (status, balance, copy) => {
 				mockPayload.meta_data = stranded();
-				mockManualPost.mockResolvedValue({ data: { order: summary(status) } });
+				mockManualPost.mockResolvedValue({ data: { order: { ...summary(status), balance } } });
 				const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 				await act(async () => result.current.clearAttempt());
 				expect(mockManualPost).toHaveBeenCalledWith(
@@ -4107,21 +4108,18 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect(mockError).not.toHaveBeenCalled();
 		});
 
-		it('clearAttempt with no answer says payment_unanswered (PAYMENT201)', async () => {
+		it('clearAttempt with no answer warns that the clear is unanswered, no code', async () => {
 			mockPayload.meta_data = stranded();
 			mockManualPost.mockRejectedValue(
 				Object.assign(new Error('down'), { response: { status: 503 } })
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.clearAttempt());
-			expect(mockError).toHaveBeenCalledWith(
-				'pos_checkout.payment_unanswered',
-				expect.objectContaining({
-					code: 'PAYMENT201',
-					showToast: true,
-					context: expect.objectContaining({ attemptId: 'attempt-9' }),
-				})
-			);
+			expect(mockWarn).toHaveBeenCalledWith('pos_checkout.attempt_clear_unanswered', {
+				showToast: true,
+				context: expect.objectContaining({ attemptId: 'attempt-9', error: 'down' }),
+			});
+			expect(mockError).not.toHaveBeenCalled();
 			expect(result.current.busy).toBe(false);
 		});
 	});

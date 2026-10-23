@@ -43,7 +43,6 @@ function attemptOf([id, entry]: [string, Entry]): GatewayAttempt {
 /** The newest owed attempt nobody awaits (`eligible('cancel')`), and the newest awaited one. */
 export function readGatewayAttempts(metaData: readonly MetaDataEntry[] | null | undefined) {
 	const entries = attemptEntries(metaData) ?? [];
-	const rows = readLedger(metaData);
 	const newest = (pick: (pair: [string, Entry]) => boolean) =>
 		entries.filter(pick).map(attemptOf).pop() ?? null;
 	return {
@@ -51,7 +50,7 @@ export function readGatewayAttempts(metaData: readonly MetaDataEntry[] | null | 
 		unanswered: newest(([id, entry]) =>
 			entry.fate === 'sent'
 				? !isEntry(entry.awaiting)
-				: entry.fate === 'paid' && !rows.some((row) => samePaymentId(row.id, id))
+				: entry.fate === 'paid' && !readLedger(metaData).some((row) => samePaymentId(row.id, id))
 		),
 	};
 }
@@ -62,11 +61,9 @@ export function withGatewayAttempt(
 	id: string,
 	patch: Entry
 ): MetaDataEntry[] {
-	const raw = mapOf(metaData);
-	const found = parseMetaValue(raw);
-	const map = isEntry(found) && isEntry(found.attempts) ? found : { schema: 1, attempts: {} };
-	const attempts = map.attempts as Record<string, Entry>;
-	const next = { ...map, attempts: { ...attempts, [id]: { ...attempts[id], ...patch } } };
-	const value = typeof raw === 'string' ? JSON.stringify(next) : next;
+	// Built from the reader's entries: a map that is not schema 1 starts fresh.
+	const attempts = Object.fromEntries(attemptEntries(metaData) ?? []);
+	const next = { schema: 1, attempts: { ...attempts, [id]: { ...attempts[id], ...patch } } };
+	const value = typeof mapOf(metaData) === 'string' ? JSON.stringify(next) : next;
 	return withMetaReplaced(metaData, [{ key: GATEWAY_ATTEMPTS_META_KEY, value }]);
 }
