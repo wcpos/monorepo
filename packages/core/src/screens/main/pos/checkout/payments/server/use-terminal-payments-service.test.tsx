@@ -122,9 +122,6 @@ jest.mock('../../../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
-jest.mock('../../../../hooks/use-payment-methods', () => ({
-	usePaymentMethods: () => ({ methods: [] }),
-}));
 jest.mock('@wcpos/query/record-readers', () => ({
 	refreshOrderRecord: jest.requireActual('@wcpos/query/record-readers').refreshOrderRecord,
 	readResidentOrder: async () => mockResident,
@@ -317,7 +314,9 @@ it('names the cashier at the till when a capture lands, not the one who started 
 				recorded_offline: false,
 				status: 'captured' as const,
 			};
-			mockHttp.get.mockResolvedValue({ data: { payment } });
+			// The status route answers the store's summary (Free 2.0); none would complete nothing.
+			const order = { status: 'completed', total: '10.00', paid: '10.00', balance: '0' };
+			mockHttp.get.mockResolvedValue({ data: { payment, order } });
 			service.resume({
 				orderUuid: 'completed-order',
 				orderId: 42,

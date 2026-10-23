@@ -2,6 +2,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import {
 	answerOf,
+	answerReadsPaid,
 	landAnswer,
 	mirrorAnswer,
 	saleOutcomeOf,
@@ -366,5 +367,56 @@ describe('answerOf', () => {
 		['a cancel', 'cancel', { order: summary('pos-open') }, [], null],
 	] as const)('%s', (_, kind, data, meta, answer) =>
 		expect(answerOf({ kind, data }, resident([...meta]))).toEqual(answer)
+	);
+});
+
+// The bridge: a recovered send lands with no press prediction (ADR 0040 Decided 1 rule 3).
+describe('recovery', () => {
+	it('lands a recovered send as a sent sale, without resolving the attempt itself', async () => {
+		const finish = jest.fn(async () => 'completed' as const);
+		const resolveAttempt = jest.fn(async () => undefined);
+		const sent = { kind: 'sent', order: summary('pending'), stamp } as const;
+		await expect(
+			landAnswer(sent, { via: 'recovery' }, { finish, resolveAttempt, dp: 2 })
+		).resolves.toBe('completed');
+		expect(finish).toHaveBeenCalledWith({ source: 'gateway', order: summary('pending'), stamp });
+		expect(resolveAttempt).not.toHaveBeenCalled();
+	});
+
+	it('a recorded answer in a recovery carries no press prediction', () => {
+		const recorded = {
+			kind: 'recorded',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+		} as const;
+		expect(saleOutcomeOf(recorded, { via: 'recovery' }, false)).toEqual({
+			source: 'manual',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+			mirrorFailed: false,
+			remainingMinor: null,
+		});
+	});
+
+	it.each([
+		['a close completed', 'close', { order: summary('completed') }, true],
+		[
+			'a terminal capture with a completed summary',
+			'capture',
+			{ payment: row, order: summary('completed') },
+			true,
+		],
+		[
+			'a submit sent, summary pending',
+			'submit',
+			{ outcome: 'sent', order: summary('pending') },
+			false,
+		],
+		['a record, summary pos-open', 'record', { payment: row, order: summary('pos-open') }, false],
+		['a refund, row only', 'refund', { payment: row }, false],
+	] as const)('answerReadsPaid: %s', (_, kind, data, paid) =>
+		expect(answerReadsPaid({ kind, data } as never)).toBe(paid)
 	);
 });

@@ -1777,3 +1777,26 @@ it('a crash leftover (unsent, claim expired) does not block finishing an adopted
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(owner.completeSale).toHaveBeenCalledTimes(1);
 });
+
+// A re-sent terminal capture lands nothing through answerOf, but its summary reading paid still
+// marks the attempt for adoption (answerReadsPaid reads the raw answer, captures included).
+it('a recovered terminal capture whose summary reads paid awaits adoption', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	mockResidentOrders.mockReturnValue(new Subject<string[]>());
+	await record();
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	mockCatchUp.mockRejectedValueOnce(new Error('refresh failed'));
+	const payment = { id: 'leg', amount: '10.00' };
+	mockRecover.mockResolvedValueOnce([
+		{
+			orderUuid: 'order',
+			answers: [{ kind: 'capture', data: { payment, order: { status: 'completed' } } }],
+		},
+	]);
+	render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+			awaitingAdoption: true,
+		})
+	);
+});
