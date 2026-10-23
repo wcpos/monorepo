@@ -252,7 +252,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
-		clearDialog: null,
 		...overrides,
 	} as TenderFlow;
 }

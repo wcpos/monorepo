@@ -264,11 +264,15 @@ describe('submitGatewayPayment', () => {
 				'attempt-1': 'settled',
 			});
 		});
-		it('a replayed paid supersedes nothing', async () => {
+		it("a replayed paid supersedes only the awaited attempt, as the store's replace() does", async () => {
 			const { post, order, deps, written } = harness(before);
 			post.mockResolvedValue(answer('paid', 'completed'));
 			await submitGatewayPayment(order, 'g', input, deps);
-			expect(fates(written[0])).toMatchObject({ 'attempt-8': 'sent' });
+			expect(fates(written[0])).toEqual({
+				'attempt-0': 'superseded',
+				'attempt-8': 'sent',
+				'attempt-7': 'cancelled',
+			});
 		});
 		it('recorded supersedes only the awaited attempt: a stranded one beside the payment stays sent', async () => {
 			const { post, order, deps, written } = harness(before);
@@ -400,7 +404,6 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
-			covered: false,
 			order: summary('pos-open'),
 			notMirrored: null,
 		});
@@ -438,7 +441,6 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
-			covered: false,
 			order: summary('pos-open'),
 			notMirrored: { cause: new Error('disk') },
 		});
@@ -451,7 +453,6 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: false,
-			covered: false,
 			order: summary('completed'),
 			notMirrored: { cause: new Error('disk') },
 		});
@@ -464,7 +465,6 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: false,
-			covered: false,
 			order: summary('completed'),
 			notMirrored: null,
 		});
@@ -500,7 +500,6 @@ describe('cancelGatewayAttempt: the clear of an unanswered attempt', () => {
 		expect(await cancelGatewayAttempt(order, stranded, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
-			covered: false,
 			order: summary('pos-open'),
 			notMirrored: null,
 		});
@@ -522,18 +521,6 @@ describe('cancelGatewayAttempt: the clear of an unanswered attempt', () => {
 			reopened: false,
 		});
 		expect(attemptsOf(written[0])['attempt-9']).toMatchObject({ fate: 'cancelled' });
-	});
-	it.each([
-		['0.00', true],
-		['5.00', false],
-	])('a 200 that does not reopen with balance %s is covered: %s', async (balance, covered) => {
-		const { post, order, deps } = harness(meta);
-		post.mockResolvedValue({ data: { order: { ...summary('processing'), balance } } });
-		expect(await cancelGatewayAttempt(order, stranded, deps)).toMatchObject({
-			kind: 'answered',
-			reopened: false,
-			covered,
-		});
 	});
 	it('409 wcpos_invalid_transition is refused, nothing mirrored', async () => {
 		const { post, mirror, order, deps } = harness(meta);

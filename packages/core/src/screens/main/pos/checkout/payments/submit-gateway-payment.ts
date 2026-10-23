@@ -5,9 +5,9 @@ import {
 	MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
+	withAttemptAnswer,
 	withAwaitingCustomer,
 	withGatewayAttempt,
-	withSupersededAttempts,
 } from '@wcpos/order-math';
 import type { MoneyCommandPoster, Post } from '@wcpos/query';
 import {
@@ -147,31 +147,26 @@ export async function submitGatewayPayment(
 		throw new Error('gateway_submit_malformed_response');
 	// Only the request is inside the try above: once the server has answered 2xx the outcome
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
-	type Patch = (meta: readonly MetaDataEntry[]) => readonly MetaDataEntry[];
+	// `answer` applies the store's supersede rules to the map (order-math `withAttemptAnswer`).
 	const mirror = async <const O extends { order: OrderPaymentSummary; row?: PaymentRow }>(
 		outcome: O,
 		awaiting: AwaitingCustomerStamp | null,
-		patch: Patch = (meta) => meta
+		answer?: GatewaySubmitResponse['outcome']
 	) => ({
 		...outcome,
 		notMirrored: await deps.mirror({
 			payment: outcome.row,
 			order: outcome.order,
-			meta: (meta) => withAwaitingCustomer(patch(meta), awaiting),
+			meta: (meta) =>
+				withAwaitingCustomer(
+					answer ? withAttemptAnswer(meta, input.attemptId, answer) : meta,
+					awaiting
+				),
 		}),
 	});
-	// The store's own supersede rules (`Attempts.php`): a send or a settle replaces every other
-	// `sent` attempt; a paid row replaces only the awaited ones, never a stranded one beside it.
-	const supersede =
-		(which: 'sent' | 'awaiting', fate?: 'paid' | 'settled'): Patch =>
-		(meta) => {
-			const rest = withSupersededAttempts(meta, input.attemptId, which);
-			return fate ? withGatewayAttempt(rest, input.attemptId, { fate, awaiting: null }) : rest;
-		};
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
-		const outcome = { kind: 'recorded', via: 'online', row, order: data.order } as const;
-		return mirror(outcome, null, supersede('awaiting', 'paid'));
+		return mirror({ kind: 'recorded', via: 'online', row, order: data.order }, null, 'recorded');
 	}
 	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
 	// the summary as the truth and no receipt number assumed.
@@ -183,8 +178,7 @@ export async function submitGatewayPayment(
 	if (data.outcome === 'settled' || data.outcome === 'paid') {
 		// The store settled the sale on the merchant's stored status and cleared any stamp an
 		// earlier send left (§3.1); the till's copy follows, with the summary's status.
-		const fresh = data.outcome === 'settled' ? supersede('sent', 'settled') : undefined;
-		return mirror({ kind: 'settled', order: data.order }, null, fresh);
+		return mirror({ kind: 'settled', order: data.order }, null, data.outcome);
 	}
 	if (data.outcome === 'sent') {
 		const stamp: AwaitingCustomerStamp = {
@@ -198,7 +192,7 @@ export async function submitGatewayPayment(
 		// one was cancelled elsewhere (§4.2): the order is open, and the stamp is not ours to write.
 		const sent = { kind: 'sent', order: data.order, stamp } as const;
 		if (data.order.status === 'pos-open') return mirror(sent, null);
-		return mirror(sent, stamp, supersede('sent'));
+		return mirror(sent, stamp, 'sent');
 	}
 	throw new Error('gateway_submit_malformed_response');
 }
@@ -209,7 +203,7 @@ export async function cancelGatewayAttempt(
 	target: { methodId: string; attemptId: string; awaiting?: AwaitingCustomerStamp },
 	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
 ): Promise<
-	| ({ kind: 'answered'; reopened: boolean; covered: boolean } & Answered)
+	| ({ kind: 'answered'; reopened: boolean } & Answered)
 	| { kind: 'refused'; code: string; message: string }
 > {
 	let summary: OrderPaymentSummary;
@@ -239,6 +233,5 @@ export async function cancelGatewayAttempt(
 			? withAwaitingCustomer(m, target.awaiting)
 			: withGatewayAttempt(m, target.attemptId, { fate: 'cancelled', awaiting: null });
 	const notMirrored = await deps.mirror({ order: summary, meta, accepted: false });
-	const covered = Number(summary.balance) <= 0; // the sale's payments already cover it
-	return { kind: 'answered', reopened, covered, order: summary, notMirrored };
+	return { kind: 'answered', reopened, order: summary, notMirrored };
 }

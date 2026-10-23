@@ -4,6 +4,8 @@ import { type MetaDataEntry, readLedger, samePaymentId } from './ledger';
 import { parseMetaValue } from './meta-value';
 import { withMetaReplaced } from './provenance';
 
+import type { GatewaySubmitResponse } from './types';
+
 export const GATEWAY_ATTEMPTS_META_KEY = '_wcpos_gateway_attempts';
 
 export interface GatewayAttempt {
@@ -73,18 +75,23 @@ export function withGatewayAttempt(
 }
 
 /**
- * The store's `supersede()`, until the next adoption: every other `sent` attempt is `superseded`;
- * with `'awaiting'` only the ones awaiting the customer (`replace()`), so a stranded one stays.
+ * A submit's answer, until the next adoption (`Attempts.php`): a send (`await()`) or a settle
+ * (`resolve('settled')`) supersedes every other `sent` attempt; a paid row or a replayed `paid`
+ * (`replace()`) only the awaited ones, never a stranded one beside it. A settle or a row also
+ * resolves the attempt itself.
  */
-export function withSupersededAttempts(
+export function withAttemptAnswer(
 	metaData: readonly MetaDataEntry[] | null | undefined,
-	keepId: string,
-	which: 'sent' | 'awaiting'
+	id: string,
+	answer: GatewaySubmitResponse['outcome']
 ): readonly MetaDataEntry[] {
 	let result = metaData ?? [];
-	for (const [id, entry] of attemptEntries(metaData) ?? [])
-		if (entry.fate === 'sent' && !samePaymentId(id, keepId))
-			if (which === 'sent' || entry.awaiting != null)
-				result = withGatewayAttempt(result, id, { fate: 'superseded', awaiting: null });
-	return result;
+	let own = id; // the attempt's key as stored (ids compare case-insensitively)
+	for (const [other, entry] of attemptEntries(metaData) ?? [])
+		if (samePaymentId(other, id)) own = other;
+		else if (entry.fate === 'sent')
+			if (answer === 'sent' || answer === 'settled' || entry.awaiting != null)
+				result = withGatewayAttempt(result, other, { fate: 'superseded', awaiting: null });
+	const fate = answer === 'recorded' ? 'paid' : answer === 'settled' ? 'settled' : null;
+	return fate ? withGatewayAttempt(result, own, { fate, awaiting: null }) : result;
 }

@@ -65,8 +65,7 @@ import {
 	recordSaleAttempt,
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
-import { useConfirmClearAttempt } from './use-confirm-clear-attempt';
-import { useConfirmOfflineTender } from './use-confirm-offline-tender';
+import { useConfirm } from './use-confirm';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -89,6 +88,7 @@ import {
 import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { useT } from '../../../../../contexts/translations';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
@@ -149,10 +149,8 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
-	/** The offline tender confirmation (ADR 0040 Decided 1 rule 1); the host renders it. */
-	offlineDialog: React.ReactNode;
-	/** The Clear attempt confirmation; the host renders it beside `offlineDialog`. */
-	clearDialog: React.ReactNode;
+	/** The one confirmation (the offline tender, the Clear attempt); the host renders it. */
+	confirmDialog: React.ReactNode;
 	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
 	unansweredCommand: boolean;
 	retryCommand: () => Promise<void>;
@@ -232,7 +230,7 @@ export interface TenderFlow {
 	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	cancelInvoice: () => Promise<void>;
-	unansweredAttempt: GatewayAttempt | null;
+	unansweredAttempt: (GatewayAttempt & { title: string | null }) | null;
 	clearAttempt: () => Promise<void>;
 }
 
@@ -276,7 +274,7 @@ type LandOptions = { notMirrored?: NotMirrored; queue?: OrderMutationContext; me
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
 	host: CheckoutHost,
-	/** The host's overlay layer for the offline confirmation (see `useConfirmOfflineTender`). */
+	/** The host's overlay layer for the confirmation (see `useConfirm`). */
 	{ portalHost }: { portalHost?: string } = {}
 ): TenderFlow {
 	useDriverChanges();
@@ -333,12 +331,8 @@ export function useTenderFlow(
 	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
 	const currency = payload.currency || storeCurrency;
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
-	const { confirmOfflineTender, dialog: offlineDialog } = useConfirmOfflineTender({
-		currencySymbol: payload.currency_symbol,
-		dp,
-		portalHost,
-	});
-	const { confirmClearAttempt, dialog: clearDialog } = useConfirmClearAttempt({ portalHost });
+	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
+	const { confirm, dialog: confirmDialog } = useConfirm({ portalHost });
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -437,10 +431,14 @@ export function useTenderFlow(
 	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
 	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
 	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
-	const unansweredAttempt = React.useMemo(
-		() => readGatewayAttempts(payload.meta_data).unanswered,
-		[payload.meta_data]
-	);
+	// Who may clear: never beside an awaiting invoice (the store refuses that cancel). The title
+	// names a gateway the till no longer offers as a tile.
+	const unansweredAttempt = React.useMemo(() => {
+		const attempt = readGatewayAttempts(payload.meta_data).unanswered;
+		return attempt && !invoiceSent
+			? { ...attempt, title: byId.get(attempt.methodId)?.title ?? null }
+			: null;
+	}, [payload.meta_data, invoiceSent, byId]);
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
@@ -904,9 +902,15 @@ export function useTenderFlow(
 		// Only a tile that settles later asks (rule 1); a disabled one is refused below, with its reason.
 		if (tiles.find((tile) => tile.method.id === method?.id)?.settlesLater && method) {
 			// The amount that will be RECORDED: cash rounding's, not the keyed entry.
-			const confirmed = await confirmOfflineTender({
-				method,
-				amountMinor: entryAppliedMinor,
+			const take = {
+				amount: format(Number(fromMinor(entryAppliedMinor, dp))),
+				method: method.title,
+			};
+			const confirmed = await confirm({
+				title: t('pos_checkout.confirm_offline_title', take),
+				body: t('pos_checkout.confirm_offline_body'),
+				action: t('pos_checkout.take_amount_in', take),
+				testID: 'checkout-offline',
 			}).catch(() => false);
 			if (!confirmed) {
 				busyRef.current = false;
@@ -1374,7 +1378,8 @@ export function useTenderFlow(
 		}
 	}, [
 		unansweredCommand,
-		confirmOfflineTender,
+		confirm,
+		format,
 		entryAppliedMinor,
 		tiles,
 		actionCtx,
@@ -1593,7 +1598,14 @@ export function useTenderFlow(
 	const clearAttempt = React.useCallback(async () => {
 		if (busyRef.current || !unansweredAttempt) return;
 		busyRef.current = true;
-		if (!(await confirmClearAttempt())) {
+		const confirmed = await confirm({
+			title: t('pos_checkout.clear_attempt_title'),
+			body: t('pos_checkout.clear_attempt_body'),
+			action: t('pos_checkout.clear_attempt'),
+			destructive: true,
+			testID: 'checkout-clear-attempt',
+		}).catch(() => false);
+		if (!confirmed) {
 			busyRef.current = false;
 			return;
 		}
@@ -1611,11 +1623,15 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			const said = outcome.reopened
-				? t('pos_checkout.attempt_cleared_reopened')
-				: outcome.covered
+			// Covered first: a covered sale can sit in an open status, and "open for payment" there
+			// invites a second tender. A missing or garbled balance is not covered.
+			const balance = Number(outcome.order.balance || NaN);
+			const said =
+				Number.isFinite(balance) && toMinor(balance, dp) === 0
 					? t('pos_checkout.attempt_cleared_covered')
-					: t('pos_checkout.attempt_cleared');
+					: outcome.reopened
+						? t('pos_checkout.attempt_cleared_reopened')
+						: t('pos_checkout.attempt_cleared');
 			logger.info(said, { actor, showToast: true, context });
 		} catch (error) {
 			logger.warn(t('pos_checkout.attempt_clear_unanswered'), {
@@ -1626,7 +1642,7 @@ export function useTenderFlow(
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [gateway, unansweredAttempt, confirmClearAttempt, order, orderContext, actor, t]);
+	}, [gateway, unansweredAttempt, confirm, order, orderContext, actor, dp, t]);
 
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
@@ -1813,8 +1829,7 @@ export function useTenderFlow(
 			clearAttempt,
 			unansweredCommand,
 			retryCommand,
-			offlineDialog,
-			clearDialog,
+			confirmDialog,
 		}),
 		[
 			plan,
@@ -1874,8 +1889,7 @@ export function useTenderFlow(
 			clearAttempt,
 			unansweredCommand,
 			retryCommand,
-			offlineDialog,
-			clearDialog,
+			confirmDialog,
 		]
 	);
 }

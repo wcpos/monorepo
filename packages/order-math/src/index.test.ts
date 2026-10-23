@@ -66,13 +66,13 @@ test('public value surface is exactly the spec', () => {
 		'splitPlanMeta',
 		'toMinor',
 		'upsertPaymentRow',
+		// Added 2026-10-24 (#2900 S2b): a submit's answer on the attempt map, as the store applies it.
+		'withAttemptAnswer',
 		'withAwaitingCustomer',
 		'withGatewayAttempt',
 		'withLedger',
 		'withMetaReplaced',
 		'withSaleProvenance',
-		// Added 2026-10-24 (#2900 S2b): the store's supersede rules, mirrored until the next adoption.
-		'withSupersededAttempts',
 	]);
 });
 

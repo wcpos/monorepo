@@ -57,7 +57,7 @@ export {
 	type GatewayAttempt,
 	readGatewayAttempts,
 	withGatewayAttempt,
-	withSupersededAttempts,
+	withAttemptAnswer,
 } from './gateway-attempts';
 export type {
 	PaymentKind,

@@ -10,32 +10,25 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { fromMinor, type PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { useT } from '../../../../../contexts/translations';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-type Facts = { method: PaymentMethodDescriptor; amountMinor: number };
+/** `testID` prefixes the dialog's own: `-dialog`, `-cancel`, `-confirm`. */
+type Facts = { title: string; body: string; action: string; destructive?: boolean; testID: string };
 
 /**
- * The cashier confirms a tender the store cannot hear yet (ADR 0040 Decided 1 rule 1: never
- * unaware): the amount and method in the title, the risk in one line. `useTenderFlow` asks it
- * and returns `dialog` for its host to render. Closing the question any way but the confirm
+ * The tender's one confirm: a tender the store cannot hear yet (ADR 0040 Decided 1 rule 1), the
+ * staff clear (c5-2). `useTenderFlow` asks it (holding busy, so one question at a time) and
+ * returns `dialog` for its host to render. Closing the question any way but the confirm
  * (Cancel, or the host unmounting) answers no.
  */
-export function useConfirmOfflineTender({
-	currencySymbol,
-	dp,
+export function useConfirm({
 	portalHost,
 }: {
-	currencySymbol?: string;
-	/** The tender's decimals: the amount arrives in its minor units. */
-	dp: number;
 	/** The host's overlay layer: the checkout column paints in the POS host, the modal at the root. */
 	portalHost?: string;
 }) {
 	const t = useT();
-	const { format } = useCurrencyFormat({ currencySymbol });
 	// The facts stay while the dialog animates out; `open` is the question.
 	const [question, setQuestion] = React.useState<{ facts: Facts; open: boolean } | null>(null);
 	const resolver = React.useRef<((confirmed: boolean) => void) | null>(null);
@@ -45,7 +38,7 @@ export function useConfirmOfflineTender({
 		setQuestion((current) => (current ? { ...current, open: false } : current));
 	}, []);
 	React.useEffect(() => () => answer(false), [answer]);
-	const confirmOfflineTender = React.useCallback(
+	const confirm = React.useCallback(
 		(facts: Facts) =>
 			new Promise<boolean>((resolve) => {
 				resolver.current?.(false);
@@ -54,32 +47,29 @@ export function useConfirmOfflineTender({
 			}),
 		[]
 	);
-	const take = question && {
-		amount: format(Number(fromMinor(question.facts.amountMinor, dp))),
-		method: question.facts.method.title,
-	};
-	const dialog = take ? (
+	const facts = question?.facts;
+	const dialog = facts ? (
 		<AlertDialog open={question.open} onOpenChange={(open) => !open && answer(false)}>
-			<AlertDialogContent portalHost={portalHost} testID="checkout-offline-dialog">
+			<AlertDialogContent portalHost={portalHost} testID={`${facts.testID}-dialog`}>
 				<AlertDialogHeader>
-					<AlertDialogTitle>{t('pos_checkout.confirm_offline_title', take)}</AlertDialogTitle>
-					<AlertDialogDescription>{t('pos_checkout.confirm_offline_body')}</AlertDialogDescription>
+					<AlertDialogTitle>{facts.title}</AlertDialogTitle>
+					<AlertDialogDescription>{facts.body}</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
-					<AlertDialogCancel testID="checkout-offline-cancel">
+					<AlertDialogCancel testID={`${facts.testID}-cancel`}>
 						{t('common.cancel')}
 					</AlertDialogCancel>
-					{/* Not destructive: taking the sale is the constructive act; red is a void. */}
+					{/* Red only for a loss (the clear): taking the sale is the constructive act. */}
 					<AlertDialogAction
-						variant="default"
-						testID="checkout-offline-confirm"
+						variant={facts.destructive ? 'destructive' : 'default'}
+						testID={`${facts.testID}-confirm`}
 						onPress={() => answer(true)}
 					>
-						{t('pos_checkout.take_amount_in', take)}
+						{facts.action}
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
 	) : null;
-	return { confirmOfflineTender, dialog };
+	return { confirm, dialog };
 }

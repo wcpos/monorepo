@@ -1,8 +1,8 @@
 import {
 	GATEWAY_ATTEMPTS_META_KEY,
 	readGatewayAttempts,
+	withAttemptAnswer,
 	withGatewayAttempt,
-	withSupersededAttempts,
 } from './gateway-attempts';
 import { withLedger } from './ledger';
 
@@ -124,7 +124,7 @@ describe('withGatewayAttempt', () => {
 	});
 });
 
-describe('withSupersededAttempts', () => {
+describe('withAttemptAnswer', () => {
 	const awaiting = { destination: 'x@y.z', at_gmt: '2026-10-23T10:50:00Z' };
 	const fates = (meta: readonly { key?: string; value?: unknown }[]) =>
 		Object.fromEntries(
@@ -140,36 +140,48 @@ describe('withSupersededAttempts', () => {
 		paid: entry({ fate: 'paid' }),
 		Keep: entry(),
 	});
+	const others = { cancelled: 'cancelled', paid: 'paid' };
 
-	it("'sent' supersedes every other sent attempt, stranded or awaited, never keepId or a resolved one", () => {
-		const next = withSupersededAttempts(meta, 'keep', 'sent');
-		expect(fates(next)).toEqual({
-			stranded: 'superseded',
-			awaited: 'superseded',
-			cancelled: 'cancelled',
-			paid: 'paid',
-			Keep: 'sent',
-		});
-		expect(readGatewayAttempts(next).awaiting).toBeNull();
-		expect(readGatewayAttempts(next).unanswered?.id).toBe('Keep');
-	});
-	it("'awaiting' supersedes only the awaited ones: a stranded sent beside a payment stays", () => {
-		const next = withSupersededAttempts(meta, 'keep', 'awaiting');
-		expect(fates(next)).toEqual({
-			stranded: 'sent',
-			awaited: 'superseded',
-			cancelled: 'cancelled',
-			paid: 'paid',
-			Keep: 'sent',
-		});
-		expect(
-			readGatewayAttempts(withSupersededAttempts(meta, 'stranded', 'awaiting')).unanswered?.id
-		).toBe('Keep');
-	});
+	it.each([
+		['sent', 'sent'],
+		['settled', 'settled'],
+	] as const)(
+		'%s supersedes every other sent attempt, stranded or awaited; the attempt is %s',
+		(answer, fate) => {
+			const next = withAttemptAnswer(meta, 'keep', answer);
+			expect(fates(next)).toEqual({
+				...others,
+				stranded: 'superseded',
+				awaited: 'superseded',
+				Keep: fate,
+			});
+			expect(readGatewayAttempts(next).awaiting).toBeNull();
+		}
+	);
+	it.each([
+		['recorded', 'paid'],
+		['paid', 'sent'],
+	] as const)(
+		'%s supersedes only the awaited ones: a stranded sent beside the payment stays; the attempt is %s',
+		(answer, fate) => {
+			const next = withAttemptAnswer(meta, 'keep', answer);
+			expect(fates(next)).toEqual({
+				...others,
+				stranded: 'sent',
+				awaited: 'superseded',
+				Keep: fate,
+			});
+			// Beside the row the answer landed, the stranded attempt is still the one to clear.
+			const rows = ['keep', 'paid'].map((id) => ({ id, status: 'captured' }) as PaymentRow);
+			expect(readGatewayAttempts(withLedger(next, rows)).unanswered?.id).toBe(
+				answer === 'paid' ? 'Keep' : 'stranded'
+			);
+		}
+	);
 	it('returns the same meta when nothing matches', () => {
 		const resolved = asString({ a: entry({ fate: 'cancelled' }), b: entry({ awaiting: null }) });
-		expect(withSupersededAttempts(resolved, 'b', 'sent')).toBe(resolved);
+		expect(withAttemptAnswer(resolved, 'b', 'sent')).toBe(resolved);
 		const stranded = asString({ a: entry() });
-		expect(withSupersededAttempts(stranded, 'x', 'awaiting')).toBe(stranded);
+		expect(withAttemptAnswer(stranded, 'x', 'paid')).toBe(stranded);
 	});
 });

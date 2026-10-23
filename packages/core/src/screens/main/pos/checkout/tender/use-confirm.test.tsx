@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { useConfirmClearAttempt } from './use-confirm-clear-attempt';
+import { useConfirm } from './use-confirm';
 
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
@@ -58,43 +58,61 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	};
 });
 
+// The two callers' questions, as the tender flow builds them.
+const offline = {
+	title: 'Take $10.50 in Cash while offline?',
+	body: 'The sale is held on this device.',
+	action: 'Take $10.50 in Cash',
+	testID: 'checkout-offline',
+};
+const clear = {
+	title: 'Clear this payment attempt?',
+	body: 'Only clear it once the dashboard shows no charge.',
+	action: 'Clear attempt',
+	destructive: true,
+	testID: 'checkout-clear-attempt',
+};
 const asked: { answer?: Promise<boolean> } = {};
-// The flow asks from an event (the Clear attempt press), as here.
-function Host() {
-	const clear = useConfirmClearAttempt({});
+// The flow asks from an event (the Take or Clear attempt press), as here.
+function Host({ question }: { question: typeof offline }) {
+	const { confirm, dialog } = useConfirm({});
 	return (
 		<>
-			<button
-				data-testid="clear"
-				onClick={() => {
-					asked.answer = clear.confirmClearAttempt();
-				}}
-			/>
-			{clear.dialog}
+			<button data-testid="ask" onClick={() => (asked.answer = confirm(question))} />
+			{dialog}
 		</>
 	);
 }
 const ask = () => {
-	fireEvent.click(screen.getByTestId('clear'));
+	fireEvent.click(screen.getByTestId('ask'));
 	return asked.answer!;
 };
 
-it('asks with the title, the body and a destructive Clear attempt; the confirm answers yes', async () => {
-	render(<Host />);
-	expect(screen.queryByTestId('checkout-clear-attempt-dialog')).toBeNull();
-	const answer = ask();
-	expect(screen.getByTestId('title').textContent).toBe('Clear this payment attempt?');
-	expect(screen.getByTestId('body').textContent).toMatch(/^Only clear it once the provider/);
-	const confirm = screen.getByTestId('checkout-clear-attempt-confirm');
-	expect(confirm.textContent).toBe('Clear attempt');
-	expect(confirm.dataset.variant).toBe('destructive');
-	fireEvent.click(confirm);
-	await expect(answer).resolves.toBe(true);
-	expect(screen.queryByTestId('checkout-clear-attempt-dialog')).toBeNull();
-});
+it.each([
+	['the offline tender', offline, 'default'],
+	// A loss: the confirm is the solid destructive red; taking a sale never is.
+	['the clear', clear, 'destructive'],
+])(
+	'asks %s with its own copy and testIDs; the confirm answers yes',
+	async (_, question, variant) => {
+		render(<Host question={question} />);
+		expect(screen.queryByTestId(`${question.testID}-dialog`)).toBeNull();
+		const answer = ask();
+		expect(screen.getByTestId(`${question.testID}-dialog`)).not.toBeNull();
+		expect(screen.getByTestId('title').textContent).toBe(question.title);
+		expect(screen.getByTestId('body').textContent).toBe(question.body);
+		expect(screen.getByTestId(`${question.testID}-cancel`).textContent).toBe('Cancel');
+		const confirm = screen.getByTestId(`${question.testID}-confirm`);
+		expect(confirm.textContent).toBe(question.action);
+		expect(confirm.dataset.variant).toBe(variant);
+		fireEvent.click(confirm);
+		await expect(answer).resolves.toBe(true);
+		expect(screen.queryByTestId(`${question.testID}-dialog`)).toBeNull();
+	}
+);
 
 it.each(['checkout-clear-attempt-cancel', 'dismiss'])('%s answers no', async (testID) => {
-	render(<Host />);
+	render(<Host question={clear} />);
 	const answer = ask();
 	fireEvent.click(screen.getByTestId(testID));
 	await expect(answer).resolves.toBe(false);
@@ -102,7 +120,7 @@ it.each(['checkout-clear-attempt-cancel', 'dismiss'])('%s answers no', async (te
 });
 
 it('unmounting with the question open answers no', async () => {
-	const view = render(<Host />);
+	const view = render(<Host question={offline} />);
 	const answer = ask();
 	view.unmount();
 	await expect(answer).resolves.toBe(false);
