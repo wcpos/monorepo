@@ -18,11 +18,14 @@ import type { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 // stuck as an open cart once the webhook landed a minute later.
 const ASYNC_PAYMENT_POLL_INTERVAL_MS = 3_000;
 const ASYNC_PAYMENT_POLL_WINDOW_MS = 120_000;
+// After a later document loads, the received page's postMessage normally arrives first and
+// the message branch's `stop()` cancels this pending start; the read is for pages that never post.
+const LATER_DOCUMENT_GRACE_MS = 1_000;
 
 type Settler = ReturnType<typeof useSettleGatewaySnapshot>;
 
 interface ServerTruthPollInput {
-	/** The host's client, so its hooks keep their place in the host's order. */
+	/** Handed in so the poll's suite needs no module mocks. */
 	http: ReturnType<typeof useRestHttpClient>;
 	order: EngineRecord<'orders'>;
 	orderId: number | undefined;
@@ -37,9 +40,10 @@ interface ServerTruthPollInput {
 
 /**
  * The server-truth poll: the safety net for a pay page that never posts its completion.
- * `poll()` reads now; `poll(delayMs)` (re)arms one delayed start. Either way it keeps
- * re-reading on the async cadence until the sale settles or the window, which starts
- * at the first read, passes. `stop()` disarms a pending tick; unmounting does too.
+ * `poll()` reads now without touching a pending start; `pollAfterGrace()` replaces any
+ * pending start with one a second away. Either way it keeps re-reading on the async cadence
+ * until the sale settles or the window, which starts at the first read, passes. There is one
+ * timer, so a re-arm replaces whatever tick was pending. `stop()` disarms it; unmounting does too.
  */
 export function useServerTruthPoll(input: ServerTruthPollInput) {
 	const { http, order, orderId, settledRef, dp, settle, isSettled, setLoading, logger } = input;
@@ -154,16 +158,13 @@ export function useServerTruthPoll(input: ServerTruthPollInput) {
 	);
 
 	const poll = React.useCallback(
-		(delayMs?: number) => {
-			if (delayMs === undefined) return void read(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
-			stop();
-			timerRef.current = setTimeout(
-				() => void read(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
-				delayMs
-			);
-		},
-		[read, stop]
+		() => void read(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
+		[read]
 	);
+	const pollAfterGrace = React.useCallback(() => {
+		stop();
+		timerRef.current = setTimeout(poll, LATER_DOCUMENT_GRACE_MS);
+	}, [poll, stop]);
 
 	// A layout effect: its cleanup runs in the commit that removes the frame, so a
 	// poll response arriving before the passive cleanups flush already sees the flag.
@@ -175,5 +176,5 @@ export function useServerTruthPoll(input: ServerTruthPollInput) {
 		};
 	}, [stop]);
 
-	return { poll, stop };
+	return { poll, pollAfterGrace, stop };
 }

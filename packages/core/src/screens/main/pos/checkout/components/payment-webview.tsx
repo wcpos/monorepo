@@ -148,7 +148,7 @@ export function PaymentWebview({
 		}
 	}, [paymentURLWithToken]);
 
-	const { poll, stop } = useServerTruthPoll({
+	const { poll, pollAfterGrace, stop } = useServerTruthPoll({
 		http,
 		order,
 		orderId,
@@ -160,13 +160,12 @@ export function PaymentWebview({
 		logger: orderLogger,
 	});
 	// A later document loaded: check server truth in case the gateway never posts a message.
-	const onLaterDocument = React.useCallback(() => poll(1000), [poll]);
 	const frame = usePayFrame({
 		src: paymentURLWithToken,
 		retryToken,
 		prepared,
 		report: setFrameStatus,
-		onLaterDocument,
+		onLaterDocument: pollAfterGrace,
 		logger: orderLogger,
 	});
 

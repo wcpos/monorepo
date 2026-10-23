@@ -64,6 +64,8 @@ const tick = (ms: number) => act(() => jest.advanceTimersByTimeAsync(ms));
 describe('useServerTruthPoll', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		// A never-resolving read from one row must not leak into the next.
+		get.mockReset();
 		jest.useFakeTimers();
 		settled = false;
 	});
@@ -71,10 +73,10 @@ describe('useServerTruthPoll', () => {
 		jest.useRealTimers();
 	});
 
-	it('a later document: poll(1000) reads nothing for a second, then reads server truth', async () => {
+	it('a later document: pollAfterGrace() reads nothing for a second, then reads server truth', async () => {
 		get.mockResolvedValue({ data: [serverOrder('completed')] });
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(999);
 		expect(get).not.toHaveBeenCalled();
 		await tick(1);
@@ -85,21 +87,37 @@ describe('useServerTruthPoll', () => {
 		);
 	});
 
-	it('a second delayed start replaces the pending one: one read, a second after the last', async () => {
+	it('a second grace start replaces the pending one: one read, a second after the last', async () => {
 		get.mockResolvedValue({ data: [serverOrder('completed')] });
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(500);
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(999);
 		expect(get).not.toHaveBeenCalled();
 		await tick(1);
 		expect(get).toHaveBeenCalledTimes(1);
 	});
 
-	it('stop() disarms a pending delayed start (the message settles instead)', async () => {
+	it('an immediate poll() leaves a pending grace start armed until its own read re-arms', async () => {
+		let answer!: (value: unknown) => void;
+		get.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+		get.mockResolvedValue({ data: [serverOrder('pending')] });
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
+		act(() => result.current.poll());
+		// The immediate read is still in flight: the grace start fires beside it.
+		await tick(1000);
+		expect(get).toHaveBeenCalledTimes(2);
+		// One timer: the first read's re-arm replaces the second chain's pending tick.
+		await act(async () => answer({ data: [serverOrder('pending')] }));
+		await tick(3_000);
+		expect(get).toHaveBeenCalledTimes(3);
+	});
+
+	it('stop() disarms a pending grace start (the message settles instead)', async () => {
+		const { result } = renderPoll();
+		act(() => result.current.pollAfterGrace());
 		act(() => result.current.stop());
 		await tick(10_000);
 		expect(get).not.toHaveBeenCalled();
@@ -137,7 +155,7 @@ describe('useServerTruthPoll', () => {
 			const order = makeOrder();
 			get.mockResolvedValue({ data: [serverOrder(status)] });
 			const { result } = renderPoll({ order });
-			act(() => result.current.poll(1000));
+			act(() => result.current.pollAfterGrace());
 			await tick(1000);
 			expect(get).toHaveBeenCalledWith(...ORDER_READ);
 			expect(order.getLatest().payload.status).toBe('pos-open');
@@ -152,7 +170,7 @@ describe('useServerTruthPoll', () => {
 	it('a failed read is a debug row, never an error, and the poll re-arms', async () => {
 		get.mockRejectedValue(new Error('Request failed with status code 404'));
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(1000);
 		expect(get).toHaveBeenCalledTimes(1);
 		expect(settle).not.toHaveBeenCalled();
@@ -168,7 +186,7 @@ describe('useServerTruthPoll', () => {
 		expect(get).toHaveBeenCalledTimes(2);
 	});
 
-	it('a settle that throws lands in the same debug row (the poll path warns nothing)', async () => {
+	it('a rejection from settle is swallowed as the debug row', async () => {
 		get.mockResolvedValue({ data: [serverOrder('completed')] });
 		settle.mockRejectedValueOnce(new Error('stock adjust broke'));
 		const { result } = renderPoll();
@@ -184,7 +202,7 @@ describe('useServerTruthPoll', () => {
 	it('stays quiet when the server status still matches the local status', async () => {
 		get.mockResolvedValue({ data: [{ status: 'pos-open', number: '42', line_items: [] }] });
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(1000);
 		expect(get).toHaveBeenCalledWith(...ORDER_READ);
 		expect(settle).not.toHaveBeenCalled();
@@ -199,7 +217,7 @@ describe('useServerTruthPoll', () => {
 		async (status) => {
 			get.mockResolvedValue({ data: [serverOrder(status)] });
 			const { result } = renderPoll();
-			act(() => result.current.poll(1000));
+			act(() => result.current.pollAfterGrace());
 			await tick(1000);
 			expect(settle).not.toHaveBeenCalled();
 			expect(logger.debug).toHaveBeenCalledWith(
@@ -238,15 +256,14 @@ describe('useServerTruthPoll', () => {
 	it('stops re-polling at the 120 s window and leaves the cart open', async () => {
 		get.mockResolvedValue({ data: [serverOrder('pending')] });
 		const { result } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		await tick(1000);
 		expect(get).toHaveBeenCalledTimes(1);
 		await tick(300_000);
-		const readsAtBound = get.mock.calls.length;
-		expect(readsAtBound).toBeGreaterThan(1);
-		expect(readsAtBound).toBeLessThanOrEqual(1 + 120_000 / 3_000);
+		// The window opens when the grace timer fires (t = 1 s): reads every 3 s until 121 s.
+		expect(get).toHaveBeenCalledTimes(41);
 		await tick(60_000);
-		expect(get).toHaveBeenCalledTimes(readsAtBound);
+		expect(get).toHaveBeenCalledTimes(41);
 		expect(settle).not.toHaveBeenCalled();
 	});
 
@@ -283,9 +300,9 @@ describe('useServerTruthPoll', () => {
 		expect(get).toHaveBeenCalledTimes(1);
 	});
 
-	it('unmounting disarms a pending delayed start', async () => {
+	it('unmounting disarms a pending grace start', async () => {
 		const { result, unmount } = renderPoll();
-		act(() => result.current.poll(1000));
+		act(() => result.current.pollAfterGrace());
 		unmount();
 		await tick(10_000);
 		expect(get).not.toHaveBeenCalled();
@@ -331,7 +348,7 @@ describe('useServerTruthPoll', () => {
 			const catalog = { bacs: 'pending' };
 			get.mockResolvedValue({ data: [pendingBacs] });
 			const { result } = renderPoll({ catalog });
-			act(() => result.current.poll(1000));
+			act(() => result.current.pollAfterGrace());
 			await tick(1000);
 			expect(settle).toHaveBeenCalledWith(
 				judgeGatewaySnapshot(pendingBacs, catalog, 2),

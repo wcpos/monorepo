@@ -419,6 +419,32 @@ describe('PaymentWebview fallback order refresh', () => {
 		}
 	);
 
+	it('a later document reads server truth once, a second after it loads', async () => {
+		jest.useFakeTimers();
+		mockGet.mockResolvedValue({ data: [{ id: 42, status: 'pos-open', number: '42' }] });
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({}); // the order-pay page
+			webViewProps.onLoad({}); // a later document: the grace starts
+			await jest.advanceTimersByTimeAsync(999);
+		});
+		expect(mockGet).not.toHaveBeenCalled();
+
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(1);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+	});
+
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
 		jest.useFakeTimers();
 		render(
@@ -549,6 +575,49 @@ describe('PaymentWebview fallback order refresh', () => {
 		);
 	});
 
+	it('logs a failed follow-up on the poll path as the fallback-refresh debug row, never a warning', async () => {
+		// The poll-path half of the row above (design §5, open with Paul): the same paid sale
+		// whose completion fails is a quiet debug row when the poll settled it.
+		jest.useFakeTimers();
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		mockStockAdjustment.mockImplementationOnce(() => {
+			throw new Error('stock adjust broke');
+		});
+		mockGet.mockResolvedValue({
+			data: [
+				{
+					id: 42,
+					status: 'completed',
+					number: '42',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+					line_items: [],
+				},
+			],
+		});
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(mockStockAdjustment).toHaveBeenCalledTimes(1);
+		expect(logger.error).not.toHaveBeenCalled();
+		// (The harness binds no register, so a provenance warn is logged too; not this row's subject.)
+		expect(logger.warn).not.toHaveBeenCalledWith('stock adjust broke', expect.anything());
+		expect(logger.debug).toHaveBeenCalledWith('Fallback order status refresh did not complete', {
+			context: { error: 'stock adjust broke', source: 'fallback-refresh' },
+		});
+	});
+
 	it('falls back to translated copy when a blocked submit carries no gateway sentence', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 		render(
@@ -649,6 +718,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			webViewProps.onLoad({});
 			webViewProps.onLoad({});
 			await jest.advanceTimersByTimeAsync(1000);
+			// The poll's read is in flight when the message lands.
+			expect(mockGet).toHaveBeenCalledTimes(1);
 			webViewProps.onMessage({
 				nativeEvent: {
 					data: { action: 'wcpos-payment-received', payload: postMessageOrder },
