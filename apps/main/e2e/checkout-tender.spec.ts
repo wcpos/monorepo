@@ -42,10 +42,10 @@ import {
 import { searchAndWaitForServer, type SearchProbe } from './search-probe';
 
 /**
- * A ledger leg row, `checkout-leg-<id>`. Its timeline dot (`checkout-leg-dot-<id>`) and tip
- * line (`checkout-leg-tip-<id>`) share the prefix, so a bare prefix counts one leg as two.
+ * A ledger leg row, `checkout-leg-<id>`. Its tip line (`checkout-leg-tip-<id>`) shares the
+ * prefix, so a bare prefix counts one leg as two.
  */
-const LEG_ROW = /^checkout-leg-(?!dot-|tip-)/;
+const LEG_ROW = /^checkout-leg-(?!tip-)/;
 
 /** Methods the tender grid can actually drive: enabled, and captured by the app itself. */
 function manualMethods(descriptors: Descriptor[]): Descriptor[] {

@@ -9,10 +9,10 @@ import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
-import { CheckoutTotals } from '../../cart/checkout-totals';
 import { useCheckoutBack } from './use-checkout-back';
 import { CheckoutColumn } from './checkout-column';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import { LedgerLegs } from '../tender/ledger-pane';
 import { initialTenderState } from '../tender/tender-state';
 
 import type { LedgerView } from '../tender/use-ledger-view';
@@ -303,7 +303,7 @@ it('reads the stilled totals independently, with balance only in the tender head
 	render(
 		<>
 			<CheckoutColumn order={order} />
-			<CheckoutTotals view={{ ...mockFlow, format: (minor) => `$${(minor / 100).toFixed(2)}` }} />
+			<LedgerLegs view={mockFlow} format={(minor) => `$${(minor / 100).toFixed(2)}`} closing />
 		</>
 	);
 	expect(mockUseFlow).toHaveBeenCalledTimes(1);

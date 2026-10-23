@@ -20,9 +20,10 @@ import { quickDiscountLabel, readQuickDiscountIntent } from '../hooks/quick-disc
 import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 
 /**
- *
+ * `readOnly` (the stilled cart in checkout and receipt): the coupon chips lose their remove
+ * control, so a coupon cannot change under a payment being taken.
  */
-export function Totals() {
+export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 	const t = useT();
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { format: formatNumber } = useNumberFormat();
@@ -105,7 +106,7 @@ export function Totals() {
 									<Chip
 										icon="discount"
 										label={label}
-										onClear={() => removeCoupon(code)}
+										onClear={readOnly ? undefined : () => removeCoupon(code)}
 										clearTestID={`remove-coupon-${code}`}
 										clearLabel={
 											intent

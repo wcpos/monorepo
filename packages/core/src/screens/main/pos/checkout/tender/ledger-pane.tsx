@@ -5,12 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import {
-	isFailedPaymentStatus,
-	isOfflineDeviceAuthorization,
-	isSettledPaymentRow,
-	toMinor,
-} from '@wcpos/order-math';
+import { isOfflineDeviceAuthorization, isSettledPaymentRow, toMinor } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { statusLabelKey, statusVariant } from './labels';
@@ -129,59 +124,90 @@ export function BalanceHeadline({
 	);
 }
 
-export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['format'] }) {
+/**
+ * The payments, one plain row per leg. `closing` ends the block with the cart's closing rows
+ * (Total, Paid, then Remaining or "Paid in full" as the lead row): the stilled cart states
+ * the balance once, here. The phone pane omits it; its `BalanceHeadline` is its closing.
+ */
+export function LedgerLegs({
+	view,
+	format,
+	closing = false,
+}: {
+	view: LedgerView;
+	format: Props['format'];
+	closing?: boolean;
+}) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const firstPending = view.rows.find((row) => row.status === 'pending');
 	const settled = view.rows.filter(isSettledPaymentRow);
 	const lastTime = settled.at(-1)?.events?.[0]?.t;
+	// A zero balance with nothing settled (every leg failed or voided) is not paid.
+	const paidInFull = view.balanceMinor === 0 && settled.length > 0;
+	const paidInFullText = lastTime
+		? t('pos_checkout.paid_in_full_at', { time: formatDate(new Date(lastTime), 'p') })
+		: t('pos_checkout.paid_in_full');
 
-	if (view.rows.length === 0) {
-		return view.invoiceSent ? (
-			<Text testID="checkout-ledger-sent" className="text-muted-foreground text-sm" decodeHtml>
-				{view.invoiceSent.destination
-					? t('pos_checkout.invoice_sent_awaiting', { destination: view.invoiceSent.destination })
-					: t('pos_checkout.invoice_sent_awaiting_customer')}
-			</Text>
+	const legs =
+		view.rows.length === 0 ? (
+			view.invoiceSent ? (
+				<Text testID="checkout-ledger-sent" className="text-muted-foreground text-sm" decodeHtml>
+					{view.invoiceSent.destination
+						? t('pos_checkout.invoice_sent_awaiting', { destination: view.invoiceSent.destination })
+						: t('pos_checkout.invoice_sent_awaiting_customer')}
+				</Text>
+			) : (
+				<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payments_yet')}</Text>
+			)
 		) : (
-			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payments_yet')}</Text>
+			<VStack space="xs" testID="checkout-ledger">
+				{view.rows.map((row) => (
+					<LedgerLeg
+						key={row.id}
+						row={row}
+						view={view}
+						format={format}
+						next={row === firstPending}
+					/>
+				))}
+				{paidInFull && !closing ? (
+					<Text className="text-success text-sm">{paidInFullText}</Text>
+				) : null}
+			</VStack>
 		);
-	}
+
+	if (!closing) return legs;
 
 	return (
-		<VStack space="xs" testID="checkout-ledger">
-			<Text className="text-sm tabular-nums">
-				{t('pos_checkout.paid_and_left', {
-					paid: format(view.paidMinor),
-					left: format(view.balanceMinor),
-				})}
-			</Text>
-			<View className="bg-muted h-1 flex-row overflow-hidden rounded-full">
-				<View className="bg-primary" style={{ flex: view.paidMinor }} />
-				<View style={{ flex: view.balanceMinor }} />
-			</View>
-			{view.rows.map((row) => (
-				<HStack key={row.id} className="gap-2">
-					<View className="items-center gap-1 pt-3">
-						<View
-							testID={`checkout-leg-dot-${row.id}`}
-							className={`size-2 rounded-full ${row.status === 'captured' ? 'bg-success' : isFailedPaymentStatus(row.status) ? 'bg-destructive' : 'bg-warning'}`}
-						/>
-						<View className="bg-border w-px flex-1" />
-					</View>
-					<View className="flex-1">
-						<LedgerLeg row={row} view={view} format={format} next={row === firstPending} />
-					</View>
+		<VStack space="xs">
+			{legs}
+			<View testID="checkout-ledger-totals" className="gap-2 pt-2">
+				<HStack className="justify-between">
+					<Text className="text-muted-foreground">{t('common.total')}</Text>
+					<Text testID="checkout-order-total" className="tabular-nums">
+						{format(view.totalMinor)}
+					</Text>
 				</HStack>
-			))}
-			{/* A zero balance with nothing settled (every leg failed or voided) is not paid. */}
-			{view.balanceMinor === 0 && settled.length > 0 ? (
-				<Text className="text-success text-sm">
-					{lastTime
-						? t('pos_checkout.paid_in_full_at', { time: formatDate(new Date(lastTime), 'p') })
-						: t('pos_checkout.paid_in_full')}
-				</Text>
-			) : null}
+				<HStack className="justify-between">
+					<Text className="text-muted-foreground">{t('pos_checkout.paid')}</Text>
+					<Text className="tabular-nums">{format(view.paidMinor)}</Text>
+				</HStack>
+				<HStack className="border-border justify-between border-t pt-2">
+					{paidInFull ? (
+						<Text className="text-success font-bold">{paidInFullText}</Text>
+					) : (
+						<Text className="font-bold">{t('pos_checkout.remaining')}</Text>
+					)}
+					{/* Paid in full has no amount to show; the zero stays readable for the specs. */}
+					<Text
+						testID="checkout-ledger-remaining"
+						className={paidInFull ? 'hidden' : 'font-bold tabular-nums'}
+					>
+						{format(view.balanceMinor)}
+					</Text>
+				</HStack>
+			</View>
 		</VStack>
 	);
 }
