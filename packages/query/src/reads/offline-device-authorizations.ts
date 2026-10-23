@@ -1,5 +1,6 @@
 import { catchError, EMPTY } from 'rxjs';
 
+import { LEDGER_META_KEY, OFFLINE_DEVICE_AUTHORIZATION } from '@wcpos/order-math';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -20,13 +21,9 @@ export function observeOfflineDeviceAuthorizations(engine: RxdbSyncEngine) {
 					selector: {
 						'payload.meta_data': {
 							$elemMatch: {
-								key: '_wcpos_payments',
+								key: LEDGER_META_KEY,
 								'value.payments': {
-									$elemMatch: {
-										capture_mode: 'device',
-										recorded_offline: true,
-										status: 'authorized',
-									},
+									$elemMatch: { ...OFFLINE_DEVICE_AUTHORIZATION },
 								},
 							},
 						},

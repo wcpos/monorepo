@@ -1,4 +1,4 @@
-import { isLivePaymentStatus, readCompletions, readLedger } from '@wcpos/order-math';
+import { isOfflineDeviceAuthorization, partitionVoidableRows } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { isDefinitiveMoneyRefusal, isMoneyAnswer, moneyRefusalOf } from '@wcpos/sync-core';
 
@@ -48,31 +48,11 @@ export type VoidPaymentsOutcome =
 	 * never to refund by hand.
 	 */
 	| { kind: 'offline'; paymentIds: string[] };
-/**
- * The live rows a cancel splits into the legs it will void and the legs it keeps. The server
- * never voids a captured row a completion counted, nor a captured non-manual row (an adopted
- * WooCommerce tender among them): those leave the balance only through a refund. One rule for
- * the void itself and for the cancel screen that announces it, so the screen never promises a
- * void the store refuses.
- */
-export function partitionLiveRows(meta_data: readonly MetaDataEntry[] | null | undefined): {
-	voidable: PaymentRow[];
-	retained: PaymentRow[];
-} {
-	const counted = new Set(
-		readCompletions(meta_data).flatMap(({ payment_ids }) => payment_ids ?? [])
-	);
-	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
-		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
-	const live = readLedger(meta_data).filter(({ status }) => isLivePaymentStatus(status));
-	return { voidable: live.filter(voidable), retained: live.filter((row) => !voidable(row)) };
-}
-
 export async function voidPayments(
 	order: VoidPaymentsOrder,
 	deps: VoidPaymentsDeps
 ): Promise<VoidPaymentsOutcome> {
-	const { voidable: liveRows, retained: kept } = partitionLiveRows(order.meta_data);
+	const { voidable: liveRows, retained: kept } = partitionVoidableRows(order.meta_data);
 	// #2798 thread 4341491614: such a leg is never sent a void, but it is reported, so a cancel
 	// that leaves money captured is never read as a clean one. The store's own rule, so `refused`.
 	const retained: VoidPaymentsFailure[] = kept.map((row) => ({
@@ -89,9 +69,7 @@ export async function voidPayments(
 	// outbox journals manual `offline: 'record'` payments only (ADR 0040 Decided 1 rule 2; a device
 	// `queue` is a later slice). A retained captured leg is reported once a cancel can reach the store.
 	if (!online) return { kind: 'offline', paymentIds: liveRows.map(({ id }) => id) };
-	const deviceHeld = liveRows.filter(
-		(row) => row.capture_mode === 'device' && row.recorded_offline && row.status === 'authorized'
-	);
+	const deviceHeld = liveRows.filter(isOfflineDeviceAuthorization);
 	if (deviceHeld.length)
 		return {
 			kind: 'voided',

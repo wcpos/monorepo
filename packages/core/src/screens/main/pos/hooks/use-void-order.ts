@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { readLedger } from '@wcpos/order-math';
+import { isInMotionPaymentStatus, readLedger } from '@wcpos/order-math';
 import { useQueryRuntime } from '@wcpos/query';
 import { restoreVoidedOrder, voidOrder, type VoidOrderResult } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -128,8 +128,6 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 				const latest = (queue.order ?? currentOrder).getLatest().toMutableJSON().payload;
 				orderPayload = latest;
 				const ledger = readLedger(latest.meta_data as Parameters<typeof readLedger>[0]);
-				const live = (row: { status: string }) =>
-					row.status === 'pending' || row.status === 'authorized';
 				const captured = (row: { status: string }) => row.status === 'captured';
 				// A terminal leg the service still holds and the ledger does not show yet counts too:
 				// in flight, the reader may still capture; settled with a captured row (the ledger write
@@ -140,11 +138,14 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 				const heldLive = heldUnmirrored && heldUnmirrored.phase !== 'final' ? 1 : 0;
 				const heldCaptured = heldUnmirrored && captured(heldUnmirrored.row) ? 1 : 0;
 				const paymentLegs = {
-					live: ledger.filter(live).length + heldLive,
+					live: ledger.filter((row) => isInMotionPaymentStatus(row.status)).length + heldLive,
 					captured: ledger.filter(captured).length + heldCaptured,
 					device:
-						ledger.filter((row) => row.capture_mode === 'device' && (live(row) || captured(row)))
-							.length +
+						ledger.filter(
+							(row) =>
+								row.capture_mode === 'device' &&
+								(isInMotionPaymentStatus(row.status) || captured(row))
+						).length +
 						(heldUnmirrored?.row.capture_mode === 'device' && (heldLive || heldCaptured) ? 1 : 0),
 				};
 				// A read: the session the void happens in, for the row. A void needs no open session,

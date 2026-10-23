@@ -1,6 +1,11 @@
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
-import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
+import {
+	activeAwaitingCustomer,
+	derive,
+	isInMotionPaymentStatus,
+	readLedger,
+} from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -53,8 +58,7 @@ export function TabChip({
 	// Contract 1.2: a sent order waits for its customer; its receipt moment is not a Paid one.
 	const sent = activeAwaitingCustomer(payload.meta_data) !== null;
 	const waiting = rows.find(
-		(row) =>
-			row.capture_mode === 'server' && (row.status === 'pending' || row.status === 'authorized')
+		(row) => row.capture_mode === 'server' && isInMotionPaymentStatus(row.status)
 	);
 	const label =
 		saveState?.kind === 'rejected'

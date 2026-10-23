@@ -13,9 +13,11 @@ import {
 	derive,
 	fromMinor,
 	isLivePaymentStatus,
+	isOfflineDeviceAuthorization,
 	mintDevicePayment,
 	mintServerPayment,
 	type OrderPaymentSummary,
+	partitionVoidableRows,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
@@ -98,7 +100,6 @@ import {
 	GatewayMirrorError,
 	submitStillDone,
 } from '../payments/submit-gateway-payment';
-import { partitionLiveRows } from '../payments/void-payments';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -187,7 +188,7 @@ export interface TenderFlow {
 	rows: PaymentRow[];
 	/** Rows with status pending | authorized | captured — money that is currently held. */
 	liveRows: PaymentRow[];
-	/** The live rows a cancel keeps for a refund instead of voiding (`partitionLiveRows`). */
+	/** The live rows a cancel keeps for a refund instead of voiding (order-math `partitionVoidableRows`). */
 	retainedRows: PaymentRow[];
 	hasLiveLeg: boolean;
 	online: boolean;
@@ -404,7 +405,7 @@ export function useTenderFlow(
 		[rows]
 	);
 	const retainedRows = React.useMemo(
-		() => partitionLiveRows(payload.meta_data).retained,
+		() => partitionVoidableRows(payload.meta_data).retained,
 		[payload.meta_data]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
@@ -1746,9 +1747,8 @@ export function useTenderFlow(
 			if (
 				rows.some(
 					(row) =>
-						row.capture_mode === 'device' &&
-						((row.recorded_offline && row.status === 'authorized') ||
-							(!online && isLivePaymentStatus(row.status)))
+						isOfflineDeviceAuthorization(row) ||
+						(!online && row.capture_mode === 'device' && isLivePaymentStatus(row.status))
 				)
 			) {
 				logger.info(t('pos_checkout.device_void_needs_settlement'), {

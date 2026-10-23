@@ -23,12 +23,18 @@ test('public value surface is exactly the spec', () => {
 		'isCompletingStatus',
 		'isFailedPaymentStatus',
 		'isFinalPaymentStatus',
+		// Added 2026-10-23 (C6, ADR 0033 item 8): the row-state vocabulary — money in motion, the
+		// offline device authorization, and §3.4 rule 2's voidable partition — one home for the
+		// copies in core and query.
+		'isInMotionPaymentStatus',
 		'isLivePaymentStatus',
+		'isOfflineDeviceAuthorization',
 		'isSettledPaymentRow',
 		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
 		'parsePaymentsContract',
+		'partitionVoidableRows',
 		'readAwaitingCustomer',
 		'readCompletions',
 		'readLedger',
@@ -67,4 +73,12 @@ test('public value surface is exactly the spec', () => {
 test('settlementPatch returns the settlement money patch', () => {
 	const result = { patch: { total: '10.00' } } as api.SettleAggregateResult;
 	expect(api.settlementPatch(result)).toBe(result.patch);
+});
+
+test('the offline device authorization literal is part of the surface', () => {
+	expect(api.OFFLINE_DEVICE_AUTHORIZATION).toEqual({
+		capture_mode: 'device',
+		recorded_offline: true,
+		status: 'authorized',
+	});
 });

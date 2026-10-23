@@ -24,12 +24,15 @@ export {
 	LEDGER_META_KEY,
 	LEDGER_SCHEMA,
 	PAYMENT_METHOD_INDEX_META_KEY,
-	LIVE_PAYMENT_STATUSES,
 	isLivePaymentStatus,
 	isSettledPaymentRow,
 	isFinalPaymentStatus,
 	isFailedPaymentStatus,
+	isInMotionPaymentStatus,
+	isOfflineDeviceAuthorization,
+	OFFLINE_DEVICE_AUTHORIZATION,
 	hasLiveSettlementLeg,
+	partitionVoidableRows,
 } from './ledger';
 export type {
 	MetaDataEntry,

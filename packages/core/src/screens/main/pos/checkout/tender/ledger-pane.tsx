@@ -5,7 +5,12 @@ import { HStack } from '@wcpos/components/hstack';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { isFailedPaymentStatus, isSettledPaymentRow, toMinor } from '@wcpos/order-math';
+import {
+	isFailedPaymentStatus,
+	isOfflineDeviceAuthorization,
+	isSettledPaymentRow,
+	toMinor,
+} from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { statusLabelKey, statusVariant } from './labels';
@@ -235,7 +240,7 @@ function LedgerLeg({
 			{row.recorded_offline ? (
 				<Text className="text-muted-foreground text-xs">
 					{t(
-						row.capture_mode === 'device' && row.status === 'authorized'
+						isOfflineDeviceAuthorization(row)
 							? 'pos_checkout.settles_later'
 							: 'pos_checkout.recorded_offline'
 					)}
