@@ -516,6 +516,24 @@ describe('useTenderFlow', () => {
 		]);
 	});
 
+	// A record answered on a sale another till reopened says so at the press, as Try again does.
+	it('a record answered on a reopened sale says the sale was reopened elsewhere', async () => {
+		mockPayload.id = 42;
+		const reopened = { status: 'pos-open', balance: '0.00' };
+		mockRecordManualPayment.mockResolvedValue({ ...recorded, order: reopened, notMirrored: null });
+		mockCompleteOrderFlow.mockResolvedValueOnce('partial');
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.takeTender());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({ source: 'manual', order: reopened }),
+			expect.anything()
+		);
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
 	// ADR 0040 §1.3: a sent command whose answer never arrived (this process or a previous one)
 	// offers no tile and no close, only a re-send of the same journaled command.
 	it('an unanswered command gates the tiles and Try again re-sends it', async () => {
@@ -583,78 +601,48 @@ describe('useTenderFlow', () => {
 	});
 
 	// A close replayed after a remote reopen answers its stored completion with the order as it
-	// now stands (`Payments_Controller.php:452-468`), and the resident after the mirror decides as
-	// for a first answer (Codex 4341491563 on #2798): a paid answer the resident does not show
-	// finishes nothing, and only a refresh that lands tells a reopen from a lag.
-	it.each([
-		['a paid answer the resident shows', 'completed', undefined, undefined, 'completed'],
-		['a reopened answer', 'pos-open', undefined, undefined, 'reopened'],
-		[
-			'a paid answer, resident open, refresh confirms it',
-			'completed',
-			'pos-open',
-			'refreshed',
-			'reopened',
-		],
-		[
-			'a paid answer, resident open, refresh fails',
-			'completed',
-			'pos-open',
-			'failed',
-			'unconfirmed',
-		],
-	] as const)(
-		'a replayed close with %s finishes the sale only when the resident reads paid',
-		async (_, status, resident, refreshed, closed) => {
-			const { resolveCompletionAttempt } = jest.requireMock('@wcpos/query/store-local');
-			mockPayload = {
-				id: 42,
-				total: '0.00',
-				meta_data: [],
-				...(resident ? { status: resident } : {}),
-			};
-			if (refreshed) jest.mocked(provenance.refreshOrderRecord).mockResolvedValueOnce(refreshed);
-			const answer = {
-				kind: 'close' as const,
-				data: { order: { status }, completion: { n: 1, id: 'c1' } },
-			};
-			enterCheckout(order.uuid);
-			expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
-			mockResend.mockResolvedValueOnce([answer]);
-			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.retryCommand());
-			if (closed !== 'completed') {
-				expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
-					'checkout'
-				);
-				expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
-			}
-			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(closed === 'completed' ? 1 : 0);
-			// A reopen ends the completion attempt; an unconfirmed close keeps it for the bridge.
-			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(closed === 'reopened' ? 1 : 0);
-			if (closed !== 'completed')
-				expect(mockInfo).toHaveBeenCalledWith(
-					closed === 'reopened'
-						? 'pos_checkout.sale_reopened_elsewhere'
-						: 'pos_checkout.payment_confirming',
-					expect.objectContaining({ showToast: true })
-				);
-		}
-	);
+	// now stands (`Payments_Controller.php:452-468`). It lands through the table: the completion
+	// judges it with the resident (sale-completion.test.ts), and a close it did not finish was
+	// reopened (land-answer.test.ts).
+	it('a replayed close the completion does not finish says the sale was reopened', async () => {
+		const answer = {
+			kind: 'close' as const,
+			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+		};
+		mockResend.mockResolvedValueOnce([answer]);
+		mockCompleteOrderFlow.mockResolvedValueOnce('not-completed');
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.retryCommand());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'zero-balance', order: { status: 'completed' } },
+			undefined
+		);
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.sale_reopened_elsewhere',
+			expect.objectContaining({ showToast: true })
+		);
+	});
 
 	// A replayed gateway submit answers its stored outcome with the order as it now stands.
+	// The paid/settled × status mapping is answerOf's table (land-answer.test.ts).
 	it.each([
 		['paid', 'completed', 1],
-		['paid', 'pos-open', 0],
-		['settled', 'pending', 1],
 		['settled', 'pos-partial', 0],
 	])(
 		'a replayed %s submit with a %s summary finishes the sale only while done',
 		async (outcome, status, finished) => {
+			const { resolveCompletionAttempt } = jest.requireMock('@wcpos/query/store-local');
 			mockResend.mockResolvedValueOnce([{ kind: 'submit', data: { outcome, order: { status } } }]);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.retryCommand());
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
+			// A reopen since ends the completion attempt and says so, as at the press.
+			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(1 - finished);
+			if (!finished)
+				expect(mockInfo).toHaveBeenCalledWith(
+					'pos_checkout.sale_reopened_elsewhere',
+					expect.objectContaining({ showToast: true })
+				);
 		}
 	);
 
@@ -678,11 +666,10 @@ describe('useTenderFlow', () => {
 		]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => result.current.retryCommand());
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
-			source: 'gateway',
-			order: summary,
-			stamp,
-		});
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'gateway', order: summary, stamp },
+			undefined
+		);
 	});
 
 	// A recovered send whose stamp disappeared finishes nothing and frees the print claim.
@@ -724,15 +711,19 @@ describe('useTenderFlow', () => {
 	});
 
 	// A cash record whose answer was lost, then a remote reopen: the replay answers the captured
-	// row with the order as it now stands, open at a zero balance. Mirrored and settled, but the
-	// reopened sale is not finished from it.
+	// row with the order as it now stands, open at a zero balance. Mirrored and settled; the
+	// completion leaves it partial, and the table says reopened (land-answer.test.ts).
 	it('a replayed record whose sale was reopened since does not finish the sale', async () => {
 		const row = payment({ amount: '92.95', tendered: '100.00' });
 		const reopened = { status: 'pos-open', total: '92.95', paid: '92.95', balance: '0.00' };
 		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: reopened } }]);
+		mockCompleteOrderFlow.mockResolvedValueOnce('partial');
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => result.current.retryCommand());
-		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({ source: 'manual', order: reopened }),
+			undefined
+		);
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.sale_reopened_elsewhere',
 			expect.objectContaining({ showToast: true })
@@ -752,7 +743,8 @@ describe('useTenderFlow', () => {
 				row,
 				order: summary,
 				remainingMinor: 0,
-			})
+			}),
+			undefined
 		);
 		expect(mockError).not.toHaveBeenCalled();
 	});
@@ -1003,7 +995,7 @@ describe('useTenderFlow', () => {
 		});
 		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			{ source: 'zero-balance' },
+			{ source: 'zero-balance', order: { status: 'completed' } },
 			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
 	});
@@ -3333,6 +3325,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 	it('a settled answer without the receipt stage says the paid sentence, never the sent one', async () => {
 		mockAutoShowReceipt = false;
 		mockPayload.number = '1042';
+		mockCompleteOrderFlow.mockResolvedValueOnce('completed');
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'settled', payment: null, order: summary('pending') },
 		});
@@ -3418,6 +3411,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		mockCompleteOrderFlow.mockImplementationOnce(async () => {
 			mockPayload = { ...mockPayload, status: 'pos-open' } as typeof mockPayload;
+			return 'not-completed';
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		try {
@@ -3434,6 +3428,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 	});
 
 	it('a replayed paid submit whose sale was reopened since finishes nothing and says so', async () => {
+		const { resolveCompletionAttempt } = jest.requireMock('@wcpos/query/store-local');
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'paid', payment: null, order: summary('pos-open') },
 		});
@@ -3441,6 +3436,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		await act(async () => result.current.takeTender());
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		// The reopen ends the completion attempt at the press, as a reopened close does.
+		expect(resolveCompletionAttempt).toHaveBeenCalledWith(expect.anything(), order.uuid);
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.sale_reopened_elsewhere',
 			expect.objectContaining({ showToast: true })
@@ -4831,7 +4828,7 @@ describe('cash rounding (#66, #84)', () => {
 		expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			{ source: 'zero-balance' },
+			{ source: 'zero-balance', order: { status: 'completed' } },
 			expect.anything()
 		);
 	});
@@ -4850,7 +4847,7 @@ describe('cash rounding (#66, #84)', () => {
 		const close = mockPosterInputs.at(-1) as { approval: { total: string } };
 		expect(close.approval.total).toBe('0.00');
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			{ source: 'zero-balance' },
+			{ source: 'zero-balance', order: { status: 'completed' } },
 			expect.anything()
 		);
 	});

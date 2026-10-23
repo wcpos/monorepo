@@ -16,6 +16,9 @@ import {
 	selectReceipt,
 } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
+import * as saleCompletion from '../sale-completion';
+
+import type { SaleOutcome } from '../sale-completion';
 
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();
@@ -87,6 +90,9 @@ jest.mock('../../contexts/current-order/context', () => ({
 		getCurrentOrderID: () => mockSelectedOrder,
 	}),
 }));
+
+/** The store's close answer for a paid sale. */
+const closed = { source: 'zero-balance', order: { status: 'completed' } } as SaleOutcome;
 
 function makeOrder(id: number | null = 42) {
 	const reduced = { id: 1, meta_data: [{ key: '_reduced_stock', value: '1' }] };
@@ -161,13 +167,30 @@ describe('useCompleteOrderFlow', () => {
 		const { record, reduced } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current({ source: 'zero-balance' }));
+		await act(async () => result.current(closed));
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+	});
+
+	// The store took it but no refresh confirmed the resident: the bridge finishes it on adoption.
+	it('an unconfirmed sale says the payment is confirming and stays in checkout', async () => {
+		jest.spyOn(saleCompletion, 'completeSale').mockResolvedValueOnce('unconfirmed');
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		let returned: unknown;
+		await act(async () => {
+			returned = await result.current(closed);
+		});
+		expect(returned).toBe('unconfirmed');
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_confirming',
+			expect.objectContaining({ showToast: true, context: { orderUUID: 'uuid-42' } })
+		);
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(true);
 	});
 
 	it('closes the phone sheet when receipts are disabled', async () => {
@@ -314,9 +337,7 @@ it('completes inside the caller queue without waiting on itself', async () => {
 	const { record } = makeOrder();
 	const { result } = renderHook(() => useCompleteOrderFlow(record));
 	await act(async () => {
-		await enqueueOrderMutation('uuid-42', (queue) =>
-			result.current({ source: 'zero-balance' }, queue)
-		);
+		await enqueueOrderMutation('uuid-42', (queue) => result.current(closed, queue));
 	});
 	expect(mockInfo).toHaveBeenCalledWith(
 		'Sale uuid-42 completed',
@@ -434,7 +455,7 @@ it.each([null, 'B', 'uuid-42'])(
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
 		await act(async () => {
-			const finishing = result.current({ source: 'zero-balance' });
+			const finishing = result.current(closed);
 			selectReceipt(receipt);
 			await finishing;
 		});

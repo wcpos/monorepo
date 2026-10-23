@@ -37,7 +37,8 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 					readBindingStatus: () =>
 						bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
 					readRegisterId: () => bindingRef.current.registerId,
-					complete: (target, slot) => complete(target, { source: 'zero-balance' }, slot),
+					complete: (target, slot, summary) =>
+						complete(target, { source: 'zero-balance', order: summary }, slot),
 					closeSale,
 				},
 				{

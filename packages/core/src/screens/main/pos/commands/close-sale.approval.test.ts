@@ -141,6 +141,6 @@ it('a zero-balance close is refused when the covered total changed, and closes o
 			...deps,
 			approval: { total: '12.00', currency: 'EUR' },
 		})
-	).toMatchObject({ kind: 'completed', completion: { n: 1, id: 'c1' } });
+	).toMatchObject({ kind: 'answered', order: { status: 'completed' } });
 	expect(completions).toBe(1);
 });

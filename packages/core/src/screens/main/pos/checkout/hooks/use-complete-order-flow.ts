@@ -12,19 +12,19 @@ import { returnToTill } from '../till-route';
 import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-import { completeSale, type SaleOutcome } from '../sale-completion';
+import { completeSale, type CompletionResult, type SaleOutcome } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
-/** Finish checkout from the freshest available order before leaving the cart. */
+/** Finish checkout from the freshest available order before leaving the cart; says how it ended. */
 export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
 	receiptHost: 'stage' | 'modal' = 'stage',
 	checkoutHost?: CheckoutHost
-): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<void> {
+): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<CompletionResult> {
 	const complete = useCompleteOrderFlowForOrder(receiptHost, checkoutHost);
 	return React.useCallback((outcome, queue) => complete(order, outcome, queue), [complete, order]);
 }
@@ -75,10 +75,10 @@ export function useCompleteOrderFlowForOrder(
 						showToast: true,
 						context: { orderUUID: order.uuid },
 					});
-					return;
+					return result;
 				case 'partial':
 				case 'not-completed':
-					return;
+					return result;
 				case 'completed':
 				case 'sent': // A sent sale leaves the till exactly as a completed one does (spec §4.2).
 					break;
@@ -86,11 +86,11 @@ export function useCompleteOrderFlowForOrder(
 					return result satisfies never;
 			}
 			// The webview already routed before catch-up; never route it a second time.
-			if (outcome.source === 'gateway-snapshot') return;
+			if (outcome.source === 'gateway-snapshot') return result;
 			if (getCurrentOrderID() !== order.uuid) {
 				if (getCheckoutModeSnapshot().selectedReceiptOrder === order.uuid) selectReceipt(null);
 				leaveCheckout(order.uuid);
-				return;
+				return result;
 			}
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
@@ -104,7 +104,7 @@ export function useCompleteOrderFlowForOrder(
 				} else {
 					returnToTill(router, screenSize === 'sm', 'products');
 				}
-				return;
+				return result;
 			}
 
 			if (!uiSettings.autoShowReceipt) {
@@ -112,6 +112,7 @@ export function useCompleteOrderFlowForOrder(
 				setCurrentOrderID('');
 				leaveHost();
 			}
+			return result;
 		},
 		[
 			ctx,

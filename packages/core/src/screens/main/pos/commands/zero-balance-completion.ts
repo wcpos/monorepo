@@ -1,3 +1,4 @@
+import type { OrderPaymentSummary } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 import { readAwaitingAnswer, resolveCompletionAttempt } from '@wcpos/query/store-local';
 
@@ -16,8 +17,8 @@ import type { OrderMutationContext } from '../hooks/order-mutation-queue';
  * resolves that attempt: offline and an unapproved change sent nothing, and a definitive refusal
  * is the store's answer, so no later replay can finish this sale. `outstanding` keeps it: money
  * still moving (a leg settling) can cover the balance and the replay finishes the sale then.
- * `unconfirmed` keeps it: the store closed the sale and the bridge finishes it once the paid order
- * is adopted. A close that throws (no answer) keeps it too: the journaled command is re-sent.
+ * An answered close goes to `complete`, which judges it with the resident and keeps or resolves
+ * the attempt. A close that throws (no answer) keeps it: the journaled command is re-sent.
  */
 export async function writeZeroBalanceCompletion(
 	ctx: SaleContext,
@@ -40,22 +41,25 @@ export async function writeZeroBalanceCompletion(
 		aggregateOnly?: () => boolean;
 		write: (changes: PayloadChanges) => Promise<unknown>;
 		queue: OrderMutationContext;
-		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
+		complete: (
+			order: EngineRecord<'orders'>,
+			queue: OrderMutationContext,
+			summary: OrderPaymentSummary
+		) => Promise<unknown>;
 		online: () => boolean;
 		close: (order: EngineRecord<'orders'>) => Promise<CloseOutcome>;
 	}
 ): Promise<
 	| 'superseded'
 	| { superseded: true; reason: string }
-	| Exclude<CloseOutcome, { kind: 'completed' }>
+	| Exclude<CloseOutcome, { kind: 'answered' }>
 	| undefined
 > {
 	const latest = order.getLatest().payload;
 	// Reject an obsolete boundary before allocating irreversible sale provenance.
 	if (changes(latest) === null) return 'superseded';
-	const unfinished = async (outcome: Exclude<CloseOutcome, { kind: 'completed' }>) => {
-		if (outcome.kind !== 'outstanding' && outcome.kind !== 'unconfirmed')
-			await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+	const unfinished = async (outcome: Exclude<CloseOutcome, { kind: 'answered' }>) => {
+		if (outcome.kind !== 'outstanding') await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return outcome;
 	};
 	if (!online()) {
@@ -96,6 +100,6 @@ export async function writeZeroBalanceCompletion(
 	if (superseded) return 'superseded';
 	if (!written) throw new Error('zero_balance_completion_failed');
 	const closed = await close(order);
-	if (closed.kind !== 'completed') return unfinished(closed);
-	await complete(order, queue);
+	if (closed.kind !== 'answered') return unfinished(closed);
+	await complete(order, queue, closed.order);
 }

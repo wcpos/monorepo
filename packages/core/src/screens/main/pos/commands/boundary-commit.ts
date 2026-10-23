@@ -44,7 +44,7 @@ export async function commitAtBoundary(
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
-		complete: (order: EngineRecord<'orders'>, queue: OrderMutationContext) => Promise<unknown>;
+		complete: Parameters<typeof writeZeroBalanceCompletion>[1]['complete'];
 		closeSale: ReturnType<typeof useCloseSale>;
 	},
 	{
