@@ -31,9 +31,25 @@ describe('withBase', () => {
 		).toBe('<head><base target="_top" href="https://s.test/receipts/?a=1&amp;b=2"></head>');
 	});
 
-	it('leaves a declared base without an href alone', () => {
-		const html = '<head><base target="_top"><p>R</p></head>';
-		expect(withBase(html, 'https://s.test/r')).toBe(html);
+	it('injects the base when the declared one has no href', () => {
+		expect(withBase('<head><base target="_top"><p>R</p></head>', 'https://s.test/r')).toBe(
+			'<head><base href="https://s.test/r"><base target="_top"><p>R</p></head>'
+		);
+	});
+
+	it('resolves a single-quoted or unquoted declared href', () => {
+		expect(withBase("<base href='images/'>", 'https://s.test/r/x')).toBe(
+			'<base href="https://s.test/r/images/">'
+		);
+		expect(withBase('<base href=images/ target=_top>', 'https://s.test/r/x')).toBe(
+			'<base href="https://s.test/r/images/" target=_top>'
+		);
+	});
+
+	it('unescapes a declared href once', () => {
+		expect(withBase('<base href="/r?q=&amp;quot;">', 'https://s.test/')).toBe(
+			'<base href="https://s.test/r?q=&amp;quot;">'
+		);
 	});
 
 	it('prepends the base when the head tag never closes', () => {
