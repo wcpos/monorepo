@@ -482,6 +482,14 @@ jest.mock('./use-confirm-offline-tender', () => ({
 		dialog: null,
 	}),
 }));
+// The Clear attempt confirm (its own suite); yes by default.
+const mockConfirmClear = jest.fn();
+jest.mock('./use-confirm-clear-attempt', () => ({
+	useConfirmClearAttempt: () => ({
+		confirmClearAttempt: () => mockConfirmClear() ?? Promise.resolve(true),
+		dialog: 'clear-dialog',
+	}),
+}));
 
 describe('useTenderFlow', () => {
 	beforeEach(() => {
@@ -4056,7 +4064,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 
 		it.each([
 			['pos-open', '92.95', 'pos_checkout.attempt_cleared_reopened'],
-			['on-hold', '0.00', 'pos_checkout.attempt_cleared'],
+			['on-hold', '0.00', 'pos_checkout.attempt_cleared_covered'],
 			['on-hold', '92.95', 'pos_checkout.attempt_cleared'],
 		])(
 			'clearAttempt answered %s with balance %s says %s, with the cashier and the attempt',
@@ -4065,6 +4073,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				mockManualPost.mockResolvedValue({ data: { order: { ...summary(status), balance } } });
 				const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 				await act(async () => result.current.clearAttempt());
+				expect(mockConfirmClear).toHaveBeenCalledTimes(1);
 				expect(mockManualPost).toHaveBeenCalledWith(
 					'orders/42/payment-methods/wcpos_email_invoice/cancel',
 					{ attempt_id: 'attempt-9' }
@@ -4082,6 +4091,21 @@ describe('gateway capture mode (contract 1.2)', () => {
 				expect(result.current.busy).toBe(false);
 			}
 		);
+
+		it('clearAttempt asks first: a decline posts nothing and frees busy for the next press', async () => {
+			mockPayload.meta_data = stranded();
+			mockConfirmClear.mockResolvedValueOnce(false);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.clearDialog).toBe('clear-dialog');
+			await act(async () => result.current.clearAttempt());
+			expect(mockConfirmClear).toHaveBeenCalledTimes(1);
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(result.current.busy).toBe(false);
+			mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
+			await act(async () => result.current.clearAttempt());
+			expect(mockConfirmClear).toHaveBeenCalledTimes(2);
+			expect(mockManualPost).toHaveBeenCalledTimes(1);
+		});
 
 		it('clearAttempt the store will not do yet warns attempt_not_cleared, no code', async () => {
 			mockPayload.meta_data = stranded();

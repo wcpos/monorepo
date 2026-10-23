@@ -228,6 +228,7 @@ export function TenderCheckout({ order }: Props) {
 					</VStack>
 				</DialogBody>
 				{flow.offlineDialog}
+				{flow.clearDialog}
 			</DialogContent>
 		</Dialog>
 	);

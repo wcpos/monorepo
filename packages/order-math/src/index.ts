@@ -103,6 +103,7 @@ export {
 	withAwaitingCustomer,
 	readGatewayAttempts,
 	withGatewayAttempt,
+	withSupersededAttempts,
 } from './payments';
 export type {
 	MetaDataEntry,

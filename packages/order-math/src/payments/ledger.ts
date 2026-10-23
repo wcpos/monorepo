@@ -2,6 +2,7 @@
  * Ledger helpers preserve the typed-meta wire shape while keeping all updates immutable.
  */
 
+import { parseMetaValue } from './meta-value';
 import { fromMinor, toMinor } from './money';
 import { readCompletions } from './provenance';
 
@@ -73,15 +74,6 @@ export type MetaDataEntry = {
 	value?: unknown;
 	[k: string]: unknown;
 };
-
-export function parseMetaValue(value: unknown): unknown {
-	if (typeof value !== 'string') return value;
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return null;
-	}
-}
 
 export function readLedger(metaData: readonly MetaDataEntry[] | null | undefined): PaymentRow[] {
 	const entry = metaData?.find(({ key }) => key === LEDGER_META_KEY);

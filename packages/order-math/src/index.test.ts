@@ -71,6 +71,8 @@ test('public value surface is exactly the spec', () => {
 		'withLedger',
 		'withMetaReplaced',
 		'withSaleProvenance',
+		// Added 2026-10-24 (#2900 S2b): the store's supersede rules, mirrored until the next adoption.
+		'withSupersededAttempts',
 	]);
 });
 

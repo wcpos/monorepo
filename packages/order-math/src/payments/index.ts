@@ -53,7 +53,12 @@ export {
 	withAwaitingCustomer,
 } from './awaiting-customer';
 export type { AwaitingCustomerStamp } from './awaiting-customer';
-export { type GatewayAttempt, readGatewayAttempts, withGatewayAttempt } from './gateway-attempts';
+export {
+	type GatewayAttempt,
+	readGatewayAttempts,
+	withGatewayAttempt,
+	withSupersededAttempts,
+} from './gateway-attempts';
 export type {
 	PaymentKind,
 	CaptureMode,

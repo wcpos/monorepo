@@ -112,6 +112,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 			</View>
 			<View className="flex-1 p-4">{body}</View>
 			{flow.offlineDialog}
+			{flow.clearDialog}
 		</View>
 	);
 }

@@ -80,7 +80,10 @@ jest.mock('@wcpos/components/tile', () => ({
 		</button>
 	),
 }));
-jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
+// The real hook answers null for a missing date; the line falls back to its unknown copy then.
+jest.mock('../../../hooks/use-date-format', () => ({
+	useDateFormat: (date: unknown) => (date === null ? null : 'Oct 8, 10:35 PM'),
+}));
 // The declared-fields helpers draw host controls; their native deps stay out of jsdom.
 type MockCheckboxProps = {
 	testID?: string;
@@ -266,6 +269,7 @@ function makeFlow(count = 1): TenderFlow {
 		unansweredCommand: false,
 		retryCommand: jest.fn(async () => undefined),
 		offlineDialog: null,
+		clearDialog: null,
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
@@ -1227,6 +1231,87 @@ describe('declared UI (contract 1.2)', () => {
 		);
 		fireEvent.click(screen.getByTestId('checkout-cancel-invoice'));
 		expect(flow.cancelInvoice).toHaveBeenCalled();
+	});
+	describe('an unanswered gateway attempt', () => {
+		const stranded = {
+			id: 'attempt-9',
+			methodId: 'wcpos_email_invoice',
+			cashierId: 7,
+			sentAtGmt: '2026-10-08T10:35:00.000Z',
+			awaiting: null,
+			flagged: false,
+		};
+		const check =
+			"Check the provider's dashboard before taking payment again. The store keeps checking and records it if the money was taken.";
+		const line = () => screen.queryByTestId('checkout-attempt-unanswered');
+		const sentence = () => line()?.querySelector('span')?.textContent;
+		it('names the method and the time, then what to check; never that it failed', () => {
+			render(<TenderPane flow={invoiceFlow({ unansweredAttempt: stranded })} format={String} />);
+			expect(sentence()).toBe(
+				`Your Email Invoice payment sent at Oct 8, 10:35 PM has no answer from the provider yet. ${check}`
+			);
+			expect(sentence()).not.toMatch(/fail/i);
+		});
+		it.each([
+			['no descriptor for its method', { ...stranded, methodId: 'gone_gateway' }],
+			['no send time', { ...stranded, sentAtGmt: null }],
+		])('with %s says the unknown copy', (_, unansweredAttempt) => {
+			render(<TenderPane flow={invoiceFlow({ unansweredAttempt })} format={String} />);
+			expect(sentence()).toBe(
+				`An earlier payment attempt on this order has no answer from the provider yet. ${check}`
+			);
+		});
+		it.each([
+			[
+				'an invoice awaits the customer',
+				{
+					invoiceSent: {
+						method_id: 'wcpos_email_invoice',
+						destination: null,
+						attempt_id: 'attempt-0',
+						sent_at_gmt: '2026-10-08T10:35:00.000Z',
+						cashier_id: 7,
+					},
+				},
+			],
+			['a money command is unanswered', { unansweredCommand: true }],
+		])('is hidden while %s', (_, overrides) => {
+			render(
+				<TenderPane
+					flow={invoiceFlow({ unansweredAttempt: stranded, ...overrides })}
+					format={String}
+				/>
+			);
+			expect(line()).toBeNull();
+			expect(screen.queryByTestId('checkout-clear-attempt')).toBeNull();
+		});
+		it('shows on a covered sale (balance 0, total above 0)', () => {
+			const flow = invoiceFlow({ unansweredAttempt: stranded, balanceMinor: 0, paidMinor: 9295 });
+			render(<TenderPane flow={flow} format={String} />);
+			expect(screen.getByTestId('checkout-keypad')).not.toBeNull();
+			expect(line()).not.toBeNull();
+		});
+		it('Clear attempt is a quiet destructive button that asks the flow', () => {
+			const flow = invoiceFlow({ unansweredAttempt: stranded });
+			render(<TenderPane flow={flow} format={String} />);
+			const clear = screen.getByTestId('checkout-clear-attempt');
+			expect(clear.textContent).toBe('Clear attempt');
+			expect(clear.dataset.variant).toBe('outline-destructive');
+			fireEvent.click(clear);
+			expect(flow.clearAttempt).toHaveBeenCalledTimes(1);
+		});
+		it.each([
+			['offline', { online: false }],
+			['busy', { busy: true }],
+		])('Clear attempt is disabled while %s', (_, overrides) => {
+			render(
+				<TenderPane
+					flow={invoiceFlow({ unansweredAttempt: stranded, ...overrides })}
+					format={String}
+				/>
+			);
+			expect(screen.getByTestId('checkout-clear-attempt').hasAttribute('disabled')).toBe(true);
+		});
 	});
 	it('lists an unavailable gateway with the split reason', () => {
 		const flow = invoiceFlow({

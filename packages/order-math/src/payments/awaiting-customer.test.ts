@@ -40,16 +40,17 @@ describe('readAwaitingCustomer', () => {
 			'attempt-2': { fate: 'sent', method_id: 'g', cashier_id: 7, awaiting: null },
 		});
 		expect(readAwaitingCustomer(meta)).toEqual(stamp);
-		expect(
-			readAwaitingCustomer(map({ a: { fate: 'sent', awaiting: { destination: null } } }))
-		).toEqual({
-			method_id: '',
+		const sparse = { fate: 'sent', method_id: 'g', awaiting: { destination: null } };
+		expect(readAwaitingCustomer(map({ a: sparse }))).toEqual({
+			method_id: 'g',
 			destination: null,
 			attempt_id: 'a',
 			sent_at_gmt: '',
 			cashier_id: 0,
 		});
 		expect(readAwaitingCustomer(map({ a: { fate: 'sent', awaiting: null } }))).toBeNull();
+		// #2900 S2b: an entry with no method is skipped; its cancel could never be posted.
+		expect(readAwaitingCustomer(map({ a: { ...sparse, method_id: undefined } }))).toBeNull();
 		expect(
 			readAwaitingCustomer([{ key: GATEWAY_ATTEMPTS_META_KEY, value: 'not json' }])
 		).toBeNull();

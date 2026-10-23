@@ -211,6 +211,78 @@ describe('submitGatewayPayment', () => {
 			notMirrored: { cause: new Error('disk') },
 		});
 	});
+	describe('the mirror supersedes as the store does', () => {
+		const strandedEntry = { fate: 'sent', method_id: 'custom_gateway', awaiting: null };
+		// attempt-0 awaits the customer (the stamp), attempt-8 is stranded, attempt-7 was cancelled.
+		const before = withGatewayAttempt(
+			withGatewayAttempt(withAwaitingCustomer([], stamp), 'attempt-8', strandedEntry),
+			'attempt-7',
+			{ ...strandedEntry, fate: 'cancelled' }
+		);
+		const fates = (meta: MetaDataEntry[]) =>
+			Object.fromEntries(
+				Object.entries(attemptsOf(meta)).map(([id, entry]) => [
+					id,
+					(entry as { fate: string }).fate,
+				])
+			);
+		const answer = (outcome: string, status: string, payment: PaymentRow | null = null) => ({
+			data: { outcome, payment, order: { ...summary(status), balance: '0.00' } },
+		});
+
+		it('sent supersedes an older stranded and an older awaited attempt, and stamps the new one', async () => {
+			const { post, order, deps, written } = harness(before);
+			post.mockResolvedValue(answer('sent', 'pending'));
+			await submitGatewayPayment(order, 'wcpos_email_invoice', input, deps);
+			expect(fates(written[0])).toEqual({
+				'attempt-0': 'superseded',
+				'attempt-8': 'superseded',
+				'attempt-7': 'cancelled',
+				'attempt-1': 'sent',
+			});
+			expect(readAwaitingCustomer(written[0])?.attempt_id).toBe('attempt-1');
+			expect(readGatewayAttempts(written[0]).unanswered).toBeNull();
+		});
+		it('a sent with a pos-open summary (a stranded replay) supersedes nothing', async () => {
+			const { post, order, deps, written } = harness(before);
+			post.mockResolvedValue(answer('sent', 'pos-open'));
+			await submitGatewayPayment(order, 'wcpos_email_invoice', input, deps);
+			expect(fates(written[0])).toEqual({
+				'attempt-0': 'sent',
+				'attempt-8': 'sent',
+				'attempt-7': 'cancelled',
+			});
+		});
+		it('a fresh settled supersedes every other sent attempt and marks itself settled', async () => {
+			const { post, order, deps, written } = harness(before);
+			post.mockResolvedValue(answer('settled', 'pending'));
+			await submitGatewayPayment(order, 'bacs', input, deps);
+			expect(fates(written[0])).toEqual({
+				'attempt-0': 'superseded',
+				'attempt-8': 'superseded',
+				'attempt-7': 'cancelled',
+				'attempt-1': 'settled',
+			});
+		});
+		it('a replayed paid supersedes nothing', async () => {
+			const { post, order, deps, written } = harness(before);
+			post.mockResolvedValue(answer('paid', 'completed'));
+			await submitGatewayPayment(order, 'g', input, deps);
+			expect(fates(written[0])).toMatchObject({ 'attempt-8': 'sent' });
+		});
+		it('recorded supersedes only the awaited attempt: a stranded one beside the payment stays sent', async () => {
+			const { post, order, deps, written } = harness(before);
+			post.mockResolvedValue(answer('recorded', 'completed', row()));
+			await submitGatewayPayment(order, 'custom_gateway', input, deps);
+			expect(fates(written[0])).toEqual({
+				'attempt-0': 'superseded',
+				'attempt-8': 'sent',
+				'attempt-7': 'cancelled',
+				'attempt-1': 'paid',
+			});
+			expect(readGatewayAttempts(written[0]).unanswered?.id).toBe('attempt-8');
+		});
+	});
 	it('wcpos_fields_invalid lands per component; a missing map becomes the form line', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockRejectedValueOnce(
@@ -328,6 +400,7 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
+			covered: false,
 			order: summary('pos-open'),
 			notMirrored: null,
 		});
@@ -365,6 +438,7 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
+			covered: false,
 			order: summary('pos-open'),
 			notMirrored: { cause: new Error('disk') },
 		});
@@ -377,6 +451,7 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: false,
+			covered: false,
 			order: summary('completed'),
 			notMirrored: { cause: new Error('disk') },
 		});
@@ -389,6 +464,7 @@ describe('cancelGatewayAttempt: Cancel invoice', () => {
 		expect(await cancelGatewayAttempt(order, invoice, deps)).toEqual({
 			kind: 'answered',
 			reopened: false,
+			covered: false,
 			order: summary('completed'),
 			notMirrored: null,
 		});
@@ -424,6 +500,7 @@ describe('cancelGatewayAttempt: the clear of an unanswered attempt', () => {
 		expect(await cancelGatewayAttempt(order, stranded, deps)).toEqual({
 			kind: 'answered',
 			reopened: true,
+			covered: false,
 			order: summary('pos-open'),
 			notMirrored: null,
 		});
@@ -445,6 +522,18 @@ describe('cancelGatewayAttempt: the clear of an unanswered attempt', () => {
 			reopened: false,
 		});
 		expect(attemptsOf(written[0])['attempt-9']).toMatchObject({ fate: 'cancelled' });
+	});
+	it.each([
+		['0.00', true],
+		['5.00', false],
+	])('a 200 that does not reopen with balance %s is covered: %s', async (balance, covered) => {
+		const { post, order, deps } = harness(meta);
+		post.mockResolvedValue({ data: { order: { ...summary('processing'), balance } } });
+		expect(await cancelGatewayAttempt(order, stranded, deps)).toMatchObject({
+			kind: 'answered',
+			reopened: false,
+			covered,
+		});
 	});
 	it('409 wcpos_invalid_transition is refused, nothing mirrored', async () => {
 		const { post, mirror, order, deps } = harness(meta);

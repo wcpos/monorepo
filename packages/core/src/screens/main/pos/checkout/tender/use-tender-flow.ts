@@ -65,6 +65,7 @@ import {
 	recordSaleAttempt,
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
+import { useConfirmClearAttempt } from './use-confirm-clear-attempt';
 import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -150,6 +151,8 @@ const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 export interface TenderFlow {
 	/** The offline tender confirmation (ADR 0040 Decided 1 rule 1); the host renders it. */
 	offlineDialog: React.ReactNode;
+	/** The Clear attempt confirmation; the host renders it beside `offlineDialog`. */
+	clearDialog: React.ReactNode;
 	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
 	unansweredCommand: boolean;
 	retryCommand: () => Promise<void>;
@@ -335,6 +338,7 @@ export function useTenderFlow(
 		dp,
 		portalHost,
 	});
+	const { confirmClearAttempt, dialog: clearDialog } = useConfirmClearAttempt({ portalHost });
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -1589,6 +1593,10 @@ export function useTenderFlow(
 	const clearAttempt = React.useCallback(async () => {
 		if (busyRef.current || !unansweredAttempt) return;
 		busyRef.current = true;
+		if (!(await confirmClearAttempt())) {
+			busyRef.current = false;
+			return;
+		}
 		setBusy(true);
 		const { id: attemptId, methodId: method } = unansweredAttempt;
 		const context = { ...orderContext, attemptId, method };
@@ -1605,7 +1613,9 @@ export function useTenderFlow(
 			}
 			const said = outcome.reopened
 				? t('pos_checkout.attempt_cleared_reopened')
-				: t('pos_checkout.attempt_cleared');
+				: outcome.covered
+					? t('pos_checkout.attempt_cleared_covered')
+					: t('pos_checkout.attempt_cleared');
 			logger.info(said, { actor, showToast: true, context });
 		} catch (error) {
 			logger.warn(t('pos_checkout.attempt_clear_unanswered'), {
@@ -1616,7 +1626,7 @@ export function useTenderFlow(
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [gateway, unansweredAttempt, order, orderContext, actor, t]);
+	}, [gateway, unansweredAttempt, confirmClearAttempt, order, orderContext, actor, t]);
 
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
@@ -1804,6 +1814,7 @@ export function useTenderFlow(
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,
+			clearDialog,
 		}),
 		[
 			plan,
@@ -1864,6 +1875,7 @@ export function useTenderFlow(
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,
+			clearDialog,
 		]
 	);
 }

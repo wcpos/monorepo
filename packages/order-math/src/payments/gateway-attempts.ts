@@ -1,6 +1,7 @@
 /** `_wcpos_gateway_attempts` schema 1, read with the plugin's own predicates (`Attempt_Log`). */
 
-import { type MetaDataEntry, parseMetaValue, readLedger, samePaymentId } from './ledger';
+import { type MetaDataEntry, readLedger, samePaymentId } from './ledger';
+import { parseMetaValue } from './meta-value';
 import { withMetaReplaced } from './provenance';
 
 export const GATEWAY_ATTEMPTS_META_KEY = '_wcpos_gateway_attempts';
@@ -25,7 +26,10 @@ const mapOf = (metaData: readonly MetaDataEntry[] | null | undefined) =>
 export function attemptEntries(metaData: readonly MetaDataEntry[] | null | undefined) {
 	const map = parseMetaValue(mapOf(metaData));
 	if (!isEntry(map) || map.schema !== 1 || !isEntry(map.attempts)) return null;
-	return Object.entries(map.attempts).filter((pair): pair is [string, Entry] => isEntry(pair[1]));
+	// An entry with no method is skipped: the till could never post its `{method}/cancel`.
+	return Object.entries(map.attempts).filter(
+		(pair): pair is [string, Entry] => isEntry(pair[1]) && !!text(pair[1].method_id)
+	);
 }
 
 function attemptOf([id, entry]: [string, Entry]): GatewayAttempt {
@@ -66,4 +70,21 @@ export function withGatewayAttempt(
 	const next = { schema: 1, attempts: { ...attempts, [id]: { ...attempts[id], ...patch } } };
 	const value = typeof mapOf(metaData) === 'string' ? JSON.stringify(next) : next;
 	return withMetaReplaced(metaData, [{ key: GATEWAY_ATTEMPTS_META_KEY, value }]);
+}
+
+/**
+ * The store's `supersede()`, until the next adoption: every other `sent` attempt is `superseded`;
+ * with `'awaiting'` only the ones awaiting the customer (`replace()`), so a stranded one stays.
+ */
+export function withSupersededAttempts(
+	metaData: readonly MetaDataEntry[] | null | undefined,
+	keepId: string,
+	which: 'sent' | 'awaiting'
+): readonly MetaDataEntry[] {
+	let result = metaData ?? [];
+	for (const [id, entry] of attemptEntries(metaData) ?? [])
+		if (entry.fate === 'sent' && !samePaymentId(id, keepId))
+			if (which === 'sent' || entry.awaiting != null)
+				result = withGatewayAttempt(result, id, { fate: 'superseded', awaiting: null });
+	return result;
 }
