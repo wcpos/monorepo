@@ -6,6 +6,7 @@ import {
 	clickAndExpectPaymentWrite,
 	createPaymentResponseMatcher,
 	type Descriptor,
+	expectPaymentAnswer,
 	ledgerRows,
 	newOrderAtCheckout,
 	openCheckout,
@@ -53,7 +54,7 @@ function terminalRoute(request: Request, orderId: number, action: string): boole
 }
 
 function terminalResponse(page: Page, orderId: number, action: 'intent' | 'status' | 'void') {
-	// The app re-sends once on a 401 and once on a stale-revision 409; neither is the answer.
+	// The app re-sends once on a 401; that first answer is not the answer. A 409 always is.
 	const pending = page.waitForResponse(
 		createPaymentResponseMatcher(terminalRoutePattern(orderId, action), terminalMethod(action)),
 		{ timeout: 90_000 }
@@ -77,7 +78,7 @@ async function takeTerminal(page: Page, orderId: number, reader: string): Promis
 	const intent = terminalResponse(page, orderId, 'intent');
 	await page.getByTestId('checkout-commit').click();
 	const response = await intent;
-	expect(response.status(), 'intent payment POST must succeed').toBeLessThan(400);
+	await expectPaymentAnswer(response, 'intent payment POST must succeed');
 	expect(response.request().postDataJSON()).toMatchObject({ context: { reader } });
 	await expect(page.getByTestId('checkout-terminal-leg')).toBeVisible({ timeout: 30_000 });
 }
@@ -134,7 +135,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId('checkout-terminal-status')).toHaveText(
 				copy['pos_checkout.waiting_for_terminal']
 			);
-			expect((await status).status(), 'terminal status GET must succeed').toBeLessThan(400);
+			await expectPaymentAnswer(await status, 'terminal status GET must succeed');
 			await expectReceipt(page);
 			const server = await pollOrder(
 				request,
@@ -282,7 +283,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				copy['pos_checkout.payment_timed_out'],
 				{ timeout: 90_000 }
 			);
-			expect((await voided).status(), 'deadline void POST must succeed').toBeLessThan(400);
+			await expectPaymentAnswer(await voided, 'deadline void POST must succeed');
 			await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible();
 			await expect(page.getByTestId('checkout-terminal-another')).toBeVisible();
 			await page.getByTestId('checkout-terminal-another').click();
