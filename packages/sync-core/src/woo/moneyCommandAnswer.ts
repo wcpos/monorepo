@@ -94,9 +94,14 @@ const UNPAID_CLOSE_STATUSES: readonly string[] = [
 	'trash',
 ];
 
-/** Whether an order status is a sale the store completed (the blocklist above). */
+/**
+ * Whether an order status is a sale the store completed (the blocklist above). A blank status
+ * is no status: a plugin filter's `{ status: '' }` must never settle a sale or open the receipt.
+ */
 export function isPaidStatus(status: unknown): boolean {
-	return typeof status === 'string' && !UNPAID_CLOSE_STATUSES.includes(status);
+	return (
+		typeof status === 'string' && status.trim() !== '' && !UNPAID_CLOSE_STATUSES.includes(status)
+	);
 }
 
 /**

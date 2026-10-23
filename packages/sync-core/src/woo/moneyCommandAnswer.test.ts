@@ -4,6 +4,7 @@ import {
 	isCloseAnswer,
 	isDefinitiveMoneyRefusal,
 	isMoneyAnswer,
+	isPaidStatus,
 	moneyRefusalOf,
 } from './moneyCommandAnswer';
 
@@ -125,6 +126,19 @@ describe('a close answered without a completion', () => {
 	it('a missing completion is still malformed', () => {
 		expect(isCloseAnswer({ order: { status: 'completed' } })).toBe(false);
 	});
+	it.each(['', '  ', undefined, null, 0, {}])(
+		'a blank or non-string status is not paid (%p)',
+		(status) => {
+			expect(isPaidStatus(status)).toBe(false);
+			expect(isCloseAnswer({ order: { status }, completion: null })).toBe(false);
+		}
+	);
+	it.each(['completed', 'on-hold', 'wc-custom-paid'])(
+		'a named status outside the blocklist is paid (%s)',
+		(status) => {
+			expect(isPaidStatus(status)).toBe(true);
+		}
+	);
 });
 
 // The server's submit vocabulary (`Gateway_Submission.php:71, 77-83, 370`): `recorded` carries
