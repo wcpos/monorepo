@@ -98,6 +98,7 @@ import {
 	GatewayMirrorError,
 	submitStillDone,
 } from '../payments/submit-gateway-payment';
+import { partitionLiveRows } from '../payments/void-payments';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -186,6 +187,8 @@ export interface TenderFlow {
 	rows: PaymentRow[];
 	/** Rows with status pending | authorized | captured — money that is currently held. */
 	liveRows: PaymentRow[];
+	/** The live rows a cancel keeps for a refund instead of voiding (`partitionLiveRows`). */
+	retainedRows: PaymentRow[];
 	hasLiveLeg: boolean;
 	online: boolean;
 
@@ -399,6 +402,10 @@ export function useTenderFlow(
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]
+	);
+	const retainedRows = React.useMemo(
+		() => partitionLiveRows(payload.meta_data).retained,
+		[payload.meta_data]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
 	const readersInUse = service?.readersInUse();
@@ -1773,14 +1780,24 @@ export function useTenderFlow(
 					},
 				});
 			}
-			if (outcome.failed.length > 0) {
+			// A leg the store keeps by its own rule (a captured card leg, a captured row a completion
+			// counted) was announced as a refund on the confirm and is never sent a void, so it is
+			// not a failed void and "Try again" is wrong advice: it is reported once, as information.
+			// The sale stays in checkout, because money is still held (the stage is derived from the
+			// live ledger rows, #2861); the leg leaves through a refund from the order (tender flows
+			// §6 rule 6: a settled leg leaves through `refund`).
+			const retained = outcome.failed.filter(
+				({ message }) => message === 'captured_refund_required'
+			);
+			const failed = outcome.failed.filter(({ message }) => message !== 'captured_refund_required');
+			if (failed.length > 0) {
 				// Each of these is money still held on the customer's card. The row has to
 				// name them, or the merchant cannot tell which payment to refund by hand.
 				//
 				// Only a refusal the store actually answered earns the definitive "refund
 				// these" instruction. A void whose answer was lost may already have been
 				// applied, and refunding it by hand would return the money twice.
-				const everyoneRefused = outcome.failed.every((failure) => failure.refused);
+				const everyoneRefused = failed.every((failure) => failure.refused);
 				logger.error(t('pos_checkout.void_failed'), {
 					code: everyoneRefused
 						? ERROR_CODES.PAYMENT_VOID_REFUSED
@@ -1791,10 +1808,20 @@ export function useTenderFlow(
 						// refusal the store never gave.
 						type: everyoneRefused ? 'payment.void-refused' : 'payment.void-unknown',
 						...orderContext,
-						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
-						reason: outcome.failed
-							.map((failure) => `${failure.paymentId}: ${failure.message}`)
-							.join('; '),
+						paymentId: failed.map((failure) => failure.paymentId).join(', '),
+						reason: failed.map((failure) => `${failure.paymentId}: ${failure.message}`).join('; '),
+						voided: outcome.rows.length,
+					},
+				});
+				return;
+			}
+			if (retained.length > 0) {
+				logger.info(t('pos_checkout.cancel_refund_required'), {
+					showToast: true,
+					context: {
+						type: 'payment.void-refused',
+						...orderContext,
+						paymentId: retained.map((failure) => failure.paymentId).join(', '),
 						voided: outcome.rows.length,
 					},
 				});
@@ -1867,6 +1894,7 @@ export function useTenderFlow(
 			linesPaidBy: state.linesPaidBy,
 			rows,
 			liveRows,
+			retainedRows,
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
 			hasLiveLeg: liveRows.length > 0,
 			online,
@@ -1927,6 +1955,7 @@ export function useTenderFlow(
 			afterThisPaymentMinor,
 			rows,
 			liveRows,
+			retainedRows,
 			online,
 			tiles,
 			legacyMethods,

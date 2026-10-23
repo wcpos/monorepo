@@ -222,6 +222,7 @@ function makeFlow(count = 1): TenderFlow {
 		linesPaidBy: {},
 		rows: [],
 		liveRows: [],
+		retainedRows: [],
 		hasLiveLeg: false,
 		terminalLeg: null,
 		hasLiveTerminalLeg: false,

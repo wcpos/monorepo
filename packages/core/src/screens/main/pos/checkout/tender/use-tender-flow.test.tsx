@@ -1453,6 +1453,40 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('a cancel whose only remaining legs the store keeps for a refund is reported once, as information', async () => {
+		// `voidPayments` never sends a captured card leg a void; it reports it retained. The confirm
+		// announced that leg as a refund, so it is not a failed void and "Try again" is wrong advice.
+		// The sale stays in checkout: money is still held, and the stage is derived from the live
+		// ledger rows (#2861), so leaving would not stick on the columns host either.
+		mockVoidPayments.mockResolvedValue({
+			rows: [payment({ id: 'voided-payment', status: 'voided' })],
+			failed: [{ paymentId: 'card-1', message: 'captured_refund_required', refused: true }],
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockError).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.cancel_refund_required',
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({
+					type: 'payment.void-refused',
+					voided: 1,
+					paymentId: 'card-1',
+				}),
+			})
+		);
+		expect(
+			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
+		).toHaveLength(0);
+		expect(result.current.state.view).toBe('cancel');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+	});
+
 	it('keeps a lost void answer outcome-unknown rather than promising a refund', async () => {
 		// A void whose answer never arrived may already have been applied; PAYMENT221's
 		// "refund these" instruction would then return the money twice.

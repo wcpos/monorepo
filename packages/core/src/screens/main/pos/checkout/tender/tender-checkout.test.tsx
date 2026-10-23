@@ -229,6 +229,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
+		retainedRows: [],
 		hasLiveLeg: false,
 		online: true,
 		tiles: [

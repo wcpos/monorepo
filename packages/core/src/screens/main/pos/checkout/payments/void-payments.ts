@@ -48,24 +48,38 @@ export type VoidPaymentsOutcome =
 	 * never to refund by hand.
 	 */
 	| { kind: 'offline'; paymentIds: string[] };
+/**
+ * The live rows a cancel splits into the legs it will void and the legs it keeps. The server
+ * never voids a captured row a completion counted, nor a captured non-manual row (an adopted
+ * WooCommerce tender among them): those leave the balance only through a refund. One rule for
+ * the void itself and for the cancel screen that announces it, so the screen never promises a
+ * void the store refuses.
+ */
+export function partitionLiveRows(meta_data: readonly MetaDataEntry[] | null | undefined): {
+	voidable: PaymentRow[];
+	retained: PaymentRow[];
+} {
+	const counted = new Set(
+		readCompletions(meta_data).flatMap(({ payment_ids }) => payment_ids ?? [])
+	);
+	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
+		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
+	const live = readLedger(meta_data).filter(({ status }) => isLivePaymentStatus(status));
+	return { voidable: live.filter(voidable), retained: live.filter((row) => !voidable(row)) };
+}
+
 export async function voidPayments(
 	order: VoidPaymentsOrder,
 	deps: VoidPaymentsDeps
 ): Promise<VoidPaymentsOutcome> {
-	// The server never voids a captured row a completion counted, nor a captured non-manual row
-	// (an adopted WooCommerce tender among them): those leave the balance only through a refund.
-	const counted = new Set(
-		readCompletions(order.meta_data).flatMap(({ payment_ids }) => payment_ids ?? [])
-	);
-	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
-		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
-	const live = readLedger(order.meta_data).filter(({ status }) => isLivePaymentStatus(status));
-	const liveRows = live.filter(voidable);
+	const { voidable: liveRows, retained: kept } = partitionLiveRows(order.meta_data);
 	// #2798 thread 4341491614: such a leg is never sent a void, but it is reported, so a cancel
 	// that leaves money captured is never read as a clean one. The store's own rule, so `refused`.
-	const retained: VoidPaymentsFailure[] = live
-		.filter((row) => !voidable(row))
-		.map((row) => ({ paymentId: row.id, message: 'captured_refund_required', refused: true }));
+	const retained: VoidPaymentsFailure[] = kept.map((row) => ({
+		paymentId: row.id,
+		message: 'captured_refund_required',
+		refused: true,
+	}));
 	if (liveRows.length === 0) {
 		return { kind: 'voided', via: 'offline', rows: [], failed: retained, order: null };
 	}
