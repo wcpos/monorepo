@@ -26,7 +26,7 @@ import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
 import { readoptRequested } from './order-readopt';
-import { adoptedSync } from './order-revision';
+import { adoptedSync, residentRevision } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -257,7 +257,10 @@ export function stashPrintCounts(
 	});
 }
 
-export type OrderIngestionContext = { source: 'ack'; mutationId: string; recordId: string };
+export type OrderIngestionContext =
+	| { source: 'ack'; mutationId: string; recordId: string }
+	/** `requestedAt`: when the pull's request went out, read before the fetch. */
+	| { source: 'pull'; requestedAt: number };
 
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
@@ -280,10 +283,21 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
-		const protectsLocal = (id: string, resident: unknown) =>
-			id !== context?.recordId && hasPendingLocalWork(resident);
+		const ack = context?.source === 'ack' ? context : undefined;
+		// A pull requested BEFORE the resident was adopted whole answers with an older document.
+		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
+		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
+		// times during one create (before totals, taxes, total, status), so a read between those
+		// saves is a half-made order; `date_modified_gmt` cannot tell them apart (the saves can
+		// share one second). Cost: a change another till made inside that window waits for the
+		// next pull or the change signal; it is never lost.
+		const holdsNewerDocument = (resident: unknown) =>
+			context?.source === 'pull' &&
+			residentRevision(resident as { sync?: unknown }).holdsDocument(context.requestedAt);
+		const keepsResident = (id: string, resident: unknown) =>
+			(id !== ack?.recordId && hasPendingLocalWork(resident)) || holdsNewerDocument(resident);
 		let applicable = documents.filter(
-			(document) => !protectsLocal(document.uuid, residents.get(document.uuid)?.toJSON())
+			(document) => !keepsResident(document.uuid, residents.get(document.uuid)?.toJSON())
 		);
 		if (applicable.length === 0) return [];
 		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
@@ -365,7 +379,7 @@ export class EngineOrderRepository {
 		// with a modifier that ignores the current data.)
 		const skipped = new Set<string>();
 		const heldIds = this.db.recordMutations
-			? createOrderPendingMutationIds(this.db.recordMutations, context?.mutationId)
+			? createOrderPendingMutationIds(this.db.recordMutations, ack?.mutationId)
 			: async () => new Set<string>();
 		const currentResidents =
 			changed.length > 0
@@ -376,7 +390,7 @@ export class EngineOrderRepository {
 		changed = changed.filter((document) => {
 			if (
 				held.has(document.uuid) ||
-				protectsLocal(document.uuid, currentResidents.get(document.uuid)?.toJSON())
+				keepsResident(document.uuid, currentResidents.get(document.uuid)?.toJSON())
 			) {
 				skipped.add(document.uuid);
 				return false;
@@ -409,7 +423,7 @@ export class EngineOrderRepository {
 			if (resident.incrementalModify) {
 				await resident.incrementalModify(async (current) => {
 					// Re-run inside RxDB's per-record write queue, including on conflict retry.
-					if (protectsLocal(document.uuid, current) || (await heldIds()).has(document.uuid)) {
+					if (keepsResident(document.uuid, current) || (await heldIds()).has(document.uuid)) {
 						skipped.add(document.uuid);
 						return current;
 					}

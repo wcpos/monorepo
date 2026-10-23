@@ -37,6 +37,7 @@ import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-colle
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { OrderIngestionContext } from '../write-path/engine-order-repository';
 import type { IncomingOrderSettlement } from '../write-path/order-pull-guard';
 import type { RangedLaneResumeState } from './persisted-coverage-schema';
 import type {
@@ -117,6 +118,10 @@ export type OrdersSchedulerFetcherInput = {
 		 * implementation — always provides it, so there is no wiring line to forget.
 		 */
 		upsertManifestRows?(rows: readonly ExistenceManifestDocument[]): Promise<void>;
+		upsertMany(
+			documents: OrderDocument[],
+			context?: OrderIngestionContext
+		): Promise<readonly OrderDocument[] | void>;
 	};
 	checkpointStore: CustomPullCheckpointStore;
 	fetcher?: Fetcher;
@@ -438,6 +443,15 @@ export async function applyOrderSnapshot(
 	await recordOrderManifestRows(input, [materialized], applied);
 	return applied.length === 0 ? 'protected' : 'applied';
 }
+/**
+ * When a pull's request goes out, read BEFORE the fetch: the repository keeps a resident adopted
+ * whole after it (see `upsertMany`). The adoption's clock, not the drain's `nowMs` seam, which a
+ * drain may freeze at its start or a harness may fake: the two must be one clock to compare.
+ */
+function pullRequestedAt(): number {
+	return Date.now();
+}
+
 function coverageNowMs(input: OrdersSchedulerFetcherInput): number {
 	return input.nowMs?.() ?? Date.now();
 }
@@ -865,6 +879,7 @@ async function fetchBrowserOrderQuery(
 		query.set('order', descriptor.complete ? 'desc' : (descriptor.order ?? 'desc'));
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
+		const requestedAt = pullRequestedAt();
 		const response = await httpGet(input, url, context);
 		if (!response.ok) {
 			throw new Error(`Woo REST browser order query request failed: ${response.status}`);
@@ -941,7 +956,9 @@ async function fetchBrowserOrderQuery(
 		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
-		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		const applied =
+			(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ??
+			applicable;
 		await recordOrderManifestRows(input, materialized, applied);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
@@ -1099,6 +1116,7 @@ async function fetchTargetedOrders(
 		query.set('orderby', 'include');
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
+		const requestedAt = pullRequestedAt();
 		const response = await httpGet(input, url, context);
 		if (!response.ok) {
 			throw new Error(`Woo REST targeted order request failed: ${response.status}`);
@@ -1118,7 +1136,9 @@ async function fetchTargetedOrders(
 		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
-		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		const applied =
+			(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ??
+			applicable;
 		await recordOrderManifestRows(input, materialized, applied);
 		appliedRecordIds.push(...applied.map((document) => String(document.remoteId)));
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
@@ -1223,9 +1243,11 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 		// Explicit delegation (never an object spread — the repository is a class instance whose
 		// methods live on the prototype): capture the applied subset per upsert for the row filter.
 		const base = input.repository;
+		const requestedAt = pullRequestedAt();
 		const capturingRepository: CustomPullRepository = {
 			upsertMany: async (documents) => {
-				const applied = (await base.upsertMany(documents)) ?? documents;
+				const applied =
+					(await base.upsertMany(documents, { source: 'pull', requestedAt })) ?? documents;
 				for (const document of applied) repositoryAppliedUuids.add(document.uuid);
 			},
 			removeDeletedOrders: base.removeDeletedOrders?.bind(base),
