@@ -174,6 +174,30 @@ describe('recordManualPayment', () => {
 		expect(calls).toEqual(['persisted push=false', 'journal', 'mirror']);
 	});
 
+	// Codex 4355660792 on #2865: the primary (largest) leg's method decides the derived status.
+	it('an earlier larger manual-card leg configured processing, then cash offline, mirrors processing', async () => {
+		const processingCard = {
+			...card,
+			defaults: { ...card.defaults, order_status: 'processing' },
+		} satisfies PaymentMethodDescriptor;
+		const earlier = { ...mintedCard, id: 'card-leg', amount: '60.00' };
+		const splitOrder = {
+			...order,
+			meta_data: [
+				...order.meta_data,
+				{ key: '_wcpos_payments', value: { schema: 1, payments: [earlier] } },
+			],
+		};
+		const deps = { ...createDeps(false), methods: [cash, processingCard] };
+
+		await recordManualPayment(splitOrder, cash, { amount: '40.00' }, deps);
+
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{ payment: expect.objectContaining({ amount: '40.00' }), status: 'processing' },
+			{ accepted: true, local: true }
+		);
+	});
+
 	it('offline journal/mirror failures: failed outcome / RecordManualPaymentMirrorError', async () => {
 		const refused = createDeps(false);
 		const cause = new Error('journal write failed');

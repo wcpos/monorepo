@@ -30,6 +30,7 @@ import {
 } from '@wcpos/utils/unsent-changes';
 import {
 	claimHeld,
+	dropUnsent,
 	failCompletionAttempt,
 	type MoneyCommandEntry,
 	nextClaimExpiry,
@@ -318,6 +319,17 @@ export function SaleCompletionBridge(): null {
 			);
 			await resolveCompletionAttempt(storeDB, uuid);
 		};
+		/**
+		 * The order has a command awaiting the store's answer: sent, or deferred offline (sent, no
+		 * revision). A never-sent crash leftover no live claim holds put nothing on the server and is
+		 * dropped (`dropUnsent`): it must not hold an adopted sale or its bounded abandonment.
+		 */
+		const awaitsAnswer = async (uuid: string) => {
+			const { entries } = await readOrderCommands(storeDB, uuid);
+			for (const { id, sentAt } of entries)
+				if (sentAt === null) await dropUnsent(storeDB, uuid, id, null);
+			return entries.some(({ sentAt }) => sentAt !== null);
+		};
 		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
 		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
 			if (current.stopped) return new Map();
@@ -404,7 +416,7 @@ export function SaleCompletionBridge(): null {
 				try {
 					// A record still journaled (an offline sale's) has no answer to judge: no unpaid start,
 					// no abandon, until the recovery answers it (ADR 0040 Decided 1 rule 3).
-					if ((await readOrderCommands(storeDB, uuid)).entries.length > 0) continue;
+					if (await awaitsAnswer(uuid)) continue;
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
 					if (!resident) {
@@ -597,7 +609,7 @@ export function SaleCompletionBridge(): null {
 				if (!attempt?.awaitingAdoption || current.stopped) return;
 				// An offline sale's resident reads paid and, with no chain, `residentHoldsAnswer` holds:
 				// only the journal says the store has not answered (ADR 0040 Decided 1 rule 3).
-				if ((await readOrderCommands(storeDB, uuid)).entries.length > 0) return;
+				if (await awaitsAnswer(uuid)) return;
 				const outcome = replayOf(attempt);
 				if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
 				// Only a whole document adopted after the answer stands in for the replay's refresh;

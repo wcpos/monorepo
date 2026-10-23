@@ -21,6 +21,7 @@ import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
+import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
@@ -61,6 +62,7 @@ export function useRecordManualPayment(
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
 	const ctx = useSaleContext();
+	const { methods } = usePaymentMethods();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
 	const { wpCredentials, store, storeDB } = useStoreSession();
@@ -140,6 +142,7 @@ export function useRecordManualPayment(
 				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
 				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
+				methods,
 				fetchOrderStatus: async () => {
 					const response = await http.get(`orders/${paymentOrder.id}`);
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
@@ -220,6 +223,7 @@ export function useRecordManualPayment(
 			stampCompletion,
 			manager,
 			storeDB,
+			methods,
 			t,
 		]
 	);

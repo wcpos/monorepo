@@ -32,6 +32,9 @@ let mockJournal: { kind: string; sentAt: string | null; body: Record<string, unk
 jest.mock('@wcpos/query/store-local', () => ({
 	readOrderCommands: async () => ({ entries: mockJournal, chain: null }),
 }));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ methods: [] }),
+}));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost, get: mockGet }),
 }));

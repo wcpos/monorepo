@@ -1574,7 +1574,7 @@ const deferredRecord = (orderUuid: string) => ({
 	claimedAt: null,
 });
 /** The money journal's local document, written whole: the order's open entries. */
-async function setJournal(orderUuid: string, entries: ReturnType<typeof deferredRecord>[]) {
+async function setJournal(orderUuid: string, entries: { id: string }[]) {
 	await mockContext.storeDB.upsertLocal('money-commands', {
 		orders: {
 			[orderUuid]: { entries: Object.fromEntries(entries.map((e) => [e.id, e])), chain: null },
@@ -1669,4 +1669,48 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 			}),
 		})
 	);
+});
+
+// Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
+// whose claim lapsed. It put nothing on the server: it is dropped, and blocks nothing.
+const crashLeftover = (orderUuid: string) => ({
+	...deferredRecord(orderUuid),
+	sentAt: null,
+	claimedBy: 'crashed-poster',
+	claimedAt: 1,
+});
+
+it('a crash leftover (unsent, claim expired) does not block finishing an adopted paid order', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	await setJournal('order', [crashLeftover('order')]);
+	await record();
+	await owner.awaitAdoption(mockContext.storeDB, 'order');
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
+});
+
+it('a crash leftover (unsent, claim expired) does not block the bounded abandonment of an unpaid attempt', async () => {
+	await record();
+	await setJournal('order', [crashLeftover('order')]);
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	const view = render(<SaleCompletionBridge />);
+	for (const count of [1, 2]) {
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				unpaidStarts: count,
+			})
+		);
+		mockManager = {};
+		view.rerender(<SaleCompletionBridge />);
+	}
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect((await journal.readOrderCommands(mockContext.storeDB, 'order')).entries).toEqual([]);
 });

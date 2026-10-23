@@ -59,6 +59,8 @@ export interface RecordManualPaymentDeps {
 	journal: (url: string, body: unknown) => Promise<unknown>;
 	currency: string;
 	dp: number;
+	/** Every descriptor the till holds: the derived status reads the primary leg's method. */
+	methods?: readonly PaymentMethodDescriptor[];
 	sleep?: (ms: number) => Promise<void>;
 	/**
 	 * A record the store may hold but never answered (the journal keeps it sent): the press
@@ -149,7 +151,10 @@ async function recordOffline(
 		return { kind: 'failed', reason, cause: error };
 	}
 	const rows = upsertPaymentRow(readLedger(order.meta_data), row);
-	const { status } = derive(order.total, rows, [method], { dp: deps.dp });
+	// The primary (largest) leg may be an earlier one of another method: its descriptor decides
+	// the status (`defaults.order_status`), never a silent `completed` fallback.
+	const methods = [...(deps.methods ?? []), method];
+	const { status } = derive(order.total, rows, methods, { dp: deps.dp });
 	const outcome = { kind: 'recorded', via: 'offline', row, order: null } as const;
 	try {
 		await deps.mirror({ payment: row, status }, { accepted: true, local: true });
