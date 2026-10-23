@@ -58,7 +58,7 @@ import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { scopeBoundFailureStreak } from '../failure-streak';
-import { AUTO_REVERT_COLLECTIONS } from './auto-revert-collections';
+import { deadLetterOutcomesForTick } from './dead-letter-outcome';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
@@ -238,15 +238,6 @@ export type WriteOutcomeEvent =
 			serverMessage?: string;
 			/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
 			data?: Record<string, unknown>;
-			/**
-			 * True when the rejected mutation is a CREATE with no local or queued
-			 * remote id and the rejection does not imply a matching server record.
-			 * The #1082 auto-revert must never `discard` these — discard DESTROYS
-			 * a born-local resident (#832 R7b, designed for the cashier-confirmed
-			 * Store health dialog) and there is no server truth to revert to.
-			 * They dead-letter for Store health instead, like orders.
-			 */
-			bornLocalCreate?: boolean;
 	  }
 	/**
 	 * R1: the server ACKED an order the POS built, but the money it returned is not
@@ -324,6 +315,8 @@ export type WriteDrainLaneDeps = {
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	/** Restore server truth for a refused catalogue change (#1082): Store health's discard. */
+	revert: (mutationId: string) => Promise<void>;
 	mintUuid: () => string;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	drainInstanceIdFor: () => string;
@@ -384,12 +377,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
 		const tickStreak = tickFailureStreaks();
-		// Catalogue dead letters this tick has not yet handed to the engine's revert
-		// (via write-rejected). Their push.rejected was only a stamped attempt, so if
-		// anything later in the tick fails first — the rest of the drain or the
-		// post-drain processing — the verdict is owed here: the row is no longer
-		// pending, and no later drain would ever revisit it.
-		let verdictsOwed: Awaited<ReturnType<typeof drainMutationQueue>>['rejected'] = [];
+		// This tick's dead-letter log outcomes (one per catalogue dead letter, scope-bound).
+		const outcomes = deadLetterOutcomesForTick({
+			diagnostics: deps.diagnostics,
+			revert: deps.revert,
+		});
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -779,11 +771,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}),
 							// Owed AS the drain makes it, not from the return value: a step
 							// later in this drain can throw after the dead letter is durable.
-							onRejected: (rejection) => {
-								if (AUTO_REVERT_COLLECTIONS.has(rejection.mutation.collectionName))
-									verdictsOwed.push(rejection);
-							},
-							observe: deps.diagnostics,
+							onRejected: (rejection) => outcomes.owe(bound, rejection),
+							observe: outcomes.observe,
 							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -907,6 +896,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									? doc.toJSON()[rejectedFacet.remoteIdField]
 									: undefined;
 							const rejectedPayloadId = dead.payload.id;
+							const bornLocalCreate =
+								dead.operation === 'create' &&
+								doc !== null &&
+								typeof rejectedRemoteId !== 'number' &&
+								typeof rejectedPayloadId !== 'number' &&
+								!rejectionSuggestsServerRecord(reason);
 							deps.emitWriteEvent({
 								type: 'write-rejected',
 								collection: dead.collectionName,
@@ -916,14 +911,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								reason,
 								serverMessage,
 								...(data ? { data } : {}),
-								bornLocalCreate:
-									dead.operation === 'create' &&
-									doc !== null &&
-									typeof rejectedRemoteId !== 'number' &&
-									typeof rejectedPayloadId !== 'number' &&
-									!rejectionSuggestsServerRecord(reason),
 							});
-							verdictsOwed = verdictsOwed.filter((owed) => owed.mutation !== dead);
+							outcomes.settle(dead.mutationId, { bornLocalCreate });
 						}
 						deps.setQueueDepth(stillPending.size);
 						report = {
@@ -957,22 +946,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			if (tickReport.status === 'ran') tickStreak.reset();
 			return tickReport;
 		} catch (error) {
-			for (const { mutation: dead, status, reason, serverMessage } of verdictsOwed) {
-				deps.diagnostics({
-					type: 'push.rejected',
-					level: 'error',
-					collection: dead.collectionName,
-					fields: {
-						op: dead.operation,
-						recordId: dead.recordId,
-						mutationId: dead.mutationId,
-						...(status !== undefined ? { status } : {}),
-						...(reason !== undefined ? { reason } : {}),
-						...(serverMessage !== undefined ? { serverMessage } : {}),
-						revertSkipped: true,
-					},
-				});
-			}
+			outcomes.abandon();
 			if (signal?.aborted) {
 				deps.setLastError(null);
 				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };

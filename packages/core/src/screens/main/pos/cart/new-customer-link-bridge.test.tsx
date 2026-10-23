@@ -472,7 +472,6 @@ describe('NewCustomerLinkBridge', () => {
 			recordId: CUSTOMER,
 			mutationId: 'm-customer',
 			status: 400,
-			bornLocalCreate: true,
 		});
 		await flush();
 

@@ -60,7 +60,6 @@ import type {
 
 import { MUTATION_QUEUE_RXDB_COLLECTION } from './collections/engine-collections';
 import { createFailureStreak, type FailureStreak } from './failure-streak';
-import { AUTO_REVERT_COLLECTIONS } from './write-path/auto-revert-collections';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
@@ -495,14 +494,6 @@ export type EngineEvent =
 			serverMessage?: string;
 			/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
 			data?: Record<string, unknown>;
-			/**
-			 * True when the rejected mutation is a CREATE with no local or queued
-			 * remote id and the rejection does not imply a matching server record.
-			 * These are exempt from the #1082 auto-revert (there is no server
-			 * truth to restore; discard would destroy the only copy) and stay
-			 * parked on `conflicts()` like an order's dead letter.
-			 */
-			bornLocalCreate?: boolean;
 	  }
 	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
 	// its money is not the money that was pushed: WooCommerce's calculation is the
@@ -842,24 +833,6 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(key);
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
-		}
-		// A refused catalogue change is reverted to server truth right after it
-		// dead-letters (see emitWriteEvent below), and the verdict is emitted where
-		// that outcome is known: `queue.write.auto-reverted` when the revert lands,
-		// a `push.rejected` marked `revertFailed` when it does not, or marked
-		// `revertSkipped` for a born-local create (which never reverts — it parks
-		// for Store health). This dead letter is stamped `revertPending` so the log
-		// keeps it an uncoded attempt. If the tick throws before write-rejected (so
-		// no revert runs) — later in the drain or in the post-drain cleanup — the
-		// write drain emits the verdict itself (`revertSkipped`) on its way out.
-		if (
-			event.type === 'push.rejected' &&
-			event.collection !== undefined &&
-			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
-			event.fields?.revertFailed !== true &&
-			event.fields?.revertSkipped !== true
-		) {
-			event = { ...event, fields: { ...event.fields, revertPending: true } };
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
@@ -1555,8 +1528,6 @@ export function createRxdbSyncEngine(
 	}
 
 	const emitEngineEvent = (event: EngineEvent): void => {
-		// Recorded at the fan-out, so a BRIDGED peer outcome (which enters here, not
-		// at emitWriteEvent — see below) is replayable in the follower too.
 		if (
 			(TERMINAL_WRITE_EVENT_TYPES.has(event.type) || event.type === 'write-superseded') &&
 			'mutationId' in event
@@ -1991,88 +1962,7 @@ export function createRxdbSyncEngine(
 				return 'offline';
 			}
 		},
-		emitWriteEvent: (event) => {
-			emitEngineEvent(event);
-			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
-				return;
-			}
-			// A refused BORN-LOCAL CREATE never auto-discards: #1082's revert means
-			// "restore server truth", and a record the server refused to create has
-			// none — `discard` would DESTROY the only copy of what the cashier typed
-			// (#832 R7b is scoped to the cashier-confirmed Store health dialog, which
-			// warns before deleting). It dead-letters like an order instead: Store
-			// health lists the rejected row and "Send again" rebuilds the payload
-			// from the kept resident.
-			// The dead-letter verdict the stamped push.rejected deferred to, emitted
-			// here because this is where the change's outcome is known.
-			const rejectionVerdict = (marker: 'revertFailed' | 'revertSkipped') =>
-				diagnostics({
-					type: 'push.rejected',
-					level: 'error',
-					collection: event.collection,
-					fields: {
-						recordId: event.recordId,
-						mutationId: event.mutationId,
-						...(event.status !== undefined ? { status: event.status } : {}),
-						...(event.reason !== undefined ? { reason: event.reason } : {}),
-						...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-						[marker]: true,
-					},
-				});
-			if (event.bornLocalCreate === true) {
-				rejectionVerdict('revertSkipped');
-				return;
-			}
-			// Reactive revert (#1082): a rejected catalog change is settled for the
-			// cashier by restoring server truth, through the SAME discard machinery
-			// Store Health uses — claim serialization, in-guard successor overlay
-			// (a newer queued edit's resident value survives the restore; see the
-			// `successors` merge in conflict-resolution.ts), barcode selectors,
-			// tombstone when the server no longer has the record. A write() landing
-			// exactly between that overlay's read and its upsert can still flash
-			// server truth for a beat — accepted: the newer mutation's queue row
-			// survives and the next drain re-decides the record either way.
-			// The scope this revert belongs to: a revert cut short by a store or
-			// cashier switch is stale, not failed — its verdict would land in the
-			// incoming scope's log. The change stays parked for Store health.
-			// Bound to the scope's EPOCH, not its id: after a switch away and back
-			// (A→B→A) the id matches again, but this revert's verdict is still stale.
-			let revertIsCurrent = (): boolean => false;
-			try {
-				void manager.runGuarded(async (bound) => {
-					revertIsCurrent = () => bound.isCurrent();
-				});
-			} catch {
-				// No active scope: no log this verdict could belong to.
-			}
-			void (async () => {
-				try {
-					await writePlane.resolveConflict(event.mutationId, 'discard');
-					// The discard can commit and the switch land before it returns: the
-					// diagnostics observer then belongs to the incoming scope, so the
-					// verdict is stale either way, success or failure.
-					if (!revertIsCurrent()) return;
-					diagnostics({
-						type: 'queue.write.auto-reverted',
-						level: 'error',
-						collection: event.collection,
-						message:
-							event.serverMessage ?? event.reason ?? 'Rejected change reverted to server truth',
-						fields: {
-							collection: event.collection,
-							recordId: event.recordId,
-							mutationId: event.mutationId,
-							...(event.status !== undefined ? { status: event.status } : {}),
-							...(event.reason !== undefined ? { reason: event.reason } : {}),
-							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-						},
-					});
-				} catch {
-					// The revert failed: the rejected row stays parked for Store Health.
-					if (revertIsCurrent()) rejectionVerdict('revertFailed');
-				}
-			})();
-		},
+		emitWriteEvent: emitEngineEvent,
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
 		persistOrderRepull: async ({ database, remoteIds, nowMs: repullNowMs }) => {

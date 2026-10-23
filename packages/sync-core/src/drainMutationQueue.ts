@@ -675,7 +675,7 @@ export async function drainMutationQueue(input: {
 				level: 'warn',
 				collection: mutation.collectionName,
 				fields: {
-					// The engine reads `op` to tell whether a catalogue auto-revert follows.
+					// Diagnostic context: which operation the server refused.
 					op: mutation.operation,
 					recordId: mutation.recordId,
 					mutationId: mutation.mutationId,
