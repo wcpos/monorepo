@@ -1,3 +1,4 @@
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import {
@@ -290,7 +291,7 @@ describe('landAnswer', () => {
 // Try again: a replayed answer arrives mirrored; answerOf only reads it.
 describe('answerOf', () => {
 	const resident = (meta_data: unknown[] = []) => ({ meta_data }) as never;
-	const awaiting = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+	const awaiting = withAwaitingCustomer([], stamp);
 	it.each([
 		[
 			'a record',

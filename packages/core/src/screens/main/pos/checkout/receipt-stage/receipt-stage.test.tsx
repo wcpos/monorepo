@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { withDelay, withTiming } from 'react-native-reanimated';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
@@ -481,18 +482,13 @@ it('paints the paid surface neutrally and the success disc semantically', () => 
 });
 it('a sent sale shows the neutral sent moment: where it went, what is due, no tick, no haptic', async () => {
 	Platform.isNative = true;
-	mockOrder.payload.meta_data = [
-		{
-			key: '_wcpos_awaiting_customer',
-			value: {
-				method_id: 'wcpos_email_invoice',
-				destination: 'buyer@example.com',
-				attempt_id: 'attempt-1',
-				sent_at_gmt: '2026-10-08T10:00:00.000Z',
-				cashier_id: 7,
-			},
-		},
-	] as never;
+	mockOrder.payload.meta_data = withAwaitingCustomer([], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-10-08T10:00:00.000Z',
+		cashier_id: 7,
+	}) as never;
 	render(<ReceiptStage orderUuid="paid" compact={false} />);
 	await act(async () => {});
 	expect(screen.getByTestId('checkout-sent')).not.toBeNull();
@@ -508,13 +504,13 @@ it('a sent sale shows the neutral sent moment: where it went, what is due, no ti
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 });
 it('a stamp beside settled money is stale: the paid moment wins', () => {
-	mockOrder.payload.meta_data = [
-		...(mockOrder.payload.meta_data as never[]),
-		{
-			key: '_wcpos_awaiting_customer',
-			value: { method_id: 'wcpos_email_invoice', destination: 'x@y.z', attempt_id: 'a' },
-		},
-	] as never;
+	mockOrder.payload.meta_data = withAwaitingCustomer(mockOrder.payload.meta_data as never[], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'x@y.z',
+		attempt_id: 'a',
+		sent_at_gmt: '',
+		cashier_id: 0,
+	}) as never;
 	render(<ReceiptStage orderUuid="paid" compact={false} />);
 	expect(screen.getByTestId('checkout-paid')).not.toBeNull();
 	expect(screen.queryByTestId('checkout-sent')).toBeNull();

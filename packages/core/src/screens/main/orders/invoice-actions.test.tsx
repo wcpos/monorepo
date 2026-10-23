@@ -89,7 +89,8 @@ it('Send again re-opens the order with the gateway already chosen', () => {
 
 it("Cancel invoice names the stamp's attempt and reports the order open again", async () => {
 	mockCancel.mockResolvedValue({
-		kind: 'cancelled',
+		kind: 'answered',
+		reopened: true,
 		order: { status: 'pos-open' },
 		notMirrored: null,
 	});
@@ -110,13 +111,19 @@ it("Cancel invoice names the stamp's attempt and reports the order open again", 
 it.each([
 	[
 		'answered',
-		() => mockCancel.mockResolvedValue({ kind: 'unchanged', order: { status: 'completed' } }),
+		() =>
+			mockCancel.mockResolvedValue({
+				kind: 'answered',
+				reopened: false,
+				order: { status: 'completed' },
+			}),
 	],
 	[
 		'answered but not mirrored',
 		() =>
 			mockCancel.mockResolvedValue({
-				kind: 'unchanged',
+				kind: 'answered',
+				reopened: false,
 				order: { status: 'completed' },
 				notMirrored: { cause: new Error('disk') },
 			}),
@@ -137,7 +144,8 @@ it.each([
 
 it('a cancel the store applied but the till could not save is still a cancel', async () => {
 	mockCancel.mockResolvedValue({
-		kind: 'cancelled',
+		kind: 'answered',
+		reopened: true,
 		order: { status: 'pos-open' },
 		notMirrored: { cause: new Error('disk') },
 	});

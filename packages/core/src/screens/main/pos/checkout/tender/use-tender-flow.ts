@@ -12,6 +12,7 @@ import {
 	type DeclaredValues,
 	derive,
 	fromMinor,
+	type GatewayAttempt,
 	isLivePaymentStatus,
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
@@ -20,6 +21,7 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readGatewayAttempts,
 	readLedger,
 	roundedDue,
 	settlesAtRoundedDue,
@@ -227,6 +229,8 @@ export interface TenderFlow {
 	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	cancelInvoice: () => Promise<void>;
+	unansweredAttempt: GatewayAttempt | null;
+	clearAttempt: () => Promise<void>;
 }
 
 type OrderPayload = EngineRecord<'orders'>['payload'];
@@ -429,6 +433,10 @@ export function useTenderFlow(
 	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
 	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
 	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
+	const unansweredAttempt = React.useMemo(
+		() => readGatewayAttempts(payload.meta_data).unanswered,
+		[payload.meta_data]
+	);
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
@@ -1533,7 +1541,7 @@ export function useTenderFlow(
 				return;
 			}
 			// Answered, but the order is not open again: the invoice stands (it may have been paid).
-			if (outcome.kind === 'unchanged') {
+			if (!outcome.reopened) {
 				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
 					showToast: true,
 					context: { ...orderContext, method: invoiceSent.method_id, status: outcome.order.status },
@@ -1577,6 +1585,38 @@ export function useTenderFlow(
 			setBusy(false);
 		}
 	}, [gateway, invoiceSent, order, orderContext, actor, t]);
+
+	const clearAttempt = React.useCallback(async () => {
+		if (busyRef.current || !unansweredAttempt) return;
+		busyRef.current = true;
+		setBusy(true);
+		const { id: attemptId, methodId: method } = unansweredAttempt;
+		const context = { ...orderContext, attemptId, method };
+		try {
+			attemptRef.current = null;
+			const outcome = await gateway.clear(order, unansweredAttempt);
+			if (outcome.kind === 'refused') {
+				const invalid = outcome.code === 'wcpos_invalid_transition';
+				logger.warn(invalid ? t('pos_checkout.attempt_not_cleared') : outcome.message, {
+					showToast: true,
+					context: { ...context, refusal: outcome.code },
+				});
+				return;
+			}
+			const said = outcome.reopened
+				? t('pos_checkout.attempt_cleared_reopened')
+				: t('pos_checkout.attempt_cleared');
+			logger.info(said, { actor, showToast: true, context });
+		} catch (error) {
+			logger.warn(t('pos_checkout.attempt_clear_unanswered'), {
+				showToast: true,
+				context: { ...context, error: getErrorMessage(error) },
+			});
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [gateway, unansweredAttempt, order, orderContext, actor, t]);
 
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
@@ -1759,6 +1799,8 @@ export function useTenderFlow(
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredAttempt,
+			clearAttempt,
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,
@@ -1817,6 +1859,8 @@ export function useTenderFlow(
 			fieldErrors,
 			invoiceSent,
 			cancelInvoice,
+			unansweredAttempt,
+			clearAttempt,
 			unansweredCommand,
 			retryCommand,
 			offlineDialog,

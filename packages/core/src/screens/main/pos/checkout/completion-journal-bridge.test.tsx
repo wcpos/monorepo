@@ -7,6 +7,7 @@ import { concat, firstValueFrom, NEVER, of, Subject } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import * as unsentChanges from '@wcpos/utils/unsent-changes';
@@ -628,7 +629,7 @@ it('finishes a recovered sent submit through the sent-sale path', async () => {
 			payload: {
 				id: 42,
 				status: 'pending',
-				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+				meta_data: withAwaitingCustomer([], stamp),
 				line_items: [],
 			},
 		}),
@@ -1189,7 +1190,15 @@ it.each([
 	[
 		'at its stored status but still stamped stays unpaid',
 		'pending',
-		[{ method_id: 'wcpos_email_invoice', attempt_id: 'a' }],
+		[
+			{
+				method_id: 'wcpos_email_invoice',
+				destination: null,
+				attempt_id: 'a',
+				sent_at_gmt: '',
+				cashier_id: 0,
+			},
+		],
 		false,
 	],
 ] as const)(
@@ -1209,7 +1218,7 @@ it.each([
 					id: 42,
 					status: 'pending',
 					payment_method: 'a',
-					meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+					meta_data: stamps.flatMap((value) => withAwaitingCustomer([], value)),
 					line_items: [],
 				},
 			}),

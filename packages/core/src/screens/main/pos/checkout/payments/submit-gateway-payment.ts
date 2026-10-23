@@ -5,7 +5,10 @@ import {
 	MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
+	withAwaitingCustomer,
+	withGatewayAttempt,
 } from '@wcpos/order-math';
+import type { MoneyCommandPoster, Post } from '@wcpos/query';
 import {
 	isDefinitiveMoneyRefusal,
 	isPaidStatus,
@@ -32,14 +35,14 @@ export interface GatewayOrder {
 	meta_data: MetaDataEntry[];
 }
 export interface SubmitGatewayPaymentDeps {
-	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
+	post: Post & Pick<MoneyCommandPoster, 'settle'>;
 	/** Where the gateway sent the customer, read from the declared fields (spec §3.2). */
 	destination: string | null;
 	/** Mirror the answer onto the latest resident; never rejects, a failure is `{ cause }`. */
 	mirror: (answer: {
 		payment?: PaymentRow;
 		order: OrderPaymentSummary;
-		awaiting: AwaitingCustomerStamp | null;
+		meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
 		accepted?: false; // a cancel's answer: no sale completion
 	}) => Promise<NotMirrored>;
 	cashierId: number;
@@ -120,7 +123,11 @@ export async function submitGatewayPayment(
 			};
 		}
 		const inMotion = moneyInMotionOf(moneyRefusalOf(error));
-		if (inMotion?.kind === 'attempt') return { kind: 'unanswered', attemptId: inMotion.id };
+		if (inMotion?.kind === 'attempt') {
+			// The forced refresh brings the store's attempt map, so the resident names the attempt.
+			await deps.post.settle().catch(() => undefined);
+			return { kind: 'unanswered', attemptId: inMotion.id };
+		}
 		// The money answer rule (sync-core): a named 4xx is the store's decision, and so is a 502
 		// `wcpos_provider_error`, the gateway's own refusal (a notice, an exception, a redirect
 		// elsewhere: Free took nothing and put the previous method back). The poster has settled
@@ -144,7 +151,11 @@ export async function submitGatewayPayment(
 		awaiting: AwaitingCustomerStamp | null
 	) => ({
 		...outcome,
-		notMirrored: await deps.mirror({ payment: outcome.row, order: outcome.order, awaiting }),
+		notMirrored: await deps.mirror({
+			payment: outcome.row,
+			order: outcome.order,
+			meta: (meta) => withAwaitingCustomer(meta, awaiting),
+		}),
 	});
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
@@ -180,22 +191,20 @@ export async function submitGatewayPayment(
 	throw new Error('gateway_submit_malformed_response');
 }
 
-/** `POST …/payment-methods/{method}/cancel` (§2.2): the order comes back pos-open, the stamp goes. */
-export async function cancelGatewayInvoice(
+/** `POST …/payment-methods/{method}/cancel` (§2.2): Cancel invoice (`awaiting`), or the clear. */
+export async function cancelGatewayAttempt(
 	order: GatewayOrder,
-	stamp: AwaitingCustomerStamp,
+	target: { methodId: string; attemptId: string; awaiting?: AwaitingCustomerStamp },
 	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
 ): Promise<
-	| ({ kind: 'cancelled' } & Answered)
-	/** Answered, but the order is not open again: the invoice was not cancelled. */
-	| ({ kind: 'unchanged' } & Answered)
+	| ({ kind: 'answered'; reopened: boolean } & Answered)
 	| { kind: 'refused'; code: string; message: string }
 > {
 	let summary: OrderPaymentSummary;
 	try {
 		const response = await deps.post(
-			`orders/${order.id}/payment-methods/${stamp.method_id}/cancel`,
-			{ attempt_id: stamp.attempt_id }
+			`orders/${order.id}/payment-methods/${target.methodId}/cancel`,
+			{ attempt_id: target.attemptId }
 		);
 		const answer = ((response.data ?? {}) as { order?: OrderPaymentSummary }).order;
 		// Only the store's own summary says what the order is now; an empty 2xx confirms nothing.
@@ -213,7 +222,10 @@ export async function cancelGatewayInvoice(
 	// with the order anywhere else did not cancel the invoice: the summary is mirrored with the
 	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
 	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
-	const awaiting = reopened ? null : stamp;
-	const notMirrored = await deps.mirror({ order: summary, awaiting, accepted: false });
-	return { kind: reopened ? 'cancelled' : 'unchanged', order: summary, notMirrored };
+	const meta = (m: MetaDataEntry[]) =>
+		target.awaiting && !reopened
+			? withAwaitingCustomer(m, target.awaiting)
+			: withGatewayAttempt(m, target.attemptId, { fate: 'cancelled', awaiting: null });
+	const notMirrored = await deps.mirror({ order: summary, meta, accepted: false });
+	return { kind: 'answered', reopened, order: summary, notMirrored };
 }

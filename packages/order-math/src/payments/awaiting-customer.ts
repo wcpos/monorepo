@@ -3,9 +3,8 @@
  * projection never drags the order back to pos-open while the customer still holds the link.
  */
 
-import { type MetaDataEntry, readLedger } from './ledger';
-
-export const AWAITING_CUSTOMER_META_KEY = '_wcpos_awaiting_customer';
+import { attemptEntries, readGatewayAttempts, withGatewayAttempt } from './gateway-attempts';
+import { type MetaDataEntry, readLedger, samePaymentId } from './ledger';
 
 export interface AwaitingCustomerStamp {
 	method_id: string;
@@ -18,24 +17,14 @@ export interface AwaitingCustomerStamp {
 export function readAwaitingCustomer(
 	metaData: readonly MetaDataEntry[] | null | undefined
 ): AwaitingCustomerStamp | null {
-	const entry = metaData?.find(({ key }) => key === AWAITING_CUSTOMER_META_KEY);
-	let value: unknown = entry?.value;
-	if (typeof value === 'string') {
-		try {
-			value = JSON.parse(value) as unknown;
-		} catch {
-			return null;
-		}
-	}
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-	const stamp = value as Record<string, unknown>;
-	if (typeof stamp.method_id !== 'string' || typeof stamp.attempt_id !== 'string') return null;
+	const attempt = readGatewayAttempts(metaData).awaiting;
+	if (!attempt?.awaiting) return null;
 	return {
-		method_id: stamp.method_id,
-		destination: typeof stamp.destination === 'string' ? stamp.destination : null,
-		attempt_id: stamp.attempt_id,
-		sent_at_gmt: typeof stamp.sent_at_gmt === 'string' ? stamp.sent_at_gmt : '',
-		cashier_id: typeof stamp.cashier_id === 'number' ? stamp.cashier_id : 0,
+		method_id: attempt.methodId,
+		destination: attempt.awaiting.destination,
+		attempt_id: attempt.id,
+		sent_at_gmt: attempt.awaiting.atGmt ?? '',
+		cashier_id: attempt.cashierId,
 	};
 }
 
@@ -56,12 +45,21 @@ export function activeAwaitingCustomer(
 	return live ? null : stamp;
 }
 
-/** The stamp as the order document carries it; `null` removes it (a cancelled invoice). */
+/** Until the next adoption: the stamp's attempt alone awaits the customer; `null` clears all. */
 export function withAwaitingCustomer(
 	metaData: readonly MetaDataEntry[] | null | undefined,
 	stamp: AwaitingCustomerStamp | null
 ): MetaDataEntry[] {
-	const result = (metaData ?? []).filter(({ key }) => key !== AWAITING_CUSTOMER_META_KEY);
-	if (stamp) result.push({ key: AWAITING_CUSTOMER_META_KEY, value: stamp });
-	return result;
+	const entries = attemptEntries(metaData) ?? [];
+	const mine = (id: string) => !!stamp && samePaymentId(id, stamp.attempt_id);
+	let result = [...(metaData ?? [])];
+	for (const [id, entry] of entries)
+		if (entry.awaiting != null && !mine(id))
+			result = withGatewayAttempt(result, id, { awaiting: null });
+	if (!stamp) return result;
+	const { method_id, cashier_id, sent_at_gmt } = stamp;
+	const awaiting = { destination: stamp.destination, at_gmt: sent_at_gmt };
+	const known = entries.find(([id]) => mine(id))?.[0];
+	const fresh = known ? {} : { fate: 'sent', method_id, cashier_id, sent_at_gmt };
+	return withGatewayAttempt(result, known ?? stamp.attempt_id, { ...fresh, awaiting });
 }
