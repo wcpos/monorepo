@@ -130,7 +130,13 @@ export function leaveCheckout(uuid: string) {
 	if (!snapshot.checkoutOrders.has(uuid)) return;
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
-	publish({ ...snapshot, checkoutOrders });
+	publish({ ...snapshot, checkoutOrders, selectedReceiptOrder: withoutProvisional(uuid) });
+}
+/** The selection, minus a derived (never confirmed) receipt of this order. */
+function withoutProvisional(uuid: string) {
+	return snapshot.selectedReceiptOrder === uuid && !snapshot.receiptOrders.has(uuid)
+		? null
+		: snapshot.selectedReceiptOrder;
 }
 /**
  * Move an order to its receipt stage. Selecting it brings the receipt on screen,
@@ -185,8 +191,16 @@ export function resetCheckoutMode() {
 	});
 }
 
-export function releaseReceiptAutoPrint(uuid: string): void {
+/**
+ * A sale the completion could not confirm (reopened, cancelled, unrefreshed) gives back what
+ * its derived receipt took: the auto-print claim, so the next paid attempt prints once, and a
+ * selection the cashier made on it before confirmation, so a reopened order shows its tender.
+ */
+export function releaseUnconfirmedReceipt(uuid: string): void {
 	receiptPrintAttempts.delete(uuid);
+	const selectedReceiptOrder = withoutProvisional(uuid);
+	if (selectedReceiptOrder !== snapshot.selectedReceiptOrder)
+		publish({ ...snapshot, selectedReceiptOrder });
 }
 
 export function isReceiptStage(

@@ -70,7 +70,7 @@ import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
-	releaseReceiptAutoPrint,
+	releaseUnconfirmedReceipt,
 	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
@@ -743,7 +743,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
 					else {
 						// Let a later paid attempt auto-print again, as a first close attempt does.
-						releaseReceiptAutoPrint(order.uuid);
+						releaseUnconfirmedReceipt(order.uuid);
 						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
 						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
 						logger.info(closeMessage({ kind: closed, order: summary }, t), {
@@ -785,7 +785,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					// settled or cancelled by the store (the stamp goes with the invoice); there is
 					// nothing left to finish. A later paid attempt can auto-print again.
 					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
-					else releaseReceiptAutoPrint(order.uuid);
+					else releaseUnconfirmedReceipt(order.uuid);
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}

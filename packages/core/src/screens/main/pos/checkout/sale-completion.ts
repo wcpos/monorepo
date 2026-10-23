@@ -33,7 +33,7 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
-import { enterReceipt, releaseReceiptAutoPrint } from './checkout-mode';
+import { enterReceipt, releaseUnconfirmedReceipt } from './checkout-mode';
 import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
 import { persistProvenance } from './provenance/persist-provenance';
@@ -405,7 +405,7 @@ async function finishSale(
 			}
 		}
 		if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
-			releaseReceiptAutoPrint(order.uuid);
+			releaseUnconfirmedReceipt(order.uuid);
 			return {
 				// The store took the money but no refresh confirmed the resident: the attempt stays
 				// for the bridge, which finishes the sale once the paid order is adopted.
@@ -453,12 +453,12 @@ async function finishSale(
 			ctx.stockAdjustment
 		);
 		if (refreshed !== 'refreshed') {
-			releaseReceiptAutoPrint(order.uuid);
+			releaseUnconfirmedReceipt(order.uuid);
 			return { outcome: 'not-completed', summary: null };
 		}
 		latest = payload();
 		if (latest.status === 'cancelled' || !isSaleComplete(outcome, ctx.dp, latest)) {
-			releaseReceiptAutoPrint(order.uuid);
+			releaseUnconfirmedReceipt(order.uuid);
 			return { outcome: 'not-completed', summary: null };
 		}
 	}

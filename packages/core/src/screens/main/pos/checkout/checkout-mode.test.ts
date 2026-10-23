@@ -18,7 +18,7 @@ import {
 	markOrderQueuedOffline,
 	markOrderSaveRejected,
 	markOrderSaving,
-	releaseReceiptAutoPrint,
+	releaseUnconfirmedReceipt,
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
@@ -276,10 +276,10 @@ it('finishing a confirmed receipt sets no skip', () => {
 	enterReceipt('a', { select: false });
 	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
 });
-it('releaseReceiptAutoPrint frees the claim for a sale paid again', () => {
+it('releaseUnconfirmedReceipt frees the claim for a sale paid again', () => {
 	expect(claimReceiptAutoPrint('a')).toBe(true);
 	expect(claimReceiptAutoPrint('a')).toBe(false);
-	releaseReceiptAutoPrint('a');
+	releaseUnconfirmedReceipt('a');
 	expect(claimReceiptAutoPrint('a')).toBe(true);
 });
 it('useOrderCheckoutStage reads the status off the record', () => {
@@ -289,4 +289,20 @@ it('useOrderCheckoutStage reads the status off the record', () => {
 		payload: { meta_data: [], status: 'completed' },
 	} as unknown as EngineRecord<'orders'>;
 	expect(renderHook(() => useOrderCheckoutStage(paid)).result.current).toBe('receipt');
+});
+
+it('releaseUnconfirmedReceipt withdraws a selection made before confirmation, never a confirmed one', () => {
+	enterCheckout('a');
+	selectReceipt('a');
+	releaseUnconfirmedReceipt('a');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	enterReceipt('b');
+	releaseUnconfirmedReceipt('b');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('b');
+});
+it('leaveCheckout drops a selection pointing at the derived receipt it ends', () => {
+	enterCheckout('a');
+	selectReceipt('a');
+	leaveCheckout('a');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 });
