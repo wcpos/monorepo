@@ -21,8 +21,19 @@ const TURN = {
 	reduceMotion: ReduceMotion.Never,
 };
 
-/** Tailwind's one-revolution-a-second utility; the Loader's `web:animate-spin` is the same keyframes. */
-const SPIN_CLASS = 'animate-spin';
+/**
+ * The Loader's own class, not the bare utility: global.css zeroes every animation under
+ * `prefers-reduced-motion` EXCEPT nodes carrying `web:animate-spin` or `web:animate-indeterminate`,
+ * the functional waits (the motion registry's `spinner` is exempt). The bare `animate-spin` would
+ * leave a reduced-motion user with no sign that a sync is running (Codex review).
+ */
+const SPIN_CLASS = 'web:animate-spin';
+
+const FULL_TURN_DEGREES = 360;
+/** The rest of a turn, at the registry's speed: how long the glyph still needs to come upright. */
+const restOfTurn = (degrees: number) => (SPINNER * degrees) / FULL_TURN_DEGREES;
+/** A zero-length step inside a sequence (the reset to 0 between a finished turn and the laps). */
+const INSTANT = 0;
 
 /**
  * Turns its child in place while `active`, and stops it upright: the turn in progress finishes
@@ -43,28 +54,41 @@ export function Spin({ active, children }: { active: boolean; children: React.Re
 	React.useEffect(() => {
 		if (Platform.isNative) {
 			if (active) {
-				const spin = withRepeat(withTiming(360, TURN), -1, false, undefined, ReduceMotion.Never);
+				const spin = withRepeat(
+					withTiming(FULL_TURN_DEGREES, TURN),
+					-1,
+					false,
+					undefined,
+					ReduceMotion.Never
+				);
 				// Started again mid-turn (the finishing turn below was still running): finish that
 				// turn first and restart the laps from 0. `withRepeat` takes the value it starts at
 				// as every lap's start, so a repeat begun at 270 would play 270→360 over and over
 				// and jump back each lap (Codex review).
-				const from = rotation.value % 360;
+				const from = rotation.value % FULL_TURN_DEGREES;
+				// Every step exempt from reduce-motion, the reset included: a reduced-motion sequence
+				// skips an intermediate step WITHOUT landing on its destination, so an unexempt reset
+				// left the repeat starting at 360 and every lap 360→360 (Codex review).
 				rotation.value =
 					from === 0
 						? spin
 						: withSequence(
-								withTiming(360, { ...TURN, duration: (SPINNER * (360 - from)) / 360 }),
-								withTiming(0, { duration: 0 }),
+								ReduceMotion.Never,
+								withTiming(FULL_TURN_DEGREES, {
+									...TURN,
+									duration: restOfTurn(FULL_TURN_DEGREES - from),
+								}),
+								withTiming(0, { duration: INSTANT, reduceMotion: ReduceMotion.Never }),
 								spin
 							);
 				return () => cancelAnimation(rotation);
 			}
 			// Finish the turn at the same speed, then rest at 0. A glyph that never turned stays.
-			const rest = 360 - (rotation.value % 360);
-			if (rest === 360) return;
+			const rest = FULL_TURN_DEGREES - (rotation.value % FULL_TURN_DEGREES);
+			if (rest === FULL_TURN_DEGREES) return;
 			rotation.value = withTiming(
 				rotation.value + rest,
-				{ ...TURN, duration: (SPINNER * rest) / 360 },
+				{ ...TURN, duration: restOfTurn(rest) },
 				(finished) => {
 					if (finished) rotation.value = 0;
 				}

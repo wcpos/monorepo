@@ -87,8 +87,18 @@ it('native: a restart mid-turn finishes the turn before the laps repeat from 0',
 	sharedValues[0].value = 340;
 	rerender(<Spin active>{null}</Spin>);
 	expect(sequences).toHaveLength(1);
-	const [finish, reset, laps] = sequences[0] as { toValue?: number; __anim: string }[];
+	// The sequence and its reset are exempt from reduce-motion, or the reset is skipped without
+	// landing on 0 and every lap after a restart is 360→360.
+	const [reduceMotion, finish, reset, laps] = sequences[0] as {
+		toValue?: number;
+		__anim: string;
+	}[];
+	expect(reduceMotion).toBe('never');
 	expect(finish).toMatchObject({ __anim: 'timing', toValue: 360 });
+	expect(timings[timings.length - 1]).toMatchObject({
+		toValue: 0,
+		config: { duration: 0, reduceMotion: 'never' },
+	});
 	// The finishing timing is pushed after the laps' and before the reset's: the rest of the turn
 	// at the same speed.
 	expect(timings[timings.length - 2]).toMatchObject({
