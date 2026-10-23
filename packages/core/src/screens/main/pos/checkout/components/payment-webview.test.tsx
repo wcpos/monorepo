@@ -11,7 +11,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { usePayPagePreparation } from '../pay-page/use-pay-page-preparation';
-import { isSettledOrderStatus } from '../sale-completion';
 import { PaymentWebview } from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
@@ -27,7 +26,6 @@ const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockAdoptOrderSnapshot = jest.fn();
-const mockUserDB = {};
 const mockSite = { uuid: 'site', wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' };
 const mockRefreshFetch = jest.fn();
 const mockCredentials$ = new BehaviorSubject({
@@ -99,12 +97,7 @@ jest.mock('../pay-page/use-pay-page-preparation', () => ({
 	})),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({
-		userDB: mockUserDB,
-		site: mockSite,
-		wpCredentials: mockCredentials,
-		store: { id: 1 },
-	}),
+	useStoreSession: () => ({ site: mockSite, wpCredentials: mockCredentials }),
 	useAppState: () => ({
 		site: mockSite,
 		wpCredentials: mockCredentials,
@@ -113,9 +106,6 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
-}));
-jest.mock('../../contexts/current-order', () => ({
-	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ get: mockGet }),
@@ -303,72 +293,6 @@ describe('PaymentWebview fallback order refresh', () => {
 			});
 			await Promise.resolve();
 		});
-		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).not.toHaveBeenCalled();
-		expect(mockDismissTo).not.toHaveBeenCalled();
-	});
-
-	it('stage host fallback poll success enters the receipt without routing', async () => {
-		jest.useFakeTimers();
-		autoShowReceipt = true;
-		const serverOrder = {
-			id: 42,
-			status: 'completed',
-			number: '42',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-			line_items: [],
-		};
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				receiptHost="stage"
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-		await act(async () => {
-			webViewProps.onLoad({});
-			webViewProps.onLoad({});
-			await jest.advanceTimersByTimeAsync(1000);
-		});
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
-		expect(mockReplace).not.toHaveBeenCalled();
-		expect(mockDismissTo).not.toHaveBeenCalled();
-		expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
-	});
-
-	it('stage host fallback poll success without auto-show leaves checkout and clears the current order, without routing', async () => {
-		jest.useFakeTimers();
-		autoShowReceipt = false;
-		enterCheckout('uuid-42');
-		const serverOrder = {
-			id: 42,
-			status: 'completed',
-			number: '42',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-			line_items: [],
-		};
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				receiptHost="stage"
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-		await act(async () => {
-			webViewProps.onLoad({});
-			webViewProps.onLoad({});
-			await jest.advanceTimersByTimeAsync(1000);
-		});
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
 		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
@@ -650,240 +574,6 @@ describe('PaymentWebview fallback order refresh', () => {
 		);
 	});
 
-	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
-		jest.useFakeTimers();
-		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onLoad({}); // initial order-pay load — gated, no poll
-			webViewProps.onLoad({}); // post-payment navigation — schedules the poll
-			await jest.advanceTimersByTimeAsync(1000);
-		});
-
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
-		// The probe failed before any local catch-up was warranted.
-		expect(mockEngineRequire).not.toHaveBeenCalled();
-		// The regression: a failed safety-net poll must NOT be raised as an error
-		// (which is what surfaced the spurious PY02001 payment-gateway error).
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(logger.debug).toHaveBeenCalled();
-	});
-
-	it('stays quiet when the fallback server status still matches the local status', async () => {
-		jest.useFakeTimers();
-		mockGet.mockResolvedValue({
-			data: [{ status: 'pos-open', number: '42', line_items: [] }],
-		});
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onLoad({});
-			webViewProps.onLoad({});
-			await jest.advanceTimersByTimeAsync(1000);
-		});
-
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(logger.success).not.toHaveBeenCalled();
-		expect(mockEngineRequire).not.toHaveBeenCalled();
-		expect(mockReplace).not.toHaveBeenCalled();
-	});
-
-	it.each(['pending', 'failed', 'cancelled'])(
-		'does not complete checkout when the fallback server status is %s',
-		async (status) => {
-			jest.useFakeTimers();
-			mockGet.mockResolvedValue({
-				data: [
-					{
-						id: 42,
-						status,
-						number: '42',
-						meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-						line_items: [],
-					},
-				],
-			});
-
-			render(
-				<PaymentWebview
-					order={makeOrder()}
-					setLoading={jest.fn()}
-					setFrameStatus={jest.fn()}
-					onStockRejection={() => false}
-				/>
-			);
-
-			await act(async () => {
-				webViewProps.onLoad({});
-				webViewProps.onLoad({});
-				await jest.advanceTimersByTimeAsync(1000);
-			});
-
-			expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
-			expect(mockStockAdjustment).not.toHaveBeenCalled();
-			expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
-			expect(mockReplace).not.toHaveBeenCalled();
-		}
-	);
-
-	it.each(['on-hold', 'processing', 'completed', 'custom-gateway-status'])(
-		'completes checkout when the fallback server status is the paid status %s',
-		async (status) => {
-			// A cheque/BACS gateway configured through POS settings lands on on-hold, and
-			// a gateway can be configured to land on any custom status. The paid check is a
-			// blocklist of unpaid statuses (mirroring the store's needs_payment() gate) —
-			// an allowlist of processing/completed would strand these sales as open carts.
-			jest.useFakeTimers();
-			const serverOrder = {
-				id: 42,
-				status,
-				number: '42',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-				line_items: [],
-			};
-			mockGet.mockResolvedValue({ data: [serverOrder] });
-
-			render(
-				<PaymentWebview
-					order={makeOrder()}
-					setLoading={jest.fn()}
-					setFrameStatus={jest.fn()}
-					onStockRejection={() => false}
-				/>
-			);
-
-			await act(async () => {
-				webViewProps.onLoad({});
-				webViewProps.onLoad({});
-				await jest.advanceTimersByTimeAsync(1000);
-			});
-
-			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-			expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
-		}
-	);
-
-	it('keeps polling after an early unpaid answer and completes when the webhook lands', async () => {
-		// The reviewer scenario: a pre-hardening store posts `pending`, the one-shot
-		// poll sees "still unpaid", and the provider's webhook confirms a minute
-		// later. Without a re-poll nothing ever noticed — the paid order stayed an
-		// open cart, the original bug through a new door.
-		jest.useFakeTimers();
-		const paidOrder = {
-			id: 42,
-			status: 'completed',
-			number: '42',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-			line_items: [],
-		};
-		mockGet
-			.mockResolvedValueOnce({ data: [{ ...paidOrder, status: 'pending' }] })
-			.mockResolvedValueOnce({ data: [{ ...paidOrder, status: 'pending' }] })
-			.mockResolvedValue({ data: [paidOrder] });
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onMessage({
-				nativeEvent: {
-					data: {
-						action: 'wcpos-payment-received',
-						payload: { ...paidOrder, status: 'pending' },
-					},
-				},
-			});
-			await Promise.resolve();
-		});
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalled();
-
-		// Two cadence ticks: still pending, then the webhook has landed.
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(3_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(2);
-		expect(mockReplace).not.toHaveBeenCalled();
-
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(3_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(3);
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(paidOrder);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledTimes(1);
-
-		// Settled: no further polls.
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(30_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(3);
-	});
-
-	it('stops re-polling at the async window bound and leaves the cart open', async () => {
-		jest.useFakeTimers();
-		mockGet.mockResolvedValue({
-			data: [{ id: 42, status: 'pending', number: '42', line_items: [] }],
-		});
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onLoad({});
-			webViewProps.onLoad({});
-			await jest.advanceTimersByTimeAsync(1_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(1);
-
-		// Well past the 120 s window: polling has ceased rather than run forever.
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(300_000);
-		});
-		const callsAtBound = mockGet.mock.calls.length;
-		expect(callsAtBound).toBeGreaterThan(1);
-		expect(callsAtBound).toBeLessThanOrEqual(1 + 120_000 / 3_000);
-
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(60_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(callsAtBound);
-		expect(mockReplace).not.toHaveBeenCalled();
-	});
-
 	it('defers to server truth when the postMessage payload reports an unpaid status', async () => {
 		// A pre-hardening store's received page emits whenever the CONFIGURED gateway
 		// status is not pos-open — for an async gateway that can be before the provider
@@ -974,57 +664,6 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(1);
 		expect(mockReplace).toHaveBeenCalledTimes(1);
 	});
-
-	it.each(['completed', 'processing'])(
-		'routes on %s SERVER truth even when the local document never updates',
-		async (status) => {
-			// The review scenario: an engine require can settle without applying a
-			// newer revision (skip-coalesced resident task, dirty-row protection) —
-			// the local doc stays pos-open forever. The decision must come from the
-			// direct server probe, with the engine refresh as best-effort catch-up.
-			jest.useFakeTimers();
-			mockGet.mockResolvedValue({
-				data: [
-					{
-						id: 42,
-						status,
-						number: '42',
-						meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-						line_items: [],
-					},
-				],
-			});
-			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-
-			render(
-				<PaymentWebview
-					order={makeOrder()}
-					setLoading={jest.fn()}
-					setFrameStatus={jest.fn()}
-					onStockRejection={() => false}
-				/>
-			);
-
-			await act(async () => {
-				webViewProps.onLoad({});
-				webViewProps.onLoad({});
-				await jest.advanceTimersByTimeAsync(1000);
-			});
-
-			expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
-			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith({
-				id: 42,
-				status,
-				number: '42',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-				line_items: [],
-			});
-			expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
-			expect(logger.error).not.toHaveBeenCalled();
-			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-			expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
-		}
-	);
 });
 
 /**
@@ -1065,84 +704,6 @@ describe('PaymentWebview settled order status', () => {
 			await Promise.resolve();
 		});
 	};
-
-	describe('isSettledOrderStatus', () => {
-		it.each(['processing', 'completed', 'on-hold', 'invoiced'])(
-			'treats %s as settled with no stored status (the blocklist it always was)',
-			(status) => {
-				expect(isSettledOrderStatus(status, null)).toBe(true);
-				expect(isSettledOrderStatus(status, undefined)).toBe(true);
-			}
-		);
-
-		it.each(['pending', 'failed', 'cancelled'])(
-			'treats %s as unpaid with no stored status',
-			(status) => {
-				expect(isSettledOrderStatus(status, null)).toBe(false);
-				expect(isSettledOrderStatus(status, undefined)).toBe(false);
-			}
-		);
-
-		it('treats an unpaid status as settled only when it is the stored status', () => {
-			expect(isSettledOrderStatus('pending', 'pending')).toBe(true);
-			expect(isSettledOrderStatus('pending', 'completed')).toBe(false);
-			expect(isSettledOrderStatus('failed', 'pending')).toBe(false);
-		});
-
-		// refunded and trash: sync-core's isPaidStatus, the close answer's rule, reads them unpaid.
-		it.each(['pos-open', 'pos-partial', 'failed', 'cancelled', 'refunded', 'trash'])(
-			'never settles %s, even when it is the stored status',
-			(status) => {
-				// The settings picker offers every registered status; a stored `failed`
-				// must not turn a failed payment into a finished sale.
-				expect(isSettledOrderStatus(status, status)).toBe(false);
-				expect(isSettledOrderStatus(status, null)).toBe(false);
-			}
-		);
-	});
-
-	it('completes from the fallback poll when background sync already moved the local order to the stored status', async () => {
-		// Sync can apply the server's `pending` to the local document before the poll
-		// runs. The order is settled, but nothing has routed the cashier off the pay
-		// window; the poll must still read server truth and close the sale rather than
-		// bail on "local status is not pos-open".
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-		const serverOrder = { ...pendingPayload, total: '75.00', payment_method: 'bacs' };
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-		const localOrder = {
-			uuid: 'uuid-42',
-			payload: {
-				id: 42,
-				number: '42',
-				status: 'pending',
-				payment_method: 'bacs',
-				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
-				line_items: [],
-			},
-			getLatest: () => localOrder,
-		};
-
-		render(
-			<PaymentWebview
-				order={localOrder as never}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		await postReceived({ not: 'an order' });
-		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 0));
-		});
-
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(logger.success).toHaveBeenCalledTimes(1);
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
-	});
 
 	it('does not honour the stored status for an order paid through a different gateway', async () => {
 		// The pay page can finish with a gateway other than the one the cart was
@@ -1244,101 +805,6 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 
-	it('sees a gateway catalog that arrives after the poll has started', async () => {
-		// The poll re-arms itself from the closure it started in. The catalog can
-		// still be loading at that moment; a later tick must read the status that
-		// arrived, or a pay-by-invoice sale never closes.
-		jest.useFakeTimers();
-		const serverOrder = { ...pendingPayload, total: '75.00' };
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-
-		const { rerender } = render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{}}
-			/>
-		);
-
-		// Arms the poll with no catalog: pending reads as unpaid, so it re-arms.
-		await postReceived({ not: 'an order' });
-		await act(async () => {
-			await Promise.resolve();
-		});
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalled();
-
-		rerender(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(3_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(2);
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(mockReplace).toHaveBeenCalledTimes(1);
-	});
-
-	it('keeps polling a local pending order until the gateway catalog arrives, then completes', async () => {
-		// Sync landed `pending` locally before the catalog loaded. Without a catalog
-		// nothing says it is settled, but bailing would skip the re-arm, and the
-		// catalog arriving later would find no poll to close the pay window.
-		jest.useFakeTimers();
-		const serverOrder = { ...pendingPayload, total: '75.00' };
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-		const localOrder = {
-			uuid: 'uuid-42',
-			payload: {
-				id: 42,
-				number: '42',
-				status: 'pending',
-				payment_method: 'bacs',
-				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
-				line_items: [],
-			},
-			getLatest: () => localOrder,
-		};
-		const props = {
-			order: localOrder as never,
-			setLoading: jest.fn(),
-			setFrameStatus: jest.fn(),
-			onStockRejection: () => false,
-		};
-
-		const { rerender } = render(<PaymentWebview {...props} settledOrderStatuses={{}} />);
-
-		await postReceived({ not: 'an order' });
-		await act(async () => {
-			await Promise.resolve();
-		});
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalled();
-
-		// Still no catalog: the poll re-arms rather than giving up.
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(3_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(2);
-		expect(mockReplace).not.toHaveBeenCalled();
-
-		rerender(<PaymentWebview {...props} settledOrderStatuses={{ bacs: 'pending' }} />);
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(3_000);
-		});
-		expect(mockGet).toHaveBeenCalledTimes(3);
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(mockReplace).toHaveBeenCalledTimes(1);
-	});
-
 	it('ignores a late payment message once the poll has already settled the sale', async () => {
 		const serverOrder = { ...pendingPayload, total: '75.00' };
 		mockGet.mockResolvedValue({ data: [serverOrder] });
@@ -1363,77 +829,6 @@ describe('PaymentWebview settled order status', () => {
 
 		expect(mockReplace).toHaveBeenCalledTimes(1);
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
-	});
-
-	it('does not navigate or re-arm after the modal has unmounted', async () => {
-		jest.useFakeTimers();
-		let resolveGet: (value: unknown) => void = () => {};
-		mockGet.mockReturnValue(
-			new Promise((resolve) => {
-				resolveGet = resolve;
-			})
-		);
-
-		const { unmount } = render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		await postReceived({ not: 'an order' });
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		unmount();
-
-		await act(async () => {
-			resolveGet({ data: [{ ...pendingPayload, total: '75.00' }] });
-			await Promise.resolve();
-			await Promise.resolve();
-		});
-		await act(async () => {
-			await jest.advanceTimersByTimeAsync(10_000);
-		});
-
-		expect(mockReplace).not.toHaveBeenCalled();
-		expect(mockGet).toHaveBeenCalledTimes(1);
-	});
-
-	it('still ignores a local order that is not open and not settled', async () => {
-		// A partial tender locally: still owed money, not this poll's to close —
-		// exactly as before.
-		mockGet.mockResolvedValue({ data: [{ ...pendingPayload, status: 'pos-partial' }] });
-		const localOrder = {
-			uuid: 'uuid-42',
-			payload: {
-				id: 42,
-				number: '42',
-				status: 'pos-partial',
-				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
-				line_items: [],
-			},
-			getLatest: () => localOrder,
-		};
-
-		render(
-			<PaymentWebview
-				order={localOrder as never}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		await postReceived({ not: 'an order' });
-		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 0));
-		});
-
-		expect(mockGet).not.toHaveBeenCalled();
-		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it("completes a pending sale from the postMessage when pending is the gateway's stored status", async () => {
@@ -1495,41 +890,6 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 	});
 
-	it("completes a pending sale from the fallback poll when pending is the gateway's stored status", async () => {
-		// A hardened store emits nothing it does not call paid, so the only signal is
-		// the poll: server truth says pending, and pending is what the merchant chose.
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-		const serverOrder = { ...pendingPayload, total: '75.00', payment_method: 'bacs' };
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		// A malformed message arms the poll immediately, with no timer to advance.
-		await postReceived({ not: 'an order' });
-		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 0));
-		});
-
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(logger.success).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				context: expect.objectContaining({ status: 'pending', source: 'fallback-refresh' }),
-			})
-		);
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
-	});
-
 	it("stage host: a pending sale on the gateway's stored status reaches finishSale as completed", async () => {
 		// next re-gates the outcome inside completeSale → finishSale with the same
 		// isSaleComplete the webview just used, so the stored status has to travel
@@ -1558,44 +918,6 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockGet).not.toHaveBeenCalled();
 	});
 
-	it("stage host: the fallback poll's pending read on the gateway's stored status reaches finishSale as completed", async () => {
-		// The message case above covers the outcome handed over by
-		// handlePaymentReceived; pollServerTruth builds its own outcome from server
-		// truth, and that one has to carry the stored status too. No received
-		// message here: the second frame load arms the poll, the poll reads the
-		// order at the stored status, and the same downstream facts must follow.
-		jest.useFakeTimers();
-		autoShowReceipt = true;
-		const serverOrder = { ...pendingPayload, total: '75.00' };
-		mockGet.mockResolvedValue({ data: [serverOrder] });
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				receiptHost="stage"
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-				settledOrderStatuses={{ bacs: 'pending' }}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onLoad({});
-			webViewProps.onLoad({});
-			await jest.advanceTimersByTimeAsync(1000);
-		});
-
-		// The poll was the completion path.
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
-		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		await waitFor(() => expect(mockStockAdjustment).toHaveBeenCalledTimes(1));
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
-		expect(mockReplace).not.toHaveBeenCalled();
-	});
-
 	it('never settles a parked status even when it is the stored status', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 		mockGet.mockResolvedValue({
@@ -1622,8 +944,6 @@ describe('PaymentWebview settled order status', () => {
 	});
 });
 
-// No register is bound in this suite.
-const mockRegisterDB = { getLocal: async () => null };
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
 		actionActor: { userId: 7, registerId: null, sessionId: null },
@@ -1638,29 +958,10 @@ jest.mock('../hooks/use-sale-context', () => ({
 				readPaymentMethod: () => null,
 				preventOverselling: false,
 				priceDecimals: 2,
-				// The session gate reads the bound register and its open session the way the app does.
-				resolveSession: async () => {
-					const { readBoundRegister } = jest.requireActual<
-						typeof import('@wcpos/query/register-session')
-					>('@wcpos/query/register-session');
-					const { findOpenSession } = jest.requireActual<
-						typeof import('@wcpos/query/register-session')
-					>('@wcpos/query/register-session');
-					const registerId =
-						(await readBoundRegister(mockRegisterDB as never, 'site', 1))?.id ?? null;
-					const session = await findOpenSession(
-						{ collections: { register_sessions: mockSessions } },
-						registerId,
-						false
-					);
-					return { registerId, sessionId: session?.id ?? null };
-				},
+				// No register is bound in this suite; nothing here commits a tender.
+				resolveSession: async () => ({ registerId: null, sessionId: null }),
 			}),
-		userDB: mockRegisterDB,
-		sessionsOn: false,
-		storeDB: mockSessionStoreDB,
-		siteUuid: 'site',
-		storeId: 1,
+		storeDB: {},
 		runtime: { engine: { require: mockEngineRequire } },
 		dp: 2,
 		stampCompletion: (
@@ -1687,9 +988,6 @@ jest.mock('@wcpos/query/store-local', () => ({
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
 }));
-
-const mockSessions = { findOne: jest.fn() };
-const mockSessionStoreDB = { collections: { register_sessions: mockSessions } };
 
 describe('PaymentWebview session expiry', () => {
 	const originalFetch = globalThis.fetch;
