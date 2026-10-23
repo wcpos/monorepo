@@ -1,7 +1,9 @@
 /** @jest-environment jsdom */
+import * as React from 'react';
+
 import { renderHook } from '@testing-library/react';
 
-import { useGround } from './ground';
+import { GroundInnerEdge, useGround, useGroundInnerEdge } from './ground';
 
 let mockPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
@@ -46,4 +48,38 @@ it('hands out the same frozen object every render', () => {
 	rerender();
 	expect(result.current).toBe(first);
 	expect(Object.isFrozen(first)).toBe(true);
+});
+
+// A pane with another pane across the resize handle keeps no inset on that edge: the handle is
+// the gutter, one page gutter wide (CODING_STANDARDS § Gutters).
+it.each([
+	['right', 'pl-gutter pr-0', 'ml-gutter mr-0', 'pt-gutter pb-gutter pl-gutter pr-0', 'pl-gutter'],
+	['left', 'pl-0 pr-gutter', 'ml-0 mr-gutter', 'pt-gutter pb-gutter pl-0 pr-gutter', 'pl-0'],
+] as const)('keeps no inset on the inner edge (%s)', (edge, px, mx, p, pl) => {
+	const wrapper = ({ children }: React.PropsWithChildren) =>
+		React.createElement(GroundInnerEdge, { value: edge }, children);
+	expect(renderHook(() => useGround(), { wrapper }).result.current).toMatchObject({
+		px,
+		mx,
+		p,
+		pl,
+		pt: 'pt-gutter',
+		gap: 'gap-gutter',
+		negMt: '-mt-gutter',
+		units: 3,
+	});
+});
+
+it('ignores the inner edge on a phone, whose panes are tabs', () => {
+	mockPhone = true;
+	const wrapper = ({ children }: React.PropsWithChildren) =>
+		React.createElement(GroundInnerEdge, { value: 'right' }, children);
+	expect(renderHook(() => useGround(), { wrapper }).result.current.px).toBe('px-4');
+});
+
+it('tells a surface its inner edge, or null outside a pane', () => {
+	expect(renderHook(() => useGroundInnerEdge()).result.current).toBeNull();
+	const wrapper = ({ children }: React.PropsWithChildren) =>
+		React.createElement(GroundInnerEdge, { value: 'left' }, children);
+	expect(renderHook(() => useGroundInnerEdge(), { wrapper }).result.current).toBe('left');
 });

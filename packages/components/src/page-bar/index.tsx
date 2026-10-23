@@ -27,7 +27,7 @@ export type PageBarProps = ViewProps & {
 	back?: { label: string; onPress: () => void; testID?: string };
 	/**
 	 * The page's search field: beside the title on wide widths, taking the width up to a cap; on
-	 * a phone, its own ruled row under the bar.
+	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23).
 	 */
 	search?: React.ReactNode;
 	/**
@@ -35,6 +35,13 @@ export type PageBarProps = ViewProps & {
 	 * pads it (the POS products column's `EdgeColumn`).
 	 */
 	insetTop?: boolean;
+	/**
+	 * The side of this bar's pane that faces another pane across a resize handle: that side keeps
+	 * no inset, because the handle is the gutter (one page gutter wide, `panels`), so the two
+	 * panes' surfaces sit one page gutter apart (the POS products column, with the cart beside
+	 * it; owner, 2026-10-23). The rest of the bar's inset is unchanged.
+	 */
+	innerEdge?: 'left' | 'right';
 };
 
 export function PageBar({
@@ -46,6 +53,7 @@ export function PageBar({
 	back,
 	search,
 	insetTop = true,
+	innerEdge,
 	children,
 	testID,
 	className,
@@ -72,7 +80,13 @@ export function PageBar({
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : 'px-gutter pt-gutter gap-4'
+					phone
+						? 'h-ctl gap-2 pr-2 pl-4'
+						: innerEdge === 'right'
+							? 'pl-gutter pt-gutter gap-4 pr-0'
+							: innerEdge === 'left'
+								? 'pr-gutter pt-gutter gap-4 pl-0'
+								: 'px-gutter pt-gutter gap-4'
 				)}
 			>
 				{(phone || onMenu) &&
@@ -132,7 +146,7 @@ export function PageBar({
 				<HStack className="items-center gap-1">{children}</HStack>
 			</HStack>
 			{phone && search != null && (
-				<View testID={id('search')} className="h-ctl border-border justify-center border-b px-2">
+				<View testID={id('search')} className="h-ctl justify-center px-2">
 					{search}
 				</View>
 			)}

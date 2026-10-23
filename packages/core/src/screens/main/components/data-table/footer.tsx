@@ -40,10 +40,14 @@ export function DataTableFooter({
 	const actions = useQueryStateActions();
 	const t = useT();
 	return (
-		// A caption row on the ground under the card: no rule of its own. Its mount aligns the
-		// text with the card's cells (`CaptionRowInset`: the card's gutter + the cell's 12).
-		<HStack testID="data-table-caption-row" className="min-h-ctl items-center">
-			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">{children}</HStack>
+		// A caption row on the ground under the card: no rule of its own, and no height of its own:
+		// it is its content's height (the `xs` sync button, 6 units; its press band keeps the 44
+		// touch target past the row), not a control row. Its mount aligns the text with the card's cells
+		// (`CaptionRowInset`: the card's gutter + the cell's 12).
+		<HStack testID="data-table-caption-row" className="items-center">
+			{/* The caption fills the row only as a layout slot: its child keeps its own width (shrinkable,
+			    never grown), so a trigger inside it is pressable on its text and icons alone. */}
+			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null

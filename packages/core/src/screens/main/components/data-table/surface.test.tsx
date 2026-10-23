@@ -26,12 +26,12 @@ beforeEach(() => {
 });
 
 // One gutter on every list surface (CODING_STANDARDS § Design, Gutters): the pages and the POS
-// products column alike.
-it('insets the card by the page gutter on its sides and bottom, leaving the top to the row above', () => {
+// products column alike. Under the card its own caption row sits the "between controls" 2 units
+// off, not the page gutter (owner, 2026-10-23).
+it('insets the card by the page gutter on its sides, 2 units above its caption row, leaving the top to the row above', () => {
 	render(<TableSurface testID="surface" />);
-	expect(classes()).toEqual(
-		expect.arrayContaining(['mx-gutter', 'mb-gutter', 'rounded-lg', 'border'])
-	);
+	expect(classes()).toEqual(expect.arrayContaining(['mx-gutter', 'mb-2', 'rounded-lg', 'border']));
+	expect(classes()).not.toContain('mb-gutter');
 	expect(classes().some((name) => /^(m|mt|my)-/.test(name))).toBe(false);
 });
 
@@ -53,21 +53,24 @@ it('insets the caption row by the gutter plus the cell padding, and by the gutte
 		return value;
 	};
 	expect(inset()).toEqual(['px-gutter pb-gutter', 'px-3']);
-	// The phone card has no side gutter, so the caption sits on the cell's 12 alone, and the
-	// screen pads the home indicator itself, so there is no bottom gutter either.
+	// The phone card runs edge to edge, so the caption takes the screen edge's 16 (4 + the cell's
+	// 12), as the chip row above it does, and the gutter above the tab bar (owner, 2026-10-23).
 	mockPhone = true;
-	expect(inset()).toEqual([null, 'px-3']);
+	expect(inset()).toEqual(['pb-gutter px-1', 'px-3']);
 });
 
 it('runs edge to edge on a phone', () => {
 	mockPhone = true;
 	render(<TableSurface testID="surface" />);
 	expect(classes()).toContain('border-t');
-	expect(classes().some((name) => /^(mx|mb|rounded)/.test(name))).toBe(false);
+	// 2 units above its caption row, as on the desktop; no side gutter, no radius.
+	expect(classes()).toContain('mb-2');
+	expect(classes().some((name) => /^(mx|rounded)/.test(name))).toBe(false);
 });
 
 // The tile ground gives the page gutter less the tile's own 4; on a phone the screen edge keeps
-// 16, as the chip row above the tiles does (owner, 2026-10-22).
+// 16, as the chip row above the tiles does (owner, 2026-10-22). Under the tiles it gives 4, so the
+// caption row sits 8 off the last tile's edge as it does off the card (owner, 2026-10-23).
 it('insets the tile ground by the gutter, and by 16 on a phone', () => {
 	const ground = () => {
 		const { unmount } = render(
@@ -81,7 +84,7 @@ it('insets the tile ground by the gutter, and by 16 on a phone', () => {
 		unmount();
 		return value;
 	};
-	expect(ground()).toEqual(['min-h-0 flex-1 px-gutter', '-mx-1 -mt-1 min-h-0 flex-1']);
+	expect(ground()).toEqual(['min-h-0 flex-1 pb-1 px-gutter', '-mx-1 -mt-1 min-h-0 flex-1']);
 	mockPhone = true;
-	expect(ground()).toEqual(['min-h-0 flex-1 px-4', '-mx-1 -mt-1 min-h-0 flex-1']);
+	expect(ground()).toEqual(['min-h-0 flex-1 pb-1 px-4', '-mx-1 -mt-1 min-h-0 flex-1']);
 });

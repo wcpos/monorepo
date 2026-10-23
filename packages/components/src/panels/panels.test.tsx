@@ -13,6 +13,8 @@ let mockDirection = 'horizontal';
 let mockHandle: PanelResizeHandleProps;
 let mockPointer: 'fine' | 'coarse' = 'fine';
 jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
+// Regular's unit: the handle is 3 of them wide, the page gutter (ledger line 5).
+jest.mock('../lib/use-spacing-unit', () => ({ useSpacingUnit: () => 4 }));
 jest.mock('react-native', () => ({
 	View: ({ children, className, onPointerEnter, onPointerLeave }: ViewProps) => (
 		<div
@@ -58,6 +60,11 @@ it.each(['horizontal', 'vertical'])(
 			order: 2,
 			hitTargetSize: 32,
 			disableDoubleTap: true,
+			// One page gutter across, the grip centred in it.
+			style:
+				direction === 'horizontal'
+					? { width: 12, height: '100%', alignItems: 'center', justifyContent: 'center' }
+					: { width: '100%', height: 12, alignItems: 'center', justifyContent: 'center' },
 		});
 		act(() => mockHandle.onDragging?.(true));
 		expect(bar).toHaveClass('bg-primary');

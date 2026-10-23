@@ -81,6 +81,16 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	// no fixed height, with no rule under it (ledger lines 8, 11).
 	const row = screen.getByTestId('bar').firstElementChild;
 	expect(row).toHaveClass('pt-gutter', 'px-gutter');
+	// A pane with another pane across a handle keeps no inset on that edge (ledger line 13).
+	for (const [innerEdge, classes] of [
+		['right', ['pl-gutter', 'pr-0']],
+		['left', ['pl-0', 'pr-gutter']],
+	] as const) {
+		const { unmount } = render(<PageBar testID="inner" title="Inner" innerEdge={innerEdge} />);
+		expect(screen.getByTestId('inner').firstElementChild).toHaveClass(...classes);
+		expect(screen.getByTestId('inner').firstElementChild).not.toHaveClass('px-gutter');
+		unmount();
+	}
 	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
 	expect(row).not.toHaveClass('border-b');
 	// A title-only bar is as tall as one with a control: the title's box is control-height.
@@ -134,7 +144,9 @@ it('puts the phone search on its own ruled row under the control row', () => {
 	expect(row.contains(screen.getByTestId('search'))).toBe(false);
 	expect(searchRow).toBe(screen.getByTestId('bar-search'));
 	expect(searchRow.contains(screen.getByTestId('search'))).toBe(true);
-	expect(searchRow).toHaveClass('h-ctl', 'border-b', 'px-2');
+	expect(searchRow).toHaveClass('h-ctl', 'px-2');
+	// No rule under the search either: the chip row's own spacing separates them (owner, 2026-10-23).
+	expect(searchRow).not.toHaveClass('border-b');
 });
 
 it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {

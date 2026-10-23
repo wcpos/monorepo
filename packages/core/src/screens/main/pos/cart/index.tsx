@@ -7,6 +7,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Skeleton } from '@wcpos/components/skeleton';
+import { cn } from '@wcpos/components/lib/utils';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
@@ -168,10 +169,14 @@ function CartColumn({
 			strip={barInStrip}
 		/>
 	);
-	// In its column the cart has no frame of its own: the register bar, the customer row and
-	// the foot run their hairlines to the column's edges (Paul, 2026-10-09).
+	// The cart has no frame of its own: the register bar, the customer row and the foot run their
+	// hairlines to the column's edges (Paul, 2026-10-09), and on the phone to the screen's (Paul,
+	// 2026-10-23: the tab had kept an 8 inset that drew a frame around the rows). The column
+	// paints the card colour; the phone tab stays on the ground, as the products tab does, because
+	// the tabs container pads the status bar in `bg-background` (columns ledger line 6: no band),
+	// and the rows, the totals and the open-order tabs paint their own card colour.
 	return (
-		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
+		<VStack className={cn('h-full gap-0', isColumn ? 'bg-card' : 'bg-background')}>
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
 			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&

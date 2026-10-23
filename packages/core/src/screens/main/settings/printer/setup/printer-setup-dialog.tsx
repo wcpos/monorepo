@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ActivityIndicator, Linking, Platform, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
 
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
@@ -17,6 +17,7 @@ import {
 } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { Icon, type IconName } from '@wcpos/components/icon';
+import { Loader } from '@wcpos/components/loader';
 import { OptionSelect, type SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -241,7 +242,7 @@ export function PrinterSetupDialog({
 	const status = (text: string, help?: string, stop?: () => void) => (
 		<View className="gap-1">
 			<View className="flex-row items-center gap-3">
-				<ActivityIndicator />
+				<Loader />
 				<Text className="flex-1 text-lg font-semibold">{text}</Text>
 				{stop && (
 					<Button testID="printer-setup-stop" variant="ghost" size="sm" onPress={stop}>

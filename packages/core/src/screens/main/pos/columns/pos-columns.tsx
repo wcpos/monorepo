@@ -14,6 +14,7 @@ import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mod
 import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
 import { EdgeColumn } from './edge-column';
+import { GroundInnerEdge } from '../../components/ground';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 
@@ -114,9 +115,14 @@ export function POSColumns() {
 													/>
 												</EdgeColumn>
 											) : (
-												<EdgeColumn testID="pos-products-column" className="bg-background">
-													{element}
-												</EdgeColumn>
+												// The products column's edge facing the cart keeps no inset: the handle
+												// placed above IS the gutter (ground.ts; ledger line 8). Named here, beside
+												// the handle, so the two halves of that rule live in one file.
+												<GroundInnerEdge value={productsOnRight ? 'left' : 'right'}>
+													<EdgeColumn testID="pos-products-column" className="bg-background">
+														{element}
+													</EdgeColumn>
+												</GroundInnerEdge>
 											)}
 										</Animated.View>
 									) : (
