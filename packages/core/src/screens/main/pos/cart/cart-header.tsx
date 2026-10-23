@@ -59,14 +59,21 @@ function StilledCartHeader() {
 						{`#${number}`}
 					</Text>
 				)}
-				{/* The customer gives way to the number: a long name truncates on the line. */}
-				<Text className="text-muted-foreground min-w-0 shrink" numberOfLines={1}>
-					{' · '}
-					<Text testID="checkout-ledger-customer" className="text-muted-foreground">
-						{format({ billing, shipping, id: customerId })}
-					</Text>
-					{created ? ` · ${dateTime(created)}` : null}
+				{/* The customer gives way to the number and the time: only the name can shrink, so
+				    a long name truncates and the creation time stays on the line. */}
+				<Text className="text-muted-foreground shrink-0">{' · '}</Text>
+				<Text
+					testID="checkout-ledger-customer"
+					className="text-muted-foreground min-w-0 shrink"
+					numberOfLines={1}
+				>
+					{format({ billing, shipping, id: customerId })}
 				</Text>
+				{created ? (
+					<Text className="text-muted-foreground shrink-0" numberOfLines={1}>
+						{` · ${dateTime(created)}`}
+					</Text>
+				) : null}
 			</HStack>
 		</HStack>
 	);
