@@ -87,9 +87,11 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 	mirror: jest.Mock;
 	raiseAttention: jest.Mock;
 	fetchOrderStatus: jest.Mock;
+	journal: jest.Mock;
 } {
 	return {
 		post: jest.fn(),
+		journal: jest.fn(async () => undefined),
 		isOnline: () => online,
 		cashierId: 7,
 		storeId: 9,
@@ -110,17 +112,94 @@ function responseError(status: number, code?: string, data: Record<string, unkno
 }
 
 describe('recordManualPayment', () => {
-	// ADR 0040 PR A: a tender the server cannot hear is refused; PR B queues it as a command.
-	it('offline is refused and nothing is written', async () => {
+	// ADR 0040 Decided 1 rules 2-3: an offline record is journaled, never posted, and the till
+	// asserts the status it derives (replaces "offline is refused and nothing is written").
+	it('offline journals the row, mirrors it with the derived status locally, via offline', async () => {
 		const deps = createDeps(false);
-		const original = structuredClone(order.meta_data);
 
-		const result = await recordManualPayment(order, cash, { amount: 42.5, tendered: 50 }, deps);
+		const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+
+		const row = expect.objectContaining({
+			id: UUID.toLowerCase(),
+			method_id: 'pos_cash',
+			amount: '100.00',
+			recorded_offline: true,
+		});
+		expect(deps.journal).toHaveBeenCalledWith('orders/1042/payments', { payment: row });
+		expect(deps.post).not.toHaveBeenCalled();
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{ payment: row, status: 'completed' },
+			{ accepted: true, local: true }
+		);
+		expect(result).toEqual({ kind: 'recorded', via: 'offline', row, order: null });
+	});
+
+	it('offline with no store id is refused, nothing journaled', async () => {
+		const deps = createDeps(false);
+
+		const result = await recordManualPayment({ ...order, id: null }, cash, { amount: 42.5 }, deps);
 
 		expect(result).toEqual({ kind: 'failed', reason: 'offline_unavailable' });
+		expect(deps.journal).not.toHaveBeenCalled();
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
-		expect(order.meta_data).toEqual(original);
+	});
+
+	it('offline partial leg mirrors pos-partial, no provenance', async () => {
+		const deps = { ...createDeps(false), persistProvenance: jest.fn(async () => undefined) };
+
+		const result = await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+		expect(deps.persistProvenance).not.toHaveBeenCalled();
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{ payment: expect.objectContaining({ amount: '42.50' }), status: 'pos-partial' },
+			{ accepted: true, local: true }
+		);
+		expect(result).toMatchObject({ kind: 'recorded', via: 'offline' });
+	});
+
+	it('offline completing leg persists provenance before journaling', async () => {
+		const calls: string[] = [];
+		const deps = {
+			...createDeps(false),
+			persistProvenance: jest.fn(async (options: { push: boolean }) => {
+				calls.push(`persisted push=${options.push}`);
+			}),
+		};
+		deps.journal.mockImplementation(async () => calls.push('journal'));
+		deps.mirror.mockImplementation(async () => calls.push('mirror'));
+
+		await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+
+		expect(calls).toEqual(['persisted push=false', 'journal', 'mirror']);
+	});
+
+	it('offline journal/mirror failures: failed outcome / RecordManualPaymentMirrorError', async () => {
+		const refused = createDeps(false);
+		const cause = new Error('journal write failed');
+		refused.journal.mockRejectedValue(cause);
+		expect(await recordManualPayment(order, cash, { amount: '42.50' }, refused)).toEqual({
+			kind: 'failed',
+			reason: 'preflight_failed',
+			cause,
+		});
+		expect(refused.mirror).not.toHaveBeenCalled();
+		const inFlight = new MoneyCommandError('in_flight', { sentAt: null } as never);
+		refused.journal.mockRejectedValue(inFlight);
+		expect(await recordManualPayment(order, cash, { amount: '42.50' }, refused)).toMatchObject({
+			kind: 'failed',
+			reason: 'in_flight',
+		});
+
+		const unmirrored = createDeps(false);
+		const mirrorFailure = new Error('resident write failed');
+		unmirrored.mirror.mockRejectedValue(mirrorFailure);
+		const promise = recordManualPayment(order, cash, { amount: '42.50' }, unmirrored);
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
+		await expect(promise).rejects.toMatchObject({
+			outcome: { kind: 'recorded', via: 'offline', order: null },
+			cause: mirrorFailure,
+		});
 	});
 
 	it('preserves the accepted online outcome when its local mirror fails', async () => {

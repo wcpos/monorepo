@@ -14,5 +14,8 @@ export function passThroughPoster(
 		settle: async () => undefined,
 		abandon: async () => undefined,
 		retire: async () => undefined,
+		defer: async () => {
+			throw new Error('money_command_not_deferrable');
+		},
 	});
 }

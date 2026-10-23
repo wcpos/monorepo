@@ -464,7 +464,8 @@ export class TerminalPaymentsService {
 	}
 	private create(input: BeginInput, resume: boolean): TerminalLeg {
 		// An offline reader payment would be authorized with no journaled row to recover it:
-		// offline tenders do not queue (OFFLINE_TENDERS_QUEUE is false; CodeRabbit 4343945871).
+		// a device `queue` is a later slice than OFFLINE_TENDERS_QUEUE's manual records (ADR 0040
+		// Decided 1 rule 2; CodeRabbit 4343945871).
 		if (input.offline) throw new Error('offline_unavailable');
 		const existing = this.legs.get(input.orderUuid)?.leg;
 		if (existing && existing.getState().phase !== 'final')

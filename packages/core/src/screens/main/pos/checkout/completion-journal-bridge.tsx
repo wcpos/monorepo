@@ -19,6 +19,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import {
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	isPaidStatus,
+	PAYMENT_ROW_REFUSALS,
+	type PaymentRowRefusal,
 	scopeDatabaseName,
 } from '@wcpos/sync-core';
 import {
@@ -34,10 +36,12 @@ import {
 	observeMoneyJournal,
 	observePendingCompletions,
 	pendingCompletions,
+	readOrderCommands,
 	resolveCompletionAttempt,
 } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
@@ -45,6 +49,7 @@ import {
 	subscribeTerminalPaymentsServiceStart,
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
+import { paymentRefusalAttention } from './payments/payment-refusal-attention';
 import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -85,11 +90,14 @@ export function SaleCompletionBridge(): null {
 	const ctx = useSaleContext();
 	const http = useRestHttpClient();
 	const httpRef = React.useRef(http);
+	const t = useT();
+	const tRef = React.useRef(t);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const onlineRef = React.useRef(online);
 	React.useLayoutEffect(() => {
 		httpRef.current = http;
-	}, [http]);
+		tRef.current = t;
+	}, [http, t]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -285,6 +293,31 @@ export function SaleCompletionBridge(): null {
 			void recoverWhenClaimsLapse();
 			armRetry();
 		};
+		/**
+		 * A record refused on its re-send: one failed story (ADR 0040 Decided 1 rule 4), told as the
+		 * tender tells it, and the attempt ends. Another refusal leaves the replay to judge the order.
+		 */
+		const raiseRefusal = async (
+			uuid: string,
+			refused: NonNullable<Awaited<ReturnType<typeof recoverMoneyCommands>>[number]['refused']>
+		) => {
+			const codes: Record<string, PaymentRowRefusal | undefined> = PAYMENT_ROW_REFUSALS;
+			const reason = codes[refused.code];
+			if (!reason || !refused.row) return;
+			const payload = (await findOrder(uuid))?.getLatest().payload;
+			logger.error(
+				...paymentRefusalAttention(tRef.current, {
+					row: refused.row,
+					order: refused.summary,
+					reason,
+					methodTitle: refused.row.method_id,
+					orderUuid: uuid,
+					orderId: payload?.id ?? refused.row.order_id,
+					orderNumber: payload?.number,
+				})
+			);
+			await resolveCompletionAttempt(storeDB, uuid);
+		};
 		/** The orders whose unanswered commands a re-send has now answered, with their answers. */
 		const recover = async (): Promise<ReadonlyMap<string, ResentCommand[]>> => {
 			if (current.stopped) return new Map();
@@ -299,6 +332,8 @@ export function SaleCompletionBridge(): null {
 							? Promise.reject(new Error('money_command_session_stopped'))
 							: client.post(url, body),
 				});
+				for (const { orderUuid, refused } of recovered)
+					if (refused) await raiseRefusal(orderUuid, refused).catch(() => undefined);
 				await recoverWhenClaimsLapse();
 				retryPending =
 					recovered.some(({ unanswered }) => unanswered) ||
@@ -367,6 +402,9 @@ export function SaleCompletionBridge(): null {
 				if (current.stopped) return;
 				if ((only && !only.has(uuid)) || skip?.has(uuid)) continue;
 				try {
+					// A record still journaled (an offline sale's) has no answer to judge: no unpaid start,
+					// no abandon, until the recovery answers it (ADR 0040 Decided 1 rule 3).
+					if ((await readOrderCommands(storeDB, uuid)).entries.length > 0) continue;
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
 					if (!resident) {
@@ -557,6 +595,9 @@ export function SaleCompletionBridge(): null {
 			enqueueOrderMutation(uuid, async (queue) => {
 				const attempt = (await pendingCompletions(storeDB))[uuid];
 				if (!attempt?.awaitingAdoption || current.stopped) return;
+				// An offline sale's resident reads paid and, with no chain, `residentHoldsAnswer` holds:
+				// only the journal says the store has not answered (ADR 0040 Decided 1 rule 3).
+				if ((await readOrderCommands(storeDB, uuid)).entries.length > 0) return;
 				const outcome = replayOf(attempt);
 				if (!isSaleComplete(outcome, current.ctx.dp, resident.getLatest().payload)) return;
 				// Only a whole document adopted after the answer stands in for the replay's refresh;

@@ -11,6 +11,8 @@ import {
 	isCompletingStatus,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
+	readLedger,
+	samePaymentId,
 } from '@wcpos/order-math';
 import { readOrderCommands } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
@@ -23,6 +25,7 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
+import { paymentRefusalAttention } from './payment-refusal-attention';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -91,9 +94,17 @@ export function useRecordManualPayment(
 			});
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
+				journal: post.defer,
+				// A sent record whose row the ledger lacks: an online one never answered, or an offline
+				// one deferred and not yet mirrored (a crash between the two). A deferred record already
+				// in the ledger is the earlier leg's: the next offline leg mints its own row.
 				unansweredRecord: async () => {
 					const { entries } = await readOrderCommands(storeDB, order.uuid);
-					const sent = entries.find(({ kind, sentAt }) => kind === 'record' && sentAt !== null);
+					const ledger = readLedger(order.getLatest().payload.meta_data ?? []);
+					const sent = entries.find(
+						({ kind, sentAt, id }) =>
+							kind === 'record' && sentAt !== null && !ledger.some((r) => samePaymentId(r.id, id))
+					);
 					return (sent?.body.payment as PaymentRow | undefined) ?? null;
 				},
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
@@ -101,14 +112,23 @@ export function useRecordManualPayment(
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				persistProvenance: async () => {
+				persistProvenance: async ({ push }) => {
 					try {
-						await persistSaleProvenance(ctx, {
-							order,
-							sessionId,
-							online: true,
-							extraMeta: input.extraMeta,
-						});
+						// Offline the stamp is saved, not pushed: the deferred record's provenance is read
+						// from it, and its re-send pushes it first (ADR 0040 Decided 1 rule 3).
+						if (push)
+							await persistSaleProvenance(ctx, {
+								order,
+								sessionId,
+								online: true,
+								extraMeta: input.extraMeta,
+							});
+						else {
+							const latest = cloneDeep(order.getLatest().payload.meta_data ?? []);
+							const facts = { sessionId, extraMeta: input.extraMeta };
+							const meta = await completionMetaFor(ctx, latest, facts);
+							if (!(await stampCompletion(order, meta))) throw new Error('provenance_save_failed');
+						}
 					} catch (error) {
 						// recordManualPayment turns this into its `provenance_save_failed` outcome;
 						// the push itself reports nothing, so the cause is kept for that one report.
@@ -125,9 +145,9 @@ export function useRecordManualPayment(
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async ({ payment, status }, { accepted }) => {
+				mirror: async ({ payment, status }, { accepted, local }) => {
 					try {
-						await post.mirror({ payment, order: status ? ({ status } as never) : null });
+						await post.mirror({ payment, order: status ? ({ status } as never) : null, local });
 						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
 						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
 							const meta_data = await completionMetaFor(ctx, latestMeta, {
@@ -150,44 +170,11 @@ export function useRecordManualPayment(
 					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
-					const number = paymentOrder.number || paymentOrder.uuid.slice(0, 8);
-					const values = { number, amount: row.amount, method: method.title };
-					const message =
-						reason === 'order_already_paid'
-							? t('payments.refusal.already_paid', values)
-							: summary?.balance
-								? t('payments.refusal.exceeds_balance_with_balance', {
-										...values,
-										balance: summary.balance,
-									})
-								: t('payments.refusal.exceeds_balance', values);
-					logger.error(message, {
-						// Two different stories with two different answers: an order already paid
-						// online needs a refund, an over-payment needs the store's balance taken
-						// instead. Neither is "payment handling hit an unexpected problem".
-						code:
-							reason === 'order_already_paid'
-								? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
-								: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
-						showToast: true,
-						terminal: {
-							operationType: 'sync.record',
-							outcome: 'failed',
-							operationId: row.id,
-						},
-						context: {
-							collection: 'orders',
-							recordId: paymentOrder.uuid,
-							direction: 'push',
-							type: 'payment.refused',
-							reason: message,
-							refusal: reason,
-							paymentId: row.id,
-							orderId: paymentOrder.id,
-							amount: row.amount,
-							methodId: row.method_id,
-						},
-					});
+					const { uuid: orderUuid, id: orderId, number: orderNumber } = paymentOrder;
+					const facts = { row, order: summary, reason, methodTitle: method.title };
+					logger.error(
+						...paymentRefusalAttention(t, { ...facts, orderUuid, orderId, orderNumber })
+					);
 				},
 			});
 			if (outcome.kind === 'failed') {

@@ -249,7 +249,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			: fixedAmount
 				? flow.entryAppliedMinor
 				: flow.state.entryMinor;
-	// A disabled tile, an offline reader included (offline tenders do not queue), is listed as
+	// A disabled tile, an offline reader included (only manual records journal offline), is listed as
 	// unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
 	const unavailable = flow.tiles.filter((tile) => tile.disabled);
 	const choosable = flow.tiles.filter((tile) => !tile.disabled);
