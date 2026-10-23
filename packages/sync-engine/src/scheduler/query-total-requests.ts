@@ -4,6 +4,9 @@
  * lease/retry/freshness discipline can't drift between them.
  */
 export const QUERY_TOTAL_LEASE_FOR_MS = 30 * 1_000;
+// The probe's one request deadline: five seconds under the lease, to settle the
+// probe before its claim can be taken over.
+export const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 export const QUERY_TOTAL_RETRY_AFTER_MS = 30 * 1_000;
 export const QUERY_TOTAL_FRESH_FOR_MS = 5 * 60 * 1_000;
 

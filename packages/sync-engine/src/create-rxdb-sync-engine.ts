@@ -101,6 +101,8 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_REQUEST_DEADLINE_MS,
+	type QueryTotalWooRequest,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -129,6 +131,7 @@ import {
 } from './write-path/write-plane';
 import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { createOrderRevisionDoor, type OrderRevisionDoor } from './write-path/order-revision';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
 import { createAutomaticTickGate } from './automatic-tick-gate';
@@ -578,6 +581,9 @@ export type RxdbSyncEngine = {
 	 */
 	whenActive(): Promise<ActiveScope>;
 	adoptOrderSnapshot(payload: unknown): Promise<'applied' | 'protected' | 'invalid'>;
+	/** The money poster's door to an order resident's revision: a status poll's naked stamp, which
+	 * the next order push goes out under (ADR 0040 §1.3; write-path/order-revision.ts). */
+	orderRevision: OrderRevisionDoor;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
@@ -891,10 +897,23 @@ export function createRxdbSyncEngine(
 		onPressureTransition: (transition) => cadence?.onServerPressureTransition(transition),
 		onPressureReadoutChanged: scheduleStatusChange,
 	});
-	// No lane given: the host-transport lane (the maintenance lanes pass their own).
-	const fetcher = (url: string, init?: RequestInit, lane?: EngineLaneName) =>
-		transport.request(url, init, { lane });
-	const queryTotal = transport.queryTotal(ports.queryTotal);
+	// No lane given: the host-transport lane.
+	const fetcher: EngineFetcher = (url, init) => transport.request(url, init);
+	// The host's query-total probe runs on its own request: its lane's label and its
+	// one deadline, so a black-holed probe is one pressure strike. A latched upgrade
+	// refusal answers "unsupported" without even a local replay (woocommerce-pos#1752).
+	const queryTotalRequest: EngineFetcher = (url, init) =>
+		transport.request(url, init, {
+			lane: 'query-total-retry',
+			deadlineMs: QUERY_TOTAL_REQUEST_DEADLINE_MS,
+		});
+	const hostQueryTotal = ports.queryTotal;
+	const queryTotal = hostQueryTotal && {
+		fetchWooQueryTotal: async (input: { request: QueryTotalWooRequest; signal?: AbortSignal }) =>
+			transport.updateRequired()
+				? null
+				: hostQueryTotal.fetchWooQueryTotal({ ...input, engineRequest: queryTotalRequest }),
+	};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
@@ -1727,7 +1746,7 @@ export function createRxdbSyncEngine(
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
 		syncBaseUrl: ports.site.syncBaseUrl,
-		fetcher,
+		fetcher: transport.request,
 		connectivity: () => {
 			try {
 				return connectivity();
@@ -2131,6 +2150,9 @@ export function createRxdbSyncEngine(
 			const { database } = await engine.whenActive();
 			return adoptActiveOrderSnapshot(database as unknown as SchedulerDrainDatabase, payload);
 		},
+		orderRevision: createOrderRevisionDoor({
+			resolveDatabase: async () => (await engine.whenActive()).database,
+		}),
 		hostTransport: () => hostTransport,
 		reconfigure: (config) => cadenceController.reconfigure(config),
 		db$: (cb) => {

@@ -4,12 +4,11 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { AwaitingCustomerStamp } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { setTenderMethod } from '../pos/checkout/checkout-mode';
-import { GatewayCancelMirrorError } from '../pos/checkout/payments/submit-gateway-payment';
 import { useGatewayPayment } from '../pos/checkout/payments/use-gateway-payment';
 import { useReopenOrder } from './use-reopen-order';
 
@@ -48,8 +47,17 @@ export function InvoiceActions({
 				});
 				return;
 			}
+			// Answered, but the order is not open again: the invoice stands (it may have been paid),
+			// whether or not the mirror landed.
+			if (outcome.kind === 'unchanged') {
+				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
+					showToast: true,
+					context: { orderId: order.uuid, method: stamp.method_id, status: outcome.order.status },
+				});
+				return;
+			}
 			logger.info(t('pos_checkout.invoice_cancelled'), {
-				showToast: true,
+				...(outcome.notMirrored ? {} : { showToast: true }),
 				context: {
 					orderId: order.uuid,
 					type: 'checkout.cancelled',
@@ -58,28 +66,17 @@ export function InvoiceActions({
 					voided: 0,
 				},
 			});
-		} catch (error) {
-			if (error instanceof GatewayCancelMirrorError) {
-				logger.info(t('pos_checkout.invoice_cancelled'), {
-					context: {
-						orderId: order.uuid,
-						type: 'checkout.cancelled',
-						method: stamp.method_id,
-						attemptId: stamp.attempt_id,
-						voided: 0,
-					},
-				});
+			if (outcome.notMirrored)
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
 					code: ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED,
 					showToast: true,
 					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {
 						orderId: order.uuid,
-						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+						error: getErrorMessage(outcome.notMirrored.cause),
 					},
 				});
-				return;
-			}
+		} catch (error) {
 			logger.error(t('pos_checkout.invoice_cancel_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,

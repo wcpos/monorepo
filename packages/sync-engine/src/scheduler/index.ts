@@ -102,6 +102,7 @@ export {
 export {
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
+	QUERY_TOTAL_REQUEST_DEADLINE_MS,
 	QUERY_TOTAL_RETRY_AFTER_MS,
 	type QueryTotalCacheEntry,
 	type QueryTotalWooRequest,

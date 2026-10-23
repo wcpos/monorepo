@@ -27,6 +27,7 @@ export {
 	engineCollectionCreators,
 } from './collections/engine-collections';
 export { drainableGenerationCollectionCreators } from './collections/drainable-generation';
+export { createOrderRevisionDoor } from './write-path/order-revision';
 export {
 	createEngineHarness,
 	type CapturedEngineTimers,

@@ -1,0 +1,92 @@
+/**
+ * The one writer of an order resident's revision facts (ADR 0040 §1.3): `sync.revision`, the
+ * stamp the next push goes out under, and `sync.adopted = { revision, at }`, which certifies a
+ * whole-document adoption and is bound to the revision adopted. A naked stamp (`stampedSync`:
+ * the 428 refresh, a manual rebase, an ack withheld for a queued successor, a status poll)
+ * moves the revision and leaves the adoption behind, so the inequality alone revokes the
+ * resident's authority; no writer needs to clear it. Readers interpret both through
+ * `residentRevision`.
+ */
+
+import type { RxDatabase } from 'rxdb';
+
+type RevisionFacts = { revision?: unknown; adopted?: { revision?: unknown; at?: unknown } };
+
+export interface ResidentRevision {
+	readonly revision: string | undefined;
+	readonly adopted: { revision: string; at: number } | null;
+	/** Adopted whole, under the revision it carries, and after `answeredAt` when one is given. */
+	holdsDocument(answeredAt?: number): boolean;
+}
+
+/** One snapshot of `record.sync`. */
+export function residentRevision(record: { sync?: unknown } | null | undefined): ResidentRevision {
+	const sync = (record?.sync ?? {}) as RevisionFacts;
+	const revision = typeof sync.revision === 'string' ? sync.revision : undefined;
+	const adopted =
+		typeof sync.adopted?.revision === 'string'
+			? {
+					revision: sync.adopted.revision,
+					at: typeof sync.adopted.at === 'number' ? sync.adopted.at : 0,
+				}
+			: null;
+	return {
+		revision,
+		adopted,
+		holdsDocument: (answeredAt) =>
+			!!revision &&
+			adopted?.revision === revision &&
+			(answeredAt === undefined || adopted.at > answeredAt),
+	};
+}
+
+/** A whole-document adoption: binds `adopted` to the revision `sync` carries (none: unchanged). */
+export function adoptedSync<S extends object>(sync: S, at: number): S {
+	const { revision } = sync as RevisionFacts;
+	if (typeof revision !== 'string' || revision === '') return sync;
+	return { ...sync, adopted: { revision, at } };
+}
+
+/** A naked stamp: moves the revision and keeps the adoption. */
+export function stampedSync<S extends object>(sync: S, revision: string): S {
+	return { ...sync, revision };
+}
+
+export interface OrderRevisionDoor {
+	/**
+	 * A status poll's answer names the store's document now: the next order push goes out under
+	 * it (the drain re-stamps baseRevision from `sync.revision`; it never reads the journal's
+	 * chain). Returns the revision replaced. Measured: order 115073, dev-next 2026-10-23, a 409
+	 * on the cash push after a terminal cancel.
+	 */
+	stamp(
+		orderUuid: string,
+		revision: string,
+		answeredAt: number
+	): Promise<{ replaced: string | null }>;
+}
+
+export function createOrderRevisionDoor(deps: {
+	resolveDatabase: () => Promise<RxDatabase>;
+}): OrderRevisionDoor {
+	return {
+		async stamp(orderUuid, revision, answeredAt) {
+			const database = await deps.resolveDatabase();
+			const resident = await database.collections.orders?.findOne(orderUuid).exec();
+			if (!resident) throw new Error(`Engine resident "${orderUuid}" is missing from "orders"`);
+			// The guard and the write share one atomic modify over the CURRENT document: an adoption
+			// that lands between a snapshot and the write must never be overwritten by the stamp.
+			let replaced: string | null = null;
+			await resident.incrementalModify((current: Record<string, unknown>) => {
+				replaced = null;
+				const facts = residentRevision(current);
+				// An adoption that landed after this answer wins; an equal revision is a no-op.
+				if ((facts.adopted?.at ?? 0) > answeredAt) return current;
+				if (facts.revision === revision) return current;
+				replaced = facts.revision ?? null;
+				return { ...current, sync: stampedSync((current.sync ?? {}) as object, revision) };
+			});
+			return { replaced };
+		},
+	};
+}

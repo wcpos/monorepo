@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ChangeSignalPoisonError } from './change-signal/change-signal-source';
 import { markTransportFailure, requestStatusOf } from './transport-failure';
-import { RequestTimeoutError } from './write-path/request-timeout';
+import { RequestTimeoutError } from './transport/request-timeout';
 
 describe('requestStatusOf', () => {
 	it('reads a deadline and a marked transport throw as a request with no response', () => {

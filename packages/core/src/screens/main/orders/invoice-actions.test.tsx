@@ -6,7 +6,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 
 import { getCheckoutModeSnapshot, resetCheckoutMode } from '../pos/checkout/checkout-mode';
-import { GatewayCancelMirrorError } from '../pos/checkout/payments/submit-gateway-payment';
 import { InvoiceActions } from './invoice-actions';
 
 const mockCancel = jest.fn();
@@ -27,6 +26,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
 		warn: (...args: unknown[]) => mockWarn(...args),
@@ -88,7 +88,11 @@ it('Send again re-opens the order with the gateway already chosen', () => {
 });
 
 it("Cancel invoice names the stamp's attempt and reports the order open again", async () => {
-	mockCancel.mockResolvedValue({ kind: 'cancelled', order: { status: 'pos-open' } });
+	mockCancel.mockResolvedValue({
+		kind: 'cancelled',
+		order: { status: 'pos-open' },
+		notMirrored: null,
+	});
 	render(<InvoiceActions order={order} stamp={stamp} />);
 	await act(async () => {
 		fireEvent.click(screen.getByTestId('orders-cancel-invoice'));
@@ -101,10 +105,42 @@ it("Cancel invoice names the stamp's attempt and reports the order open again", 
 	expect(screen.getByTestId('orders-cancel-invoice').hasAttribute('disabled')).toBe(false);
 });
 
-it('a cancel the store applied but the till could not save is still a cancel', async () => {
-	mockCancel.mockRejectedValue(
-		new GatewayCancelMirrorError({ status: 'pos-open' } as never, new Error('disk'))
+// As the till's own cancel does: an answer with the order not open again did not cancel the
+// invoice, whether or not its mirror landed.
+it.each([
+	[
+		'answered',
+		() => mockCancel.mockResolvedValue({ kind: 'unchanged', order: { status: 'completed' } }),
+	],
+	[
+		'answered but not mirrored',
+		() =>
+			mockCancel.mockResolvedValue({
+				kind: 'unchanged',
+				order: { status: 'completed' },
+				notMirrored: { cause: new Error('disk') },
+			}),
+	],
+])('an unchanged cancel (%s) says the invoice was not cancelled', async (_label, arrange) => {
+	arrange();
+	render(<InvoiceActions order={order} stamp={stamp} />);
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('orders-cancel-invoice'));
+	});
+	expect(mockWarn).toHaveBeenCalledWith(
+		'pos_checkout.invoice_not_cancelled',
+		expect.objectContaining({ showToast: true })
 	);
+	expect(mockInfo).not.toHaveBeenCalledWith('pos_checkout.invoice_cancelled', expect.anything());
+	expect(mockError).not.toHaveBeenCalled();
+});
+
+it('a cancel the store applied but the till could not save is still a cancel', async () => {
+	mockCancel.mockResolvedValue({
+		kind: 'cancelled',
+		order: { status: 'pos-open' },
+		notMirrored: { cause: new Error('disk') },
+	});
 	render(<InvoiceActions order={order} stamp={stamp} />);
 	await act(async () => {
 		fireEvent.click(screen.getByTestId('orders-cancel-invoice'));
@@ -113,10 +149,16 @@ it('a cancel the store applied but the till could not save is still a cancel', a
 		'pos_checkout.invoice_cancelled',
 		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.cancelled' }) })
 	);
+	// One toast: the not-synced warning, never a plain "cancelled" beside it.
+	expect(mockInfo).not.toHaveBeenCalledWith(
+		'pos_checkout.invoice_cancelled',
+		expect.objectContaining({ showToast: true })
+	);
 	expect(mockWarn).toHaveBeenCalledWith(
 		'pos_checkout.invoice_cancelled_not_synced',
 		expect.objectContaining({
 			code: 'PAYMENT113',
+			context: expect.objectContaining({ error: 'disk' }),
 			toast: { title: 'pos_checkout.invoice_cancelled_not_synced' },
 		})
 	);

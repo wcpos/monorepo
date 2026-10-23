@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 
 import { foldSearchText } from '@wcpos/sync-core';
 import {
+	createOrderRevisionDoor,
 	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
 	memoryEngineStorage,
@@ -512,6 +513,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
+		orderRevision: createOrderRevisionDoor({ resolveDatabase: async () => database }),
 		dispose: async () => undefined,
 	} as unknown as FakeEngine;
 

@@ -220,3 +220,69 @@ describe('a revision written without its document leaves sync.adopted behind', (
 		}
 	});
 });
+
+describe("engine.orderRevision.stamp: a status poll's naked stamp", () => {
+	it('moves the revision and leaves sync.adopted behind', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith(routedFetch(server, () => 'unused'));
+		try {
+			await engine.ready;
+			await insertAdoptedOrder(engine);
+			expect(await engine.orderRevision.stamp(UUID_A, 'sha256:r2', Date.now())).toEqual({
+				replaced: 'sha256:r1',
+			});
+			expectAuthorityRevoked((await residentSync(engine)).sync, 'sha256:r2');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('yields to an adoption newer than the answer', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith(routedFetch(server, () => 'unused'));
+		try {
+			await engine.ready;
+			await insertAdoptedOrder(engine);
+			expect(await engine.orderRevision.stamp(UUID_A, 'sha256:r0', 0)).toEqual({ replaced: null });
+			expect((await residentSync(engine)).sync).toMatchObject({
+				revision: ADOPTED.revision,
+				adopted: ADOPTED,
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/** The server moved to r2 (a void the poll saw); the till edits the order's note and drains. */
+	async function noteUpdateEnvelopes(stamp: boolean) {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:r2' });
+		const engine = engineWith(routedFetch(server, () => 'sha256:r2'));
+		try {
+			await engine.ready;
+			await insertAdoptedOrder(engine);
+			if (stamp) await engine.orderRevision.stamp(UUID_A, 'sha256:r2', Date.now());
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: note,
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1 });
+			return server.received.filter((envelope) => envelope.operation === 'update');
+		} finally {
+			await engine.dispose();
+		}
+	}
+
+	it('the next order push goes out under the stamped revision', async () => {
+		const updates = await noteUpdateEnvelopes(true);
+		expect(updates).toHaveLength(1);
+		expect(updates[0]?.baseRevision).toBe('sha256:r2');
+	});
+
+	it('control: without the stamp the push is refused once and re-sent', async () => {
+		const updates = await noteUpdateEnvelopes(false);
+		expect(updates.map((envelope) => envelope.baseRevision)).toEqual(['sha256:r1', 'sha256:r2']);
+	});
+});

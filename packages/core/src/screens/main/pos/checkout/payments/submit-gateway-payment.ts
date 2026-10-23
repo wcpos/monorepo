@@ -8,6 +8,8 @@ import {
 } from '@wcpos/order-math';
 import { isDefinitiveMoneyRefusal, isPaidStatus, moneyRefusalOf } from '@wcpos/sync-core';
 
+import type { NotMirrored } from '../../commands/land-answer';
+
 /**
  * Submit a `gateway` capture-mode method (Payments Contract 1.2 §2, roadmap#415 R2/R4):
  * Free runs the gateway's own `process_payment()` with the declared values and answers
@@ -28,50 +30,27 @@ export interface SubmitGatewayPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 	/** Where the gateway sent the customer, read from the declared fields (spec §3.2). */
 	destination: string | null;
-	/** Mirror the server's answer onto the latest resident: its row, summary and stamp. */
+	/** Mirror the answer onto the latest resident; never rejects, a failure is `{ cause }`. */
 	mirror: (answer: {
 		payment?: PaymentRow;
 		order: OrderPaymentSummary;
 		awaiting: AwaitingCustomerStamp | null;
-	}) => Promise<void>;
+		accepted?: false; // a cancel's answer: no sale completion
+	}) => Promise<NotMirrored>;
 	cashierId: number;
 	now?: () => string;
 }
+type Answered = { order: OrderPaymentSummary; notMirrored: NotMirrored };
 export type SubmitGatewayPaymentOutcome =
-	| { kind: 'recorded'; row: PaymentRow; order: OrderPaymentSummary }
-	| { kind: 'sent'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
-	| { kind: 'settled'; order: OrderPaymentSummary }
+	| ({ kind: 'recorded'; row: PaymentRow } & Answered)
+	| ({ kind: 'sent'; stamp: AwaitingCustomerStamp } & Answered)
+	| ({ kind: 'settled' } & Answered)
 	/** A replayed `settled`/`paid` whose order was reopened since: mirrored, never finished. */
-	| { kind: 'reopened'; order: OrderPaymentSummary }
+	| ({ kind: 'reopened' } & Answered)
 	/** `wcpos_fields_invalid`: a message per component id, `_form` for the gateway's own line. */
 	| { kind: 'fields_invalid'; errors: Record<string, string> }
 	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
 	| { kind: 'refused'; code: string; message: string; provider: boolean };
-
-/** The server answered 2xx and the till's copy could not be written: the outcome stands. */
-export class GatewayMirrorError extends Error {
-	public constructor(
-		public outcome: Extract<
-			SubmitGatewayPaymentOutcome,
-			{ kind: 'recorded' | 'sent' | 'settled' | 'reopened' }
-		>,
-		public cause: unknown
-	) {
-		super('Gateway outcome could not be mirrored locally.', { cause });
-		this.name = 'GatewayMirrorError';
-	}
-}
-
-/** The store answered the cancel and the till's copy could not be written: the outcome stands. */
-export class GatewayCancelMirrorError extends Error {
-	public constructor(
-		public outcome: { kind: 'cancelled' | 'unchanged'; order: OrderPaymentSummary },
-		public cause: unknown
-	) {
-		super('Cancelled invoice could not be mirrored locally.', { cause });
-		this.name = 'GatewayCancelMirrorError';
-	}
-}
 
 type ErrorResponse = {
 	status?: number;
@@ -151,24 +130,13 @@ export async function submitGatewayPayment(
 		throw new Error('gateway_submit_malformed_response');
 	// Only the request is inside the try above: once the server has answered 2xx the outcome
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
-	const mirror = async (
-		outcome: Extract<
-			SubmitGatewayPaymentOutcome,
-			{ kind: 'recorded' | 'sent' | 'settled' | 'reopened' }
-		>,
+	const mirror = async <const O extends { order: OrderPaymentSummary; row?: PaymentRow }>(
+		outcome: O,
 		awaiting: AwaitingCustomerStamp | null
-	) => {
-		try {
-			await deps.mirror({
-				...(outcome.kind === 'recorded' ? { payment: outcome.row } : {}),
-				order: outcome.order,
-				awaiting,
-			});
-		} catch (mirrorError) {
-			throw new GatewayMirrorError(outcome, mirrorError);
-		}
-		return outcome;
-	};
+	) => ({
+		...outcome,
+		notMirrored: await deps.mirror({ payment: outcome.row, order: outcome.order, awaiting }),
+	});
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
 		return mirror({ kind: 'recorded', row, order: data.order }, null);
@@ -209,9 +177,9 @@ export async function cancelGatewayInvoice(
 	stamp: AwaitingCustomerStamp,
 	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
 ): Promise<
-	| { kind: 'cancelled'; order: OrderPaymentSummary }
+	| ({ kind: 'cancelled' } & Answered)
 	/** Answered, but the order is not open again: the invoice was not cancelled. */
-	| { kind: 'unchanged'; order: OrderPaymentSummary }
+	| ({ kind: 'unchanged' } & Answered)
 	| { kind: 'refused'; code: string; message: string }
 > {
 	let summary: OrderPaymentSummary;
@@ -236,11 +204,7 @@ export async function cancelGatewayInvoice(
 	// with the order anywhere else did not cancel the invoice: the summary is mirrored with the
 	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
 	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
-	const outcome = { kind: reopened ? 'cancelled' : 'unchanged', order: summary } as const;
-	try {
-		await deps.mirror({ order: summary, awaiting: reopened ? null : stamp });
-	} catch (mirrorError) {
-		throw new GatewayCancelMirrorError(outcome, mirrorError);
-	}
-	return outcome;
+	const awaiting = reopened ? null : stamp;
+	const notMirrored = await deps.mirror({ order: summary, awaiting, accepted: false });
+	return { kind: reopened ? 'cancelled' : 'unchanged', order: summary, notMirrored };
 }

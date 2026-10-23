@@ -1,11 +1,6 @@
 import { AWAITING_CUSTOMER_META_KEY, type MetaDataEntry, type PaymentRow } from '@wcpos/order-math';
 
-import {
-	cancelGatewayInvoice,
-	GatewayCancelMirrorError,
-	GatewayMirrorError,
-	submitGatewayPayment,
-} from './submit-gateway-payment';
+import { cancelGatewayInvoice, submitGatewayPayment } from './submit-gateway-payment';
 
 const stamp = {
 	method_id: 'wcpos_email_invoice',
@@ -59,7 +54,7 @@ const refusal = (status: number, code: string, data: Record<string, unknown> = {
 
 function harness(meta: MetaDataEntry[] = []) {
 	const post = jest.fn();
-	const mirror = jest.fn(async () => {});
+	const mirror = jest.fn(async (): Promise<{ cause: unknown } | null> => null);
 	const order = { uuid: 'order-1', id: 42, meta_data: meta };
 	const deps = {
 		post,
@@ -91,6 +86,7 @@ describe('submitGatewayPayment', () => {
 				sent_at_gmt: '2026-10-08T12:00:00.000Z',
 				cashier_id: 7,
 			},
+			notMirrored: null,
 		});
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary('pending'),
@@ -138,7 +134,7 @@ describe('submitGatewayPayment', () => {
 			data: { outcome: 'settled', payment: null, order: summary('pending') },
 		});
 		const outcome = await submitGatewayPayment(order, 'bacs', input, deps);
-		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
+		expect(outcome).toEqual({ kind: 'settled', order: summary('pending'), notMirrored: null });
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary('pending'),
 			awaiting: null,
@@ -152,6 +148,7 @@ describe('submitGatewayPayment', () => {
 		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
 			kind: 'settled',
 			order: summary('completed'),
+			notMirrored: null,
 		});
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary('completed'),
@@ -176,25 +173,24 @@ describe('submitGatewayPayment', () => {
 		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
 			kind,
 			order: summary(status),
+			notMirrored: null,
 		});
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary(status),
 			awaiting: null,
 		});
 	});
-	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
+	it('a settled answer whose mirror fails keeps the settled outcome, marked not mirrored', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({
 			data: { outcome: 'settled', payment: null, order: summary('pending') },
 		});
-		mirror.mockRejectedValueOnce(new Error('disk'));
-		const error = await submitGatewayPayment(order, 'bacs', input, deps).catch((e) => e);
-		expect(error).toBeInstanceOf(GatewayMirrorError);
-		expect((error as GatewayMirrorError).outcome).toEqual({
+		mirror.mockResolvedValueOnce({ cause: new Error('disk') });
+		expect(await submitGatewayPayment(order, 'bacs', input, deps)).toEqual({
 			kind: 'settled',
 			order: summary('pending'),
+			notMirrored: { cause: new Error('disk') },
 		});
-		expect((error as GatewayMirrorError).cause).toEqual(new Error('disk'));
 	});
 	it('wcpos_fields_invalid lands per component; a missing map becomes the form line', async () => {
 		const { post, mirror, order, deps } = harness();
@@ -248,13 +244,15 @@ describe('submitGatewayPayment', () => {
 			errors: { _form: 'Too short. No dots.' },
 		});
 	});
-	it('a mirror that fails after a 2xx keeps the outcome in the error, never a retry', async () => {
+	it('a mirror that fails after a 2xx keeps the outcome, never a retry', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({ data: { outcome: 'sent', payment: null, order: summary('pending') } });
-		mirror.mockRejectedValueOnce(new Error('disk'));
-		const error = await submitGatewayPayment(order, 'g', input, deps).catch((e) => e);
-		expect(error).toBeInstanceOf(GatewayMirrorError);
-		expect((error as GatewayMirrorError).outcome).toMatchObject({ kind: 'sent' });
+		mirror.mockResolvedValueOnce({ cause: new Error('disk') });
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toMatchObject({
+			kind: 'sent',
+			notMirrored: { cause: new Error('disk') },
+		});
+		expect(post).toHaveBeenCalledTimes(1);
 	});
 	it('a malformed 2xx is an error, never an outcome', async () => {
 		const { post, order, deps } = harness();
@@ -275,6 +273,7 @@ describe('cancelGatewayInvoice', () => {
 		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
 			kind: 'cancelled',
 			order: summary('pos-open'),
+			notMirrored: null,
 		});
 		expect(post).toHaveBeenCalledWith('orders/42/payment-methods/wcpos_email_invoice/cancel', {
 			attempt_id: 'attempt-0',
@@ -282,6 +281,7 @@ describe('cancelGatewayInvoice', () => {
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary('pos-open'),
 			awaiting: null,
+			accepted: false,
 		});
 	});
 	it('an empty 2xx confirms nothing: no stamp is cleared', async () => {
@@ -295,23 +295,22 @@ describe('cancelGatewayInvoice', () => {
 	it('a cancelled invoice whose local write fails is still cancelled', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({ data: { order: summary('pos-open') } });
-		mirror.mockRejectedValueOnce(new Error('disk'));
-		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
-		expect(error).toBeInstanceOf(GatewayCancelMirrorError);
-		expect((error as GatewayCancelMirrorError).outcome).toEqual({
+		mirror.mockResolvedValueOnce({ cause: new Error('disk') });
+		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
 			kind: 'cancelled',
 			order: summary('pos-open'),
+			notMirrored: { cause: new Error('disk') },
 		});
 	});
 	// Codex 4346411064 on #2837: the invoice still stands whether or not the mirror landed.
 	it('an unchanged cancel whose local write fails is still unchanged', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({ data: { order: summary('completed') } });
-		mirror.mockRejectedValueOnce(new Error('disk'));
-		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
-		expect((error as GatewayCancelMirrorError).outcome).toEqual({
+		mirror.mockResolvedValueOnce({ cause: new Error('disk') });
+		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
 			kind: 'unchanged',
 			order: summary('completed'),
+			notMirrored: { cause: new Error('disk') },
 		});
 	});
 	// A cancel whose answer shows the order not reopened did not cancel the invoice: the summary
@@ -322,10 +321,12 @@ describe('cancelGatewayInvoice', () => {
 		expect(await cancelGatewayInvoice(order, stamp, deps)).toEqual({
 			kind: 'unchanged',
 			order: summary('completed'),
+			notMirrored: null,
 		});
 		expect(mirror).toHaveBeenCalledWith({
 			order: summary('completed'),
 			awaiting: stamp,
+			accepted: false,
 		});
 	});
 	it('a refusal leaves the order alone', async () => {

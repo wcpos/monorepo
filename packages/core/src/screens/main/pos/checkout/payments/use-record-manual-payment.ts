@@ -6,8 +6,6 @@ import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
-	hasSaleProvenance,
-	isCompletingStatus,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	readLedger,
@@ -19,10 +17,11 @@ import type { EngineRecord } from '@wcpos/query';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { pushFailureCode } from '../../../contexts/push-failure-code';
+import { mirrorAnswer } from '../../commands/land-answer';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
+import { completionMetaFor, persistSaleProvenance } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { raisePaymentRefusal } from './payment-refusal-attention';
@@ -83,6 +82,8 @@ export function useRecordManualPayment(): (
 				post: (url, body) => http.post(url, body),
 				provenance: (command) => commandProvenance(ctx, order, sessionId, command),
 			});
+			const facts = { sessionId, extraMeta: input.extraMeta };
+			const mirror = mirrorAnswer({ ctx, order, poster: post, facts });
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
 				journal: post.defer,
@@ -115,7 +116,6 @@ export function useRecordManualPayment(): (
 							});
 						else {
 							const latest = cloneDeep(order.getLatest().payload.meta_data ?? []);
-							const facts = { sessionId, extraMeta: input.extraMeta };
 							const meta = await completionMetaFor(ctx, latest, facts);
 							if (!(await stampCompletion(order, meta))) throw new Error('provenance_save_failed');
 						}
@@ -136,30 +136,8 @@ export function useRecordManualPayment(): (
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async ({ payment, status }, { accepted, local }) => {
-					try {
-						await post.mirror({ payment, order: status ? ({ status } as never) : null, local });
-						const latestMeta = cloneDeep(order.getLatest().payload.meta_data ?? []);
-						if (accepted && isCompletingStatus(status ?? '') && !hasSaleProvenance(latestMeta)) {
-							const meta_data = await completionMetaFor(ctx, latestMeta, {
-								sessionId,
-								extraMeta: input.extraMeta,
-							});
-							const patched = await stampCompletion(order, meta_data);
-							if (!patched) throw new Error('provenance_save_failed');
-						}
-					} catch (error) {
-						// The store has already answered: the money is on the order there, and only
-						// this till's copy is behind. Swallowing that used to report a generic
-						// "checkout failed" on a payment the store had taken, which invites the
-						// cashier to take it again. Pull the store's copy so the ledger catches up,
-						// then let the caller report the gap for what it is.
-						if (paymentOrder.id) {
-							await refreshOrderRecord(manager, paymentOrder.id).catch(() => undefined);
-						}
-						throw error;
-					}
-				},
+				mirror: ({ payment, status }, { accepted, local }) =>
+					mirror({ payment, order: status ? ({ status } as never) : null, local }, { accepted }),
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const { uuid: orderUuid, id: orderId, number: orderNumber } = paymentOrder;
 					const facts = { row, order: summary, reason, methodTitle: method.title };

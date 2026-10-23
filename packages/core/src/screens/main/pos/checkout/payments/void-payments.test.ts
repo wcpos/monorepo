@@ -294,22 +294,6 @@ it('cannot void an offline device authorization before it settles', async () => 
 	expect(deps.post).not.toHaveBeenCalled();
 });
 
-// A malformed 2xx proves nothing: it is never replaced by a locally voided row (sync-core
-// `isMoneyAnswer`). The leg stays live, unknown (never "refund by hand"), and journaled.
-it('a malformed 2xx voids nothing locally and reports the row unknown', async () => {
-	const deps = createDeps();
-	deps.post.mockResolvedValue({ data: {} });
-
-	const result = await voidPayments(order([payment('held', 'captured')]), deps);
-
-	expect(result).toMatchObject({
-		kind: 'voided',
-		rows: [],
-		failed: [{ paymentId: 'held', refused: false, message: 'money_command_malformed_answer' }],
-	});
-	expect(deps.mirror).not.toHaveBeenCalled();
-});
-
 // One poster journals every void of the sale, and a mirror settles what that poster has answered:
 // each void is mirrored before the next is sent, so a settle never deletes the entry of a void
 // whose row is not mirrored yet (a failed refresh or a crash would leave it live with no entry).

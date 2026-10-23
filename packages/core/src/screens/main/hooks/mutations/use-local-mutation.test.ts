@@ -483,7 +483,7 @@ describe('cart changes at the resident modifier', () => {
 	);
 });
 
-// Exercise the app-session bridge (no POS provider) through the real plainPatch and outbound write contract.
+// Exercise the app-session bridge (no POS provider) through the real writeOrderChanges and outbound write contract.
 describe('durable divergence ownership', () => {
 	const { MoneyOwnerHintBridge } = jest.requireActual<
 		typeof import('../../components/money-owner-hint-bridge')
@@ -622,6 +622,35 @@ it('keeps the provider latch immediate without invoking the mutation path', asyn
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	});
 	expect(mockFindOneExec).not.toHaveBeenCalled();
+});
+
+// The link stamp holds only `{ uuid, isNew }`: the command names the collection, never a fabricated document.
+it('passes collectionName through to the door for an identity-only target', async () => {
+	activeScopeId = 'scope-1';
+	activeReturnsNullOnce = false;
+	mockStatus.mockReturnValue({ activeScopeId });
+	mockWrite.mockClear().mockResolvedValue({});
+	const stored = { uuid: 'order', payload: { customer_id: 0 } };
+	mockFindOneExec.mockResolvedValue({
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	});
+	const { result } = renderHook(() => useLocalMutation());
+	const document = { uuid: 'order', isNew: false };
+	// Without a name the identity has no collection, so the door refuses it.
+	await expect(
+		result.current.localPatch({ document, data: { customer_id: 91 } })
+	).resolves.toBeUndefined();
+	expect(mockWrite).not.toHaveBeenCalled();
+	await result.current.localPatch(
+		{ document, data: { customer_id: 91 } },
+		{ collectionName: 'orders' }
+	);
+	expect(stored.payload.customer_id).toBe(91);
+	expect(mockWrite).toHaveBeenLastCalledWith(
+		expect.objectContaining({ payload: expect.objectContaining({ customer_id: 91 }) })
+	);
 });
 
 jest.mock('../../pos/commands/use-boundary-commit', () => ({

@@ -12,7 +12,8 @@ export {
 	patchEngineResident,
 	syncableChanges,
 	writeableCollection,
-	type MutationDocument,
+	type RecordWriteTarget,
+	type WriteTarget,
 	type PayloadChanges,
 	type LocalPatchProps,
 } from './resident';

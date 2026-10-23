@@ -12,6 +12,7 @@ import type {
 	TaxRateDocument,
 } from '@wcpos/database';
 
+import type { ReadonlyEngineRecord } from './readonly-engine-record';
 import type { RxDocument } from 'rxdb';
 
 /**
@@ -106,9 +107,9 @@ export type EngineRecordShape<C extends EngineRecordCollectionName> = {
 export type EngineRecord<C extends EngineRecordCollectionName> = RxDocument<EngineRecordShape<C>>;
 
 export function isVariationRecord(
-	record: EngineRecord<'products'> | EngineRecord<'variations'>
-): record is EngineRecord<'variations'> {
-	return record.collection.name === 'variations';
+	record: ReadonlyEngineRecord<'products'> | ReadonlyEngineRecord<'variations'>
+): record is ReadonlyEngineRecord<'variations'> {
+	return recordCollectionName(record) === 'variations';
 }
 
 /** Also accepts temporary-database documents, which share the collection lifecycle. */

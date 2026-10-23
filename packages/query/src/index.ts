@@ -184,6 +184,7 @@ export {
 	type ResentCommand,
 } from './commands/money-command';
 export type { OrderApproval } from './store-local/money-commands';
+export { adoptStoreOrderSnapshot } from './commands/adopt-store-order';
 
 export { observeNotifications, observeNotificationsReplaced } from './reads/notifications';
 export {

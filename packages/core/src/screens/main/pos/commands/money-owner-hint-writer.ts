@@ -4,7 +4,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 
-import type { MutationDocument } from '../../hooks/mutations/use-local-mutation';
+import type { WriteTarget } from '../../hooks/mutations/use-local-mutation';
 
 const logger = getLogger(['wcpos', 'pos', 'money-owner']);
 
@@ -23,13 +23,13 @@ export function createMoneyOwnerHintWriter(manager: ReturnType<typeof useQueryRu
 		pending.add(orderId);
 		void enqueueOrderMutation(orderId, async () => {
 			if (pending !== pendingOwnership) return;
-			// Lazy: `plain-patch` reaches `uuid` (ESM-only), which jest cannot require from the
-			// many suites that import this bridge; the write is rare and already async.
-			const { findEngineResident, plainPatch } = await import('./plain-patch');
+			// Lazy: `write-order-changes` reaches `uuid` (ESM-only), which jest cannot require from
+			// the many suites that import this bridge; the write is rare and already async.
+			const { findEngineResident, writeOrderChanges } = await import('./write-order-changes');
 			const document = await findEngineResident(manager, 'orders', orderId);
 			if (!document) return;
-			await plainPatch(manager, 'orders', {
-				document: document as unknown as MutationDocument,
+			await writeOrderChanges(manager, {
+				document: document as unknown as WriteTarget,
 				changes: (payload) => {
 					if (pending !== pendingOwnership) return {};
 					const meta = (payload.meta_data ?? []) as MetaDataEntry[];

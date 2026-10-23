@@ -1,6 +1,6 @@
 import { isOfflineDeviceAuthorization, partitionVoidableRows } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
-import { isDefinitiveMoneyRefusal, isMoneyAnswer, moneyRefusalOf } from '@wcpos/sync-core';
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 
 /**
  * Void the live payment legs when a cashier abandons a half-paid order. Offline a void is
@@ -91,11 +91,8 @@ export async function voidPayments(
 	for (const row of liveRows) {
 		let accepted: { payment: PaymentRow; order: OrderPaymentSummary };
 		try {
+			// The poster returns only the store's own answer: a malformed 2xx throws (money-command.ts).
 			const response = await deps.post(`orders/${order.id}/payments/${row.id}/void`, {});
-			// Only the store's own row and summary say the leg was voided (sync-core
-			// `isMoneyAnswer`): a malformed 2xx is never replaced by a locally voided row. It is an
-			// unknown outcome, and the journal keeps the void for a re-send.
-			if (!isMoneyAnswer('void', response.data)) throw new Error('money_command_malformed_answer');
 			accepted = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 		} catch (error) {
 			const refusal = moneyRefusalOf(error);

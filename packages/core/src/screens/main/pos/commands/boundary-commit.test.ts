@@ -12,7 +12,7 @@ import {
 	withLedger,
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, ReadonlyEngineRecord } from '@wcpos/query';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { pendingCompletions } from '@wcpos/query/store-local';
 
@@ -44,7 +44,7 @@ let ctx: SaleContext & { closeSale: typeof closeSale };
 // The server completes a covered sale through close (ADR 0040 D2); its mirror lands the status.
 const closeSale = {
 	online: jest.fn(() => true),
-	close: jest.fn(async (target: EngineRecord<'orders'>) => {
+	close: jest.fn(async (target: ReadonlyEngineRecord<'orders'>) => {
 		Object.assign(target.getLatest().payload, { status: 'completed' });
 		return { kind: 'completed' as const, order: null, completion: null };
 	}),
