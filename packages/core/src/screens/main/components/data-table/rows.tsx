@@ -75,7 +75,13 @@ export function DataTableRow<TData extends RowData>({
 		// did: specs find a row's `+` inside the row, so the id must not sit on the pressable alone.
 		<View
 			testID={testID ?? getRowTestID(item)}
-			className="border-border flex-row items-center border-b"
+			// The hover tint is the ROW's, actions cell included: the pressable stops short of
+			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23).
+			className={
+				pointer === 'fine'
+					? 'border-border web:hover:bg-muted flex-row items-center border-b'
+					: 'border-border flex-row items-center border-b'
+			}
 		>
 			<Pressable
 				ref={pressable}
@@ -105,7 +111,7 @@ export function DataTableRow<TData extends RowData>({
 				}
 				className={
 					pointer === 'fine'
-						? 'min-h-row active:bg-muted web:hover:bg-muted flex-1 flex-row items-center'
+						? 'min-h-row active:bg-muted flex-1 flex-row items-center'
 						: 'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3'
 				}
 			>
