@@ -36,9 +36,10 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 	// Remaining), never a method row that reads as paid. A dead order owes nothing.
 	const dead = ['cancelled', 'failed', 'refunded', 'trash'].includes(payload.status ?? '');
 	const owing = !legs && !paidAt && view.balanceMinor > 0 && !dead;
-	// The ledger derives the balance from the journal alone; a cancelled or refunded order
-	// keeps its legs as history but owes nothing, so it never closes on Remaining.
-	const closing = view.balanceMinor > 0 && !dead;
+	// The ledger derives the balance from the journal alone (a refund counts back as owed);
+	// an order that has settled (`date_paid`) or died keeps its legs as history and owes
+	// nothing, so only an open sale closes on Remaining.
+	const closing = view.balanceMinor > 0 && !dead && !paidAt;
 	const fallback = !legs && !owing && Boolean(method || paidAt || payload.transaction_id);
 
 	if (!legs && !owing && !fallback && refunded === 0 && !stamp) return null;

@@ -110,6 +110,22 @@ describe('PaymentSection', () => {
 		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
 	});
 
+	it('a completed sale with a partial refund never closes on Remaining', () => {
+		mockView = viewWith([leg('a', '7.70')], 770);
+		mockView.balanceMinor = 200; // the journal adds the refund back
+		render(
+			<PaymentSection
+				order={record({
+					status: 'completed',
+					date_paid_gmt: '2026-10-23T12:48:00',
+					refunds: [{ id: 9, total: '-2.00' }],
+				})}
+			/>
+		);
+		expect(screen.getByTestId('checkout-ledger')).not.toBeNull();
+		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
+	});
+
 	it('a cancelled order with a method set shows the method row with no Captured badge', () => {
 		mockView = viewWith([], 0);
 		render(
