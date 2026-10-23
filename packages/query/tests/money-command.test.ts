@@ -9,6 +9,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 
+import * as mirrorServerOrder from '../src/mutations/mirror-server-order';
 import {
 	MoneyCommandError,
 	moneyCommandPoster,
@@ -804,6 +805,11 @@ describe('the answer chain and the post-answer refresh', () => {
 			answerRevision: polled,
 			polled: true,
 		});
+		// Stamped for the next order push (the drain reads sync.revision); the adoption stays, so
+		// the stamp claims no authority (ADR 0040 §1.3).
+		const { sync } = await residentJSON();
+		expect(sync.revision).toBe(polled);
+		expect(sync.adopted?.revision).toBe('sha256:r1');
 		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
 		expect(requires).toEqual([]);
 		expect(store.post).toHaveBeenCalledTimes(1);
@@ -819,11 +825,66 @@ describe('the answer chain and the post-answer refresh', () => {
 		expect(store.completions).toBe(1);
 	});
 
-	it('a mirror without a revision leaves the chain as it was', async () => {
+	it('a mirror without a revision leaves the chain and the stamp as they were', async () => {
 		await sendAndSettle('orders/5/payments', { payment: cash() });
 		const { chain: before } = await readOrderCommands(storeDB, 'order');
+		const { sync } = await residentJSON();
 		await poster().mirror({ payment: cash(), order: store.summary() as never });
 		expect((await readOrderCommands(storeDB, 'order')).chain).toEqual(before);
+		expect((await residentJSON()).sync).toEqual(sync);
+	});
+
+	it('a poll answered before a later adoption never replaces the stamp', async () => {
+		store.n += 1;
+		await adoptStore(false);
+		const adopted = store.revision;
+		clock -= 1_000_000; // the poll's answer dates before the adoption
+		const polled = await pollSettles();
+		expect((await residentJSON()).sync.revision).toBe(adopted);
+		expect(await chain()).toMatchObject({ answerRevision: polled, polled: true });
+	});
+
+	it('an adoption that lands while the poll is being mirrored keeps its revision', async () => {
+		store.n += 1;
+		const payment = { ...cash('leg-1', '10.00'), status: 'authorized' } as PaymentRow;
+		const polledRevision = store.revision;
+		// The answer has arrived; a pull adopts a newer document during the mirror's own awaits.
+		const original = mirrorServerOrder.mirrorMoneyAnswer;
+		let adopted = '';
+		jest.spyOn(mirrorServerOrder, 'mirrorMoneyAnswer').mockImplementationOnce(async (...args) => {
+			const out = await original(...args);
+			store.n += 1;
+			await adoptStore(false);
+			adopted = store.revision;
+			return out;
+		});
+		await poster().mirror({ payment, order: store.summary() as never, revision: polledRevision });
+		expect(adopted).not.toBe(polledRevision);
+		expect((await residentJSON()).sync.revision).toBe(adopted);
+		expect(await chain()).toMatchObject({ answerRevision: polledRevision, polled: true });
+	});
+
+	it('a command answer’s post-answer refresh re-adopts over a poll’s stamp', async () => {
+		await pollSettles();
+		await sendAndSettle('orders/5/payments/leg-1/void', { reason: 'cancelled' });
+		const { sync } = await residentJSON();
+		expect(sync.revision).toBe(store.revision);
+		expect(sync.adopted?.revision).toBe(sync.revision);
+	});
+
+	it('a second poll’s summary lands under the stamp the first poll made', async () => {
+		refreshWorks = false; // the intent's refresh fails: the resident keeps the sent revision
+		const post = poster();
+		await post('orders/5/payments/leg-1/intent', {});
+		await post.settle();
+		const payment = { ...cash('leg-1', '10.00'), status: 'authorized' } as PaymentRow;
+		for (const status of ['pos-partial', 'processing']) {
+			store.n += 1;
+			store.status = status;
+			await post.mirror({ payment, order: store.summary() as never, revision: store.revision });
+		}
+		expect((await residentJSON()).payload.status).toBe('processing');
+		expect((await residentJSON()).sync.revision).toBe(store.revision);
 	});
 });
 

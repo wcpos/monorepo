@@ -604,6 +604,28 @@ function answerChain(revision: unknown, at: number): RevisionChain | undefined {
 }
 
 /**
+ * A poll's answer names the store's document NOW: the next order push goes out under it (the
+ * drain re-stamps baseRevision from sync.revision; it never reads the chain). A naked stamp
+ * (ADR 0040 §1.3): the adoption stays, so no authority is claimed and no re-read runs; an
+ * adoption that landed after the poll wins. Measured: order 115073, dev-next 2026-10-23, a 409
+ * on the cash push after a terminal cancel. Returns the revision it replaced, if it stamped.
+ */
+async function stampPolledRevision(runtime: QueryRuntime, orderUuid: string, chain: RevisionChain) {
+	const { resident } = await readOrder(runtime, orderUuid);
+	// The guard and the write share one atomic modify over the CURRENT document: an adoption
+	// that lands between a snapshot and the write must never be overwritten by the poll's stamp.
+	let replaced: string | undefined;
+	await resident.incrementalModify((current: Record<string, unknown>) => {
+		const sync = (current.sync ?? {}) as { revision?: string; adopted?: { at?: number } };
+		if ((sync.adopted?.at ?? 0) > chain.answeredAt) return current;
+		if (sync.revision === chain.answerRevision) return current;
+		replaced = sync.revision;
+		return { ...current, sync: { ...sync, revision: chain.answerRevision } };
+	});
+	return replaced;
+}
+
+/**
  * A drop-in `post` for the money routes: classifies the path, freezes the body (provenance for
  * the completion-capable kinds, minted once here), journals it, and sends it through the
  * envelope. Any other path passes through untouched (the status poll, bootstraps).
@@ -762,6 +784,9 @@ export function moneyCommandPoster(input: {
 			revision,
 			...answer
 		}: Omit<MoneyAnswer, 'sentRevision'> & { revision?: unknown }) => {
+			// Dated at arrival, before the mirror's awaits: an adoption that lands during them is
+			// newer than this answer and must keep its revision (the stamp guard compares the two).
+			const answeredAt = Date.now();
 			try {
 				await mirrorMoneyAnswer(input.runtime, input.orderUuid, { ...answer, sentRevision });
 			} catch (error) {
@@ -769,10 +794,14 @@ export function moneyCommandPoster(input: {
 				for (const { id } of answered) await release(id);
 				throw error;
 			}
-			// A poll that settled the row moved the order: record its revision, never a refresh.
-			const polled = answerChain(revision, Date.now());
-			if (polled)
+			// A poll that settled the row moved the order: record its revision and stamp it for the
+			// next push, never a refresh. The next poll's summary lands under the stamp this one made.
+			const polled = answerChain(revision, answeredAt);
+			if (polled) {
 				await settleCommand(input.storeDB, input.orderUuid, null, { ...polled, polled: true });
+				const replaced = await stampPolledRevision(input.runtime, input.orderUuid, polled);
+				if (replaced && replaced === sentRevision) sentRevision = polled.answerRevision;
+			}
 			await settle();
 		},
 		settle,
