@@ -18,6 +18,7 @@ import { useEngineRecord } from '@wcpos/query/record-readers';
 import { useT } from '../../../../contexts/translations';
 import {
 	finishReceipt,
+	getCheckoutModeSnapshot,
 	leaveCheckout,
 	resolveStage,
 	selectReceipt,
@@ -54,10 +55,24 @@ export function OpenOrderTabs({
 	useResumeTerminalLegsForOrders(openOrders.map(({ record }) => record));
 	const t = useT();
 	const phone = useIsPhone();
-	const { checkoutOrders, receiptOrders, selectedReceiptOrder } = useCheckoutMode();
+	const { checkoutOrders, receiptOrders, saveStates, selectedReceiptOrder } = useCheckoutMode();
+	// Receipts and in-flight checkouts that left the open hits keep a tab. A draft that entered
+	// checkout before its first save landed has no record yet and is no tab.
 	const extraIds = [...new Set([...checkoutOrders, ...receiptOrders])].filter(
-		(uuid) => !openOrders.some((order) => order.id === uuid)
+		(uuid) =>
+			!openOrders.some((order) => order.id === uuid) && saveStates.get(uuid)?.kind !== 'saving'
 	);
+	// A tender belongs to the scope it was opened in: another cashier's or register's open
+	// orders are not this till's, so a change of scope ends every unconfirmed checkout (a
+	// confirmed receipt keeps its tab). Never on mount: coming back from the Orders screen
+	// must not drop a sale mid-checkout.
+	const seenScope = React.useRef(openOrdersScope);
+	React.useEffect(() => {
+		if (seenScope.current === openOrdersScope) return;
+		seenScope.current = openOrdersScope;
+		const mode = getCheckoutModeSnapshot();
+		for (const uuid of mode.checkoutOrders) if (!mode.receiptOrders.has(uuid)) leaveCheckout(uuid);
+	}, [openOrdersScope]);
 	const [listOpen, setListOpenState] = React.useState(false);
 	// The host hears about the cover in the same handler that opens or closes the list, so
 	// the covered cart is out of reach in the frame the list appears.
