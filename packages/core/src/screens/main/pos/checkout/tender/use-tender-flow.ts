@@ -853,13 +853,20 @@ export function useTenderFlow(
 			service?.get(order.uuid)
 		)
 			return;
-		if (
-			method?.capture.mode === 'manual' &&
-			(!online || queuedOffline) &&
-			!(await confirmOfflineTender({ method, amountMinor: enteredLegMinor, queuedOffline }))
-		)
-			return;
+		// Busy from here: a second press while the cashier is still answering the offline
+		// confirmation must not open a second prompt. A decline or a throwing prompt frees it.
 		busyRef.current = true;
+		if (method?.capture.mode === 'manual' && (!online || queuedOffline)) {
+			const confirmed = await confirmOfflineTender({
+				method,
+				amountMinor: enteredLegMinor,
+				queuedOffline,
+			}).catch(() => false);
+			if (!confirmed) {
+				busyRef.current = false;
+				return;
+			}
+		}
 		setBusy(true);
 		setPressing(true);
 		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).

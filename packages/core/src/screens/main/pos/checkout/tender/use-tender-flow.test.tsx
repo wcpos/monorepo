@@ -4904,4 +4904,32 @@ describe('offline manual tenders (switch mocked on)', () => {
 		expect(recordCompletionAttempt).not.toHaveBeenCalled();
 		expect(result.current.busy).toBe(false);
 	});
+
+	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
+		let answer: (confirmed: boolean) => void = () => {};
+		const confirmOfflineTender = jest.fn(
+			() => new Promise<boolean>((resolve) => (answer = resolve))
+		);
+		const { result } = renderHook(() =>
+			useTenderFlow(order, hostAtWidth(), { confirmOfflineTender })
+		);
+		act(() => result.current.pickMethod('pos_cash'));
+		const first = result.current.takeTender();
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			answer(false);
+			await first;
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+
+		confirmOfflineTender.mockRejectedValueOnce(new Error('prompt lost'));
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(2);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		// Freed: the next press asks again.
+		confirmOfflineTender.mockResolvedValueOnce(false);
+		await act(async () => result.current.takeTender());
+		expect(confirmOfflineTender).toHaveBeenCalledTimes(3);
+	});
 });
