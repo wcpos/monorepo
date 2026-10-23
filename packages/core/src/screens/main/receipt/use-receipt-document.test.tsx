@@ -151,6 +151,7 @@ beforeEach(() => {
 	global.fetch = mockFetch.mockReset().mockReturnValue(new Promise(() => {}));
 	resetCheckoutMode();
 	mockPrint.mockReset().mockResolvedValue(true);
+	mockToast.mockClear();
 	mockFinal = true;
 	mockAutoPrint = true;
 	mockAwaiting = false;
@@ -197,6 +198,33 @@ it('a sale the store has not heard renders locally with its line: no store page,
 	await act(async () => rerender());
 	expect(mockRendererOptions).toMatchObject({ localOnly: false, awaitingStoreLine: null });
 	expect(mockPrintOptions).toMatchObject({ orderId: 42, awaitingStoreLine: undefined });
+});
+// The store renders a cloud printer's copy and has not heard the sale: say why, and keep the
+// single auto-print attempt for when it has (ADR 0040 Decided 1 rule 1).
+it('refuses a cloud print while the sale awaits the store, and auto-prints once it answers', async () => {
+	mockAwaiting = true;
+	mockPrinter = {
+		resolvedPrinter: {
+			id: 'c',
+			name: 'Cloud',
+			connectionType: 'cloud',
+			cloudProvider: 'printnode',
+		},
+	};
+	const { result, rerender } = renderHook(() =>
+		useReceiptDocument({ order, autoPrintAllowed: true })
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).not.toHaveBeenCalled();
+	await act(async () => {
+		expect(await result.current.printAndReport()).toBe(false);
+	});
+	expect(mockToast).toHaveBeenCalledWith({ title: 'receipt.print_awaiting_store' });
+	expect(mockPrint).not.toHaveBeenCalled();
+	mockAwaiting = false;
+	await act(async () => rerender());
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 it('waits for a frame even when final data is ready first', async () => {
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));

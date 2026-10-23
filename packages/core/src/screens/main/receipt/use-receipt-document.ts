@@ -248,6 +248,9 @@ export function useReceiptDocument({
 
 	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
 	const sessionReport = !!localReport || templateType === 'closure';
+	// The store renders an order-based cloud printer's copy, and it has not heard this sale: say
+	// so, never a failure (offline keeps the print path's own refusal). ADR 0040 D1 rule 1.
+	const cloudAwaiting = awaits === true && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const reportSystemDialog =
 		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const printerProfile = React.useMemo(
@@ -375,6 +378,10 @@ export function useReceiptDocument({
 				);
 				throw new Error(t('reports.closure_template_required'));
 			}
+			if (cloudAwaiting) {
+				Toast.show({ title: t('receipt.print_awaiting_store') });
+				return false;
+			}
 			let dispatched: boolean;
 			try {
 				dispatched = (await printReceipt()) === true;
@@ -385,7 +392,7 @@ export function useReceiptDocument({
 			if (dispatched) setPrintedTo(printDestination);
 			return dispatched;
 		},
-		[printReceipt, printDestination, document, selectedTemplate, t]
+		[printReceipt, printDestination, document, selectedTemplate, t, cloudAwaiting]
 	);
 	// For hosts that show their own inline error (reports, closures): the row only, no
 	// toast. A closed print dialog is a cancel (debug); a real failure carries its
@@ -511,6 +518,7 @@ export function useReceiptDocument({
 			autoPrintAllowed &&
 			!isResolvingPrinter &&
 			awaits !== null &&
+			!cloudAwaiting &&
 			(!needsLoadedPreview || frameLoaded) &&
 			hasFinalData &&
 			(receiptDataIsServer || localOrderSettled) &&
@@ -529,6 +537,7 @@ export function useReceiptDocument({
 		frameKey,
 		isResolvingPrinter,
 		awaits,
+		cloudAwaiting,
 		localOrderSettled,
 		needsLoadedPreview,
 		printAndReport,

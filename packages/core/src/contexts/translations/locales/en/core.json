@@ -1295,6 +1295,7 @@
 	"receipt.open_cash_drawer": "Open Cash Drawer on Print",
 	"receipt.output_type": "Receipt Output Type",
 	"receipt.pdf_downloaded": "PDF downloaded",
+	"receipt.print_awaiting_store": "This printer prints the store’s copy, and the store hasn’t confirmed this sale yet. Print again once it has.",
 	"receipt.print_dialog": "Print Dialog",
 	"receipt.print_again": "Print again",
 	"receipt.print_receipt": "Print Receipt",
