@@ -8,7 +8,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { moneyCommandPoster, recoverMoneyCommands, type useQueryRuntime } from '@wcpos/query';
+import { moneyCommandPoster, moneyCommandRecovery, type useQueryRuntime } from '@wcpos/query';
 import {
 	createEngineDatabase,
 	createFakeEngine,
@@ -315,7 +315,14 @@ it('a locked intent whose cancel voids a missing row is retired: recovery sends 
 	await timers.drain(() => false);
 	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
 	const posts = store.post.mock.calls.length;
-	expect(await recoverMoneyCommands(runtime, storeDB, { post: store.post })).toEqual([]);
+	const recovery = moneyCommandRecovery({
+		runtime,
+		storeDB,
+		client: () => store,
+		online: () => true,
+		due: () => undefined,
+	});
+	expect(await recovery.recover()).toEqual([]);
 	expect(store.post).toHaveBeenCalledTimes(posts);
 	terminal.stop();
 });

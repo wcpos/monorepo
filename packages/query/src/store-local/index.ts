@@ -6,15 +6,7 @@ export {
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
 } from './completion-journal';
-export {
-	claimHeld,
-	nextClaimExpiry,
-	observeMoneyJournal,
-	observeTenderGate,
-	readAwaitingAnswer,
-	readJournaledRecordIds,
-	type MoneyCommandEntry,
-} from './money-commands';
+export { observeTenderGate, readAwaitingAnswer, readJournaledRecordIds } from './money-commands';
 export {
 	observePaymentAttention,
 	recordPaymentAttention,

@@ -49,8 +49,8 @@ export interface MoneyCommandEntry {
 	readonly deferredAt?: string | null;
 	/**
 	 * The engine scope (one cashier's orders) that sent the command. The journal is per store and
-	 * outlives a cashier switch; the order is resident only in this scope, so the command is
-	 * re-sent only while it is active.
+	 * per signed-in credential; the scope is the sending cashier's, so the command is re-sent only
+	 * while that scope is active.
 	 */
 	readonly scope: string;
 	/** The poster working on this command (see `claimRoute`), and when it claimed it. */
@@ -383,25 +383,30 @@ export async function readMoneyJournal(
 	);
 }
 
+/** The session owes it a re-send: dispatched or deferred, nobody holds it, its scope is active. */
+export function owedResend(entry: MoneyCommandEntry, scope: string | null, now = Date.now()) {
+	const { kind } = commandState(entry, null, now);
+	return (kind === 'deferred' || kind === 'unanswered') && entry.scope === scope;
+}
+
 /**
  * When the earliest live claim on a sent, unanswered command lapses, or null when none holds one.
  * The recovery skips a claimed command, so the session runs it again at this time: a claim a
  * crashed process left behind must not keep its command unanswered while the till stays online.
  */
-export async function nextClaimExpiry(
-	storeDB: StoreLocalDatabase,
+export function nextClaimExpiry(
+	entries: readonly MoneyCommandEntry[],
 	scope: string | null,
 	now = Date.now()
 ) {
 	let next: number | null = null;
-	for (const { entries } of Object.values(await readMoneyJournal(storeDB)))
-		for (const entry of entries)
-			// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
-			if (entry.scope === scope) {
-				const state = commandState(entry, null, now);
-				if (state.kind === 'in-flight' && state.of !== 'unsent')
-					if (next === null || state.lapsesAt < next) next = state.lapsesAt;
-			}
+	for (const entry of entries)
+		// Only the active scope's: the recovery re-sends no other, so its lapse is a wasted run.
+		if (entry.scope === scope) {
+			const state = commandState(entry, null, now);
+			if (state.kind === 'in-flight' && state.of !== 'unsent')
+				if (next === null || state.lapsesAt < next) next = state.lapsesAt;
+		}
 	return next;
 }
 
