@@ -199,8 +199,15 @@ it.each([
 		{ ...manual, mirrorFailed: true },
 		false,
 	],
+	// A recovery carries no press prediction: only a usable store balance decides.
+	[
+		'manual recovery with a zero store balance',
+		{ ...manual, remainingMinor: null, order: { balance: '0.00' } },
+		true,
+	],
+	['manual recovery without summary is never complete', { ...manual, remainingMinor: null }, false],
 	['terminal summary', { source: 'terminal', row, order: { balance: '0.00' } }, true],
-	['terminal fallback', { source: 'terminal', row, order: null, balance: '0.00' }, true],
+	['terminal without a summary is never complete', { source: 'terminal', row, order: null }, false],
 	['contract exact status', { source: 'gateway-contract', status: 'on-hold' }, false],
 	[
 		'snapshot on-hold',
@@ -954,7 +961,7 @@ it.each([
 		kind === 'manual'
 			? manual
 			: kind === 'terminal'
-				? { source: kind, row, order: null, balance: '0' }
+				? { source: kind, row, order: { balance: '0' } as never }
 				: { source: kind };
 	try {
 		await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, order, outcome, presentation);

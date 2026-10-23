@@ -937,57 +937,25 @@ it.each(['provider_declined', 'wcpos_amount_exceeds_balance', 'expired'])(
 	}
 );
 
-it('uses the persisted ledger balance when the terminal supplies no order summary', async () => {
+it("a captured status without the store's summary does not complete the sale", async () => {
 	const c = setup();
-	let read!: (value: string) => void;
-	const options = {
-		...c.options,
-		getBalance: () =>
-			new Promise<string>((resolve) => {
-				read = resolve;
-			}),
-	};
-	const service = new TerminalPaymentsService(options);
+	const error = getLogger([]).error as jest.Mock;
+	error.mockClear();
 	c.http.post.mockResolvedValue({ data: { payment: { ...row, status: 'captured' } } });
 	const published = jest.fn();
-	service.subscribe(() => published(service.get('order')?.settlement));
-	service.begin(input);
-	await jest.advanceTimersByTimeAsync(0);
-	expect(service.get('order')?.settlement).toBeUndefined();
-	read('0.00');
+	c.service.subscribe(() => published(c.service.get('order')?.settlement));
+	c.service.begin(input);
 	await jest.advanceTimersByTimeAsync(0);
 	expect(published).toHaveBeenCalledWith(
-		expect.objectContaining({
-			saleComplete: true,
-			outcome: 'captured',
-		})
+		expect.objectContaining({ outcome: 'captured', saleComplete: false })
 	);
-	expect(service.get('order')).toBeNull();
-	expect(c.completeOrder).toHaveBeenCalledTimes(1);
-	service.stop();
-});
-
-it('does not enter an old store receipt when a pending local balance read finishes after stop', async () => {
-	const { resetCheckoutMode, getCheckoutModeSnapshot } =
-		await import('../../screens/main/pos/checkout/checkout-mode');
-	resetCheckoutMode();
-	const c = setup();
-	let read!: (value: string) => void;
-	const service = new TerminalPaymentsService({
-		...c.options,
-		getBalance: () =>
-			new Promise<string>((resolve) => {
-				read = resolve;
-			}),
-	});
-	c.http.post.mockResolvedValue({ data: { payment: { ...row, status: 'captured' } } });
-	service.begin(input);
-	await jest.advanceTimersByTimeAsync(0);
-	service.stop();
-	read('0');
-	await jest.advanceTimersByTimeAsync(0);
-	expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
 	expect(c.completeOrder).not.toHaveBeenCalled();
+	expect(c.service.get('order')).not.toBeNull();
+	expect(error).not.toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED })
+	);
+	c.service.stop();
 });
 
 it.each(['success', 'rejection'])(

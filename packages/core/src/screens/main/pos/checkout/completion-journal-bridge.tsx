@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { type OrderPaymentSummary, readAwaitingCustomer } from '@wcpos/order-math';
 import {
 	observeResidentOrders,
 	recoverMoneyCommands,
@@ -18,7 +17,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
-	isPaidStatus,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 	scopeDatabaseName,
@@ -42,6 +40,7 @@ import {
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { answerOf, answerReadsPaid, landAnswer } from '../commands/land-answer';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -369,10 +368,14 @@ export function SaleCompletionBridge(): null {
 			}
 		};
 		/**
-		 * A recovered gateway submit answered `sent` finishes as a sent sale (its `checkout.sent`
-		 * audit, the attempt resolved), from the stamp the refresh adopted with the store's
-		 * document: never the unpaid replay, which would count starts and abandon it. Returns the
-		 * orders finished this way; the rest go through the completion replay.
+		 * A recovered gateway submit answered `sent` lands through the answer table (`landAnswer`,
+		 * `{ via: 'recovery' }`) as a sent sale (its `checkout.sent` audit, the attempt resolved),
+		 * from the stamp the refresh adopted with the store's document: never the unpaid replay,
+		 * which would count starts and abandon it. A send is the only answer landed here: a recovered
+		 * record, a settled or recorded submit, a close and a capture go to the resident judge
+		 * (`replay`, `finishOne`), which decides on the attempt's stored status and the adopted
+		 * document (an offline record's second completion is a replay: ADR 0040 Decided 1 rule 3).
+		 * Returns the orders finished this way.
 		 */
 		const finishRecovered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
 			const finished = new Set<string>();
@@ -380,23 +383,26 @@ export function SaleCompletionBridge(): null {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, answers] of answered) {
 				if (current.stopped) break;
-				const sent = answers.find(({ kind, data }) => kind === 'submit' && data.outcome === 'sent');
 				const attempt = pending[uuid];
-				const summary = sent?.data.order as OrderPaymentSummary | undefined;
-				// A `sent` gateway answer is final only when the summary carries a status; a summary
-				// without one is the trimmed ack and the next refresh decides (ADR 0040 §1.8).
-				if (!sent || !attempt || typeof summary?.status !== 'string') continue;
+				if (!attempt) continue;
 				const resident = await findOrder(uuid);
-				const stamp = resident
-					? readAwaitingCustomer(resident.getLatest().payload.meta_data)
-					: null;
-				if (!resident || !stamp) continue;
+				if (!resident) continue;
+				const sent = answers
+					.map((resent) => answerOf(resent, resident.getLatest().payload))
+					.find((answer) => answer?.kind === 'sent');
+				if (!sent) continue;
 				try {
-					await completeSale(
-						{ ...current.ctx, actor: attempt.actor },
-						resident,
-						{ source: 'gateway', order: summary, stamp },
-						{ host: 'background' }
+					await landAnswer(
+						sent,
+						{ via: 'recovery' },
+						{
+							finish: (outcome) =>
+								completeSale({ ...current.ctx, actor: attempt.actor }, resident, outcome, {
+									host: 'background',
+								}),
+							resolveAttempt: () => resolveCompletionAttempt(storeDB, uuid),
+							dp: current.ctx.dp,
+						}
 					);
 					finished.add(uuid);
 				} catch (error) {
@@ -518,13 +524,7 @@ export function SaleCompletionBridge(): null {
 			if (answered.size === 0) return;
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, answers] of answered)
-				if (
-					pending[uuid] &&
-					answers.some(({ data }) =>
-						isPaidStatus((data.order as { status?: unknown } | undefined)?.status)
-					)
-				)
-					await awaitAdoption(storeDB, uuid);
+				if (pending[uuid] && answers.some(answerReadsPaid)) await awaitAdoption(storeDB, uuid);
 		};
 		// One run at a time: a reconnect during the start's replay waits for it.
 		let queue: Promise<void> = Promise.resolve();

@@ -145,10 +145,13 @@ export type SaleOutcome =
 			row: PaymentRow;
 			order: OrderPaymentSummary | null;
 			mirrorFailed: boolean;
-			/** The press's prediction (`StampedSale.remainingMinor`); a usable store balance overrules it. */
-			remainingMinor: number;
+			/**
+			 * The press's prediction (`StampedSale.remainingMinor`); a usable store balance overrules it.
+			 * null: no press prediction (a recovery); only a usable store balance decides.
+			 */
+			remainingMinor: number | null;
 	  }
-	| { source: 'terminal'; row: PaymentRow; order: OrderPaymentSummary | null; balance?: string }
+	| { source: 'terminal'; row: PaymentRow; order: OrderPaymentSummary | null }
 	/**
 	 * Contract 1.2 `sent`: the gateway sent the customer away to pay (an invoice, a link) and
 	 * the sale leaves the till without money. A `recorded` answer never arrives here: it is a
@@ -304,9 +307,9 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
 				: !outcome.mirrorFailed && outcome.remainingMinor === 0;
-		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
+		case 'terminal': // The narrator uses Number; no summary completes nothing (the bridge finishes it).
 			if (!outcome.row.recorded_offline && unpaidOnStore(outcome.order, dp, payload)) return false;
-			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
+			return outcome.order !== null && Number(outcome.order.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
 		case 'gateway-settled': // The store judged the stored status reached (§3.1), and the resident agrees.
