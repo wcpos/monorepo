@@ -38,7 +38,10 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 					<IconButton
 						name="refresh"
 						size="xs"
-						loading={active}
+						// The refresh glyph turns while the engine pulls and rests upright when it is done:
+						// the glyph is the motion, so swapping it for the Loader's arc jarred on every
+						// sync (owner, 2026-10-23).
+						spin={active}
 						accessibilityLabel={
 							clearAndSync ? t('common.press_to_sync_long_press_for') : t('common.sync')
 						}

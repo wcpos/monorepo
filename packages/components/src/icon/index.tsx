@@ -8,7 +8,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
-import { Loader } from '../loader';
+import { Loader, Spin } from '../loader';
 import { TextClassContext } from '../text';
 import { useIconSet } from './set-context';
 import { ICON_SETS } from './sets';
@@ -74,7 +74,14 @@ const iconVariants = cva('inset-0 content-center items-center', {
 
 export type IconProps = VariantProps<typeof iconVariants> & {
 	name: IconName;
+	/** Swap the glyph for the Loader: a wait in the glyph's place. */
 	loading?: boolean;
+	/**
+	 * Turn the glyph itself while true, and rest it upright when done (`loader/spin.tsx`): for a glyph
+	 * that reads as motion (refresh, sync), where swapping it for the Loader jars. `undefined`
+	 * mounts no animation at all; a glyph that may spin passes a boolean.
+	 */
+	spin?: boolean;
 	fill?: string;
 	className?: string;
 	pointerEvents?: ViewProps['pointerEvents'];
@@ -88,6 +95,7 @@ export function Icon({
 	variant = 'default',
 	size,
 	loading,
+	spin,
 	className,
 	fill,
 	pointerEvents,
@@ -129,15 +137,19 @@ export function Icon({
 	const svgColor =
 		fill || (Platform.isWeb || Platform.isElectron ? 'currentColor' : String(resolvedColor ?? ''));
 
+	const glyph = (
+		<Svg
+			width="100%"
+			height="100%"
+			fill={svgColor}
+			color={svgColor}
+			pointerEvents={pointerEvents}
+		/>
+	);
+
 	return (
 		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
-			<Svg
-				width="100%"
-				height="100%"
-				fill={svgColor}
-				color={svgColor}
-				pointerEvents={pointerEvents}
-			/>
+			{spin === undefined ? glyph : <Spin active={spin}>{glyph}</Spin>}
 		</View>
 	);
 }

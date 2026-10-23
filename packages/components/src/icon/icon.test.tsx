@@ -10,7 +10,11 @@ jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false, isElectron
 const { Platform: mockPlatform } = jest.requireMock('@wcpos/utils/platform');
 jest.mock('uniwind', () => ({ useCSSVariable: () => '#123456' }));
 jest.mock('../text', () => ({ TextClassContext: React.createContext('') }));
-jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('../loader', () => ({
+	Loader: () => null,
+	Spin: ({ active, children }: any) =>
+		React.createElement('div', { 'data-testid': 'spin', 'data-active': String(active) }, children),
+}));
 jest.mock('react-native-svg', () => {
 	const elements = jest.requireActual('react-native-svg/lib/commonjs/elements.web');
 	return { ...elements, default: elements.Svg, __esModule: true };
@@ -79,4 +83,20 @@ it('keeps CSS currentColor inheritance on web', () => {
 	} finally {
 		mockPlatform.isWeb = false;
 	}
+});
+
+// A glyph that reads as motion turns in place rather than being swapped for the Loader (icon
+// LEDGER line 6): the svg stays mounted, inside `Spin`, while it turns and after it stops; an
+// icon without `spin` mounts no wrapper at all.
+it('spin keeps the glyph mounted and turning', () => {
+	const { container, rerender, queryByTestId } = render(<Icon name="refresh" spin />);
+	const svg = container.querySelector('svg');
+	expect(svg).not.toBeNull();
+	expect(svg?.parentElement).toBe(queryByTestId('spin'));
+	expect(queryByTestId('spin')).toHaveAttribute('data-active', 'true');
+	rerender(<Icon name="refresh" spin={false} />);
+	expect(container.querySelector('svg')).toBe(svg);
+	expect(queryByTestId('spin')).toHaveAttribute('data-active', 'false');
+	rerender(<Icon name="refresh" />);
+	expect(queryByTestId('spin')).toBeNull();
 });

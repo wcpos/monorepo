@@ -48,6 +48,8 @@ type ButtonProps = PressableProps &
 		 */
 		accessibilityLabel: string;
 		loading?: boolean;
+		/** Turn the glyph itself while true (Icon `spin`), instead of swapping it for the Loader. */
+		spin?: boolean;
 		on?: boolean;
 		iconClassName?: string;
 		disableHaptics?: boolean;
@@ -61,6 +63,7 @@ function IconButton({
 	variant,
 	size,
 	loading,
+	spin,
 	on,
 	disableHaptics = false,
 	onPress,
@@ -96,6 +99,7 @@ function IconButton({
 				variant={variant === 'outline' ? 'default' : variant}
 				size={size}
 				loading={loading}
+				spin={spin}
 				className={cn(
 					(!variant || variant === 'default') && 'text-muted-foreground',
 					on && 'text-primary',

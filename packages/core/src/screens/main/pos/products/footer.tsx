@@ -35,8 +35,9 @@ export function ProductsFooter({
 		// Same caption row as the data-table footer: on the ground, no rule, its content's height (the
 		// `xs` sync button, 6 units); its mount aligns the text with the card's cells (`CaptionRowInset`).
 		<HStack className="items-center">
-			{/* Keep the tax label shrinkable and counts at their natural width. */}
-			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">
+			{/* The caption slot fills the row; its child keeps its own width (shrinkable, never grown),
+			    so the tax trigger is pressable on its text and icons alone, not across the footer. */}
+			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">
 				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}
 			</HStack>
 			<HStack className="shrink-0 gap-0">

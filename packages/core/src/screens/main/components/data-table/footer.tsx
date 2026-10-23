@@ -45,7 +45,9 @@ export function DataTableFooter({
 		// target), not a control row. Its mount aligns the text with the card's cells
 		// (`CaptionRowInset`: the card's gutter + the cell's 12).
 		<HStack testID="data-table-caption-row" className="items-center">
-			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">{children}</HStack>
+			{/* The caption fills the row only as a layout slot: its child keeps its own width (shrinkable,
+			    never grown), so a trigger inside it is pressable on its text and icons alone. */}
+			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null

@@ -142,3 +142,5 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 		</View>
 	);
 }
+
+export { Spin } from './spin';
