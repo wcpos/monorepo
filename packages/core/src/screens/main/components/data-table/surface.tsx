@@ -31,7 +31,7 @@ export function TableSurface({ className, ...props }: ViewProps) {
 		<View
 			className={cn(
 				'bg-card border-border min-h-0 flex-1',
-				phone ? 'border-t' : 'mx-gutter mb-2 overflow-hidden rounded-lg border',
+				phone ? 'mb-2 border-t' : 'mx-gutter mb-2 overflow-hidden rounded-lg border',
 				className
 			)}
 			{...props}
@@ -58,16 +58,21 @@ export function TileGround({ children }: { children: React.ReactNode }) {
 /**
  * The caption row's inset under the card: the card's gutter, then the cell's own 12 (`px-3`),
  * so the footer's text lines up with the cells' (12 + 12 at Regular); on a phone, where the
- * card runs edge to edge, the cell's 12 alone. The caption row is the pane's last row, so it
+ * card runs edge to edge, the screen edge's 16 (4 + the cell's 12), as the bar and the chip row
+ * above it keep (Gutters: the phone's screen edge). The caption row is the pane's last row, so it
  * also carries the gutter below it: the container insets its last child from its bottom edge as
- * it does its first from the top (owner, 2026-10-20: "consistent, including at the bottom").
- * The phone's list runs edge to edge and its screen already pads the home indicator, so it keeps
- * no bottom gutter. The mount owns it; a footer component carries no padding of its own.
+ * it does its first from the top (owner, 2026-10-20: "consistent, including at the bottom"); on
+ * the phone that edge is the tab bar or the home-indicator inset, and the gutter sits above it
+ * (owner, 2026-10-23: the row had sat on the tab bar with no padding). The mount owns it; a
+ * footer component carries no padding of its own.
  */
 export function CaptionRowInset({ children }: { children: React.ReactNode }) {
 	const phone = useIsPhone();
 	return (
-		<View testID="data-table-caption-inset" className={phone ? undefined : 'px-gutter pb-gutter'}>
+		<View
+			testID="data-table-caption-inset"
+			className={phone ? 'pb-gutter px-1' : 'px-gutter pb-gutter'}
+		>
 			<View className="px-3">{children}</View>
 		</View>
 	);

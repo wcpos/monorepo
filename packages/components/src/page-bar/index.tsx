@@ -27,7 +27,7 @@ export type PageBarProps = ViewProps & {
 	back?: { label: string; onPress: () => void; testID?: string };
 	/**
 	 * The page's search field: beside the title on wide widths, taking the width up to a cap; on
-	 * a phone, its own ruled row under the bar.
+	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23).
 	 */
 	search?: React.ReactNode;
 	/**
@@ -132,7 +132,7 @@ export function PageBar({
 				<HStack className="items-center gap-1">{children}</HStack>
 			</HStack>
 			{phone && search != null && (
-				<View testID={id('search')} className="h-ctl border-border justify-center border-b px-2">
+				<View testID={id('search')} className="h-ctl justify-center px-2">
 					{search}
 				</View>
 			)}

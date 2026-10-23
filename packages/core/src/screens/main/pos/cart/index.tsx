@@ -168,10 +168,11 @@ function CartColumn({
 			strip={barInStrip}
 		/>
 	);
-	// In its column the cart has no frame of its own: the register bar, the customer row and
-	// the foot run their hairlines to the column's edges (Paul, 2026-10-09).
+	// The cart has no frame of its own: the register bar, the customer row and the foot run their
+	// hairlines to the column's edges (Paul, 2026-10-09), and on the phone to the screen's (Paul,
+	// 2026-10-23: the tab had kept an 8 inset that drew a frame around the rows).
 	return (
-		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
+		<VStack className="bg-card h-full gap-0">
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
 			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&

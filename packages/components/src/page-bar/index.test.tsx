@@ -134,7 +134,9 @@ it('puts the phone search on its own ruled row under the control row', () => {
 	expect(row.contains(screen.getByTestId('search'))).toBe(false);
 	expect(searchRow).toBe(screen.getByTestId('bar-search'));
 	expect(searchRow.contains(screen.getByTestId('search'))).toBe(true);
-	expect(searchRow).toHaveClass('h-ctl', 'border-b', 'px-2');
+	expect(searchRow).toHaveClass('h-ctl', 'px-2');
+	// No rule under the search either: the chip row's own spacing separates them (owner, 2026-10-23).
+	expect(searchRow).not.toHaveClass('border-b');
 });
 
 it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {

@@ -53,17 +53,19 @@ it('insets the caption row by the gutter plus the cell padding, and by the gutte
 		return value;
 	};
 	expect(inset()).toEqual(['px-gutter pb-gutter', 'px-3']);
-	// The phone card has no side gutter, so the caption sits on the cell's 12 alone, and the
-	// screen pads the home indicator itself, so there is no bottom gutter either.
+	// The phone card runs edge to edge, so the caption takes the screen edge's 16 (4 + the cell's
+	// 12), as the chip row above it does, and the gutter above the tab bar (owner, 2026-10-23).
 	mockPhone = true;
-	expect(inset()).toEqual([null, 'px-3']);
+	expect(inset()).toEqual(['pb-gutter px-1', 'px-3']);
 });
 
 it('runs edge to edge on a phone', () => {
 	mockPhone = true;
 	render(<TableSurface testID="surface" />);
 	expect(classes()).toContain('border-t');
-	expect(classes().some((name) => /^(mx|mb|rounded)/.test(name))).toBe(false);
+	// 2 units above its caption row, as on the desktop; no side gutter, no radius.
+	expect(classes()).toContain('mb-2');
+	expect(classes().some((name) => /^(mx|rounded)/.test(name))).toBe(false);
 });
 
 // The tile ground gives the page gutter less the tile's own 4; on a phone the screen edge keeps
