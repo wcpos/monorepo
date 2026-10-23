@@ -1032,7 +1032,6 @@ export function useTenderFlow(
 			}
 			// An order the store has not created has no route to journal a leg against (its own
 			// slice): refused before a reader starts or a rounding fee is written.
-			// orderId is null exactly when the lane is not-on-store; naming it narrows the id below.
 			if (sale.lane === 'not-on-store' || sale.orderId === null) {
 				logger.info(t('pos_checkout.order_not_on_store_yet'), {
 					showToast: true,
@@ -1268,15 +1267,13 @@ export function useTenderFlow(
 				return;
 			}
 
-			// Only a keypad press reaches here; a commit without its lane fails closed (PAYMENT_UNEXPECTED).
 			if (!sale.lane) throw new Error('press_lane_missing');
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
 			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
-			// The record the lane was judged on, as the slot holds it: it has a server id, so it is the
-			// engine resident (a temporary order has none and was refused as not-on-store above).
+			// The slot's record has a server id here: the engine resident, never a temporary order.
 			const outcome = await recordManualPayment(target as EngineRecord<'orders'>, method, {
 				amount: fromMinor(amountMinor, dp),
 				tendered,
