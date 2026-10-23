@@ -1124,6 +1124,8 @@
 	"pos_cart.percentage_of_cart_total": "Percentage of Cart Total",
 	"pos_cart.qty_abbrev": "Qty",
 	"pos_cart.quantity": "Quantity",
+	"pos_cart.quantity_decrease": "One fewer",
+	"pos_cart.quantity_increase": "One more",
 	"pos_cart.save_to_order": "Save to Order",
 	"pos_cart.save_to_order_customer": "Save to Order & Customer",
 	"pos_cart.save_to_server": "Save to Server",

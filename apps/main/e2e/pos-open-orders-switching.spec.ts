@@ -79,17 +79,15 @@ test.describe('POS open-orders tab switching', () => {
 		const order2TabId = await activeOrderTabId(page, order1TabId);
 		expect(order2TabId).not.toBe(order1TabId);
 
-		// Back to order 1, then give it a distinctive quantity: the numpad APPENDS to the
-		// default 1, so typing "2" yields 12 — a value order 2 cannot have.
+		// Back to order 1, then give it a distinctive quantity: the keypad REPLACES the
+		// default 1, so pressing 1 then 2 yields 12 — a value order 2 cannot have.
 		await page.getByTestId(order1TabId).click();
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
 		await cartRows(page).first().click();
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
-		const numpadInput = numpad.locator('input');
-		await expect(numpadInput).toBeVisible({ timeout: 10_000 });
-		await numpadInput.click();
-		await numpadInput.type('2', { delay: 100 });
+		await page.getByTestId('numpad-key-1').click();
+		await page.getByTestId('numpad-key-2').click();
 		await page.getByTestId('numpad-done-button').click();
 		await expect.poll(() => firstRowQuantityDigits(page), { timeout: 15_000 }).toMatch(/^12$/);
 
