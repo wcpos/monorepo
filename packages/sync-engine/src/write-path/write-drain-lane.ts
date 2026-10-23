@@ -60,10 +60,9 @@ import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/b
 import { scopeBoundFailureStreak } from '../failure-streak';
 import { deadLetterOutcomesForTick } from './dead-letter-outcome';
 import { fetchOrderServerRevision } from './order-server-revision';
-import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
-import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
+import type { EngineRequest } from '../transport/engine-transport';
 import type { RxDatabase } from 'rxdb';
 
 // Transitional re-export: callers should migrate to order-server-revision.
@@ -73,6 +72,8 @@ export { fetchOrderServerRevision } from './order-server-revision';
 const SESSION_PROBE_BASE_MS = 30_000;
 // Cap the interval between probes for the plugin's no-user-logged-in 401 at five minutes.
 const SESSION_PROBE_MAX_MS = 300_000;
+/** Below the 60 s claim lease, but allows a slow store's order create to finish. */
+const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known
@@ -308,7 +309,7 @@ export type WriteDrainReport = {
 export type WriteDrainLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
-	fetcher: EngineSourceFetcher;
+	request: EngineRequest;
 	/** Configured versioned WCPOS sync base used by pushes and targeted revision refreshes. */
 	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
@@ -431,17 +432,20 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						ticketSignal?.addEventListener('abort', abort, { once: true });
 						tickAbort.signal.addEventListener('abort', abort, { once: true });
 					}
+					// A request that never answers would hold the lane and every checkout
+					// queued behind it: the drain's deadline is the transport's one layer.
 					try {
-						return await (deps.fetcher as Fetcher)(url, { ...init, signal: combined.signal });
+						return await deps.request(
+							url,
+							{ ...init, signal: combined.signal },
+							{ deadlineMs: WRITE_DRAIN_REQUEST_TIMEOUT_MS }
+						);
 					} finally {
 						ticketSignal?.removeEventListener('abort', abort);
 						tickAbort.signal.removeEventListener('abort', abort);
 					}
 				};
-				// A request that never answers would hold the lane and every checkout queued behind it.
-				const rawBoundFetch = bound.bindFetch(
-					withRequestTimeout(tickFetcher, WRITE_DRAIN_REQUEST_TIMEOUT_MS)
-				);
+				const rawBoundFetch = bound.bindFetch(tickFetcher);
 				// Pull helpers thread the tick signal for between-request cancellation,
 				// but a scope-bound fetcher must not receive it: scopedFetch would use
 				// AbortSignal.any, which RN/Expo does not provide. tickFetcher already

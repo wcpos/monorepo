@@ -64,10 +64,6 @@ function customerTargetFromDocumentId(id: string): CollectionTarget {
 	return { documentId: customerDocumentId(remoteId), remoteId };
 }
 
-function revisionFromCustomer(payload: WooCustomerPayload): string {
-	return String(payload.date_modified_gmt ?? payload.date_modified ?? '');
-}
-
 function customerDocumentFromWooPayload(
 	payload: WooCustomerPayload
 ): Materialized<LocalCustomerDocument> {
