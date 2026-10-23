@@ -21,7 +21,8 @@ import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
 
 export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
-	const flow = useTenderFlow(order, 'columns');
+	// The POS screen's overlays paint in its "pos" host, as the cart's confirmations do.
+	const flow = useTenderFlow(order, 'columns', { portalHost: 'pos' });
 	const payload = useRecordField(order, (record) => record.payload);
 	const { format: formatCurrency } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const format = React.useCallback(
@@ -110,6 +111,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				<StorageOutageBanner testID="checkout-storage-unavailable" />
 			</View>
 			<View className="flex-1 p-4">{body}</View>
+			{flow.offlineDialog}
 		</View>
 	);
 }

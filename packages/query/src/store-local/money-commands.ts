@@ -29,6 +29,8 @@ export interface MoneyCommandEntry {
 	/** null = never dispatched. */
 	readonly sentAt: string | null;
 	readonly sentRevision: string | null;
+	/** Journaled offline (`deferEntry`); kept through the re-send until the store answers. */
+	readonly deferredAt?: string | null;
 	/**
 	 * The engine scope (one cashier's orders) that sent the command. The journal is per store and
 	 * outlives a cashier switch; the order is resident only in this scope, so the command is
@@ -269,6 +271,7 @@ export async function deferEntry(
 						...entry,
 						sentAt: new Date().toISOString(),
 						sentRevision: null,
+						deferredAt: entry.deferredAt ?? new Date().toISOString(),
 						claimedBy: null,
 						claimedAt: null,
 					})
@@ -276,6 +279,9 @@ export async function deferEntry(
 	});
 	return deferred;
 }
+
+/** The store has not answered this offline record yet: the till marks its sale until it does. */
+export const isDeferred = (entry: Pick<MoneyCommandEntry, 'deferredAt'>) => !!entry.deferredAt;
 
 /**
  * Deletes the entry (with `claimant`, only while it holds the entry; `null` = only while nobody

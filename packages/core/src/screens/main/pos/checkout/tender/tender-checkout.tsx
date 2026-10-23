@@ -45,6 +45,7 @@ interface Props {
  * same flow works from a phone at a market stall to a desktop till.
  */
 export function TenderCheckout({ order }: Props) {
+	// The routed modal's confirmations paint at the root host, above it (as the refund form's).
 	const flow = useTenderFlow(order, 'modal');
 	const payload = useRecordField(order, (record) => record.payload);
 	const { screenSize } = useTheme();
@@ -226,6 +227,7 @@ export function TenderCheckout({ order }: Props) {
 						{body}
 					</VStack>
 				</DialogBody>
+				{flow.offlineDialog}
 			</DialogContent>
 		</Dialog>
 	);

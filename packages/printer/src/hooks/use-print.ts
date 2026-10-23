@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { DEFAULT_THERMAL_TEMPLATE } from '../encoder/default-thermal-template';
+import { markAwaitingStoreXml } from '../encoder/mark-awaiting-store';
 import { MAX_DOTS_58MM, MAX_DOTS_80MM, maxDotsForColumns } from '../encoder/thermal-print';
 import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
@@ -33,6 +34,8 @@ interface UsePrintOptions {
 	decimals?: number;
 	/** Engine type of the selected template */
 	templateEngine?: string;
+	/** The store has not heard this sale (ADR 0040 D1 rule 1): every thermal path prints it first. */
+	awaitingStoreLine?: string;
 	/** Ref to the receipt iframe — used to extract HTML when fetch is blocked by CORS */
 	iframeRef?: React.RefObject<HTMLIFrameElement | null>;
 	/** Injected by the host app: builds the cloud queue enqueue fn for a profile. */
@@ -111,6 +114,7 @@ export function usePrint(options: UsePrintOptions) {
 		templateXml,
 		decimals,
 		templateEngine,
+		awaitingStoreLine,
 		iframeRef,
 		cloudEnqueueFactory,
 		orderId,
@@ -166,6 +170,8 @@ export function usePrint(options: UsePrintOptions) {
 				await service.printOrderViaCloud(printerProfile, orderId, templateId);
 			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && printData) {
 				const normalised = mapReceiptData(printData as Record<string, any>);
+				const marked = (xml: string) =>
+					awaitingStoreLine ? markAwaitingStoreXml(xml, awaitingStoreLine) : xml;
 
 				if (printerProfile.fullReceiptRaster) {
 					if (!rasterize) {
@@ -174,8 +180,9 @@ export function usePrint(options: UsePrintOptions) {
 
 					// Raster path: render → capture → encode inside the 'use dom' component,
 					// then send the finished bytes via the existing printRaw.
-					const effectiveTemplateXml =
-						templateEngine === 'thermal' && templateXml ? templateXml : DEFAULT_THERMAL_TEMPLATE;
+					const effectiveTemplateXml = marked(
+						templateEngine === 'thermal' && templateXml ? templateXml : DEFAULT_THERMAL_TEMPLATE
+					);
 					const geometry = resolvePaperGeometry(paperWidth, printerProfile.columns);
 					const bytes = await rasterize({
 						templateXml: effectiveTemplateXml,
@@ -197,11 +204,17 @@ export function usePrint(options: UsePrintOptions) {
 					await service.printThermalTemplateForPrint(
 						normalised,
 						printerProfile,
-						templateXml,
+						marked(templateXml),
 						geometry.maxWidthDots
 					);
 				} else {
-					await service.printReceipt(normalised, printerProfile, undefined, decimals);
+					await service.printReceipt(
+						normalised,
+						printerProfile,
+						undefined,
+						decimals,
+						awaitingStoreLine
+					);
 				}
 			} else {
 				// System print fallback — need HTML content
@@ -267,6 +280,7 @@ export function usePrint(options: UsePrintOptions) {
 		receiptData,
 		receiptUrl,
 		templateEngine,
+		awaitingStoreLine,
 		templateId,
 		templateXml,
 	]);

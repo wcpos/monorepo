@@ -14,14 +14,14 @@ import { getSumUpReader } from '../../../modules/sumup-reader';
 // The session query is local to the SDK; one that never answers must not hold a checkout.
 //
 // KEPT ON PURPOSE (Paul, 2026-10-23; monorepo#2847 closed unmerged). Nothing starts a SumUp
-// offline session today: `startOfflineSession` has no caller because offline tenders do not
-// queue: the outbox's first slices journal manual records (`OFFLINE_TENDERS_QUEUE` in core's
-// checkout/tender/tiles.ts flips in slice B), and a device `queue` is a later slice (ADR 0040
+// offline session today: `startOfflineSession` has no caller because offline device tenders do not
+// queue: the outbox journals manual `offline: 'record'` methods only (core's
+// checkout/tender/tiles.ts), and a device `queue` is a later slice (ADR 0040
 // Decided 1 rule 2). The session query, the upload before a
 // checkout, the reconnect sync and the `authorized` outcome for an in-session checkout below
 // still run; with no session ever started they find none and do nothing. They are the SumUp half
 // of that outbox, validated on a physical Solo in #2495: not dead code to delete, they wait for
-// the outbox to flip the switch and start sessions. Where the outbox stands is written in
+// the outbox's device `queue` slice to start sessions. Where the outbox stands is written in
 // woocommerce-pos `docs/adr/0040…md`, "Offline tenders: status".
 const OFFLINE_QUERY_TIMEOUT_MS = 5000;
 

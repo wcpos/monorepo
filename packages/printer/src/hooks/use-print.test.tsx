@@ -115,3 +115,32 @@ it('does not report success when there is no printable content', async () => {
 	});
 	expect(printHtml).not.toHaveBeenCalled();
 });
+
+// ADR 0040 Decided 1 rule 1: the ESC/POS fallback (no thermal template) prints the line too.
+it('hands the awaiting-store line to the built-in layout and marks a thermal template', async () => {
+	const { PrinterService } = await import('../printer-service');
+	const printReceipt = vi.spyOn(PrinterService.prototype, 'printReceipt').mockResolvedValue();
+	const printThermal = vi
+		.spyOn(PrinterService.prototype, 'printThermalTemplateForPrint')
+		.mockResolvedValue();
+	const profile = { id: 'p', connectionType: 'network', columns: 48 } as never;
+	const options = { receiptData: {}, printerProfile: profile, awaitingStoreLine: 'Awaiting store' };
+	const fallback = renderHook(() => usePrint(options));
+	await act(async () => {
+		await fallback.result.current.print();
+	});
+	expect(printReceipt.mock.calls[0][4]).toBe('Awaiting store');
+	const thermal = renderHook(() =>
+		usePrint({
+			...options,
+			templateEngine: 'thermal',
+			templateXml: '<receipt><text>R</text></receipt>',
+		})
+	);
+	await act(async () => {
+		await thermal.result.current.print();
+	});
+	expect(printThermal.mock.calls[0][2]).toContain(
+		'<receipt><align mode="center"><bold><text>Awaiting store'
+	);
+});

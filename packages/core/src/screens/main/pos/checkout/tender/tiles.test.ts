@@ -4,7 +4,6 @@ import { registerDriver } from '../../../../../services/payment-drivers/registry
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { driverReady } from './use-driver-status';
-import * as tilesModule from './tiles';
 import {
 	buildTenderTiles,
 	initialReaderId,
@@ -105,7 +104,12 @@ describe('buildTenderTiles', () => {
 			online: false,
 		});
 
-		expect(tile).toMatchObject({ disabled: true, reason: 'offline', worksOffline: false });
+		expect(tile).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+			worksOffline: false,
+			settlesLater: false,
+		});
 	});
 
 	it('enables a manual method online and flags recordable offline methods', () => {
@@ -119,29 +123,20 @@ describe('buildTenderTiles', () => {
 	});
 
 	// ADR 0040 §offline: the tender passes `online: false` for an offline till and for a queued-offline
-	// save alike (use-tender-flow), so one rule covers both.
-	it('offline and queued-offline orders disable manual and device tiles with the offline reason', () => {
+	// save alike (use-tender-flow), so one rule covers both. Decided 1 rule 2: `record` journals.
+	it('offline and queued-offline orders keep a manual record tile and disable the device tile', () => {
 		registerDriver(createSimulatedDriver());
 		const tiles = buildTenderTiles([makeMethod(), deviceMethod], { online: false });
 		expect(tiles.map(({ disabled, reason }) => ({ disabled, reason }))).toEqual([
-			{ disabled: true, reason: 'offline' },
+			{ disabled: false, reason: null },
 			{ disabled: true, reason: 'offline' },
 		]);
 	});
 });
 
-// ADR 0040 Decided 1: the switch stays off in slice A; slice B flips it. Flipped here as a mock.
-describe('the offline tender switch', () => {
-	const switchOn = () =>
-		jest.replaceProperty(
-			tilesModule as { OFFLINE_TENDERS_QUEUE: boolean },
-			'OFFLINE_TENDERS_QUEUE',
-			true
-		);
-	afterEach(() => jest.restoreAllMocks());
-
-	it("with the switch on, a manual record-capable tile is enabled offline and settlesLater; device, gateway, server and offline:'none' stay offline", () => {
-		switchOn();
+// ADR 0040 Decided 1 rule 2: `capabilities.offline` decides; rule 1: the tile says it settles later.
+describe('offline tenders', () => {
+	it("a manual record-capable tile is enabled offline and settlesLater; device, gateway, server and offline:'none' stay offline", () => {
 		registerDriver(createSimulatedDriver());
 		const methods = [
 			makeMethod({ id: 'cash' }),
@@ -167,14 +162,18 @@ describe('the offline tender switch', () => {
 		]);
 	});
 
-	it('settlesLater is false online', () => {
-		switchOn();
-		const [cash] = buildTenderTiles([makeMethod()], { online: true });
-		expect(cash).toMatchObject({ disabled: false, worksOffline: true, settlesLater: false });
-		// And off (slice A ships it off), an offline manual tile is disabled and never settles later.
-		jest.restoreAllMocks();
-		const [offline] = buildTenderTiles([makeMethod()], { online: false });
+	it('an order the store has never seen is not offered offline: no route for the record', () => {
+		const [offline] = buildTenderTiles([makeMethod()], { online: false, hasServerId: false });
 		expect(offline).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
+		const [online] = buildTenderTiles([makeMethod()], { online: true, hasServerId: false });
+		expect(online).toMatchObject({ disabled: false, reason: null });
+	});
+
+	it('settlesLater only offline, enabled and record', () => {
+		const [online] = buildTenderTiles([makeMethod()], { online: true });
+		expect(online).toMatchObject({ disabled: false, worksOffline: true, settlesLater: false });
+		const [offline] = buildTenderTiles([makeMethod()], { online: false });
+		expect(offline).toMatchObject({ disabled: false, reason: null, settlesLater: true });
 	});
 });
 

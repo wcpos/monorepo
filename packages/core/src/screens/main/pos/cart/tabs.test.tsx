@@ -159,7 +159,10 @@ jest.mock('@wcpos/query/record-readers', () => ({
 		return mockReceipts[uuid];
 	},
 }));
-jest.mock('observable-hooks', () => ({ useObservableSuspense: (record: unknown) => record }));
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: (record: unknown) => record,
+}));
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),

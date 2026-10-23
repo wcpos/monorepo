@@ -6,6 +6,7 @@ import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/r
 import { isOrderBasedCloudProfile, usePrint, usesSystemPrintDialog } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { withBase } from '@wcpos/components/webview/with-base';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -23,6 +24,7 @@ import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
+import { useAwaitsStore } from '../pos/checkout/use-awaiting-store';
 import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
@@ -78,8 +80,16 @@ export function useReceiptDocument({
 	// Get the WC order ID for the receipts API
 	const orderId = orderData?.id;
 
+	// ADR 0040 Decided 1 rule 1, the ONE local-only rule: offline, or a sale the store has not heard
+	// (its page and receipts API read it unpaid), the receipt renders locally, its line first: no
+	// store page, no order-based cloud print, no PDF; email queues. Not read yet (null) HOLDS the
+	// document and the auto-print. A document with no order never awaits.
+	const awaiting = useAwaitsStore(order?.uuid ?? '');
+	const awaits = order ? awaiting : false;
+	const localOnly = useOnlineStatus().status !== 'online-website-available' || awaits !== false;
+	const awaitingStoreLine = awaits ? t('receipt.awaiting_store_line') : undefined;
 	// Legacy receipt URL from order links
-	const baseReceiptURL = orderData?.links?.receipt?.[0]?.href;
+	const baseReceiptURL = localOnly ? undefined : orderData?.links?.receipt?.[0]?.href;
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
@@ -114,6 +124,8 @@ export function useReceiptDocument({
 		localReport,
 		formatReport,
 		order: orderData,
+		localOnly,
+		awaitingStoreLine: awaitingStoreLine ?? null,
 		nextLocalClosureCount: async () => {
 			const closure = await getLocalClosure?.();
 			return closure ? closure.getLatest().print_count + 1 : 0;
@@ -160,7 +172,8 @@ export function useReceiptDocument({
 	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
 	const previewHtml = renderedHtml ?? pageHtml ?? null;
 	const previewPending =
-		previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL));
+		awaits === null ||
+		(previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL)));
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
@@ -235,6 +248,9 @@ export function useReceiptDocument({
 
 	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
 	const sessionReport = !!localReport || templateType === 'closure';
+	// The store renders an order-based cloud printer's copy, and it has not heard this sale: say
+	// so, never a failure (offline keeps the print path's own refusal). ADR 0040 D1 rule 1.
+	const cloudAwaiting = awaits === true && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const reportSystemDialog =
 		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const printerProfile = React.useMemo(
@@ -318,12 +334,13 @@ export function useReceiptDocument({
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
+		awaitingStoreLine,
 		iframeRef,
 		cloudEnqueueFactory,
 		// Order-based cloud providers (Epson/PrintNode) send these instead of bytes;
 		// the server renders + delivers. templateInfo.id is the server template id
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
-		orderId: document ? undefined : orderId,
+		orderId: document || localOnly ? undefined : orderId,
 		templateId: document ? undefined : templateInfo?.id,
 		onBeforePrint: () => {
 			if (reportSystemDialog) Toast.show({ title: t('register.report_system_print') });
@@ -341,6 +358,8 @@ export function useReceiptDocument({
 	// nor the reverse.
 	const runPrint = React.useCallback(
 		async (onFailure: (error: unknown) => void) => {
+			// Not read yet: whether the paper needs the awaiting-store line is unknown (rule 1).
+			if (awaits === null) return false;
 			if (
 				(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
 				(!selectedTemplate?.offline_capable || !selectedTemplate.content)
@@ -361,6 +380,10 @@ export function useReceiptDocument({
 				);
 				throw new Error(t('reports.closure_template_required'));
 			}
+			if (cloudAwaiting) {
+				Toast.show({ title: t('receipt.print_awaiting_store') });
+				return false;
+			}
 			let dispatched: boolean;
 			try {
 				dispatched = (await printReceipt()) === true;
@@ -371,7 +394,7 @@ export function useReceiptDocument({
 			if (dispatched) setPrintedTo(printDestination);
 			return dispatched;
 		},
-		[printReceipt, printDestination, document, selectedTemplate, t]
+		[printReceipt, printDestination, document, selectedTemplate, t, cloudAwaiting, awaits]
 	);
 	// For hosts that show their own inline error (reports, closures): the row only, no
 	// toast. A closed print dialog is a cancel (debug); a real failure carries its
@@ -496,6 +519,8 @@ export function useReceiptDocument({
 			uiSettings.autoPrintReceipt &&
 			autoPrintAllowed &&
 			!isResolvingPrinter &&
+			awaits !== null &&
+			!cloudAwaiting &&
 			(!needsLoadedPreview || frameLoaded) &&
 			hasFinalData &&
 			(receiptDataIsServer || localOrderSettled) &&
@@ -513,6 +538,8 @@ export function useReceiptDocument({
 		hasFinalData,
 		frameKey,
 		isResolvingPrinter,
+		awaits,
+		cloudAwaiting,
 		localOrderSettled,
 		needsLoadedPreview,
 		printAndReport,
@@ -547,6 +574,7 @@ export function useReceiptDocument({
 		frameState !== 'failed' &&
 		(isSyncing ||
 			isResolvingPrinter ||
+			awaits === null ||
 			(needsLoadedPreview && hasDocument && frameState !== 'loaded') ||
 			(awaitingSettledData && !dataWaitExpired));
 
@@ -574,6 +602,8 @@ export function useReceiptDocument({
 		printAndReport,
 		isPrinting,
 		printedTo,
+		/** The journal has not said whether this sale awaits the store: Print waits too. */
+		printHeld: awaits === null,
 		canDownloadPdf,
 		downloadReceiptPdf,
 		isDownloadingPdf,

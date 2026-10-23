@@ -21,6 +21,7 @@ import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { UserAvatar } from '../../components/user-avatar';
 import { NotificationBell } from '../../components/notification-bell/notification-bell';
+import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { describeRegisterBar } from './register-bar.helpers';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { UserSheet } from './user-sheet';
@@ -59,6 +60,7 @@ function RegisterBarContent({
 	// The store being unreachable reads as offline to a cashier: one pill, one place.
 	const status = useOnlineStatus().status;
 	const online = status !== 'offline' && status !== 'online-website-unavailable';
+	const awaitingStore = useAwaitingStoreCount();
 	const { place, pill } = describeRegisterBar({
 		registerName: binding.registerName,
 		registerCount: binding.registers.length,
@@ -74,6 +76,7 @@ function RegisterBarContent({
 		sessionStatus: session?.status,
 		approvalRequired: session?.approval_required,
 		overdue,
+		awaitingStore,
 	});
 	const { open: userOpen, setOpen: setUserOpen } = useCashierSheet();
 	const [storeOpen, setStoreOpen] = React.useState(false);
@@ -117,7 +120,13 @@ function RegisterBarContent({
 						</Text>
 					)}
 				</View>
-				{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
+				{pill && (
+					<StatusBadge
+						testID="register-bar-pill"
+						label={t(pill, { count: awaitingStore })}
+						variant="warning"
+					/>
+				)}
 				<View className="flex-1" />
 				{(session || lastClosure) && (
 					<IconButton

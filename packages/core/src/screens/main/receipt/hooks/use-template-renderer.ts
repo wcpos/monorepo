@@ -3,6 +3,10 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import {
+	markAwaitingStore,
+	markAwaitingStoreXml,
+} from '@wcpos/printer/encoder/mark-awaiting-store';
 import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
 import { loadBarcodeLibrary } from '@wcpos/receipt-renderer/barcode-library';
 import type { ActiveTemplate } from '@wcpos/query';
@@ -70,6 +74,10 @@ interface UseTemplateRendererOptions {
 	formatReport?: (data: Record<string, unknown>) => Record<string, unknown>;
 	/** The RxDB order document — used to build local receipt data when offline */
 	order: Record<string, any> | undefined;
+	/** Never the store's page or receipts API: offline, or a sale the store has not heard. */
+	localOnly?: boolean;
+	/** The store has not heard this sale yet: the till's line to show first, else null. */
+	awaitingStoreLine?: string | null;
 }
 
 interface TemplateRendererResult {
@@ -113,6 +121,8 @@ export function useTemplateRenderer({
 	templateType,
 	storeId,
 	previewEnabled = true,
+	localOnly,
+	awaitingStoreLine = null,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const barcodesReady = useBarcodeLibrary();
 	const { templates: activeTemplates, synced } = useActiveTemplatesState(
@@ -145,7 +155,8 @@ export function useTemplateRenderer({
 	const receiptI18n = useDocField(store, (value) => value.receipt_i18n) as
 		Record<string, string> | undefined;
 	const { status } = useOnlineStatus();
-	const isOffline = status !== 'online-website-available';
+	// ADR 0040 Decided 1 rule 1: the receipt document decides (its one local-only rule).
+	const isOffline = localOnly ?? status !== 'online-website-available';
 	if (templateType === 'closure' && !isOffline && site?.url) {
 		const url = new URL(site.url);
 		url.searchParams.set('wcpos-receipt', '0');
@@ -248,6 +259,27 @@ export function useTemplateRenderer({
 
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
 
+	// The awaiting-store line goes first in the preview and the dialog print (ADR 0040 Decided 1
+	// rule 1): inside a thermal template's XML, before the rendered HTML otherwise. A thermal
+	// printer gets it from `usePrint`, on every path.
+	const renderTemplate = React.useCallback(
+		(template: { engine?: string | null; content: string }, data: Record<string, unknown>) => {
+			const thermal = template.engine === 'thermal';
+			const html = renderOfflineTemplatePreview({
+				engine: template.engine,
+				content:
+					awaitingStoreLine !== null && thermal
+						? markAwaitingStoreXml(template.content, awaitingStoreLine)
+						: template.content,
+				receiptData: data,
+			});
+			return awaitingStoreLine !== null && !thermal
+				? markAwaitingStore(html, awaitingStoreLine)
+				: html;
+		},
+		[awaitingStoreLine]
+	);
+
 	// Pre-render all offline-capable templates into a cache
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
@@ -258,11 +290,10 @@ export function useTemplateRenderer({
 				try {
 					cache.set(
 						tmpl.id,
-						renderOfflineTemplatePreview({
-							engine: tmpl.engine,
-							content: tmpl.content,
-							receiptData: receiptData as Record<string, unknown>,
-						})
+						renderTemplate(
+							{ engine: tmpl.engine, content: tmpl.content },
+							receiptData as Record<string, unknown>
+						)
 					);
 				} catch {
 					// Skip templates with render errors
@@ -270,7 +301,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, receiptData, barcodesReady]);
+	}, [templates, receiptData, barcodesReady, renderTemplate]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -284,11 +315,10 @@ export function useTemplateRenderer({
 			const data = receiptData;
 			if (data && selectedTemplate.content) {
 				try {
-					renderedHtml = renderOfflineTemplatePreview({
-						engine: selectedTemplate.engine,
-						content: selectedTemplate.content,
-						receiptData: data as Record<string, unknown>,
-					});
+					renderedHtml = renderTemplate(
+						{ engine: selectedTemplate.engine, content: selectedTemplate.content },
+						data as Record<string, unknown>
+					);
 				} catch {
 					renderedHtml = '<p>Template render error</p>';
 				}
@@ -385,11 +415,10 @@ export function useTemplateRenderer({
 				: {}),
 			html:
 				selectedTemplate?.offline_capable && selectedTemplate.content
-					? renderOfflineTemplatePreview({
-							engine: selectedTemplate.engine,
-							content: selectedTemplate.content,
-							receiptData: data as Record<string, unknown>,
-						})
+					? renderTemplate(
+							{ engine: selectedTemplate.engine, content: selectedTemplate.content },
+							data as Record<string, unknown>
+						)
 					: reportContent
 						? Mustache.render(reportContent, data)
 						: undefined,

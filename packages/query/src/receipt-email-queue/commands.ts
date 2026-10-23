@@ -10,7 +10,9 @@ import {
 	removeReceiptEmail as remove,
 	retryReceiptEmail as retry,
 } from './queue';
+import { readAwaitingStoreOrderIds } from '../store-local/awaiting-store';
 
+import type { StoreLocalDatabase } from '../reads/store-local';
 import type { LocalDatabaseWithReset } from '../use-local-collection';
 
 export type ReceiptEmailStoreDatabase = LocalDatabaseWithReset | null | undefined;
@@ -27,11 +29,15 @@ export function enqueueReceiptEmail(
 	return enqueue({ ...deps, collection: receiptEmailQueue(storeDB) }, input);
 }
 
-export function drainReceiptEmailQueue({
+export async function drainReceiptEmailQueue({
 	storeDB,
 	...deps
-}: Omit<DrainDeps, 'collection'> & { storeDB: ReceiptEmailStoreDatabase }) {
-	return drain({ ...deps, collection: receiptEmailQueue(storeDB) });
+}: Omit<DrainDeps, 'collection' | 'holds'> & { storeDB: ReceiptEmailStoreDatabase }) {
+	const collection = receiptEmailQueue(storeDB);
+	// ADR 0040 Decided 1 rule 1: the store's copy would show a sale it has not heard as unpaid.
+	// Its email stays queued, unpenalised, until the offline record settles; a later drain sends it.
+	const awaiting = await readAwaitingStoreOrderIds(storeDB as StoreLocalDatabase);
+	return drain({ ...deps, collection, holds: (row) => awaiting.has(row.orderId) });
 }
 
 export async function retryReceiptEmail(

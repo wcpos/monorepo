@@ -49,7 +49,7 @@ export function ReceiptActions({
 							<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 						</DialogHeader>
 						<DialogBody>
-							<EmailForm order={order} />
+							<EmailForm order={order} localOnly={doc.isOffline} />
 						</DialogBody>
 					</DialogContent>
 				</Dialog>
@@ -66,6 +66,7 @@ export function ReceiptActions({
 				testID="receipt-print-button"
 				// One coded row and a toast on failure (a closed print dialog is a cancel).
 				onPress={() => void doc.printAndReport()}
+				disabled={doc.printHeld}
 				loading={doc.isPrinting || doc.isSyncing}
 			>
 				{t(doc.printedTo ? 'receipt.print_again' : 'receipt.print_receipt')}

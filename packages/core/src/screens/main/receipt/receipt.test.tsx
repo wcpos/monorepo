@@ -173,6 +173,12 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({}),
 }));
 
+// No sale awaits the store here (its own suites cover the mark).
+let mockAwaiting: boolean | null = false;
+jest.mock('../pos/checkout/use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		store: { wc_price_decimals$: new BehaviorSubject(2) },
@@ -349,6 +355,14 @@ describe('Receipt PDF download action', () => {
 		expect((screen.getByTestId('receipt-download-pdf-button') as HTMLButtonElement).disabled).toBe(
 			true
 		);
+	});
+
+	// ADR 0040 Decided 1 rule 1: until the journal answers, the paper's mark is unknown.
+	it('holds the Print button until the journal has said whether the sale awaits the store', () => {
+		mockAwaiting = null;
+		render(<Receipt resource={{} as never} />);
+		expect((screen.getByTestId('receipt-print-button') as HTMLButtonElement).disabled).toBe(true);
+		mockAwaiting = false;
 	});
 
 	it('persists a print attempt before invoking the printer transport', async () => {

@@ -65,10 +65,18 @@ jest.mock('./hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: (...args: unknown[]) => mockReconcile(...args),
 	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
 }));
-jest.mock('./checkout-mode', () => ({
-	...jest.requireActual('./checkout-mode'),
-	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
-}));
+jest.mock('./checkout-mode', () => {
+	const actual = jest.requireActual('./checkout-mode');
+	return {
+		...actual,
+		// The sale's tab is open (a replay refreshes only an open tab, ADR 0040 D1 rule 3).
+		getCheckoutModeSnapshot: () => {
+			const mode = actual.getCheckoutModeSnapshot();
+			return { ...mode, checkoutOrders: new Set([...mode.checkoutOrders, 'order']) };
+		},
+		enterReceipt: (...args: unknown[]) => mockReceipt(...args),
+	};
+});
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),

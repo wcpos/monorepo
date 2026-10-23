@@ -2,6 +2,7 @@ import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
 
 import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
+import { markAwaitingStoreXml } from './mark-awaiting-store';
 import { createEncodabilityGate, withEscposFontA } from './escpos-text';
 import { formatMoney } from './format-money';
 import { DEFAULT_I18N } from './format-receipt-data';
@@ -33,6 +34,8 @@ export interface EncodeReceiptOptions {
 	decimals?: number;
 	/** ESC/POS code page name for the receipt text. Default: the encoder's automatic choice. */
 	codePage?: string;
+	/** The store has not heard this sale: the built-in layout prints this line first. */
+	awaitingStoreLine?: string;
 }
 
 export function buildReceiptMarkupJob(
@@ -139,7 +142,9 @@ export function buildReceiptMarkupJob(
 	gate.logSubstitutions();
 
 	return {
-		template: DEFAULT_THERMAL_TEMPLATE,
+		template: options.awaitingStoreLine
+			? markAwaitingStoreXml(DEFAULT_THERMAL_TEMPLATE, options.awaitingStoreLine)
+			: DEFAULT_THERMAL_TEMPLATE,
 		data: templateData,
 		options: {
 			printerModel,

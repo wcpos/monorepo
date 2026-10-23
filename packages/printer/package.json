@@ -10,6 +10,7 @@
 		".": "./src/index.ts",
 		"./encoder": "./src/encoder/index.ts",
 		"./encoder/format-money": "./src/encoder/format-money.ts",
+		"./encoder/mark-awaiting-store": "./src/encoder/mark-awaiting-store.ts",
 		"./encoder/render-preview": "./src/encoder/render-preview.ts",
 		"./ipc-channels": "./src/ipc/channels.cts",
 		"./transport/device-key": "./src/transport/device-key.ts"

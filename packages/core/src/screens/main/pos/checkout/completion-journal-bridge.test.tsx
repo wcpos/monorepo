@@ -79,7 +79,13 @@ jest.mock('./hooks/reconcile-completed-order', () => ({
 	refreshOrderRecord: (...args: unknown[]) => mockCatchUp(...args),
 }));
 jest.mock('./provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
+// The sale's receipt or checkout tab is open unless a test finishes it (ADR 0040 D1 rule 3).
+let mockTabOpen = true;
 jest.mock('./checkout-mode', () => ({
+	getCheckoutModeSnapshot: () => ({
+		receiptOrders: { has: () => mockTabOpen },
+		checkoutOrders: new Set(),
+	}),
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
 	releaseUnconfirmedReceipt: () => {},
 }));
@@ -109,6 +115,7 @@ const drain = () =>
 	});
 addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
+	mockTabOpen = true;
 	jest.resetAllMocks();
 	mockRecover.mockResolvedValue([]);
 	mockHoldsAnswer.mockResolvedValue(true);
@@ -1367,6 +1374,52 @@ it('an unconfirmed sale is finished by the bridge once the paid order is adopted
 			context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
 		})
 	);
+});
+
+// ADR 0040 Decided 1 rule 3: an offline sale completes at the till (its paid moment: receipt
+// selected, audited once) and the bridge's second completion, once the store answers, is a
+// REPLAY: audited `replayed: true`, and it never adds back the receipt tab the cashier finished
+// (that tab would auto-print a second, unmarked copy and buzz again).
+it.each([
+	['still open, refreshes it unselected', true],
+	['finished with New sale, adds nothing back', false],
+])('an offline sale replayed once answered, its receipt tab %s', async (_, open) => {
+	await recordCompletionAttempt(mockContext.storeDB, { orderUuid: 'order', source: 'manual' });
+	const answer = {
+		source: 'manual',
+		via: 'offline',
+		row: { id: 'row-1', amount: '10.00', recorded_offline: true },
+		order: null,
+		mirrorFailed: false,
+		preparedCompleting: true,
+		preLegBalanceMinor: 1000,
+		amountMinor: 1000,
+	} as unknown as Parameters<typeof owner.completeSale>[2];
+	expect(
+		await owner.completeSale(mockContext, resident() as never, answer, {
+			host: 'stage',
+			autoShowReceipt: true,
+		})
+	).toBe('completed');
+	expect(await pendingCompletions(mockContext.storeDB)).toMatchObject({
+		order: { awaitingAdoption: true },
+	});
+	expect(mockReceipt).toHaveBeenCalledWith('order');
+	expect(mockInfo).toHaveBeenCalledTimes(1);
+	expect(mockInfo.mock.calls[0][1].context).toMatchObject({ type: 'checkout.completed' });
+	expect(mockInfo.mock.calls[0][1].context).not.toHaveProperty('replayed');
+	mockReceipt.mockClear();
+	mockTabOpen = open;
+	mockFind.mockResolvedValue(resident()); // the store answered; the paid order is adopted
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	if (open) expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+	else expect(mockReceipt).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledTimes(2);
+	expect(mockInfo.mock.calls[1][1].context).toMatchObject({
+		type: 'checkout.completed',
+		replayed: true,
+	});
 });
 
 // The same `unconfirmed` sale, finished mid-session: the pull adopts the paid order while the till

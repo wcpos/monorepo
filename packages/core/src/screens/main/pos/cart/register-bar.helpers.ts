@@ -9,6 +9,7 @@ export function describeRegisterBar({
 	sessionStatus = null,
 	overdue = false,
 	approvalRequired = false,
+	awaitingStore = 0,
 }: {
 	registerName: string | null;
 	registerCount: number;
@@ -20,6 +21,8 @@ export function describeRegisterBar({
 	sessionStatus?: string | null;
 	overdue?: boolean;
 	approvalRequired?: boolean;
+	/** Sales taken that the store has still to hear (`useAwaitingStoreCount`). */
+	awaitingStore?: number;
 }) {
 	return {
 		place: registerCount > 1 && registerName ? `${registerName} · ${storeName}` : storeName,
@@ -29,7 +32,10 @@ export function describeRegisterBar({
 				: bindingStatus === 'none'
 					? ('register.no_register' as const)
 					: !online || directoryFailed
-						? ('register.offline' as const)
+						? // ADR 0040 Decided 1 rule 1: offline, the pill counts the sales still to send.
+							awaitingStore > 0
+							? ('register.offline_to_send' as const)
+							: ('register.offline' as const)
 						: sessionStatus === 'counting' && !approvalRequired
 							? ('register.counting' as const)
 							: approvalRequired
@@ -38,6 +44,9 @@ export function describeRegisterBar({
 									? ('register.overdue' as const)
 									: sessionsOn && !sessionStatus
 										? ('register.closed' as const)
-										: null,
+										: // Online, the sales the store has not answered rank last: they need no action.
+											awaitingStore > 0
+											? ('register.awaiting_store' as const)
+											: null,
 	};
 }
