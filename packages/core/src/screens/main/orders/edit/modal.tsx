@@ -19,6 +19,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { EditOrderForm } from './form';
 import { OrderView } from './view';
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
@@ -30,9 +31,15 @@ const TABS = ['view', 'edit', 'json'] as const;
 export function OrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
+	// The modal is its own route, outside the list page's Pro guard and its provider: the
+	// guard's own derivation, as the attention notice reads it. Free browses; it never edits.
+	const readOnly = !useAppInfo().license?.isPro;
 	// The route's `tab` picks the tab it opens on; the tab strip owns it after that.
 	const { tab } = useLocalSearchParams<{ tab?: string }>();
-	const [value, setValue] = React.useState<string>(TABS.find((name) => name === tab) ?? 'view');
+	const requested = TABS.find((name) => name === tab) ?? 'view';
+	const [value, setValue] = React.useState<string>(
+		readOnly && requested === 'edit' ? 'view' : requested
+	);
 	const payload = useRecordField(order, (record) => record.payload);
 
 	if (!order) {
@@ -64,19 +71,23 @@ export function OrderModal({ resource }: Props) {
 							<TabsTrigger value="view" className="flex-1">
 								<Text>{t('common.view')}</Text>
 							</TabsTrigger>
-							<TabsTrigger value="edit" className="flex-1">
-								<Text>{t('common.edit')}</Text>
-							</TabsTrigger>
+							{!readOnly && (
+								<TabsTrigger value="edit" className="flex-1">
+									<Text>{t('common.edit')}</Text>
+								</TabsTrigger>
+							)}
 							<TabsTrigger value="json" className="flex-1">
 								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="view" className="min-h-0 flex-1">
-							<OrderView order={order} />
+							<OrderView order={order} readOnly={readOnly} />
 						</TabsContent>
-						<TabsContent value="edit" className="min-h-0 flex-1">
-							<EditOrderForm order={order} />
-						</TabsContent>
+						{!readOnly && (
+							<TabsContent value="edit" className="min-h-0 flex-1">
+								<EditOrderForm order={order} />
+							</TabsContent>
+						)}
 						<TabsContent value="json" className="min-h-0 flex-1">
 							<DialogBody>
 								<Tree value={payload} />

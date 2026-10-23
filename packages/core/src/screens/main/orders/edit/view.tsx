@@ -11,7 +11,6 @@ import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CreatedVia } from '../../components/order/created-via';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { OrderStatusBadge } from '../cells/status';
@@ -30,14 +29,20 @@ import { POSMetadataSection } from '../view/sections/pos-metadata';
 import { totalRefunded } from '../view/sections/total-refunded';
 import { TotalsSection } from '../view/sections/totals';
 
-/** The order modal's View tab: the order read top to bottom, and its actions in the footer. */
-export function OrderView({ order }: { order: EngineRecord<'orders'> }) {
+/**
+ * The order modal's View tab: the order read top to bottom, and its actions in the footer.
+ * `readOnly` is the modal's (Free browses, never edits): the footer keeps only the receipt.
+ */
+export function OrderView({
+	order,
+	readOnly,
+}: {
+	order: EngineRecord<'orders'>;
+	readOnly: boolean;
+}) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const t = useT();
 	const router = useRouter();
-	// The modal is its own route, outside the Pro guard's provider (the list page's): the
-	// guard's own derivation, as the attention notice reads it.
-	const readOnly = !useAppInfo().license?.isPro;
 	const { close } = useDialog();
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const actions = useOrderActions(order, { onDeleted: close });

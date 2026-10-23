@@ -143,8 +143,12 @@ it('offers only Re-open and Delete for an order the store has not saved', () => 
 	expect(footer()).toEqual(['delete', 'reopen']);
 });
 
-it('offers only the receipt when read-only', () => {
+it('offers only the receipt when read-only, and no Edit tab even when the route asks for it', () => {
 	mockReadOnly = true;
+	mockTab = 'edit';
 	render(<OrderModal resource={{} as never} />);
 	expect(footer()).toEqual(['receipt']);
+	expect(screen.queryByText('common.edit')).toBeNull();
+	expect(screen.queryByTestId('order-edit-form')).toBeNull();
+	expect(screen.getByTestId('order-modal-view')).toBeTruthy();
 });
