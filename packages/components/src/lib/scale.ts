@@ -14,6 +14,15 @@
  */
 export const GUTTER_UNITS = 3;
 
+/**
+ * A band in spacing units; `--spacing-band` in global.css carries the same 7. A band is a label
+ * ON a list (the orders day heading), not an item in it: the caption line (12 px type on a 16 px
+ * line) with 1.5 units above and below, 28 at Regular, about 64% of a row. The references keep
+ * a section heading well under their rows (Up 28, YNAB 26, Monarch 24, Shopify 22; board
+ * 2026-10-23). It is not a target, so the pointer floor never lifts it.
+ */
+export const BAND_UNITS = 7;
+
 /** The three drawn density steps. */
 export type ScaleStep = 'compact' | 'regular' | 'spacious';
 

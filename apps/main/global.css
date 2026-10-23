@@ -21,6 +21,9 @@
    ScopedVariables) moves it too. */
 @theme inline {
   --spacing-gutter: calc(var(--spacing) * 3);
+  /* A band (a section heading on a list): seven spacing units, 28 at Regular. `BAND_UNITS` in
+     scale.ts carries the same 7 with the sources. Not a target, so never floored. */
+  --spacing-band: calc(var(--spacing) * 7);
 }
 
 @theme {
