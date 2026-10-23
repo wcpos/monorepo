@@ -7,7 +7,8 @@ import type { StoreLocalDatabase } from '../reads/store-local';
 /**
  * The money command journal (ADR 0040 §1.3): every money command's frozen envelope, from before
  * it is sent until its outcome is definitive. It lives in the store database, which is named per
- * store and not per scope generation, so no order write, pull, reset or generation bump sees it.
+ * store AND per signed-in credential (`generateStoreLocalID`), not per scope generation: no order
+ * write, pull, reset or generation bump sees it, and neither does another cashier's session.
  */
 export type MoneyCommandKind =
 	'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close';

@@ -8,6 +8,7 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
+import { createTestT } from '../../../../../jest/translate';
 import { UserSheet, useSalesToday } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
@@ -95,7 +96,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 		logout: mockLogout,
 	}),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+let mockT: (key: string, options?: Record<string, unknown>) => string = (key) => key;
+jest.mock('../../../../contexts/translations', () => ({ useT: () => mockT }));
+let mockAwaitingStore = 0;
+jest.mock('../checkout/use-awaiting-store', () => ({
+	useAwaitingStoreCount: () => mockAwaitingStore,
+}));
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: (date: Date) => date.toISOString().slice(0, -5),
 }));
@@ -397,4 +403,35 @@ it('uses the store day, re-subscribes at store midnight and cleans up its timer'
 		mockStoreTimezone = undefined;
 		jest.useRealTimers();
 	}
+});
+
+describe('awaiting store', () => {
+	beforeEach(() => {
+		mockT = createTestT();
+	});
+	afterEach(() => {
+		mockAwaitingStore = 0;
+		mockT = (key) => key;
+	});
+
+	it('shows nothing when the store has heard every sale', () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-awaiting-store')).toBeNull();
+	});
+
+	it('tells the cashier the sale is kept for them on this till', () => {
+		mockAwaitingStore = 1;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		const row = screen.getByTestId('user-sheet-awaiting-store');
+		expect(row.textContent).toContain('Awaiting store');
+		expect(row.textContent).toContain('1 sale');
+		expect(row.textContent).not.toContain('1 sales');
+		expect(row.textContent).toContain('Sent when you are signed in online.');
+	});
+
+	it('counts several sales', () => {
+		mockAwaitingStore = 3;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-awaiting-store').textContent).toContain('3 sales');
+	});
 });
