@@ -115,12 +115,11 @@ it.each([
 	[
 		'answered but not mirrored',
 		() =>
-			mockCancel.mockRejectedValue(
-				new GatewayCancelMirrorError(
-					{ kind: 'unchanged', order: { status: 'completed' } as never },
-					new Error('disk')
-				)
-			),
+			mockCancel.mockResolvedValue({
+				kind: 'unchanged',
+				order: { status: 'completed' },
+				notMirrored: { cause: new Error('disk') },
+			}),
 	],
 ])('an unchanged cancel (%s) says the invoice was not cancelled', async (_label, arrange) => {
 	arrange();
