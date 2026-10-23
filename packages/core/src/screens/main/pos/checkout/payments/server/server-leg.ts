@@ -269,15 +269,24 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
 				return;
 			}
+			// A failed request moved nothing on the server, so the last mirrored revision still
+			// holds: the flag clears here, and the deadline cancel inside handleError voids at once.
 			if (seq === sequence) inFlight = null;
 			if (current(seq)) await handleError(error, route, seq);
 			return;
 		}
-		if (seq === sequence) inFlight = null;
 		// Answered: the poster settles the intent's journal entry with this answer.
 		if (route === 'intent') finality.intent = null;
 		if (!current(seq)) return;
-		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route))) return;
+		// In flight until the answer is mirrored: a cancel pressed during the mirror must wait for
+		// the revision it carries, exactly as one pressed during the request does.
+		let applied: boolean;
+		try {
+			applied = await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route);
+		} finally {
+			if (seq === sequence) inFlight = null;
+		}
+		if (!applied) return;
 		setState({
 			phase: 'polling',
 			capturing: false,

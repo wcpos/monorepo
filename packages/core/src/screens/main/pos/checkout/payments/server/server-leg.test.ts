@@ -445,6 +445,30 @@ it('a cancel while a status poll is in flight sends the void after the poll answ
 	expect(c.count('status')).toBe(1);
 	expect(c.count('void')).toBe(1);
 });
+it('a cancel while the poll answer is still being mirrored waits for the mirror', async () => {
+	const c = setup(true);
+	const mirroring = deferred<void>();
+	c.answer('status', response());
+	c.answer('void', response({ status: 'voided' }));
+	let first = true;
+	c.mirror.mockImplementation(async () => {
+		c.calls.push({ route: 'mirror', at: Date.now() });
+		if (first) {
+			first = false;
+			await mirroring.promise;
+		}
+	});
+	await tick();
+	expect(c.calls.map((call) => call.route)).toEqual(['status', 'mirror']);
+	// The answer is back but not yet mirrored: the cancel must not void under the old revision.
+	await c.leg.cancel('cashier');
+	expect(c.count('void')).toBe(0);
+	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
+	mirroring.resolve();
+	await tick();
+	expect(c.calls.map((call) => call.route)).toEqual(['status', 'mirror', 'void', 'mirror']);
+	expect(c.leg.getState().outcome).toBe('voided');
+});
 it('a status poll that errors while a cancel is pending still voids', async () => {
 	const c = setup(true);
 	const poll = deferred<{ data: unknown }>();
