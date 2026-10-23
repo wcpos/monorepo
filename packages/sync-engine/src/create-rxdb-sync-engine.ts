@@ -101,6 +101,8 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_REQUEST_DEADLINE_MS,
+	type QueryTotalWooRequest,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -895,10 +897,23 @@ export function createRxdbSyncEngine(
 		onPressureTransition: (transition) => cadence?.onServerPressureTransition(transition),
 		onPressureReadoutChanged: scheduleStatusChange,
 	});
-	// No lane given: the host-transport lane (the maintenance lanes pass their own).
-	const fetcher = (url: string, init?: RequestInit, lane?: EngineLaneName) =>
-		transport.request(url, init, { lane });
-	const queryTotal = transport.queryTotal(ports.queryTotal);
+	// No lane given: the host-transport lane.
+	const fetcher: EngineFetcher = (url, init) => transport.request(url, init);
+	// The host's query-total probe runs on its own request: its lane's label and its
+	// one deadline, so a black-holed probe is one pressure strike. A latched upgrade
+	// refusal answers "unsupported" without even a local replay (woocommerce-pos#1752).
+	const queryTotalRequest: EngineFetcher = (url, init) =>
+		transport.request(url, init, {
+			lane: 'query-total-retry',
+			deadlineMs: QUERY_TOTAL_REQUEST_DEADLINE_MS,
+		});
+	const hostQueryTotal = ports.queryTotal;
+	const queryTotal = hostQueryTotal && {
+		fetchWooQueryTotal: async (input: { request: QueryTotalWooRequest; signal?: AbortSignal }) =>
+			transport.updateRequired()
+				? null
+				: hostQueryTotal.fetchWooQueryTotal({ ...input, engineRequest: queryTotalRequest }),
+	};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
@@ -1731,7 +1746,7 @@ export function createRxdbSyncEngine(
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
 		syncBaseUrl: ports.site.syncBaseUrl,
-		fetcher,
+		fetcher: transport.request,
 		connectivity: () => {
 			try {
 				return connectivity();

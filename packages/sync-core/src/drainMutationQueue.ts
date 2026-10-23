@@ -43,8 +43,9 @@ import type { PushResult } from './recordPushAdapter';
  *    the host scopes it to orders): the FIRST 409 re-anchors the base from the
  *    409's own `currentRevision` and re-pushes the SAME intent once; only a
  *    SECOND consecutive conflict parks the row. See `autoRecoverConflict`;
- *  - 428 precondition required → ONE targeted `refreshRevision` + re-push with
- *    the observed revision. A born-local CREATE with no refreshable server
+ *  - 428 precondition required, on the first push or the #1204 re-push alike
+ *    (one step, `refreshAndRepush`) → ONE targeted `refreshRevision` + re-push
+ *    with the observed revision. A born-local CREATE with no refreshable server
  *    identity is permanently rejected; when no update/delete revision can be
  *    determined (no refresh port or refresh finds nothing), the row parks as durable status
  *    'needs-revision' (gate2 #516 item 4) — resolved only by an explicit
@@ -58,7 +59,10 @@ import type { PushResult } from './recordPushAdapter';
  *    retries a dead letter: recovery is an explicit `resolveConflict` call that
  *    enqueues a FRESH row with the payload rebuilt from the current resident;
  *
- *  - error → back to 'pending' with backoff; left queued to retry next drain;
+ *  - error (any push attempt, or a 428's revision refresh) → back to 'pending'
+ *    with backoff, reported to the row's waiter; left queued to retry next drain.
+ *    A 401 also walls the rest of the pass: no user is logged in, so every push
+ *    would get one;
  *  - abort (scope switch) → the row STAYS durably 'claimed' (gate2 #516 item
  *    1): the push may have reached the server, so the intent is
  *    pushed-with-unknown-outcome — a claimed row never coalesces, which is
@@ -94,7 +98,7 @@ export type DrainResult = {
 	failed: number;
 	/** True when a push in this drain failed with 401; later rows were not pushed. */
 	sessionExpired: boolean;
-	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
+	/** Retryable push failures, whichever attempt met them (first push, 428 restamp or #1204 re-push). */
 	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
 	deferred: number;
@@ -116,6 +120,9 @@ export type DrainResult = {
 
 // A 401 is a session failure, not a payload verdict; the queue drains after re-auth.
 const SESSION_EXPIRED_STATUS = 401;
+
+/** How one push attempt ended: a verdict to record, settled here, or cut off by an abort. */
+type Settled = { kind: 'pushed'; result: PushResult } | { kind: 'settled' } | { kind: 'aborted' };
 
 /**
  * The queue's record identity: a recordId is unique within its collection, not across
@@ -735,6 +742,78 @@ export async function drainMutationQueue(input: {
 		blockedRecords.add(recordKey(mutation));
 	};
 
+	// ONE ATTEMPT, one owner per rule. The first push and the #1204 re-anchored
+	// re-push both run `attempt`, so a 428 buys the same refresh (`refreshAndRepush`,
+	// one per push it re-anchors) and a throw settles the same way (`settleThrown`)
+	// whichever push met it.
+	const attempt = async (row: QueuedMutation, prepare?: () => Promise<void>): Promise<Settled> => {
+		try {
+			await prepare?.();
+			return { kind: 'pushed', result: await input.push(row) };
+		} catch (error) {
+			// An abort (scope switch) cancelled the push — NOT a real failure. Don't bump attempts,
+			// back it off, or dead-letter a permanent error that raced with cancellation. The row
+			// STAYS durably 'claimed' (gate2 #516 item 1): the push may have reached the server, so
+			// this intent is pushed-with-unknown-outcome — a claimed row never coalesces, and the
+			// next drain re-pushes it (the server dedupes on mutationId).
+			if (input.signal?.aborted) return { kind: 'aborted' };
+			if ((error as { status?: unknown } | null)?.status === 428) {
+				return refreshAndRepush(row, error);
+			}
+			await settleThrown(row, error);
+			return { kind: 'settled' };
+		}
+	};
+
+	// The 428 rule, in one place: ONE targeted refresh, then ONE re-push with the
+	// observed revision. No revision (no refresh port, or a born-local create with no
+	// remote identity to refresh against) settles terminally: a create can never
+	// satisfy the precondition, so it is rejected; an update/delete parks.
+	const refreshAndRepush = async (row: QueuedMutation, error: unknown): Promise<Settled> => {
+		let revision: string | null | undefined;
+		try {
+			revision = await input.refreshRevision?.(row);
+		} catch (refreshError) {
+			if (input.signal?.aborted) return { kind: 'aborted' };
+			// Never a dead letter: a failed refresh says nothing about the write itself.
+			await defer(row, refreshError);
+			return { kind: 'settled' };
+		}
+		if (!revision) {
+			if (row.operation === 'create') await deadLetter(row, error);
+			else await parkNeedsRevision(row);
+			return { kind: 'settled' };
+		}
+		const restamped = { ...row, baseRevision: revision };
+		try {
+			return { kind: 'pushed', result: await input.push(restamped) };
+		} catch (retryError) {
+			if (input.signal?.aborted) return { kind: 'aborted' };
+			// A second 428 proves the refreshed revision ineffective; isNonRetryable
+			// treats 428 as terminal, so it dead-letters instead of looping on that base.
+			await settleThrown(restamped, retryError);
+			return { kind: 'settled' };
+		}
+	};
+
+	// A retryable failure, settled in one place: the row stays queued behind backoff
+	// (ADR 0012) and its waiter hears now, whichever attempt met it. A 401 also walls
+	// the pass: it is a session fact, not this row's.
+	const defer = async (row: QueuedMutation, error: unknown): Promise<void> => {
+		failed += 1;
+		const { status, reason } = (error ?? {}) as { status?: number; reason?: string };
+		reportFailure({ mutation: row, status, reason });
+		blockedByFailure.set(recordKey(row), { status, reason });
+		blockedRecords.add(recordKey(row));
+		await applyBackoff({ ...row, status: 'pending' });
+		if (status === SESSION_EXPIRED_STATUS) sessionWall = { status, reason };
+	};
+
+	// A thrown push: a permanent 4xx is dead-lettered (retrying forever would poison
+	// the queue); anything else is deferred (the push adapter already emitted push.error).
+	const settleThrown = (row: QueuedMutation, error: unknown): Promise<void | false> =>
+		isNonRetryable(error) ? deadLetter(row, error) : defer(row, error);
+
 	// A drainable release row — an explicit mutation or a delete — must drain its
 	// record's WHOLE chain in FIFO order. An already-attempted predecessor cannot
 	// coalesce with the release, so holding it would starve the release behind
@@ -884,95 +963,10 @@ export async function drainMutationQueue(input: {
 		if (admission === 'lost') draining.admissionReleased = draining.admittedBy;
 		attemptStartedAt = now();
 		attempted += 1;
-		let result: PushResult;
-		try {
-			result = await input.push(draining);
-		} catch (error) {
-			// An abort (scope switch) cancelled the push — NOT a real failure. Don't bump attempts,
-			// back it off, or dead-letter a permanent error that raced with cancellation. The row
-			// STAYS durably 'claimed' (gate2 #516 item 1): the push may have reached the server, so
-			// this intent is pushed-with-unknown-outcome — a claimed row never coalesces, and the
-			// next drain re-pushes it (the server dedupes on mutationId).
-			if (input.signal?.aborted) {
-				break;
-			}
-			if ((error as { status?: unknown } | null)?.status === 428) {
-				// Attempt the existing one-refresh, one-retry policy when a remote
-				// identity exists. A born-local create has no such identity; the null
-				// refresh result below makes its 428 a permanent rejection instead of
-				// an unsettleable needs-revision row.
-				if (!input.refreshRevision) {
-					if (draining.operation === 'create') await deadLetter(draining, error);
-					else await parkNeedsRevision(draining);
-					continue;
-				}
-				let revision: string | null | undefined;
-				try {
-					revision = await input.refreshRevision(draining);
-				} catch {
-					if (input.signal?.aborted) {
-						break;
-					}
-					failed += 1;
-					blockedRecords.add(recordKey(mutation));
-					await applyBackoff({ ...draining, status: 'pending' });
-					continue;
-				}
-				if (revision) {
-					const restamped = { ...draining, baseRevision: revision };
-					try {
-						result = await input.push(restamped);
-					} catch (retryError) {
-						if (input.signal?.aborted) {
-							break;
-						}
-						if ((retryError as { status?: unknown } | null)?.status === 428) {
-							// The targeted refresh produced a revision and the server still rejected
-							// the one allowed retry. That revision has now been proven ineffective;
-							// dead-letter instead of creating a same-base resolution loop.
-							await deadLetter(restamped, retryError);
-							continue;
-						} else if (isNonRetryable(retryError)) {
-							await deadLetter(restamped, retryError);
-							continue;
-						} else {
-							failed += 1;
-							blockedRecords.add(recordKey(mutation));
-							await applyBackoff({ ...restamped, status: 'pending' });
-							continue;
-						}
-					}
-				} else {
-					// A born-local create has no remote identity, so refreshRevision
-					// returns no revision without a request. It can never satisfy a 428
-					// precondition through conflict resolution; reject it permanently.
-					if (draining.operation === 'create') await deadLetter(draining, error);
-					else await parkNeedsRevision(draining);
-					continue;
-				}
-			} else if (isNonRetryable(error)) {
-				// A permanent client error (4xx) — retrying forever would poison the queue.
-				// Dead-letter it: durable status 'rejected' (leaves pending() so the record is
-				// syncable again, persists for the conflicts() surface) + surface it here.
-				await deadLetter(draining, error);
-				continue;
-			} else {
-				// The push adapter already emitted push.error. Leave it queued; bump + back off (ADR 0012).
-				failed += 1;
-				const detail = error as { status?: number; reason?: string } | null;
-				reportFailure({ mutation: draining, status: detail?.status, reason: detail?.reason });
-				blockedByFailure.set(recordKey(mutation), {
-					status: detail?.status,
-					reason: detail?.reason,
-				});
-				blockedRecords.add(recordKey(mutation));
-				await applyBackoff({ ...draining, status: 'pending' });
-				if (detail?.status === SESSION_EXPIRED_STATUS) {
-					sessionWall = { status: detail.status, reason: detail?.reason };
-				}
-				continue;
-			}
-		}
+		const first = await attempt(draining);
+		if (first.kind === 'aborted') break;
+		if (first.kind === 'settled') continue;
+		let result = first.result;
 
 		// LEASE FENCE (task 43): the push (and any 428 refresh/retry) is where a slow
 		// drain outlives its lease. Before recording the outcome — a conflict
@@ -997,74 +991,15 @@ export async function drainMutationQueue(input: {
 			let recovered = false;
 			if (serverRevision && input.autoRecoverConflict?.(draining) === true) {
 				const reanchored = { ...draining, baseRevision: serverRevision };
-				let retry: PushResult;
-				try {
+				// A re-anchored push that throws settles exactly as a first attempt
+				// would (a 428 is owed one refresh per push it re-anchors), never
+				// parked 'conflicted' — that would hide the server's real verdict.
+				const retried = await attempt(reanchored, async () => {
 					if (serverDocument) await input.reconcileConflict?.(reanchored, serverDocument);
-					retry = await input.push(reanchored);
-				} catch (retryError) {
-					// The re-anchored push THREW: settle it exactly as a first-attempt
-					// throw would have been settled. The row is not parked 'conflicted'
-					// — this is no longer a conflict, it is whatever the server just
-					// said, and pretending otherwise would hide the real verdict.
-					if (input.signal?.aborted) {
-						break;
-					}
-					if ((retryError as { status?: unknown } | null)?.status === 428) {
-						// "Settled exactly as a first attempt would be" has to include the
-						// 428 carve-out above: this row has spent NO refresh yet, so it is
-						// owed the one targeted refreshRevision + re-push this module's
-						// header contract promises. Dead-lettering here permanently rejects
-						// a write that had only hit 409-then-428, having never offered it a
-						// fresh precondition.
-						let revision: string | null | undefined;
-						try {
-							revision = await input.refreshRevision?.(reanchored);
-						} catch {
-							if (input.signal?.aborted) {
-								break;
-							}
-							failed += 1;
-							blockedRecords.add(recordKey(mutation));
-							await applyBackoff({ ...reanchored, status: 'pending' });
-							continue;
-						}
-						if (!revision) {
-							// No adapter, or a born-local create with no remote identity to
-							// refresh against — the same terminal split the first-push path makes.
-							if (reanchored.operation === 'create') await deadLetter(reanchored, retryError);
-							else await parkNeedsRevision(reanchored);
-							continue;
-						}
-						const restamped = { ...reanchored, baseRevision: revision };
-						try {
-							retry = await input.push(restamped);
-						} catch (refreshedError) {
-							if (input.signal?.aborted) {
-								break;
-							}
-							// A second 428 proves the refreshed revision was itself ineffective;
-							// isNonRetryable already treats 428 as terminal, so that dead-letters
-							// rather than looping on the same base.
-							if (isNonRetryable(refreshedError)) {
-								await deadLetter(restamped, refreshedError);
-							} else {
-								failed += 1;
-								blockedRecords.add(recordKey(mutation));
-								await applyBackoff({ ...restamped, status: 'pending' });
-							}
-							continue;
-						}
-						// Fall through carrying the refreshed push's verdict.
-					} else if (isNonRetryable(retryError)) {
-						await deadLetter(reanchored, retryError);
-						continue;
-					} else {
-						failed += 1;
-						blockedRecords.add(recordKey(mutation));
-						await applyBackoff({ ...reanchored, status: 'pending' });
-						continue;
-					}
-				}
+				});
+				if (retried.kind === 'aborted') break;
+				if (retried.kind === 'settled') continue;
+				const retry = retried.result;
 				if (input.signal?.aborted) {
 					break;
 				}

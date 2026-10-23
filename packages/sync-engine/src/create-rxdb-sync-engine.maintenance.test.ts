@@ -41,6 +41,14 @@ function freshIdentity(): StoreScopeIdentity {
 	return { site: SITE, storeId: 5, cashierId: `maint-${uniqueStore}` };
 }
 
+// A census probe the server never answers. The host's port fetches through the request
+// the engine hands it, which carries the query-total deadline.
+const BLACK_HOLE_URL = 'https://census.example.test/never-answers';
+const blackHoleOr = (url: string) =>
+	url === BLACK_HOLE_URL
+		? new Promise<Response>(() => {})
+		: Promise.resolve(new Response(JSON.stringify({ changes: [], complete: true, documents: [] })));
+
 function engineWith(
 	overrides?: Partial<RxdbSyncEnginePorts>,
 	identity = freshIdentity()
@@ -284,9 +292,11 @@ describe('maintenance lanes through the public handle', () => {
 			const diagnostics = vi.fn();
 			const engine = engineWith({
 				diagnostics,
+				fetcher: blackHoleOr,
 				queryTotal: {
-					fetchWooQueryTotal: async () => {
-						if (failure === 'deadline') return new Promise<number>(() => {});
+					fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+						if (failure === 'deadline')
+							return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
 						throw new Error('HTTP 500');
 					},
 				},
@@ -317,9 +327,12 @@ describe('maintenance lanes through the public handle', () => {
 		let hang = true;
 		const harness = await createEngineHarness({
 			mode: 'manual',
+			fetch: blackHoleOr,
 			queryTotal: {
-				fetchWooQueryTotal: () =>
-					hang ? new Promise(() => {}) : Promise.reject(new Error('census store write failed')),
+				fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+					if (hang) return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
+					throw new Error('census store write failed');
+				},
 			},
 		});
 		vi.useFakeTimers();

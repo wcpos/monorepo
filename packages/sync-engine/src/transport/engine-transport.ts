@@ -9,7 +9,7 @@
 import type { SyncObserver } from '@wcpos/sync-core';
 
 import { createFailureStreak, type FailureStreak } from '../failure-streak';
-import { RequestTimeoutError, withRequestTimeout } from '../write-path/request-timeout';
+import { RequestTimeoutError, withRequestTimeout } from './request-timeout';
 import { parseUpdateRequiredBody } from '../update-required';
 import {
 	parseRetryAfterMs,
@@ -20,7 +20,6 @@ import {
 	type ServerPressureTransition,
 } from '../change-signal/server-pressure';
 import { hydrateResponse, type ResponseEnvelopeTransportState } from './response-envelope';
-import { QUERY_TOTAL_LEASE_FOR_MS } from '../scheduler';
 
 import type {
 	EngineConnectivity,
@@ -29,7 +28,6 @@ import type {
 } from '../create-rxdb-sync-engine';
 import type { EngineTimers } from '../engine-timers';
 import type { EngineLaneName } from '../maintenance/lane-registry';
-import type { QueryTotalPort } from '../maintenance/maintenance-lanes';
 /**
  * How long an in-flight request must have been running before a cancellation is
  * read as the SERVER failing to answer rather than the app changing its mind.
@@ -39,8 +37,6 @@ import type { QueryTotalPort } from '../maintenance/maintenance-lanes';
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
 // Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
 const ENGINE_REQUEST_DEADLINE_MS = 60_000;
-// Leave five seconds to settle the probe before its claim can be taken over.
-const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /** A lane's request: the engine transport with the lane's label already applied. */
 export type EngineRequest = (
@@ -60,8 +56,8 @@ type EngineTransport = {
 			deadlineMs?: number;
 		}
 	): Promise<Response>;
-	/** The host's query-total port behind the latch and its own deadline. */
-	queryTotal(port: QueryTotalPort | undefined): QueryTotalPort | undefined;
+	/** True once the protocol-gate latch is set: every request is a local replay of the refusal. */
+	updateRequired(): boolean;
 	/** Drops every deadline streak: they belong to the outgoing scope. */
 	scopeActivated(): void;
 };
@@ -328,31 +324,9 @@ export function createEngineTransport(deps: {
 			url,
 			init?.signal
 		);
-	const queryTotal = (rawQueryTotal: QueryTotalPort | undefined): QueryTotalPort | undefined =>
-		rawQueryTotal === undefined
-			? undefined
-			: {
-					fetchWooQueryTotal: async (
-						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
-					): Promise<number | null> =>
-						updateRequiredRefusal === null
-							? observeDeadline(
-									() =>
-										withRequestTimeout(
-											(_url, init) =>
-												rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
-											QUERY_TOTAL_REQUEST_DEADLINE_MS,
-											timers
-										)(input.request.endpoint, { signal: input.signal }),
-									'query-total-retry',
-									input.request.endpoint,
-									input.signal
-								)
-							: null,
-				};
 	return {
 		request,
-		queryTotal,
+		updateRequired: () => updateRequiredRefusal !== null,
 		scopeActivated: () => consecutiveDeadlines.clear(),
 	};
 }

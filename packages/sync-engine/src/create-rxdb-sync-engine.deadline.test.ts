@@ -4,12 +4,27 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createAutomaticTickGate } from './automatic-tick-gate';
 import { createEngineHarness, type EngineHarness } from './testing';
 import { requestStatusOf } from './transport-failure';
-import { RequestTimeoutError } from './write-path/request-timeout';
+import { RequestTimeoutError } from './transport/request-timeout';
 import { queueFor } from './write-path/write-intents';
+
+import type { QueryTotalPort } from './maintenance/maintenance-lanes';
 
 setPremiumFlag();
 let harness: EngineHarness;
 const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+const TOTAL_URL = 'https://example.test/wp-json/wc/v3/products?page=1&per_page=1';
+/** A server that never answers; the request rejects like a real transport once aborted. */
+const blackHole = (init?: RequestInit) =>
+	new Promise<Response>((_resolve, reject) => {
+		const abort = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+		if (init?.signal?.aborted) abort();
+		init?.signal?.addEventListener('abort', abort, { once: true });
+	});
+/** The host's port as apps/main builds it: one probe through the request the engine hands it. */
+const hostProbe: QueryTotalPort['fetchWooQueryTotal'] = async ({ engineRequest, signal }) => {
+	await engineRequest(TOTAL_URL, { signal });
+	return 42;
+};
 beforeEach(async () => {
 	fetch.mockReset().mockResolvedValue(new Response('[]'));
 	harness = await createEngineHarness({ mode: 'manual', fetch, now: () => Date.now() });
@@ -73,10 +88,13 @@ it.each(['headers', 'body'])(
 
 it('releases a black-holed query-total lane before its lease expires so the next run starts', async () => {
 	await harness.dispose();
-	const fetchWooQueryTotal = vi.fn(async (_input: { signal?: AbortSignal }) => 42);
-	fetchWooQueryTotal.mockImplementationOnce(() => new Promise(() => {}));
+	let blackHoles = 1;
+	fetch.mockImplementation(async (url, init) =>
+		url === TOTAL_URL && blackHoles-- > 0 ? blackHole(init) : new Response('[]')
+	);
 	harness = await createEngineHarness({
-		queryTotal: { fetchWooQueryTotal },
+		fetch,
+		queryTotal: { fetchWooQueryTotal: hostProbe },
 		now: () => Date.now(),
 	});
 	vi.useFakeTimers();
@@ -97,7 +115,7 @@ it('releases a black-holed query-total lane before its lease expires so the next
 	expect(recordTick).not.toHaveBeenCalled();
 	await vi.advanceTimersByTimeAsync(1);
 	expect(recordTick).toHaveBeenCalledOnce();
-	expect(fetchWooQueryTotal.mock.calls[0][0].signal?.aborted).toBe(true);
+	expect(fetch.mock.calls.find(([url]) => url === TOTAL_URL)?.[1]?.signal?.aborted).toBe(true);
 	expect(harness.diagnostics).toContainEqual(
 		expect.objectContaining({
 			type: 'engine.request.deadline',
@@ -143,45 +161,46 @@ it.each(['headers', 'body'])('counts black-holed %s once in server pressure', as
 });
 
 it('counts a black-holed query-total probe exactly once in server pressure', async () => {
+	// The host's probe runs on the request the engine hands it, so the probe's deadline
+	// is its one layer: the raw fetch's abort, long past the abort-as-timeout age, is
+	// the same request and must not strike a second time.
 	await harness.dispose();
-	let rejectProbe!: (error: Error) => void;
+	let networkDown = false;
+	let blackHoles = 1;
+	fetch.mockImplementation(async (url, init) => {
+		if (url === TOTAL_URL) return blackHoles-- > 0 ? blackHole(init) : new Response('[]');
+		if (networkDown) throw new Error('network down');
+		return new Response('[]');
+	});
 	harness = await createEngineHarness({
 		fetch,
-		queryTotal: {
-			fetchWooQueryTotal: vi
-				.fn(async () => 42)
-				.mockImplementationOnce(
-					() =>
-						new Promise((_, reject) => {
-							rejectProbe = reject;
-						})
-				),
-		},
+		queryTotal: { fetchWooQueryTotal: hostProbe },
 		now: () => Date.now(),
 	});
 	vi.useFakeTimers();
-	const run = harness.engine.sync('query-total-retry');
-	await vi.advanceTimersByTimeAsync(24_999);
-	fetch.mockRejectedValue(new Error('network down'));
+	networkDown = true;
 	const networkFailure = () =>
 		harness.engine
 			.hostTransport()
 			.fetcher('https://example.test/probe')
 			.catch(() => {});
 	await networkFailure();
-	await networkFailure();
-	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
-	await vi.advanceTimersByTimeAsync(1);
+	const run = harness.engine.sync('query-total-retry');
+	await vi.advanceTimersByTimeAsync(25_000);
 	await run;
+	expect(harness.diagnostics).toContainEqual(
+		expect.objectContaining({
+			type: 'engine.request.deadline',
+			fields: { lane: 'query-total-retry', elapsedMs: 25_000, consecutiveDeadlines: 1 },
+		})
+	);
+	// Two strikes (the failure and the probe): one short of a back-off.
+	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
+	await networkFailure();
 	expect(harness.engine.status().serverPressure).toMatchObject({
 		multiplier: 2,
 		signal: 'timeout',
 	});
-	rejectProbe(Object.assign(new Error('aborted'), { name: 'AbortError' }));
-	await vi.advanceTimersByTimeAsync(0);
-	await networkFailure();
-	await networkFailure();
-	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
 });
 
 it('settles caller cancellation immediately without deadline or pressure for ignored aborts', async () => {
@@ -244,9 +263,13 @@ it('leaves a thrown failure unmarked unless the host wrote its transport row', a
 it('starts the deadline streak over under another store scope', async () => {
 	// The census count is the one deadline lane a scope switch never answers on,
 	// so only the scope change itself can start the streak over here.
+	fetch.mockImplementation(async (url, init) =>
+		url === TOTAL_URL ? blackHole(init) : new Response('[]')
+	);
 	const census = await createEngineHarness({
 		mode: 'manual',
-		queryTotal: { fetchWooQueryTotal: () => new Promise(() => {}) },
+		fetch,
+		queryTotal: { fetchWooQueryTotal: hostProbe },
 	});
 	vi.useFakeTimers();
 	try {

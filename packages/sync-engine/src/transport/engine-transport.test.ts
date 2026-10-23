@@ -4,7 +4,7 @@ import type { SyncEvent } from '@wcpos/sync-core';
 
 import { createServerPressureMonitor } from '../change-signal/server-pressure';
 import { systemTimers } from '../engine-timers';
-import { RequestTimeoutError } from '../write-path/request-timeout';
+import { RequestTimeoutError } from './request-timeout';
 import { createEngineTransport } from './engine-transport';
 
 const URL_PROBE = 'https://store.test/wp-json/wcpos/v2/probe';
@@ -191,18 +191,14 @@ describe('createEngineTransport', () => {
 		]);
 	});
 
-	it('the query-total port answers null once latched, without being called', async () => {
+	it('reports the latch once set, for the query-total port to answer null without a request', async () => {
 		const { transport, fetcher } = transportWith();
-		const fetchWooQueryTotal = vi.fn(async () => 42);
-		const queryTotal = transport.queryTotal({ fetchWooQueryTotal });
-		const input = { request: { endpoint: 'https://store.test/wp-json/wc/v3/products' } } as never;
 
-		expect(transport.queryTotal(undefined)).toBeUndefined();
-		expect(await queryTotal?.fetchWooQueryTotal(input)).toBe(42);
+		await transport.request(URL_PROBE);
+		expect(transport.updateRequired()).toBe(false);
 		fetcher.mockResolvedValue(new Response(JSON.stringify(refusalBody), { status: 426 }));
 		await transport.request(URL_PROBE);
 
-		expect(await queryTotal?.fetchWooQueryTotal(input)).toBeNull();
-		expect(fetchWooQueryTotal).toHaveBeenCalledOnce();
+		expect(transport.updateRequired()).toBe(true);
 	});
 });
