@@ -14,9 +14,11 @@ import { findEngineResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
 	claimRoute,
+	classifyMoneyRoute,
 	type CommandPhase,
 	commandState,
 	deferEntry,
+	dropLeftovers,
 	dropUnsent,
 	isDeferred,
 	markSent,
@@ -64,8 +66,8 @@ export interface ProvenanceCommand {
 export type MoneyCommandErrorReason =
 	'revision_unavailable' | 'order_changed' | 'preflight_failed' | 'in_flight';
 export class MoneyCommandError extends Error {
-	/** The phase of the command it names: `unsent` = it never left the till. */
-	public readonly before: CommandPhase;
+	/** The phase before this send: `unsent` = the store holds nothing from it. */
+	public readonly phase: CommandPhase;
 	public constructor(
 		public readonly reason: MoneyCommandErrorReason,
 		entry: MoneyCommandEntry,
@@ -74,7 +76,7 @@ export class MoneyCommandError extends Error {
 	) {
 		super(`money_command_${reason}`, options);
 		this.name = 'MoneyCommandError';
-		this.before = phaseOf(entry);
+		this.phase = phaseOf(entry);
 	}
 }
 export type MoneyCommandPoster = Post & {
@@ -116,18 +118,6 @@ const PROVENANCE_KINDS = new Set<MoneyCommandKind>([
 	'submit',
 	'close',
 ]);
-const ROUTE =
-	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
-
-export function classifyMoneyRoute(
-	path: string
-): { kind: MoneyCommandKind; orderId: number; target: string | null } | null {
-	const match = ROUTE.exec(path.replace(/^\/+/, ''));
-	if (!match) return null;
-	const kind = (match[3] ?? match[5] ?? match[6] ?? 'record') as MoneyCommandKind;
-	return { kind, orderId: Number(match[1]), target: match[2] ?? match[4] ?? null };
-}
-
 type ResidentOrder = {
 	payload: { id?: number; total?: unknown; currency?: unknown };
 	sync: unknown;
@@ -460,13 +450,11 @@ export async function resendOpenCommands(
 	);
 	const poster = moneyCommandPoster({ runtime, storeDB, orderUuid, post: deps.post, replay: true });
 	const answers: ResentCommand[] = [];
+	// A crash leftover put nothing on the server. One a live poster holds is its pre-flight's,
+	// and stays (CodeRabbit 4332935302 on #2798).
+	await dropLeftovers(storeDB, orderUuid, scope);
 	for (const entry of entries) {
-		if (phaseOf(entry) === 'unsent') {
-			// A crash leftover put nothing on the server. One a live poster holds is its pre-flight's,
-			// and stays (CodeRabbit 4332935302 on #2798).
-			await dropUnsent(storeDB, orderUuid, entry.id, null);
-			continue;
-		}
+		if (phaseOf(entry) === 'unsent') continue;
 		const sent = await poster(entry.path, entry.body).catch(async (error: Error) => {
 			if (error.message === 'money_command_unclaimed') return null;
 			// A definitive refusal settled its entry and says the resident's money is stale: the
@@ -552,11 +540,8 @@ export async function recoverMoneyCommands(
 	for (const [orderUuid, { entries }] of Object.entries(await readMoneyJournal(storeDB))) {
 		const sent = entries.filter((entry) => phaseOf(entry) !== 'unsent' && inScope(entry, scope));
 		if (sent.length === 0) {
-			// Only crash leftovers: nothing on the server and nothing to re-send (`dropUnsent`); one a
-			// live poster holds is its pre-flight's, and stays. Housekeeping never fails the run.
-			for (const entry of entries)
-				if (inScope(entry, scope) && commandState(entry).kind === 'unsent')
-					await dropUnsent(storeDB, orderUuid, entry.id, null).catch(() => undefined);
+			// Only crash leftovers: nothing to re-send. Housekeeping never fails the run.
+			await dropLeftovers(storeDB, orderUuid, scope).catch(() => undefined);
 			continue;
 		}
 		try {

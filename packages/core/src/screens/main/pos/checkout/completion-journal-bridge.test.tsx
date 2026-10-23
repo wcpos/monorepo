@@ -1745,3 +1745,35 @@ it('a refused record whose method the store no longer lists is named by its id',
 	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
 	expect(entry.message).toContain('10.00 pos_cheque was also taken');
 });
+
+// Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
+// whose claim lapsed. It put nothing on the server and awaits nothing: it blocks nothing (the
+// online recovery drops it; pinned in the query suites).
+it('a crash leftover (unsent, claim expired) does not block finishing an adopted paid order', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	const adoptions = new Subject<string[]>();
+	mockResidentOrders.mockReturnValue(adoptions);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
+	await drain();
+	const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() - moneyJournal.CLAIM_LEASE_MS - 1);
+	const route = { orderUuid: 'order', kind: 'record', target: null, rowId: 'order-row' } as const;
+	await moneyJournal.claimRoute(mockContext.storeDB, route, 'crashed-poster', {
+		orderUuid: 'order',
+		scope: 'scope-1',
+		kind: 'record',
+		path: 'orders/42/payments',
+		target: null,
+		id: 'order-row',
+		body: { payment: { id: 'order-row', amount: '10.00' } },
+		approval: { total: '10.00', currency: 'USD' },
+		sentAt: null,
+		sentRevision: null,
+	});
+	now.mockRestore();
+	await record();
+	await owner.awaitAdoption(mockContext.storeDB, 'order');
+	act(() => adoptions.next(['order']));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+});

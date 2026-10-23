@@ -518,7 +518,7 @@ describe('useTenderFlow', () => {
 
 	// ADR 0040 §1.3: a sent command whose answer never arrived (this process or a previous one)
 	// offers no tile and no close, only a re-send of the same journaled command.
-	it('an entry with sentAt hides the tiles and Try again re-sends it', async () => {
+	it('an unanswered command gates the tiles and Try again re-sends it', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.tiles.length).toBeGreaterThan(0);
 		act(() => mockGate$.next(true));

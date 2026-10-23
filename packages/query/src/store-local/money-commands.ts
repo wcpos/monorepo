@@ -15,6 +15,18 @@ import type { Observable } from 'rxjs';
  */
 export type MoneyCommandKind =
 	'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close';
+const ROUTE =
+	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
+
+/** A money route's kind, order id and target (a payment uuid or method id); null for any other path. */
+export function classifyMoneyRoute(
+	path: string
+): { kind: MoneyCommandKind; orderId: number; target: string | null } | null {
+	const match = ROUTE.exec(path.replace(/^\/+/, ''));
+	if (!match) return null;
+	const kind = (match[3] ?? match[5] ?? match[6] ?? 'record') as MoneyCommandKind;
+	return { kind, orderId: Number(match[1]), target: match[2] ?? match[4] ?? null };
+}
 export interface OrderApproval {
 	readonly total: string;
 	readonly currency: string;
@@ -203,6 +215,18 @@ export function dropUnsent(
 	return modifyOrder(storeDB, orderUuid, (order) => {
 		const entry = order.entries[id];
 		if (entry && commandState(entry, claimant).kind === 'unsent') delete order.entries[id];
+	});
+}
+
+/**
+ * Drop the order's crash leftovers in `scope`, in one journal write: every never-dispatched entry
+ * nobody holds (`dropUnsent`'s rule). One a live poster holds is its pre-flight's, and stays.
+ */
+export function dropLeftovers(storeDB: StoreLocalDatabase, orderUuid: string, scope: string) {
+	return modifyOrder(storeDB, orderUuid, (order) => {
+		for (const entry of Object.values(order.entries))
+			if (entry.scope === scope && commandState(entry).kind === 'unsent')
+				delete order.entries[entry.id];
 	});
 }
 

@@ -367,6 +367,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 				reportImport('cross-package relative import');
 		}
 		const from = (name: string) => module === name || module.startsWith(`${name}/`);
+		// The query package's test kit (journal writers, fake engines) is for suites only.
+		const testFile = /\.(?:test|stories)\.|(?:^|\/)(?:__tests__|__mocks__|jest)\//.test(filePath);
 		const only = (allowed: Set<string>) =>
 			!wholeModule && names.length > 0 && names.every((name) => allowed.has(name));
 		if (from('rxdb') || from('rxdb-premium') || from('@wcpos/database')) {
@@ -377,6 +379,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		if (
 			from('@wcpos/query') &&
 			(wholeModule ||
+				(from('@wcpos/query/testing') && !testFile) ||
 				names.some(
 					(name) =>
 						forbiddenQueryNames.has(name) ||
@@ -1222,6 +1225,14 @@ it.each(['writer = other;', 'scope = other.scope;', 'writer === runtime.engine;'
 	'allows unrelated assignments and engine comparisons: %s',
 	(source) => expect(violations(source)).toEqual([])
 );
+
+it('fences @wcpos/query/testing outside test files; a test file may import it', () => {
+	const source = "import { claimRoute } from '@wcpos/query/testing';";
+	expect(violations(source, 'screens/example.ts').map(({ rule }) => rule)).toEqual([
+		'query escape hatch',
+	]);
+	expect(violations(source, 'screens/example.test.ts')).toEqual([]);
+});
 
 it.each([
 	['observeBinding', 'engine-query'],

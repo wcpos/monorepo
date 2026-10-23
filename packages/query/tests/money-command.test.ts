@@ -1458,12 +1458,12 @@ describe('answerAdopted', () => {
 	});
 });
 
-describe('MoneyCommandError.before: the phase of the command it names', () => {
+describe('MoneyCommandError.phase: the phase before this send', () => {
 	it('a fresh command refused in its pre-flight never left the till: unsent', async () => {
 		await dirty();
 		jest.mocked(pushRecord).mockRejectedValue(httpError(401, 'rest_not_logged_in'));
 		const error = await send('orders/5/payments', { payment: cash() }).catch((e: unknown) => e);
-		expect(error).toMatchObject({ reason: 'preflight_failed', before: 'unsent' });
+		expect(error).toMatchObject({ reason: 'preflight_failed', phase: 'unsent' });
 	});
 
 	it('a re-send refused because another poster holds it was dispatched: unanswered', async () => {
@@ -1472,7 +1472,7 @@ describe('MoneyCommandError.before: the phase of the command it names', () => {
 		await claim('orders/5/payments/leg/capture', {}, { claimant: 'other-tab' });
 		const error = await poster()('orders/5/payments/leg/capture', {}).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(MoneyCommandError);
-		expect(error).toMatchObject({ reason: 'in_flight', before: 'unanswered' });
+		expect(error).toMatchObject({ reason: 'in_flight', phase: 'unanswered' });
 	});
 });
 

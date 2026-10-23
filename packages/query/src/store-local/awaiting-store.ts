@@ -2,8 +2,12 @@ import { type Observable } from 'rxjs';
 import { distinctUntilChanged, map, shareReplay } from 'rxjs/operators';
 
 import { storeDatabase } from './ensure-local-document';
-import { isDeferred, observeMoneyJournal, readMoneyJournal } from './money-commands';
-import { classifyMoneyRoute } from '../commands/money-command';
+import {
+	classifyMoneyRoute,
+	isDeferred,
+	observeMoneyJournal,
+	readMoneyJournal,
+} from './money-commands';
 
 import type { StoreLocalDatabase } from '../reads/store-local';
 
