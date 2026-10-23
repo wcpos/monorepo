@@ -55,13 +55,8 @@ export function PaymentAttentionNotice() {
 						className="flex-wrap items-center gap-2"
 					>
 						<Text className="text-muted-foreground min-w-0 flex-1 basis-48">
-							{t('orders.attention_row', {
-								// The refusal copy's fallback when the order has no number yet.
-								number: entry.orderNumber || entry.orderUuid.slice(0, 8),
-								amount: entry.amount,
-								method: entry.methodTitle,
-								message: entry.message,
-							})}
+							{/* The refusal's own sentence already names the order, amount and tender. */}
+							{entry.message}
 						</Text>
 						<HStack className="gap-1">
 							<Button

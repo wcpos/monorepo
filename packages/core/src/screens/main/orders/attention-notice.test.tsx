@@ -69,18 +69,20 @@ afterEach(async () => {
 	await mockStoreDB.remove();
 });
 
-const refuse = (rowId: string, facts: { orderNumber?: string | null; message?: string } = {}) =>
+const ALREADY_PAID =
+	'Order #1042 was already paid online; 10.00 Cash was also taken at the till — refund that payment.';
+const refuse = (rowId: string, message = ALREADY_PAID) =>
 	recordPaymentAttention(mockStoreDB, {
 		rowId,
 		orderUuid: `order-uuid-${rowId}`,
 		orderId: 42,
-		orderNumber: facts.orderNumber === undefined ? '1042' : facts.orderNumber,
+		orderNumber: '1042',
 		amount: '10.00',
 		currency: 'USD',
 		methodId: 'pos_cash',
 		methodTitle: 'Cash',
 		reason: 'order_already_paid',
-		message: facts.message ?? 'refund that payment.',
+		message,
 	});
 const drain = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 
@@ -90,28 +92,29 @@ it('renders nothing while no sale needs attention', async () => {
 	expect(screen.queryByTestId('orders-attention')).toBeNull();
 });
 
-it('names one sale and the refusal: number, amount, method and message', async () => {
+it('names one sale and shows the refusal sentence alone, which already names order, amount and tender', async () => {
 	await refuse('row-a');
 	render(<PaymentAttentionNotice />);
 	expect((await screen.findByTestId('orders-attention-title')).textContent).toBe(
 		'1 sale needs attention'
 	);
-	expect(screen.getByTestId('orders-attention-row-row-a').textContent).toContain(
-		'Order #1042 · 10.00 Cash — refund that payment.'
+	// The row is the sentence and the two actions: no second copy of the facts.
+	expect(screen.getByTestId('orders-attention-row-row-a').textContent).toBe(
+		`${ALREADY_PAID}Open orderHandled`
 	);
 	// Rule 4: a refused row is never retried on its own; no row offers it.
 	expect(screen.queryByText(/retry/i)).toBeNull();
 });
 
-it('counts many sales, and a sale with no number reads by its uuid as the refusal copy does', async () => {
+it('counts many sales, each row with its own refusal', async () => {
 	await refuse('row-a');
-	await refuse('row-b', { orderNumber: null, message: 'refund the difference.' });
+	await refuse('row-b', 'Order #1043 could not accept the full payment; refund the difference.');
 	render(<PaymentAttentionNotice />);
 	expect((await screen.findByTestId('orders-attention-title')).textContent).toBe(
 		'2 sales need attention'
 	);
 	expect(screen.getByTestId('orders-attention-row-row-b').textContent).toContain(
-		'Order #order-uu · 10.00 Cash — refund the difference.'
+		'Order #1043 could not accept the full payment; refund the difference.'
 	);
 });
 

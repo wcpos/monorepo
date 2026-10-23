@@ -44,6 +44,7 @@ import {
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
 	getTerminalPaymentsServiceStartVersion,
@@ -96,12 +97,15 @@ export function SaleCompletionBridge(): null {
 	const httpRef = React.useRef(http);
 	const t = useT();
 	const tRef = React.useRef(t);
+	const { byId: methods } = usePaymentMethods();
+	const methodsRef = React.useRef(methods);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const onlineRef = React.useRef(online);
 	React.useLayoutEffect(() => {
 		httpRef.current = http;
 		tRef.current = t;
-	}, [http, t]);
+		methodsRef.current = methods;
+	}, [http, t, methods]);
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -313,7 +317,9 @@ export function SaleCompletionBridge(): null {
 				row: refused.row,
 				order: refused.summary,
 				reason,
-				methodTitle: refused.row.method_id,
+				// The tender as the cashier saw it on the tile (ADR 0040 Decided 1 rule 4: the row names
+				// what was taken); the id only for a method the store no longer lists.
+				methodTitle: methodsRef.current.get(refused.row.method_id)?.title ?? refused.row.method_id,
 				orderUuid: uuid,
 				orderId: payload?.id ?? refused.row.order_id,
 				orderNumber: payload?.number,

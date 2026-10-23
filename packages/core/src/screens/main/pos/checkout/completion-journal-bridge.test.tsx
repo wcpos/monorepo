@@ -61,6 +61,9 @@ jest.mock('@wcpos/query', () => ({
 	observeResidentOrders: (...args: unknown[]) => mockResidentOrders(...args),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+jest.mock('../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ byId: new Map([['pos_cash', { id: 'pos_cash', title: 'Cash' }]]) }),
+}));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline }),
 }));
@@ -1640,8 +1643,7 @@ it.each([
 	}
 );
 
-it('a refused record on recovery raises attention and resolves the attempt', async () => {
-	await record();
+const refusedOnRecovery = (methodId: string) =>
 	mockRecover.mockResolvedValueOnce([
 		{
 			orderUuid: 'order',
@@ -1652,18 +1654,22 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 					id: 'order-row',
 					amount: '10.00',
 					currency: 'USD',
-					method_id: 'pos_cash',
+					method_id: methodId,
 					order_id: 42,
 				},
 				summary: { status: 'completed', balance: '0.00' },
 			},
 		},
 	]);
+it('a refused record on recovery raises attention and resolves the attempt', async () => {
+	await record();
+	refusedOnRecovery('pos_cash');
 	render(<SaleCompletionBridge />);
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(owner.completeSale).not.toHaveBeenCalled();
+	// Rule 4: the tender is named as the cashier saw it on the tile, never by its id.
 	expect(mockError).toHaveBeenCalledWith(
-		expect.stringContaining('already paid online'),
+		expect.stringContaining('10.00 Cash was also taken'),
 		expect.objectContaining({
 			code: ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE,
 			terminal: { operationType: 'sync.record', outcome: 'failed', operationId: 'order-row' },
@@ -1685,12 +1691,25 @@ it('a refused record on recovery raises attention and resolves the attempt', asy
 		amount: '10.00',
 		currency: 'USD',
 		methodId: 'pos_cash',
-		methodTitle: 'pos_cash',
+		methodTitle: 'Cash',
 		reason: 'order_already_paid',
 		message: mockError.mock.calls.at(-1)?.[0],
 		refusedAt: expect.any(String),
 		resolvedAt: null,
 	});
+});
+
+it('a refused record whose method the store no longer lists is named by its id', async () => {
+	await record();
+	refusedOnRecovery('pos_cheque');
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(mockError).toHaveBeenCalledWith(
+		expect.stringContaining('10.00 pos_cheque was also taken'),
+		expect.anything()
+	);
+	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
+	expect(entry.methodTitle).toBe('pos_cheque');
 });
 
 // Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
