@@ -183,21 +183,33 @@ async function waitForReplayAudit(page: Page, uuid: string): Promise<void> {
 	const logs = page.getByTestId('screen-logs');
 	await expect(logs.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
 	await logs.getByTestId('search-logs').fill(`checkout.completed ${uuid}`); // Indexed log facts.
+	// The search debounces and the ledger keeps the previous rows until the new query answers.
+	// This search yields the till's completion plus at most its replay; the unfiltered log of a
+	// session that just logged in, synced and sold is never that short.
+	const filtered = async () =>
+		['1', '2'].includes(((await logs.getByTestId('logs-total-count').textContent()) ?? '').trim());
 	await expect
-		.poll(async () => Number((await logs.getByTestId('logs-loaded-count').textContent()) ?? 0), {
-			timeout: 30_000,
-			message: "the till's own completion must be audited",
-		})
-		.toBeGreaterThanOrEqual(1);
+		.poll(filtered, { timeout: 30_000, message: 'the uuid search must narrow the log' })
+		.toBe(true);
 	const rows = logs.getByTestId(/^logs-row-/).filter({ visible: true });
+	const details = logs.getByTestId(/^logs-detail-/);
+	// The count renders only in an expanded row, and a click toggles: open it only if closed.
+	const openFirst = async () => {
+		if ((await details.count()) === 0) await rows.first().click({ timeout: 10_000 });
+	};
+	await openFirst();
+	await expect(details.first()).toContainText('checkout.completed');
+	await expect(details.first()).toContainText(uuid);
+	const attempts = details
+		.filter({ hasText: uuid })
+		.first()
+		.getByTestId(/^logs-attempts-/);
 	await expect
 		.poll(
 			async () => {
+				if (!(await filtered())) return false;
 				if ((await rows.count()) >= 2) return true;
-				// The count renders only in an expanded row, and a click toggles: open it only if closed.
-				if ((await logs.getByTestId(/^logs-detail-/).count()) === 0)
-					await rows.first().click({ timeout: 10_000 });
-				const attempts = logs.getByTestId(/^logs-attempts-/).first();
+				await openFirst();
 				return ((await attempts.textContent().catch(() => null)) ?? '').trim() === '2';
 			},
 			{
