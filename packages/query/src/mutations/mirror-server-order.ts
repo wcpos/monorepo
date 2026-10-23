@@ -131,7 +131,8 @@ function mergeAnsweredRow(resident: PaymentRow | undefined, answer: PaymentRow):
  * (ADR 0040 §1.3): the row is upserted by id and nothing is deleted; the summary is written only
  * while the resident still carries the revision the command was sent with, so an older status
  * never lands under a newer stamp, and neither does a caller's metadata change (the gateway
- * stamp). The revision stamp itself is untouched; the refresh after it adopts.
+ * stamp). The revision stamp itself is untouched: the poster stamps a poll's revision; the
+ * refresh after a command adopts.
  */
 export async function mirrorMoneyAnswer(manager: QueryRuntime, uuid: string, answer: MoneyAnswer) {
 	const scoped = await resolveEngineResident(manager, 'orders', uuid);

@@ -9,7 +9,7 @@ import {
 import { mintUuid } from '../mint-uuid';
 import { mirrorMoneyAnswer, type MoneyAnswer } from '../mutations/mirror-server-order';
 import { pushRecord } from '../mutations/push-record';
-import { findEngineResident } from '../mutations/resident';
+import { findEngineResident, patchLocalResident } from '../mutations/resident';
 import { refreshRecordByWooId } from '../record-readers/refresh-records';
 import {
 	claimHeld,
@@ -604,6 +604,21 @@ function answerChain(revision: unknown, at: number): RevisionChain | undefined {
 }
 
 /**
+ * A poll's answer names the store's document NOW: the next order push goes out under it (the
+ * drain re-stamps baseRevision from sync.revision; it never reads the chain). A naked stamp
+ * (ADR 0040 §1.3): the adoption stays, so no authority is claimed and no re-read runs; an
+ * adoption that landed after the poll wins. Measured: order 115073, dev-next 2026-10-23, a 409
+ * on the cash push after a terminal cancel. Returns the revision it replaced, if it stamped.
+ */
+async function stampPolledRevision(runtime: QueryRuntime, orderUuid: string, chain: RevisionChain) {
+	const { resident, order } = await readOrder(runtime, orderUuid);
+	if ((order.sync?.adopted?.at ?? 0) > chain.answeredAt) return undefined;
+	if (order.sync?.revision === chain.answerRevision) return undefined;
+	await patchLocalResident(resident, { sync: { ...order.sync, revision: chain.answerRevision } });
+	return order.sync?.revision;
+}
+
+/**
  * A drop-in `post` for the money routes: classifies the path, freezes the body (provenance for
  * the completion-capable kinds, minted once here), journals it, and sends it through the
  * envelope. Any other path passes through untouched (the status poll, bootstraps).
@@ -769,10 +784,14 @@ export function moneyCommandPoster(input: {
 				for (const { id } of answered) await release(id);
 				throw error;
 			}
-			// A poll that settled the row moved the order: record its revision, never a refresh.
+			// A poll that settled the row moved the order: record its revision and stamp it for the
+			// next push, never a refresh. The next poll's summary lands under the stamp this one made.
 			const polled = answerChain(revision, Date.now());
-			if (polled)
+			if (polled) {
 				await settleCommand(input.storeDB, input.orderUuid, null, { ...polled, polled: true });
+				const replaced = await stampPolledRevision(input.runtime, input.orderUuid, polled);
+				if (replaced && replaced === sentRevision) sentRevision = polled.answerRevision;
+			}
 			await settle();
 		},
 		settle,
