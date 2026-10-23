@@ -72,7 +72,10 @@ export function useOnEndReached({
 
 		container.addEventListener('scroll', throttledHandleScroll);
 		resizeObserver?.observe(container);
-		handleScroll(); // Call immediately for initial check
+		// A ResizeObserver's first delivery for a non-zero target comes after layout, so it does
+		// the first check — reading scroll sizes here would force layout inside the commit. A
+		// 0×0 (hidden) target gets no first delivery, as the viewSize guard returned before.
+		if (!resizeObserver) handleScroll();
 		return () => {
 			container.removeEventListener('scroll', throttledHandleScroll);
 			throttledHandleScroll.cancel(); // Cancel any pending throttled calls
@@ -109,10 +112,11 @@ export function useOnEndReached({
 			}
 		};
 
-		const timeoutId = setTimeout(checkContentSize, 0);
 		const resizeObserver =
 			typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(checkContentSize);
 		resizeObserver?.observe(container);
+		// Same first-delivery rule as the scroll check: the observer does the first measure.
+		const timeoutId = resizeObserver ? undefined : setTimeout(checkContentSize, 0);
 		return () => {
 			clearTimeout(timeoutId);
 			resizeObserver?.disconnect();

@@ -429,6 +429,64 @@ describe('useOnEndReached', () => {
 		}
 	);
 
+	it('reads no scroll geometry inside the commit when a ResizeObserver will deliver it', () => {
+		const resizeCallbacks: ResizeObserverCallback[] = [];
+		const originalResizeObserver = globalThis.ResizeObserver;
+		Object.defineProperty(globalThis, 'ResizeObserver', {
+			configurable: true,
+			value: class {
+				constructor(callback: ResizeObserverCallback) {
+					resizeCallbacks.push(callback);
+				}
+
+				observe = jest.fn();
+				unobserve = jest.fn();
+				disconnect = jest.fn();
+			},
+		});
+
+		try {
+			const onEndReached = jest.fn();
+			const scrollElement = createMockScrollElement();
+			const geometry = { scrollTop: 0, clientHeight: 500, scrollHeight: 500 };
+			let reads = 0;
+			for (const [key, value] of Object.entries(geometry)) {
+				Object.defineProperty(scrollElement, key, {
+					configurable: true,
+					get: () => (reads++, value),
+				});
+			}
+
+			renderHook(() =>
+				useOnEndReached({
+					scrollElement,
+					horizontal: false,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [1],
+					totalSize: 1000,
+				})
+			);
+			act(() => {
+				jest.runAllTimers();
+			});
+
+			expect(reads).toBe(0); // no forced layout during the effects
+			expect(onEndReached).not.toHaveBeenCalled();
+
+			// The observer's first (post-layout) delivery does the initial check.
+			act(() => {
+				resizeCallbacks.forEach((callback) => callback([], {} as ResizeObserver));
+			});
+			expect(onEndReached).toHaveBeenCalledTimes(1);
+		} finally {
+			Object.defineProperty(globalThis, 'ResizeObserver', {
+				configurable: true,
+				value: originalResizeObserver,
+			});
+		}
+	});
+
 	it('should not trigger short content check with empty data', () => {
 		const onEndReached = jest.fn();
 		const scrollElement = createMockScrollElement();

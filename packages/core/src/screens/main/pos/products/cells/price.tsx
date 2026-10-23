@@ -9,20 +9,19 @@ import { moneyRow } from '../tiles/tile-words';
  *
  */
 export function Price({ row, column }: CellContext<{ record: EngineRecord<'products'> }, 'price'>) {
-	const price = useRecordField(row.original.record, (product) => product.payload.price);
-	const regular_price = useRecordField(
+	// One subscription for the cell; the hook's deep-equal dedupe keeps the object stable.
+	const { price, regular_price, tax_status, tax_class, on_sale, out } = useRecordField(
 		row.original.record,
-		(product) => product.payload.regular_price
+		({ payload }) => ({
+			price: payload.price,
+			regular_price: payload.regular_price,
+			tax_status: payload.tax_status,
+			tax_class: payload.tax_class,
+			on_sale: payload.on_sale,
+			out: displayStockStatus(payload) === 'outofstock',
+		})
 	);
-	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
-	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
-	const onSale = useRecordField(row.original.record, (product) => product.payload.on_sale);
-
 	const t = useT();
-	const out = useRecordField(
-		row.original.record,
-		({ payload }) => displayStockStatus(payload) === 'outofstock'
-	);
 	const meta = column.columnDef.meta;
 	const show = meta?.show ?? (() => false);
 
@@ -30,14 +29,14 @@ export function Price({ row, column }: CellContext<{ record: EngineRecord<'produ
 	 *
 	 */
 	const taxDisplay = show('tax') ? ('text' as const) : ('tooltip' as const);
-	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
+	const safeTaxStatus = (tax_status || 'none') as 'taxable' | 'shipping' | 'none';
 
 	return moneyRow({
 		price: price ?? '',
 		regularPrice: regular_price,
-		onSale,
+		onSale: on_sale,
 		taxStatus: safeTaxStatus,
-		taxClass,
+		taxClass: tax_class,
 		taxDisplay,
 		out,
 		t,
