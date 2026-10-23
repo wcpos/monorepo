@@ -55,7 +55,7 @@ export type VoidPaymentsOutcome =
  * the void itself and for the cancel screen that announces it, so the screen never promises a
  * void the store refuses.
  */
-export function partitionLiveRows(meta_data: MetaDataEntry[]): {
+export function partitionLiveRows(meta_data: readonly MetaDataEntry[] | null | undefined): {
 	voidable: PaymentRow[];
 	retained: PaymentRow[];
 } {

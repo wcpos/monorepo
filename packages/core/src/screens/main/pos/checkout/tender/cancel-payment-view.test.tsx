@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 
 import type { PaymentRow } from '@wcpos/order-math';
 
+import { partitionLiveRows } from '../payments/void-payments';
 import { CancelPaymentView } from './cancel-payment-view';
 import { initialTenderState } from './tender-state';
 
@@ -81,5 +82,27 @@ it('tells the cashier which legs are voided, returned, and which need a refund i
 	);
 	expect(screen.getByTestId('checkout-cancel-leg-card').textContent).not.toContain(
 		'void_on_method'
+	);
+});
+
+// The hook feeds the view `partitionLiveRows(meta_data).retained`, the void command's own rule: a
+// captured cash row a completion already counted is kept too, so it reads refund, not return cash.
+it('a captured cash row a completion counted reads as a refund, through the void rule itself', () => {
+	const counted = row('counted', { status: 'captured', kind: 'cash', capture_mode: 'manual' });
+	const open = row('open', { status: 'captured', kind: 'cash', capture_mode: 'manual' });
+	const meta_data = [
+		{ key: '_wcpos_payments', value: { schema: 1, payments: [counted, open] } },
+		{ key: '_wcpos_completions', value: [{ payment_ids: ['counted'] }] },
+	] as never;
+	const { retained } = partitionLiveRows(meta_data);
+	expect(retained.map(({ id }) => id)).toEqual(['counted']);
+
+	render(<CancelPaymentView flow={flow([counted, open], retained)} format={format} />);
+
+	expect(screen.getByTestId('checkout-cancel-leg-counted').textContent).toContain(
+		'pos_checkout.refund_on_method'
+	);
+	expect(screen.getByTestId('checkout-cancel-leg-open').textContent).toContain(
+		'pos_checkout.return_cash'
 	);
 });

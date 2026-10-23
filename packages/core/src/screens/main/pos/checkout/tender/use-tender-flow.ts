@@ -404,7 +404,7 @@ export function useTenderFlow(
 		[rows]
 	);
 	const retainedRows = React.useMemo(
-		() => partitionLiveRows(payload.meta_data ?? []).retained,
+		() => partitionLiveRows(payload.meta_data).retained,
 		[payload.meta_data]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
@@ -1780,14 +1780,22 @@ export function useTenderFlow(
 					},
 				});
 			}
-			if (outcome.failed.length > 0) {
+			// A leg the store keeps by its own rule (a captured card leg, a captured row a completion
+			// counted) was announced as a refund on the confirm and is never sent a void, so it is
+			// not a failed void: the cancel completes, the rows stay on the order, and the cashier
+			// refunds it from the order (tender flows §6 rule 6: a settled leg leaves through refund).
+			const retained = outcome.failed.filter(
+				({ message }) => message === 'captured_refund_required'
+			);
+			const failed = outcome.failed.filter(({ message }) => message !== 'captured_refund_required');
+			if (failed.length > 0) {
 				// Each of these is money still held on the customer's card. The row has to
 				// name them, or the merchant cannot tell which payment to refund by hand.
 				//
 				// Only a refusal the store actually answered earns the definitive "refund
 				// these" instruction. A void whose answer was lost may already have been
 				// applied, and refunding it by hand would return the money twice.
-				const everyoneRefused = outcome.failed.every((failure) => failure.refused);
+				const everyoneRefused = failed.every((failure) => failure.refused);
 				logger.error(t('pos_checkout.void_failed'), {
 					code: everyoneRefused
 						? ERROR_CODES.PAYMENT_VOID_REFUSED
@@ -1798,19 +1806,30 @@ export function useTenderFlow(
 						// refusal the store never gave.
 						type: everyoneRefused ? 'payment.void-refused' : 'payment.void-unknown',
 						...orderContext,
-						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
-						reason: outcome.failed
-							.map((failure) => `${failure.paymentId}: ${failure.message}`)
-							.join('; '),
+						paymentId: failed.map((failure) => failure.paymentId).join(', '),
+						reason: failed.map((failure) => `${failure.paymentId}: ${failure.message}`).join('; '),
 						voided: outcome.rows.length,
 					},
 				});
 				return;
 			}
-			logger.info(`Sale ${order.uuid} cancelled`, {
-				actor,
-				context: { ...orderContext, type: 'checkout.cancelled', voided: outcome.rows.length },
-			});
+			logger.info(
+				retained.length > 0
+					? t('pos_checkout.cancelled_refund_required')
+					: `Sale ${order.uuid} cancelled`,
+				{
+					actor,
+					showToast: retained.length > 0,
+					context: {
+						...orderContext,
+						type: 'checkout.cancelled',
+						voided: outcome.rows.length,
+						...(retained.length > 0
+							? { paymentId: retained.map((failure) => failure.paymentId).join(', ') }
+							: {}),
+					},
+				}
+			);
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
