@@ -140,6 +140,53 @@ describe('useRecordField', () => {
 		expect(renders.mock.calls.length).toBe(after_mount);
 	});
 
+	it('clones each document revision once, however many hooks read it', async () => {
+		// Every revision is its own doc-cache instance, and the prototype's `toJSON` is
+		// non-configurable — so give each new instance a counting own `toJSON`.
+		const toJSON = jest.fn();
+		collection.postCreate((_data, doc) => {
+			const original = doc.toJSON.bind(doc);
+			Object.defineProperty(doc, 'toJSON', {
+				value: (...args: Parameters<typeof original>) => (toJSON(), original(...args)),
+			});
+		}, false);
+		const document = await insertRow();
+
+		function Probe({ record }: { record: RxDocument<Shape> }) {
+			const total = useRecordField(record, (row) => row.payload.total);
+			const note = useRecordField(record, (row) => row.payload.note);
+			const qty = useRecordField(record, (row) => row.payload.nested?.qty);
+			return <>{`${total}|${note}|${qty}`}</>;
+		}
+
+		const { container } = render(<Probe record={document} />);
+		expect(toJSON).toHaveBeenCalledTimes(1);
+
+		await writePayload(document, { note: 'second' });
+		expect(container.textContent).toBe('10.00|second|1');
+		expect(toJSON).toHaveBeenCalledTimes(2);
+
+		await writePayload(document, { total: '30.00' });
+		expect(container.textContent).toBe('30.00|second|1');
+		expect(toJSON).toHaveBeenCalledTimes(3);
+	});
+
+	it('renders an object-selector component exactly once at mount', async () => {
+		const document = await insertRow();
+		const renders = jest.fn();
+
+		function Probe({ record }: { record: RxDocument<Shape> }) {
+			// A fresh object every evaluation: the effect-phase subscription must hand back the
+			// render-phase reference, or the mount commits twice.
+			const slice = useRecordField(record, (row) => ({ total: row.payload.total }));
+			renders(slice);
+			return <>{slice.total}</>;
+		}
+
+		render(<Probe record={document} />);
+		expect(renders).toHaveBeenCalledTimes(1);
+	});
+
 	it('never resubscribes for re-renders with inline selectors; resubscribes on record swap', async () => {
 		const first = await insertRow('row-a');
 		const second = await insertRow('row-b');

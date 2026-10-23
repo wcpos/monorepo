@@ -1,6 +1,6 @@
 import { useLayoutObservable, useObservableEagerState } from 'observable-hooks';
 import { combineLatest, defer, type Observable, of } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
 import type { ClosureRow, TemporaryOrderDocument } from '@wcpos/database';
@@ -73,9 +73,14 @@ function useSelectedValue<TSource, TData, R>(
 				switchMap((input) => (input == null ? of(undefined) : toData$(input)))
 			);
 			const select$ = inputs$.pipe(map(([, selector]) => selector));
+			// ONE `last` per component, shared by the render-phase and effect-phase subscriptions:
+			// a slice deep-equal to the last one delivered here comes back as that same reference,
+			// so the effect-phase subscription makes no setState (an object slice renders once).
+			let last: R | undefined;
 			return combineLatest([data$, select$]).pipe(
 				map(([data, selector]) => (data === undefined ? undefined : selector(data as TData))),
-				distinctUntilChanged(deepEqual)
+				map((value) => (deepEqual(value, last) ? last : (last = value))),
+				distinctUntilChanged()
 			);
 		},
 		[source, select] as [TSource | null | undefined, Selector<TData, R>]
@@ -172,12 +177,27 @@ export function useDocField<TState extends Record<string, unknown>, R>(
 	return useSelectedValue(source, select, sourceData$);
 }
 
+// One stream and one `toJSON()` clone per document instance — a product row runs 7–12 field
+// hooks, which was 12 `record.$` observers and 12 clones (each deep-frozen in dev) per emission.
+// RxDB's doc-cache hands out one instance per revision, so the instance is the right key, and
+// `refCount` drops an idle document's subscription. The clone is SHARED: never mutate a slice.
+const documentStreams = new WeakMap<object, Observable<unknown>>();
+const documentJson = new WeakMap<object, unknown>();
+
+function jsonOf<TDoc extends Record<string, unknown>>(latest: RxDocument<TDoc>): TDoc {
+	if (!documentJson.has(latest)) documentJson.set(latest, latest.toJSON());
+	return documentJson.get(latest) as TDoc;
+}
+
 function recordData$<TDoc extends Record<string, unknown>>(
 	record: RxDocument<TDoc>
 ): Observable<TDoc> {
-	// One access of the `$` getter per subscription — the emitted instances come from RxDB's
-	// doc-cache (rev-deduped), and `toJSON()` exposes the immutable data without meta fields.
-	return record.$.pipe(map((latest) => latest.toJSON() as TDoc));
+	let data$ = documentStreams.get(record);
+	if (!data$) {
+		data$ = record.$.pipe(map(jsonOf), shareReplay({ bufferSize: 1, refCount: true }));
+		documentStreams.set(record, data$);
+	}
+	return data$ as Observable<TDoc>;
 }
 
 function sourceData$<TState extends Record<string, unknown>>(
