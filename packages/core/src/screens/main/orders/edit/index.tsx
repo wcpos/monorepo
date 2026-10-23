@@ -2,11 +2,11 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
 
-import { EditOrderModal } from './modal';
+import { OrderModal } from './modal';
 
-export function EditOrderScreen() {
+export function OrderScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
 	const resource = useEngineRecord('orders', orderId);
 
-	return <EditOrderModal resource={resource} />;
+	return <OrderModal resource={resource} />;
 }

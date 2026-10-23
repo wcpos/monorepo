@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useLocalSearchParams } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import {
@@ -16,16 +17,22 @@ import { Tree } from '@wcpos/components/tree';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
+import { OrderView } from './view';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
-export function EditOrderModal({ resource }: Props) {
+const TABS = ['view', 'edit', 'json'] as const;
+
+/** The one order surface: View (the default), Edit and JSON. */
+export function OrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
-	const [value, setValue] = React.useState('form');
+	// The route's `tab` picks the tab it opens on; the tab strip owns it after that.
+	const { tab } = useLocalSearchParams<{ tab?: string }>();
+	const [value, setValue] = React.useState<string>(TABS.find((name) => name === tab) ?? 'view');
 	const payload = useRecordField(order, (record) => record.payload);
 
 	if (!order) {
@@ -42,29 +49,32 @@ export function EditOrderModal({ resource }: Props) {
 		);
 	}
 
+	const number = payload?.number || payload?.id;
 	return (
 		<Dialog route>
-			<DialogContent side="right" size="xl">
+			<DialogContent side="right" size="xl" testID="order-modal">
 				<DialogHeader>
 					<DialogTitle>
-						<Text>
-							{payload?.id
-								? t('orders.edit_order_2', { number: payload.id })
-								: t('orders.edit_order')}
-						</Text>
+						<Text>{number ? t('orders.order_title', { number }) : t('common.order')}</Text>
 					</DialogTitle>
 				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 						<TabsList className="mx-4 flex-row">
-							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('common.form')}</Text>
+							<TabsTrigger value="view" className="flex-1">
+								<Text>{t('common.view')}</Text>
+							</TabsTrigger>
+							<TabsTrigger value="edit" className="flex-1">
+								<Text>{t('common.edit')}</Text>
 							</TabsTrigger>
 							<TabsTrigger value="json" className="flex-1">
 								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="form" className="min-h-0 flex-1">
+						<TabsContent value="view" className="min-h-0 flex-1">
+							<OrderView order={order} />
+						</TabsContent>
+						<TabsContent value="edit" className="min-h-0 flex-1">
 							<EditOrderForm order={order} />
 						</TabsContent>
 						<TabsContent value="json" className="min-h-0 flex-1">

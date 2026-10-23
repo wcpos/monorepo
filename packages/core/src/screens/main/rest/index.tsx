@@ -22,7 +22,7 @@ export { CustomersScreen } from '../customers';
 export { DatabaseScreen } from '../health/database';
 export { EditCouponScreen } from '../coupons/edit';
 export { EditCustomerScreen } from '../customers/edit';
-export { EditOrderScreen } from '../orders/edit';
+export { OrderScreen } from '../orders/edit';
 export { EditProductScreen } from '../products/edit/product';
 export { EditVariationScreen } from '../products/edit/variation';
 export { LogsScreen } from '../logs';

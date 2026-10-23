@@ -6,7 +6,7 @@ import type { ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
 
-import { EditOrderModal } from './orders/edit/modal';
+import { OrderModal } from './orders/edit/modal';
 import { RefundOrderModal } from './orders/refund/modal';
 import { EditProductModal } from './products/edit/product/modal';
 import { EditVariationModal } from './products/edit/variation/modal';
@@ -118,6 +118,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./orders/edit/form', () => ({ EditOrderForm: () => null }));
+jest.mock('./orders/edit/view', () => ({ OrderView: () => null }));
 jest.mock('./orders/refund/form', () => ({ RefundOrderForm: () => null }));
 
 jest.mock('./products/edit/product/form', () => ({ EditProductForm: () => null }));
@@ -177,7 +178,7 @@ describe.each([
 	['customer add', AddCustomerRoute, 'w-160'],
 	['coupon', EditCoupon, 'w-lg'],
 	['coupon add', AddCouponRoute, 'w-lg'],
-	['order edit', EditOrderModal, 'w-160'],
+	['order', OrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
 ] as const)('%s route shell', (_name, Screen, width) => {
 	it.each([false, true])('keeps desktop width or becomes a phone page (phone=%s)', (phone) => {

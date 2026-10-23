@@ -3,7 +3,7 @@ import { Platform, type ViewInstance, type ViewProps } from 'react-native';
 
 export function useRowKeyboard(
 	ids: string[],
-	select: (uuid: string | null) => void,
+	open: (uuid: string) => void,
 	scroll: (index: number) => void
 ) {
 	const [focusIndex, setFocusIndex] = React.useState(-1);
@@ -20,14 +20,9 @@ export function useRowKeyboard(
 				? event.target.closest('button,[role="button"],input,textarea,select,a')
 				: null;
 		if (control && !control.matches('[data-testid^="orders-row-"]')) return;
-		if (event.nativeEvent.key === 'Escape') {
-			event.preventDefault();
-			select(null);
-			return;
-		}
 		if (event.nativeEvent.key === 'Enter' && ids[focusIndex]) {
 			event.preventDefault();
-			select(ids[focusIndex]);
+			open(ids[focusIndex]);
 			return;
 		}
 		if (

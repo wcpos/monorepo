@@ -7,9 +7,9 @@ import { useRowKeyboard } from './use-row-keyboard';
 
 const ids = ['a', 'b'];
 function setup() {
-	const select = jest.fn();
+	const open = jest.fn();
 	const scroll = jest.fn();
-	const hook = renderHook(() => useRowKeyboard(ids, select, scroll));
+	const hook = renderHook(() => useRowKeyboard(ids, open, scroll));
 	const key = (key: string) =>
 		act(() =>
 			hook.result.current.onKeyDown?.({
@@ -18,10 +18,10 @@ function setup() {
 				preventDefault: jest.fn(),
 			} as unknown as Parameters<NonNullable<typeof hook.result.current.onKeyDown>>[0])
 		);
-	return { ...hook, key, select, scroll };
+	return { ...hook, key, open, scroll };
 }
-it('moves focus, scrolls, opens on Enter and clears on Escape without selecting day headings', () => {
-	const { key, result, select, scroll } = setup();
+it('moves focus, scrolls and opens on Enter; Escape is not the list key', () => {
+	const { key, result, open, scroll } = setup();
 	key('ArrowDown');
 	expect(result.current.focusIndex).toBe(0);
 	key('ArrowDown');
@@ -30,12 +30,12 @@ it('moves focus, scrolls, opens on Enter and clears on Escape without selecting 
 	expect(result.current.focusIndex).toBe(1);
 	expect(scroll).toHaveBeenLastCalledWith(1);
 	key('Enter');
-	expect(select).toHaveBeenLastCalledWith('b');
+	expect(open).toHaveBeenLastCalledWith('b');
 	key('ArrowUp');
 	key('Enter');
-	expect(select).toHaveBeenLastCalledWith('a');
+	expect(open).toHaveBeenLastCalledWith('a');
 	key('Escape');
-	expect(select).toHaveBeenLastCalledWith(null);
+	expect(open).toHaveBeenCalledTimes(2);
 });
 it('does nothing on native', () => {
 	const old = Platform.OS;
@@ -47,7 +47,7 @@ it('does nothing on native', () => {
 	}
 });
 it('does not intercept a control inside a row', () => {
-	const { result, select } = setup();
+	const { result, open } = setup();
 	act(() =>
 		result.current.onKeyDown?.({
 			nativeEvent: { key: 'Enter' },
@@ -55,5 +55,5 @@ it('does not intercept a control inside a row', () => {
 			preventDefault: jest.fn(),
 		} as unknown as Parameters<NonNullable<typeof result.current.onKeyDown>>[0])
 	);
-	expect(select).not.toHaveBeenCalled();
+	expect(open).not.toHaveBeenCalled();
 });

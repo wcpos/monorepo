@@ -24,9 +24,8 @@ const answered = (hits: unknown[] = [], extra: Record<string, unknown> = {}) =>
 let mockHandle: FakeHandle = answered();
 const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
 let mockPointer = 'fine';
-let mockSelected: string | undefined;
 let mockPhone = false;
-const mockSetParams = jest.fn();
+const mockPush = jest.fn();
 const mockScroll = jest.fn();
 let mockDataTableProps: Record<string, unknown> = {};
 let mockSortBy = 'date_created_gmt';
@@ -260,8 +259,7 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	),
 }));
 jest.mock('expo-router', () => ({
-	useLocalSearchParams: () => ({ order: mockSelected }),
-	useRouter: () => ({ setParams: mockSetParams }),
+	useRouter: () => ({ push: mockPush }),
 }));
 jest.mock('../../../hooks/use-store-day', () => ({
 	...jest.requireActual('../../../hooks/use-store-day'),
@@ -279,7 +277,7 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 jest.mock('../components/data-table/rows', () => ({ DataTableRow: () => null }));
 beforeEach(() => {
 	mockPointer = 'fine';
-	mockSetParams.mockClear();
+	mockPush.mockClear();
 	mockScroll.mockClear();
 	mockStoreID = 9;
 	mockSortBy = 'date_created_gmt';
@@ -418,7 +416,7 @@ it('keeps rows and shows the searching line only for pending results with rows',
 	}
 });
 
-it('navigates from the actual focused coarse row, skipping headings, then opens and escapes', () => {
+it('navigates from the actual focused coarse row, skipping headings, then opens it', () => {
 	mockPointer = 'coarse';
 	const original = mockHandle;
 	const source = {
@@ -440,9 +438,10 @@ it('navigates from the actual focused coarse row, skipping headings, then opens 
 		fireEvent.keyDown(row, { key: 'ArrowDown' });
 		expect(mockScroll).toHaveBeenLastCalledWith({ index: 3, align: 'center', animated: false });
 		fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
-		expect(mockSetParams).toHaveBeenLastCalledWith({ order: 'three' });
-		fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-		expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
+		expect(mockPush).toHaveBeenLastCalledWith({
+			pathname: '/orders/edit/[orderId]',
+			params: { orderId: 'three' },
+		});
 		unmount();
 	} finally {
 		mockHandle = original;
@@ -458,13 +457,6 @@ jest.mock('../components/management-bar', () => ({
 	),
 }));
 jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
-jest.mock('./order-pane', () => ({
-	OrderPane: ({ selected, onClose }: { selected: string; onClose: () => void }) => (
-		<button data-testid="order-pane" onClick={onClose}>
-			{selected}
-		</button>
-	),
-}));
 jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
@@ -480,39 +472,8 @@ jest.mock('../components/pro-guard', () => ({
 			);
 		},
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: React.PropsWithChildren) => children,
-	DialogContent: ({ children }: React.PropsWithChildren) => (
-		<div data-testid="phone-page">{children}</div>
-	),
-	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-}));
-// The pane's slide is `SlideOver`'s own (tested there); here it is its frame and its content.
-jest.mock('@wcpos/components/slide-over', () => ({
-	SlideOver: ({
-		open,
-		from,
-		onLeft,
-		children,
-	}: React.PropsWithChildren<{ open: boolean; from: string; onLeft?: () => void }>) => (
-		<div data-testid="orders-pane-frame" data-open={String(open)} data-from={from}>
-			<button data-testid="orders-pane-left" onClick={onLeft} />
-			{children}
-		</div>
-	),
-}));
 afterEach(() => {
-	mockSelected = undefined;
 	mockPhone = false;
-});
-it('searches from the management bar and opens the selected pane beside the list', () => {
-	mockSelected = 'one';
-	render(<OrdersScreen />);
-	expect(screen.getByTestId('order-pane').textContent).toBe('one');
-	expect(screen.queryByTestId('phone-page')).toBeNull();
-	fireEvent.click(screen.getByTestId('order-pane'));
-	expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
-	expect(screen.getByTestId('search-orders')).toBeTruthy();
 });
 it('puts the attention notice under the page bar, above the chips, outside the Pro guard', () => {
 	render(<OrdersScreen />);
@@ -523,54 +484,6 @@ it('puts the attention notice under the page bar, above the chips, outside the P
 	expect(notice.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	expect(screen.getByTestId('guard-orders').contains(notice)).toBe(false);
 });
-it('renders the selected order as a full page on the phone', () => {
-	mockPhone = true;
-	mockSelected = 'one';
-	render(<OrdersScreen />);
-	expect(screen.getByTestId('phone-page').contains(screen.getByTestId('order-pane'))).toBe(true);
-});
-
-it('slides the pane out of the right edge, and a closing pane keeps its order until it has left', () => {
-	mockSelected = 'one';
-	const { rerender } = render(<OrdersScreen />);
-	const frame = () => screen.getByTestId('orders-pane-frame');
-	expect(frame().dataset).toMatchObject({ open: 'true', from: 'right' });
-	mockSelected = undefined;
-	rerender(<OrdersScreen />);
-	// Closed, but the order it showed is still inside for the slide out.
-	expect(frame().dataset.open).toBe('false');
-	expect(frame().contains(screen.getByTestId('order-pane'))).toBe(true);
-	// The list keeps its narrow rows while the frame is still beside it, and gets its columns
-	// back only once the pane has left.
-	expect(screen.getByTestId('list-scope').dataset.pointer).toBe('coarse');
-	fireEvent.click(screen.getByTestId('orders-pane-left'));
-	expect(screen.getByTestId('list-scope').dataset.pointer).toBe('device');
-});
-
-it('ignores reselecting the same row and returns focus there when the pane closes', () => {
-	mockPointer = 'coarse';
-	mockSelected = 'one';
-	const original = mockHandle;
-	mockHandle = fakeQueryHandle({
-		result: {
-			hits: [{ id: 'one', record: { uuid: 'one', payload: { number: '1' } } }],
-			searchActive: false,
-			searchState: 'answered',
-		},
-		total: 27,
-	});
-	try {
-		render(<OrdersScreen />);
-		fireEvent.click(screen.getByTestId('orders-row-one'));
-		expect(mockSetParams).not.toHaveBeenCalled();
-		fireEvent.click(screen.getByTestId('order-pane'));
-		expect(mockSetParams).toHaveBeenCalledWith({ order: undefined });
-		expect(document.activeElement?.getAttribute('aria-selected')).toBe('true');
-	} finally {
-		mockHandle = original;
-	}
-});
-
 // A Free user below lg has no permanent rail: the bar's menu must stay outside the preview
 // overlay, which covers whatever the guard wraps.
 it('keeps the management bar outside the Pro guard and the list inside it', () => {
