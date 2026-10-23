@@ -53,7 +53,6 @@ import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
 import {
 	persistSaleProvenance,
-	receiptOnPaidWrite,
 	recordSaleAttempt,
 	reopenedSince,
 	residentUnpaid,
@@ -67,17 +66,16 @@ import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import {
+	enterCheckout,
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
-	receiptEntryAfterWrite,
-	retractReceiptEntry,
+	releaseUnconfirmedReceipt,
 	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
 	setTenderPlan,
 	useTenderMethod,
-	watchTender,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
@@ -732,21 +730,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		busyRef.current = true;
 		setBusy(true);
 		try {
-			const enterReceiptAfter = receiptEntryAfterWrite(order.uuid);
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
-				afterMirror: ({ kind, data }) => {
-					// Only answers the loop below finishes; a send needs its adopted stamp.
-					const finishes =
-						kind === 'close' ||
-						kind === 'record' ||
-						(kind === 'submit' &&
-							(data.outcome !== 'sent' ||
-								readAwaitingCustomer(order.getLatest().payload.meta_data) !== null));
-					if (!finishes) return;
-					const summary = data.order as OrderPaymentSummary | null | undefined;
-					receiptOnPaidWrite(order, summary?.status, { entry: enterReceiptAfter })?.();
-				},
 			});
 			for (const { kind, data } of answers) {
 				const row = data.payment as PaymentRow | undefined;
@@ -757,9 +742,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const closed = await closeConfirmed(ctx.runtime, order, summary);
 					if (closed === 'completed') await completeOrderFlow({ source: 'zero-balance' });
 					else {
-						// Not finished: the provisional receipt afterMirror entered is withdrawn, as a
-						// first attempt's closeSale does.
-						retractReceiptEntry(order.uuid);
+						// Let a later paid attempt auto-print again, as a first close attempt does.
+						releaseUnconfirmedReceipt(order.uuid);
 						// A reopen ends this attempt; an unconfirmed close keeps it for the bridge.
 						if (closed === 'reopened') await resolveCompletionAttempt(storeDB, order.uuid);
 						logger.info(closeMessage({ kind: closed, order: summary }, t), {
@@ -799,10 +783,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 					const stamp = readAwaitingCustomer(order.getLatest().payload.meta_data);
 					// A recovered send whose adopted order carries no awaiting-customer stamp was already
 					// settled or cancelled by the store (the stamp goes with the invoice); there is
-					// nothing left to finish — and the provisional receipt afterMirror entered while the
-					// stamp still stood is withdrawn with it (local Codex review on #2853).
+					// nothing left to finish. A later paid attempt can auto-print again.
 					if (stamp) await completeOrderFlow({ source: 'gateway', order: summary, stamp });
-					else retractReceiptEntry(order.uuid);
+					else releaseUnconfirmedReceipt(order.uuid);
 				} else if (kind === 'submit' && summary && submitStillDone(data.outcome, summary.status))
 					await completeOrderFlow({ source: 'gateway-settled', order: summary });
 			}
@@ -1509,13 +1492,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>, host: CheckoutHost)
 		reducerDispatch,
 	]);
 
-	// A settling capture's status write can unmount this flow before its subscriber below
-	// sees the settlement; the service selects the receipt for a watched tender instead.
+	// A mounted tender is a checkout member: a restart restores the tender from a live ledger
+	// row without Pay, and the stage derivation and the provider's hold read membership, not
+	// the mount. A confirmed receipt (the phone sheet still runs this hook) is left alone.
 	// Layout, not passive: a capture can land between this commit and passive effects.
-	React.useLayoutEffect(
-		() => watchTender(order.uuid, !!uiSettings.autoShowReceipt),
-		[order.uuid, uiSettings.autoShowReceipt]
-	);
+	React.useLayoutEffect(() => {
+		if (!getCheckoutModeSnapshot().receiptOrders.has(order.uuid)) enterCheckout(order.uuid);
+	}, [order.uuid]);
 
 	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
 	React.useEffect(() => {

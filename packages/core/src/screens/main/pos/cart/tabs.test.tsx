@@ -5,9 +5,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrderTabs } from './tabs';
 import {
+	enterCheckout,
 	enterReceipt,
 	finishReceipt,
 	getCheckoutModeSnapshot,
+	markOrderSaving,
 	resetCheckoutMode,
 } from '../checkout/checkout-mode';
 import { CartTabTitle } from './tab-title';
@@ -159,6 +161,7 @@ jest.mock('@wcpos/query/record-readers', () => ({
 }));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: (record: unknown) => record }));
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
@@ -501,5 +504,70 @@ it('the first cart pins to the left edge with only the right arrow', () => {
 		expect(screen.getByTestId('open-order-tab-a').getAttribute('aria-selected')).toBe('true');
 	} finally {
 		mockOpen = open;
+	}
+});
+
+it('keeps a paid checkout member tab before confirmation', () => {
+	enterCheckout('late');
+	const record = mockReceipts.late;
+	mockReceipts.late = {
+		...record,
+		payload: { ...record.payload, status: 'completed' },
+	} as typeof record;
+	try {
+		render(<OpenOrderTabs />);
+		expect(screen.getByTestId('open-order-tab-late').textContent).toContain('Paid · receipt');
+		// Tapping it before confirmation selects the receipt, never the draft under its name.
+		fireEvent.click(screen.getByTestId('open-order-tab-late'));
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('late');
+		expect(mockSetOrder).not.toHaveBeenCalledWith('late');
+	} finally {
+		mockReceipts.late = record;
+	}
+});
+it('does not show a tab for a cancelled checkout member outside the open hits', () => {
+	enterCheckout('late');
+	const record = mockReceipts.late;
+	mockReceipts.late = {
+		...record,
+		payload: { ...record.payload, status: 'cancelled' },
+	} as typeof record;
+	try {
+		render(<OpenOrderTabs />);
+		expect(screen.queryByTestId('open-order-tab-late')).toBeNull();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('late')).toBe(false);
+	} finally {
+		mockReceipts.late = record;
+	}
+});
+
+it('a draft saving into checkout has no tab until its record lands', () => {
+	enterCheckout('draft-1');
+	markOrderSaving('draft-1');
+	render(<OpenOrderTabs />);
+	expect(screen.queryByTestId('open-order-tab-draft-1')).toBeNull();
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('draft-1')).toBe(true);
+});
+it('a change of scope ends every unconfirmed checkout and keeps confirmed receipts', () => {
+	// Another register's open order, still a checkout member: outside the hits, status open.
+	enterCheckout('late');
+	enterReceipt('early', { select: false });
+	const record = mockReceipts.late;
+	mockReceipts.late = {
+		...record,
+		payload: { ...record.payload, status: 'pos-open' },
+	} as typeof record;
+	try {
+		const view = render(<OpenOrderTabs />);
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('late')).toBe(true);
+		mockScope = '9:2:r1';
+		view.rerender(<OpenOrderTabs />);
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('late')).toBe(false);
+		expect(getCheckoutModeSnapshot().receiptOrders.has('early')).toBe(true);
+		// No blank, selectable tab is left for the order that is no longer this till's.
+		expect(screen.queryByTestId('open-order-tab-late')).toBeNull();
+	} finally {
+		mockReceipts.late = record;
+		mockScope = '7:2:r1';
 	}
 });

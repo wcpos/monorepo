@@ -40,7 +40,7 @@ export function TabChip({
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const t = useT();
 	const rows = readLedger(payload.meta_data);
-	const stage = resolveStage(order.uuid, mode, rows);
+	const stage = resolveStage(order.uuid, mode, rows, payload.status);
 	// The latest store document, not the session's snapshot (see checkout's use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { balance } = derive(payload.total, rows, methods, { dp });

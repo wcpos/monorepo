@@ -17,7 +17,7 @@ import {
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { commandProvenance } from '../provenance/command-provenance';
-import { receiptOnPaidWrite, refreshOrderRecord } from '../sale-completion';
+import { refreshOrderRecord } from '../sale-completion';
 import {
 	cancelGatewayInvoice,
 	submitGatewayPayment,
@@ -46,8 +46,7 @@ export function useGatewayPayment() {
 				destination?: string | null;
 				approval?: OrderApproval;
 				sessionId?: string | null;
-				receipt?: false;
-			}
+			} = {}
 		) => {
 			const post = moneyCommandPoster({
 				runtime: manager,
@@ -68,19 +67,11 @@ export function useGatewayPayment() {
 					awaiting,
 				}: Parameters<SubmitGatewayPaymentDeps['mirror']>[0]) => {
 					try {
-						await post.mirror(
-							{
-								payment,
-								order: summary,
-								meta: (meta) => withAwaitingCustomer(meta, awaiting),
-							},
-							{
-								afterWrite:
-									options.receipt === false
-										? undefined
-										: receiptOnPaidWrite(order, summary?.status),
-							}
-						);
+						await post.mirror({
+							payment,
+							order: summary,
+							meta: (meta) => withAwaitingCustomer(meta, awaiting),
+						});
 					} catch (error) {
 						// The store has already answered; only this till's copy is behind. Pull it.
 						const id = order.getLatest().payload.id;
@@ -117,7 +108,7 @@ export function useGatewayPayment() {
 	);
 	const cancel = React.useCallback(
 		(order: EngineRecord<'orders'>, stamp: AwaitingCustomerStamp) =>
-			cancelGatewayInvoice(gatewayOrder(order), stamp, deps(order, { receipt: false })),
+			cancelGatewayInvoice(gatewayOrder(order), stamp, deps(order)),
 		[deps]
 	);
 	return React.useMemo(() => ({ submit, cancel }), [submit, cancel]);

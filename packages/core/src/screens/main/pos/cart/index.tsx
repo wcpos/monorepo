@@ -208,7 +208,7 @@ function CartColumn({
 						<React.Suspense fallback={LOADING_ROWS}>
 							<ReceiptLedger uuid={receiptOrderUuid} />
 						</React.Suspense>
-					) : isColumn && !isNewOrder && stage === 'checkout' ? (
+					) : isColumn && !isNewOrder && (stage === 'checkout' || stage === 'receipt') ? (
 						<StilledCart order={currentOrderRecord as EngineRecord<'orders'>} />
 					) : isNewOrder ? (
 						<View className="flex-1">

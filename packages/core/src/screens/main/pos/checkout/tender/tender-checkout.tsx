@@ -18,7 +18,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { releaseTender, useOrderCheckoutStage } from '../checkout-mode';
+import { leaveCheckout, useOrderCheckoutStage } from '../checkout-mode';
 import { ReceiptStage } from '../receipt-stage/receipt-stage';
 import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
@@ -28,6 +28,7 @@ import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useTheme } from '../../../../../contexts/theme';
+import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { StorageOutageBanner } from '../../components/storage-outage-banner';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
@@ -55,6 +56,7 @@ export function TenderCheckout({ order }: Props) {
 
 	const compact = screenSize === 'sm';
 	const stage = useOrderCheckoutStage(order);
+	const { uiSettings } = useUISettings('pos-cart');
 	const finishSale = useFinishSale(order.uuid, 'modal');
 	// Every figure in this modal is carried as minor units and only becomes a
 	// display string here, so there is exactly one place a rounding rule applies.
@@ -80,7 +82,7 @@ export function TenderCheckout({ order }: Props) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
-		releaseTender(order.uuid);
+		leaveCheckout(order.uuid);
 		router.back();
 	}, [flow, router, stage, finishSale, order.uuid]);
 
@@ -141,7 +143,7 @@ export function TenderCheckout({ order }: Props) {
 		);
 	})();
 
-	if (stage === 'receipt') {
+	if (stage === 'receipt' && uiSettings.autoShowReceipt) {
 		return (
 			<Dialog route onClose={handleClose}>
 				<DialogContent testID="checkout-dialog" size="full" className="h-full">

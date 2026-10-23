@@ -1,6 +1,12 @@
 import type { EngineRecord } from '@wcpos/query';
 
-import { getCheckoutModeSnapshot, resetCheckoutMode, watchTender } from '../checkout/checkout-mode';
+import {
+	claimReceiptAutoPrint,
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	resetCheckoutMode,
+	resolveStage,
+} from '../checkout/checkout-mode';
 import { closeSale } from './close-sale';
 
 // The hook's dependencies; closeSale itself takes everything it needs as arguments.
@@ -25,12 +31,11 @@ jest.mock('@wcpos/query', () => {
 		}) => {
 			mockPosterInput(input);
 			return Object.assign((url: string, body: unknown) => input.post(url, body), {
-				mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+				mirror: async (answer: object) => {
 					await mockMirror(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
 					});
-					options?.afterWrite?.();
 					await mockSettle();
 				},
 				settle: mockSettle,
@@ -125,7 +130,7 @@ it('a paid summary with a null completion completes, without a completion number
 });
 
 it('balance outstanding mirrors the summary and says what is due', async () => {
-	const unwatch = watchTender(order.uuid, true);
+	enterCheckout(order.uuid);
 	const summary = { status: 'pos-partial', balance: '4.00' };
 	const post = jest.fn(async () => {
 		throw refusal(409, 'wcpos_balance_outstanding', { order: summary });
@@ -135,7 +140,6 @@ it('balance outstanding mirrors the summary and says what is due', async () => {
 		kind: 'outstanding',
 		order: summary,
 	});
-	unwatch();
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	expect(mockMirror).toHaveBeenCalledWith(
 		{},
@@ -254,44 +258,13 @@ it('a paid close the resident already shows costs no refresh', async () => {
 	expect(mockRefresh).not.toHaveBeenCalled();
 });
 
-it('selects a paid close receipt before the poster refresh and close confirmation refresh', async () => {
+it('a reopened close returns to checkout and releases its print claim', async () => {
 	let status = 'pos-open';
 	const resident = {
 		uuid: order.uuid,
 		getLatest: () => ({ payload: { id: 42, status } }),
 	} as EngineRecord<'orders'>;
-	const unwatch = watchTender(order.uuid, true);
-	const post = jest.fn(async () => ({
-		data: { order: { status: 'completed' }, completion: null },
-	}));
-	mockMirror.mockImplementationOnce(async () => {
-		status = 'completed';
-	});
-	let atPoster: string | null | undefined;
-	let atConfirmation: string | null | undefined;
-	mockSettle.mockImplementationOnce(async () => {
-		atPoster = getCheckoutModeSnapshot().selectedReceiptOrder;
-		// The forced refresh adopts an open document, so closeConfirmed must re-check it.
-		status = 'pos-open';
-	});
-	mockRefresh.mockImplementationOnce(async () => {
-		atConfirmation = getCheckoutModeSnapshot().selectedReceiptOrder;
-		status = 'completed';
-		return 'refreshed';
-	});
-	await closeSale({} as never, {} as never, resident, deps(post));
-	unwatch();
-	expect(atPoster).toBe(order.uuid);
-	expect(atConfirmation).toBe(order.uuid);
-});
-
-it('withdraws the early receipt when close confirmation confirms a reopen', async () => {
-	let status = 'pos-open';
-	const resident = {
-		uuid: order.uuid,
-		getLatest: () => ({ payload: { id: 42, status } }),
-	} as EngineRecord<'orders'>;
-	const unwatch = watchTender(order.uuid, true);
+	enterCheckout(order.uuid);
 	const post = jest.fn(async () => ({
 		data: { order: { status: 'completed' }, completion: null },
 	}));
@@ -299,14 +272,16 @@ it('withdraws the early receipt when close confirmation confirms a reopen', asyn
 		status = 'completed';
 	});
 	mockSettle.mockImplementationOnce(async () => {
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(order.uuid);
+		expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], status)).toBe('receipt');
+		expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
 		status = 'pos-open';
 	});
 	mockRefresh.mockResolvedValueOnce('refreshed');
 	expect(await closeSale({} as never, {} as never, resident, deps(post))).toMatchObject({
 		kind: 'reopened',
 	});
-	unwatch();
+	expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], status)).toBe('checkout');
+	expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
 	expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
 	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(true);
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();

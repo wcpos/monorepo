@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { PayButton } from './pay';
+import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../checkout/checkout-mode';
 import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
 let mockSize = 'lg';
@@ -44,7 +45,11 @@ jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
 }));
 jest.mock('../../checkout/checkout-mode', () => ({
-	enterCheckout: (id: string) => mockEnter(id),
+	...jest.requireActual('../../checkout/checkout-mode'),
+	enterCheckout: (id: string) => {
+		mockEnter(id);
+		jest.requireActual('../../checkout/checkout-mode').enterCheckout(id);
+	},
 	leaveCheckout: (id: string) => mockLeave(id),
 	markOrderSaving: (id: string) => mockMarkSaving(id),
 	clearOrderSaving: (id: string) => mockClearSaving(id),
@@ -85,6 +90,7 @@ jest.mock('../../checkout/refusal-toast', () => ({
 	showOrderRefusedToast: (...args: unknown[]) => mockRefusal(...args),
 }));
 beforeEach(() => {
+	resetCheckoutMode();
 	jest.clearAllMocks();
 	mockUnmet = [];
 	mockSaveState = null;
@@ -115,7 +121,9 @@ it.each(['phone', 'legacy', 'unsupported'])('retains the modal for %s', async (l
 			params: { orderId: 'order-1' },
 		})
 	);
-	expect(mockEnter).not.toHaveBeenCalled();
+	if (lane === 'phone') {
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	} else expect(mockEnter).not.toHaveBeenCalled();
 });
 it('leaves checkout on an unsuccessful push', async () => {
 	mockLoaded = false;
@@ -158,8 +166,8 @@ it.each(['lg', 'sm'])('re-enters checkout without a second save while saving (%s
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	expect(mockSave).not.toHaveBeenCalled();
 	expect(mockMarkSaving).not.toHaveBeenCalled();
-	if (size === 'lg') expect(mockEnter).toHaveBeenCalledWith('order-1');
-	else
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	if (size === 'sm')
 		expect(mockPush).toHaveBeenCalledWith(
 			expect.objectContaining({ params: { orderId: 'order-1' } })
 		);

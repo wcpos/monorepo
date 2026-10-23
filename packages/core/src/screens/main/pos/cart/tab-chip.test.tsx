@@ -189,3 +189,13 @@ it('keeps a caller status fallback as a badge, and the strip word as plain text'
 	expect(screen.queryByTestId('open-order-status-a')).toBeNull();
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('POS - Open');
 });
+
+it('labels a paid checkout member as Paid · receipt before confirmation', () => {
+	enterCheckout('a');
+	const order = {
+		uuid: 'a',
+		payload: { total: '10.00', status: 'completed', meta_data: [] },
+	} as unknown as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
+});

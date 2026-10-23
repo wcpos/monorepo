@@ -3,6 +3,7 @@
  */
 import * as React from 'react';
 
+import { flushSync } from 'react-dom';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
@@ -27,15 +28,17 @@ import { createSimulatedDriver } from '../../../../../services/payment-drivers/s
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { method as deviceMethod, row as deviceRow } from '../payments/device/fixtures.test-utils';
 import {
+	claimReceiptAutoPrint,
 	enterCheckout,
+	enterReceipt,
 	getCheckoutModeSnapshot,
 	markOrderQueuedOffline,
 	markOrderSaving,
 	resetCheckoutMode,
+	resolveStage,
 	setTenderMethod,
 	setTenderPlan,
-	useCheckoutMode,
-	watchTender,
+	useOrderCheckoutStage,
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
@@ -379,14 +382,13 @@ jest.mock('@wcpos/query', () => ({
 		mockPosterInputs.push(input);
 		return Object.assign((url: string, body: unknown) => input.post(url, body), {
 			// The mocked mirrorServerOrder under a fixed revision.
-			mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+			mirror: async (answer: object) => {
 				await jest
 					.requireMock('@wcpos/query/mutations')
 					.mirrorServerOrder(input.runtime, input.orderUuid, {
 						...answer,
 						sentRevision: 'sha256:sent',
 					});
-				options?.afterWrite?.();
 			},
 			settle: async () => undefined,
 		});
@@ -466,6 +468,14 @@ describe('useTenderFlow', () => {
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
 	});
+	it('a mounted tender is a checkout member; a confirmed receipt is not re-entered', () => {
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(true);
+		resetCheckoutMode();
+		enterReceipt(order.uuid);
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
+	});
 	it.each([
 		['online', 'payment.recorded'],
 		['offline', 'payment.recorded-offline'],
@@ -511,34 +521,19 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.retryCommand());
 		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
 			post: expect.any(Function),
-			afterMirror: expect.any(Function),
 		});
 	});
 
 	it('Try again does not select a receipt for a replayed cancel with a paid summary', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+		mockResend.mockImplementationOnce(async () => {
 			mockPayload.status = 'processing';
 			const answer = { kind: 'cancel' as const, data: { order: { status: 'processing' } } };
-			deps.afterMirror?.(answer);
 			return [answer];
 		});
 		await act(async () => result.current.retryCommand());
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
-	});
-
-	it('Try again selects the replayed paid receipt before re-send settlement returns', async () => {
-		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		let atMirror: string | null | undefined;
-		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
-			mockPayload.status = 'completed';
-			deps.afterMirror?.({ kind: 'record', data: { order: { status: 'completed' } } });
-			atMirror = getCheckoutModeSnapshot().selectedReceiptOrder;
-			return [];
-		});
-		await act(async () => result.current.retryCommand());
-		expect(atMirror).toBe(order.uuid);
 	});
 
 	// CodeRabbit 4346454764 on #2837: a re-send in flight never shows the keypad.
@@ -620,30 +615,17 @@ describe('useTenderFlow', () => {
 				kind: 'close' as const,
 				data: { order: { status }, completion: { n: 1, id: 'c1' } },
 			};
-			// The mirror lands the answer's status, afterMirror enters the provisional receipt, then
-			// the forced refresh adopts the resident the row describes (a reopen, for the open rows).
-			const unwatch = watchTender(order.uuid, true);
-			mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
-				const before = mockPayload.status;
-				mockPayload.status = status;
-				deps.afterMirror?.(answer);
-				// An open answer never leaves the till, so it enters nothing to withdraw.
-				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
-					status === 'pos-open' ? null : order.uuid
-				);
-				if (before === undefined) delete mockPayload.status;
-				else mockPayload.status = before;
-				return [answer];
-			});
+			enterCheckout(order.uuid);
+			expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
+			mockResend.mockResolvedValueOnce([answer]);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.retryCommand());
-			unwatch();
-			// Only a confirmed close keeps the provisional receipt; a reopen or an unconfirmed close
-			// withdraws it (Codex 4352787835 on #2853).
-			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(closed === 'completed');
-			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
-				closed === 'completed' ? order.uuid : null
-			);
+			if (closed !== 'completed') {
+				expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
+					'checkout'
+				);
+				expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
+			}
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(closed === 'completed' ? 1 : 0);
 			// A reopen ends the completion attempt; an unconfirmed close keeps it for the bridge.
 			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(closed === 'reopened' ? 1 : 0);
@@ -700,10 +682,8 @@ describe('useTenderFlow', () => {
 		});
 	});
 
-	// A recovered send on a paid-looking status enters its provisional receipt while the stamp
-	// stands; the forced refresh then adopts another till's cancel (open, no stamp). The loop
-	// finishes nothing, so the receipt is withdrawn with the stamp (local Codex review on #2853).
-	it('a recovered send whose refresh drops the stamp withdraws its provisional receipt', async () => {
+	// A recovered send whose stamp disappeared finishes nothing and frees the print claim.
+	it('a recovered send whose refresh drops the stamp returns to checkout', async () => {
 		const stamp = {
 			method_id: 'wcpos_email_invoice',
 			destination: 'a@b.c',
@@ -715,22 +695,27 @@ describe('useTenderFlow', () => {
 			kind: 'submit' as const,
 			data: { outcome: 'sent', order: { status: 'on-hold' } },
 		};
-		const unwatch = watchTender(order.uuid, true);
-		mockResend.mockImplementationOnce(async (_runtime, _db, _uuid, deps) => {
+		enterCheckout(order.uuid);
+		expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
+		mockResend.mockImplementationOnce(async () => {
 			mockPayload = {
 				...mockPayload,
 				status: 'on-hold',
 				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
 			} as typeof mockPayload;
-			deps.afterMirror?.(answer);
-			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(order.uuid);
+			expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
+				'receipt'
+			);
 			mockPayload = { ...mockPayload, status: 'pos-open', meta_data: [] } as typeof mockPayload;
 			return [answer];
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => result.current.retryCommand());
-		unwatch();
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
+			'checkout'
+		);
+		expect(claimReceiptAutoPrint(order.uuid)).toBe(true);
 		expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(false);
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	});
@@ -2006,6 +1991,7 @@ describe('server tender', () => {
 		async (when) => {
 			resetCheckoutMode();
 			const checkoutMode = await import('../checkout-mode');
+			enterCheckout('order-1');
 			let respond!: (value: unknown) => void;
 			let recorded!: () => void;
 			let refreshed!: () => void;
@@ -2021,6 +2007,8 @@ describe('server tender', () => {
 						recorded = resolve;
 					});
 				mockPayload = { ...mockPayload, ...changes };
+				// Deliver the paid record emission before the mirror returns to the service.
+				if (when === 'receipt-entry') flushSync(() => host.rerender(<Host />));
 			});
 			mockRequire.mockReturnValue({
 				ready: new Promise<void>((resolve) => {
@@ -2039,7 +2027,11 @@ describe('server tender', () => {
 				);
 			}
 			function Host() {
-				return useCheckoutMode().receiptOrders.has('order-1') ? <span>Receipt</span> : <Checkout />;
+				return useOrderCheckoutStage(order) === 'receipt' ? (
+					<span data-testid="receipt">Receipt</span>
+				) : (
+					<Checkout />
+				);
 			}
 			const host = render(<Host />);
 			fireEvent.click(host.getByRole('button', { name: 'Pick' }));
@@ -2073,13 +2065,12 @@ describe('server tender', () => {
 				host.unmount();
 				await act(async () => recorded());
 			}
+			if (when === 'receipt-entry') {
+				expect(host.getByTestId('receipt')).toBeDefined();
+			}
 			expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
-			// A tender still watching when the completing status arrives has its receipt entered
-			// and selected by the service once the write lands (receiptEntryAfterWrite); one gone
-			// before the response is left to the background completion.
-			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
-				when === 'before-response' ? null : 'order-1'
-			);
+			// Background confirmation never selects the receipt; the current order derives it.
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 			expect(mockRequire).toHaveBeenCalledTimes(1);
 			expect(

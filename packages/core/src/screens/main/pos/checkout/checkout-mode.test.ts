@@ -13,19 +13,18 @@ import {
 	finishReceipt,
 	getCheckoutModeSnapshot,
 	getOrderSaveState,
+	isReceiptStage,
 	leaveCheckout,
 	markOrderQueuedOffline,
 	markOrderSaveRejected,
 	markOrderSaving,
-	receiptEntryAfterWrite,
+	releaseUnconfirmedReceipt,
 	resetCheckoutMode,
 	resolveStage,
-	retractReceiptEntry,
 	selectReceipt,
 	setTenderMethod,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
-	watchTender,
 } from './checkout-mode';
 import { useOrderSaveState, useOrderSaving } from './use-order-save-state';
 
@@ -46,28 +45,30 @@ beforeEach(() => {
 });
 
 it('defaults to cart and ignores ended legs', () => {
-	expect(resolveStage('a', getCheckoutModeSnapshot(), [])).toBe('cart');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'pos-open')).toBe('cart');
 	expect(
-		resolveStage('a', getCheckoutModeSnapshot(), [
-			{ status: 'voided' },
-			{ status: 'failed' },
-		] as PaymentRow[])
+		resolveStage(
+			'a',
+			getCheckoutModeSnapshot(),
+			[{ status: 'voided' }, { status: 'failed' }] as PaymentRow[],
+			'pos-open'
+		)
 	).toBe('cart');
-	expect(resolveStage(undefined, getCheckoutModeSnapshot(), [])).toBe('cart');
+	expect(resolveStage(undefined, getCheckoutModeSnapshot(), [], 'pos-open')).toBe('cart');
 });
 it('resolves explicit checkout independently for each order', () => {
 	enterCheckout('a');
 	enterCheckout('b');
 	leaveCheckout('a');
-	expect(resolveStage('a', getCheckoutModeSnapshot(), [])).toBe('cart');
-	expect(resolveStage('b', getCheckoutModeSnapshot(), [])).toBe('checkout');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'pos-open')).toBe('cart');
+	expect(resolveStage('b', getCheckoutModeSnapshot(), [], 'pos-open')).toBe('checkout');
 });
 it.each(['pending', 'authorized', 'captured'])(
 	'recovers checkout from a %s ledger row',
 	(status) => {
-		expect(resolveStage('a', getCheckoutModeSnapshot(), [{ status }] as PaymentRow[])).toBe(
-			'checkout'
-		);
+		expect(
+			resolveStage('a', getCheckoutModeSnapshot(), [{ status }] as PaymentRow[], 'pos-open')
+		).toBe('checkout');
 	}
 );
 it('a background capture enters the receipt without selecting it', () => {
@@ -84,7 +85,12 @@ it('receipt wins over checkout and live rows, and can be selected and finished',
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(false);
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('a');
 	expect(
-		resolveStage('a', getCheckoutModeSnapshot(), [{ status: 'captured' }] as PaymentRow[])
+		resolveStage(
+			'a',
+			getCheckoutModeSnapshot(),
+			[{ status: 'captured' }] as PaymentRow[],
+			'pos-open'
+		)
 	).toBe('receipt');
 	selectReceipt(null);
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
@@ -232,36 +238,71 @@ it('derives offline immediately without changing the stored saving state', () =>
 	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
 });
 
-it('retracts a provisional receipt to checkout and releases its print claim', () => {
+it('derives the receipt for a checkout member whose resident reads paid', () => {
 	enterCheckout('a');
-	const unwatch = watchTender('a', true);
-	receiptEntryAfterWrite('a')();
-	unwatch();
-	expect(claimReceiptAutoPrint('a')).toBe(true);
-	retractReceiptEntry('a');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'pos-open')).toBe('checkout');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'completed')).toBe('receipt');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'on-hold')).toBe('receipt');
+	// A gateway that settles on `pending` leaves the till; it never derives a receipt.
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'pending')).toBe('checkout');
+	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'cancelled')).toBe('checkout');
+	// Not a member: a paid status alone is not a receipt here.
+	expect(resolveStage('b', getCheckoutModeSnapshot(), [], 'completed')).toBe('cart');
+});
+it('a reopen before confirmation returns the tender by itself', () => {
+	enterCheckout('a');
+	expect(isReceiptStage('a', getCheckoutModeSnapshot(), 'completed')).toBe(true);
+	expect(isReceiptStage('a', getCheckoutModeSnapshot(), 'pos-open')).toBe(false);
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
+});
+it('finishing an unconfirmed receipt leaves checkout and skips the one unselected confirmation', () => {
+	enterCheckout('a');
+	finishReceipt('a');
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(false);
+	enterReceipt('a', { select: false });
 	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(false);
-	expect(resolveStage('a', getCheckoutModeSnapshot(), [])).toBe('checkout');
+	enterReceipt('a', { select: false });
+	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
+});
+it('a receipt never in checkout (resumed terminal leg) still gets its unselected entry', () => {
+	enterReceipt('a', { select: false });
+	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
-	expect(claimReceiptAutoPrint('a')).toBe(true);
 });
-it.each(['direct', 'finished'])('does not retract a %s receipt entry', (kind) => {
-	if (kind === 'direct') enterReceipt('a');
-	else {
-		const unwatch = watchTender('a', true);
-		receiptEntryAfterWrite('a')();
-		unwatch();
-		finishReceipt('a');
-	}
-	const before = getCheckoutModeSnapshot();
-	retractReceiptEntry('a');
-	expect(getCheckoutModeSnapshot()).toBe(before);
-});
-it('a confirmed entry does not skip an unrelated background entry after New order', () => {
-	const unwatch = watchTender('a', true);
-	receiptEntryAfterWrite('a')();
-	unwatch();
+it('finishing a confirmed receipt sets no skip', () => {
+	enterCheckout('a');
 	enterReceipt('a');
 	finishReceipt('a');
 	enterReceipt('a', { select: false });
 	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
+});
+it('releaseUnconfirmedReceipt frees the claim for a sale paid again', () => {
+	expect(claimReceiptAutoPrint('a')).toBe(true);
+	expect(claimReceiptAutoPrint('a')).toBe(false);
+	releaseUnconfirmedReceipt('a');
+	expect(claimReceiptAutoPrint('a')).toBe(true);
+});
+it('useOrderCheckoutStage reads the status off the record', () => {
+	enterCheckout('a');
+	const paid = {
+		uuid: 'a',
+		payload: { meta_data: [], status: 'completed' },
+	} as unknown as EngineRecord<'orders'>;
+	expect(renderHook(() => useOrderCheckoutStage(paid)).result.current).toBe('receipt');
+});
+
+it('releaseUnconfirmedReceipt withdraws a selection made before confirmation, never a confirmed one', () => {
+	enterCheckout('a');
+	selectReceipt('a');
+	releaseUnconfirmedReceipt('a');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	enterReceipt('b');
+	releaseUnconfirmedReceipt('b');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('b');
+});
+it('leaveCheckout drops a selection pointing at the derived receipt it ends', () => {
+	enterCheckout('a');
+	selectReceipt('a');
+	leaveCheckout('a');
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 });

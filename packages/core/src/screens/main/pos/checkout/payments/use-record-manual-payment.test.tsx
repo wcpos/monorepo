@@ -4,7 +4,6 @@ import { act, renderHook } from '@testing-library/react';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
-import { getCheckoutModeSnapshot, resetCheckoutMode, watchTender } from '../checkout-mode';
 import { useRecordManualPayment } from './use-record-manual-payment';
 
 const mockPost = jest.fn();
@@ -62,14 +61,13 @@ jest.mock('@wcpos/query', () => ({
 			(url: string, body: object) => input.post(url, { ...body, revision: 'sha256:sent' }),
 			{
 				// The mocked mirrorServerOrder under the revision the post went out with, then settle.
-				mirror: async (answer: object, options?: { afterWrite?: () => void }) => {
+				mirror: async (answer: object) => {
 					await jest
 						.requireMock('@wcpos/query/mutations')
 						.mirrorServerOrder(input.runtime, input.orderUuid, {
 							...answer,
 							sentRevision: 'sha256:sent',
 						});
-					options?.afterWrite?.();
 					await mockSettle();
 				},
 				settle: mockSettle,
@@ -615,51 +613,3 @@ jest.mock('@wcpos/query/mutations', () => ({
 	mirrorServerOrder: (manager: unknown, recordId: string, changes: unknown) =>
 		mockPatchEngineResident({ manager, collection: 'orders', recordId, changes }),
 }));
-
-// Moving receipt entry after the poster resolves would leave these snapshots unselected.
-it.each([
-	['completed', false, 'o-1'],
-	['pos-partial', false, null],
-	['completed', true, null],
-])(
-	'selects only an accepted paid receipt before refresh (%s, refused=%s)',
-	async (status, refused, selected) => {
-		resetCheckoutMode();
-		const unwatch = watchTender(order.uuid, true);
-		onlineStatus = 'online-website-available';
-		if (refused)
-			mockPost.mockRejectedValueOnce({
-				response: {
-					status: 409,
-					data: { code: 'wcpos_order_already_paid', data: { order: { status } } },
-				},
-			});
-		else mockPost.mockImplementationOnce(answer({ status }));
-		mockPatchEngineResident.mockImplementationOnce(async () => {
-			order.payload.status = status;
-		});
-		let atRefresh: string | null | undefined;
-		let release!: () => void;
-		const refresh = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		let started!: () => void;
-		const refreshing = new Promise<void>((resolve) => {
-			started = resolve;
-		});
-		mockSettle.mockImplementationOnce(async () => {
-			atRefresh = getCheckoutModeSnapshot().selectedReceiptOrder;
-			started();
-			await refresh;
-		});
-		const { result } = renderHook(() => useRecordManualPayment());
-		const run = result.current(order, method, { session: gateSession(), amount: 40 });
-		await refreshing;
-		release();
-		await act(() => run);
-		unwatch();
-		resetCheckoutMode();
-		delete order.payload.status;
-		expect(atRefresh).toBe(selected);
-	}
-);
