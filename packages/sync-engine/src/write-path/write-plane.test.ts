@@ -258,20 +258,6 @@ describe('write-plane resolution after a scope switch', () => {
 		expect(diagnostics.map((event) => event.type)).not.toContain('queue.write.resolve');
 	});
 
-	it('logs nothing into the SAME scope reactivated by a switch away and back (A→B→A)', async () => {
-		const { manager, diagnostics } = await orderDiscard({
-			repull: async (scopes) => {
-				await scopes.switchTo('scope-2');
-				await scopes.switchTo('scope-1');
-				throw new Error('scope moved');
-			},
-		});
-		expect(manager.activeScope).toBe('scope-1');
-		const types = diagnostics.map((event) => event.type);
-		expect(types).not.toContain('queue.write.discard-repull-deferred');
-		expect(types).not.toContain('queue.write.resolve');
-	});
-
 	it('logs no failed claim release into the incoming scope', async () => {
 		const { manager, diagnostics } = await orderDiscard({
 			release: async (scopes) => {

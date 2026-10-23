@@ -116,6 +116,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		connectivity: deps.connectivity,
 		diagnostics: deps.diagnostics,
 		emitWriteEvent: deps.emitWriteEvent,
+		revert: (mutationId) => conflictResolution.resolveConflict(mutationId, 'discard'),
 		mintUuid: deps.mintUuid,
 		queueFor,
 		drainInstanceIdFor: () => (drainInstanceIdOnce ??= deps.mintUuid()),

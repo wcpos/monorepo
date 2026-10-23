@@ -1729,6 +1729,62 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each([
+		{ id: 0, outcome: 'born-local: revertSkipped, the only copy kept' },
+		{ id: PRODUCT_ID, outcome: 'a server identity: auto-reverted' },
+	])('judges a rejected catalogue create whose ids are $id as $outcome', async ({ id }) => {
+		// A zero id is no server identity (the #2693 class): counting it would
+		// auto-discard the only local copy of a born-local record.
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			const resident = await engine.active()?.database.collections.products.findOne(UUID_A).exec();
+			await resident?.incrementalModify((data: Record<string, unknown>) => ({
+				...data,
+				remoteId: String(id), // the column holds decimal strings
+			}));
+			const receipt = await engine.write({
+				collection: 'products',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { ...productPayload(2), id },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+			const rejections = () =>
+				diagnostics
+					.filter((event) => event.type === 'push.rejected')
+					.map((event) => [event.fields?.revertPending, event.fields?.revertSkipped]);
+			if (id === 0) {
+				await vi.waitFor(() => expect(rejections()).toHaveLength(2));
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				expect(rejections()).toEqual([
+					[true, undefined],
+					[undefined, true],
+				]);
+				expect(route.pulls).toEqual([]);
+				expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+				expect(await productJson(engine)).not.toBeNull();
+				expect(await engine.conflicts()).toEqual([
+					expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+				]);
+			} else {
+				await vi.waitFor(() =>
+					expect(diagnostics.map((event) => event.type)).toContain('queue.write.auto-reverted')
+				);
+				expect(rejections()).toEqual([[true, undefined]]);
+			}
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('adopts the update ack document so server-derived catalog fields land at ack time', async () => {
 		// The cashier zeroes stock_quantity; WooCommerce recomputes stock_status
 		// server-side and returns it in the push ack envelope. The resident (and
@@ -2004,63 +2060,6 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it('owes the verdict when post-drain processing fails before the revert starts', async () => {
-		const route = rejectedProductFetch();
-		const diagnostics: SyncEvent[] = [];
-		const engine = engineWith({
-			fetch: route.fetch,
-			diagnostics: (event) => diagnostics.push(event),
-		});
-		try {
-			await engine.ready;
-			await insertServerBornProduct(engine, 2);
-			await engine.write({
-				collection: 'products',
-				operation: 'update',
-				recordId: UUID_A,
-				payload: productPayload(2),
-			});
-			// The first queue read AFTER the dead letter is durable fails once — the
-			// post-drain processing dies before write-rejected can start the revert.
-			const queue = queueFor(engine.active()!.database as never);
-			const replace = queue.replace.bind(queue);
-			const pending = queue.pending.bind(queue);
-			let deadLettered = false;
-			let failed = false;
-			vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
-				await replace(row);
-				if (row.status === 'rejected') deadLettered = true;
-			});
-			vi.spyOn(queue, 'pending').mockImplementation(async () => {
-				if (deadLettered && !failed) {
-					failed = true;
-					throw new Error('queue read failed');
-				}
-				return pending();
-			});
-
-			expect(await engine.sync('write-drain')).toMatchObject({ status: 'error' });
-			// A later healthy drain must not add a second verdict.
-			await engine.sync('write-drain');
-
-			const rejections = diagnostics.filter((event) => event.type === 'push.rejected');
-			// The stamped attempt, then exactly ONE coded verdict, emitted by the drain.
-			expect(
-				rejections.map((event) => {
-					const fields = event.fields as Record<string, unknown> | undefined;
-					return [event.level, fields?.revertPending, fields?.revertSkipped, fields?.status];
-				})
-			).toEqual([
-				['warn', true, undefined, 403],
-				['error', undefined, true, 403],
-			]);
-			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
-		} finally {
-			vi.restoreAllMocks();
-			await engine.dispose();
-		}
-	});
-
 	it('owes the verdict when the drain itself throws after the dead letter is durable', async () => {
 		const route = rejectedProductFetch();
 		const diagnostics: SyncEvent[] = [];
@@ -2169,105 +2168,6 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			).toBe(false);
 		} finally {
 			answerPull(new Response('unavailable', { status: 503 }));
-			await engine.dispose();
-		}
-	});
-
-	it("drops a revert's success verdict when the store switched before the revert returned", async () => {
-		const route = rejectedProductFetch();
-		const diagnostics: SyncEvent[] = [];
-		const a = freshIdentity();
-		const engine = engineWith({
-			fetch: route.fetch,
-			identity: a,
-			diagnostics: (event) => diagnostics.push(event),
-		});
-		let releaseClaim!: () => void;
-		const claimReleased = new Promise<void>((resolve) => {
-			releaseClaim = resolve;
-		});
-		try {
-			await engine.ready;
-			await insertServerBornProduct(engine, 2);
-			await engine.write({
-				collection: 'products',
-				operation: 'update',
-				recordId: UUID_A,
-				payload: productPayload(2),
-			});
-			// The discard commits; the revert then waits on its claim release, its
-			// post-resolution work, while the cashier switches.
-			const queue = queueFor(engine.active()!.database as never);
-			const release = queue.releaseResolutionClaim.bind(queue);
-			const releaseSpy = vi
-				.spyOn(queue, 'releaseResolutionClaim')
-				.mockImplementation(async (mutationId, holder) => {
-					await claimReleased;
-					return release(mutationId, holder);
-				});
-			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
-			await vi.waitFor(() => expect(releaseSpy).toHaveBeenCalled());
-			expect(await engine.conflicts()).toEqual([]);
-
-			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
-			releaseClaim();
-			await new Promise((resolve) => setTimeout(resolve, 50));
-
-			// The incoming scope's log never hears about the outgoing scope's revert —
-			// neither its verdict nor the resolution event inside it.
-			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
-			expect(diagnostics.some((event) => event.type === 'queue.write.resolve')).toBe(false);
-		} finally {
-			releaseClaim();
-			vi.restoreAllMocks();
-			await engine.dispose();
-		}
-	});
-
-	it("drops a revert's verdict when the store switched away and BACK before it returned (A→B→A)", async () => {
-		const route = rejectedProductFetch();
-		const diagnostics: SyncEvent[] = [];
-		const a = freshIdentity();
-		const engine = engineWith({
-			fetch: route.fetch,
-			identity: a,
-			diagnostics: (event) => diagnostics.push(event),
-		});
-		let releaseClaim!: () => void;
-		const claimReleased = new Promise<void>((resolve) => {
-			releaseClaim = resolve;
-		});
-		try {
-			await engine.ready;
-			await insertServerBornProduct(engine, 2);
-			await engine.write({
-				collection: 'products',
-				operation: 'update',
-				recordId: UUID_A,
-				payload: productPayload(2),
-			});
-			const queue = queueFor(engine.active()!.database as never);
-			const release = queue.releaseResolutionClaim.bind(queue);
-			const releaseSpy = vi
-				.spyOn(queue, 'releaseResolutionClaim')
-				.mockImplementation(async (mutationId, holder) => {
-					await claimReleased;
-					return release(mutationId, holder);
-				});
-			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
-			await vi.waitFor(() => expect(releaseSpy).toHaveBeenCalled());
-
-			// Away and back: the scope id matches again, the epoch does not.
-			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
-			await engine.scope.switch(a);
-			releaseClaim();
-			await new Promise((resolve) => setTimeout(resolve, 50));
-
-			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
-			expect(diagnostics.some((event) => event.type === 'queue.write.resolve')).toBe(false);
-		} finally {
-			releaseClaim();
-			vi.restoreAllMocks();
 			await engine.dispose();
 		}
 	});

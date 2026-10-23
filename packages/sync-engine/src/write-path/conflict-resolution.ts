@@ -10,6 +10,7 @@ import {
 import { type CollectionWriteFacet, writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { requeueRejectedMutation } from './write-intents';
+import { scopeBoundObserver } from '../scope-bound';
 import { removeRefundChildren } from './refund-children';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
@@ -187,12 +188,12 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				// switch can land first; the observer then belongs to the incoming scope,
 				// and none of these rows are its. The bound EPOCH decides, not the scope
 				// id, which matches again after a switch away and back (A→B→A).
-				let inBoundScope = (): boolean => false;
+				let log: SyncObserver = () => undefined;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
-						inBoundScope = () => bound.isCurrent();
+						log = scopeBoundObserver(bound, diagnostics);
 						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
@@ -628,12 +629,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						await (claimedQueue as ReturnType<typeof queueFor>)
 							.releaseResolutionClaim(mutationId, resolutionInstanceIdFor())
 							.catch((error) => {
-								if (!inBoundScope()) return;
 								// The release must never mask the try-block's outcome, and a failed
 								// release self-heals at the lease deadline — but a storage failure
 								// here is still a failure someone may be diagnosing, so it is
 								// reported rather than swallowed silently (#1345).
-								diagnostics({
+								log({
 									type: 'queue.write.tick.error',
 									level: 'warn',
 									message: `conflict-claim release failed (row stays claimed until the lease deadline): ${error instanceof Error ? error.message : String(error)}`,
@@ -654,14 +654,13 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							reason: `conflict-discard:${mutationId}`,
 						});
 					} catch (error) {
-						if (inBoundScope())
-							diagnostics({
-								type: 'queue.write.discard-repull-deferred',
-								level: 'warn',
-								collection: 'orders',
-								message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-								fields: { mutationId, remoteId: needsRepull },
-							});
+						log({
+							type: 'queue.write.discard-repull-deferred',
+							level: 'warn',
+							collection: 'orders',
+							message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+							fields: { mutationId, remoteId: needsRepull },
+						});
 					}
 				}
 				const settledResolution = resolved as {
@@ -669,21 +668,20 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 					recordId: string;
 				} | null;
 				if (settledResolution) {
-					if (inBoundScope())
-						diagnostics({
-							type: 'queue.write.resolve',
-							level: 'info',
-							collection: settledResolution.collectionName,
-							// `residentRemoved` makes a destructive discard legible in the log:
-							// it is the one resolution that deletes a record outright, and "the
-							// order is gone" must never be an unexplained disappearance (R7b).
-							fields: {
-								recordId: settledResolution.recordId,
-								mutationId,
-								resolution,
-								residentRemoved,
-							},
-						});
+					log({
+						type: 'queue.write.resolve',
+						level: 'info',
+						collection: settledResolution.collectionName,
+						// `residentRemoved` makes a destructive discard legible in the log:
+						// it is the one resolution that deletes a record outright, and "the
+						// order is gone" must never be an unexplained disappearance (R7b).
+						fields: {
+							recordId: settledResolution.recordId,
+							mutationId,
+							resolution,
+							residentRemoved,
+						},
+					});
 					// The resolution changed queue state outside the drain path — refresh
 					// the cached depth and tell status subscribers, or an idle engine
 					// keeps showing the pre-resolution depth.
