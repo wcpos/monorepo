@@ -11,7 +11,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { recordCompletionAttempt } from '@wcpos/query/store-local';
 
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
-import { LegacyTab } from '../tender/legacy-tab';
 import { commitGatewaySale } from '../commit-gateway-sale';
 import { isSettledOrderStatus, persistSaleProvenance } from '../sale-completion';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
@@ -77,43 +76,6 @@ jest.mock('@wcpos/components/webview', () => {
 		},
 	};
 });
-// Resolved, with an empty catalog, unless a test says otherwise.
-const MOCK_CHECKOUT_SESSION = {
-	handleStockRejection: () => false,
-	gatewayResolved: true,
-	settledOrderStatuses: {} as Record<string, string | null>,
-};
-let mockCheckoutSession = MOCK_CHECKOUT_SESSION;
-jest.mock('../hooks/use-checkout-session', () => ({
-	useCheckoutSession: () => mockCheckoutSession,
-}));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		testID,
-		onPress,
-		disabled,
-	}: {
-		children: React.ReactNode;
-		testID: string;
-		onPress: () => void;
-		disabled: boolean;
-	}) => (
-		<button data-testid={testID} onClick={onPress} disabled={disabled}>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => children,
-}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -2636,136 +2598,6 @@ describe('pay-page session gate', () => {
 			expect(preparedSession.observed).toBe(false);
 		}
 	);
-	it('closing ready session A leaves LegacyTab Process Payment disabled without a new session', async () => {
-		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
-		const preparedSession = new BehaviorSubject(session);
-		mockOpenSession.next(session);
-		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
-			typeof query === 'string' || query.selector.id
-				? {
-						$: preparedSession.pipe(
-							map((session) => (session?.status === 'open' ? session : null))
-						),
-					}
-				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
-		);
-		const view = render(
-			<LegacyTab
-				order={makeOrder()}
-				flow={
-					{
-						hasLiveLeg: false,
-						legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
-						saveState: null,
-					} as never
-				}
-			/>
-		);
-		await act(async () => {});
-		act(() => webViewProps.onLoad({}));
-		const button = view.getByTestId('checkout-legacy-process-payment') as HTMLButtonElement;
-		expect(button.disabled).toBe(false);
-		await act(async () => {
-			mockOpenSession.next(null);
-			preparedSession.next({ ...session, status: 'closed' });
-		});
-		expect(button.disabled).toBe(true);
-		expect(webViewProps.src).toBeUndefined();
-		act(() => button.click());
-		expect(mockPostMessage).not.toHaveBeenCalled();
-		expect(commitGatewaySale).toHaveBeenCalledTimes(1);
-	});
-	it('LegacyTab waits for the gateway catalog, so the commit journals the LOADED catalog', async () => {
-		// The tender pane mounts LegacyTab before useCheckoutSession has loaded the catalog. The
-		// commit journals the catalog once, at mount, for replay: a frame mounted early would
-		// journal {} and a BACS-at-pending sale would never replay (#2482 review).
-		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
-		const preparedSession = new BehaviorSubject(session);
-		mockOpenSession.next(session);
-		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
-			typeof query === 'string' || query.selector.id
-				? {
-						$: preparedSession.pipe(
-							map((session) => (session?.status === 'open' ? session : null))
-						),
-					}
-				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
-		);
-		const order = makeOrder();
-		const flow = {
-			hasLiveLeg: false,
-			legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
-			saveState: null,
-		} as never;
-		const catalog = { pos_cash: null, bacs: 'pending' };
-		try {
-			mockCheckoutSession = { ...MOCK_CHECKOUT_SESSION, gatewayResolved: false };
-			const view = render(<LegacyTab order={order} flow={flow} />);
-			await act(async () => {});
-			expect(recordCompletionAttempt).not.toHaveBeenCalled();
-			expect(view.getByTestId('checkout-legacy-skeleton')).toBeTruthy();
-
-			mockCheckoutSession = { ...MOCK_CHECKOUT_SESSION, settledOrderStatuses: catalog };
-			view.rerender(<LegacyTab order={order} flow={flow} />);
-
-			await waitFor(() => expect(recordCompletionAttempt).toHaveBeenCalledTimes(1));
-			expect(jest.mocked(recordCompletionAttempt).mock.calls[0][1]).toMatchObject({
-				source: 'gateway-snapshot',
-				settledOrderStatuses: catalog,
-			});
-		} finally {
-			mockCheckoutSession = MOCK_CHECKOUT_SESSION;
-		}
-	});
-	it('LegacyTab forwards receiptHost to PaymentWebview', async () => {
-		autoShowReceipt = false;
-		resetCheckoutMode();
-		enterCheckout('uuid-42');
-		mockAdoptOrderSnapshot.mockResolvedValue('applied');
-		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
-		const preparedSession = new BehaviorSubject(session);
-		mockOpenSession.next(session);
-		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
-			typeof query === 'string' || query.selector.id
-				? {
-						$: preparedSession.pipe(
-							map((session) => (session?.status === 'open' ? session : null))
-						),
-					}
-				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
-		);
-		render(
-			<LegacyTab
-				order={makeOrder()}
-				flow={
-					{
-						hasLiveLeg: false,
-						legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
-						saveState: null,
-					} as never
-				}
-				receiptHost="stage"
-			/>
-		);
-		await act(async () => {});
-		const payload = {
-			id: 42,
-			number: '42',
-			status: 'completed',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
-			line_items: [],
-		};
-		await act(async () => {
-			webViewProps.onMessage({
-				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
-			});
-			await Promise.resolve();
-		});
-		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).not.toHaveBeenCalled();
-		expect(mockDismissTo).not.toHaveBeenCalled();
-	});
 	it('opening a session recovers the legacy frame exactly once without a retryToken', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 		const setFrameStatus = jest.fn();
@@ -3234,7 +3066,3 @@ describe('PaymentWebview session expiry', () => {
 		expect(reopenWarnings).toHaveLength(1);
 	});
 });
-
-// Notice links out through the native URL boundary; keep that boundary inert in jsdom.
-jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

@@ -7,11 +7,12 @@ import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
-import type { WebViewHandle } from '@wcpos/components/webview';
 
 import { useT } from '../../../../../contexts/translations';
-import { type PaymentFrameStatus, PaymentWebview } from '../components/payment-webview';
+import { PaymentWebview } from '../components/payment-webview';
 import { useCheckoutSession } from '../hooks/use-checkout-session';
+import { PayFrameNotice } from '../pay-page/pay-frame-notice';
+import { usePayFrameGate } from '../pay-page/use-pay-frame-gate';
 
 import type { TenderFlow } from './use-tender-flow';
 
@@ -32,22 +33,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
 	const { handleStockRejection, settledOrderStatuses, gatewayResolved, gatewayError, refetch } =
 		useCheckoutSession(order);
-	const webViewRef = React.useRef<WebViewHandle>(null);
-	const [loading, setLoading] = React.useState(false);
-	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
-	// See checkout.tsx (#1024): `wcpos-process-payment` is fire-and-forget, so a
-	// press that beats the re-render must read live state, not a render snapshot.
-	const frameStatusRef = React.useRef<PaymentFrameStatus>('loading');
-	const reportFrameStatus = React.useCallback((next: PaymentFrameStatus) => {
-		frameStatusRef.current = next;
-		setFrameStatus(next);
-	}, []);
-
-	const handleProcess = React.useCallback(() => {
-		if (frameStatusRef.current !== 'ready') return;
-		setLoading(true);
-		webViewRef.current?.postMessage?.({ action: 'wcpos-process-payment' });
-	}, []);
+	const frameGate = usePayFrameGate();
 
 	if (flow.hasLiveLeg) {
 		return (
@@ -109,10 +95,9 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	}
 	if (!paymentURL) {
 		return (
-			<Notice
-				tone="bad"
+			<PayFrameNotice
+				status="link-missing"
 				className="m-4"
-				title={t('pos_checkout.payment_form_unavailable')}
 				testID="checkout-payment-form-unavailable"
 			/>
 		);
@@ -120,19 +105,15 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 
 	return (
 		<VStack space="sm" className="flex-1 p-4">
-			{frameStatus === 'failed' ? (
-				<Notice
-					tone="bad"
-					title={t('pos_checkout.payment_form_load_failed')}
-					testID="checkout-payment-form-load-failed"
-				/>
-			) : null}
+			<PayFrameNotice
+				status={frameGate.status}
+				onRetry={frameGate.retry}
+				testID="checkout-payment-form-load-failed"
+			/>
 			<PaymentWebview
 				order={order}
 				receiptHost={receiptHost}
-				ref={webViewRef}
-				setLoading={setLoading}
-				setFrameStatus={reportFrameStatus}
+				{...frameGate.frameProps}
 				settledOrderStatuses={settledOrderStatuses}
 				onStockRejection={handleStockRejection}
 			/>
@@ -140,9 +121,9 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 				<Button
 					testID="checkout-legacy-process-payment"
 					size="lg"
-					loading={loading || frameStatus === 'loading'}
-					disabled={frameStatus !== 'ready' || loading}
-					onPress={handleProcess}
+					loading={frameGate.busy || frameGate.status === 'loading'}
+					disabled={frameGate.status !== 'ready' || frameGate.busy}
+					onPress={frameGate.press}
 				>
 					<ButtonText>{t('pos_checkout.process_payment')}</ButtonText>
 				</Button>
