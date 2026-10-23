@@ -7,7 +7,17 @@ export function useRowKeyboard(
 	scroll: (index: number) => void
 ) {
 	const [focusIndex, setFocusIndex] = React.useState(-1);
+	// Whether the focused row shows its ring: only after a keyboard move. Uniwind has no
+	// `focus-visible:`, and a click focuses the row too, so the hook keeps the distinction.
+	const [ring, setRing] = React.useState(false);
+	const viaKeyboard = React.useRef(false);
 	const requestedFocus = React.useRef<number | null>(null);
+	/** The row's own focus event (a click, a Tab, or the move this hook asked for). */
+	const focusFrom = (index: number) => {
+		setRing(viaKeyboard.current);
+		viaKeyboard.current = false;
+		setFocusIndex(index);
+	};
 	const focusRow = (index: number, node: ViewInstance | null) => {
 		if (Platform.OS === 'web' && node && requestedFocus.current === index) {
 			requestedFocus.current = null;
@@ -36,13 +46,16 @@ export function useRowKeyboard(
 			Math.min(ids.length - 1, focusIndex + (event.nativeEvent.key === 'ArrowDown' ? 1 : -1))
 		);
 		requestedFocus.current = index;
+		viaKeyboard.current = true;
+		setRing(true);
 		setFocusIndex(index);
 		scroll(index);
 	};
 	return {
 		focusRow,
 		focusIndex,
-		setFocusIndex,
+		focusFrom,
+		ring,
 		onKeyDown: Platform.OS === 'web' ? onKeyDown : undefined,
 	};
 }

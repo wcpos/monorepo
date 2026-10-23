@@ -167,10 +167,14 @@ function OrdersList({
 				<View
 					testID={pointer === 'coarse' ? `data-table-row-${record.uuid}` : undefined}
 					tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
-					onFocus={() => keyboard.setFocusIndex(focusIndex)}
+					onFocus={() => keyboard.focusFrom(focusIndex)}
 					ref={(node) => keyboard.focusRow(focusIndex, node)}
+					// The ring marks keyboard focus only (`keyboard.ring`): a click focuses the row too,
+					// and must not draw it. Uniwind has no `focus-visible:`, so the hook decides.
 					className={
-						focused ? 'web:outline-2 web:outline-primary web:-outline-offset-2' : undefined
+						focused && keyboard.ring
+							? 'web:outline-2 web:outline-primary web:-outline-offset-2'
+							: undefined
 					}
 				>
 					{pointer === 'coarse' ? (
@@ -203,7 +207,7 @@ function OrdersList({
 					tableConfig={{
 						data,
 						getRowId: (item) => (isDay(item) ? item.id : item.record.uuid),
-						extraData: { focusIndex: keyboard.focusIndex },
+						extraData: { focusIndex: keyboard.focusIndex, ring: keyboard.ring },
 					}}
 					getItemType={(item: Row<OrderListItem, DataTableFeatures>) =>
 						isDay(item.original) ? 'day' : 'order'

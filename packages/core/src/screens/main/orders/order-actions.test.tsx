@@ -3,54 +3,46 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import type { EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
-import { OrderActionsMenu } from './order-menu';
-const mockDeleted = jest.fn();
-function Actions({ row }: { row: { original: { record: EngineRecord<'orders'> } } }) {
-	return (
-		<OrderActionsMenu
-			order={row.original.record}
-			trigger={<button data-testid="order-actions-button" />}
-			onDeleted={mockDeleted}
-		/>
-	);
-}
+import { DeleteOrderDialog, useOrderActions } from './order-actions';
 
 /**
- * #163 ruling R5 reaches the Orders list too: re-open is an order save and
- * delete is a void, both writes the device cannot record while the storage
- * worker is dead.
+ * #163 ruling R5 reaches the order modal's footer too: re-open is an order save and
+ * delete is a void, both writes the device cannot record while the storage worker is
+ * dead. `useOrderActions` is the footer's one source of those guards and toasts, so the
+ * harness wires its outputs the way `edit/view.tsx` wires its buttons.
  */
 const mockEngineWrite = jest.fn(async () => ({
 	mutationId: 'delete-1',
 	annihilated: true,
 }));
 const mockLocalPatch = jest.fn();
-const mockRelease = jest.fn();
-const mockRequire = jest.fn(() => ({ ready: Promise.resolve(), release: mockRelease }));
 const mockPush = jest.fn();
-let mockReadOnly = false;
 const mockHandlers = new Map<string, () => unknown>();
 const mockDisabled = new Map<string, boolean>();
 
-jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 
+const mockEngineRequire = jest.fn();
+const mockAwaitWriteOutcome = jest.fn(async (..._args: unknown[]) => undefined as unknown);
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
-		engine: { write: mockEngineWrite, require: mockRequire },
+		engine: { write: mockEngineWrite, require: mockEngineRequire },
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
-	awaitWriteOutcome: jest.fn(async () => undefined),
-	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteOutcomeError: class WriteOutcomeError extends Error {
+		constructor(public reason?: string) {
+			super('write-rejected');
+		}
+	},
 }));
 
 jest.mock('@wcpos/sync-core', () => ({
@@ -63,30 +55,6 @@ const recordAction = (testID?: string, onPress?: () => unknown, disabled?: boole
 	if (onPress) mockHandlers.set(testID, onPress);
 	mockDisabled.set(testID, !!disabled);
 };
-
-jest.mock('@wcpos/components/dropdown-menu', () => ({
-	DropdownMenu: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DropdownMenuContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DropdownMenuTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DropdownMenuSeparator: () => null,
-	DropdownMenuItem: ({
-		children,
-		onPress,
-		testID,
-		disabled,
-	}: React.PropsWithChildren<{
-		onPress?: () => unknown;
-		testID?: string;
-		disabled?: boolean;
-	}>) => {
-		recordAction(testID, onPress, disabled);
-		return (
-			<button data-testid={testID} disabled={disabled} onClick={onPress}>
-				{children}
-			</button>
-		);
-	},
-}));
 
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -107,16 +75,11 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 		disabled?: boolean;
 	}>) => {
 		recordAction(testID, onPress, disabled);
-		return (
-			<button data-testid={testID} disabled={disabled} onClick={onPress}>
-				{children}
-			</button>
-		);
+		return <div data-testid={testID}>{children}</div>;
 	},
 }));
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -134,10 +97,6 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../contexts/pro-access', () => ({
-	useProAccess: () => ({ readOnly: mockReadOnly }),
-}));
-
 jest.mock('../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
@@ -147,13 +106,23 @@ const mockOrder = {
 	payload: { id: 42, status: 'completed', meta_data: [] },
 };
 
-const cellProps = {
-	row: {
-		original: {
-			record: mockOrder,
-		},
-	},
-} as unknown as React.ComponentProps<typeof Actions>;
+/** The footer's wiring (`edit/view.tsx`): each button's handler and disabled state. */
+function Footer({ order }: { order: typeof mockOrder }) {
+	const actions = useOrderActions(order as never);
+	recordAction('order-modal-reopen', actions.reopen, actions.storageDegraded || actions.reopening);
+	recordAction('order-modal-refund', actions.refund, actions.storageDegraded);
+	recordAction('order-modal-sync', actions.sync);
+	recordAction('order-modal-delete', actions.requestDelete, actions.storageDegraded);
+	return (
+		<DeleteOrderDialog
+			orderID={actions.orderID}
+			open={actions.deleteOpen}
+			onOpenChange={actions.setDeleteOpen}
+			onConfirm={actions.confirmDelete}
+			disabled={actions.storageDegraded}
+		/>
+	);
+}
 
 async function degradeStorage(databaseName: string) {
 	const instance = {
@@ -192,7 +161,7 @@ async function degradeStorage(databaseName: string) {
 	});
 }
 
-describe('Orders list actions while storage is degraded (#163 ruling R5)', () => {
+describe('Order actions while storage is degraded (#163 ruling R5)', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockHandlers.clear();
@@ -204,48 +173,35 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 	});
 
 	it('allows re-open and delete while storage is healthy', async () => {
-		render(<Actions {...cellProps} />);
+		render(<Footer order={mockOrder} />);
 
-		expect(mockDisabled.get('order-reopen-menu-item')).toBe(false);
+		expect(mockDisabled.get('order-modal-reopen')).toBe(false);
 		expect(mockDisabled.get('order-delete-confirm-button')).toBe(false);
-		expect(mockDisabled.get('order-refund-menu-item')).toBe(false);
+		expect(mockDisabled.get('order-modal-refund')).toBe(false);
 
 		await act(async () => {
 			await mockHandlers.get('order-delete-confirm-button')!();
 		});
-		expect(mockDeleted).toHaveBeenCalledTimes(1);
 		expect(mockEngineWrite).toHaveBeenCalledWith(
 			expect.objectContaining({ operation: 'delete', recordId: 'order-1' })
 		);
 	});
-	it('refreshes the order through the engine and releases the demand', async () => {
-		render(<Actions {...cellProps} />);
-		await act(async () => fireEvent.click(screen.getByRole('button', { name: 'common.sync' })));
-		expect(mockRequire).toHaveBeenCalledWith({
-			id: 'order-actions:refresh:42',
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: ['42'],
-			forceRefresh: true,
-		});
-		expect(mockRelease).toHaveBeenCalledTimes(1);
-	});
 
 	it('blocks re-open (an order save), delete (a void) and refund', async () => {
-		render(<Actions {...cellProps} />);
+		render(<Footer order={mockOrder} />);
 		await degradeStorage('degraded-orders-list');
 
-		expect(mockDisabled.get('order-reopen-menu-item')).toBe(true);
-		expect(mockDisabled.get('order-delete-menu-item')).toBe(true);
+		expect(mockDisabled.get('order-modal-reopen')).toBe(true);
+		expect(mockDisabled.get('order-modal-delete')).toBe(true);
 		expect(mockDisabled.get('order-delete-confirm-button')).toBe(true);
 		// Refunds are a money path under the #163 follow-up ruling: don't let the
 		// cashier into a flow that cannot record what it hands back.
-		expect(mockDisabled.get('order-refund-menu-item')).toBe(true);
+		expect(mockDisabled.get('order-modal-refund')).toBe(true);
 
 		await act(async () => {
-			await mockHandlers.get('order-reopen-menu-item')!();
+			await mockHandlers.get('order-modal-reopen')!();
 			await mockHandlers.get('order-delete-confirm-button')!();
-			await mockHandlers.get('order-refund-menu-item')!();
+			await mockHandlers.get('order-modal-refund')!();
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -258,11 +214,11 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		mockLocalPatch.mockImplementation(
 			() => new Promise<void>((resolve) => (resolveLocalPatch = resolve))
 		);
-		render(<Actions {...cellProps} />);
+		render(<Footer order={mockOrder} />);
 
 		let openPromise!: Promise<unknown>;
 		act(() => {
-			openPromise = mockHandlers.get('order-reopen-menu-item')!() as Promise<unknown>;
+			openPromise = mockHandlers.get('order-modal-reopen')!() as Promise<unknown>;
 		});
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 
@@ -277,63 +233,60 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 });
 
 jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
+describe('Order action reports', () => {
+	const logger = getLogger(['test']) as unknown as Record<'debug' | 'warn' | 'error', jest.Mock>;
 
-// The route modal is the one order surface: View and Edit open it on their tab.
-it('View and Edit open the order modal on their tab', () => {
-	render(<Actions {...cellProps} />);
-	fireEvent.click(screen.getByText('common.view'));
-	expect(mockPush).toHaveBeenLastCalledWith({
-		pathname: '/orders/edit/[orderId]',
-		params: { orderId: 'order-1', tab: 'view' },
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockHandlers.clear();
+		mockDisabled.clear();
 	});
-	fireEvent.click(screen.getByText('common.edit'));
-	expect(mockPush).toHaveBeenLastCalledWith({
-		pathname: '/orders/edit/[orderId]',
-		params: { orderId: 'order-1', tab: 'edit' },
+
+	it('toasts a failed refresh without a second row (the engine logged the require)', async () => {
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.reject(new Error('require: unreachable')),
+			release: jest.fn(),
+		});
+		render(<Footer order={mockOrder} />);
+
+		await act(async () => {
+			await mockHandlers.get('order-modal-sync')!();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(
+			'Failed to refresh order',
+			expect.objectContaining({
+				showToast: true,
+				toast: { title: 'orders.refresh_failed', type: 'warning' },
+			})
+		);
 	});
-});
-it.each([
-	'completed',
-	'processing',
-	'on-hold',
-	'pending',
-	'failed',
-	'refunded',
-	'cancelled',
-	'pos-open',
-	'pos-partial',
-	'trash',
-])('preserves refund eligibility for %s', (status) => {
-	mockOrder.payload.status = status;
-	render(<Actions {...cellProps} />);
-	expect(!!screen.queryByTestId('order-refund-menu-item')).toBe(
-		['completed', 'processing', 'on-hold'].includes(status)
-	);
-	mockOrder.payload.status = 'completed';
-});
-it('omits receipt, sync and refund without a persisted id', () => {
-	mockOrder.payload.id = 0;
-	render(<Actions {...cellProps} />);
-	for (const key of ['common.receipt', 'common.sync', 'orders.refund'])
-		expect(screen.queryByText(key)).toBeNull();
-	mockOrder.payload.id = 42;
-});
-it('keeps edit and receipt route targets', () => {
-	render(<Actions {...cellProps} />);
-	fireEvent.click(screen.getByText('common.edit'));
-	expect(mockPush).toHaveBeenLastCalledWith({
-		pathname: '/orders/edit/[orderId]',
-		params: { orderId: 'order-1', tab: 'edit' },
+
+	it('toasts a store delete refusal with the role hint, without a second row', async () => {
+		const { WriteOutcomeError } = jest.requireMock('@wcpos/query') as {
+			WriteOutcomeError: new (reason?: string) => Error;
+		};
+		mockEngineWrite.mockResolvedValueOnce({ mutationId: 'delete-1', annihilated: false });
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeError('woocommerce_rest_cannot_delete')
+		);
+		render(<Footer order={mockOrder} />);
+
+		await act(async () => {
+			await mockHandlers.get('order-delete-confirm-button')!();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(
+			'Server refused to delete order',
+			expect.objectContaining({
+				showToast: true,
+				code: 'AUTH201',
+				toast: { title: 'orders.delete_not_permitted', type: 'error' },
+			})
+		);
 	});
-	fireEvent.click(screen.getByText('common.receipt'));
-	expect(mockPush).toHaveBeenLastCalledWith({
-		pathname: '/orders/receipt/[orderId]',
-		params: { orderId: 'order-1' },
-	});
-});
-it('hides all actions when read-only', () => {
-	mockReadOnly = true;
-	render(<Actions {...cellProps} />);
-	expect(screen.queryByText('common.edit')).toBeNull();
-	mockReadOnly = false;
 });

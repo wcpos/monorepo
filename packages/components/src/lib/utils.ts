@@ -4,7 +4,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const twMerge = extendTailwindMerge({
 	extend: {
 		theme: {
-			spacing: ['ctl', 'row', 'tile'],
+			spacing: ['ctl', 'row', 'tile', 'band'],
 			// `text-amt` is the amount's font size (`--text-amt`). Unknown to the merger it reads
 			// as a text COLOUR and silently wins over `text-foreground`, which is why every amount
 			// painted black on the dark theme.

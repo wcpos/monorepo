@@ -34,4 +34,17 @@ it('renders actual day headings alongside stable order rows without counting hea
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
 });
 
+it('is a band on the list, never a row of it', () => {
+	// react-native-web compiles `className` away; read the element the component asks for.
+	const element = DayHeading({
+		id: 'day-2026-09-16',
+		type: 'day',
+		day: '2026-09-16',
+		label: 'Today',
+	});
+	const classes = (element.props.className as string).split(' ');
+	expect(classes).toContain('h-band');
+	expect(classes).not.toContain('min-h-row');
+});
+
 jest.mock('../../../contexts/app-state', () => ({}));

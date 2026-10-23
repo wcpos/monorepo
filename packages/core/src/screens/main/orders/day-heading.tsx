@@ -41,7 +41,8 @@ export function DayHeading({ day, label }: DayItem) {
 	return (
 		<View
 			testID={`orders-day-heading-${day}`}
-			className="min-h-row bg-background border-border justify-center border-b px-3"
+			// A band, not a row (`h-band`, 28 at Regular): at row height it read as an empty order.
+			className="h-band bg-background border-border justify-center border-b px-3"
 		>
 			<Text className="text-muted-foreground text-xs tracking-wide uppercase">{label}</Text>
 		</View>

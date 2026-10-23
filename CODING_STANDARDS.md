@@ -2,49 +2,59 @@ Coding standards for the WCPOS monorepo, including the owner's UI design rules.
 `/code-review` reads this file on the Standards axis.
 
 ## React, TypeScript, and Logging
+
 Applies to `**/*.{ts,tsx}`.
 
 ### Namespace Imports
+
 Always use namespace imports for React hooks: `React.useState`, `React.useRef`, etc. Never destructure hooks from `react`.
 
 ### useEffect Rules
+
 - `useEffect` is a last resort. Prefer derived state, event handlers, or external stores such as React Query or RxJS.
 - If used, add a comment explaining why.
 - Never use `useEffect` to react to state you just set; handle that in the event handler.
 - Mount-only effects must use `[]` deps. Use a ref if you need a value without re-triggering.
 
 ### Logging
+
 - No `console.log`; use `import { log } from '@wcpos/utils/logger'`.
 - Error codes: `import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated'`.
 
 ### TypeScript
+
 - No `any`. Use strict types and generics.
 
 ## Table and List Pagination
+
 - Auto-pagination requires a measured, positive-size viewport. Hidden/inactive screens can stay mounted with zero layout; zero geometry is not "at the bottom".
 - Apply this gate to scroll, content-size, layout, and rendered-row callbacks; recheck when the viewport becomes visible so short pages still fill normally.
 - Reuse the shared virtualized list where applicable. Custom ScrollViews must preserve the same hidden/visible contract and test it; do not disable scrolling or background sync globally.
 
 ## Styling and Theming
+
 Applies to `**/*.tsx` and `**/global.css`.
 
 ### Semantic Color Classes
+
 Prefer semantic classes over hardcoded colors to preserve theme compatibility.
 
-| Class | Purpose |
-| --- | --- |
-| `bg-background` | Main app background |
-| `bg-card` | Card/elevated surfaces |
-| `bg-sidebar` | Navigation sidebar |
-| `bg-muted` | Muted elements/buttons |
-| `text-warn-text` | warning words, and an icon inline with them (register-count lock, open-orders clock, upgrade-notice star); `warn` is the fill and the standalone icon (register-bar, StatusBadge, Icon `warning` variant) |
-| `bg-table-header` | Data table headers |
+| Class             | Purpose                                                                                                                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bg-background`   | Main app background                                                                                                                                                                                       |
+| `bg-card`         | Card/elevated surfaces                                                                                                                                                                                    |
+| `bg-sidebar`      | Navigation sidebar                                                                                                                                                                                        |
+| `bg-muted`        | Muted elements/buttons                                                                                                                                                                                    |
+| `text-warn-text`  | warning words, and an icon inline with them (register-count lock, open-orders clock, upgrade-notice star); `warn` is the fill and the standalone icon (register-bar, StatusBadge, Icon `warning` variant) |
+| `bg-table-header` | Data table headers                                                                                                                                                                                        |
 
 ### Theme Switching and Native Issues
+
 - Use `Uniwind.setTheme('name')` or the `useUniwind()` hook.
 - Prefer `className` over inline styles.
 
 ### Status Bar
+
 Use `react-native-edge-to-edge` and match the status bar to the background context:
 
 ```typescript
@@ -56,9 +66,11 @@ const style = theme === 'light' ? 'dark' : 'light';
 ```
 
 ### Typography
+
 Base font size: Web = 14px, Native = 16px. Use rem-based classes for proportional scaling: `text-xs`, `text-sm`, `text-base`, `text-lg`.
 
 ## Translations
+
 1. Write `t('namespace.descriptive_key')` — key only. Never `t(key, 'English')` or
    `t(key, { defaultValue: 'English' })`.
 2. Put the English in `en/core.json`, with `{interpolation}` placeholders. Pass interpolation
@@ -68,6 +80,7 @@ Base font size: Web = 14px, Native = 16px. Use rem-based classes for proportiona
    the key — never from an inline default.
 
 ## E2E selectors
+
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; _selecting_ by text is not.)
 
 **Assertions follow the same referent discipline.** Never assert on a composite or translated sentence when a value-bearing testID exists: `data-table-count` renders `Showing {shown} of {total}`, so a digit regex on it (`/[1-9]/`, `/\b1\b/`) matches the SERVER total and passes on an empty grid — the exact failure that let a dead scope database pass readiness on 2026-08-19 (#1336, #1345). Assert `data-table-loaded-count` (the rendered-row count on its own; `display:none`, so use text assertions, not visibility). Where a composite string deliberately IS the referent (e.g. probing the server total), say so in a comment naming which constituent is being read.
@@ -81,7 +94,9 @@ Tests must be language-agnostic because demo stores may run in any locale.
 5. Anchor text assertions to testID-located elements, e.g. `toContainText` on a `getByTestId` locator.
 
 ## E2E store-agnostic
+
 E2E specs must pass against **any** store — never against one store's remembered contents. A spec that hardcodes a product name, an order number, or a customer that "should exist" is deterministically wrong the day the store drifts, and it reads as a product regression (this cost a full diagnosis loop on 2026-08-07).
+
 - **Create-and-find is the primary pattern.** A spec that needs data creates its own record with a unique probe token (single alphanumeric word, ≥ 3 chars for the search tokenizer — see `mintSearchProbeToken` in `apps/main/e2e/search-probe.ts`), acts on it, and asserts on _that_ record. This also exercises the full pipeline: server write → sync demand → materialization → rendered row.
 - **No fixture-content assumptions.** Never assert absolute row counts, other records' names/ids, or hidden-column values. Count assertions are relative; row assertions target the probe's id-bearing testID.
 - **Both permalink styles.** Any direct REST call must tolerate pretty (`/wp-json/...`) and plain (`?rest_route=...`) permalinks — see `probeRequest` in `search-probe.ts`.
@@ -90,14 +105,16 @@ E2E specs must pass against **any** store — never against one store's remember
 - **Leftover probe records on dev stores are acceptable** (owner ruling, 2026-08-07): unique per-run tokens make past probes invisible to future runs; delete in teardown only best-effort, never letting teardown fail a test.
 
 ## WCPOS Naming Convention
+
 Due to copyright considerations, use these product names:
 
-| Correct | Incorrect |
-| --- | --- |
-| WCPOS | WooCommerce POS |
+| Correct   | Incorrect           |
+| --------- | ------------------- |
+| WCPOS     | WooCommerce POS     |
 | WCPOS Pro | WooCommerce POS Pro |
 
 Guidelines:
+
 - In code, UI, and documentation, use `WCPOS` or `WCPOS Pro`.
 - WordPress.org slug exception: `woocommerce-pos` remains unchanged.
 - GitHub repository name exceptions: `woocommerce-pos` and `woocommerce-pos-pro` remain unchanged.
@@ -105,6 +122,7 @@ Guidelines:
 - ZIP filename exceptions: `woocommerce-pos.zip` and `woocommerce-pos-pro.zip` remain unchanged.
 
 ## Design
+
 The owner's UI design position. The long form with sources and rationale is `docs/design/ui-design-guidelines.md` in `wcpos/roadmap`. A PR that breaks one of these rules needs a stated reason in its body, not a quiet exception.
 
 ### The two sentences everything else serves
@@ -125,11 +143,13 @@ screen at 5 pm with a queue: can the next action be found in under a second with
 ### Rules
 
 #### 1. One number, one action
+
 Each screen has one figure that leads and one primary action. Nothing else competes with them
 in size, weight or colour. A second amount (a split leg, a custom amount) appears only when it
-differs from the first, and then as a plan (*Payment 1 of 2*), not a second total.
+differs from the first, and then as a plan (_Payment 1 of 2_), not a second total.
 
 #### 2. Touch first
+
 - Minimum tap target 44 × 44 pt (Apple HIG); 48 pt preferred (Material, about 9 mm). Gaps of at
   least 8 pt between adjacent targets, about 12 pt of padding around a bordered control.
 - Keys and tiles the cashier hits every sale (tender keypad, payment tiles, product grid, Pay) are
@@ -143,6 +163,7 @@ differs from the first, and then as a plan (*Payment 1 of 2*), not a second tota
 - A press shows a visible pressed state within 100 ms. Silence after a tap is a bug.
 
 #### 3. Apple's grammar, our accent
+
 - Navigation, modality, sheets, popovers, safe areas and typography follow the Human Interface
   Guidelines. Full-screen for multi-step tasks; sheets for short, dismissable ones; popovers for
   small choices; never an enlarged centred modal for a task that grew.
@@ -154,6 +175,7 @@ differs from the first, and then as a plan (*Payment 1 of 2*), not a second tota
   (11 px) is only for glyph-like text: avatar initials, badge counts. There is no `text-3xs`.
 
 #### 4. Layout is a grid, not a wrap
+
 Tiles are equal width in fixed columns and keep their order. Width never follows label length.
 Five or six payment gateways is normal for a WooCommerce store: design the grid for that, not for
 two. Phones stack to one or two columns; tablets and desktop use the space they have.
@@ -165,6 +187,7 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   breakpoint.
 
 #### 5. State is visible, not explained
+
 - Offline, saving, refused, disabled: one badge in one place, at the top of the pane.
 - A disabled control says why in a few words beside it. Unavailable options are folded or dimmed
   so they never compete with live ones at full size.
@@ -173,10 +196,11 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Never rely on colour alone; pair it with an icon or a word.
 
 #### 6. Motion means something
+
 - Durations 150–250 ms for most transitions, ease-out; nothing over 400 ms on a path the cashier
   is waiting on. Animations are interruptible and never block the next tap.
 - Every completion gets a beat: the change-due line appears as the amount is typed, the total
-  settles, the *Paid* stamp lands, a capture gets a short haptic on native. That is the joy.
+  settles, the _Paid_ stamp lands, a capture gets a short haptic on native. That is the joy.
 - Respect reduce-motion. No confetti, no mascots, no emoji in the UI, no animation for its own
   sake.
 - Anything that moves is smooth, and a beat is a pleasure (owner, 2026-10-01): "fun, smooth and
@@ -201,6 +225,7 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   - Film it before calling it done: record the frames and read them one by one.
 
 #### 7. Calm colour, semantic tokens
+
 - Use the semantic tokens in `apps/main/global.css` (`bg-background`, `bg-card`, `text-muted-foreground`,
   `bg-primary`, `text-destructive`, `bg-success`, …). Never a hex or an `oklch()` in a component.
 - One accent colour for the primary action per screen. Semantic colours (success, warning,
@@ -216,14 +241,16 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   look "premium"; hierarchy comes from spacing, weight and colour, in that order.
 
 #### 8. Words the cashier uses
-- Buttons are verbs with the object on them: *Take 18,00 £ in Cash*, *Close register*, *Reprint copy*.
-- A label that repeats what is already on the element is noise: no *OTHER* above *SumUp Terminal*,
-  no *Cash* kind above *Cash*. Kinds are icons.
+
+- Buttons are verbs with the object on them: _Take 18,00 £ in Cash_, _Close register_, _Reprint copy_.
+- A label that repeats what is already on the element is noise: no _OTHER_ above _SumUp Terminal_,
+  no _Cash_ kind above _Cash_. Kinds are icons.
 - Plain words: products, not SKUs; sync, not replication. Every string is translated; it must
   survive German length and Spanish plurals without wrapping the layout.
 - Brand voice: direct, not blunt; calm, not cute. Error copy says what happened and what to do next.
 
 #### 9. Before you draw, open the real screen
+
 - Inventory what the existing screen does (every state, every string) and rehost it. A mockup that
   invents a simplified version of an existing surface evaluates a straw man.
 - Then look at what Square, Shopify POS, Lightspeed, Toast, Zettle and SumUp do for the same task.
@@ -231,6 +258,7 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Take zero leads from WordPress or WooCommerce admin idioms for app UI.
 
 #### 10. Definition of done for a UI change
+
 - Walked every state as a cashier: empty, loading, saving, error, offline, disabled, long text,
   part-paid, phone width, dark mode.
 - Screenshots of the states that changed are in the PR body, tablet and phone.
@@ -239,14 +267,15 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Every interactive element carries a stable `testID`.
 
 #### 11. Settings and admin forms
+
 Applies to every settings form the owner edits, in the app and in the plugins' WordPress admin
-screens (owner, 2026-10-21: *"what is variance, is it a time? is it money? You need better guidelines on
-UI because this is not intuitive"*). The long form with the cited examples is section 11 of
+screens (owner, 2026-10-21: _"what is variance, is it a time? is it money? You need better guidelines on
+UI because this is not intuitive"_). The long form with the cited examples is section 11 of
 `docs/design/ui-design-guidelines.md` in `wcpos/roadmap`.
 
 - **A setting is a sentence the owner would say.** The label is the behaviour in the words used at
-  the counter; the control sits where the value goes in the sentence: *Ask a manager when the count
-  is out by more than [£ 5.00]*.
+  the counter; the control sits where the value goes in the sentence: _Ask a manager when the count
+  is out by more than [£ 5.00]_.
 - **Every value carries its unit inside the control.** A currency symbol in a money field, a time
   picker for a time, a suffix for minutes or percent. Never a bare box.
 - **Optional behaviour is a switch, and its value appears when the switch is on.** "Leave blank for
@@ -257,38 +286,39 @@ UI because this is not intuitive"*). The long form with the cited examples is se
   expected.
 - **The common case is one switch.** Everything that only matters when it is on is hidden while it
   is off.
-- **Inherited or customised is shown on the field, never implied by blank:** *Site default · value ·
-  Customise*, or *Overridden · value · Use site default*.
+- **Inherited or customised is shown on the field, never implied by blank:** _Site default · value ·
+  Customise_, or _Overridden · value · Use site default_.
 - **Defaults are prefilled and visible in the control**, not described in a tip.
 
 ### Components: one answer per element, app-wide
 
-The owner's rule (2026-10-13, Card readers run): *"I don't want a special UI carved out for this
+The owner's rule (2026-10-13, Card readers run): _"I don't want a special UI carved out for this
 sheet, it needs to be consistent across the whole app. If a suggestion is not consistent with
-similar UI elements, warn me."* So every element below has ONE home and ONE set of rules. A fix
+similar UI elements, warn me."_ So every element below has ONE home and ONE set of rules. A fix
 goes into the shared component in `packages/components`, never into a screen's own override, and
 a request that would make one screen differ from this table is answered with the table first,
 then built only if the owner confirms the exception.
 
 #### Buttons (`@wcpos/components/button`)
+
 The seven kept variants (decision 1[^board]); nothing else is in the cva union, so TypeScript refuses any other.
 
-| Variant | Role | Where it sits | Examples |
-|---|---|---|---|
-| `default` (filled `bg-primary`) | Primary: the action the screen exists for | one per screen, full width on a phone | *Take 18,00 € in Cash*, *Try again* after a refusal, *Save order*, *Connect a reader* when nothing is connected |
-| `outline` | Secondary: the reversible alternative beside the primary | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Close*, *Help* |
-| `ghost` (muted label at rest) | Quiet: navigation, escapes, more | after the buttons, on its own line, or in a toolbar | *Reader guide*, *Details*, *Cancel* on a scan |
-| `link` | Text that behaves as a button: no surface, the size's height | after the content; inline it is `DocsLink`, which drops the padding | *Open docs*, *Reader settings* |
-| `outline-destructive` | Destructive: what loses something (never filled) | never in the same row as a primary | *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
-| `ghost-destructive` | The quiet form of the same, in a dense row | inside a table or list row | *Remove* on a queued email's row |
-| `destructive` (solid red) | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | *Delete* in *Delete this order?*, *Reset and restart* |
-| any, `disabled` | Unavailable, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
+| Variant                         | Role                                                                                                                                               | Where it sits                                                                 | Examples                                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Save order_, _Connect a reader_ when nothing is connected |
+| `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_                                                             |
+| `ghost` (muted label at rest)   | Quiet: navigation, escapes, more                                                                                                                   | after the buttons, on its own line, or in a toolbar                           | _Reader guide_, _Details_, _Cancel_ on a scan                                                                   |
+| `link`                          | Text that behaves as a button: no surface, the size's height                                                                                       | after the content; inline it is `DocsLink`, which drops the padding           | _Open docs_, _Reader settings_                                                                                  |
+| `outline-destructive`           | Destructive: what loses something (never filled)                                                                                                   | never in the same row as a primary                                            | _Void_, _Cancel payment_, _Restore defaults_, _Cancel on terminal_                                              |
+| `ghost-destructive`             | The quiet form of the same, in a dense row                                                                                                         | inside a table or list row                                                    | _Remove_ on a queued email's row                                                                                |
+| `destructive` (solid red)       | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | _Delete_ in _Delete this order?_, _Reset and restart_                                                           |
+| any, `disabled`                 | Unavailable, with one line beside it saying why                                                                                                    | in the SAME slot the live button uses                                         | _Connecting…_, _Installing…_                                                                                    |
 
-| Size | Height | Where |
-|---|---|---|
-| `sm` | 36 (`h-9`) | in table rows and dense toolbars |
-| `default` | 44 (`h-ctl`, the control token) | everywhere else |
-| `lg` | 56 (`h-14`) | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
+| Size      | Height                          | Where                                                                        |
+| --------- | ------------------------------- | ---------------------------------------------------------------------------- |
+| `sm`      | 36 (`h-9`)                      | in table rows and dense toolbars                                             |
+| `default` | 44 (`h-ctl`, the control token) | everywhere else                                                              |
+| `lg`      | 56 (`h-14`)                     | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
 
 Heights are at the Regular scale step; Compact and Spacious scale them with `--spacing`, and `h-ctl`
 never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `IconButton size="sm"` and
@@ -303,47 +333,51 @@ slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on 
 never shares a colour with Void (§7).
 
 #### Situation → overlay
+
 One shell (`lib/overlay.tsx`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
 anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
 becomes a page.
 
-| Situation | Overlay | Notes |
-|---|---|---|
-| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side` | `right` on a page; on the POS `usePanelSide` puts it over the other column |
-| Confirm a loss | `AlertDialog` | no ×, the scrim does not dismiss, the confirm is solid `destructive` |
-| Row actions | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator |
-| Display or column settings | side panel (`UISettingsDialog`) | on every screen, never a popover |
-| Pick one of a few | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons |
-| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | a list, a picker or a keypad with at most a Done; never a settings form |
-| The cashier (switch user, register, store; sign out) | `UserSheet` (right panel) | the one cashier surface on every screen |
-| A multi-step task (checkout) | full screen | never a centred modal that grew |
+| Situation                                                           | Overlay                             | Notes                                                                      |
+| ------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------- |
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`    | `right` on a page; on the POS `usePanelSide` puts it over the other column |
+| Confirm a loss                                                      | `AlertDialog`                       | no ×, the scrim does not dismiss, the confirm is solid `destructive`       |
+| Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator                                |
+| Display or column settings                                          | side panel (`UISettingsDialog`)     | on every screen, never a popover                                           |
+| Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons                                            |
+| A small non-modal choice (the bell, a date range, the numpad)       | `Popover`                           | a list, a picker or a keypad with at most a Done; never a settings form    |
+| The cashier (switch user, register, store; sign out)                | `UserSheet` (right panel)           | the one cashier surface on every screen                                    |
+| A multi-step task (checkout)                                        | full screen                         | never a centred modal that grew                                            |
 
 #### Chips, badges and switches
-| Element | Component | Sizes |
-|---|---|---|
-| A selectable choice (a filter, a reader) | `Chip`, `on` when selected (border and text go primary) | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
-| A count, or a short state tag in a dense row ("1 stuck", "Unsynced") | `Badge` (solid tone by `variant`); `tinted` for a quiet state label beside a row's own text (a printer scan's *Ready*): the tone's wash, words in the foreground (`muted` has no wash and stays the solid muted) | `sm` 16, default 20, `lg` 24; full radius |
-| A named state ("Signed in", "Out of stock", an order's status) | `StatusBadge`: a tone dot and the word | the text's own line height |
-| A few-way view switch (List / Grid, Fixed / Percent) | `SegmentedControl` | 44 (`min-h-ctl`) |
-| A choice the cashier hits by position (a split option, a payment method, a denomination) | `Tile` | 64 at Regular (`min-h-tile`) |
-| Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
-| An on/off setting | `Switch` | — |
+
+| Element                                                                                  | Component                                                                                                                                                                                                        | Sizes                                                                                           |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A selectable choice (a filter, a reader)                                                 | `Chip`, `on` when selected (border and text go primary)                                                                                                                                                          | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
+| A count, or a short state tag in a dense row ("1 stuck", "Unsynced")                     | `Badge` (solid tone by `variant`); `tinted` for a quiet state label beside a row's own text (a printer scan's _Ready_): the tone's wash, words in the foreground (`muted` has no wash and stays the solid muted) | `sm` 16, default 20, `lg` 24; full radius                                                       |
+| A named state ("Signed in", "Out of stock", an order's status)                           | `StatusBadge`: a tone dot and the word                                                                                                                                                                           | the text's own line height                                                                      |
+| A few-way view switch (List / Grid, Fixed / Percent)                                     | `SegmentedControl`                                                                                                                                                                                               | 44 (`min-h-ctl`)                                                                                |
+| A choice the cashier hits by position (a split option, a payment method, a denomination) | `Tile`                                                                                                                                                                                                           | 64 at Regular (`min-h-tile`)                                                                    |
+| Sections inside a panel                                                                  | `Tabs`                                                                                                                                                                                                           | 44 (`h-ctl`) triggers                                                                           |
+| An on/off setting                                                                        | `Switch`                                                                                                                                                                                                         | —                                                                                               |
 
 A Button is never a toggle. Among pills, full radius belongs to `Chip` and `Badge` alone; a circular control (`Switch`, `RadioGroup`, a `Slider` thumb) is its own shape.
 
 #### Gutters
+
 Spacing is decided by the system, never per surface (owner, 2026-10-18: the icon rail had been
 left at a 4 px inset and the gap was offered as a choice; it is not one).
+
 - One scale: 4, 8, 12, 16, 32 (`p-1`, `p-2`, `p-3`, `p-4`, `p-8`). Nothing in between.
 - Every container insets its children from its own edges by the gutter of its density, and the
   children share that one gutter:
 
-  | Container | Gutter | Today |
-  |---|---|---|
-  | Inside a control: an icon from its button's edge, a row's lines from its card edge | 4 | `gap-1`, hitSlop |
-  | Between controls, and a dense strip of them: the icon rail (48 + 2×8), the front drawer's items, the gap between chips, the cart column's rows, a card to its own caption row (the count and the sync button are the card's controls, not a content area) | 8 | drawer `mx-2`, chips `gap-2`, `TableSurface` `mb-2`, `TileGround` `pb-1` + the tile's 4, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`) |
-  | Between content areas on the page ground — the page gutter: `PageBar`'s controls from the top and the sides, the chip row, `TableSurface`'s sides, the caption row's bottom, `ListColumn`'s rows, `AreaPage` around its card, the area nav rail, the hold banner and the upgrade strip, the Reports ground | 12 at Regular: the `--spacing-gutter` token, 3 units (10.5 / 12 / 15), so it follows the density step | `p-gutter`, `px-gutter`, `mx-gutter`, `gap-gutter`…: `PageBar` `pt-gutter px-gutter`, `ListColumn`, `ChipRow` `p-gutter`, `TableSurface` `mx-gutter` (its `mb-2` is the row above), the caption row's `pb-gutter`, `TileGround`, `AreaPage` `p-gutter` |
-  | Inside a surface: a card's body, a pane's body, a panel's header and footer, a bordered notice; the screen edge of a gate or sign-in screen; and the phone's screen edge: its bar, chip row and page padding (Apple's 16 pt root-view minimum applies at the device edge; the gutter is for the ground inside a window) | 16 | `p-4` |
+  | Container                                                                                                                                                                                                                                                                                                               | Gutter                                                                                                | Today                                                                                                                                                                                                                                                  |
+  | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | Inside a control: an icon from its button's edge, a row's lines from its card edge                                                                                                                                                                                                                                      | 4                                                                                                     | `gap-1`, hitSlop                                                                                                                                                                                                                                       |
+  | Between controls, and a dense strip of them: the icon rail (48 + 2×8), the front drawer's items, the gap between chips, the cart column's rows, a card to its own caption row (the count and the sync button are the card's controls, not a content area)                                                               | 8                                                                                                     | drawer `mx-2`, chips `gap-2`, `TableSurface` `mb-2`, `TileGround` `pb-1` + the tile's 4, rail 16 spacing units = 12 + 2 + 2 (64 at Regular; the drawer reads it through `useRailWidth`)                                                                |
+  | Between content areas on the page ground — the page gutter: `PageBar`'s controls from the top and the sides, the chip row, `TableSurface`'s sides, the caption row's bottom, `ListColumn`'s rows, `AreaPage` around its card, the area nav rail, the hold banner and the upgrade strip, the Reports ground              | 12 at Regular: the `--spacing-gutter` token, 3 units (10.5 / 12 / 15), so it follows the density step | `p-gutter`, `px-gutter`, `mx-gutter`, `gap-gutter`…: `PageBar` `pt-gutter px-gutter`, `ListColumn`, `ChipRow` `p-gutter`, `TableSurface` `mx-gutter` (its `mb-2` is the row above), the caption row's `pb-gutter`, `TileGround`, `AreaPage` `p-gutter` |
+  | Inside a surface: a card's body, a pane's body, a panel's header and footer, a bordered notice; the screen edge of a gate or sign-in screen; and the phone's screen edge: its bar, chip row and page padding (Apple's 16 pt root-view minimum applies at the device edge; the gutter is for the ground inside a window) | 16                                                                                                    | `p-4`                                                                                                                                                                                                                                                  |
 
   Sources: Windows app design (Content layout and spacing): 8 epx between buttons, 12 between
   content areas, 16 between a surface and edge text. UIKit: 8 pt default view margins; 16/20 is
@@ -357,6 +391,9 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   item; that is the tell that a gutter is missing.
 - The bottom edge is a container edge like the top one: the last row of a page or pane (the
   table's caption row) sits one gutter above it, as the first row sits one gutter below the top.
+- A section heading inside a list (the orders day heading) is a band, not a row: `h-band`, the
+  `--spacing-band` token, 7 units (24.5 / 28 / 35), uppercase `text-xs` muted on the ground (`bg-background`) with
+  the rows' bottom rule. At row height it reads as an empty item (owner, 2026-10-23).
 - Between the rows of a page or pane there is exactly one gutter, and the bar is a row: on wide
   widths `PageBar` has no height of its own, its controls sit the gutter from the top and the
   sides, and the row under it (the chip row, a page body) brings the gutter between them. A bar
@@ -372,6 +409,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   one (owner, 2026-10-22).
 
 #### Page bars
+
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
 - The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter from the top and the sides and the row under it brings the page gutter between them (Gutters, above); on a phone the bar is 44 and search is its own 44 row under it, with no rule under either.
 - The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
@@ -381,6 +419,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 - An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
 
 #### Gate screens
+
 A screen that replaces the whole app (a protocol refusal, a plugin too old, a missing route) is a `GateScreen` (`@wcpos/components/gate-screen`): the sign-in mark, one card, a tone disc, a title in foreground ink, one line, one primary, at most one outline secondary, one docs link, nothing else.
 The family has three members: `GateScreen` inside the providers, `FallbackScreen` (`@wcpos/components/error-boundary`) as the fallback of a boundary around a whole route, and `PreThemeGate` (`@wcpos/components/gate-screen/pre-theme`) above the providers, where no className resolves; a boundary around part of a screen keeps the inline bar.
 A new gate is registered in `apps/main/components/gate-screens.test.ts`, which also refuses an `EmptyState` and a `Button` hand-centred in a `View`.
@@ -391,6 +430,7 @@ The lint refuses a hand-centred `absoluteFill` (`StyleSheet.absoluteFill` with `
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 
 #### Rows and cards
+
 A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),
 line 1 the name (16 px semibold) with an optional chip at the right edge, line 2 the identifiers
 (serial · location), line 3 ONE state line (dot + words, or the error in `text-destructive`), then
@@ -398,6 +438,7 @@ the action slot as a full-width row under the lines. Nothing shares a line with 
 nothing wraps. The same shape is the Printers row and the Card readers row.
 
 #### Sheets, modals and menus on a phone
+
 - A full-size modal IS the screen: no scrim gutter, no radius, card colour to the safe-area
   edges, top-aligned (`DialogContent` from `dialog` with `size="full"` does this on native).
 - A bottom sheet (a ⋮ menu, a picker, a short choice) sits on the screen edge and paints the
@@ -409,6 +450,7 @@ nothing wraps. The same shape is the Printers row and the Card readers row.
   under the header on a phone, never in the header row.
 
 #### Where the shared component is
+
 `MenuRow` (`menu-row/`) is the shared action/choice row inside sheets, popovers and side-panel menus: `rounded-md`, one size, a check slot for `choice`, destructive last and red. `MenuRowSeparator` separates groups, never individual rows.
 
 `packages/components/src/<name>/` with its `LEDGER.md`. Before styling anything on a screen,
@@ -417,6 +459,7 @@ there with a test and a line in the ledger; if it does not exist, say so before 
 one.
 
 ### Anti-patterns that have already been rejected
+
 - The centred modal that grew: enlarging it is the one fix the design systems forbid.
 - A paragraph under the tiles telling the cashier how the screen works.
 - Full-size dead tiles for gateways that are not set up.
@@ -425,7 +468,9 @@ one.
 - Hosted-artifact-only mockups; write the HTML to disk and open it.
 
 ## Native and E2E fixes
+
 The diagnosis playbook is `.claude/rules/native-e2e-diagnosis.mdc` and `apps/main/.maestro/README.md`; these are the rules a fix must follow once the cause is known.
+
 - Fix the class at the throw site, not the instance at the catch site: name a cancellation `AbortError` where it is thrown (`Object.assign(new Error(msg), { name: 'AbortError' })`) so every downstream classifier inherits it — never extend a catch-site regex. Pattern: `packages/sync-engine/src/maintenance/variation-prefetch.ts`.
 - A native/web platform divergence gets a unit test in `packages/sync-engine/src/platform-seam.test.ts`, so `vitest` catches the next one, not Maestro.
 - Never "fix" a red box by trying to silence LogBox; `LogBox.ignoreAllLogs()` is a no-op outside `__DEV__`.
