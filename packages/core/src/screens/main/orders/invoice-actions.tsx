@@ -39,12 +39,27 @@ export function InvoiceActions({
 		busyRef.current = true;
 		setBusy(true);
 		try {
-			const outcome = await gateway.cancel(order, stamp);
+			// An unchanged answer is that whether or not its mirror landed: the invoice stands.
+			const outcome = await gateway
+				.cancel(order, stamp)
+				.catch((error: unknown) =>
+					error instanceof GatewayCancelMirrorError && error.outcome.kind === 'unchanged'
+						? error.outcome
+						: Promise.reject(error)
+				);
 			if (outcome.kind === 'refused') {
 				logger.error(outcome.message, {
 					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
 					showToast: true,
 					context: { orderId: order.uuid, method: stamp.method_id, refusal: outcome.code },
+				});
+				return;
+			}
+			// Answered, but the order is not open again: the invoice stands (it may have been paid).
+			if (outcome.kind === 'unchanged') {
+				logger.warn(t('pos_checkout.invoice_not_cancelled'), {
+					showToast: true,
+					context: { orderId: order.uuid, method: stamp.method_id, status: outcome.order.status },
 				});
 				return;
 			}
