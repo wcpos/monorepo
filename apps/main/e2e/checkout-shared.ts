@@ -136,7 +136,21 @@ export async function clickAndExpectPaymentWrite(
 	pending.catch(() => {});
 	await page.getByTestId(testId).click();
 	const response = await pending;
-	expect(response.status(), `${write} payment POST must succeed`).toBeLessThan(400);
+	await expectPaymentAnswer(response, `${write} payment POST must succeed`);
+}
+
+/**
+ * Asserts a money command's answer is 2xx/3xx. A refusal's message carries the body's `code`
+ * (`wcpos_revision_stale`, `wcpos_invalid_transition`, …), so a red run names the regression
+ * instead of leaving "409" to be attributed from a trace (run 39887094457 had no body).
+ */
+export async function expectPaymentAnswer(response: Response, label: string): Promise<void> {
+	const status = response.status();
+	if (status < 400) return;
+	const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+	expect(status, `${label} (answered ${status} ${String(body?.code ?? 'no code')})`).toBeLessThan(
+		400
+	);
 }
 
 interface LedgerRow {
