@@ -452,7 +452,7 @@ export async function resendOpenCommands(
 	const answers: ResentCommand[] = [];
 	// A crash leftover put nothing on the server. One a live poster holds is its pre-flight's,
 	// and stays (CodeRabbit 4332935302 on #2798).
-	await dropLeftovers(storeDB, orderUuid, scope);
+	await dropLeftovers(storeDB, orderUuid, scope, entries);
 	for (const entry of entries) {
 		if (phaseOf(entry) === 'unsent') continue;
 		const sent = await poster(entry.path, entry.body).catch(async (error: Error) => {
@@ -541,7 +541,7 @@ export async function recoverMoneyCommands(
 		const sent = entries.filter((entry) => phaseOf(entry) !== 'unsent' && inScope(entry, scope));
 		if (sent.length === 0) {
 			// Only crash leftovers: nothing to re-send. Housekeeping never fails the run.
-			await dropLeftovers(storeDB, orderUuid, scope).catch(() => undefined);
+			await dropLeftovers(storeDB, orderUuid, scope, entries).catch(() => undefined);
 			continue;
 		}
 		try {

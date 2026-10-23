@@ -221,9 +221,17 @@ export function dropUnsent(
 /**
  * Drop the order's crash leftovers in `scope`, in one journal write: every never-dispatched entry
  * nobody holds (`dropUnsent`'s rule). One a live poster holds is its pre-flight's, and stays.
+ * No write unless the caller's snapshot `seen` shows one: every write rewrites the whole journal,
+ * which keeps settled orders' chains for days. The write re-checks each claim.
  */
-export function dropLeftovers(storeDB: StoreLocalDatabase, orderUuid: string, scope: string) {
-	return modifyOrder(storeDB, orderUuid, (order) => {
+export async function dropLeftovers(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	scope: string,
+	seen: readonly MoneyCommandEntry[]
+) {
+	if (!seen.some((entry) => entry.scope === scope && commandState(entry).kind === 'unsent')) return;
+	await modifyOrder(storeDB, orderUuid, (order) => {
 		for (const entry of Object.values(order.entries))
 			if (entry.scope === scope && commandState(entry).kind === 'unsent')
 				delete order.entries[entry.id];

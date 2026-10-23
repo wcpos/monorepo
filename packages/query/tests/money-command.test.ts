@@ -1507,6 +1507,19 @@ describe('the store-session recovery drops crash leftovers', () => {
 		expect(await entries()).toEqual([expect.objectContaining({ id: 'in-preflight' })]);
 	});
 
+	// Codex on #2892: chains outlive their orders for days; a run over settled orders writes nothing.
+	it('makes no journal write over settled orders whose entries are empty', async () => {
+		for (let i = 0; i < 5; i++)
+			await settleCommand(storeDB, `settled-${i}`, null, {
+				answerRevision: 'r',
+				answeredAt: clock,
+			});
+		const revision = async () => (await storeDB.getLocal('money-commands'))!.revision;
+		const before = await revision();
+		expect(await recover()).toEqual([]);
+		expect(await revision()).toBe(before);
+	});
+
 	it("keeps another scope's: only its own session judges it", async () => {
 		await claimRoute(storeDB, route, 'crashed-tab', leftover('theirs', 'another-cashier'));
 		clock += CLAIM_LEASE_MS;
