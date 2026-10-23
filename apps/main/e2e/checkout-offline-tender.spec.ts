@@ -171,6 +171,49 @@ async function expectStoreAdopted(
 	);
 }
 
+/**
+ * Waits for the bridge's replay of this sale's completion to have run. The replay has no UI of
+ * its own, so its `checkout.completed` audit row is the only order-specific proof it ran. The
+ * logger folds identical rows within 60 s into one counted row, and `replayed` is not part of
+ * that identity (nor searchable), so the replay shows as a second row OR as one row counted twice.
+ */
+async function waitForReplayAudit(page: Page, uuid: string): Promise<void> {
+	await navigateToPage(page, 'health');
+	await page.getByTestId('health-nav-logs').click();
+	const logs = page.getByTestId('screen-logs');
+	await expect(logs.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
+	await logs.getByTestId('search-logs').fill(`checkout.completed ${uuid}`); // Indexed log facts.
+	await expect
+		.poll(async () => Number((await logs.getByTestId('logs-loaded-count').textContent()) ?? 0), {
+			timeout: 30_000,
+			message: "the till's own completion must be audited",
+		})
+		.toBeGreaterThanOrEqual(1);
+	const rows = logs.getByTestId(/^logs-row-/).filter({ visible: true });
+	await expect
+		.poll(
+			async () => {
+				if ((await rows.count()) >= 2) return true;
+				// The count renders only in an expanded row, and a click toggles: open it only if closed.
+				if ((await logs.getByTestId(/^logs-detail-/).count()) === 0)
+					await rows.first().click({ timeout: 10_000 });
+				const attempts = logs.getByTestId(/^logs-attempts-/).first();
+				return ((await attempts.textContent().catch(() => null)) ?? '').trim() === '2';
+			},
+			{
+				timeout: 150_000, // The replay waits for a pull to adopt the paid document.
+				intervals: [1_000, 2_000, 5_000],
+				message:
+					'the bridge must replay the completion: a second audit row, or one row counted twice',
+			}
+		)
+		.toBe(true);
+	await navigateToPage(page, 'pos');
+	await expect(page.getByTestId('pos-products-panel').getByTestId('search-products')).toBeVisible({
+		timeout: 30_000,
+	});
+}
+
 liveTest.describe('POS offline cash tender (live store, ADR 0040 Decided 1)', () => {
 	// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
 	liveTest.beforeEach(async ({}, testInfo) => {
@@ -235,6 +278,7 @@ liveTest.describe('POS offline cash tender (live store, ADR 0040 Decided 1)', ()
 
 				await reconnectAndExpectResend(page, sale.orderId);
 				await expectStoreAdopted(request, testInfo, sale);
+				await waitForReplayAudit(page, sale.uuid);
 
 				// ADR 0040 Built 3: the bridge's second completion is a replay; it refreshes only a
 				// receipt tab that still exists and never re-adds one.
