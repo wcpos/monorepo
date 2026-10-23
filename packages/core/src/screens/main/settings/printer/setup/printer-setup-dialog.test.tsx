@@ -8,7 +8,6 @@ import { PrinterSetupDialog } from './printer-setup-dialog';
 import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
-	ActivityIndicator: 'Spinner',
 	Linking: { sendIntent: jest.fn(async () => undefined) },
 	Platform: { OS: 'ios' },
 	Pressable: 'Pressable',
@@ -16,6 +15,8 @@ jest.mock('react-native', () => ({
 	ScrollView: 'ScrollView',
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
+// The status rows' spinner is the system Loader now, not the bare ActivityIndicator.
+jest.mock('@wcpos/components/loader', () => ({ Loader: 'Spinner' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));
 jest.mock('@wcpos/components/badge', () => ({ Badge: 'Badge' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
