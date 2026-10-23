@@ -191,20 +191,14 @@ test('an engine helper or engine.write naming the orders collection is a violati
 });
 
 test('a cast, a non-null assertion or parentheses do not hide an order write', () => {
-	for (const receiver of [
-		'(order as MutationDocument)',
-		'order!',
-		'(order)',
-		'ctx.current.order!',
-	]) {
+	for (const receiver of ['(order as WriteTarget)', 'order!', '(order)', 'ctx.current.order!']) {
 		assert.deepEqual(scanSource(`${receiver}.incrementalPatch(data)`, path), [
 			`${path}:1:1:doc-write`,
 		]);
 	}
-	assert.deepEqual(
-		scanSource('localPatch({ document: freshOrder as MutationDocument, data })', path),
-		[`${path}:1:1:local-write`]
-	);
+	assert.deepEqual(scanSource('localPatch({ document: freshOrder as WriteTarget, data })', path), [
+		`${path}:1:1:local-write`,
+	]);
 	assert.deepEqual(scanSource('order.remove()', path), [`${path}:1:1:doc-write`]);
 	assert.deepEqual(scanSource('localModify({ document: ctx.order, data })', path), [
 		`${path}:1:1:local-write`,

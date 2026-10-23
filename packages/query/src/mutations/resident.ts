@@ -26,12 +26,15 @@ import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { TemporaryOrderRecord } from '../temporary-order';
 import type { RxDocument } from 'rxdb';
 
+/** A read-only engine record of a writeable collection: what the push doors return. */
+export type WriteableRecord = {
+	[C in WriteableCollection]: ReadonlyEngineRecord<C>;
+}[WriteableCollection];
 /** A record the push doors can serve: it carries its own collection. An identity-only order needs `applyLocalPatch`'s `collectionName`. */
-export type RecordWriteTarget =
-	| { [C in WriteableCollection]: ReadonlyEngineRecord<C> }[WriteableCollection]
-	| TemporaryOrderRecord;
+export type RecordWriteTarget = WriteableRecord | TemporaryOrderRecord;
 type OrderIdentity = { readonly uuid: string; readonly isNew: boolean };
-export type MutationDocument = RecordWriteTarget | OrderIdentity;
+/** What a write door accepts: a read-only record, or an order's identity plus an explicit collection. */
+export type WriteTarget = RecordWriteTarget | OrderIdentity;
 
 const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
 	Object.entries(COLLECTION_VOCABULARY)
@@ -55,7 +58,7 @@ export type PayloadChanges = (
 	currentDocument?: Record<string, unknown>
 ) => Record<string, unknown>;
 
-export type LocalPatchProps<TDocument extends MutationDocument, TData extends object> = {
+export type LocalPatchProps<TDocument extends WriteTarget, TData extends object> = {
 	document: TDocument;
 } & ({ data: TData; changes?: never } | { data?: never; changes: PayloadChanges });
 
@@ -74,7 +77,7 @@ export function documentRecordId(document: unknown): string | null {
 
 /** The validated engine collection a write target lives in: the caller's explicit name first, else the record's own. */
 export function writeTargetCollection(
-	target: MutationDocument,
+	target: WriteTarget,
 	explicit?: string
 ): WriteableCollection | null {
 	return writeableCollection(explicit ?? recordCollectionName(target));

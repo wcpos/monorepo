@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { EngineRecord, ProductPayload, VariationPayload } from '@wcpos/query';
+import type { ProductPayload, ReadonlyEngineRecord, VariationPayload } from '@wcpos/query';
 
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
@@ -11,14 +11,14 @@ export function useCatalogueRecord() {
 	const { patchRecord: variationsPatch } = useMutation({ collectionName: 'variations' });
 	const saveCatalogueFields = React.useCallback(
 		async (
-			record: EngineRecord<'products'> | EngineRecord<'variations'>,
+			record: ReadonlyEngineRecord<'products'> | ReadonlyEngineRecord<'variations'>,
 			data: Partial<ProductPayload> | Partial<VariationPayload>
 		): Promise<boolean> => !!(await localPatch({ document: record, data }))?.document,
 		[localPatch]
 	);
 	const saveCatalogueChange = React.useCallback(
 		(
-			record: EngineRecord<'products'> | EngineRecord<'variations'>,
+			record: ReadonlyEngineRecord<'products'> | ReadonlyEngineRecord<'variations'>,
 			changes: Record<string, unknown>
 		) => {
 			if (record.payload.type === 'variation') {

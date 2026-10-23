@@ -11,7 +11,6 @@ import {
 	documentRecordId,
 	type EngineResident,
 	type LocalPatchProps,
-	type MutationDocument,
 	patchAndEnqueueEngineResident,
 	type PayloadChanges,
 	type QueryManager,
@@ -20,12 +19,13 @@ import {
 	scopeBarcodeSelectors,
 	type ScopedEngineResident,
 	syncableChanges,
+	type WriteTarget,
 	writeTargetCollection,
 } from './resident';
 
 import type { WriteableCollection } from '../engine-adapter/collection-map';
 
-async function applyPayloadChanges<TDocument extends MutationDocument>(
+async function applyPayloadChanges<TDocument extends WriteTarget>(
 	manager: QueryManager,
 	collection: WriteableCollection,
 	{ document, changes: resolveChanges }: { document: TDocument; changes: PayloadChanges },
@@ -63,7 +63,7 @@ async function applyPayloadChanges<TDocument extends MutationDocument>(
 	return { changes, document: patched as TDocument };
 }
 
-export async function applyLocalPatch<TDocument extends MutationDocument, TData extends object>(
+export async function applyLocalPatch<TDocument extends WriteTarget, TData extends object>(
 	manager: QueryManager,
 	{ document, data, changes: resolveChanges }: LocalPatchProps<TDocument, TData>,
 	{

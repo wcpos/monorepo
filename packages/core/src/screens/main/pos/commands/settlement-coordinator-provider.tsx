@@ -19,7 +19,7 @@ import { useCoverageGeneration } from '@wcpos/query/query-state';
 
 import { couponReferences } from './coupon-continuation';
 import { readCouponContext } from '../hooks/use-coupon-context';
-import { plainPatch } from './plain-patch';
+import { writeOrderChanges } from './write-order-changes';
 import { commitAtBoundary } from './boundary-commit';
 import { useCloseSale } from './close-sale';
 import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
@@ -116,8 +116,8 @@ export function SettlementCoordinatorProvider() {
 				let warnings: readonly EngineWarning[] = [];
 				let boundary: BoundaryResult | undefined;
 				let failure: Extract<ReturnType<typeof settleCart>, { ok: false }>['error'] | undefined;
-				const write = (changes: Parameters<typeof plainPatch>[2]['changes']) =>
-					plainPatch(manager, 'orders', { document, changes });
+				const write = (changes: Parameters<typeof writeOrderChanges>[1]['changes']) =>
+					writeOrderChanges(manager, { document, changes });
 				await write((payload) => {
 					boundary = undefined;
 					if (!allowed(payload as OrderPayload)) return {};

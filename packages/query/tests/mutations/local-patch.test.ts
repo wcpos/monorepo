@@ -10,7 +10,7 @@ import { act, waitFor } from '@testing-library/react';
 
 import { applyLocalPatch, ResidentWriteError } from '../../src/mutations';
 
-import type { LocalPatchProps, MutationDocument } from '../../src/mutations';
+import type { LocalPatchProps, WriteTarget } from '../../src/mutations';
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
@@ -87,7 +87,7 @@ const manager = {
 		status: mockStatus,
 	},
 };
-const localPatch = <D extends MutationDocument, T extends object>(input: LocalPatchProps<D, T>) =>
+const localPatch = <D extends WriteTarget, T extends object>(input: LocalPatchProps<D, T>) =>
 	applyLocalPatch(manager as never, input);
 
 jest.mock('../../src/temporary-order', () => ({

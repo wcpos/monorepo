@@ -12,6 +12,7 @@ import {
 	findEngineResident,
 	type QueryManager,
 	type RecordWriteTarget,
+	type WriteableRecord,
 	writeTargetCollection,
 } from './resident';
 
@@ -80,7 +81,7 @@ export async function readWrittenResident(
 export async function pushRecord(
 	runtime: QueryManager,
 	document: RecordWriteTarget
-): Promise<EngineResident> {
+): Promise<WriteableRecord> {
 	const { collectionName, recordId, receipt, resident } = await enqueueRecordWrite(
 		runtime,
 		document
@@ -94,5 +95,5 @@ export async function pushRecord(
 		currentResident = await readWrittenResident(runtime, collectionName, recordId);
 	}
 
-	return currentResident;
+	return currentResident as unknown as WriteableRecord;
 }

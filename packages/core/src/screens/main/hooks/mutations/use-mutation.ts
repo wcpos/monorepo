@@ -8,7 +8,7 @@ import {
 import { useQueryRuntime, type WriteableCollection, WriteOutcomeError } from '@wcpos/query';
 import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 
-import { type MutationDocument, useLocalMutation } from './use-local-mutation';
+import { useLocalMutation, type WriteTarget } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { reportPushFailure } from '../../contexts/push-failure-code';
 
@@ -91,7 +91,7 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 	);
 
 	const patch = React.useCallback(
-		async ({ document, data }: { document: MutationDocument; data: Record<string, unknown> }) => {
+		async ({ document, data }: { document: WriteTarget; data: Record<string, unknown> }) => {
 			const result = await localPatch({ document, data: data as never });
 			if (result?.document) {
 				handleSuccess(result.document as unknown as Record<string, unknown>);

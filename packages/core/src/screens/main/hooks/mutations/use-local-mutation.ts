@@ -1,13 +1,13 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime, type WriteableCollection } from '@wcpos/query';
 import {
 	ActiveScopeChangedTwiceError,
 	applyLocalPatch,
 	documentRecordId,
 	type LocalPatchProps,
-	type MutationDocument,
 	ResidentWriteError,
+	type WriteTarget,
 } from '@wcpos/query/mutations';
 import { getCurrentBoundRegisterId } from '@wcpos/query/register-session';
 import { getErrorMessage, getLogger, markErrorReported } from '@wcpos/utils/logger';
@@ -21,23 +21,27 @@ export {
 	patchAndEnqueueEngineResident,
 	syncableChanges,
 	writeableCollection,
-	type MutationDocument,
+	type WriteTarget,
 	type PayloadChanges,
 } from '@wcpos/query/mutations';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 export const useLocalMutation = () => {
 	const manager = useQueryRuntime();
 	const localPatch = React.useCallback(
-		async <TDocument extends MutationDocument, TData extends object>(
+		async <TDocument extends WriteTarget, TData extends object>(
 			input: LocalPatchProps<TDocument, TData>,
-			/** `explicit`: the cashier asked for this push, so an open cart's hold never holds it. */
-			options: { explicit?: boolean } = {}
+			/**
+			 * `explicit`: the cashier asked for this push, so an open cart's hold never holds it.
+			 * `collectionName`: names the collection for an identity-only target (commands only).
+			 */
+			options: { explicit?: boolean; collectionName?: WriteableCollection } = {}
 		) => {
 			const { document } = input;
 			try {
 				return await applyLocalPatch(manager, input, {
 					registerId: getCurrentBoundRegisterId() ?? undefined,
 					...(options.explicit ? { explicit: true } : {}),
+					...(options.collectionName ? { collectionName: options.collectionName } : {}),
 				});
 			} catch (failure) {
 				const error = failure instanceof ResidentWriteError ? failure.cause : failure;
