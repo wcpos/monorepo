@@ -49,8 +49,8 @@ export interface MoneyCommandEntry {
 	readonly deferredAt?: string | null;
 	/**
 	 * The engine scope (one cashier's orders) that sent the command. The journal is per store and
-	 * outlives a cashier switch; the order is resident only in this scope, so the command is
-	 * re-sent only while it is active.
+	 * per signed-in credential; the scope is the sending cashier's, so the command is re-sent only
+	 * while that scope is active.
 	 */
 	readonly scope: string;
 	/** The poster working on this command (see `claimRoute`), and when it claimed it. */
@@ -381,6 +381,12 @@ export async function readMoneyJournal(
 			{ entries: Object.values(order.entries), chain: order.chain },
 		])
 	);
+}
+
+/** The session owes it a re-send: dispatched or deferred, nobody holds it, its scope is active. */
+export function owedResend(entry: MoneyCommandEntry, scope: string | null, now = Date.now()) {
+	const { kind } = commandState(entry, null, now);
+	return (kind === 'deferred' || kind === 'unanswered') && entry.scope === scope;
 }
 
 /**

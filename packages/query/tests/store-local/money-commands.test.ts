@@ -8,10 +8,6 @@ import { firstValueFrom } from 'rxjs';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
-	claimHeld,
-	type MoneyCommandEntry,
-	nextClaimExpiry,
-	observeMoneyJournal,
 	observeTenderGate,
 	readAwaitingAnswer,
 	readJournaledRecordIds,
@@ -20,6 +16,7 @@ import {
 	type AwaitedCommand,
 	CHAIN_RETENTION_MS,
 	CLAIM_LEASE_MS,
+	claimHeld,
 	claimRoute,
 	type CommandState,
 	commandState,
@@ -27,7 +24,11 @@ import {
 	dropUnsent,
 	isDeferred,
 	markSent,
+	type MoneyCommandEntry,
+	nextClaimExpiry,
+	observeMoneyJournal,
 	observeOrderCommands,
+	owedResend,
 	readMoneyJournal,
 	readOrderCommands,
 	releaseClaim,
@@ -303,6 +304,7 @@ describe('the entry state and the reads over it', () => {
 		awaiting: AwaitedCommand[];
 		ids: string[];
 		mark: boolean;
+		owed: boolean;
 	}>([
 		{
 			name: '1 created and claimed',
@@ -312,6 +314,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [],
 			ids: ['row-1'],
 			mark: false,
+			owed: false,
 		},
 		{
 			name: '2 its claim lapsed: a crash leftover',
@@ -324,6 +327,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [],
 			ids: ['row-1'],
 			mark: false,
+			owed: false,
 		},
 		{
 			name: '3 deferred offline',
@@ -333,6 +337,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: awaitedRecord,
 			ids: ['row-1'],
 			mark: true,
+			owed: true,
 		},
 		{
 			name: '4 the deferred record re-claimed',
@@ -342,6 +347,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: awaitedRecord,
 			ids: ['row-1'],
 			mark: true,
+			owed: false,
 		},
 		{
 			name: '5 the re-send marked sent',
@@ -351,6 +357,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: awaitedRecord,
 			ids: ['row-1'],
 			mark: true,
+			owed: false,
 		},
 		{
 			name: '6 its claim released, no answer',
@@ -360,6 +367,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: awaitedRecord,
 			ids: ['row-1'],
 			mark: true,
+			owed: true,
 		},
 		{
 			name: '7 settled by the answer',
@@ -372,6 +380,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [],
 			ids: [],
 			mark: false,
+			owed: false,
 		},
 		{
 			name: '8 online: created, then sent',
@@ -384,6 +393,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: awaitedRecord,
 			ids: ['row-1'],
 			mark: false,
+			owed: false,
 		},
 		{
 			name: '9 a sent close carries no row',
@@ -397,6 +407,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [{ kind: 'close', row: null }],
 			ids: [],
 			mark: false,
+			owed: true,
 		},
 		{
 			name: '10 the sender reading its own claim sees the phase, not in flight',
@@ -407,6 +418,7 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [],
 			ids: ['row-1'],
 			mark: false,
+			owed: false,
 		},
 		{
 			name: '11 a claim stamped in the future (the clock stepped back) is not in flight',
@@ -419,8 +431,22 @@ describe('the entry state and the reads over it', () => {
 			awaiting: [],
 			ids: ['row-1'],
 			mark: false,
+			owed: false,
 		},
-	])('$name', async ({ build, claimant, state, gate, awaiting, ids, mark }) => {
+		{
+			name: "12 another scope's deferred record: not owed here",
+			build: async (db) => {
+				await claimRoute(db, recordRoute, 'poster', { ...record, scope: 'other-scope' });
+				await deferEntry(db, 'order', 'row-1', 'poster');
+			},
+			state: { kind: 'deferred' },
+			gate: false,
+			awaiting: awaitedRecord,
+			ids: ['row-1'],
+			mark: true,
+			owed: false,
+		},
+	])('$name', async ({ build, claimant, state, gate, awaiting, ids, mark, owed }) => {
 		const db = await open();
 		await build(db);
 		const [entry] = (await readOrderCommands(db, 'order')).entries;
@@ -429,5 +455,7 @@ describe('the entry state and the reads over it', () => {
 		expect(await readAwaitingAnswer(db, 'order')).toEqual(awaiting);
 		expect([...(await readJournaledRecordIds(db, 'order'))]).toEqual(ids);
 		expect(!!entry && isDeferred(entry)).toBe(mark);
+		// The session owes a re-send for the candidate's scope (`test-scope`), whoever reads it.
+		expect(!!entry && owedResend(entry, 'test-scope')).toBe(owed);
 	});
 });

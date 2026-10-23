@@ -6,7 +6,6 @@ import type { StoreDatabase } from '@wcpos/database';
 
 import {
 	failCompletionAttempt,
-	type MoneyCommandEntry,
 	observeAwaitingStore,
 	recordCompletionAttempt,
 } from '../../src/store-local';
@@ -14,6 +13,7 @@ import {
 	claimRoute,
 	deferEntry,
 	markSent,
+	type MoneyCommandEntry,
 	settleCommand,
 } from '../../src/store-local/money-commands';
 

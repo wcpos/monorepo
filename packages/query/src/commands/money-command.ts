@@ -15,7 +15,6 @@ import {
 	claimRoute,
 	classifyMoneyRoute,
 	type CommandPhase,
-	commandState,
 	deferEntry,
 	dropLeftovers,
 	dropUnsent,
@@ -24,6 +23,7 @@ import {
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
 	type OrderApproval,
+	owedResend,
 	phaseOf,
 	readMoneyJournal,
 	readOrderCommands,
@@ -470,23 +470,8 @@ export async function resendOpenCommands(
 	return answers;
 }
 
-/**
- * When the session runs the recovery again after a re-send that failed without a definitive
- * answer (a 429, a 5xx, no answer) while the till stays online (Codex 4333265115 on #2798). A
- * reconnect, a restart and Try again still re-send at once.
- */
-export const RECOVERY_RETRY_DELAYS_MS: readonly number[] = [
-	// A reconnect blip: a rate limit or a proxy restart is over in half a minute.
-	30_000,
-	// A store restart takes a minute or two.
-	120_000,
-	// A longer outage: repeated every ten minutes so a down store is not hammered, until a run
-	// answers or the next session start re-sends at once.
-	600_000,
-];
-
 /** A store-session recovery's re-sends for one order, answered. */
-interface RecoveredOrder {
+export interface RecoveredOrder {
 	readonly orderUuid: string;
 	readonly answers: ResentCommand[];
 	/**
@@ -547,10 +532,7 @@ export async function recoverMoneyCommands(
 							summary: (failure.data?.order as OrderPaymentSummary | undefined) ?? null,
 						}
 					: undefined;
-			const left = journaled.filter((entry) => {
-				const { kind } = commandState(entry);
-				return (kind === 'deferred' || kind === 'unanswered') && inScope(entry, scope);
-			});
+			const left = journaled.filter((entry) => owedResend(entry, scope));
 			if (left.length > 0 || refused)
 				recovered.push({
 					orderUuid,
