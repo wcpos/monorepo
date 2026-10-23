@@ -47,8 +47,8 @@ export interface RecordManualPaymentInput {
 	tendered?: string | number | null;
 	/** The row's id when the caller has already named it (a rounding fee line points at it). */
 	paymentId?: string;
-	/** The press's frozen lane (`StampedSale.lane`): only `online` posts; any other journals. */
-	lane: PressLane | null;
+	/** The press's frozen lane (`StampedSale.lane`): `online` posts, `settles-later` journals. */
+	lane: Exclude<PressLane, 'not-on-store'>;
 }
 export interface RecordManualPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;

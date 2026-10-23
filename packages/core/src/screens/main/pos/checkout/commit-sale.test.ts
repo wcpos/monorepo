@@ -108,6 +108,7 @@ it('whole-balance dispatches the slot balance as every amount, completing, mode 
 			completing: true,
 			remainingMinor: 0,
 			lane: null,
+			orderId: 42,
 			bindingStatus: 'bound',
 			registerId: 'register',
 			sessionId: 'session',
@@ -360,7 +361,7 @@ describe('stampSale', () => {
 			{ amountMinor: 1000, balanceMinor: 1000, roundingMinor: 2 },
 			entry(true),
 			42,
-			{ completing: true, remainingMinor: 0, lane: 'online' },
+			{ completing: true, remainingMinor: 0, lane: 'online', orderId: 42 },
 		],
 		[
 			'a short split leg leaves the remainder',
@@ -370,8 +371,20 @@ describe('stampSale', () => {
 			{ completing: false, remainingMinor: 600, lane: 'online' },
 		],
 		['a queued save settles later', {}, entry(false), 42, { lane: 'settles-later' }],
-		['no server id is not on the store', {}, entry(true), null, { lane: 'not-on-store' }],
-		['server id 0 is not on the store', {}, entry(false), 0, { lane: 'not-on-store' }],
+		[
+			'no server id is not on the store',
+			{},
+			entry(true),
+			null,
+			{ lane: 'not-on-store', orderId: null },
+		],
+		[
+			'server id 0 is not on the store',
+			{},
+			entry(false),
+			0,
+			{ lane: 'not-on-store', orderId: null },
+		],
 		[
 			'a whole-balance commit has no press lane',
 			{},
@@ -408,5 +421,9 @@ it('the writer receives the lane from the order as the slot reads it', async () 
 	const outcome = commitSale(ctx, { ...request, amounts }, write);
 	await edit;
 	await outcome;
-	expect(write.mock.calls[0][0]).toMatchObject({ lane: 'online', remainingMinor: 400 });
+	expect(write.mock.calls[0][0]).toMatchObject({
+		lane: 'online',
+		orderId: 42,
+		remainingMinor: 400,
+	});
 });

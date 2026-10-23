@@ -3211,6 +3211,26 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockGatewaysGet.mockResolvedValue({ data: [] });
 	});
 
+	it.each(['pos_cash', 'wcpos_email_invoice'])(
+		'refuses %s on an order the store has not created: no fee, no record, no submit',
+		async (methodId) => {
+			const rounding = { increment: '0.05', mode: 'nearest' as const };
+			mockMethods = [{ ...cash, defaults: { ...cash.defaults, rounding } }, invoice];
+			mockPayload = { total: '10.02', meta_data: [], billing: mockPayload.billing };
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.pickMethod(methodId));
+			await act(async () => result.current.takeTender());
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.order_not_on_store_yet',
+				expect.objectContaining({ showToast: true })
+			);
+			expect(mockRecordManualPayment).not.toHaveBeenCalled();
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockError).not.toHaveBeenCalled();
+		}
+	);
+
 	it('a settled answer is the paid completion: no row, no stamp, the stored status journaled, the sale leaves the till', async () => {
 		// The gateway catalog names the status the merchant stored for the gateway.
 		mockGatewaysGet.mockResolvedValue({
@@ -3876,8 +3896,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		// registration is restored after.
 		registerActionHook(
 			TENDER_COMMIT_EVENT,
-			async (_ctx, e, next) =>
-				next({ ...e, payload: { ...e.payload, amountMinor: 9290, balanceMinor: 9290 } }),
+			async (_ctx, e, next) => next({ ...e, payload: { ...e.payload, amountMinor: 9290 } }),
 			{ id: 'cash.rounding', tier: 'extension', order: 0 }
 		);
 		const row = payment({ method_id: 'wcpos_email_invoice', amount: '92.90', tendered: null });
@@ -3897,7 +3916,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 				expect.objectContaining({
 					source: 'manual',
 					mirrorFailed: true,
-					remainingMinor: 0,
+					// The chain's 9295 - 9290, not the keypad's 9295 - 9295.
+					remainingMinor: 5,
 				})
 			);
 		} finally {
@@ -4483,6 +4503,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
+		// The keypad says 10.00 against 10.02 (2 left); the chain rounds the due to 10.00 (none left).
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
 		await act(async () => result.current.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(

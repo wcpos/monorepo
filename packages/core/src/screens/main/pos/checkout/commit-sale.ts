@@ -49,9 +49,11 @@ export interface StampedSale extends TenderCommitPayload {
 	remainingMinor: number;
 	/** null when no keypad press stamped it (whole-balance, retained captures). */
 	lane: PressLane | null;
+	/** The server id the lane was judged on, read in the slot; null when the store has none. */
+	orderId: number | null;
 }
 
-export function pressLane(reachable: boolean, serverId: number | null | undefined): PressLane {
+function pressLane(reachable: boolean, serverId: number | null | undefined): PressLane {
 	if (!(Number.isInteger(serverId) && Number(serverId) > 0)) return 'not-on-store';
 	return reachable ? 'online' : 'settles-later';
 }
@@ -67,6 +69,7 @@ export function stampSale(
 		completing: payload.amountMinor === payload.balanceMinor,
 		remainingMinor: payload.balanceMinor - payload.amountMinor,
 		lane: amounts.kind === 'entry' ? pressLane(amounts.reachable, serverId) : null,
+		orderId: Number.isInteger(serverId) && Number(serverId) > 0 ? Number(serverId) : null,
 	};
 }
 

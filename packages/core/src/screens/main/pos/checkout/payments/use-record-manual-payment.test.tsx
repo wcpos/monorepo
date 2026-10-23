@@ -6,7 +6,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { useRecordManualPayment } from './use-record-manual-payment';
 
-import type { PressLane } from '../commit-sale';
+import type { RecordManualPaymentInput } from './record-manual-payment';
 
 const mockPost = jest.fn();
 /** The store's answer to a record: the row it stored and the order summary. */
@@ -27,7 +27,7 @@ const mockEngineRequire = jest.fn((_input: unknown) => ({
 }));
 const manager = { engine: { require: (input: unknown) => mockEngineRequire(input) } };
 // The lane the tender's press froze (`StampedSale.lane`), handed to the record as its input.
-let lane: PressLane = 'settles-later';
+let lane: RecordManualPaymentInput['lane'] = 'settles-later';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
 // The order's journaled money commands; the journal itself is pinned in the query suites.

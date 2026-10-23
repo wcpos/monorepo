@@ -29,10 +29,10 @@ export async function commitGatewaySale(
 	return commitSale(
 		ctx,
 		{ ...input, amounts: { kind: 'whole-balance' } },
-		async ({ registerId, sessionId }) => {
+		async ({ registerId, sessionId, completing }) => {
 			await recordSaleAttempt(ctx, {
 				order,
-				completing: true,
+				completing,
 				source,
 				settledOrderStatus: input.settledOrderStatus,
 				settledOrderGateway: input.methodId ?? undefined,
