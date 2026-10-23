@@ -14,7 +14,17 @@ const mockClose = jest.fn();
 const mockDelete = jest.fn(async () => ({ annihilated: true, mutationId: 'm' }));
 let mockTab: string | undefined;
 let mockReadOnly = false;
-const mockOrder = { uuid: 'one', payload: { id: 42, number: '42', status: 'completed' } };
+const mockOrder = {
+	uuid: 'one',
+	payload: {
+		id: 42,
+		number: '42',
+		status: 'completed',
+		total: '17.60',
+		date_created_gmt: '2026-10-23T12:47:00',
+		meta_data: [] as { key: string; value: string }[],
+	},
+};
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
 	useLocalSearchParams: () => ({ tab: mockTab }),
@@ -78,7 +88,21 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogCancel: mockDiv,
 	AlertDialogAction: mockButton,
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: mockDiv }));
+// The class rides along so the header test can see that no `text-amt` total is drawn.
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children, className }: Props & { className?: string }) => (
+		<span className={className}>{children}</span>
+	),
+}));
+jest.mock('../../../../hooks/use-store-day-label', () => ({
+	useStoreDayLabel: () => ({ dateTime: () => 'Today · 12:47' }),
+}));
+jest.mock('../../hooks/use-store-label', () => ({
+	useStoreLabel: (id?: string) => ({ label: id === '7' ? 'High Street' : '' }),
+}));
+jest.mock('../../hooks/use-cashier-label', () => ({
+	useCashierLabel: (id?: string) => ({ label: id === '3' ? 'Alice' : '' }),
+}));
 jest.mock('@wcpos/components/tree', () => ({ Tree: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
 jest.mock('./form', () => ({ EditOrderForm: () => <div data-testid="order-edit-form" /> }));
@@ -89,13 +113,7 @@ jest.mock('../view/refunds-boundary', () => ({ RefundsBoundary: () => null }));
 jest.mock('../view/sections/line-items', () => ({ LineItemsSection: () => null }));
 jest.mock('../view/sections/totals', () => ({ TotalsSection: () => null }));
 jest.mock('../view/sections/payment', () => ({ PaymentSection: () => null }));
-jest.mock('../view/sections/pos-metadata', () => ({ POSMetadataSection: () => null }));
-jest.mock('../view/sections/customer', () => ({
-	CustomerNoteSection: () => null,
-	CustomerRail: () => null,
-	AddressesRail: () => null,
-	TaxIdsRail: () => null,
-}));
+jest.mock('../view/sections/customer', () => ({ CustomerSection: () => null }));
 
 const footer = () =>
 	screen.getAllByRole('button').map((button) => button.dataset.testid?.replace('order-modal-', ''));
@@ -104,6 +122,7 @@ beforeEach(() => {
 	mockTab = undefined;
 	mockReadOnly = false;
 	mockOrder.payload.id = 42;
+	mockOrder.payload.meta_data = [];
 });
 
 it('opens on the View tab by default and on the Edit tab when the route asks for it', () => {
@@ -151,4 +170,24 @@ it('offers only the receipt when read-only, and no Edit tab even when the route 
 	expect(screen.queryByText('common.edit')).toBeNull();
 	expect(screen.queryByTestId('order-edit-form')).toBeNull();
 	expect(screen.getByTestId('order-modal-view')).toBeTruthy();
+});
+
+it('leads with the status and one identity line, no big total; the store only when the order has one', () => {
+	mockOrder.payload.meta_data = [
+		{ key: '_pos_user', value: '3' },
+		{ key: '_pos_store', value: '7' },
+	];
+	const { container, unmount } = render(<OrderModal resource={{} as never} />);
+	expect(container.querySelector('.text-amt')).toBeNull();
+	expect(screen.queryByText('17.6')).toBeNull();
+	expect(screen.getByTestId('order-modal-identity').textContent).toBe(
+		'Today · 12:47 · High Street · Alice · '
+	);
+	unmount();
+	mockOrder.payload.meta_data = [
+		{ key: '_pos_user', value: '3' },
+		{ key: '_pos_store', value: '0' },
+	];
+	render(<OrderModal resource={{} as never} />);
+	expect(screen.getByTestId('order-modal-identity').textContent).toBe('Today · 12:47 · Alice · ');
 });

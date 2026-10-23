@@ -9,25 +9,67 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { CreatedVia } from '../../components/order/created-via';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useCashierLabel } from '../../hooks/use-cashier-label';
+import { useStoreLabel } from '../../hooks/use-store-label';
 import { OrderStatusBadge } from '../cells/status';
 import { InvoiceActions } from '../invoice-actions';
 import { DeleteOrderDialog, useOrderActions } from '../order-actions';
 import { RefundsBoundary } from '../view/refunds-boundary';
-import {
-	AddressesRail,
-	CustomerNoteSection,
-	CustomerRail,
-	TaxIdsRail,
-} from '../view/sections/customer';
+import { CustomerSection } from '../view/sections/customer';
 import { LineItemsSection } from '../view/sections/line-items';
 import { PaymentSection } from '../view/sections/payment';
-import { POSMetadataSection } from '../view/sections/pos-metadata';
 import { totalRefunded } from '../view/sections/total-refunded';
 import { TotalsSection } from '../view/sections/totals';
+
+/**
+ * The identity line under the status: when · store · cashier · via (the order-summary board,
+ * 2026-10-23). It replaces the big total and the Metadata section. The store shows only when
+ * the order carries one: `_pos_store` 0 is no store attribution.
+ */
+function OrderIdentity({ order }: { order: EngineRecord<'orders'> }) {
+	const created = useRecordField(order, (record) => record.payload.date_created_gmt);
+	const meta = useRecordField(order, (record) => record.payload.meta_data);
+	const { cashierId, storeId } = wooMetaCarrier.readIdentity(meta);
+	const store = useStoreLabel(Number(storeId) > 0 ? storeId : undefined).label;
+	const cashier = useCashierLabel(cashierId ?? undefined).label;
+	const { dateTime } = useStoreDayLabel();
+	// Each part is its own Text: the base Text draws foreground at base size, so a bare nested
+	// Text would not inherit the line's muted small recipe.
+	const muted = 'text-muted-foreground text-sm';
+	const parts = [
+		created && (
+			<Text key="when" className={muted}>
+				{dateTime(created)}
+			</Text>
+		),
+		store && (
+			<Text key="store" className="text-foreground text-sm font-medium">
+				{store}
+			</Text>
+		),
+		cashier && (
+			<Text key="cashier" className={muted}>
+				{cashier}
+			</Text>
+		),
+	].filter(Boolean);
+	return (
+		<View testID="order-modal-identity" className="flex-row flex-wrap items-center">
+			<Text className={muted}>
+				{parts.flatMap((part, index) => (index > 0 ? [' · ', part] : [part]))}
+				{parts.length > 0 ? ' · ' : null}
+			</Text>
+			<CreatedVia
+				{...({ row: { original: { record: order } } } as React.ComponentProps<typeof CreatedVia>)}
+			/>
+		</View>
+	);
+}
 
 /**
  * The order modal's View tab: the order read top to bottom, and its actions in the footer.
@@ -44,7 +86,6 @@ export function OrderView({
 	const t = useT();
 	const router = useRouter();
 	const { close } = useDialog();
-	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const actions = useOrderActions(order, { onDeleted: close });
 	const refundedAmount = totalRefunded(payload.refunds);
 	const status =
@@ -79,9 +120,9 @@ export function OrderView({
 				className="gap-0 px-0 py-0"
 				contentContainerClassName="p-0"
 			>
+				{/* No big total: the Total row in Totals is the one number (Paul, 2026-10-23). */}
 				<View className="border-border gap-2 border-b p-4">
-					<Text className="text-amt tabular-nums">{format(Number(payload.total || 0))}</Text>
-					<View className="flex-row flex-wrap items-center gap-2">
+					<View className="flex-row">
 						{syntheticLabel ? (
 							<StatusBadge
 								label={syntheticLabel}
@@ -90,24 +131,16 @@ export function OrderView({
 						) : (
 							<OrderStatusBadge status={payload.status} />
 						)}
-						<CreatedVia
-							{...({ row: { original: { record: order } } } as React.ComponentProps<
-								typeof CreatedVia
-							>)}
-						/>
 					</View>
+					<OrderIdentity order={order} />
 				</View>
 				<LineItemsSection order={payload} />
 				<TotalsSection order={payload} />
+				<PaymentSection order={order} />
 				{payload.id ? (
 					<RefundsBoundary order={payload} orderUuid={order.uuid} orderId={payload.id} />
 				) : null}
-				<CustomerNoteSection order={payload} />
-				<CustomerRail order={payload} />
-				<AddressesRail order={payload} />
-				<TaxIdsRail order={payload} />
-				<PaymentSection order={payload} />
-				<POSMetadataSection order={payload} last />
+				<CustomerSection order={payload} last />
 			</DialogBody>
 			{readOnly ? (
 				// Everything but the receipt changes the order (ledger line 8).

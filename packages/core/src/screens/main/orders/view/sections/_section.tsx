@@ -38,30 +38,3 @@ export function Section({
 		</View>
 	);
 }
-
-/**
- * Compact rail-style section used in the right column.
- * Smaller padding and an uppercase muted heading.
- */
-export function RailSection({
-	title,
-	children,
-	className,
-	last,
-}: {
-	title?: string;
-	children: React.ReactNode;
-	className?: string;
-	last?: boolean;
-}) {
-	return (
-		<View className={`px-4 py-3 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
-			{title ? (
-				<Text className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-					{title}
-				</Text>
-			) : null}
-			{children}
-		</View>
-	);
-}
