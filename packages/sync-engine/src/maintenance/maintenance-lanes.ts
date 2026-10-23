@@ -145,7 +145,11 @@ type MaintenanceLaneDeps = {
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
-	fetcher: (url: string, init?: { signal?: AbortSignal }, lane?: string) => Promise<Response>;
+	fetcher: (
+		url: string,
+		init?: { signal?: AbortSignal },
+		lane?: MaintenanceLaneName
+	) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	withCollectionActivity?: <T>(

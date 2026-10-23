@@ -12,7 +12,6 @@ import { createFailureStreak, type FailureStreak } from '../failure-streak';
 import { RequestTimeoutError, withRequestTimeout } from '../write-path/request-timeout';
 import { parseUpdateRequiredBody } from '../update-required';
 import {
-	createServerPressureMonitor,
 	parseRetryAfterMs,
 	parseServerLoad1m,
 	parseServerPressure,
@@ -29,6 +28,7 @@ import type {
 	RxdbSyncEnginePorts,
 } from '../create-rxdb-sync-engine';
 import type { EngineTimers } from '../engine-timers';
+import type { EngineLaneName } from '../maintenance/lane-registry';
 import type { QueryTotalPort } from '../maintenance/maintenance-lanes';
 /**
  * How long an in-flight request must have been running before a cancellation is
@@ -49,23 +49,26 @@ export type EngineRequest = (
 	options?: { deadlineMs?: number }
 ) => Promise<Response>;
 
-export type EngineTransport = {
+type EngineTransport = {
 	/** `lane` labels the deadline row (default 'host-transport'); `deadlineMs`
 	 * replaces the 60 s default and stays the request's only deadline. */
 	request(
 		url: string,
 		init?: RequestInit,
-		options?: { lane?: string; deadlineMs?: number }
+		options?: {
+			lane?: EngineLaneName | 'host-transport' | 'require' | 'conflict-resolution';
+			deadlineMs?: number;
+		}
 	): Promise<Response>;
 	/** The host's query-total port behind the latch and its own deadline. */
 	queryTotal(port: QueryTotalPort | undefined): QueryTotalPort | undefined;
-	readonly pressure: ServerPressureMonitor;
 	/** Drops every deadline streak: they belong to the outgoing scope. */
 	scopeActivated(): void;
 };
 
 export function createEngineTransport(deps: {
 	fetcher: EngineFetcher;
+	pressure: ServerPressureMonitor;
 	getInstanceId?: RxdbSyncEnginePorts['getInstanceId'];
 	onUpdateRequired?: RxdbSyncEnginePorts['onUpdateRequired'];
 	diagnostics: SyncObserver;
@@ -76,14 +79,7 @@ export function createEngineTransport(deps: {
 	onPressureReadoutChanged: () => void;
 }): EngineTransport {
 	const { now: nowMs, timers, diagnostics, connectivity: readConnectivity } = deps;
-	// #846: EVERY engine request feeds the pressure monitor — the change-signal
-	// poll, the maintenance lanes AND the demand-driven pulls a cashier triggers.
-	// A 429 raised by a product search is the same server saying the same thing,
-	// so it counts as evidence. What it does NOT do is slow that search down:
-	// only the change-signal cadence adapts (see armChangeSignalTimer). Demand
-	// fetches are human-bounded — a cashier can only ask so fast — and delaying
-	// one would trade the merchant's server load for the merchant's queue.
-	const serverPressure = createServerPressureMonitor();
+	const serverPressure = deps.pressure;
 	const responseEnvelopeTransport: ResponseEnvelopeTransportState = {
 		responseHeadersReadable: true,
 	};
@@ -357,7 +353,6 @@ export function createEngineTransport(deps: {
 	return {
 		request,
 		queryTotal,
-		pressure: serverPressure,
 		scopeActivated: () => consecutiveDeadlines.clear(),
 	};
 }

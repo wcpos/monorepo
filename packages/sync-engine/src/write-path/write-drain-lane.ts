@@ -73,7 +73,7 @@ const SESSION_PROBE_BASE_MS = 30_000;
 // Cap the interval between probes for the plugin's no-user-logged-in 401 at five minutes.
 const SESSION_PROBE_MAX_MS = 300_000;
 /** Below the 60 s claim lease, but allows a slow store's order create to finish. */
-export const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
+const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known

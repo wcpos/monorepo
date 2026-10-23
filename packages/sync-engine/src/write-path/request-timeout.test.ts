@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Fetcher } from '@wcpos/sync-core';
 
 import { RequestTimeoutError, withRequestTimeout } from './request-timeout';
-import { WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './write-drain-lane';
 
+// The write-drain lane owns the real constant; this suite only needs a deadline of that size.
+const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
 const abortError = Object.assign(new Error('request aborted'), { name: 'AbortError' });
 const neverAnswers: Fetcher = (_url, init) =>
 	new Promise<Response>((_resolve, reject) => {

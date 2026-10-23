@@ -390,3 +390,26 @@ it('a black-holed conflict-resolution fetch is labelled conflict-resolution at 6
 		}),
 	]);
 });
+
+it('a black-holed maintenance-lane fetch is labelled with its own lane', async () => {
+	expect((await harness.engine.sync('order-window-seed')).status).toBe('ran');
+	fetch.mockImplementation(() => new Promise(() => {}));
+	vi.useFakeTimers();
+
+	let settled = false;
+	const run = harness.engine.sync('scheduler-drain').finally(() => (settled = true));
+	// The drain walks its tasks one after another; each black-holed pull takes the full deadline.
+	for (let step = 0; step < 10 && !settled; step += 1) await vi.advanceTimersByTimeAsync(60_000);
+	await run;
+
+	expect(
+		harness.diagnostics
+			.filter((event) => event.type === 'engine.request.deadline')
+			.map((event) => event.fields)
+	).toContainEqual({ lane: 'scheduler-drain', elapsedMs: 60_000, consecutiveDeadlines: 1 });
+	expect(
+		harness.diagnostics.some(
+			(event) => event.type === 'engine.request.deadline' && event.fields?.lane === 'host-transport'
+		)
+	).toBe(false);
+});

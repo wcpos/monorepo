@@ -79,6 +79,11 @@ import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
 } from './change-signal/change-signal-lane';
+import {
+	createServerPressureMonitor,
+	type PressureSignal,
+	type ServerPressure,
+} from './change-signal/server-pressure';
 import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
 	type BarcodeSelectors,
@@ -145,7 +150,6 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
-import type { PressureSignal, ServerPressure } from './change-signal/server-pressure';
 import type { UpdateRequiredDetails } from './update-required';
 import type { QueueRow } from './queue-rows';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
@@ -832,6 +836,14 @@ export function createRxdbSyncEngine(
 			return 'offline';
 		}
 	};
+	// #846: EVERY engine request feeds the pressure monitor — the change-signal
+	// poll, the maintenance lanes AND the demand-driven pulls a cashier triggers.
+	// A 429 raised by a product search is the same server saying the same thing,
+	// so it counts as evidence. What it does NOT do is slow that search down:
+	// only the change-signal cadence adapts (see armChangeSignalTimer). Demand
+	// fetches are human-bounded — a cashier can only ask so fast — and delaying
+	// one would trade the merchant's server load for the merchant's queue.
+	const serverPressure = createServerPressureMonitor();
 	// Assigned below, once the change-signal timer exists — a transition observed
 	// before then (there is no transport before `ready`) is simply dropped.
 	let cadence: CadenceController | null = null;
@@ -869,6 +881,7 @@ export function createRxdbSyncEngine(
 	};
 	const transport = createEngineTransport({
 		fetcher: ports.fetcher,
+		pressure: serverPressure,
 		getInstanceId: ports.getInstanceId,
 		onUpdateRequired: ports.onUpdateRequired,
 		diagnostics,
@@ -878,8 +891,9 @@ export function createRxdbSyncEngine(
 		onPressureTransition: (transition) => cadence?.onServerPressureTransition(transition),
 		onPressureReadoutChanged: scheduleStatusChange,
 	});
-	// The host-transport lane: every engine request without a lane of its own.
-	const fetcher: EngineFetcher = (url, init) => transport.request(url, init);
+	// No lane given: the host-transport lane (the maintenance lanes pass their own).
+	const fetcher = (url: string, init?: RequestInit, lane?: EngineLaneName) =>
+		transport.request(url, init, { lane });
 	const queryTotal = transport.queryTotal(ports.queryTotal);
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
@@ -1757,8 +1771,8 @@ export function createRxdbSyncEngine(
 		...(ports.hostVisible !== undefined ? { hostVisible: ports.hostVisible } : {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
-		isServerBackingOff: (atMs) => transport.pressure.isBackingOff(atMs),
-		isServerRetryAfterActive: (atMs) => transport.pressure.retryAfterUntilMs() > atMs,
+		isServerBackingOff: (atMs) => serverPressure.isBackingOff(atMs),
+		isServerRetryAfterActive: (atMs) => serverPressure.retryAfterUntilMs() > atMs,
 	});
 
 	type LaneTarget = {
@@ -1979,7 +1993,7 @@ export function createRxdbSyncEngine(
 	const cadenceController = createCadenceController({
 		mode,
 		intervals,
-		pressure: transport.pressure,
+		pressure: serverPressure,
 		now: nowMs,
 		random,
 		diagnostics,
@@ -2067,13 +2081,11 @@ export function createRxdbSyncEngine(
 			) as EngineStatus['lanes'],
 			queueDepth: writePlane.queueDepth(),
 			serverPressure: {
-				multiplier: transport.pressure.multiplier(),
+				multiplier: serverPressure.multiplier(),
 				retryAfterUntilMs:
-					transport.pressure.retryAfterUntilMs() > now
-						? transport.pressure.retryAfterUntilMs()
-						: null,
-				reported: transport.pressure.reported(),
-				signal: transport.pressure.signal(),
+					serverPressure.retryAfterUntilMs() > now ? serverPressure.retryAfterUntilMs() : null,
+				reported: serverPressure.reported(),
+				signal: serverPressure.signal(),
 			},
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [

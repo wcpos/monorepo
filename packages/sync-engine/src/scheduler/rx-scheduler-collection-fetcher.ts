@@ -19,7 +19,6 @@ import { type RemoteId, type SyncObserver, wooIdOf } from '@wcpos/sync-core';
 import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
-import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
 	parseReferenceLaneQueryKey,
 	type ReferenceLaneDescriptor,
@@ -27,6 +26,7 @@ import {
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { CacheQueryTotals } from './query-total-requests';
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { Materialized } from '../materialization/record-materialization';

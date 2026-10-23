@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SyncEvent } from '@wcpos/sync-core';
 
+import { createServerPressureMonitor } from '../change-signal/server-pressure';
 import { systemTimers } from '../engine-timers';
 import { RequestTimeoutError } from '../write-path/request-timeout';
 import { createEngineTransport } from './engine-transport';
@@ -25,8 +26,11 @@ function transportWith(overrides: Partial<Parameters<typeof createEngineTranspor
 	);
 	const diagnostics: SyncEvent[] = [];
 	const onUpdateRequired = vi.fn();
+	const pressure = createServerPressureMonitor();
+	const observe = vi.spyOn(pressure, 'observe');
 	const transport = createEngineTransport({
 		fetcher,
+		pressure,
 		onUpdateRequired,
 		diagnostics: (event) => void diagnostics.push(event),
 		now: () => Date.now(),
@@ -37,7 +41,6 @@ function transportWith(overrides: Partial<Parameters<typeof createEngineTranspor
 		onPressureReadoutChanged: vi.fn(),
 		...overrides,
 	});
-	const observe = vi.spyOn(transport.pressure, 'observe');
 	const deadlines = () =>
 		diagnostics
 			.filter((event) => event.type === 'engine.request.deadline')
@@ -157,7 +160,7 @@ describe('createEngineTransport', () => {
 
 	it('counts deadline streaks per lane and path, ends one on any answer, and restarts them per scope', async () => {
 		const { transport, fetcher, deadlines } = transportWith();
-		const blackHole = async (url: string, lane?: string) => {
+		const blackHole = async (url: string, lane?: 'require') => {
 			fetcher.mockImplementationOnce(neverAnswers);
 			const request = transport
 				.request(url, undefined, lane === undefined ? undefined : { lane })
