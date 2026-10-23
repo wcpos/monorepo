@@ -63,7 +63,7 @@ import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/b
 import { scopeBoundFailureStreak } from '../failure-streak';
 import { deadLetterOutcomesForTick } from './dead-letter-outcome';
 import { fetchOrderServerRevision } from './order-server-revision';
-import { residentRevision, stampedSync } from './order-revision';
+import { residentRevision, type ResidentSync, stampedSync } from './order-revision';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineRequest } from '../transport/engine-transport';
@@ -596,7 +596,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								if (!revision) return null;
 								await doc?.incrementalModify((data: Record<string, unknown>) => ({
 									...data,
-									sync: stampedSync((data.sync ?? {}) as object, revision),
+									sync: stampedSync((data.sync ?? {}) as ResidentSync, revision),
 								}));
 								return revision;
 							},

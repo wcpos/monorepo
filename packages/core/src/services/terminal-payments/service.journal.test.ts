@@ -174,7 +174,7 @@ beforeEach(async () => {
 						},
 					}))
 				)
-				.then(() => ({ action: 'fetched' }));
+				.then(() => ({ action: 'fetched', appliedRecordIds: ['42'] }));
 			return { ready, release: () => undefined, queryKey: '' };
 		},
 	});

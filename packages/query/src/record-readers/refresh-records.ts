@@ -49,17 +49,10 @@ export function refreshRecordByWooId(
 		id: string;
 		collection: 'products' | 'variations' | 'customers' | 'orders';
 		wooId: number;
-		/** Adopt the document even under an equal stamp (ADR 0040's corrective refresh). */
-		readopt?: boolean;
 	}
 ): Promise<void> {
 	return fetchFreshRecords(engine, [
-		{
-			id: request.id,
-			collection: request.collection,
-			wooIds: [request.wooId],
-			...(request.readopt ? { readopt: true } : {}),
-		},
+		{ id: request.id, collection: request.collection, wooIds: [request.wooId] },
 	]);
 }
 
@@ -91,25 +84,20 @@ export const ORDER_REFRESH_TIMEOUT_MS = 10_000;
  *
  * Used after a payment the store accepted: whatever the till holds locally is behind,
  * and the store's copy is the one with the money on it.
- *
- * `readopt` adopts the store's copy even under an equal stamp (ADR 0040): after a refused
- * write the store's copy has not changed, and only a re-adoption replaces the local one.
  */
 export function refreshOrderRecord(
 	engine: RxdbSyncEngine,
-	orderId: number,
-	options: { readopt?: boolean } = {}
+	orderId: number
 ): Promise<'refreshed' | 'timed-out' | 'failed'> {
 	// Deliberately not `async`: an engine that cannot even take the request throws
 	// from here, synchronously, to whoever asked for the refresh. Only the WAIT for
 	// readiness is the caller's to absorb.
 	const handle = engine.require({
-		id: options.readopt ? `orders:readopt:${orderId}` : `checkout:order-refresh:${orderId}`,
+		id: `checkout:order-refresh:${orderId}`,
 		collection: 'orders',
 		kind: 'targeted-records',
 		remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 		forceRefresh: true,
-		...(options.readopt ? { readopt: true } : {}),
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([

@@ -171,16 +171,23 @@ async function resident() {
 async function residentJSON() {
 	return (await resident()).toJSON() as unknown as {
 		payload: Record<string, unknown> & { meta_data: { key: string; value: unknown }[] };
-		sync: { revision: string; adopted?: { revision: string; at: number } };
+		sync: {
+			revision: string;
+			adopted?: { revision: string; at: number };
+			stamped?: { at: number };
+		};
 	};
 }
 async function writeResident(modify: (doc: Record<string, any>) => Record<string, any>) {
 	await (await resident()).incrementalModify(modify as never);
 }
-/** A whole-document adoption of the store's current copy, as the pull adopt path makes it. */
+/**
+ * A whole-document adoption of the store's current copy, as the pull adopt path makes it; true
+ * when it wrote (the engine reports the order in the refresh's `appliedRecordIds`).
+ */
 async function adoptStore(readopt: boolean) {
 	const { sync } = await residentJSON();
-	if (!readopt && sync.revision === store.revision) return; // the equal-stamp skip
+	if (!readopt && sync.revision === store.revision) return false; // the equal-stamp skip
 	await writeResident((doc) => ({
 		...doc,
 		payload: {
@@ -194,6 +201,7 @@ async function adoptStore(readopt: boolean) {
 			adopted: { revision: store.revision, at: Date.now() },
 		},
 	}));
+	return true;
 }
 /** A naked writer: replaces sync.revision while spreading ...sync (428 refresh, rebase, ack). */
 async function nakedRevision(revision: string) {
@@ -225,7 +233,10 @@ beforeEach(async () => {
 		require: (requirement: { readopt?: boolean }) => {
 			requires.push(requirement);
 			const ready = refreshWorks
-				? adoptStore(requirement.readopt === true).then(() => ({ action: 'fetched' }))
+				? adoptStore(requirement.readopt === true).then((wrote) => ({
+						action: 'fetched',
+						appliedRecordIds: wrote ? ['5'] : [],
+					}))
 				: Promise.reject(new Error('offline'));
 			return { ready, release: () => undefined, queryKey: '' };
 		},
@@ -779,13 +790,10 @@ describe('the answer chain and the post-answer refresh', () => {
 			queryKey: '',
 		});
 		await settleMoneyCommand(runtime, storeDB, 'order');
-		expect((await readOrderCommands(storeDB, 'order')).chain).not.toHaveProperty(
-			'adoptedAfterAnswer'
-		);
+		expect((await readOrderCommands(storeDB, 'order')).chain).not.toHaveProperty('adoptedRevision');
 		engine.require = refresh;
 		await settleMoneyCommand(runtime, storeDB, 'order');
 		expect((await readOrderCommands(storeDB, 'order')).chain).toMatchObject({
-			adoptedAfterAnswer: true,
 			adoptedRevision: store.revision,
 		});
 	});
@@ -799,17 +807,15 @@ describe('the answer chain and the post-answer refresh', () => {
 		return store.revision;
 	}
 
-	it('a status poll’s revision is recorded as the chain, without the post-answer refresh, and the next void is sent once under it with no re-read', async () => {
+	it('a status poll’s revision is stamped on the resident, without the post-answer refresh or a journal write, and the next void is sent once under it with no re-read', async () => {
 		const polled = await pollSettles();
 		expect(requires).toEqual([]);
-		expect((await readOrderCommands(storeDB, 'order')).chain).toMatchObject({
-			answerRevision: polled,
-			polled: true,
-		});
+		expect(await chain()).toBeNull();
 		// Stamped for the next order push (the drain reads sync.revision); the adoption stays, so
 		// the stamp claims no authority (ADR 0040 §1.3).
 		const { sync } = await residentJSON();
 		expect(sync.revision).toBe(polled);
+		expect(sync.stamped).toEqual({ at: expect.any(Number) });
 		expect(sync.adopted?.revision).toBe('sha256:r1');
 		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
 		expect(requires).toEqual([]);
@@ -826,6 +832,17 @@ describe('the answer chain and the post-answer refresh', () => {
 		expect(store.completions).toBe(1);
 	});
 
+	it('a poll leaves the journal’s chain as the command answer wrote it', async () => {
+		await sendAndSettle('orders/5/payments', { payment: cash() });
+		const { chain: before } = await readOrderCommands(storeDB, 'order');
+		const polled = await pollSettles();
+		expect(await chain()).toEqual(before);
+		expect((await residentJSON()).sync).toMatchObject({
+			revision: polled,
+			stamped: { at: expect.any(Number) },
+		});
+	});
+
 	it('a mirror without a revision leaves the chain and the stamp as they were', async () => {
 		await sendAndSettle('orders/5/payments', { payment: cash() });
 		const { chain: before } = await readOrderCommands(storeDB, 'order');
@@ -840,9 +857,10 @@ describe('the answer chain and the post-answer refresh', () => {
 		await adoptStore(false);
 		const adopted = store.revision;
 		clock -= 1_000_000; // the poll's answer dates before the adoption
-		const polled = await pollSettles();
+		await pollSettles();
 		expect((await residentJSON()).sync.revision).toBe(adopted);
-		expect(await chain()).toMatchObject({ answerRevision: polled, polled: true });
+		expect((await residentJSON()).sync.stamped).toBeUndefined();
+		expect(await chain()).toBeNull();
 	});
 
 	it('an adoption that lands while the poll is being mirrored keeps its revision', async () => {
@@ -862,7 +880,8 @@ describe('the answer chain and the post-answer refresh', () => {
 		await poster().mirror({ payment, order: store.summary() as never, revision: polledRevision });
 		expect(adopted).not.toBe(polledRevision);
 		expect((await residentJSON()).sync.revision).toBe(adopted);
-		expect(await chain()).toMatchObject({ answerRevision: polledRevision, polled: true });
+		expect((await residentJSON()).sync.stamped).toBeUndefined();
+		expect(await chain()).toBeNull();
 	});
 
 	it('a command answer’s post-answer refresh re-adopts over a poll’s stamp', async () => {
@@ -871,6 +890,24 @@ describe('the answer chain and the post-answer refresh', () => {
 		const { sync } = await residentJSON();
 		expect(sync.revision).toBe(store.revision);
 		expect(sync.adopted?.revision).toBe(sync.revision);
+	});
+
+	// Every terminal 2xx is mirrored with its revision (server-leg.ts), a command's as a poll's.
+	it('a command answer mirrored with its revision stamps it: with the readopt failing, the next void goes out under it with no re-read', async () => {
+		refreshWorks = false;
+		const post = poster();
+		const { data } = (await post('orders/5/payments/leg-1/intent', {})) as {
+			data: { payment: PaymentRow; revision: string };
+		};
+		await post.mirror({ payment: data.payment, revision: data.revision });
+		expect((await residentJSON()).sync).toMatchObject({
+			revision: data.revision,
+			stamped: { at: expect.any(Number) },
+		});
+		requires = [];
+		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
+		expect(requires).toEqual([]);
+		expect(sentBodies().at(-1)?.revision).toBe(data.revision);
 	});
 
 	it('a second poll’s summary lands under the stamp the first poll made', async () => {
@@ -1179,56 +1216,40 @@ describe('Try again: resendOpenCommands', () => {
 		}
 	);
 
-	it('a replayed submit is not confirmed by a pull adopted while the re-send was in flight', async () => {
-		store.modes = ['lose'];
-		await expect(
-			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
-		).rejects.toThrow('Network Error');
-		const real = store.post.getMockImplementation()!;
-		store.post.mockImplementationOnce(async (url, body) => {
-			await adoptStore(true); // the normal pull, mid-flight
-			return real(url, body);
-		});
-		refreshWorks = false;
-		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
-		expect(await entries()).toHaveLength(1);
-	});
-
-	it('a pull adopted in the same millisecond as the answer never confirms a replayed submit', async () => {
-		store.modes = ['lose'];
-		await expect(
-			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
-		).rejects.toThrow('Network Error');
-		const real = store.post.getMockImplementation()!;
-		store.post.mockImplementationOnce(async (url, body) => {
-			const answer = await real(url, body);
-			await adoptStore(true); // the normal pull, at the answer
-			return answer;
-		});
-		jest.mocked(Date.now).mockReturnValue(clock); // one millisecond for the whole replay
-		refreshWorks = false;
-		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
-		expect(await entries()).toHaveLength(1);
-	});
-
-	it('a replayed submit is not confirmed by an older adoption landing while its refresh fails', async () => {
-		store.modes = ['lose'];
-		await expect(
-			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
-		).rejects.toThrow('Network Error');
+	/** The refresh completes, but another write lands the adoption: its own task wrote nothing. */
+	function refreshLanding(write: () => Promise<unknown>) {
 		Object.assign(runtime.engine, {
 			require: () => ({
-				ready: (async () => {
-					await writeResident((doc) => ({
-						...doc,
-						sync: { ...doc.sync, adopted: { revision: doc.sync.revision, at: Date.now() } },
-					}));
-					throw new Error('offline');
-				})(),
+				ready: write().then(() => ({ action: 'fetched', appliedRecordIds: [] })),
 				release: () => undefined,
 				queryKey: '',
 			}),
 		});
+	}
+
+	// The same-millisecond pull case moved to sync-engine's naked-revision suite: the proof is the
+	// refresh's own task, so no stamp or time on the resident can stand in for it.
+	it('a replayed submit is not confirmed by a pull another drain adopted while it was replayed', async () => {
+		store.modes = ['lose'];
+		await expect(
+			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+		).rejects.toThrow('Network Error');
+		refreshLanding(() => adoptStore(true)); // the normal pull, not the refresh's task
+		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
+		expect(await entries()).toHaveLength(1);
+	});
+
+	it('a replayed submit is not confirmed by an older adoption landing while its refresh writes nothing', async () => {
+		store.modes = ['lose'];
+		await expect(
+			poster()('orders/5/payment-methods/g/submit', { attempt_id: 'a-1', values: {} })
+		).rejects.toThrow('Network Error');
+		refreshLanding(() =>
+			writeResident((doc) => ({
+				...doc,
+				sync: { ...doc.sync, adopted: { revision: doc.sync.revision, at: Date.now() } },
+			}))
+		);
 		await expect(restart()).rejects.toThrow('money_command_unconfirmed');
 		expect(await entries()).toHaveLength(1);
 	});
@@ -1401,10 +1422,7 @@ describe('the store-session recovery', () => {
 			data: { payment: PaymentRow };
 		};
 		await post.mirror({ payment: data.payment });
-		expect(await chain()).toMatchObject({
-			adoptedAfterAnswer: true,
-			adoptedRevision: store.revision,
-		});
+		expect(await chain()).toMatchObject({ adoptedRevision: store.revision });
 		await recover();
 		expect(await chain()).not.toBeNull();
 		store.n += 1; // another till moves the order; the pull adopts the newer document

@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import type { EngineEvent } from '@wcpos/sync-engine';
+import { createOrderRevisionDoor } from '@wcpos/sync-engine/testing';
 import type { EngineRecord } from '@wcpos/query';
 import { applyLocalPatch, patchEngineResident } from '@wcpos/query/mutations';
 import { log } from '@wcpos/utils/logger';
@@ -35,6 +36,15 @@ const mockEngine = {
 		release: () => {},
 	})),
 };
+// The engine's own readopt door over this fake's forced refresh: the proof of adoption is the door's.
+Object.assign(mockEngine, {
+	orderRevision: createOrderRevisionDoor({
+		resolveDatabase: async () => {
+			throw new Error('the undo never stamps');
+		},
+		require: (requirement) => mockEngine.require(requirement) as never,
+	}),
+});
 const emit = (event: EngineEvent) => [...mockListeners].forEach((cb) => cb(event));
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
