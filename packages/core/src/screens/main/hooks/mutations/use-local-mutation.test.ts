@@ -76,7 +76,6 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
-	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
 	...(() => {

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { BehaviorSubject } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import { hasQueuedDelete, useQueryRuntime } from '@wcpos/query';
+import { orderHasQueuedDelete, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -94,12 +94,8 @@ export function NewCustomerLinkBridge(): null {
 				}
 				return Boolean(outcome);
 			},
-			orderHasQueuedDelete: async (uuid) => {
-				const database = runtime.engine.active()?.database;
-				// Thrown, not guessed: the pass keeps the link and the next pass retries.
-				if (!database) throw new Error('No active scope to read the write queue from');
-				return hasQueuedDelete(database, 'orders', uuid);
-			},
+			// Throws with no active scope: the pass keeps the link and the next pass retries.
+			orderHasQueuedDelete: (uuid) => orderHasQueuedDelete(runtime.engine, uuid),
 			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, (slot) => run(slot)),
 			drop: (uuid, at) => dropCustomerLink(storeDB, uuid, at),
 			now: () => Date.now(),

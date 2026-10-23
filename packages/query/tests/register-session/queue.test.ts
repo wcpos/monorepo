@@ -8,7 +8,7 @@ import type { CashMovementRow, StoreDatabase, UserDatabase } from '@wcpos/databa
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
-import { ensureRegister, readRegister } from '@wcpos/query/register-session';
+import { readRegister } from '@wcpos/query/register-session';
 
 import {
 	closeSession,
@@ -19,6 +19,7 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
+import { remintRegister } from '../../src/register-session/register-document';
 import {
 	drainRegisterSessionQueue,
 	type ServerMovementRow,
@@ -47,7 +48,7 @@ beforeEach(async () => {
 		localDocuments: true,
 		multiInstance: false,
 	});
-	await ensureRegister(userDB);
+	await remintRegister(userDB);
 	await db.addCollections({
 		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },

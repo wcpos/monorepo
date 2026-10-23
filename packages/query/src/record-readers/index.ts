@@ -3,7 +3,7 @@ export {
 	useEngineRecordByWooId,
 	useEngineRecordsByWooId,
 } from './use-engine-document';
-export { readResidentOrder, readResidentRecord } from './read-resident-record';
+export { readResidentOrder } from './read-resident-order';
 export { readCustomerByWooId } from './read-customer-by-woo-id';
 export { observeRecordToName, type RecordToNameEmission } from './observe-record-to-name';
 export {

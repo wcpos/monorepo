@@ -103,10 +103,6 @@ async function readOrMintRegister(
 	}
 }
 
-export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocument> {
-	return (await readOrMintRegister(userDB)).register;
-}
-
 /**
  * Give a cloned installation its own identity: a new till id and name, and every
  * site's sale counter back at zero, so its sales never share a till or a counter with

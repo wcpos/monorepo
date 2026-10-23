@@ -9,7 +9,7 @@ import { readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 
-import * as mirrorServerOrder from '../src/mutations/mirror-server-order';
+import * as moneyAnswer from '../src/mutations/money-answer';
 import {
 	answerAdopted,
 	MoneyCommandError,
@@ -850,9 +850,9 @@ describe('the answer chain and the post-answer refresh', () => {
 		const payment = { ...cash('leg-1', '10.00'), status: 'authorized' } as PaymentRow;
 		const polledRevision = store.revision;
 		// The answer has arrived; a pull adopts a newer document during the mirror's own awaits.
-		const original = mirrorServerOrder.mirrorMoneyAnswer;
+		const original = moneyAnswer.mirrorMoneyAnswer;
 		let adopted = '';
-		jest.spyOn(mirrorServerOrder, 'mirrorMoneyAnswer').mockImplementationOnce(async (...args) => {
+		jest.spyOn(moneyAnswer, 'mirrorMoneyAnswer').mockImplementationOnce(async (...args) => {
 			const out = await original(...args);
 			store.n += 1;
 			await adoptStore(false);

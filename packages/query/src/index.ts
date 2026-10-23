@@ -81,17 +81,11 @@ export {
 } from './open-orders-scope';
 export { acquireOrderRefundsQueryHandle } from './order-refunds';
 
-export {
-	projectionReaderFor,
-	registerProjectionReader,
-	storageQueryProjectionReader,
-} from './projection-read';
-export type { ProjectionCollection, ProjectionReader, ProjectionRow } from './projection-read';
+export type { ProjectionCollection, ProjectionRow } from './projection-read';
 export {
 	acquireQueryHandle,
 	ATTEMPTED,
 	censusTotal$,
-	coverageProjection$,
 	coverageProjectionWithResult$,
 	coverageTargetFor,
 	coverageTargetKey,
@@ -123,7 +117,7 @@ export { observeCatalogChanges, readCatalogGeneration } from './reads/catalog-ch
 export { observeLocalRecordsById, observeResidentOrders } from './reads/local-records-by-id';
 export { observeProductMetaKeys } from './reads/product-meta-keys';
 export { observeUnsentWorkCount } from './reads/unsent-work-count';
-export { hasQueuedDelete } from './reads/queued-delete';
+export { orderHasQueuedDelete } from './reads/queued-delete';
 
 export {
 	observeQueueRows,
@@ -155,7 +149,7 @@ export {
 	type LocalPrinterProfile,
 } from './reads/store-local';
 
-export { readStorePaymentsContract, useStorePaymentsContract } from './store-payments-contract';
+export { useStorePaymentsContract } from './store-payments-contract';
 
 export {
 	savePrinterProfile,

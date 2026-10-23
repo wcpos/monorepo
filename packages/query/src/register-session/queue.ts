@@ -643,10 +643,3 @@ export async function adoptSessionRow(
 		() => adopted
 	);
 }
-
-export function adoptSession(
-	storeDB: RegisterStoreDatabase,
-	server: Parameters<typeof adoptSessionRow>[1]
-) {
-	return adoptSessionRow(registerCollections(storeDB).register_sessions, server);
-}

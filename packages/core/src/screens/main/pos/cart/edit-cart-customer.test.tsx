@@ -65,7 +65,6 @@ jest.mock('react-hook-form', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
-	readStorePaymentsContract: jest.requireActual('@wcpos/query').readStorePaymentsContract,
 	useQueryRuntime: () => manager,
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));

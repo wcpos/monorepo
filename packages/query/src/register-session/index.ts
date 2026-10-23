@@ -2,7 +2,6 @@ export {
 	adoptCounters,
 	advancePerpetual,
 	bindRegister,
-	ensureRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
 	getRegisterId,
@@ -33,7 +32,7 @@ export {
 	deriveUnsyncedDelta,
 } from './expected';
 export { failureFacts } from './failure-facts';
-export { adoptSession, drainRegisterSessionQueue, type SessionHttp } from './queue';
+export { drainRegisterSessionQueue, type SessionHttp } from './queue';
 export { refreshSessions, sessionRefreshRequests } from './refresh';
 export {
 	backToSelling,
@@ -60,7 +59,6 @@ export {
 	createSessionAccountingState,
 	observeRegisterSessions,
 	observeRegisterSessionAvailability,
-	observeClosure,
 	readClosure,
 	observeClosures,
 	observeOpenSessionPresence,

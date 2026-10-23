@@ -7,7 +7,7 @@ import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
-import { ensureRegister, readClosure, readRegister } from '@wcpos/query/register-session';
+import { readClosure, readRegister } from '@wcpos/query/register-session';
 
 import {
 	closeSession,
@@ -18,6 +18,7 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
+import { remintRegister } from '../../src/register-session/register-document';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
@@ -39,7 +40,7 @@ beforeEach(async () => {
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
-	await ensureRegister(userDB);
+	await remintRegister(userDB);
 });
 afterEach(async () => {
 	await db.remove();

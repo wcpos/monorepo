@@ -14,13 +14,6 @@ function contractFromEnvelope(value: unknown): string | null {
 		: null;
 }
 
-/** Named store-local read shared by commands and engine host ports. */
-export function readStorePaymentsContract(
-	extraData: { get(key: string): unknown } | null | undefined
-): string | null {
-	return contractFromEnvelope(extraData?.get('paymentMethods'));
-}
-
 export function useStorePaymentsContract(extraData: ExtraDataSlot): string | null {
 	return useDocField(extraData, (state) => contractFromEnvelope(state.paymentMethods));
 }

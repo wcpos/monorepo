@@ -2,7 +2,6 @@ import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import {
 	observeCashMovements,
-	observeClosure,
 	observeClosures,
 	observeOpenSessionPresence,
 	observeRegisterClosures,
@@ -79,7 +78,7 @@ it('distinguishes unavailable open-session presence from a closed session', () =
 		selector: { status: 'open', sync_status: { $ne: 'failed' }, id: 'session' },
 	});
 	sub.unsubscribe();
-	for (const read of [observeClosure, observeClosures, observeOpenSessionPresence]) {
+	for (const read of [observeClosures, observeOpenSessionPresence]) {
 		const absent: unknown[] = [];
 		read(null, { id: 'id', sessionId: 'session' }).subscribe((value) => absent.push(value));
 		expect(absent).toEqual([null]);

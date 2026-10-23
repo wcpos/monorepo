@@ -3,7 +3,13 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { recordMutationQueueSchema } from '@wcpos/sync-core';
 
-import { hasQueuedDelete } from '../src/reads/queued-delete';
+import { orderHasQueuedDelete } from '../src/reads/queued-delete';
+
+import type { RxDatabase } from 'rxdb';
+
+const engineOver = (database: RxDatabase | null) => ({
+	active: () => (database ? { database } : null) as never,
+});
 
 it('the queued-delete read excludes superseded deletes', async () => {
 	const storage = getRxStorageMemory();
@@ -21,9 +27,9 @@ it('the queued-delete read excludes superseded deletes', async () => {
 			queuedAt: new Date().toISOString(),
 			supersededBy: 'coalesce:writer',
 		});
-		expect(await hasQueuedDelete(db, 'orders', 'order')).toBe(false);
+		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(false);
 		await row.modify(({ supersededBy: _, ...data }) => data);
-		expect(await hasQueuedDelete(db, 'orders', 'order')).toBe(true);
+		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(true);
 	} finally {
 		await db.remove();
 	}
@@ -48,8 +54,38 @@ it('the queued-delete read retains void-marked deletes', async () => {
 			queuedAt: new Date().toISOString(),
 			supersededBy: 'void-token',
 		});
-		expect(await hasQueuedDelete(db, 'orders', 'order')).toBe(true);
+		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(true);
 	} finally {
 		await db.remove();
 	}
+});
+
+it('the queued-delete read answers only for orders, not another collection with the same id', async () => {
+	const db = await createRxDatabase({
+		name: 'customerdelete',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	try {
+		await db.addCollections({ recordMutations: { schema: recordMutationQueueSchema } });
+		await db.collections.recordMutations.insert({
+			mutationId: 'delete',
+			collectionName: 'customers',
+			recordId: 'order',
+			operation: 'delete',
+			origin: 'existing',
+			payload: {},
+			baseRevision: null,
+			queuedAt: new Date().toISOString(),
+		});
+		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(false);
+	} finally {
+		await db.remove();
+	}
+});
+
+it('the queued-delete read throws with no active scope', async () => {
+	await expect(orderHasQueuedDelete(engineOver(null), 'order')).rejects.toThrow(
+		'No active scope to read the write queue from'
+	);
 });

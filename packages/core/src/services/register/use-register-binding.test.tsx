@@ -6,12 +6,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { getLogger } from '@wcpos/utils/logger';
 import type { UserDatabase } from '@wcpos/database';
-import {
-	bindRegister,
-	ensureRegister,
-	readBoundRegister,
-	readRegister,
-} from '@wcpos/query/register-session';
+import { bindRegister, readBoundRegister, readRegister } from '@wcpos/query/register-session';
 
 import {
 	useRegisterBinding,
@@ -19,6 +14,7 @@ import {
 	useRegisterDirectory,
 } from './use-register-binding';
 import { useRegisterNames } from './use-register-names';
+import { remintRegister } from '../../../../query/src/register-session/register-document';
 
 let mockStatus = 'online-website-available';
 let mockDB: UserDatabase;
@@ -56,7 +52,7 @@ beforeEach(async () => {
 		localDocuments: true,
 		multiInstance: false,
 	});
-	await ensureRegister(mockDB);
+	await remintRegister(mockDB);
 	mockStatus = 'online-website-available';
 	mockStoreId = 2;
 	mockHttp.get.mockReset();

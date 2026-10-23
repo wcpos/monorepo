@@ -48,8 +48,8 @@ export function VariationTableFooter({
 	 * must not fall through to the local count (CodeRabbit, #1492).
 	 *
 	 * It can still be stale, so it never claims fewer variations than are on screen: the same
-	 * resident-count floor `coverageProjection$` applies to every other footer. Without it a
-	 * parent whose payload had not caught up would read "Showing 2 of 0".
+	 * resident-count floor `coverageProjectionWithResult$` applies to every other footer. Without
+	 * it a parent whose payload had not caught up would read "Showing 2 of 0".
 	 *
 	 * With no parent list at all, the drawn handle's `total` carries the answer — and it is null
 	 * when nothing vouches for a size, in which case the footer states the count alone rather

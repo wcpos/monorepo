@@ -1,10 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import {
-	readStorePaymentsContract,
-	useStorePaymentsContract,
-} from '../src/store-payments-contract';
+import { useStorePaymentsContract } from '../src/store-payments-contract';
 
 import type { RxState } from 'rxdb';
 
@@ -18,7 +15,6 @@ it.each([
 ] as const)('reads the contract from %j', (paymentMethods, expected) => {
 	const state = new BehaviorSubject({ paymentMethods });
 	const extraData = { get: (key?: string) => (key ? paymentMethods : state.value), $: state };
-	expect(readStorePaymentsContract(extraData)).toBe(expected);
 	const { result } = renderHook(() =>
 		useStorePaymentsContract(extraData as unknown as RxState<Record<string, unknown>>)
 	);
