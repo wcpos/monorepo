@@ -22,6 +22,7 @@ import {
 	completeSale,
 	completionMetaFor,
 	isSaleComplete,
+	isSettledOrderStatus,
 	persistSaleProvenance,
 	recordSaleAttempt,
 } from './sale-completion';
@@ -1289,6 +1290,41 @@ describe('a zero balance the store answered closed', () => {
 			expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
 			expect(getCheckoutModeSnapshot().checkoutOrders.has('order')).toBe(true);
 			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+		}
+	);
+});
+
+describe('isSettledOrderStatus', () => {
+	it.each(['processing', 'completed', 'on-hold', 'invoiced'])(
+		'treats %s as settled with no stored status (the blocklist it always was)',
+		(status) => {
+			expect(isSettledOrderStatus(status, null)).toBe(true);
+			expect(isSettledOrderStatus(status, undefined)).toBe(true);
+		}
+	);
+
+	it.each(['pending', 'failed', 'cancelled'])(
+		'treats %s as unpaid with no stored status',
+		(status) => {
+			expect(isSettledOrderStatus(status, null)).toBe(false);
+			expect(isSettledOrderStatus(status, undefined)).toBe(false);
+		}
+	);
+
+	it('treats an unpaid status as settled only when it is the stored status', () => {
+		expect(isSettledOrderStatus('pending', 'pending')).toBe(true);
+		expect(isSettledOrderStatus('pending', 'completed')).toBe(false);
+		expect(isSettledOrderStatus('failed', 'pending')).toBe(false);
+	});
+
+	// refunded and trash: sync-core's isPaidStatus, the close answer's rule, reads them unpaid.
+	it.each(['pos-open', 'pos-partial', 'failed', 'cancelled', 'refunded', 'trash'])(
+		'never settles %s, even when it is the stored status',
+		(status) => {
+			// The settings picker offers every registered status; a stored `failed`
+			// must not turn a failed payment into a finished sale.
+			expect(isSettledOrderStatus(status, status)).toBe(false);
+			expect(isSettledOrderStatus(status, null)).toBe(false);
 		}
 	);
 });

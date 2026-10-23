@@ -4,10 +4,9 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { awaitsStoredStatus } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -17,19 +16,10 @@ import { judgeGatewaySnapshot } from '../pay-page/gateway-snapshot';
 import { type PayPageMessage, readPayPageMessage } from '../pay-page/pay-page-message';
 import { usePayFrame } from '../pay-page/use-pay-frame';
 import { usePayPagePreparation } from '../pay-page/use-pay-page-preparation';
+import { useServerTruthPoll } from '../pay-page/use-server-truth-poll';
 import { useSettleGatewaySnapshot } from '../pay-page/use-settle-gateway-snapshot';
 
 import type { PaymentFrameStatus } from '../pay-page/use-pay-frame-gate';
-
-// A pre-hardening store or an async gateway can report "not paid yet" while the
-// provider's confirmation is still in flight. Re-read server truth on a short
-// cadence — a webhook round-trip is seconds — but stop after a bound: past it the
-// cart legitimately stays open for the cashier to decide, and the background
-// order lanes (plus the Orders grid's per-order Sync) remain the long-tail net.
-// Without the re-poll, a one-shot "still unpaid" answer left the paid order
-// stuck as an open cart once the webhook landed a minute later.
-const ASYNC_PAYMENT_POLL_INTERVAL_MS = 3_000;
-const ASYNC_PAYMENT_POLL_WINDOW_MS = 120_000;
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
@@ -95,9 +85,8 @@ export function PaymentWebview({
 	const refreshAccessToken = useAccessTokenRefresher();
 	const t = useT();
 	const http = useRestHttpClient();
-	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-	// Set on unmount so a poll or a session refresh that is still awaiting a
-	// response cannot settle the sale, or arm another poll, after checkout closed.
+	// Set on unmount so a session refresh still awaiting a response cannot remount the
+	// frame, or start the poll, after checkout closed.
 	const unmountedRef = React.useRef(false);
 	// Ref-backed so a message arriving before the next render still sees the real count.
 	const sessionReloadsRef = React.useRef(0);
@@ -135,9 +124,6 @@ export function PaymentWebview({
 		logger: orderLogger,
 	});
 
-	/**
-	 *
-	 */
 	const paymentURLWithToken = React.useMemo(() => {
 		if (!paymentURL) return '';
 		// Append the JWT token as a query parameter to the payment URL
@@ -162,130 +148,24 @@ export function PaymentWebview({
 		}
 	}, [paymentURLWithToken]);
 
-	/**
-	 * Read server truth once; with `pollUntilMs`, keep re-reading on the async cadence
-	 * until the order is paid or the bound passes. Every not-yet-paid outcome — server
-	 * unchanged, an unpaid transition, a transient request failure — re-arms; only a
-	 * completed sale (here or via postMessage) settles it.
-	 */
-	const pollServerTruth = React.useCallback(
-		async (pollUntilMs?: number): Promise<void> => {
-			if (isSettled() || unmountedRef.current) return;
-			const localPayload = order.getLatest().payload;
-			const localStatus = localPayload.status;
-			// The poll reconciles an open cart. The one other local state worth a
-			// read is the gateway's stored status having already arrived through
-			// background sync — the order is settled, but nothing has routed the
-			// cashier off the pay window; the server read below closes it. Exactly
-			// that status, for exactly that gateway: any other local status is a
-			// sale this screen no longer owns (a partial tender, a sale settled by
-			// someone else).
-			const local = judgeGatewaySnapshot(localPayload, settledRef.current, ctx.dp);
-			const localStored = local.storedStatus;
-			const localAlreadySettled =
-				typeof localStatus === 'string' &&
-				localStored !== null &&
-				localStatus === localStored &&
-				local.complete;
-			// Sync can land the stored status locally before the gateway catalog has
-			// loaded, so nothing yet says it is settled. Returning here would skip the
-			// re-arm in `finally`, and the catalog arriving later would find no poll
-			// to close the pay window. Keep polling, bounded, while a payable local
-			// status has no stored status to be judged against (the catalog has not
-			// loaded, or stores none for this gateway); a later tick judges it.
-			const localAwaitingCatalog =
-				localStored === null && typeof localStatus === 'string' && awaitsStoredStatus(localStatus);
-			if (
-				!localStatus ||
-				(localStatus !== 'pos-open' && !localAlreadySettled && !localAwaitingCatalog)
-			) {
-				return;
-			}
-			try {
-				orderLogger.debug('No postMessage received, checking server order status', {
-					context: { orderId },
-				});
-				// The decision reads SERVER truth directly (the sync surface's
-				// include-read) — an engine require's `ready` can settle without
-				// applying a newer revision to THIS document (skip-coalesced
-				// resident tasks, dirty-row protection), so it cannot prove
-				// payment state. The snapshot adoption in `settle` is the local
-				// write; the engine refresh inside it is catch-up only.
-				const response = await http.get('orders', {
-					params: { include: orderId, per_page: 1 },
-				});
-				const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-				if (!serverOrder || isSettled() || unmountedRef.current) return;
-				const serverStatus = serverOrder.status as string;
-				// Unchanged from the open cart: nothing to reconcile. (When the local
-				// copy already carries the settled status, "unchanged" IS the outcome.)
-				if (serverStatus === localStatus && !localAlreadySettled) return;
-				// A status change is not a payment: an unpaid transition leaves everything in
-				// place (the finally releases the spinner) so the cashier can retry from the
-				// cart they still have — unless it is the status the merchant configured the
-				// gateway to settle on, which is the sale finishing.
-				const server = judgeGatewaySnapshot(serverOrder, settledRef.current, ctx.dp);
-				if (!server.complete) {
-					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
-						context: {
-							serverStatus,
-							settledOrderStatus: server.storedStatus,
-							source: 'fallback-refresh',
-						},
-					});
-					return;
-				}
-				await settle(server, 'fallback-refresh');
-			} catch (err) {
-				// Best-effort safety net only. Order completion is authoritatively
-				// delivered via the postMessage path, so a failed or premature poll
-				// (order not queryable yet or a transient sync error) is
-				// expected and must NOT be surfaced as a payment-gateway failure —
-				// doing so produced spurious PY02001 errors on successful checkouts.
-				orderLogger.debug('Fallback order status refresh did not complete', {
-					context: {
-						error: getErrorMessage(err),
-						source: 'fallback-refresh',
-					},
-				});
-			} finally {
-				setLoading(false);
-				if (
-					!isSettled() &&
-					!unmountedRef.current &&
-					pollUntilMs !== undefined &&
-					Date.now() < pollUntilMs
-				) {
-					if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-					fallbackTimerRef.current = setTimeout(
-						() => void pollServerTruth(pollUntilMs),
-						ASYNC_PAYMENT_POLL_INTERVAL_MS
-					);
-				}
-			}
-		},
-		[http, order, orderId, ctx.dp, settle, isSettled, setLoading, orderLogger]
-	);
-
-	/**
-	 * A later document loaded: schedule a fallback refresh in case the payment
-	 * gateway doesn't send a postMessage.
-	 */
-	const onLaterDocument = React.useCallback(() => {
-		if (fallbackTimerRef.current) {
-			clearTimeout(fallbackTimerRef.current);
-		}
-		fallbackTimerRef.current = setTimeout(
-			() => void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
-			1000
-		);
-	}, [pollServerTruth]);
+	const { poll, pollAfterGrace, stop } = useServerTruthPoll({
+		http,
+		order,
+		orderId,
+		settledRef,
+		dp: ctx.dp,
+		settle,
+		isSettled,
+		setLoading,
+		logger: orderLogger,
+	});
+	// A later document loaded: check server truth in case the gateway never posts a message.
 	const frame = usePayFrame({
 		src: paymentURLWithToken,
 		retryToken,
 		prepared,
 		report: setFrameStatus,
-		onLaterDocument,
+		onLaterDocument: pollAfterGrace,
 		logger: orderLogger,
 	});
 
@@ -312,7 +192,7 @@ export function PaymentWebview({
 				frame.remount();
 				// The remount resets the load count, so its first load never arms the poll.
 				// Still detect a payment that settled during the refresh.
-				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+				poll();
 			} else {
 				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
 				frame.expire();
@@ -338,7 +218,7 @@ export function PaymentWebview({
 				context: { orderId },
 			});
 			setLoading(false);
-			void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+			poll();
 			return;
 		}
 		// A pre-hardening store's received page emits whenever the CONFIGURED
@@ -358,13 +238,10 @@ export function PaymentWebview({
 				},
 			});
 			setLoading(false);
-			void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+			poll();
 			return;
 		}
-		if (fallbackTimerRef.current) {
-			clearTimeout(fallbackTimerRef.current);
-			fallbackTimerRef.current = null;
-		}
+		stop();
 		try {
 			await settle(judged, 'pay-page-message');
 		} finally {
@@ -412,14 +289,11 @@ export function PaymentWebview({
 	};
 
 	// A layout effect: its cleanup runs in the commit that removes the frame, so a
-	// poll response arriving before the passive cleanups flush already sees the flag.
+	// refresh answer arriving before the passive cleanups flush already sees the flag.
 	React.useLayoutEffect(() => {
 		unmountedRef.current = false;
 		return () => {
 			unmountedRef.current = true;
-			if (fallbackTimerRef.current) {
-				clearTimeout(fallbackTimerRef.current);
-			}
 		};
 	}, []);
 
