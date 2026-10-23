@@ -126,6 +126,21 @@ describe('PaymentSection', () => {
 		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
 	});
 
+	it('a completed order with no journal and no date_paid is settled: the method row, nothing owed', () => {
+		mockView = viewWith([], 0);
+		render(
+			<PaymentSection
+				order={record({
+					status: 'completed',
+					payment_method: 'bacs',
+					payment_method_title: 'Bank transfer',
+				})}
+			/>
+		);
+		expect(screen.getByTestId('order-modal-payment').textContent).toBe('Bank transfer$7.70');
+		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
+	});
+
 	it('a cancelled order with a method set shows the method row with no Captured badge', () => {
 		mockView = viewWith([], 0);
 		render(

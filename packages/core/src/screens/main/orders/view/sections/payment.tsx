@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
+import { isPaidStatus } from '@wcpos/sync-core';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { Section } from './_section';
@@ -35,11 +36,12 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 	// Nothing taken yet: the ledger's own words ("No payments yet", then Total · Paid ·
 	// Remaining), never a method row that reads as paid. A dead order owes nothing.
 	const dead = ['cancelled', 'failed', 'refunded', 'trash'].includes(payload.status ?? '');
-	const owing = !legs && !paidAt && view.balanceMinor > 0 && !dead;
-	// The ledger derives the balance from the journal alone (a refund counts back as owed);
-	// an order that has settled (`date_paid`) or died keeps its legs as history and owes
-	// nothing, so only an open sale closes on Remaining.
-	const closing = view.balanceMinor > 0 && !dead && !paidAt;
+	// Settled is the store's word (`isPaidStatus`: completed, processing, a custom paid status)
+	// or a `date_paid`; the ledger derives the balance from the journal alone (a refund counts
+	// back as owed), so only an open sale closes on Remaining. A dead order owes nothing.
+	const settled = Boolean(paidAt) || isPaidStatus(payload.status);
+	const owing = !legs && !settled && view.balanceMinor > 0 && !dead;
+	const closing = view.balanceMinor > 0 && !dead && !settled;
 	const fallback = !legs && !owing && Boolean(method || paidAt || payload.transaction_id);
 
 	if (!legs && !owing && !fallback && refunded === 0 && !stamp) return null;
