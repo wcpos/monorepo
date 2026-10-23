@@ -982,6 +982,7 @@
 	"orders.delete_order": "Delete order",
 	"orders.delete_order_2": "Delete order {id}",
 	"orders.order_title": "Order #{number}",
+	"orders.open_order": "Open order",
 	"orders.items": "Items",
 	"orders.local_refund_summary": "Local refund summary:",
 	"orders.metadata": "Metadata",

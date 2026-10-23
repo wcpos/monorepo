@@ -37,6 +37,18 @@ it('moves focus, scrolls and opens on Enter; Escape is not the list key', () => 
 	key('Escape');
 	expect(open).toHaveBeenCalledTimes(2);
 });
+it('rings the row after a keyboard move, never after a click', () => {
+	const { key, result } = setup();
+	key('ArrowDown');
+	expect(result.current.ring).toBe(true);
+	// The focus event that follows the hook's own move keeps the ring.
+	act(() => result.current.focusFrom(0));
+	expect(result.current.ring).toBe(true);
+	// A click (its focus event arrives with no key behind it) drops it.
+	act(() => result.current.focusFrom(1));
+	expect(result.current.focusIndex).toBe(1);
+	expect(result.current.ring).toBe(false);
+});
 it('does nothing on native', () => {
 	const old = Platform.OS;
 	Platform.OS = 'ios';
