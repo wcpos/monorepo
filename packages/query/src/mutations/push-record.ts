@@ -12,9 +12,10 @@ import {
 	findEngineResident,
 	type QueryManager,
 	type RecordWriteTarget,
-	type WriteableRecord,
 	writeTargetCollection,
 } from './resident';
+
+import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 
 // Slow stores answer order pushes after 15 s (Sentry CHECKOUT101); 45 s covers the
 // write drain's 30 s request timeout plus its first retry. Pay spins and stays disabled.
@@ -81,7 +82,7 @@ export async function readWrittenResident(
 export async function pushRecord(
 	runtime: QueryManager,
 	document: RecordWriteTarget
-): Promise<WriteableRecord> {
+): Promise<ReadonlyEngineRecord<WriteableCollection>> {
 	const { collectionName, recordId, receipt, resident } = await enqueueRecordWrite(
 		runtime,
 		document
@@ -95,5 +96,6 @@ export async function pushRecord(
 		currentResident = await readWrittenResident(runtime, collectionName, recordId);
 	}
 
-	return currentResident as unknown as WriteableRecord;
+	// The resident IS the engine record (ADR 0028); `findEngineResident` types it as an untyped RxDocument.
+	return currentResident as unknown as ReadonlyEngineRecord<WriteableCollection>;
 }

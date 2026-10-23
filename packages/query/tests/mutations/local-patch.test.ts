@@ -470,6 +470,18 @@ it('a target with no engine collection is refused', async () => {
 	expect(mockWrite).not.toHaveBeenCalled();
 });
 
+it('an explicit collection never re-addresses a record that carries its own', async () => {
+	const coupon = { uuid: 'coupon-uuid', collection: { name: 'coupons' } };
+	const refusal = applyLocalPatch(
+		manager as never,
+		{ document: coupon as never, data: { status: 'pending' } },
+		{ collectionName: 'orders' }
+	);
+	await expect(refusal).rejects.toBeInstanceOf(ResidentWriteError);
+	expect(mockFindOneExec).not.toHaveBeenCalled();
+	expect(mockWrite).not.toHaveBeenCalled();
+});
+
 it('optimistically patches a server-born resident and enqueues syncable fields', async () => {
 	const stored: Record<string, unknown> = {
 		uuid: 'order-uuid',

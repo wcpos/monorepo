@@ -1004,10 +1004,10 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.takeTender());
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			changes: expect.any(Function),
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{ document: order, changes: expect.any(Function) },
+			{ collectionName: 'orders' }
+		);
 		// ADR 0040 D2: the provenance rides the write, the status comes from the store's close.
 		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
 			meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
@@ -2404,10 +2404,10 @@ it('zero balance writes its provenance once, then closes', async () => {
 		mockLocalPatch.mock.invocationCallOrder[0]
 	);
 	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledWith({
-		document: order,
-		changes: expect.any(Function),
-	});
+	expect(mockLocalPatch).toHaveBeenCalledWith(
+		{ document: order, changes: expect.any(Function) },
+		{ collectionName: 'orders' }
+	);
 	expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload)).toEqual({
 		meta_data: [{ key: '_wcpos_sale_counter', value: '1' }],
 	});

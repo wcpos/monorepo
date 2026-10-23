@@ -26,12 +26,10 @@ import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { TemporaryOrderRecord } from '../temporary-order';
 import type { RxDocument } from 'rxdb';
 
-/** A read-only engine record of a writeable collection: what the push doors return. */
-export type WriteableRecord = {
-	[C in WriteableCollection]: ReadonlyEngineRecord<C>;
-}[WriteableCollection];
 /** A record the push doors can serve: it carries its own collection. An identity-only order needs `applyLocalPatch`'s `collectionName`. */
-export type RecordWriteTarget = WriteableRecord | TemporaryOrderRecord;
+export type RecordWriteTarget =
+	| { [C in WriteableCollection]: ReadonlyEngineRecord<C> }[WriteableCollection]
+	| TemporaryOrderRecord;
 type OrderIdentity = { readonly uuid: string; readonly isNew: boolean };
 /** What a write door accepts: a read-only record, or an order's identity plus an explicit collection. */
 export type WriteTarget = RecordWriteTarget | OrderIdentity;
@@ -75,12 +73,15 @@ export function documentRecordId(document: unknown): string | null {
 	return typeof identity === 'string' && identity.length > 0 ? identity : null;
 }
 
-/** The validated engine collection a write target lives in: the caller's explicit name first, else the record's own. */
+/** The validated engine collection a write target lives in: the caller's explicit name for an identity, else the record's own. */
 export function writeTargetCollection(
 	target: WriteTarget,
 	explicit?: string
 ): WriteableCollection | null {
-	return writeableCollection(explicit ?? recordCollectionName(target));
+	const own = recordCollectionName(target);
+	// An explicit name never re-addresses a record that carries its own: no write door.
+	if (own && explicit && own !== explicit) return null;
+	return writeableCollection(explicit ?? own);
 }
 
 function withPromotedFields(

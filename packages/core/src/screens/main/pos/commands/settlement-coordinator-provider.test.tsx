@@ -118,10 +118,8 @@ jest.mock('../contexts/order-money-divergence', () => ({
 }));
 jest.mock('../contexts/order-engine-warnings', () => ({ useReportEngineWarnings: () => report }));
 jest.mock('./write-order-changes', () => ({
-	// The order-only verb fixes 'orders' inside; callers pass no collection.
-	writeOrderChanges: async (...args: any[]) => {
-		expect(args).toHaveLength(2);
-		const [, input] = args;
+	// The verb's 'orders' is proven through the real verb: "durable divergence ownership" in use-local-mutation.test.ts.
+	writeOrderChanges: async (_manager: unknown, input: any) => {
 		input.changes(input.document.payload);
 		await beforeResolve();
 		const changes = input.changes(input.document.payload);

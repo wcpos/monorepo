@@ -3,12 +3,12 @@ import * as React from 'react';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	type CommandProvenance,
-	type EngineRecord,
 	MoneyCommandError,
 	moneyCommandPoster,
 	type OrderApproval,
 	type Post,
 	type ProvenanceCommand,
+	type ReadonlyEngineRecord,
 } from '@wcpos/query';
 import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
@@ -50,7 +50,7 @@ export type CloseOutcome =
  */
 export async function closeConfirmed(
 	runtime: SaleContext['runtime'],
-	order: EngineRecord<'orders'>,
+	order: ReadonlyEngineRecord<'orders'>,
 	summary: OrderPaymentSummary
 ): Promise<'completed' | 'reopened' | 'unconfirmed'> {
 	if (!isPaidStatus(summary.status)) return 'reopened';
@@ -71,7 +71,7 @@ export async function closeConfirmed(
 export async function closeSale(
 	runtime: SaleContext['runtime'],
 	storeDB: StoreLocalDatabase,
-	order: EngineRecord<'orders'>,
+	order: ReadonlyEngineRecord<'orders'>,
 	deps: {
 		post: Post;
 		/** Absent (the boundary's own decision): the order as it stands once its lines are written. */
@@ -132,7 +132,7 @@ export function useCloseSale() {
 	}, [online]);
 	const close = React.useCallback(
 		(
-			order: EngineRecord<'orders'>,
+			order: ReadonlyEngineRecord<'orders'>,
 			options: { sessionId: string | null; approval?: OrderApproval }
 		) =>
 			closeSale(ctx.runtime, ctx.storeDB, order, {

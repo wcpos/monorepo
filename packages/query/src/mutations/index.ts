@@ -12,6 +12,7 @@ export {
 	patchEngineResident,
 	syncableChanges,
 	writeableCollection,
+	type RecordWriteTarget,
 	type WriteTarget,
 	type PayloadChanges,
 	type LocalPatchProps,

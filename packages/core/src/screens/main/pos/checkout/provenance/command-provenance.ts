@@ -1,5 +1,5 @@
 import { derive, readCompletions, readLedger, toMinor } from '@wcpos/order-math';
-import type { CommandProvenance, EngineRecord, ProvenanceCommand } from '@wcpos/query';
+import type { CommandProvenance, ProvenanceCommand, ReadonlyEngineRecord } from '@wcpos/query';
 import type { MetaDataEntry } from '@wcpos/order-math';
 
 import { completionMeta } from './stamp-completion';
@@ -31,7 +31,7 @@ function fromMeta(meta: readonly MetaDataEntry[], withCounter: boolean): Command
  */
 function completesSale(
 	command: ProvenanceCommand,
-	payload: EngineRecord<'orders'>['payload'],
+	payload: ReadonlyEngineRecord<'orders'>['payload'],
 	dp: number
 ): boolean {
 	if (command.kind === 'close' || command.kind === 'submit') return true;
@@ -57,7 +57,7 @@ function completesSale(
  */
 export async function commandProvenance(
 	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId'> & { dp?: number },
-	order: EngineRecord<'orders'>,
+	order: ReadonlyEngineRecord<'orders'>,
 	sessionId: string | null,
 	command: ProvenanceCommand
 ): Promise<CommandProvenance | null> {

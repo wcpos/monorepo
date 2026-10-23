@@ -3,6 +3,7 @@
  * Compiled by `pnpm typecheck` (tsc), never run by jest.
  */
 import { isVariationRecord, useRecordField } from '@wcpos/query';
+import type { RecordWriteTarget } from '@wcpos/query/mutations';
 import type {
 	EngineRecord,
 	OrderPayload,
@@ -10,11 +11,13 @@ import type {
 	useQueryRuntime,
 } from '@wcpos/query';
 
+import { commandProvenance } from './pos/checkout/provenance/command-provenance';
+import { closeConfirmed, closeSale, type useCloseSale } from './pos/commands/close-sale';
+
 import type { usePushDocument } from './contexts/use-push-document';
 import type { useCouponRecord } from './coupons/commands/use-coupon-record';
 import type { useCustomerRecord } from './customers/commands/use-customer-record';
 import type { useOrderRecord, useUndoRefusedReopen } from './orders/commands/use-order-record';
-import type { useCustomerLinkStamp } from './pos/commands/use-customer-link-stamp';
 import type { useOrderLedgerWrite } from './pos/commands/use-order-ledger-write';
 import type { writeOrderChanges } from './pos/commands/write-order-changes';
 import type { useCatalogueRecord } from './products/commands/use-catalogue-record';
@@ -34,8 +37,11 @@ declare const coupons: ReturnType<typeof useCouponRecord>;
 declare const catalogue: ReturnType<typeof useCatalogueRecord>;
 declare const pushDocument: ReturnType<typeof usePushDocument>;
 declare const ledger: ReturnType<typeof useOrderLedgerWrite>;
-declare const link: ReturnType<typeof useCustomerLinkStamp>;
 declare const write: typeof writeOrderChanges;
+declare const close: ReturnType<typeof useCloseSale>['close'];
+declare const [runtime, storeDB, , deps]: Parameters<typeof closeSale>;
+declare const summary: Parameters<typeof closeConfirmed>[2];
+declare const [saleCtx, , , command]: Parameters<typeof commandProvenance>;
 
 void customers.saveCustomerFields(customer, {});
 void orders.saveOrderFields(order, {});
@@ -50,8 +56,15 @@ void pushDocument(order);
 void ledger.recordLedger(order, { fee_lines: [], total: '0' });
 void ledger.stampCompletion(order, []);
 void ledger.writeLedgerChanges(order, () => ({}));
-void link.stampCustomer({ document: { uuid: order.uuid, isNew: false } }, 1);
+void ledger.stampCompletion({ uuid: order.uuid, isNew: false }, []); // the ledger verbs name 'orders'
 void write(manager, { document: order, changes: () => ({}) });
+// `useMutation().patchRecord` takes a RecordWriteTarget (the seam scan fences naming it here).
+const couponTarget: RecordWriteTarget = coupon;
+void couponTarget;
+void closeConfirmed(runtime, order, summary);
+void closeSale(runtime, storeDB, order, deps);
+void close(order, { sessionId: null });
+void commandProvenance(saleCtx, order, null, command);
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -61,10 +74,18 @@ function useReadonlyFieldContract(): void {
 		void inferred;
 		return data.payload.total;
 	});
+	const mutableTotal = useRecordField(mutableOrder, (data) => {
+		const inferred: Equal<typeof data.payload, OrderPayload> = true;
+		void inferred;
+		return data.payload.total;
+	});
 	const parentId = isVariationRecord(variation) ? variation.payload.parent_id : undefined;
-	void [total, parentId, product];
+	void [total, mutableTotal, parentId, product];
 }
 void useReadonlyFieldContract;
 
 // @ts-expect-error a bare `{ id }` carries no record identity: it is not a write target
 void ledger.stampCompletion({ id: 'order' }, []);
+// @ts-expect-error `patchRecord` names no collection, so an identity is not a record it can serve
+const identityTarget: RecordWriteTarget = { uuid: order.uuid, isNew: false };
+void identityTarget;

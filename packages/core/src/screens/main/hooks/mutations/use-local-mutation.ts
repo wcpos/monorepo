@@ -21,6 +21,7 @@ export {
 	patchAndEnqueueEngineResident,
 	syncableChanges,
 	writeableCollection,
+	type RecordWriteTarget,
 	type WriteTarget,
 	type PayloadChanges,
 } from '@wcpos/query/mutations';
