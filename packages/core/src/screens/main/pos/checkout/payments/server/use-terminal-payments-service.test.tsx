@@ -346,6 +346,54 @@ it('names the cashier at the till when a capture lands, not the one who started 
 	}
 });
 
+// C1 slice 3: the till-side balance is gone. A captured status without the store's summary
+// completes nothing, even when the resident's ledger reads paid; the attempt waits for the bridge.
+it("a captured status without the store's summary completes nothing, whatever the ledger reads", async () => {
+	const services = await import('../../../../../../services/terminal-payments');
+	const realStart = services.startTerminalPaymentsService;
+	const completeOrder = jest.fn();
+	const start = jest
+		.spyOn(services, 'startTerminalPaymentsService')
+		.mockImplementation((options) => {
+			completeOrder.mockImplementation(options.completeOrder!);
+			return realStart({ ...options, completeOrder });
+		});
+	const { completeSale } = jest.requireMock<{ completeSale: jest.Mock }>('../../sale-completion');
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], [{ ...mockRow, status: 'captured' }]);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const service = getTerminalPaymentsService()!;
+		const published: unknown[] = [];
+		service.subscribe(() => published.push(service.get('completed-order')?.settlement));
+		const payment = {
+			...mockRow,
+			id: 'bare',
+			capture_mode: 'server' as const,
+			recorded_offline: false,
+			status: 'captured' as const,
+		};
+		mockHttp.get.mockResolvedValue({ data: { payment } });
+		service.resume({
+			orderUuid: 'completed-order',
+			orderId: 42,
+			orderNumber: '42',
+			row: { ...payment, status: 'pending' },
+		});
+		await waitFor(() =>
+			expect(published).toContainEqual(expect.objectContaining({ outcome: 'captured' }))
+		);
+		expect(published).not.toContainEqual(expect.objectContaining({ saleComplete: true }));
+		expect(service.get('completed-order')?.settlement?.saleComplete).toBe(false);
+		expect(completeOrder).not.toHaveBeenCalled();
+		expect(completeSale).not.toHaveBeenCalled();
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+		mockResident.payload.meta_data = original;
+	}
+});
+
 it.each(['ledger', 'provenance'] as const)(
 	'preserves the rejection contract for a failed %s patch',
 	async (failure) => {
@@ -512,7 +560,7 @@ jest.mock('../../sale-completion', () => {
 	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
 		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '2' }, ...(facts.extraMeta ?? [])])
 	);
-	return { ...actual, completionMetaFor };
+	return { ...actual, completionMetaFor, completeSale: jest.fn(actual.completeSale) };
 });
 
 jest.mock('../../hooks/use-sale-context', () => ({

@@ -372,8 +372,10 @@ export function SaleCompletionBridge(): null {
 		 * `{ via: 'recovery' }`) as a sent sale (its `checkout.sent` audit, the attempt resolved),
 		 * from the stamp the refresh adopted with the store's document: never the unpaid replay,
 		 * which would count starts and abandon it. A send is the only answer landed here: a recovered
-		 * record or settled submit completes through the replay, as a replay (ADR 0040 Decided 1
-		 * rule 3). Returns the orders finished this way.
+		 * record, a settled or recorded submit, a close and a capture go to the resident judge
+		 * (`replay`, `finishOne`), which decides on the attempt's stored status and the adopted
+		 * document (an offline record's second completion is a replay: ADR 0040 Decided 1 rule 3).
+		 * Returns the orders finished this way.
 		 */
 		const finishRecovered = async (answered: ReadonlyMap<string, ResentCommand[]>) => {
 			const finished = new Set<string>();
@@ -382,7 +384,7 @@ export function SaleCompletionBridge(): null {
 			for (const [uuid, answers] of answered) {
 				if (current.stopped) break;
 				const attempt = pending[uuid];
-				if (!attempt || !answers.some(({ kind }) => kind === 'submit')) continue;
+				if (!attempt) continue;
 				const resident = await findOrder(uuid);
 				if (!resident) continue;
 				const sent = answers

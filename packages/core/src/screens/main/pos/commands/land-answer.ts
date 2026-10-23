@@ -81,9 +81,9 @@ export type StoreAnswer =
 export type Arrival = { via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' };
 
 /**
- * A replayed answer (Try again) as a store answer: it arrives mirrored, so this only reads it.
- * Null when it lands nothing: a cancel, a void, a terminal leg (its service finishes it), or a
- * send whose adopted order no longer carries the stamp (the store settled or cancelled it).
+ * A replayed answer (Try again, recovery) as a store answer: it arrives mirrored, so this only
+ * reads it. Null when it lands nothing: a cancel, a void, a terminal leg (its service finishes
+ * it), or a send whose adopted order lost the stamp (the store settled or cancelled it).
  */
 export function answerOf(
 	{ kind, data }: ResentCommand,
