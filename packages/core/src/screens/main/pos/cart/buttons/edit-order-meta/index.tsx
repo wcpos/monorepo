@@ -16,7 +16,7 @@ import type { CurrentOrderRecord } from '../../../contexts/current-order';
 interface Props {
 	order: CurrentOrderRecord;
 	/** The autosave's flush, for the sheet's Sync order (see `EditOrderMetaForm`). */
-	flushRef?: React.RefObject<(() => Promise<void>) | null>;
+	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
 /**

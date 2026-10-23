@@ -210,7 +210,7 @@ function FlushHarness({
 	onFlushReady,
 }: {
 	onChange: (changes: object) => Promise<void>;
-	onFlushReady: (flush: () => Promise<void>) => void;
+	onFlushReady: (flush: () => Promise<boolean>) => void;
 }) {
 	const form = useForm({ defaultValues: { name: 'Original' } });
 	const { flush } = useFormChangeHandler({ form, onChange });
@@ -231,7 +231,7 @@ it('flush resolves after the pending write has landed', async () => {
 				}, 50)
 			)
 	);
-	const flushRef: { current: (() => Promise<void>) | null } = { current: null };
+	const flushRef: { current: (() => Promise<boolean>) | null } = { current: null };
 	const view = render(
 		<FlushHarness
 			onChange={onChange}
@@ -245,15 +245,15 @@ it('flush resolves after the pending write has landed', async () => {
 	});
 	// Within the debounce window: nothing written yet, and flush must not wait for the timer.
 	expect(onChange).not.toHaveBeenCalled();
-	let flushed = false;
-	const flushing = flushRef.current!().then(() => {
-		flushed = true;
+	let flushed: boolean | null = null;
+	const flushing = flushRef.current!().then((landed) => {
+		flushed = landed;
 	});
 	await act(async () => {
 		await Promise.resolve();
 	});
 	expect(onChange).toHaveBeenCalledWith({ name: 'Typed' });
-	expect(flushed).toBe(false);
+	expect(flushed).toBeNull();
 	await act(async () => {
 		jest.advanceTimersByTime(50);
 		await flushing;
@@ -302,4 +302,26 @@ it('a second text field edited inside the debounce window does not drop the firs
 	});
 	expect(onChange).toHaveBeenCalledWith({ name: 'Shop' });
 	expect(onChange).toHaveBeenCalledWith({ city: 'Perth' });
+});
+
+it('flush resolves false when the pending write reports a failure', async () => {
+	const onChange = jest.fn(() => Promise.resolve(false));
+	const flushRef: { current: (() => Promise<boolean>) | null } = { current: null };
+	const view = render(
+		<FlushHarness
+			onChange={onChange as unknown as (changes: object) => Promise<void>}
+			onFlushReady={(flush) => {
+				flushRef.current = flush;
+			}}
+		/>
+	);
+	await act(async () => {
+		view.getByTestId('change').click();
+	});
+	let landed: boolean | null = null;
+	await act(async () => {
+		landed = await flushRef.current!();
+	});
+	expect(onChange).toHaveBeenCalled();
+	expect(landed).toBe(false);
 });

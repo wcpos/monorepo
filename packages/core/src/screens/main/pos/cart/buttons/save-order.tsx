@@ -18,8 +18,11 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 export function SaveButton({
 	onBeforePush,
 }: {
-	/** Awaited before the push: the order sheet's pending autosave, so the push carries it. */
-	onBeforePush?: () => Promise<void>;
+	/**
+	 * Awaited before the push: the order sheet's pending autosave, so the push carries it. False
+	 * means the edit did not land (already reported), and there is no push.
+	 */
+	onBeforePush?: () => Promise<boolean>;
 } = {}) {
 	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
@@ -43,7 +46,7 @@ export function SaveButton({
 
 		setLoading(true);
 		try {
-			await onBeforePush?.();
+			if (onBeforePush && !(await onBeforePush())) return;
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook

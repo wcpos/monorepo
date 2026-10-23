@@ -70,6 +70,23 @@ const formSchema = z.object({
 });
 
 const handOverSchema = z.object({ status: z.string(), cashier_id: z.string() });
+
+type MetaRow = { id?: number; key?: string; value?: unknown };
+
+/** The draft's rows with the id the order already holds for the same key, where the draft has none. */
+function withStoredMetaIds<Row extends MetaRow>(rows: Row[], stored: readonly MetaRow[]): Row[] {
+	const claimed = new Set<number>();
+	for (const row of rows) if (row.id != null) claimed.add(row.id);
+	return rows.map((row) => {
+		if (row.id != null) return row;
+		const id = stored.find(
+			(entry) => entry.id != null && entry.key === row.key && !claimed.has(entry.id)
+		)?.id;
+		if (id == null) return row;
+		claimed.add(id);
+		return { ...row, id };
+	});
+}
 type HandOverValues = z.infer<typeof handOverSchema>;
 
 type FormValues = z.infer<typeof formSchema>;
@@ -87,7 +104,7 @@ export function EditOrderMetaForm({
 	 * Receives the autosave's flush, so an action outside the form that pushes the order
 	 * (the sheet's Sync order) carries the edit the cashier just made, not the one before.
 	 */
-	flushRef?: React.RefObject<(() => Promise<void>) | null>;
+	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }) {
 	const t = useT();
 	const { writeOrderFields } = useOrderFieldsWrite();
@@ -130,19 +147,26 @@ export function EditOrderMetaForm({
 			const value = form.getValues(root);
 			// Autosave never writes the identity rows (the hand-over does, on Send; the local patch
 			// keeps the stored ones), and a row the cashier has only just added (no key yet) is not
-			// an edit: it would be pushed as blank meta.
+			// an edit: it would be pushed as blank meta. The draft is the form's own, so a row the
+			// store has numbered since (a sync while the sheet stayed open) takes its id back from
+			// the order by key, or the store would append a copy instead of updating the row.
 			const patch = {
 				[root]:
 					root === 'meta_data' && Array.isArray(value)
-						? value.filter(
-								(row) =>
-									!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
-									(row?.id != null || String(row?.key ?? '') !== '')
+						? withStoredMetaIds(
+								value.filter(
+									(row) =>
+										!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
+										(row?.id != null || String(row?.key ?? '') !== '')
+								),
+								order.getLatest().payload.meta_data ?? []
 							)
 						: value,
 			};
+			// Resolves whether the record holds the edit: flush() hands that to Sync order and Send.
 			return writeOrderFields(order, () => patch).then((written) => {
 				if (written) markSaved([root]);
+				return written;
 			});
 		},
 	});
@@ -175,6 +199,10 @@ export function EditOrderMetaForm({
 	async function handleSend() {
 		if (!pending || loading) return;
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
+		// A note still debounced or being written lands first, or the push would miss it and the
+		// rollback snapshot below would carry the value before it. A failed write stops the send;
+		// its failure was already reported.
+		if (!(await flush())) return;
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, status, statusEdit: statusChanged } = pending;

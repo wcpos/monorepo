@@ -76,7 +76,7 @@ export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,
 	debounceMs = 300,
-}: UseFormChangeHandlerOptions<T>): { flush: () => Promise<void> } {
+}: UseFormChangeHandlerOptions<T>): { flush: () => Promise<boolean> } {
 	const onChangeRef = React.useRef(onChange);
 	React.useEffect(() => {
 		onChangeRef.current = onChange;
@@ -86,7 +86,7 @@ export function useFormChangeHandler<T extends FieldValues>({
 	 * The write in flight (validation, then the caller's onChange), so a caller that is about
 	 * to act on the persisted record (a push to the store) can wait for it: `flush()` below.
 	 */
-	const inFlightRef = React.useRef<Promise<void> | null>(null);
+	const inFlightRef = React.useRef<Promise<boolean> | null>(null);
 	/** The field whose debounced write is waiting, so another field's edit can flush it first. */
 	const pendingNameRef = React.useRef<string | null>(null);
 	type Commit = (
@@ -97,9 +97,14 @@ export function useFormChangeHandler<T extends FieldValues>({
 	const commit: Commit = (changes, write, validate) => {
 		pendingNameRef.current = null;
 		// The gate: an invalid value is never written; the field shows its own error instead.
-		const settled: Promise<void> = validate()
+		// A write that returns false (the caller's writer reported a failure) or throws settles as
+		// false, so a caller waiting on flush() knows the record does not hold the edit.
+		const settled: Promise<boolean> = validate()
 			.then((valid) => (valid ? write(changes) : undefined))
-			.then(() => undefined)
+			.then(
+				(result) => result !== false,
+				() => false
+			)
 			.finally(() => {
 				if (inFlightRef.current === settled) inFlightRef.current = null;
 			});
@@ -182,12 +187,15 @@ export function useFormChangeHandler<T extends FieldValues>({
 
 	/**
 	 * Run the pending debounced write now and resolve once it (validation and the caller's
-	 * onChange) has settled. For a caller that pushes the record next: the push must carry
-	 * the edit the cashier just made, not the one before it.
+	 * onChange) has settled: true when the record holds the edit (or nothing was pending), false
+	 * when the write failed. For a caller that pushes the record next: the push must carry the
+	 * edit the cashier just made, not the one before it, and must not go out at all over a
+	 * failed write with a success toast.
 	 */
 	const flush = React.useCallback(async () => {
 		debouncedRef.current?.flush();
-		await inFlightRef.current;
+		const landed = await inFlightRef.current;
+		return landed ?? true;
 	}, []);
 
 	return { flush };
