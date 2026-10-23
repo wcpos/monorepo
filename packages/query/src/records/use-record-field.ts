@@ -5,7 +5,8 @@ import { deepEqual } from 'rxdb/plugins/utils';
 
 import type { ClosureRow, TemporaryOrderDocument } from '@wcpos/database';
 
-import type { EngineRecord, EngineRecordCollectionName, EngineRecordShape } from './engine-record';
+import type { EngineRecordCollectionName, EngineRecordShape } from './engine-record';
+import type { ReadonlyEngineRecord } from './readonly-engine-record';
 import type { ReadonlyClosureDocument } from '../register-session/reads';
 import type { ReadonlyUserDatabaseRecord } from '../user-db/records';
 import type { RxDocument, RxState } from 'rxdb';
@@ -97,22 +98,22 @@ function useSelectedValue<TSource, TData, R>(
  * yields `undefined` (for optional mounts, e.g. no selected order).
  */
 export function useRecordField<C extends EngineRecordCollectionName, R>(
-	record: EngineRecord<C>,
+	record: ReadonlyEngineRecord<C>,
 	select: Selector<EngineRecordShape<C>, R>
 ): R;
 export function useRecordField<C extends EngineRecordCollectionName, R>(
-	record: EngineRecord<C> | null | undefined,
+	record: ReadonlyEngineRecord<C> | null | undefined,
 	select: Selector<EngineRecordShape<C>, R>
 ): R | undefined;
 // Interim overload for the POS current-order union (engine order | per-till temporary
 // template, ADR 0028 stage I). The union of two RxDocument instantiations matches neither
 // generic overload, so it needs its own. Dies with the temporary order in ADR 0030.
 export function useRecordField<R>(
-	record: EngineRecord<'orders'> | TemporaryOrderDocument,
+	record: ReadonlyEngineRecord<'orders'> | TemporaryOrderDocument,
 	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
 ): R;
 export function useRecordField<R>(
-	record: EngineRecord<'orders'> | TemporaryOrderDocument | null | undefined,
+	record: ReadonlyEngineRecord<'orders'> | TemporaryOrderDocument | null | undefined,
 	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
 ): R | undefined;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(

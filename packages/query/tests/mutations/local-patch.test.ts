@@ -10,7 +10,7 @@ import { act, waitFor } from '@testing-library/react';
 
 import { applyLocalPatch, ResidentWriteError } from '../../src/mutations';
 
-import type { LocalPatchProps, MutationDocument } from '../../src/mutations';
+import type { LocalPatchProps, WriteTarget } from '../../src/mutations';
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
@@ -87,7 +87,7 @@ const manager = {
 		status: mockStatus,
 	},
 };
-const localPatch = <D extends MutationDocument, T extends object>(input: LocalPatchProps<D, T>) =>
+const localPatch = <D extends WriteTarget, T extends object>(input: LocalPatchProps<D, T>) =>
 	applyLocalPatch(manager as never, input);
 
 jest.mock('../../src/temporary-order', () => ({
@@ -466,6 +466,18 @@ it('a target with no engine collection is refused', async () => {
 	const refusal = localPatch({ document: { uuid: 'x', isNew: false }, data: { name: 'x' } });
 	await expect(refusal).rejects.toBeInstanceOf(ResidentWriteError);
 	await expect(refusal).rejects.toThrow('No write door for collection "undefined"');
+	expect(mockFindOneExec).not.toHaveBeenCalled();
+	expect(mockWrite).not.toHaveBeenCalled();
+});
+
+it('an explicit collection never re-addresses a record that carries its own', async () => {
+	const coupon = { uuid: 'coupon-uuid', collection: { name: 'coupons' } };
+	const refusal = applyLocalPatch(
+		manager as never,
+		{ document: coupon as never, data: { status: 'pending' } },
+		{ collectionName: 'orders' }
+	);
+	await expect(refusal).rejects.toBeInstanceOf(ResidentWriteError);
 	expect(mockFindOneExec).not.toHaveBeenCalled();
 	expect(mockWrite).not.toHaveBeenCalled();
 });

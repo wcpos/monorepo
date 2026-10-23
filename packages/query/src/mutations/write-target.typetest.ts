@@ -6,7 +6,7 @@ import { enqueueRecordWrite, pushRecord } from './push-record';
 import type { QueryRuntime } from '../provider';
 import type { EngineRecord } from '../records/engine-record';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
-import type { MutationDocument } from './resident';
+import type { WriteTarget } from './resident';
 
 declare const runtime: QueryRuntime;
 declare const readonlyOrder: ReadonlyEngineRecord<'orders'>;
@@ -21,9 +21,9 @@ void enqueueRecordWrite(runtime, readonlyOrder);
 const asReadonly: ReadonlyEngineRecord<'orders'> = order; // per-screen migration precondition
 void asReadonly;
 // @ts-expect-error a bare object with no record identity is not a write target
-const a: MutationDocument = { id: 'store_1' };
+const a: WriteTarget = { id: 'store_1' };
 // @ts-expect-error a store document has no write door
-const b: MutationDocument = store;
+const b: WriteTarget = store;
 void [a, b];
 // @ts-expect-error the push doors cannot serve an identity: it carries no collection
 void pushRecord(runtime, identity);

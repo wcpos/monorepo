@@ -247,12 +247,15 @@ it('background terminal settlement enqueues one provenance-only patch after mirr
 	try {
 		await waitFor(() => expect(mockPatch).toHaveBeenCalledTimes(1));
 		expect(mockMirror).toHaveBeenCalledTimes(1);
-		expect(mockPatch).toHaveBeenCalledWith({
-			document: mockResident,
-			data: {
-				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '2' }]),
+		expect(mockPatch).toHaveBeenCalledWith(
+			{
+				document: mockResident,
+				data: {
+					meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '2' }]),
+				},
 			},
-		});
+			{ collectionName: 'orders' }
+		);
 	} finally {
 		hook.unmount();
 		mockResident.payload.meta_data = original;

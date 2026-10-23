@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { CustomerPayload, EngineRecord } from '@wcpos/query';
+import type { CustomerPayload, EngineRecord, ReadonlyEngineRecord } from '@wcpos/query';
 
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
@@ -14,8 +14,10 @@ export function useCustomerRecord() {
 		[create]
 	);
 	const saveCustomerFields = React.useCallback(
-		async (customer: EngineRecord<'customers'>, data: Partial<CustomerPayload>): Promise<boolean> =>
-			!!(await localPatch({ document: customer, data }))?.document,
+		async (
+			customer: ReadonlyEngineRecord<'customers'>,
+			data: Partial<CustomerPayload>
+		): Promise<boolean> => !!(await localPatch({ document: customer, data }))?.document,
 		[localPatch]
 	);
 	return { createCustomer, saveCustomerFields };

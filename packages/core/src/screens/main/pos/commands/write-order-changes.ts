@@ -1,21 +1,21 @@
 import type { useQueryRuntime } from '@wcpos/query';
 import {
 	applyLocalPatch,
-	type MutationDocument,
 	type PayloadChanges,
 	ResidentWriteError,
+	type WriteTarget,
 } from '@wcpos/query/mutations';
 import { getCurrentBoundRegisterId } from '@wcpos/query/register-session';
 export { findEngineResident } from '@wcpos/query/mutations';
 
-export async function plainPatch<TDocument extends MutationDocument>(
+/** The order-only resolver write: the changes are resolved against the resident inside the door. */
+export async function writeOrderChanges<TDocument extends WriteTarget>(
 	manager: ReturnType<typeof useQueryRuntime>,
-	collectionName: string | undefined,
 	input: { document: TDocument; changes: PayloadChanges }
 ) {
 	try {
 		return await applyLocalPatch(manager, input, {
-			collectionName,
+			collectionName: 'orders',
 			registerId: getCurrentBoundRegisterId() ?? undefined,
 		});
 	} catch (error) {

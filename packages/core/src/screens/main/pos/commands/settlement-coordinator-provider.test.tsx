@@ -117,9 +117,9 @@ jest.mock('../contexts/order-money-divergence', () => ({
 	useServerOwnsMoneyReader: () => ownsMoney,
 }));
 jest.mock('../contexts/order-engine-warnings', () => ({ useReportEngineWarnings: () => report }));
-jest.mock('./plain-patch', () => ({
-	plainPatch: async (_manager: unknown, collection: string, input: any) => {
-		expect(collection).toBe('orders');
+jest.mock('./write-order-changes', () => ({
+	// The verb's 'orders' is proven through the real verb: "durable divergence ownership" in use-local-mutation.test.ts.
+	writeOrderChanges: async (_manager: unknown, input: any) => {
 		input.changes(input.document.payload);
 		await beforeResolve();
 		const changes = input.changes(input.document.payload);
@@ -465,7 +465,7 @@ it('#1560 only reports authoritative warnings after the resolver preflight', asy
 		line_items: [{ subtotal: '10', total: '10', total_tax: '1', taxes: [{ id: 41, total: '1' }] }],
 	});
 	orders.next({ ready: true, hits: [{ record: a }] });
-	// plainPatch may evaluate a resolver before the authoritative resident write.
+	// writeOrderChanges may evaluate a resolver before the authoritative resident write.
 	beforeResolve.mockImplementationOnce(async () => {
 		expect(report).not.toHaveBeenCalled();
 		a.payload.line_items = [

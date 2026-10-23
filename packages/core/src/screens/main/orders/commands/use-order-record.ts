@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { type EngineRecord, type OrderPayload, useQueryRuntime } from '@wcpos/query';
+import { type OrderPayload, type ReadonlyEngineRecord, useQueryRuntime } from '@wcpos/query';
 import { patchEngineResident } from '@wcpos/query/mutations';
 import { refreshOrderRecord } from '@wcpos/query/record-readers';
 import { type MetaDataEntry, POS_META_KEYS } from '@wcpos/sync-core';
@@ -23,7 +23,7 @@ type BeforeReopen = { status: OrderPayload['status']; identity: MetaDataEntry[] 
 export function useOrderRecord() {
 	const { localPatch } = useLocalMutation();
 	const saveOrderFields = React.useCallback(
-		async (order: EngineRecord<'orders'>, data: Partial<OrderPayload>): Promise<boolean> =>
+		async (order: ReadonlyEngineRecord<'orders'>, data: Partial<OrderPayload>): Promise<boolean> =>
 			!!(await localPatch({ document: order, data }))?.document,
 		[localPatch]
 	);
@@ -34,7 +34,7 @@ export function useOrderRecord() {
 	 */
 	const reopenOrder = React.useCallback(
 		async (
-			order: EngineRecord<'orders'>,
+			order: ReadonlyEngineRecord<'orders'>,
 			data: Pick<OrderPayload, 'status' | 'meta_data'>
 		): Promise<{ mutationId?: string; before: BeforeReopen } | null> => {
 			const before = {
@@ -60,7 +60,7 @@ export function useOrderRecord() {
 export function useUndoRefusedReopen() {
 	const runtime = useQueryRuntime();
 	return React.useCallback(
-		async (order: EngineRecord<'orders'>, before: BeforeReopen) => {
+		async (order: ReadonlyEngineRecord<'orders'>, before: BeforeReopen) => {
 			const wooId = order.payload.id;
 			let readopted = false;
 			if (wooId) {
