@@ -88,6 +88,9 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
 }));
 jest.mock('@wcpos/query', () => ({
+	adoptStoreOrderSnapshot: jest.requireActual(
+		'../../../../../../../query/src/commands/adopt-store-order'
+	).adoptStoreOrderSnapshot,
 	useDocField: jest.requireActual('../../../../../../../query/src/records/use-record-field')
 		.useDocField,
 	useQueryRuntime: () => ({
