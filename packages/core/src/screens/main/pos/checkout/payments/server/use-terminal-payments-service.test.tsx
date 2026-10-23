@@ -72,7 +72,10 @@ const mockPosterRefresh = jest.fn(async () => {});
 const mockMirror = jest.fn(async (_input: unknown) => {});
 const mockPatch = jest.fn<
 	Promise<object | undefined>,
-	[{ document: unknown; data: { meta_data?: MetaDataEntry[]; status?: string } }]
+	[
+		{ document: unknown; data: { meta_data?: MetaDataEntry[]; status?: string } },
+		{ collectionName: 'orders' }?,
+	]
 >(async () => ({}));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
@@ -535,7 +538,7 @@ jest.mock('../../hooks/use-sale-context', () => ({
 		dp: 2,
 		stampCompletion: (
 			...[o, m]: Parameters<import('../../sale-completion').SaleContext['stampCompletion']>
-		) => mockPatch({ document: o, data: { meta_data: m } }),
+		) => mockPatch({ document: o, data: { meta_data: m } }, { collectionName: 'orders' }),
 		actor: {
 			id: String(mockSession.wpCredentials.id),
 			name: mockSession.wpCredentials.display_name,
