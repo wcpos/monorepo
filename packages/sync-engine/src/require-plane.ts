@@ -567,13 +567,16 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		// re-render while the boot window is in flight rejoins it instead of aborting it and
 		// re-sending page=1. Kinds with no such key (targeted-records, refresh, refunds-by-
 		// parent) keep the immediate abort: nothing could rejoin them within the grace.
+		// The (scope, epoch) ticket guardWrite checks: a declaration after a store switch must
+		// never join the previous scope's execution, whose writes that switch drops.
+		const scope = `${deps.manager.activeScope}\u0000${deps.manager.epoch}`;
 		if (requirement.kind === 'query') {
-			return `query\u0000${requirement.collection}\u0000${requirement.queryKey}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+			return `${scope}\u0000query\u0000${requirement.collection}\u0000${requirement.queryKey}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
 		}
 		if (requirement.kind !== 'search') return null;
 		const limit = searchLimitOf(requirement);
 		if (!Number.isSafeInteger(limit) || limit <= 0) return null;
-		return `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+		return `${scope}\u0000${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
 	};
 	const forgetDedupeKey = (item: QueuedRequirement): void => {
 		if (item.dedupeKey && activeByDedupeKey.get(item.dedupeKey) === item) {

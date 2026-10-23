@@ -1384,6 +1384,44 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it("a search declared after a scope switch does not join the previous scope's in-flight search (it fetches for its own scope)", async () => {
+		let searches = 0;
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products') || !parsed.searchParams.has('search')) {
+				return json([]);
+			}
+			searches += 1;
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			// The old scope's request hangs until the switch aborts it; the new scope's answers.
+			if (searches > 1) return json([productPayload(321, 'Keyboard')]);
+			return await new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+			});
+		});
+		await engine.ready;
+		const search = { collection: 'products', kind: 'search', term: 'keyboard' } as const;
+		const before = engine.require({ id: 'search-scope-a', ...search });
+		const beforeSettled = before.ready.catch(() => undefined);
+		await vi.waitFor(() => expect(searches).toBe(1));
+
+		// Declared the instant the switch lands, while the old scope's execution is still
+		// unwinding: the new scope's screen re-renders on the switch event.
+		let after: ReturnType<RxdbSyncEngine['require']> | undefined;
+		const stop = engine.events((event) => {
+			if (event.type === 'scope-switched')
+				after = engine.require({ id: 'search-scope-b', ...search });
+		});
+		await engine.scope.switch(freshIdentity());
+		stop();
+
+		await expect(after!.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(searches).toBe(2);
+		await beforeSettled;
+		await engine.dispose();
+	});
+
 	it('queues a wider redeclare behind the in-flight walk instead of aborting it (#1221)', async () => {
 		const response = Promise.withResolvers<Response>();
 		const started = Promise.withResolvers<AbortSignal>();

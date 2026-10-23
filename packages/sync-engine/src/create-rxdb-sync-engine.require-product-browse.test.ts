@@ -209,6 +209,35 @@ describe('require() for the products browse window', () => {
 		await engine.dispose();
 	});
 
+	it("a browse declared after a scope switch does not join the previous scope's in-flight browse (it fetches for its own scope)", async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const server = heldProductServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		const window = { collection: 'products', kind: 'product-browse', limit: 10 } as const;
+		const before = engine.require({ id: 'browse-scope-a', ...window });
+		const beforeSettled = before.ready.catch(() => undefined);
+		await vi.waitFor(() => expect(server.signals).toHaveLength(1));
+
+		// Declared the instant the switch lands, while the old scope's execution is still
+		// unwinding: the new scope's screen re-renders on the switch event.
+		let after: ReturnType<RxdbSyncEngine['require']> | undefined;
+		const stop = engine.events((event) => {
+			if (event.type === 'scope-switched')
+				after = engine.require({ id: 'browse-scope-b', ...window });
+		});
+		await engine.scope.switch(freshIdentity());
+		stop();
+		await vi.waitFor(() => expect(server.signals).toHaveLength(2));
+
+		server.open();
+		await expect(after!.ready).resolves.toMatchObject({ action: 'fetched', documents: 1 });
+		await beforeSettled;
+		expect(await productIds(engine)).toEqual([1]);
+		await engine.dispose();
+	});
+
 	it('fetches an identical requirement immediately after releasing an in-flight fetch past the grace', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
