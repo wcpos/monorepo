@@ -501,3 +501,22 @@ it('a meta row deleted after the store numbered it is written as a tombstone', a
 		expect.arrayContaining([{ id: 9, key: 'custom', value: null }, ...meta])
 	);
 });
+
+it('a meta row that arrived from the store while the sheet was open is never tombstoned', async () => {
+	// The draft never saw external_reference (a store integration added it after the sheet opened).
+	const arrived = { id: 11, key: 'external_reference', value: 'INT-1' };
+	const resident = { ...order, payload: { ...payload, meta_data: [...meta, arrived] } };
+	resident.getLatest = () => resident;
+	const formData = {
+		...payload,
+		status: 'pos-open',
+		cashier_id: '7',
+		meta_data: [...meta, { key: 'custom', value: 'before' }],
+	};
+	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
+	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
+	expect(resident.payload.meta_data).not.toEqual(
+		expect.arrayContaining([expect.objectContaining({ id: 11, value: null })])
+	);
+});
