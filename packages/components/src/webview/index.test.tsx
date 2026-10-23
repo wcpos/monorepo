@@ -5,19 +5,42 @@ import { render } from '@testing-library/react';
 import { WebView, WebViewHandle } from './index';
 
 const injectJavaScriptMock = jest.fn();
+const sources: unknown[] = [];
 
 jest.mock('react-native-webview', () => {
 	return {
 		WebView: React.forwardRef(function MockRNWebView(
-			_props: Record<string, unknown>,
+			props: Record<string, unknown>,
 			ref: React.ForwardedRef<{ injectJavaScript: (script: string) => void }>
 		) {
+			sources.push(props.source);
 			React.useImperativeHandle(ref, () => ({
 				injectJavaScript: injectJavaScriptMock,
 			}));
 			return null;
 		}),
 	};
+});
+
+describe('WebView native source', () => {
+	beforeEach(() => {
+		sources.length = 0;
+	});
+
+	it('shows inline HTML read from src with src as its base, so relative links resolve', () => {
+		render(
+			<WebView src="https://store.test/receipt/1/?key=k" srcDoc="<p>hi</p>" onMessage={() => {}} />
+		);
+		expect(sources[0]).toEqual({
+			html: '<p>hi</p>',
+			baseUrl: 'https://store.test/receipt/1/?key=k',
+		});
+	});
+
+	it('shows inline HTML without a base when there is no src', () => {
+		render(<WebView srcDoc="<p>hi</p>" onMessage={() => {}} />);
+		expect(sources[0]).toEqual({ html: '<p>hi</p>' });
+	});
 });
 
 describe('WebView native postMessage bridge', () => {

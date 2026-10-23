@@ -90,7 +90,8 @@
     "./tree-combobox": "./src/tree-combobox/index.ts",
     "./virtualized-list": "./src/virtualized-list/index.ts",
     "./vstack": "./src/vstack/index.tsx",
-    "./webview": "./src/webview/index.tsx"
+    "./webview": "./src/webview/index.tsx",
+    "./webview/with-base": "./src/webview/with-base.ts"
   },
   "scripts": {
     "build:css": "tailwindcss -i ./src/index.css -o ./dist/styles.css --minify",

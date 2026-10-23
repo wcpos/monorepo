@@ -6,6 +6,7 @@ import { WebViewProps as RNWebViewProps } from 'react-native-webview';
 
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
+import { withBase } from './with-base';
 
 /**
  * react-native-webview types `onContentSizeChange` without the `contentSize`
@@ -169,8 +170,12 @@ function WebView({
 			<iframe
 				ref={composedRef}
 				data-testid={props.testID}
-				src={(source && 'uri' in source ? source.uri : undefined) || src}
-				srcDoc={srcDoc}
+				// srcDoc wins over src; with both, src is only the document's base and the frame never
+				// navigates to it.
+				src={
+					srcDoc != null ? undefined : (source && 'uri' in source ? source.uri : undefined) || src
+				}
+				srcDoc={srcDoc != null && src ? withBase(srcDoc, src) : srcDoc}
 				onLoad={handleLoaded}
 				frameBorder="0"
 				sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-modals"

@@ -3,8 +3,9 @@ import * as React from 'react';
 import { recordReceiptPrint } from '@wcpos/query/mutations';
 import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type ReadonlyClosureDocument, recordClosurePrint } from '@wcpos/query/register-session';
-import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
+import { isOrderBasedCloudProfile, usePrint, usesSystemPrintDialog } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
+import { withBase } from '@wcpos/components/webview/with-base';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -26,6 +27,12 @@ import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
 import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
+
+// Bounds the receipt page read so a stalled read cannot hold the cashier: while it is pending no
+// frame mounts, so the auto-print and the finish-sale buttons wait on it. It is not there to race
+// the host: the page on a slow host answers in 12-15 s (run 39803114058), and it was the print
+// path's own 10 s FETCH_TIMEOUT_MS that timed out there. Past it, the frame loads the URL as before.
+const RECEIPT_PAGE_READ_TIMEOUT_MS = 20_000;
 
 export function useReceiptDocument({
 	order,
@@ -80,6 +87,7 @@ export function useReceiptDocument({
 		refetch,
 		templates,
 		templatesReady,
+		templatesSynced,
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,
@@ -111,6 +119,48 @@ export function useReceiptDocument({
 			return closure ? closure.getLatest().print_count + 1 : 0;
 		},
 	});
+
+	// The order's own link is the fallback for a store with no receipt template. While the
+	// templates are still arriving it is not the answer yet: loading it then cost the cashier one
+	// more full WordPress page, and the templated page right after it (run 39803114058).
+	const templatesResolving = !document && templates.length === 0 && !templatesSynced && !isOffline;
+	const fallbackURL = document || templatesResolving ? undefined : baseReceiptURL;
+	// The receipt page is read ONCE per URL (order, template and mode are all in it): the preview
+	// shows it as srcDoc and a dialog print prints the same HTML. A failed read (a cross-origin
+	// host) falls back to the frame loading the URL, as before.
+	const pageURL =
+		!document && previewEnabled && !isOffline && renderedHtml == null
+			? templateReceiptUrl || fallbackURL
+			: undefined;
+	const [page, setPage] = React.useState<{ url: string; html: string | null } | null>(null);
+	React.useEffect(() => {
+		if (!pageURL) return;
+		const controller = new AbortController();
+		let current = true;
+		const settle = (html: string | null) => {
+			if (!current) return;
+			current = false;
+			clearTimeout(deadline);
+			setPage({ url: pageURL, html });
+		};
+		const deadline = setTimeout(() => {
+			settle(null);
+			controller.abort();
+		}, RECEIPT_PAGE_READ_TIMEOUT_MS);
+		Promise.resolve()
+			.then(() => fetch(pageURL, { signal: controller.signal }))
+			.then((response) => (response.ok ? response.text() : null))
+			.then(settle, () => settle(null));
+		return () => {
+			current = false;
+			clearTimeout(deadline);
+			controller.abort();
+		};
+	}, [pageURL]);
+	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
+	const previewHtml = renderedHtml ?? pageHtml ?? null;
+	const previewPending =
+		previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL));
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
@@ -198,6 +248,21 @@ export function useReceiptDocument({
 	);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
+			// The page the preview read, printed as the URL print always was: uncounted.
+			// The preview frame has run the page's scripts, so its DOM is the printable document,
+			// as the same-origin frame's DOM was before the page was read once (a receipt whose
+			// script fills the body prints empty from the source). Before the frame has a body,
+			// the source: the dialog adapter loads inline HTML from a data: URL, so the page's own
+			// URL travels with it as <base> for relative stylesheets and logos (the frame does the
+			// same via `src`). pageURL is set whenever pageHtml is.
+			if (pageHtml && pageURL && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
+				const frameDocument = iframeRef.current?.contentDocument;
+				return {
+					html: frameDocument?.body?.childElementCount
+						? frameDocument.documentElement.outerHTML
+						: withBase(pageHtml, pageURL),
+				};
+			}
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
 				if (getLocalClosure) {
@@ -245,7 +310,7 @@ export function useReceiptDocument({
 			return { ...prepared, commit };
 		},
 		receiptData: receiptData ?? undefined,
-		html: renderedHtml ?? undefined,
+		html: previewHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
 		printerProfile,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
@@ -391,9 +456,9 @@ export function useReceiptDocument({
 			printNeedsLoadedPreview({
 				printerProfile,
 				receiptData: receiptData ?? undefined,
-				html: renderedHtml ?? undefined,
+				html: previewHtml ?? undefined,
 			}),
-		[printerProfile, receiptData, renderedHtml]
+		[printerProfile, receiptData, previewHtml]
 	);
 	// The receipt is entered before the bounded order refresh lands. If the receipt request
 	// then fails (or the deadline passes), the only data is built from the local order, still
@@ -517,9 +582,12 @@ export function useReceiptDocument({
 			previewKey,
 			previewPaperWidth,
 			contentSize,
-			renderedHtml,
-			receiptUrl: templateReceiptUrl,
-			baseReceiptURL: document ? undefined : baseReceiptURL,
+			renderedHtml: previewHtml,
+			receiptUrl: previewPending ? null : templateReceiptUrl,
+			baseReceiptURL: previewPending ? undefined : fallbackURL,
+			pending: previewPending,
+			// The URL the shown page was read from, so its relative links resolve against the store.
+			pageBase: pageHtml ? pageURL : undefined,
 			iframeRef,
 			handleLoad,
 			handleError,

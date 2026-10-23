@@ -82,8 +82,12 @@ function WebView({
 		[]
 	);
 
-	// srcDoc (inline HTML) takes priority over src (URI)
-	const source = srcDoc != null ? { html: srcDoc } : { uri: src || '' };
+	// srcDoc (inline HTML) takes priority over src (URI). When both are given the HTML is a page
+	// that was read from src (the receipt stage reads it once and shows the text), so src is its
+	// base: relative links in a template resolve against the store, as they did when the WebView
+	// loaded the URL itself.
+	const source =
+		srcDoc != null ? { html: srcDoc, ...(src ? { baseUrl: src } : {}) } : { uri: src || '' };
 
 	return (
 		<RNWebView<object>

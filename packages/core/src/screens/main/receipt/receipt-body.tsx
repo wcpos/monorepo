@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
+import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
@@ -56,6 +57,8 @@ export function ReceiptBody({
 		handleLoad,
 		handleError,
 		handleContentSizeChange,
+		pending,
+		pageBase,
 	} = doc.previewProps;
 	// Keep the iframe at paper size, then scale its canvas just like the modal preview.
 	const paper = PAPER_DIMENSIONS[previewPaperWidth];
@@ -67,7 +70,7 @@ export function ReceiptBody({
 			testID="receipt-preview-frame"
 			ref={iframeRef as never}
 			{...(renderedHtml != null
-				? { srcDoc: renderedHtml }
+				? { srcDoc: renderedHtml, src: pageBase }
 				: { src: receiptUrl || baseReceiptURL || '' })}
 			onLoad={handleLoad}
 			onError={handleError}
@@ -108,7 +111,15 @@ export function ReceiptBody({
 					</>
 				)}
 				<MismatchBadge mismatch={mismatch} />
-				{renderedHtml == null && !(receiptUrl || baseReceiptURL) ? (
+				{pending ? (
+					// The page is still being read: no frame yet, so it mounts once, on the final document.
+					<VStack
+						testID="receipt-preview-loading"
+						className="bg-muted min-h-0 flex-1 items-center justify-center rounded-md border p-4"
+					>
+						<Loader />
+					</VStack>
+				) : renderedHtml == null && !(receiptUrl || baseReceiptURL) ? (
 					// No paper canvas when there is nothing to draw on it: the viewport's
 					// sheet is hard-coded white, so themed text would vanish on it in dark themes.
 					<VStack className="bg-muted min-h-0 flex-1 items-center justify-center rounded-md border p-4">

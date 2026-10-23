@@ -11,6 +11,9 @@ import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
 
 const mockPrint = jest.fn<Promise<boolean>, []>();
+// The receipt page read. jsdom has no network: by default the read never answers (the preview
+// stays pending, the print path is unchanged); the cases that need it make it land or fail.
+const mockFetch = jest.fn();
 let mockFinal = true;
 let mockAutoPrint = true;
 let mockServerData = true;
@@ -135,6 +138,7 @@ jest.mock('../contexts/ui-settings', () => ({
 jest.mock('../contexts/tax-rates/provider', () => ({ useTaxSettingsOptional: () => null }));
 
 beforeEach(() => {
+	global.fetch = mockFetch.mockReset().mockReturnValue(new Promise(() => {}));
 	resetCheckoutMode();
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockFinal = true;
@@ -1016,6 +1020,140 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		} finally {
 			iframe.remove();
 		}
+	});
+
+	// Run 39803114058: the receipt page was requested six times for one sale on a 12 s host.
+	describe('the receipt page is read once per sale', () => {
+		const pageOrder = {
+			uuid: 'page',
+			payload: {
+				id: 42,
+				currency: 'USD',
+				links: { receipt: [{ href: 'https://shop.test/r?key=k' }] },
+			},
+		} as never;
+		const templated = 'https://shop.test/r?key=k&mode=live&template=7';
+		const pageReads = () =>
+			mockFetch.mock.calls.filter(([url]) => String(url).startsWith('https://shop.test/r'));
+		beforeEach(() => {
+			mockFetch.mockResolvedValue({ ok: true, text: async () => '<p>Server receipt</p>' });
+			jest
+				.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+				.mockReturnValue({ useSystemDialog: true });
+		});
+
+		it('previews the templated page from one read and prints it without a second', async () => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+			const { result } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			expect(result.current.previewProps.pending).toBe(true);
+			await waitFor(() =>
+				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
+			);
+			expect(result.current.previewProps).toMatchObject({ pending: false, pageBase: templated });
+			await act(async () => {
+				await result.current.print();
+			});
+			// The dialog loads the HTML from a data: URL, so it carries the page URL as its base.
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain(
+				'<base href="https://shop.test/r?key=k&amp;mode=live&amp;template=7"><p>Server receipt</p>'
+			);
+			expect(pageReads().map(([url]) => url)).toEqual([templated]);
+			// Uncounted, as the URL print always was: no intent=print request.
+			expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
+		});
+
+		it("prints the frame's rendered document once it has a body, not the page source", async () => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+			const { result } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			await waitFor(() =>
+				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
+			);
+			// A script in the page filled the body after load; the source still reads empty.
+			(result.current.previewProps.iframeRef as React.MutableRefObject<unknown>).current = {
+				contentDocument: {
+					body: { childElementCount: 1 },
+					documentElement: { outerHTML: '<html><body><p>Scripted total</p></body></html>' },
+				},
+			};
+			await act(async () => {
+				await result.current.print();
+			});
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain('<p>Scripted total</p>');
+			expect(mockHtmlPrint.mock.calls[0][0]).not.toContain('Server receipt');
+			expect(pageReads().map(([url]) => url)).toEqual([templated]);
+		});
+
+		it('loads nothing while the templates are still arriving, then the fallback link once', async () => {
+			mockTemplatesSynced = false;
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([]);
+			const { result, rerender } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			expect(result.current.previewProps).toMatchObject({ pending: true, receiptUrl: null });
+			expect(result.current.previewProps.baseReceiptURL).toBeUndefined();
+			expect(pageReads()).toHaveLength(0);
+			mockTemplatesSynced = true;
+			rerender();
+			await waitFor(() =>
+				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
+			);
+			expect(pageReads().map(([url]) => url)).toEqual(['https://shop.test/r?key=k']);
+		});
+
+		it('settles a read that never answers to the URL at the deadline', async () => {
+			jest.useFakeTimers();
+			try {
+				jest
+					.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+					.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+				mockFetch.mockReturnValue(new Promise(() => {}));
+				const { result } = renderHook(() =>
+					useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+				);
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(19_999);
+				});
+				expect(result.current.previewProps.pending).toBe(true);
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(1);
+				});
+				expect(pageReads()).toHaveLength(1);
+				expect(pageReads()[0][1].signal.aborted).toBe(true);
+				expect(result.current.previewProps).toMatchObject({
+					pending: false,
+					renderedHtml: null,
+					receiptUrl: templated,
+					pageBase: undefined,
+				});
+			} finally {
+				jest.useRealTimers();
+			}
+		});
+
+		it('falls back to the frame loading the URL when the read fails', async () => {
+			mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+			const { result } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			await waitFor(() => expect(result.current.previewProps.pending).toBe(false));
+			expect(result.current.previewProps).toMatchObject({
+				renderedHtml: null,
+				receiptUrl: templated,
+			});
+		});
 	});
 
 	it.each([undefined, 42])(
