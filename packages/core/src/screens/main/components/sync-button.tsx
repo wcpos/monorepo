@@ -32,9 +32,12 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			/>
 			<Tooltip showOnNative>
 				<TooltipTrigger asChild>
+					{/* The caption row's one control, at the row's height: 6 units (24 at Regular,
+					    the `fine` pointer floor in scale.ts; WCAG 2.2 target minimum), and its 12 hitSlop
+					    keeps the 44 touch target (owner, 2026-10-23: the band under the card). */}
 					<IconButton
 						name="refresh"
-						size="sm"
+						size="xs"
 						loading={active}
 						accessibilityLabel={
 							clearAndSync ? t('common.press_to_sync_long_press_for') : t('common.sync')

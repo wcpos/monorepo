@@ -41,7 +41,7 @@ export function DataTableFooter({
 	const t = useT();
 	return (
 		// A caption row on the ground under the card: no rule of its own, and no height of its own:
-		// it is its content's height (the `sm` sync button, 8 units; its hitSlop keeps the 44 touch
+		// it is its content's height (the `xs` sync button, 6 units; its hitSlop keeps the 44 touch
 		// target), not a control row. Its mount aligns the text with the card's cells
 		// (`CaptionRowInset`: the card's gutter + the cell's 12).
 		<HStack testID="data-table-caption-row" className="items-center">

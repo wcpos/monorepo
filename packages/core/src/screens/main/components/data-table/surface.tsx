@@ -13,7 +13,12 @@ import { useGround } from '../ground';
  * up with the search and the chips above it. The card owns its sides and its bottom only: the
  * row above it (the chip row's `p-gutter`, or `ListColumn`'s body `pt-gutter` where there are no
  * chips) owns the gutter over it, so there is exactly one gutter between the chips and the card
- * and the pending-search line between them still runs the pane's full width. The phone has no
+ * and the pending-search line between them still runs the pane's full width. Under the card its
+ * own caption row (the count, the sync button) sits 2 units off (8 at Regular): the caption is the
+ * card's control strip, not a content area of its own, so it takes the Gutters table's "between
+ * controls" 8 (Windows app design: 8 epx between related controls), not the page gutter the row
+ * above and the pane's bottom edge take (owner, 2026-10-23: the gutter + row + gutter band under
+ * the card read as too much space). The phone has no
  * ground to show around it — the list runs edge to edge under a hairline instead.
  *
  * Owner's choice from the 2026-10-05 mockup (white card, rounded) over edge-to-edge white and
@@ -26,7 +31,7 @@ export function TableSurface({ className, ...props }: ViewProps) {
 		<View
 			className={cn(
 				'bg-card border-border min-h-0 flex-1',
-				phone ? 'border-t' : 'mx-gutter mb-gutter overflow-hidden rounded-lg border',
+				phone ? 'border-t' : 'mx-gutter mb-2 overflow-hidden rounded-lg border',
 				className
 			)}
 			{...props}
@@ -37,13 +42,14 @@ export function TableSurface({ className, ...props }: ViewProps) {
 /**
  * The ground a tile grid stands on, in the card's place: a Poster tile carries 4 of its own
  * margin; the ground gives the page gutter minus it, so tiles sit one gutter from the sides and
- * under the row above, like the table card. A child that moves itself (the deal's air frame)
- * goes inside, never on the element taking the tiles' margin back.
+ * under the row above, like the table card, and the caption row sits 2 units under the last
+ * tile's edge as it does under the card (`pb-1` plus the tile's own 4). A child that moves itself
+ * (the deal's air frame) goes inside, never on the element taking the tiles' margin back.
  */
 export function TileGround({ children }: { children: React.ReactNode }) {
 	// The phone's screen edge keeps 16 (`useGround`), as the chip row above the tiles does.
 	return (
-		<View className={cn('min-h-0 flex-1', useGround().px)}>
+		<View className={cn('min-h-0 flex-1 pb-1', useGround().px)}>
 			<View className="-mx-1 -mt-1 min-h-0 flex-1">{children}</View>
 		</View>
 	);

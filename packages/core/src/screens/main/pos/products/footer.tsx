@@ -33,7 +33,7 @@ export function ProductsFooter({
 	const t = useT();
 	return (
 		// Same caption row as the data-table footer: on the ground, no rule, its content's height (the
-		// `sm` sync button, 8 units); its mount aligns the text with the card's cells (`CaptionRowInset`).
+		// `xs` sync button, 6 units); its mount aligns the text with the card's cells (`CaptionRowInset`).
 		<HStack className="items-center">
 			{/* Keep the tax label shrinkable and counts at their natural width. */}
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">
