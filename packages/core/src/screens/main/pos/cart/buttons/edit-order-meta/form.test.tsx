@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -27,9 +27,10 @@ function mockButton({
 	children,
 	testID,
 	onPress,
-}: React.PropsWithChildren<{ testID?: string; onPress?: () => void }>) {
+	disabled,
+}: React.PropsWithChildren<{ testID?: string; onPress?: () => void; disabled?: boolean }>) {
 	return (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
 			{children}
 		</button>
 	);
@@ -55,6 +56,10 @@ function mockInput({
 	);
 }
 jest.mock('@wcpos/components/form', () => ({
+	useFormChangeHandler: jest.requireActual('@wcpos/components/form/use-form-change-handler')
+		.useFormChangeHandler,
+	SavedMark: () => null,
+	useMarkSaved: () => jest.fn(),
 	Form: jest.requireActual('react-hook-form').FormProvider,
 	FormField: jest.requireActual('react-hook-form').Controller,
 	FormInput: mockInput,
@@ -63,7 +68,11 @@ jest.mock('@wcpos/components/form', () => ({
 		mockSelectProps(props);
 		return mockInput(props);
 	},
-	FormCombobox: mockInput,
+	FormCombobox: (props: Record<string, unknown> & { value: string | { value: string } }) =>
+		mockInput({
+			...props,
+			value: typeof props.value === 'object' ? props.value.value : props.value,
+		}),
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
@@ -178,11 +187,20 @@ const payload = {
 	transaction_id: '',
 	customer_note: '',
 };
+function formProps(
+	data: Omit<typeof payload, 'meta_data'> & { cashier_id: string; meta_data: unknown[] }
+) {
+	const { status, cashier_id, transaction_id: _transaction, ...formData } = data;
+	return {
+		formData: formData as React.ComponentProps<typeof EditOrderMetaForm>['formData'],
+		handOverData: { status, cashier_id },
+	};
+}
 const order = { uuid: 'order-1', payload, getLatest: () => order };
 async function save(status = 'pos-open') {
 	const formData = { ...payload, status, cashier_id: '7', customer_note: 'Keep note' };
-	render(<EditOrderMetaForm order={order as never} formData={formData} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 }
 async function confirm() {
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send-confirm')));
@@ -202,15 +220,20 @@ beforeEach(() => {
 	mockPush.mockResolvedValue(order);
 	mockGuard.mockReturnValue(false);
 });
-it('saves notes locally without confirmation or push when identity is unchanged', async () => {
-	await save();
-	expect(mockPatch).toHaveBeenCalledWith({
-		document: order,
-		data: expect.objectContaining({ customer_note: 'Keep note' }),
-	});
+it('autosaves a note locally without confirmation, push, or a status write', async () => {
+	render(
+		<EditOrderMetaForm order={order as never} {...formProps({ ...payload, cashier_id: '7' })} />
+	);
+	fireEvent.change(screen.getByTestId('order-note-input'), { target: { value: 'Keep note' } });
+	await waitFor(() =>
+		expect(mockPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { customer_note: 'Keep note' },
+		})
+	);
 	expect(mockPush).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('order-meta-send-confirm')).toBeNull();
-	expect(mockClose).toHaveBeenCalledWith();
+	expect(mockClose).not.toHaveBeenCalled();
 });
 it('confirms before writing, keeps values on cancel, then patches, pushes and leaves', async () => {
 	await save('completed');
@@ -219,7 +242,7 @@ it('confirms before writing, keeps values on cancel, then patches, pushes and le
 	fireEvent.click(screen.getByTestId('order-meta-send-cancel'));
 	expect(mockPatch).not.toHaveBeenCalled();
 	expect((screen.getByTestId('order-note-input') as HTMLInputElement).value).toBe('Keep note');
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(mockPatch).toHaveBeenCalledWith({
 		document: order,
@@ -289,14 +312,30 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
 	resident.getLatest = () => resident;
 	const custom = { key: 'custom', value: 'edited' };
-	const formData = { ...payload, status, cashier_id: '7', meta_data: [...protectedMeta, custom] };
-	const view = render(<EditOrderMetaForm order={resident as never} formData={formData} />);
+	const formData = {
+		...payload,
+		status,
+		cashier_id: '7',
+		meta_data: [
+			...protectedMeta,
+			{ ...custom, value: status === 'completed' ? 'edited' : 'before' },
+		],
+	};
+	const view = render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
 	expect(screen.queryAllByDisplayValue('server')).toHaveLength(0);
 	expect(screen.getByDisplayValue('custom')).toBeTruthy();
-	const edited = { ...formData, meta_data: [{ ...protectedMeta[4], value: null }, custom] };
-	view.rerender(<EditOrderMetaForm order={resident as never} formData={edited} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
-	if (status === 'completed') await confirm();
+	const edited = {
+		...formData,
+		meta_data: [{ ...protectedMeta[4], value: null }, formData.meta_data.at(-1)!],
+	};
+	view.rerender(<EditOrderMetaForm order={resident as never} {...formProps(edited)} />);
+	if (status === 'completed') {
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
+		await confirm();
+	} else {
+		fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
+		await waitFor(() => expect(mockPatch).toHaveBeenCalled());
+	}
 	expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...protectedMeta]));
 	expect(resident.payload.meta_data).toHaveLength(protectedMeta.length + 1);
 });
@@ -311,10 +350,20 @@ it.each(['pos-open', 'completed'])(
 		mockBeforePatch.mockImplementationOnce(() => {
 			resident.payload = { ...payload, meta_data: [...meta, hint] };
 		});
-		const formData = { ...payload, status, cashier_id: '7', meta_data: [...meta, custom] };
-		render(<EditOrderMetaForm order={resident as never} formData={formData} />);
-		await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
-		if (status === 'completed') await confirm();
+		const formData = {
+			...payload,
+			status,
+			cashier_id: '7',
+			meta_data: [...meta, { ...custom, value: status === 'completed' ? 'edited' : 'before' }],
+		};
+		render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+		if (status === 'completed') {
+			await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
+			await confirm();
+		} else {
+			fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
+			await waitFor(() => expect(mockPatch).toHaveBeenCalled());
+		}
 		expect(resident.payload.meta_data).toEqual(expect.arrayContaining([custom, ...meta, hint]));
 		expect(resident.payload.meta_data).toHaveLength(meta.length + 2);
 	}
@@ -334,8 +383,8 @@ it('keeps a hint queued during a failed send when rolling back', async () => {
 		return Promise.reject(new Error('offline'));
 	});
 	const formData = { ...payload, status: 'completed', cashier_id: '9' };
-	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(sentCashiers).toEqual(['9']);
 	expect(resident.payload).toEqual({
@@ -356,8 +405,8 @@ it('rolls back the cashier after a failed hand-off without losing concurrent own
 		return Promise.reject(new Error('offline'));
 	});
 	const formData = { ...payload, cashier_id: '9' };
-	render(<EditOrderMetaForm order={resident as never} formData={formData} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(sentCashiers).toEqual(['9']);
 	expect(resident.payload.meta_data).toEqual([...meta, hint]);
@@ -367,28 +416,17 @@ it('rejects renaming an ordinary row to a protected key', async () => {
 	render(
 		<EditOrderMetaForm
 			order={order as never}
-			formData={{
+			{...formProps({
 				...payload,
 				cashier_id: '7',
 				meta_data: [...meta, { key: 'ordinary', value: 'keep' }],
-			}}
+			})}
 		/>
 	);
 	const input = screen.getByDisplayValue('ordinary');
 	fireEvent.change(input, { target: { value: '_pos_user' } });
 	expect(screen.queryByDisplayValue('_pos_user')).toBeNull();
 	expect(screen.getByDisplayValue('ordinary')).toBe(input);
-});
-
-// ADR 0040: under the server's reopen rule a stale pushable status is a reopen, so a
-// save names the status only when the cashier changed it.
-it('a note-only save does not write status', async () => {
-	await save();
-	expect(mockPatch).toHaveBeenCalledWith({
-		document: order,
-		data: expect.objectContaining({ customer_note: 'Keep note' }),
-	});
-	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
 });
 
 it('the status picker offers pushable statuses and shows a paid status read-only', () => {
@@ -398,33 +436,19 @@ it('the status picker offers pushable statuses and shows a paid status read-only
 			.filter((props) => props.customComponent === mockStatusSelect)
 			.at(-1)!;
 	const formData = { ...payload, cashier_id: '7' };
-	const view = render(<EditOrderMetaForm order={order as never} formData={formData} />);
+	const view = render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
 	expect([...(statusProps().allowed as string[])].sort()).toEqual(
 		['cancelled', 'on-hold', 'pending', 'pos-open'].sort()
 	);
 	expect(statusProps().disabled).toBeFalsy();
 	view.rerender(
-		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
+		<EditOrderMetaForm
+			order={order as never}
+			{...formProps({ ...formData, status: 'completed' })}
+		/>
 	);
 	expect(statusProps().allowed).toEqual(expect.arrayContaining(['completed', 'pos-open']));
 	expect(statusProps().disabled).toBe(true);
-});
-
-// ADR 0040: the server owns transaction_id and strips it from every push, so the cart shows it
-// read-only and neither the local save nor the send writes it.
-it('shows transaction_id read-only and never writes it', async () => {
-	const formData = { ...payload, transaction_id: 'tx-1', cashier_id: '7' };
-	render(<EditOrderMetaForm order={order as never} formData={formData} />);
-	expect((screen.getByTestId('order-meta-transaction-id') as HTMLInputElement).readOnly).toBe(true);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
-	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
-	mockPatch.mockClear();
-	render(
-		<EditOrderMetaForm order={order as never} formData={{ ...formData, status: 'completed' }} />
-	);
-	await act(async () => fireEvent.click(screen.getAllByTestId('order-meta-save')[1]));
-	await confirm();
-	expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('transaction_id');
 });
 
 // Status is an intent, never an echo (ADR 0040): a hand-off that changes only the cashier pushes
@@ -433,8 +457,8 @@ it('shows transaction_id read-only and never writes it', async () => {
 it('a cashier-only hand-off writes and rolls back no status', async () => {
 	mockPush.mockRejectedValueOnce(new Error('offline'));
 	const formData = { ...payload, cashier_id: '9' };
-	render(<EditOrderMetaForm order={order as never} formData={formData} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(mockPatch).toHaveBeenCalledTimes(2);
 	const [[handOff], [rollback]] = mockPatch.mock.calls as [[{ data: object }], [{ data: object }]];
@@ -448,8 +472,8 @@ it('a cashier-only hand-off writes and rolls back no status', async () => {
 // status and cannot reopen the paid sale.
 it('a completion adopted while the hand-off awaits confirmation is not sent as a status edit', async () => {
 	const formData = { ...payload, cashier_id: '9' };
-	render(<EditOrderMetaForm order={order as never} formData={formData} />);
-	await act(async () => fireEvent.click(screen.getByTestId('order-meta-save')));
+	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	order.payload = { ...payload, status: 'completed' }; // another till completed it; a pull adopted
 	await confirm();
 	expect(mockPatch).toHaveBeenCalledTimes(1);

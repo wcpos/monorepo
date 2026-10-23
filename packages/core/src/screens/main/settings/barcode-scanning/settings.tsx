@@ -11,7 +11,11 @@ import {
 	FormField,
 	FormInput,
 	FormSwitch,
+	SavedFieldProvider,
+	savedKeys,
+	SavedMark,
 	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
@@ -33,7 +37,6 @@ import {
 	SCAN_SOUND_THEMES,
 	type ScanSoundTheme,
 } from '../../pos/products/scan-sound-themes';
-import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from '../components/saved-mark';
 import { SettingsRow } from '../components/settings-row';
 
 const formSchema = z.object({
@@ -244,7 +247,7 @@ function BarcodeSettingsForm() {
 										<Text className="text-sm font-medium">{t('settings.barcode_sound_theme')}</Text>
 										{/* Out of flow: the mark never takes width from the controls beside it. */}
 										<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-											<SavedMark name="barcode_scanning_sound_theme" />
+											<SavedMark name="barcode_scanning_sound_theme" label={t('settings.saved')} />
 										</View>
 									</View>
 									<RadioGroup value={field.value} onValueChange={field.onChange}>
@@ -291,7 +294,7 @@ function BarcodeSettingsForm() {
 										</Text>
 										{/* Out of flow, under the label: the slider's track never changes width mid-drag. */}
 										<View className="pointer-events-none absolute top-full left-0 mt-0.5">
-											<SavedMark name="barcode_scanning_sound_volume" />
+											<SavedMark name="barcode_scanning_sound_volume" label={t('settings.saved')} />
 										</View>
 									</View>
 									<VStack className="flex-1 px-2">

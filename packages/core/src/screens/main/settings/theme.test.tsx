@@ -18,7 +18,11 @@ jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/form', () => ({ FormItem: () => null, FormLabel: () => null }));
+jest.mock('@wcpos/components/form', () => ({
+	...jest.requireActual('@wcpos/components/form/saved-mark'),
+	FormItem: () => null,
+	FormLabel: () => null,
+}));
 jest.mock('@wcpos/components/radio-group', () => {
 	const ReactMock = jest.requireActual('react') as typeof React;
 	const Ctx = ReactMock.createContext<{ value: string; select: (v: string) => void }>({
@@ -219,7 +223,7 @@ describe('the Icons section', () => {
 		await act(async () => fireEvent.click(getByTestId('settings-icons-lucide')));
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'lucide' } });
-		expect(getByTestId('settings-saved-icons').textContent).toBe('settings.saved');
+		expect(getByTestId('saved-icons').textContent).toBe('settings.saved');
 	});
 });
 
@@ -245,7 +249,7 @@ describe('theme tiles', () => {
 		await act(async () => fireEvent.click(getByTestId('theme-option-ocean')));
 		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { theme: 'ocean' } });
 		expect(Uniwind.setTheme).toHaveBeenCalledWith('ocean');
-		expect(getByTestId('settings-saved-theme').textContent).toBe('settings.saved');
+		expect(getByTestId('saved-theme').textContent).toBe('settings.saved');
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			jest.mocked(Uniwind.setTheme).mock.invocationCallOrder[0]
 		);
@@ -261,9 +265,9 @@ it('marks Scale only after its patch resolves', async () => {
 	);
 	const { getByTestId, queryByTestId } = render(<ThemeSettings />);
 	fireEvent.click(getByTestId('settings-scale-compact'));
-	expect(queryByTestId('settings-saved-scale')).toBeNull();
+	expect(queryByTestId('saved-scale')).toBeNull();
 	await act(async () => resolve({}));
-	expect(getByTestId('settings-saved-scale').textContent).toBe('settings.saved');
+	expect(getByTestId('saved-scale').textContent).toBe('settings.saved');
 });
 
 it('stays silent when the patch did not apply — localPatch logs a failed write and resolves undefined', async () => {
@@ -271,5 +275,5 @@ it('stays silent when the patch did not apply — localPatch logs a failed write
 	const { getByTestId, queryByTestId } = render(<ThemeSettings />);
 	await act(async () => fireEvent.click(getByTestId('settings-scale-compact')));
 	expect(mockLocalPatch).toHaveBeenCalled();
-	expect(queryByTestId('settings-saved-scale')).toBeNull();
+	expect(queryByTestId('saved-scale')).toBeNull();
 });

@@ -5,7 +5,7 @@ import debounce from 'lodash/debounce';
 import cloneDeep from 'lodash/cloneDeep';
 import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
-import { FieldValues, UseFormReturn } from 'react-hook-form';
+import { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
 
 import type { DebouncedFunc } from 'lodash';
 
@@ -84,11 +84,18 @@ export function useFormChangeHandler<T extends FieldValues>({
 	 * Unmount FLUSHES rather than cancels: closing the dialog within the debounce window
 	 * must not lose the value the cashier just chose.
 	 */
-	type Write = (changes: Partial<T>, write: (changes: Partial<T>) => void) => void;
+	type Write = (
+		changes: Partial<T>,
+		write: (changes: Partial<T>) => void,
+		validate: () => Promise<boolean>
+	) => void;
 	const debouncedRef = React.useRef<DebouncedFunc<Write> | null>(null);
 	React.useEffect(() => {
-		const debounced = debounce<Write>((changes, write) => {
-			write(changes);
+		const debounced = debounce<Write>((changes, write, validate) => {
+			// The gate: an invalid value is never written; the field shows its own error instead.
+			void validate().then((valid) => {
+				if (valid) write(changes);
+			});
 		}, debounceMs);
 		debouncedRef.current = debounced;
 		return () => {
@@ -136,11 +143,14 @@ export function useFormChangeHandler<T extends FieldValues>({
 
 			// Debounce text inputs to avoid saving on every keystroke
 			if (isTextValue(value) && debounceMs > 0 && debounced) {
-				debounced(changes, onChangeRef.current);
+				debounced(changes, onChangeRef.current, () => form.trigger(name as FieldPath<T>));
 			} else {
 				// Flush any pending debounced changes first
 				debounced?.flush();
-				onChangeRef.current(changes);
+				const write = onChangeRef.current;
+				void form.trigger(name as FieldPath<T>).then((valid) => {
+					if (valid) write(changes);
+				});
 			}
 		});
 
