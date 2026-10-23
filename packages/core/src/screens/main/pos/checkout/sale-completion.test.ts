@@ -1217,24 +1217,39 @@ describe('a zero balance the store answered closed', () => {
 	});
 
 	it('answered after another till’s reopen was adopted is not completed: no receipt', async () => {
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'zero-balance' });
 		status = 'pos-open';
 		mockRefresh.mockResolvedValueOnce('refreshed');
 		expect(await completeSale(ctx, resident, closed(), stage)).toBe('not-completed');
 		expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
 		expect(mockReceipt).not.toHaveBeenCalled();
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 	});
 
-	it.each(['failed', 'timed-out', 'throws'])(
+	// Codex on C1-S2: a disposed engine's refresh throws before it returns a promise; that proves
+	// nothing either, so the close is unconfirmed, never a failed checkout.
+	it.each(['failed', 'timed-out', 'throws', 'throws synchronously'])(
 		'a paid answer the resident does not show is unconfirmed when the refresh %s',
 		async (how) => {
 			await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'zero-balance' });
-			mockRefresh.mockImplementationOnce(async () => {
-				if (how === 'throws') throw new Error('engine unavailable');
-				return how;
-			});
+			enterCheckout('order');
+			expect(claimReceiptAutoPrint('order')).toBe(true);
+			mockRefresh.mockImplementationOnce(
+				how === 'throws synchronously'
+					? () => {
+							throw new Error('engine disposed');
+						}
+					: async () => {
+							if (how === 'throws') throw new Error('engine unavailable');
+							return how;
+						}
+			);
 			expect(await completeSale(ctx, resident, closed(), stage)).toBe('unconfirmed');
 			expect(mockReceipt).not.toHaveBeenCalled();
-			expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
+			expect(claimReceiptAutoPrint('order')).toBe(true);
+			expect(await pendingCompletions(ctx.storeDB)).toMatchObject({
+				order: { awaitingAdoption: true },
+			});
 		}
 	);
 
@@ -1247,8 +1262,10 @@ describe('a zero balance the store answered closed', () => {
 	});
 
 	it('is not completed when the refresh lands and the resident still reads unpaid', async () => {
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'zero-balance' });
 		mockRefresh.mockResolvedValueOnce('refreshed');
 		expect(await completeSale(ctx, resident, closed(), stage)).toBe('not-completed');
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 	});
 
 	it('a paid close the resident already shows costs no refresh', async () => {
@@ -1257,15 +1274,21 @@ describe('a zero balance the store answered closed', () => {
 		expect(mockRefresh).not.toHaveBeenCalled();
 	});
 
-	it('a reopened close returns to checkout and releases its print claim', async () => {
-		status = 'pos-open';
-		enterCheckout('order');
-		expect(claimReceiptAutoPrint('order')).toBe(true);
-		expect(await completeSale(ctx, resident, closed('pos-open'), stage)).toBe('not-completed');
-		// The answer itself reads open: nothing to confirm, so no refresh.
-		expect(mockRefresh).not.toHaveBeenCalled();
-		expect(claimReceiptAutoPrint('order')).toBe(true);
-		expect(resolveStage('order', getCheckoutModeSnapshot(), [], status)).toBe('checkout');
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
-	});
+	// An open answer needs no refresh; a paid one the refresh confirms unpaid ends the same way.
+	it.each(['pos-open', 'completed'])(
+		'a reopened close (answer %s) returns to checkout and releases its print claim',
+		async (answer) => {
+			status = 'pos-open';
+			enterCheckout('order');
+			expect(claimReceiptAutoPrint('order')).toBe(true);
+			mockRefresh.mockResolvedValueOnce('refreshed');
+			expect(await completeSale(ctx, resident, closed(answer), stage)).toBe('not-completed');
+			expect(mockRefresh).toHaveBeenCalledTimes(answer === 'completed' ? 1 : 0);
+			expect(claimReceiptAutoPrint('order')).toBe(true);
+			expect(resolveStage('order', getCheckoutModeSnapshot(), [], status)).toBe('checkout');
+			expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
+			expect(getCheckoutModeSnapshot().checkoutOrders.has('order')).toBe(true);
+			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+		}
+	);
 });

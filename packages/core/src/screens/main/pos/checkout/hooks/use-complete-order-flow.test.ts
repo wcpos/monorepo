@@ -16,6 +16,7 @@ import {
 	selectReceipt,
 } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
+import * as saleCompletion from '../sale-completion';
 
 import type { SaleOutcome } from '../sale-completion';
 
@@ -173,6 +174,23 @@ describe('useCompleteOrderFlow', () => {
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+	});
+
+	// The store took it but no refresh confirmed the resident: the bridge finishes it on adoption.
+	it('an unconfirmed sale says the payment is confirming and stays in checkout', async () => {
+		jest.spyOn(saleCompletion, 'completeSale').mockResolvedValueOnce('unconfirmed');
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		let returned: unknown;
+		await act(async () => {
+			returned = await result.current(closed);
+		});
+		expect(returned).toBe('unconfirmed');
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_confirming',
+			expect.objectContaining({ showToast: true, context: { orderUUID: 'uuid-42' } })
+		);
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(true);
 	});
 
 	it('closes the phone sheet when receipts are disabled', async () => {

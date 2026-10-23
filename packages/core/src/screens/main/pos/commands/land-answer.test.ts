@@ -256,7 +256,7 @@ describe('landAnswer', () => {
 			resolveAttempt,
 			dp: 2,
 		});
-		expect(landed).toEqual({ result, answer, notMirrored: null });
+		expect(landed).toBe(result);
 		expect(finish).toHaveBeenCalledTimes(1);
 		expect(resolveAttempt).not.toHaveBeenCalled();
 	});
@@ -266,12 +266,12 @@ describe('landAnswer', () => {
 		const resolveAttempt = jest.fn(async () => undefined);
 		const answer = { kind: 'reopened', order: summary('pos-open') } as const;
 		const landed = await landAnswer(answer, press, { finish, resolveAttempt, dp: 2 });
-		expect(landed.result).toBe('reopened');
+		expect(landed).toBe('reopened');
 		expect(finish).not.toHaveBeenCalled();
 		expect(resolveAttempt).toHaveBeenCalledTimes(1);
 	});
 
-	it('a copy that failed to save completes as a failed mirror and says so', async () => {
+	it('a copy that failed to save completes as a failed mirror', async () => {
 		const finish = jest.fn(async () => 'partial' as const);
 		const notMirrored = { cause: new Error('disk') };
 		const answer = { kind: 'recorded', via: 'online', row, order: null } as const;
@@ -282,7 +282,7 @@ describe('landAnswer', () => {
 			notMirrored,
 		});
 		expect(finish).toHaveBeenCalledWith(expect.objectContaining({ mirrorFailed: true }));
-		expect(landed).toEqual({ result: 'partial', answer, notMirrored });
+		expect(landed).toBe('partial');
 	});
 });
 

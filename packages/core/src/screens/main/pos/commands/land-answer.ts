@@ -72,16 +72,12 @@ export type StoreAnswer =
 			order: OrderPaymentSummary | null;
 	  }
 	| { kind: 'sent'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
-	/** `reopened`: a replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
-	| { kind: 'settled' | 'reopened'; order: OrderPaymentSummary }
+	| { kind: 'settled'; order: OrderPaymentSummary }
+	/** A replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
+	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'close'; order: OrderPaymentSummary };
 /** `remainingMinor`: the press's prediction for a recorded leg (`StampedSale`). */
 export type Arrival = { via: 'press' | 'try-again'; remainingMinor: number };
-export type Landed = {
-	result: CompletionResult | 'reopened';
-	answer: StoreAnswer;
-	notMirrored: NotMirrored;
-};
 
 /**
  * A replayed answer (Try again) as a store answer: it arrives mirrored, so this only reads it.
@@ -112,21 +108,26 @@ export function saleOutcomeOf(
 	{ remainingMinor }: Arrival,
 	mirrorFailed: boolean
 ): SaleOutcome {
-	if (answer.kind === 'recorded') {
-		const { row, order, via } = answer;
-		return { source: 'manual', via, row, order, mirrorFailed, remainingMinor };
+	switch (answer.kind) {
+		case 'recorded': {
+			const { row, order, via } = answer;
+			return { source: 'manual', via, row, order, mirrorFailed, remainingMinor };
+		}
+		case 'close':
+			return { source: 'zero-balance', order: answer.order };
+		case 'sent':
+			return { source: 'gateway', order: answer.order, stamp: answer.stamp };
+		case 'settled':
+			return { source: 'gateway-settled', order: answer.order };
+		default:
+			return answer satisfies never;
 	}
-	if (answer.kind === 'close') return { source: 'zero-balance', order: answer.order };
-	if (answer.kind === 'sent')
-		return { source: 'gateway', order: answer.order, stamp: answer.stamp };
-	return { source: 'gateway-settled', order: answer.order };
 }
 
 /**
  * Only the answer settles the command; `finish` (`finishSale`, the resident's one judge) completes
- * the sale, and its `answerAdopted` (no journal entry at all) is the adoption read here, never the
- * bridge's `awaitsAnswer` (nothing owed an answer). `reopened`: the answer said so (the attempt is
- * resolved), or a close or a recorded leg whose answer `reopenedSince` did not finish.
+ * the sale. `reopened`: the answer said so (the attempt is resolved), or a close or a recorded leg
+ * whose answer `reopenedSince` did not finish.
  */
 export async function landAnswer(
 	answer: StoreAnswer,
@@ -137,16 +138,15 @@ export async function landAnswer(
 		dp: number;
 		notMirrored?: NotMirrored;
 	}
-): Promise<Landed> {
-	const notMirrored = deps.notMirrored ?? null;
+): Promise<CompletionResult | 'reopened'> {
 	if (answer.kind === 'reopened') {
 		await deps.resolveAttempt();
-		return { result: 'reopened', answer, notMirrored };
+		return 'reopened';
 	}
-	const result = await deps.finish(saleOutcomeOf(answer, arrival, notMirrored !== null));
+	const result = await deps.finish(saleOutcomeOf(answer, arrival, !!deps.notMirrored));
 	const reopened =
 		(result === 'not-completed' || result === 'partial') &&
 		(answer.kind === 'close' ||
 			(answer.kind === 'recorded' && reopenedSince(answer.order, deps.dp)));
-	return { result: reopened ? 'reopened' : result, answer, notMirrored };
+	return reopened ? 'reopened' : result;
 }

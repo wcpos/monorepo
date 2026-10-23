@@ -42,7 +42,7 @@ export interface SubmitGatewayPaymentDeps {
 }
 type Answered = { order: OrderPaymentSummary; notMirrored: NotMirrored };
 export type SubmitGatewayPaymentOutcome =
-	| ({ kind: 'recorded'; row: PaymentRow } & Answered)
+	| ({ kind: 'recorded'; via: 'online'; row: PaymentRow } & Answered)
 	| ({ kind: 'sent'; stamp: AwaitingCustomerStamp } & Answered)
 	| ({ kind: 'settled' } & Answered)
 	/** A replayed `settled`/`paid` whose order was reopened since: mirrored, never finished. */
@@ -139,7 +139,7 @@ export async function submitGatewayPayment(
 	});
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
-		return mirror({ kind: 'recorded', row, order: data.order }, null);
+		return mirror({ kind: 'recorded', via: 'online', row, order: data.order }, null);
 	}
 	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
 	// the summary as the truth and no receipt number assumed.

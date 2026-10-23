@@ -51,7 +51,11 @@ import {
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
-import { persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
+import {
+	type CompletionResult,
+	persistSaleProvenance,
+	recordSaleAttempt,
+} from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useConfirmOfflineTender } from './use-confirm-offline-tender';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -124,7 +128,6 @@ import {
 	answerOf,
 	type Arrival,
 	landAnswer,
-	type Landed,
 	type NotMirrored,
 	type StoreAnswer,
 } from '../../commands/land-answer';
@@ -739,31 +742,46 @@ export function useTenderFlow(
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
 	const land = React.useCallback(
-		async (
-			answer: StoreAnswer,
-			arrival: Arrival,
-			{ notMirrored = null, queue, method }: LandOptions = {}
-		) => {
+		async (answer: StoreAnswer, arrival: Arrival, options: LandOptions = {}) => {
+			const { notMirrored = null, queue, method } = options;
 			const context = {
 				...orderContext,
-				...(method ? { method } : {}),
+				method,
 				outcome: answer.kind,
 				status: answer.order?.status,
 			};
 			const toast = (sentence: string) => logger.info(sentence, { showToast: true, context });
-			/**
-			 * A reopen is said however the answer arrived; the press's own moments (paid for the
-			 * order, invoice sent, open again) only at the press, never over "not synced".
-			 */
-			const presentLanded = ({ result }: Landed) => {
+			// The store answered; only this till's copy failed to save, said before the finish (which
+			// can still throw). PAYMENT111 names a payment; a reopened replay took no money.
+			if (notMirrored && answer.kind !== 'reopened') {
+				const sent = answer.kind === 'sent';
+				const row = answer.kind === 'recorded' ? answer.row : null;
+				const sentence = sent
+					? t('pos_checkout.invoice_sent_not_synced')
+					: t('pos_checkout.payment_recorded_not_synced');
+				logger.warn(sentence, {
+					code: ERROR_CODES[
+						sent ? 'PAYMENT_INVOICE_NOT_MIRRORED' : 'PAYMENT_RECORDED_NOT_MIRRORED'
+					],
+					showToast: true,
+					...(sent ? { toast: { title: sentence } } : {}),
+					...(row ? { terminal: { operationId: row.id } } : {}),
+					context: {
+						...context,
+						type: 'payment.not-mirrored',
+						...(row ? { paymentId: row.id, amount: row.amount, status: row.status } : {}),
+						error: getErrorMessage(notMirrored.cause),
+					},
+				});
+			}
+			// A reopen is said however the answer arrived; the press's own moments (paid for the
+			// order, invoice sent, open again) only at the press, never over "not synced".
+			const presentLanded = (result: CompletionResult | 'reopened') => {
 				if (result === 'reopened') return toast(t('pos_checkout.sale_reopened_elsewhere'));
 				if (arrival.via !== 'press' || notMirrored) return;
+				const orderNumber = payload.number ?? String(payload.id);
 				if (answer.kind === 'settled' && result === 'completed' && !uiSettings.autoShowReceipt)
-					toast(
-						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: payload.number ?? String(payload.id),
-						})
-					);
+					toast(t('pos_checkout.payment_completed_for_order', { orderNumber }));
 				if (answer.kind !== 'sent') return;
 				// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
 				if (answer.order.status === 'pos-open') toast(t('pos_checkout.order_open_send_again'));
@@ -774,25 +792,15 @@ export function useTenderFlow(
 							: t('pos_checkout.invoice_sent')
 					);
 			};
-			const landed = await landAnswer(answer, arrival, {
+			const result = await landAnswer(answer, arrival, {
 				finish: (outcome) => completeOrderFlow(outcome, queue),
 				resolveAttempt: () => resolveCompletionAttempt(storeDB, order.uuid),
 				dp,
 				notMirrored,
 			}).finally(() => answer.kind === 'recorded' && tenderRecorded(answer.row, answer.via));
-			presentLanded(landed);
+			presentLanded(result);
 		},
-		[
-			orderContext,
-			t,
-			completeOrderFlow,
-			storeDB,
-			order.uuid,
-			dp,
-			tenderRecorded,
-			payload,
-			uiSettings,
-		]
+		[orderContext, t, completeOrderFlow, storeDB, order, dp, tenderRecorded, payload, uiSettings]
 	);
 
 	/**
@@ -884,28 +892,6 @@ export function useTenderFlow(
 		// records its shares (activePlan is null once the legs are done). A whole-order gateway
 		// never has one.
 		const journaledPlan = fixedAmount ? null : state.plan;
-		// The store answered; only this till's copy failed to save. PAYMENT111 names a payment.
-		type Answered = { kind: string; notMirrored: { cause: unknown } | null; row?: PaymentRow };
-		const warnNotMirrored = ({ kind, notMirrored, row }: Answered, method: string) => {
-			const sent = kind === 'sent';
-			const sentence = sent
-				? t('pos_checkout.invoice_sent_not_synced')
-				: t('pos_checkout.payment_recorded_not_synced');
-			logger.warn(sentence, {
-				code: ERROR_CODES[sent ? 'PAYMENT_INVOICE_NOT_MIRRORED' : 'PAYMENT_RECORDED_NOT_MIRRORED'],
-				showToast: true,
-				...(sent ? { toast: { title: sentence } } : {}),
-				...(row ? { terminal: { operationId: row.id } } : {}),
-				context: {
-					type: 'payment.not-mirrored',
-					...orderContext,
-					method,
-					outcome: kind,
-					...(row ? { paymentId: row.id, amount: row.amount, status: row.status } : {}),
-					error: getErrorMessage(notMirrored?.cause),
-				},
-			});
-		};
 		// Once answered, a throw is a failed status check (PAYMENT101), never "nothing was taken".
 		let answered = false;
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
@@ -1215,11 +1201,9 @@ export function useTenderFlow(
 					return;
 				}
 				answered = true;
-				// A reopened replay took no money: no "recorded, not synced" (CodeRabbit 4346454779).
-				if (outcome.notMirrored && outcome.kind !== 'reopened') warnNotMirrored(outcome, method.id);
 				// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
 				await land(
-					outcome.kind === 'recorded' ? { ...outcome, via: 'online' } : outcome,
+					outcome,
 					{ via: 'press', remainingMinor: sale.remainingMinor },
 					{ notMirrored: outcome.notMirrored, queue, method: method.id }
 				);
@@ -1251,7 +1235,6 @@ export function useTenderFlow(
 			if (outcome.kind !== 'recorded' && outcome.kind !== 'unknown') await unround();
 			if (outcome.kind === 'recorded') {
 				answered = true;
-				if (outcome.notMirrored) warnNotMirrored(outcome, method.id);
 				// A failed mirror trusts only the store's summary: the pane stays on what is left to pay.
 				await land(
 					outcome,

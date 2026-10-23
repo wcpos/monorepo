@@ -388,9 +388,9 @@ async function finishSale(
 			// Only when the store disagrees with the till (an ordinary split leg costs no request),
 			// or its answer reads paid while the resident does not: the refresh decides.
 			const logger = getLogger(['wcpos', 'pos', 'checkout']);
-			const refreshed = refreshOrderRecord(ctx.runtime, latest.id);
 			try {
-				const result = await refreshed;
+				// Inside the try: a disposed engine throws synchronously, and that is unconfirmed too.
+				const result = await refreshOrderRecord(ctx.runtime, latest.id);
 				confirmed = result === 'refreshed';
 				if (result === 'timed-out')
 					logger.debug('Post-payment order refresh timed out; keeping sale open', {
@@ -435,7 +435,8 @@ async function finishSale(
 					: outcome.source === 'gateway-contract' || outcome.source === 'gateway-settled';
 	// The poster's post-answer refresh already adopted the store's document after the last answer
 	// and settled every command it sent; a second whole-order read of the same document is the
-	// 10 s a slow host pays twice. A failed mirror leaves its answer journaled (its chain never
+	// 10 s a slow host pays twice. `answerAdopted` is "no journal entry at all", stricter than the
+	// bridge's `awaitsAnswer` (nothing owed an answer): a leftover still costs this read. A failed mirror leaves its answer journaled (its chain never
 	// written), and a failed or timed-out refresh never holds the answer: both read as before. A
 	// replay re-judges a suspect cached status on purpose; a pay-page contract never went through
 	// the poster, so an earlier leg's adoption would read as this answer's. A read that throws
