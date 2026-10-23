@@ -190,27 +190,6 @@ describe('refreshOrderRecord', () => {
 		expect(jest.getTimerCount()).toBe(0);
 	});
 
-	it('a readopt refresh adopts the store copy under an equal stamp, under its own demand', async () => {
-		const release = jest.fn();
-		const require = jest.fn(() => ({
-			ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
-			release,
-		}));
-		const pending = refreshOrderRecord({ require } as unknown as RxdbSyncEngine, 42, {
-			readopt: true,
-		});
-		expect(require).toHaveBeenCalledWith({
-			id: 'orders:readopt:42',
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: ['42'],
-			forceRefresh: true,
-			readopt: true,
-		});
-		await expect(pending).resolves.toBe('refreshed');
-		expect(release).toHaveBeenCalledTimes(1);
-	});
-
 	it('releases a stalled demand at ten seconds', async () => {
 		const release = jest.fn();
 		const engine = {

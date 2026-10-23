@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { type OrderPayload, type ReadonlyEngineRecord, useQueryRuntime } from '@wcpos/query';
 import { patchEngineResident } from '@wcpos/query/mutations';
-import { refreshOrderRecord } from '@wcpos/query/record-readers';
+import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type MetaDataEntry, POS_META_KEYS } from '@wcpos/sync-core';
 
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -64,12 +64,12 @@ export function useUndoRefusedReopen() {
 			const wooId = order.payload.id;
 			let readopted = false;
 			if (wooId) {
-				try {
-					readopted =
-						(await refreshOrderRecord(runtime.engine, wooId, { readopt: true })) === 'refreshed';
-				} catch {
-					readopted = false;
-				}
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				const timedOut = new Promise<false>((resolve) => {
+					timer = setTimeout(() => resolve(false), ORDER_REFRESH_TIMEOUT_MS);
+				});
+				readopted = await Promise.race([runtime.engine.orderRevision.readopt(wooId), timedOut]);
+				clearTimeout(timer);
 			}
 			if (readopted || !order.uuid) return;
 			// A pull that landed meanwhile already holds the store's word; leave it.

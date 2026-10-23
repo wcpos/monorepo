@@ -427,6 +427,8 @@ export class EngineOrderRepository {
 					const localMeta = (current.payload as Record<string, unknown> | undefined)?.meta_data;
 					return withPreservedPrintCount(current, {
 						...document,
+						// A stamp that landed after this pull's snapshot is newer than its document.
+						sync: carriedFacts(document.sync, current, adoptedAt),
 						payload: {
 							...document.payload,
 							meta_data: mergeProtectedOrderMeta(

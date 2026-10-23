@@ -582,8 +582,7 @@ export type RxdbSyncEngine = {
 	whenActive(): Promise<ActiveScope>;
 	adoptOrderSnapshot(payload: unknown): Promise<'applied' | 'protected' | 'invalid'>;
 	/** The money poster's door to an order resident's revision: a status poll's naked stamp, which
-	 * the next order push goes out under, and the corrective readopt with its proof of adoption
-	 * (ADR 0040 §1.3; write-path/order-revision.ts). */
+	 * the next order push goes out under, and the proven readopt (ADR 0040 §1.3; order-revision.ts). */
 	orderRevision: OrderRevisionDoor;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured

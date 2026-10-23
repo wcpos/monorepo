@@ -61,7 +61,6 @@ export interface RevisionChain {
 	readonly answerRevision: string;
 	readonly answeredAt: number;
 	/** Set only by the post-answer refresh (§1.8). */
-	readonly adoptedAfterAnswer?: boolean;
 	readonly adoptedRevision?: string;
 }
 type OrderCommands = { entries: Record<string, MoneyCommandEntry>; chain: RevisionChain | null };

@@ -174,7 +174,7 @@ async function residentJSON() {
 		sync: {
 			revision: string;
 			adopted?: { revision: string; at: number };
-			stamped?: { revision: string; at: number };
+			stamped?: { at: number };
 		};
 	};
 }
@@ -790,13 +790,10 @@ describe('the answer chain and the post-answer refresh', () => {
 			queryKey: '',
 		});
 		await settleMoneyCommand(runtime, storeDB, 'order');
-		expect((await readOrderCommands(storeDB, 'order')).chain).not.toHaveProperty(
-			'adoptedAfterAnswer'
-		);
+		expect((await readOrderCommands(storeDB, 'order')).chain).not.toHaveProperty('adoptedRevision');
 		engine.require = refresh;
 		await settleMoneyCommand(runtime, storeDB, 'order');
 		expect((await readOrderCommands(storeDB, 'order')).chain).toMatchObject({
-			adoptedAfterAnswer: true,
 			adoptedRevision: store.revision,
 		});
 	});
@@ -818,7 +815,7 @@ describe('the answer chain and the post-answer refresh', () => {
 		// the stamp claims no authority (ADR 0040 §1.3).
 		const { sync } = await residentJSON();
 		expect(sync.revision).toBe(polled);
-		expect(sync.stamped).toEqual({ revision: polled, at: expect.any(Number) });
+		expect(sync.stamped).toEqual({ at: expect.any(Number) });
 		expect(sync.adopted?.revision).toBe('sha256:r1');
 		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
 		expect(requires).toEqual([]);
@@ -840,7 +837,10 @@ describe('the answer chain and the post-answer refresh', () => {
 		const { chain: before } = await readOrderCommands(storeDB, 'order');
 		const polled = await pollSettles();
 		expect(await chain()).toEqual(before);
-		expect((await residentJSON()).sync.stamped?.revision).toBe(polled);
+		expect((await residentJSON()).sync).toMatchObject({
+			revision: polled,
+			stamped: { at: expect.any(Number) },
+		});
 	});
 
 	it('a mirror without a revision leaves the chain and the stamp as they were', async () => {
@@ -890,6 +890,24 @@ describe('the answer chain and the post-answer refresh', () => {
 		const { sync } = await residentJSON();
 		expect(sync.revision).toBe(store.revision);
 		expect(sync.adopted?.revision).toBe(sync.revision);
+	});
+
+	// Every terminal 2xx is mirrored with its revision (server-leg.ts), a command's as a poll's.
+	it('a command answer mirrored with its revision stamps it: with the readopt failing, the next void goes out under it with no re-read', async () => {
+		refreshWorks = false;
+		const post = poster();
+		const { data } = (await post('orders/5/payments/leg-1/intent', {})) as {
+			data: { payment: PaymentRow; revision: string };
+		};
+		await post.mirror({ payment: data.payment, revision: data.revision });
+		expect((await residentJSON()).sync).toMatchObject({
+			revision: data.revision,
+			stamped: { at: expect.any(Number) },
+		});
+		requires = [];
+		await poster()('orders/5/payments/leg-1/void', { reason: 'cancelled' });
+		expect(requires).toEqual([]);
+		expect(sentBodies().at(-1)?.revision).toBe(data.revision);
 	});
 
 	it('a second poll’s summary lands under the stamp the first poll made', async () => {
@@ -1404,10 +1422,7 @@ describe('the store-session recovery', () => {
 			data: { payment: PaymentRow };
 		};
 		await post.mirror({ payment: data.payment });
-		expect(await chain()).toMatchObject({
-			adoptedAfterAnswer: true,
-			adoptedRevision: store.revision,
-		});
+		expect(await chain()).toMatchObject({ adoptedRevision: store.revision });
 		await recover();
 		expect(await chain()).not.toBeNull();
 		store.n += 1; // another till moves the order; the pull adopts the newer document

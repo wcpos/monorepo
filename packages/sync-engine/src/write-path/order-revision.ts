@@ -1,11 +1,12 @@
 /**
  * The one writer of an order resident's revision facts (ADR 0040 §1.3): `sync.revision`, the
- * stamp the next push goes out under; `sync.adopted = { revision, at }`, which certifies a
- * whole-document adoption and is bound to the revision adopted; and `sync.stamped`, the last
- * status poll's answer (`stamp`), which an adoption clears. A naked stamp (`stampedSync`: the
- * 428 refresh, a manual rebase, an ack withheld for a queued successor, a status poll) moves the
- * revision and leaves the adoption behind, so the inequality alone revokes the resident's
- * authority; no writer needs to clear it. Readers interpret all three through `residentRevision`.
+ * stamp the next push goes out under, and `sync.adopted = { revision, at }`, which certifies a
+ * whole-document adoption and is bound to the revision adopted. A naked stamp (`stampedSync`:
+ * the 428 refresh, a manual rebase, an ack withheld for a queued successor, a status poll)
+ * moves the revision and leaves the adoption behind, so the inequality alone revokes the
+ * resident's authority; no writer needs to clear it. Readers interpret both through
+ * `residentRevision`, and `sync.stamped = { at }`: when the last answer mirrored with a revision
+ * arrived (`stamp`; an adoption clears it).
  */
 
 import { type OrderDocument, remoteIdOrNull } from '@wcpos/sync-core';
@@ -14,42 +15,45 @@ import type { EngineRequirement, RequirementHandle } from '../require-plane';
 import type { RxDatabase } from 'rxdb';
 
 type Fact = { revision: string; at: number };
+type WireSync = Partial<OrderDocument['sync']>;
 /** An order resident's `sync`: the wire's `SyncMetadata` plus the facts only this module writes. */
-export type ResidentSync = Partial<OrderDocument['sync']> & { adopted?: Fact; stamped?: Fact };
-type RawFact = { revision?: unknown; at?: unknown };
-type RevisionFacts = { revision?: unknown; adopted?: RawFact; stamped?: RawFact };
+export type ResidentSync = WireSync & { adopted?: Fact; stamped?: { at: number } };
+type Raw = { revision?: unknown; at?: unknown };
+type RevisionFacts = { revision?: unknown; adopted?: Raw; stamped?: Raw };
 
 export interface ResidentRevision {
 	readonly revision: string | undefined;
 	readonly adopted: Fact | null;
-	/** The last status poll's answer, unless an adoption has landed since. */
-	readonly stamped: Fact | null;
-	/** Adopted whole, under the revision it carries, after `at` (the pull guard's question). */
+	/** Adopted whole after `at`, whatever stamped the revision since (the pull guard's question). */
 	adoptedAfter(at: number): boolean;
-	/** Adopted whole, under the revision it carries, after `answeredAt` and the last poll's stamp. */
+	/** An answer stamped its revision after `answeredAt` (the chain's) and the last adoption. */
+	polledAfter(answeredAt?: number): boolean;
+	/** Adopted whole, under the revision it carries, after `answeredAt` and the last stamp. */
 	holdsDocument(answeredAt?: number): boolean;
-}
-
-function factOf(value: RawFact | undefined): Fact | null {
-	if (typeof value?.revision !== 'string') return null;
-	return { revision: value.revision, at: typeof value.at === 'number' ? value.at : 0 };
 }
 
 /** One snapshot of `record.sync`. */
 export function residentRevision(record: { sync?: unknown } | null | undefined): ResidentRevision {
 	const sync = (record?.sync ?? {}) as RevisionFacts;
 	const revision = typeof sync.revision === 'string' ? sync.revision : undefined;
-	const adopted = factOf(sync.adopted);
-	const stamped = factOf(sync.stamped);
-	const adoptedAfter = (at: number) =>
-		!!revision && adopted?.revision === revision && adopted.at > at;
+	const adopted =
+		typeof sync.adopted?.revision === 'string'
+			? {
+					revision: sync.adopted.revision,
+					at: typeof sync.adopted.at === 'number' ? sync.adopted.at : 0,
+				}
+			: null;
+	const stampedAt = typeof sync.stamped?.at === 'number' ? sync.stamped.at : null;
+	const adoptedAfter = (at: number) => (adopted?.at ?? -Infinity) > at;
 	return {
 		revision,
 		adopted,
-		stamped,
 		adoptedAfter,
+		polledAfter: (answeredAt) => stampedAt !== null && stampedAt > (answeredAt ?? 0),
 		holdsDocument: (answeredAt) =>
-			adoptedAfter(Math.max(answeredAt ?? -Infinity, stamped?.at ?? -Infinity)),
+			!!revision &&
+			adopted?.revision === revision &&
+			adoptedAfter(Math.max(answeredAt ?? -Infinity, stampedAt ?? -Infinity)),
 	};
 }
 
@@ -69,18 +73,20 @@ export function stampedSync<S extends ResidentSync>(sync: S, revision: string): 
 /**
  * The resident's own revision facts carried onto a pulled `sync`, so the unchanged-comparison
  * sees only the server's bytes; a document actually written is then adopted (`adoptedSync`).
+ * At the write (`at`, the adoption's time), only a stamp that landed since is carried.
  */
-export function carriedFacts<S extends ResidentSync>(sync: S, resident: unknown): S {
+export function carriedFacts<S extends ResidentSync>(sync: S, resident: unknown, at?: number): S {
 	const { adopted, stamped } = (resident as { sync?: ResidentSync } | undefined)?.sync ?? {};
+	if (at !== undefined) return stamped && stamped.at >= at ? { ...sync, stamped } : sync;
 	return { ...sync, ...(adopted && { adopted }), ...(stamped && { stamped }) };
 }
 
 export interface OrderRevisionDoor {
 	/**
 	 * A status poll's answer names the store's document now: the next order push goes out under
-	 * it (the drain reads `sync.revision`, never the journal), and `sync.stamped` records it even
-	 * under an equal revision. Returns the revision replaced. Measured: order 115073, dev-next
-	 * 2026-10-23, a 409 on the cash push after a terminal cancel.
+	 * it (the drain re-stamps baseRevision from `sync.revision`; it never reads the journal's
+	 * chain). Returns the revision replaced. Measured: order 115073, dev-next 2026-10-23, a 409
+	 * on the cash push after a terminal cancel. Any answer mirrored with a revision stamps too.
 	 */
 	stamp(
 		orderUuid: string,
@@ -106,11 +112,11 @@ export function createOrderRevisionDoor(deps: {
 			await resident.incrementalModify((current: Record<string, unknown>) => {
 				replaced = null;
 				const facts = residentRevision(current);
-				// An adoption that landed after this answer wins.
-				if ((facts.adopted?.at ?? 0) > answeredAt) return current;
+				// An adoption that landed after this answer wins; an empty revision names nothing.
+				if (!revision || (facts.adopted?.at ?? 0) > answeredAt) return current;
 				if (facts.revision !== revision) replaced = facts.revision ?? null;
 				const sync = stampedSync((current.sync ?? {}) as ResidentSync, revision);
-				return { ...current, sync: { ...sync, stamped: { revision, at: answeredAt } } };
+				return { ...current, sync: { ...sync, stamped: { at: answeredAt } } };
 			});
 			return { replaced };
 		},
@@ -128,8 +134,7 @@ export function createOrderRevisionDoor(deps: {
 					readopt: true,
 				});
 				const outcome = await handle.ready;
-				// A readopt document skips the unchanged filter (written unless the local-work guard keeps
-				// the resident), and `appliedRecordIds` counts only this requirement's own tasks.
+				// Written unless the local-work guard keeps it; the ids are this requirement's own tasks'.
 				return outcome.action === 'fetched' && !!outcome.appliedRecordIds?.includes(remoteId);
 			} catch {
 				return false;

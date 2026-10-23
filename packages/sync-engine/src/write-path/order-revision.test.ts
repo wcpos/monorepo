@@ -79,7 +79,7 @@ describe('adoptedSync', () => {
 		},
 		{
 			name: "clears the last poll's stamp",
-			sync: { revision: 'sha256:r2', stamped: { revision: 'sha256:r2', at: 400 } },
+			sync: { revision: 'sha256:r2', stamped: { at: 400 } },
 			expected: { revision: 'sha256:r2', adopted: { revision: 'sha256:r2', at: 500 } },
 		},
 	])('$name', ({ sync, expected }) => {
@@ -91,11 +91,11 @@ describe('carriedFacts', () => {
 	it.each([
 		{
 			name: "carries the resident's adoption and stamp onto the pulled sync",
-			resident: { ...SYNC, stamped: { revision: 'sha256:r1', at: 200 } },
+			resident: { ...SYNC, stamped: { at: 200 } },
 			expected: {
 				revision: 'sha256:r9',
 				adopted: ADOPTED,
-				stamped: { revision: 'sha256:r1', at: 200 },
+				stamped: { at: 200 },
 			},
 		},
 		{
@@ -111,6 +111,17 @@ describe('carriedFacts', () => {
 	])('$name', ({ resident, expected }) => {
 		expect(carriedFacts({ revision: 'sha256:r9' }, resident && { sync: resident })).toEqual(
 			expected
+		);
+	});
+
+	it.each([
+		{ name: 'a stamp that landed since the adoption', stamped: { at: 500 }, carried: true },
+		{ name: 'a stamp at the adoption', stamped: { at: 400 }, carried: true },
+		{ name: 'a stamp older than the adoption', stamped: { at: 399 }, carried: false },
+	])('at the write, carries only $name', ({ stamped, carried }) => {
+		const current = { sync: { ...SYNC, stamped } };
+		expect(carriedFacts({ revision: 'sha256:r9' }, current, 400)).toEqual(
+			carried ? { revision: 'sha256:r9', stamped } : { revision: 'sha256:r9' }
 		);
 	});
 });
@@ -131,19 +142,19 @@ describe('residentRevision', () => {
 		{ name: 'never adopted', sync: { revision: 'sha256:r1' }, answeredAt: undefined, holds: false },
 		{
 			name: "a poll's stamp at or after the adoption, under an equal revision",
-			sync: { ...SYNC, stamped: { revision: 'sha256:r1', at: 100 } },
+			sync: { ...SYNC, stamped: { at: 100 } },
 			answeredAt: undefined,
 			holds: false,
 		},
 		{
 			name: "a poll's stamp newer than the chain's answer",
-			sync: { ...SYNC, stamped: { revision: 'sha256:r1', at: 150 } },
+			sync: { ...SYNC, stamped: { at: 150 } },
 			answeredAt: 50,
 			holds: false,
 		},
 		{
 			name: "adopted after both the answer and the poll's stamp",
-			sync: { ...SYNC, stamped: { revision: 'sha256:r1', at: 60 } },
+			sync: { ...SYNC, stamped: { at: 60 } },
 			answeredAt: 50,
 			holds: true,
 		},
@@ -151,25 +162,58 @@ describe('residentRevision', () => {
 		expect(residentRevision({ sync }).holdsDocument(answeredAt)).toBe(holds);
 	});
 
-	it("adoptedAfter: the pull guard's question ignores a poll's stamp", () => {
-		const facts = residentRevision({
-			sync: { ...SYNC, stamped: { revision: 'sha256:r1', at: 150 } },
-		});
-		expect(facts.adoptedAfter(99)).toBe(true);
-		expect(facts.adoptedAfter(100)).toBe(false);
-		expect(facts.stamped).toEqual({ revision: 'sha256:r1', at: 150 });
+	it.each([
+		{
+			name: 'adopted after it, a stamp later',
+			sync: { ...SYNC, stamped: { at: 150 } },
+			at: 99,
+			after: true,
+		},
+		{ name: 'adopted at it', sync: SYNC, at: 100, after: false },
+		// A pull requested before the adoption stays out though a naked stamp moved the revision.
+		{
+			name: 'adopted after it, then a naked stamp r2',
+			sync: { ...SYNC, revision: 'sha256:r2' },
+			at: 99,
+			after: true,
+		},
+		{ name: 'never adopted', sync: { revision: 'sha256:r1' }, at: 0, after: false },
+	])("adoptedAfter answers time only (the pull guard's question): $name", ({ sync, at, after }) => {
+		expect(residentRevision({ sync }).adoptedAfter(at)).toBe(after);
+	});
+
+	it.each([
+		{
+			name: 'a stamp after the chain',
+			sync: { ...SYNC, stamped: { at: 150 } },
+			answeredAt: 120,
+			polled: true,
+		},
+		{
+			name: 'a stamp and no chain',
+			sync: { ...SYNC, stamped: { at: 150 } },
+			answeredAt: undefined,
+			polled: true,
+		},
+		{
+			name: 'the chain answered after the stamp',
+			sync: { ...SYNC, stamped: { at: 150 } },
+			answeredAt: 150,
+			polled: false,
+		},
+		{ name: 'no stamp', sync: SYNC, answeredAt: undefined, polled: false },
+	])('polledAfter: $name', ({ sync, answeredAt, polled }) => {
+		expect(residentRevision({ sync }).polledAfter(answeredAt)).toBe(polled);
 	});
 
 	it('reads a record without sync as no revision and no adoption', () => {
 		expect(residentRevision({})).toMatchObject({
 			revision: undefined,
 			adopted: null,
-			stamped: null,
 		});
 		expect(residentRevision(null)).toMatchObject({
 			revision: undefined,
 			adopted: null,
-			stamped: null,
 		});
 	});
 });
@@ -213,14 +257,14 @@ describe('the door: stamp', () => {
 		expect(await residentSync()).toEqual({
 			...SYNC,
 			revision: 'sha256:r2',
-			stamped: { revision: 'sha256:r2', at: 200 },
+			stamped: { at: 200 },
 		});
 	});
 
 	it('under an equal revision replaces nothing and still records the stamp', async () => {
 		const { door, residentSync } = await doorOver(SYNC);
 		expect(await door.stamp(UUID, 'sha256:r1', 200)).toEqual({ replaced: null });
-		expect(await residentSync()).toEqual({ ...SYNC, stamped: { revision: 'sha256:r1', at: 200 } });
+		expect(await residentSync()).toEqual({ ...SYNC, stamped: { at: 200 } });
 	});
 
 	it.each([
@@ -236,10 +280,14 @@ describe('the door: stamp', () => {
 			replaced: stamps ? 'sha256:r1' : null,
 		});
 		expect(await residentSync()).toEqual(
-			stamps
-				? { ...SYNC, revision: 'sha256:r2', stamped: { revision: 'sha256:r2', at: answeredAt } }
-				: SYNC
+			stamps ? { ...SYNC, revision: 'sha256:r2', stamped: { at: answeredAt } } : SYNC
 		);
+	});
+
+	it('refuses an empty revision, as an adoption does', async () => {
+		const { door, residentSync } = await doorOver(SYNC);
+		expect(await door.stamp(UUID, '', 200)).toEqual({ replaced: null });
+		expect(await residentSync()).toEqual(SYNC);
 	});
 
 	it('throws when the resident is missing', async () => {
@@ -333,12 +381,12 @@ describe('the one writer', () => {
 			if (entry.isDirectory()) return sourceFiles(path);
 			return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [path] : [];
 		});
-	// An object value, a shorthand key after a spread, or an assignment: every shape a write of
-	// the facts takes (a destructuring read is none of them).
+	// A key with any value, a shorthand key after a spread, or an assignment: every shape a write
+	// of the facts takes. A destructuring read is none of them, nor an `unknown` parameter.
 	const WRITE =
-		/\b(?:adopted|stamped)\s*:\s*\{|\.\.\.[\w.?]+\s*,\s*(?:adopted|stamped)\s*[,}]|\.(?:adopted|stamped)\s*=(?!=)/g;
+		/\b(?:adopted|stamped)\s*:(?!\s*unknown\b)|\.\.\.[^{}]*?,\s*(?:adopted|stamped)\s*[,}]|\.(?:adopted|stamped)\s*=(?!=)/g;
 
-	it('no engine source outside order-revision.ts writes sync.adopted or sync.stamped', () => {
+	it('no sync-engine source outside order-revision.ts writes sync.adopted or sync.stamped', () => {
 		const writes = sourceFiles(sourceRoot).flatMap((path) => {
 			const file = relative(sourceRoot, path);
 			if (file === join('write-path', 'order-revision.ts')) return [];
@@ -348,8 +396,15 @@ describe('the one writer', () => {
 	});
 
 	it('the scan sees each shape', () => {
-		for (const write of ['{ adopted: { revision } }', '{ ...sync, stamped }', 'sync.adopted = at'])
+		for (const write of [
+			'{ adopted: { revision } }',
+			'{ adopted: resident.sync.adopted }',
+			'{ ...sync, stamped }',
+			'{ ...s, revision, adopted }',
+			'sync.adopted = at',
+		])
 			expect(write.match(WRITE)).not.toBeNull();
+		expect('function newer(incoming: X, adopted: unknown) {}'.match(WRITE)).toBeNull();
 		expect('const { adopted, stamped } = facts;'.match(WRITE)).toBeNull();
 	});
 });

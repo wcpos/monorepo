@@ -11,6 +11,7 @@ import { withOrderColumns } from '@wcpos/sync-core';
 import { createEngineHarness } from '../testing';
 import { materializeLocalOnly } from '../materialization/record-materialization';
 import { EngineOrderRepository } from './engine-order-repository';
+import { createOrderRevisionDoor } from './order-revision';
 
 setPremiumFlag();
 let sequence = 0;
@@ -40,7 +41,15 @@ async function harness() {
 	const orders = h.collection<ReturnType<typeof order>>('orders');
 	const total = async () =>
 		(await orders.findOne(acked().uuid).exec())?.toJSON().payload.total as string;
-	return { repo, orders, total };
+	const door = createOrderRevisionDoor({
+		resolveDatabase: async () => scope.database as never,
+		require: () => {
+			throw new Error('unused');
+		},
+	});
+	const sync = async () =>
+		(await orders.findOne(acked().uuid).exec())?.toJSON().sync as Record<string, unknown>;
+	return { repo, orders, total, door, sync };
 }
 
 describe('a pull requested before the ack adopted the order', () => {
@@ -81,5 +90,61 @@ describe('a pull requested before the ack adopted the order', () => {
 		const context = { source: 'ack', mutationId: 'm', recordId: next.uuid } as const;
 		expect(await h.repo.upsertMany([next], context)).toHaveLength(1);
 		expect(await h.total()).toBe('30.000000');
+	});
+});
+
+describe("a mirrored answer's stamp and the pull (ADR 0040 §1.3)", () => {
+	it('an equal-revision stamp after the ack never lets a pull requested before the adoption in', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		await h.door.stamp(acked().uuid, 'r2', 120);
+		expect(await h.sync()).toMatchObject({ revision: 'r2', stamped: { at: 120 } });
+		const stale = order('pending', '0.00', 'r1');
+		expect(await h.repo.upsertMany([stale], { source: 'pull', requestedAt: 50 })).toEqual([]);
+		expect(await h.total()).toBe('25.000000');
+	});
+
+	it('a naked stamp after the ack never lets a pull requested before the adoption in', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		await h.door.stamp(acked().uuid, 'r3', 120);
+		const stale = order('pending', '0.00', 'r1');
+		expect(await h.repo.upsertMany([stale], { source: 'pull', requestedAt: 50 })).toEqual([]);
+		expect(await h.total()).toBe('25.000000');
+	});
+
+	it('an unchanged pull after a poll stays skipped and keeps the stamp', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		await h.door.stamp(acked().uuid, 'r2', 120);
+		const before = await h.sync();
+		const same = order('processing', '25.000000', 'r2');
+		await h.repo.upsertMany([same], { source: 'pull', requestedAt: 150 });
+		expect(await h.sync()).toEqual(before);
+	});
+
+	it('a written pull adopts its document and clears the stamp', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		await h.door.stamp(acked().uuid, 'r2', 120);
+		const moved = order('completed', '30.000000', 'r3');
+		expect(await h.repo.upsertMany([moved], { source: 'pull', requestedAt: 150 })).toHaveLength(1);
+		const sync = await h.sync();
+		expect(sync).toMatchObject({ revision: 'r3', adopted: { revision: 'r3' } });
+		expect(sync).not.toHaveProperty('stamped');
+	});
+
+	it('keeps a stamp that lands while the pull is being written', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		const later = Date.now() + 60_000; // the answer arrived after this pull adopts
+		const getLocal = h.orders.getLocal.bind(h.orders);
+		vi.spyOn(h.orders, 'getLocal').mockImplementationOnce(async (id) => {
+			await h.door.stamp(acked().uuid, 'r4', later);
+			return getLocal(id);
+		});
+		const moved = order('completed', '30.000000', 'r3');
+		expect(await h.repo.upsertMany([moved], { source: 'pull', requestedAt: 150 })).toHaveLength(1);
+		expect(await h.sync()).toMatchObject({ stamped: { at: later }, adopted: { revision: 'r3' } });
 	});
 });
