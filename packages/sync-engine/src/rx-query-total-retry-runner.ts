@@ -1,4 +1,4 @@
-import { RequestTimeoutError } from './write-path/request-timeout';
+import { RequestTimeoutError } from './transport/request-timeout';
 
 import type {
 	QueryTotalCacheEntry,

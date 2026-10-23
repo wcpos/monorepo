@@ -1006,8 +1006,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			},
 			queryTotal: {
-				fetchWooQueryTotal: (input) =>
-					fetchWooQueryTotal(input, engine.hostTransport().fetcher, site.wpJsonRoot),
+				// The engine's request carries the query-total lane and its one deadline.
+				fetchWooQueryTotal: ({ fetcher: request, ...input }) =>
+					fetchWooQueryTotal(input, request, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
 			holdAutomaticTicks: () =>

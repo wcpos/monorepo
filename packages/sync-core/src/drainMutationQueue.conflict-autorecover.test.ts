@@ -370,6 +370,44 @@ describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
 		expect(await queue.all()).toEqual([]);
 	});
 
+	// A 401 is a session fact (no user is logged in), so whichever push meets it,
+	// the next row must not pay a second 401 to learn it. Each case scripts order-A's
+	// pushes by call number; a scripted status throws, any other call reaches the
+	// fake server (whose seeded revision answers the stale base with a real 409).
+	it.each<{ name: string; throws: Record<number, number> }>([
+		{ name: '409 re-anchored push', throws: { 2: 401 } },
+		{ name: '428 restamped push', throws: { 1: 428, 2: 401 } },
+		{ name: '409 then 428 restamped push', throws: { 2: 428, 3: 401 } },
+	])('a 401 on a re-push walls the rest of the pass ($name)', async ({ throws }) => {
+		const { queue, server, push } = await harness(mut());
+		await queue.enqueue(
+			mut({ mutationId: 'm2', recordId: 'order-B', queuedAt: '2026-08-14T00:01:00.000Z' })
+		);
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		const pushed: string[] = [];
+		const scripted = async (m: RecordMutation) => {
+			pushed.push(m.recordId);
+			const status = throws[pushed.length];
+			if (status !== undefined) throw Object.assign(new Error(`HTTP ${status}`), { status });
+			return push(m);
+		};
+
+		const result = await drainMutationQueue({
+			queue,
+			push: scripted,
+			autoRecoverConflict: () => true,
+			refreshRevision: async () => 'sha256:server-moved',
+		});
+
+		expect(pushed).not.toContain('order-B');
+		expect(result.sessionExpired).toBe(true);
+		expect(result.failed).toBe(1);
+		// The re-push's own failure stays out of `failures` (first-push only); the
+		// walled row is reported with the 401 so its waiter hears it now.
+		expect(result.failures.map((f) => [f.mutation.mutationId, f.status])).toEqual([['m2', 401]]);
+		expect(result.rejected).toEqual([]);
+	});
+
 	it('does not recover when the host supplies no policy (every legacy caller unchanged)', async () => {
 		const { queue, server, push } = await harness(mut());
 		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });

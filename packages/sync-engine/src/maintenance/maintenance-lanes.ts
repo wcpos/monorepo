@@ -53,7 +53,10 @@ import {
 	seedRefundWindowLane,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
-import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
+import {
+	type QueryTotalRetryRunnerInput,
+	runQueryTotalRetryRequests,
+} from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
@@ -85,11 +88,13 @@ export type MaintenanceLaneReport = {
 	error?: string;
 };
 
-/** The host port the query-total retry lane drains through (host-executed fetch). */
+/** The host port the query-total retry lane drains through: a host-executed fetch on
+ * the engine's `fetcher`, which carries the lane's label and its one deadline. */
 export type QueryTotalPort = {
 	fetchWooQueryTotal: (input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
+		fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	}) => Promise<number | null>;
 };
 
@@ -148,7 +153,7 @@ type MaintenanceLaneDeps = {
 	fetcher: (
 		url: string,
 		init?: { signal?: AbortSignal },
-		lane?: MaintenanceLaneName
+		options?: { lane?: MaintenanceLaneName }
 	) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
@@ -160,7 +165,8 @@ type MaintenanceLaneDeps = {
 	ownerId: () => string;
 	/** Current facade-configured record cap for scheduler data requests. */
 	pullBatchSize?: () => number | undefined;
-	queryTotal?: QueryTotalPort;
+	/** The host's port with the engine's request already handed to it. */
+	queryTotal?: Pick<QueryTotalRetryRunnerInput, 'fetchWooQueryTotal'>;
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	censusTotals: () => Promise<CensusTotals>;
@@ -399,7 +405,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								signal.addEventListener('abort', abort, { once: true });
 							}
 							try {
-								return await deps.fetcher(url, { ...init, signal: combined.signal }, name);
+								return await deps.fetcher(
+									url,
+									{ ...init, signal: combined.signal },
+									{ lane: name }
+								);
 							} finally {
 								ticketSignal?.removeEventListener('abort', abort);
 								signal.removeEventListener('abort', abort);

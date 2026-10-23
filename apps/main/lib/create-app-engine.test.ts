@@ -125,6 +125,7 @@ function loadCreateAppEngine(
 							totalHeader: 'X-WP-Total';
 						};
 						signal?: AbortSignal;
+						fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 					}): Promise<number | null>;
 				};
 				databaseOpenBarrier?: Promise<void>;
