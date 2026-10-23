@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, PressableProps } from 'react-native';
+import { Platform, Pressable, PressableProps, View } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as Haptics from 'expo-haptics';
@@ -86,6 +86,8 @@ function IconButton({
 				props.disabled && 'web:pointer-events-none opacity-45',
 				buttonVariants({ variant, size, className })
 			)}
+			// Belt and braces with the press band below: the slop still helps inside a row that
+			// contains it (Android, a 44 row); the band is what reaches past a shorter parent.
 			hitSlop={size === 'sm' ? 8 : size === 'xs' ? 12 : undefined}
 			role="button"
 			onPress={handlePress}
@@ -107,6 +109,24 @@ function IconButton({
 				)}
 				pointerEvents="none"
 			/>
+			{(size === 'sm' || size === 'xs') && (
+				// The finger gets 44 tall (§ Design 2, both HIGs) while the row lays out the drawn
+				// 32 or 24: a transparent band the control token tall, centred over the glyph and
+				// overflowing it, out of layout, as the switch does (switch ledger line 5). Not
+				// hitSlop alone: iOS drops a touch outside a parent nothing overflows, so slop past
+				// a 24 caption row never reached the button, and the web ignores hitSlop; a real
+				// overflowing child is hit-tested on iOS and Android and is part of the button's
+				// DOM on the web. Only tall: sideways growth would take a neighbour's touches in a
+				// dense strip (`MAX_SIDE_SLOP`). The band is inside the button, so a press on it is
+				// the button's own.
+				<View
+					testID="icon-button-press-band"
+					pointerEvents="box-none"
+					className="absolute inset-0 items-center justify-center"
+				>
+					<View className="min-h-ctl w-full" />
+				</View>
+			)}
 		</Pressable>
 	);
 }

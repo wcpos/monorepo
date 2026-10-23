@@ -33,8 +33,9 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			<Tooltip showOnNative>
 				<TooltipTrigger asChild>
 					{/* The caption row's one control, at the row's height: 6 units (24 at Regular,
-					    the `fine` pointer floor in scale.ts; WCAG 2.2 target minimum), and its 12 hitSlop
-					    keeps the 44 touch target (owner, 2026-10-23: the band under the card). */}
+					    the `fine` pointer floor in scale.ts; WCAG 2.2 target minimum); its press band
+					    keeps the 44 touch target past the row (icon-button ledger line 7; owner,
+					    2026-10-23: the band under the card). */}
 					<IconButton
 						name="refresh"
 						size="xs"
