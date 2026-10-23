@@ -12,6 +12,8 @@ let icon: Record<string, unknown>;
 let label: Record<string, unknown>;
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
+	// The under-44 icon buttons mount a press band (icon-button ledger line 7).
+	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	Pressable: (props: Record<string, unknown>) => {
 		pressable = props;
 		return (
