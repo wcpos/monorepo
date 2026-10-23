@@ -414,7 +414,10 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			report('raw query construction', node);
 		if ((name === '$' || name === 'eventBulks$') && receiver && isChangeStreamReceiver(receiver))
 			report('raw change stream', node);
-		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
+		if (
+			(name === 'write' || name === 'resolveConflict' || name === 'adoptOrderSnapshot') &&
+			isEngineReceiver(receiver)
+		)
 			report('write plane outside a command module', node);
 		if (name === 'require' && isEngineReceiver(receiver))
 			report('require plane outside a named read', node);
@@ -800,22 +803,30 @@ it('reports the full accessed AST text so failures name long accesses', () => {
 });
 
 // Engine methods are fenced by receiver, not on unrelated objects with the same names.
-it.each(['write', 'resolveConflict'])('fences engine %s calls and extraction', (name) => {
-	for (const receiver of ['engine', 'object.engine', "runtime['engine']", "runtime?.['engine']"]) {
-		for (const source of [
-			`${receiver}.${name}({});`,
-			`${receiver}['${name}']({});`,
-			`${receiver}?.['${name}']?.({});`,
-			`const fn = ${receiver}.${name};`,
-			`const fn = ${receiver}['${name}'];`,
-			`const { ${name} } = ${receiver};`,
-			`const { ['${name}']: fn } = ${receiver};`,
-		])
-			expect(violations(source).map(({ rule }) => rule)).toContain(
-				'write plane outside a command module'
-			);
+it.each(['write', 'resolveConflict', 'adoptOrderSnapshot'])(
+	'fences engine %s calls and extraction',
+	(name) => {
+		for (const receiver of [
+			'engine',
+			'object.engine',
+			"runtime['engine']",
+			"runtime?.['engine']",
+		]) {
+			for (const source of [
+				`${receiver}.${name}({});`,
+				`${receiver}['${name}']({});`,
+				`${receiver}?.['${name}']?.({});`,
+				`const fn = ${receiver}.${name};`,
+				`const fn = ${receiver}['${name}'];`,
+				`const { ${name} } = ${receiver};`,
+				`const { ['${name}']: fn } = ${receiver};`,
+			])
+				expect(violations(source).map(({ rule }) => rule)).toContain(
+					'write plane outside a command module'
+				);
+		}
 	}
-});
+);
 
 it.each([
 	['require', 'require plane outside a named read'],
@@ -874,6 +885,7 @@ it.each([
 	'runtime[engine].write();',
 	'const { write, resolveConflict } = other;',
 	"const fn = other['resolveConflict'];",
+	'other.adoptOrderSnapshot({});',
 ])('allows unrelated receivers in %s', (source) => {
 	expect(violations(source)).toEqual([]);
 });
