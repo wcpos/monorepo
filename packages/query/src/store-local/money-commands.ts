@@ -249,6 +249,35 @@ export async function markSent(
 }
 
 /**
+ * Journaled, never dispatched (ADR 0040 Decided 1 rule 3, an offline record): `sentAt` is set so
+ * no pre-flight or recovery drops it as a crash leftover (`dropUnsent`), `sentRevision` stays null
+ * because no revision was ever sent, and the claim is released for the recovery's re-send. One
+ * journal write, fenced on the claimant: null when another poster holds the entry.
+ */
+export async function deferEntry(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	id: string,
+	claimant: string
+): Promise<MoneyCommandEntry | null> {
+	let deferred: MoneyCommandEntry | null = null;
+	await modifyOrder(storeDB, orderUuid, (order) => {
+		const entry = order.entries[id];
+		deferred =
+			entry?.claimedBy === claimant
+				? (order.entries[id] = {
+						...entry,
+						sentAt: new Date().toISOString(),
+						sentRevision: null,
+						claimedBy: null,
+						claimedAt: null,
+					})
+				: null;
+	});
+	return deferred;
+}
+
+/**
  * Deletes the entry (with `claimant`, only while it holds the entry; `null` = only while nobody
  * does) and records a 2xx's chain.
  */
