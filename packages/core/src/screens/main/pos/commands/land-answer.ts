@@ -77,8 +77,12 @@ export type StoreAnswer =
 	/** A replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
 	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'close'; order: OrderPaymentSummary };
-/** `remainingMinor`: the press's prediction for a recorded leg (`StampedSale`); a recovery has none. */
-export type Arrival = { via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' };
+/**
+ * `remainingMinor`: the press's prediction for a recorded leg (`StampedSale`); a recovery or a
+ * boundary close has none.
+ */
+export type Arrival =
+	{ via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' | 'boundary' };
 
 /**
  * A replayed answer (Try again, recovery) as a store answer: it arrives mirrored, so this only
@@ -117,7 +121,7 @@ export function saleOutcomeOf(
 	switch (answer.kind) {
 		case 'recorded': {
 			const { row, order, via } = answer;
-			const remainingMinor = arrival.via === 'recovery' ? null : arrival.remainingMinor;
+			const remainingMinor = 'remainingMinor' in arrival ? arrival.remainingMinor : null;
 			return { source: 'manual', via, row, order, mirrorFailed, remainingMinor };
 		}
 		case 'close':

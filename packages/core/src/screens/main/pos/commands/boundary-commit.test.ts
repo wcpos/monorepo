@@ -19,6 +19,7 @@ import { pendingCompletions } from '@wcpos/query/store-local';
 
 import { config } from '../../../../../jest/cart-write';
 import { createActionContext, registerActionHook } from '../../../../extensions/actions';
+import { refreshOrderRecord } from '../checkout/hooks/reconcile-completed-order';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { enqueueCartAction } from '../hooks/enqueue-cart-action';
@@ -38,6 +39,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 }));
 jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: jest.fn(async () => {}),
+	refreshOrderRecord: jest.fn(async () => 'refreshed'),
 }));
 jest.mock('../checkout/provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -154,15 +156,10 @@ it.each(['4', '3'])(
 					configForOrder: () => config,
 					serverOwnsMoney: () => false,
 					bindingStatus: 'bound',
-					complete: async (target, slot, summary) => {
+					complete: async (target, outcome, slot) => {
 						expect(slot).toBe(queue);
-						await completeSale(
-							ctx,
-							target,
-							{ source: 'zero-balance', order: summary },
-							{ host: 'background' },
-							slot
-						);
+						expect(outcome).toEqual({ source: 'zero-balance', order: { status: 'completed' } });
+						return completeSale(ctx, target, outcome, { host: 'background' }, slot);
 					},
 				},
 				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
@@ -197,6 +194,74 @@ it.each(['4', '3'])(
 		}
 	}
 );
+// The answered close lands through the answer table; each pins today's boundary behaviour.
+describe('an answered close', () => {
+	const run = (order: EngineRecord<'orders'>) =>
+		enqueueOrderMutation(order.uuid, (queue) =>
+			commitAtBoundary(
+				{
+					...ctx,
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+					bindingStatus: 'bound',
+					complete: (target, outcome, slot) =>
+						completeSale(ctx, target, outcome, { host: 'background' }, slot),
+				},
+				{
+					order,
+					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
+					queue,
+					write: (changes) => write({ document: order, changes }),
+				}
+			)
+		);
+	const answeredWithoutMirror = () =>
+		closeSale.close.mockImplementationOnce(async () => ({
+			kind: 'answered' as const,
+			order: { status: 'completed' } as OrderPaymentSummary,
+		}));
+	const rows = (name: string) =>
+		[jest.mocked(getLogger(['test']).debug), jest.mocked(getLogger(['test']).warn)]
+			.flatMap((fn) => fn.mock.calls)
+			.filter(([message]) => message === name);
+
+	it('an answered close on a sale reopened elsewhere resolves the attempt and returns nothing', async () => {
+		const order = orderFor();
+		Object.assign(order.payload, { id: 42 });
+		answeredWithoutMirror();
+		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('refreshed');
+		expect(await run(order)).toBeUndefined();
+		expect(order.payload.status).toBe('pos-partial');
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		expect(rows('settlement.boundary-not-closed')).toEqual([]);
+		expect(rows('settlement.boundary-superseded')).toEqual([]);
+	});
+
+	it('an answered close no refresh confirmed awaits adoption', async () => {
+		const order = orderFor();
+		Object.assign(order.payload, { id: 42 });
+		answeredWithoutMirror();
+		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
+		expect(await run(order)).toBeUndefined();
+		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
+			awaitingAdoption: true,
+		});
+	});
+
+	it('a close the store answers outstanding logs the not-closed row and keeps the attempt', async () => {
+		const order = orderFor();
+		// The fixture's close is typed by its answered default; a CloseOutcome also holds this kind.
+		closeSale.close.mockImplementationOnce(
+			async () => ({ kind: 'outstanding', order: null }) as never
+		);
+		expect(await run(order)).toEqual({ kind: 'outstanding', order: null });
+		expect(getLogger(['test']).debug).toHaveBeenCalledWith('settlement.boundary-not-closed', {
+			context: { orderId: order.uuid, outcome: 'outstanding' },
+		});
+		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toBeDefined();
+	});
+});
+
 // ADR 0040 PR A: a system pass offline sends nothing; its completion attempt is resolved, and
 // the offline outcome is what the coordinator retries on reconnect.
 it('an offline boundary returns offline and leaves no completion attempt behind', async () => {
@@ -335,7 +400,7 @@ it.each([undefined, 'system'] as const)(
 					bindingStatus: 'bound',
 					configForOrder: () => config,
 					serverOwnsMoney: () => false,
-					complete: async () => {},
+					complete: async () => 'completed' as const,
 				},
 				{
 					order,

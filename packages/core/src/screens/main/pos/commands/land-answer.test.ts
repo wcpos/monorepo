@@ -421,3 +421,39 @@ describe('recovery', () => {
 		expect(answerReadsPaid({ kind, data } as never)).toBe(paid)
 	);
 });
+
+// The paid-balance boundary: a close carries no press prediction and lands like any other close.
+describe('boundary', () => {
+	it.each([
+		['a press', { via: 'press', remainingMinor: 0 }],
+		['a boundary', { via: 'boundary' }],
+		['a recovery', { via: 'recovery' }],
+	] as const)('a close does not depend on how it arrived: %s', (_, arrival) =>
+		expect(saleOutcomeOf({ kind: 'close', order: summary('completed') }, arrival, false)).toEqual({
+			source: 'zero-balance',
+			order: summary('completed'),
+		})
+	);
+
+	it('a boundary close the completion did not finish lands reopened, leaving the attempt to it', async () => {
+		const finish = jest.fn(async () => 'not-completed' as const);
+		const resolveAttempt = jest.fn(async () => undefined);
+		const close = { kind: 'close', order: summary('completed') } as const;
+		await expect(
+			landAnswer(close, { via: 'boundary' }, { finish, resolveAttempt, dp: 2 })
+		).resolves.toBe('reopened');
+		expect(resolveAttempt).not.toHaveBeenCalled();
+	});
+
+	it('a recorded answer at the boundary carries no press prediction', () => {
+		const recorded = {
+			kind: 'recorded',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+		} as const;
+		expect(saleOutcomeOf(recorded, { via: 'boundary' }, false)).toMatchObject({
+			remainingMinor: null,
+		});
+	});
+});
