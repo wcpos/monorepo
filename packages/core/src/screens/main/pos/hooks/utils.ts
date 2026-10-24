@@ -346,20 +346,31 @@ export const convertVariationToLineItemWithoutTax = (
 };
 
 /**
- * A sheet's meta rows as the line writer should receive them: the form's rows without a row the
- * cashier has only just added (no id, no key yet: it is not an edit and would be pushed as blank
- * meta), and with the line's CURRENT `_woocommerce_pos_data` row in place of the form's copy. The
- * form holds its own draft, so after an autosave of price, a flag or a category its copy of that
- * row is stale, and `applyLineItemChanges` keeps whatever pos_data the supplied meta holds for the
- * keys the write does not name — a meta-only edit would otherwise revert them.
+ * A line's meta rows as the writer applies them: the supplied rows without a row the cashier has
+ * only just added (no id, no key, no attribute, no value: it is not an edit and would be pushed as
+ * blank meta; a variation's attribute row has `attr_id`/`display_key` and no key, and stays), and
+ * with the line's CURRENT `_woocommerce_pos_data` row in place of the supplied copy. A sheet holds
+ * its own draft, so after an autosave of price, a flag or a category its copy of that row is
+ * stale, and `applyLineItemChanges` keeps whatever pos_data the supplied meta holds for the keys
+ * the write does not name — a meta-only edit would otherwise revert them. Called inside the
+ * order's mutation queue, where `line` is the line as it stands.
  */
-export function lineMetaForWrite<Row extends { id?: number; key?: string }>(
-	formMeta: readonly Row[],
-	line: { meta_data?: readonly Row[] | null } | undefined
-): Row[] {
+export function lineMetaForWrite<
+	Row extends {
+		id?: number;
+		key?: string;
+		value?: unknown;
+		attr_id?: number;
+		display_key?: string;
+	},
+>(supplied: readonly Row[], line: { meta_data?: readonly Row[] | null } | undefined): Row[] {
 	const current = line?.meta_data?.find((row) => row.key === POS_META_KEYS.posData);
-	const rows = formMeta.filter(
-		(row) => row.key !== POS_META_KEYS.posData && (row.id != null || String(row.key ?? '') !== '')
-	);
+	const blank = (row: Row) =>
+		row.id == null &&
+		!row.key &&
+		row.attr_id == null &&
+		!row.display_key &&
+		(row.value == null || row.value === '');
+	const rows = supplied.filter((row) => row.key !== POS_META_KEYS.posData && !blank(row));
 	return current ? [...rows, current] : rows;
 }

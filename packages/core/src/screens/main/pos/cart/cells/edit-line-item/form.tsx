@@ -37,8 +37,9 @@ import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
+import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { lineMetaForWrite, parsePosData } from '../../../hooks/utils';
+import { parsePosData } from '../../../hooks/utils';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -75,6 +76,9 @@ export function EditLineItemForm(props: Props) {
 function EditLineItemFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
+	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
+	// another order was selected still reaches it.
+	const { currentOrderRecord } = useCurrentOrder();
 	const markSaved = useMarkSaved();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
@@ -112,11 +116,6 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
-			// A meta-only edit drops a just-added blank row and carries the line's current pos_data row.
-			const metaValue =
-				root === 'meta_data'
-					? lineMetaForWrite(value as { id?: number; key?: string }[], item)
-					: value;
 			const wireValue =
 				root === 'tax_class'
 					? taxClassToWire(form.getValues('tax_class'))
@@ -124,8 +123,13 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 						? form
 								.getValues('categories')
 								.map((opt) => ({ id: Number(opt.value), name: opt.label }))
-						: metaValue;
-			return updateCartLine('line_items', uuid, { [root]: wireValue }).then((written) => {
+						: value;
+			return updateCartLine(
+				'line_items',
+				uuid,
+				{ [root]: wireValue },
+				{ record: currentOrderRecord }
+			).then((written) => {
 				if (written) markSaved([root]);
 				return Boolean(written);
 			});

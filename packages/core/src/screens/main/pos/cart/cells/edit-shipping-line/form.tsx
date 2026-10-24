@@ -30,8 +30,8 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
+import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { lineMetaForWrite } from '../../../hooks/utils';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
@@ -68,6 +68,9 @@ export function EditShippingLineForm(props: Props) {
 function EditShippingLineFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
+	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
+	// another order was selected still reaches it.
+	const { currentOrderRecord } = useCurrentOrder();
 	const markSaved = useMarkSaved();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
@@ -95,13 +98,13 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
-			// A meta-only edit drops a just-added blank row and carries the line's current pos_data row.
-			const metaValue =
-				root === 'meta_data'
-					? lineMetaForWrite(value as { id?: number; key?: string }[], item)
-					: value;
-			const wireValue = metaValue;
-			return updateCartLine('shipping_lines', uuid, { [root]: wireValue }).then((written) => {
+			const wireValue = value;
+			return updateCartLine(
+				'shipping_lines',
+				uuid,
+				{ [root]: wireValue },
+				{ record: currentOrderRecord }
+			).then((written) => {
 				if (written) markSaved([root]);
 				return Boolean(written);
 			});

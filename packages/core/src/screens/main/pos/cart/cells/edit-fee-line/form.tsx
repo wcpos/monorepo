@@ -32,8 +32,8 @@ import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
-import { lineMetaForWrite } from '../../../hooks/utils';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
+import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 
 /**
@@ -66,6 +66,9 @@ export function EditFeeLineForm(props: Props) {
 function EditFeeLineFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
+	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
+	// another order was selected still reaches it.
+	const { currentOrderRecord } = useCurrentOrder();
 	const markSaved = useMarkSaved();
 	const { getFeeLineData } = useFeeLineData();
 	const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
@@ -99,18 +102,18 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
-			// A meta-only edit drops a just-added blank row and carries the line's current pos_data row.
-			const metaValue =
-				root === 'meta_data'
-					? lineMetaForWrite(value as { id?: number; key?: string }[], item)
-					: value;
 			const wireValue =
 				root === 'tax_class'
 					? taxClassToWire(form.getValues('tax_class'))
 					: root === 'amount'
 						? String(value)
-						: metaValue;
-			return updateCartLine('fee_lines', uuid, { [root]: wireValue }).then((written) => {
+						: value;
+			return updateCartLine(
+				'fee_lines',
+				uuid,
+				{ [root]: wireValue },
+				{ record: currentOrderRecord }
+			).then((written) => {
 				if (written) markSaved([root]);
 				return Boolean(written);
 			});

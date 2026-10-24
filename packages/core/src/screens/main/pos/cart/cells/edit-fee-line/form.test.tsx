@@ -67,6 +67,9 @@ jest.mock('../../../../components/form-errors', () => ({
 		return <span>{errors.amount?.message}</span>;
 	},
 }));
+jest.mock('../../../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
+}));
 jest.mock('../../../hooks/use-update-cart-line', () => ({
 	useUpdateCartLine: () => ({ updateCartLine: mockUpdate }),
 }));
@@ -89,7 +92,12 @@ it('autosaves only the amount as a wire string and marks it saved', async () => 
 	render(<EditFeeLineForm uuid="fee-1" item={{ name: 'Fee', meta_data: [] }} />);
 	fireEvent.change(screen.getByRole('textbox', { name: 'amount' }), { target: { value: '12.5' } });
 	await waitFor(() =>
-		expect(mockUpdate).toHaveBeenCalledWith('fee_lines', 'fee-1', { amount: '12.5' })
+		expect(mockUpdate).toHaveBeenCalledWith(
+			'fee_lines',
+			'fee-1',
+			{ amount: '12.5' },
+			{ record: { uuid: 'order-1' } }
+		)
 	);
 	expect(mockMarkSaved).toHaveBeenCalledWith(['amount']);
 });

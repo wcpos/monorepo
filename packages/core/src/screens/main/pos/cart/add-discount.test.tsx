@@ -156,6 +156,9 @@ jest.mock('../hooks/use-add-quick-discount', () => ({
 	useAddQuickDiscount: () => ({ addQuickDiscount: mockAdd }),
 }));
 jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: mockFee }) }));
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
+}));
 jest.mock('../hooks/use-update-cart-line', () => ({
 	useUpdateCartLine: () => ({ updateCartLine: mockUpdate }),
 }));
