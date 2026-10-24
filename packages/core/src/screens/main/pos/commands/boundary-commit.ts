@@ -119,7 +119,7 @@ export async function commitAtBoundary(
 				revalidate,
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
-				complete: (target, slotQueue, summary) =>
+				complete: (target, slotQueue, { order: summary }) =>
 					landAnswer(
 						{ kind: 'close', order: summary },
 						{

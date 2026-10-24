@@ -39,7 +39,7 @@ declare const pushDocument: ReturnType<typeof usePushDocument>;
 declare const ledger: ReturnType<typeof useOrderLedgerWrite>;
 declare const write: typeof writeOrderChanges;
 declare const close: ReturnType<typeof useCloseSale>['close'];
-declare const [runtime, storeDB, , deps]: Parameters<typeof closeSale>;
+declare const [closeCtx, , deps]: Parameters<typeof closeSale>;
 declare const [saleCtx, , , command]: Parameters<typeof commandProvenance>;
 
 void customers.saveCustomerFields(customer, {});
@@ -60,7 +60,7 @@ void write(manager, { document: order, changes: () => ({}) });
 // `useMutation().patchRecord` takes a RecordWriteTarget (the seam scan fences naming it here).
 const couponTarget: RecordWriteTarget = coupon;
 void couponTarget;
-void closeSale(runtime, storeDB, order, deps);
+void closeSale(closeCtx, order, deps);
 void close(order, { sessionId: null });
 void commandProvenance(saleCtx, order, null, command);
 

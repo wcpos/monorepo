@@ -36,7 +36,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 
 let database: RxDatabase;
 let storeDB: StoreLocalDatabase;
-let runtime: Parameters<typeof closeSale>[0];
+let runtime: Parameters<typeof closeSale>[0]['runtime'];
 /** The store's copy: revision r2 carries a total moved from 10.00 to 12.00 (still covered). */
 const server = { revision: 'sha256:r2', document: { id: 42, total: '12.00', currency: 'EUR' } };
 let completions: number;
@@ -97,7 +97,7 @@ beforeEach(async () => {
 			return 'applied';
 		},
 	});
-	runtime = { engine } as unknown as Parameters<typeof closeSale>[0];
+	runtime = { engine } as unknown as typeof runtime;
 	// The till adopted r1, the 10.00 EUR sale the cashier saw.
 	await database.orders.insert({
 		...engineOrder({
@@ -129,7 +129,7 @@ it('a zero-balance close is refused when the covered total changed, and closes o
 	const deps = { post, provenance: async () => null };
 
 	expect(
-		await closeSale(runtime, storeDB, await order(), {
+		await closeSale({ runtime, storeDB } as never, await order(), {
 			...deps,
 			approval: { total: '10.00', currency: 'EUR' },
 		})
@@ -141,10 +141,10 @@ it('a zero-balance close is refused when the covered total changed, and closes o
 	expect((await readOrderCommands(storeDB, 'order')).entries).toEqual([]);
 
 	expect(
-		await closeSale(runtime, storeDB, await order(), {
+		await closeSale({ runtime, storeDB } as never, await order(), {
 			...deps,
 			approval: { total: '12.00', currency: 'EUR' },
 		})
-	).toMatchObject({ kind: 'answered', order: { status: 'completed' } });
+	).toMatchObject({ kind: 'answered', order: { status: 'completed' }, notMirrored: null });
 	expect(completions).toBe(1);
 });

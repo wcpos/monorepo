@@ -31,7 +31,11 @@ function run(online: boolean) {
 		}),
 		complete: jest.fn(async () => undefined),
 		online: () => online,
-		close: jest.fn(async () => ({ kind: 'answered' as const, order: { status: 'completed' } })),
+		close: jest.fn(async () => ({
+			kind: 'answered' as const,
+			order: { status: 'completed' },
+			notMirrored: null as { cause: unknown } | null,
+		})),
 	};
 	const ctx = { storeDB: 'store-db' } as never;
 	return { input, written, result: writeZeroBalanceCompletion(ctx, input as never) };
@@ -50,10 +54,24 @@ it('completes through close and never writes status', async () => {
 	expect(written[0]).not.toHaveProperty('status');
 	expect(input.close).toHaveBeenCalledWith(order);
 	// The completion judges the answer with the resident (`zero-balance`), in the caller's slot.
-	expect(input.complete).toHaveBeenCalledWith(order, input.queue, { status: 'completed' });
+	expect(input.complete).toHaveBeenCalledWith(order, input.queue, {
+		kind: 'answered',
+		order: { status: 'completed' },
+		notMirrored: null,
+	});
 	expect(input.write.mock.invocationCallOrder[0]).toBeLessThan(
 		input.close.mock.invocationCallOrder[0]
 	);
+});
+
+// C5 round 2: a failed close mirror reaches the completion, which lands it as "not synced".
+it('an answered close whose mirror failed hands that failure to complete', async () => {
+	const { input, result } = run(true);
+	const notMirrored = { cause: new Error('mirror_failed') };
+	const answered = { kind: 'answered' as const, order: { status: 'completed' }, notMirrored };
+	input.close.mockResolvedValueOnce(answered);
+	await result;
+	expect(input.complete).toHaveBeenCalledWith(order, input.queue, answered);
 });
 
 it('a close the store refuses does not complete the sale', async () => {

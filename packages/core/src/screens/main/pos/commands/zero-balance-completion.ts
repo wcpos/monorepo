@@ -1,4 +1,3 @@
-import type { OrderPaymentSummary } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 import { readAwaitingAnswer, resolveCompletionAttempt } from '@wcpos/query/store-local';
 
@@ -44,7 +43,7 @@ export async function writeZeroBalanceCompletion(
 		complete: (
 			order: EngineRecord<'orders'>,
 			queue: OrderMutationContext,
-			summary: OrderPaymentSummary
+			answered: Extract<CloseOutcome, { kind: 'answered' }>
 		) => Promise<unknown>;
 		online: () => boolean;
 		close: (order: EngineRecord<'orders'>) => Promise<CloseOutcome>;
@@ -101,5 +100,5 @@ export async function writeZeroBalanceCompletion(
 	if (!written) throw new Error('zero_balance_completion_failed');
 	const closed = await close(order);
 	if (closed.kind !== 'answered') return unfinished(closed);
-	await complete(order, queue, closed.order);
+	await complete(order, queue, closed);
 }

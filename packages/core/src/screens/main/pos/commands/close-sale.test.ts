@@ -13,6 +13,10 @@ jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => 
 jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => ({}) }));
 const mockPosterInput = jest.fn();
 const mockMirror = jest.fn(async (..._args: unknown[]) => undefined);
+const mockRefresh = jest.fn(async (..._args: unknown[]) => 'refreshed');
+jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
+	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
+}));
 const mockSettle = jest.fn(async () => undefined);
 jest.mock('@wcpos/query', () => {
 	class MoneyCommandError extends Error {
@@ -47,6 +51,7 @@ const order = {
 	getLatest: () => ({ payload: { id: 42, total: '0.00', currency: 'EUR' } }),
 } as unknown as EngineRecord<'orders'>;
 const approval = { total: '10.00', currency: 'EUR' };
+const ctx = { runtime: {}, storeDB: {} } as never;
 const refusal = (status: number, code: string, data?: object) =>
 	Object.assign(new Error(code), {
 		response: { status, data: { code, message: `${code} says`, data } },
@@ -66,7 +71,7 @@ it('a zero-balance close carries the approval and is refused when the covered to
 		throw new MoneyCommandError('order_changed');
 	});
 
-	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+	const outcome = await closeSale(ctx, order, deps(post));
 
 	expect(mockPosterInput).toHaveBeenCalledWith(expect.objectContaining({ approval }));
 	expect(post).toHaveBeenCalledWith('orders/42/close', {});
@@ -79,9 +84,9 @@ it('a 2xx with a completion is answered, mirroring the summary under the sent re
 	const summary = { status: 'completed' };
 	const post = jest.fn(async () => ({ data: { order: summary, completion: { n: 2, id: 'c2' } } }));
 
-	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+	const outcome = await closeSale(ctx, order, deps(post));
 
-	expect(outcome).toEqual({ kind: 'answered', order: summary });
+	expect(outcome).toEqual({ kind: 'answered', order: summary, notMirrored: null });
 	expect(mockMirror).toHaveBeenCalledWith({}, 'order-1', {
 		order: summary,
 		sentRevision: 'sha256:sent',
@@ -101,9 +106,7 @@ it.each([
 	async (_, data) => {
 		const post = jest.fn(async () => ({ data }));
 
-		await expect(closeSale({} as never, {} as never, order, deps(post))).rejects.toThrow(
-			'close_malformed_response'
-		);
+		await expect(closeSale(ctx, order, deps(post))).rejects.toThrow('close_malformed_response');
 		expect(mockMirror).not.toHaveBeenCalled();
 		expect(mockSettle).not.toHaveBeenCalled();
 	}
@@ -114,10 +117,35 @@ it('a paid summary with a null completion is answered, without a completion numb
 	const summary = { status: 'completed' };
 	const post = jest.fn(async () => ({ data: { order: summary, completion: null } }));
 
-	const outcome = await closeSale({} as never, {} as never, order, deps(post));
+	const outcome = await closeSale(ctx, order, deps(post));
 
-	expect(outcome).toEqual({ kind: 'answered', order: summary });
+	expect(outcome).toEqual({ kind: 'answered', order: summary, notMirrored: null });
 	expect(mockSettle).toHaveBeenCalledTimes(1);
+});
+
+// C5 round 2: the close joins the one mirror policy (`mirrorAnswer`): a failed local mirror after
+// the store's answer is `notMirrored`, never a throw, and the store's copy is pulled.
+it('a 2xx whose mirror rejects is still answered, with the failure and a pull of the store copy', async () => {
+	const failure = new Error('mirror_failed');
+	mockMirror.mockRejectedValueOnce(failure);
+	const summary = { status: 'completed' };
+	const post = jest.fn(async () => ({ data: { order: summary, completion: { n: 3, id: 'c3' } } }));
+
+	const outcome = await closeSale(ctx, order, deps(post));
+
+	expect(outcome).toEqual({ kind: 'answered', order: summary, notMirrored: { cause: failure } });
+	expect(mockRefresh).toHaveBeenCalledWith({}, 42);
+});
+
+it('balance outstanding whose mirror rejects still says what is due', async () => {
+	mockMirror.mockRejectedValueOnce(new Error('mirror_failed'));
+	const summary = { status: 'pos-partial', balance: '4.00' };
+	const post = jest.fn(async () => {
+		throw refusal(409, 'wcpos_balance_outstanding', { order: summary });
+	});
+
+	expect(await closeSale(ctx, order, deps(post))).toEqual({ kind: 'outstanding', order: summary });
+	expect(mockRefresh).toHaveBeenCalledWith({}, 42);
 });
 
 it('balance outstanding mirrors the summary and says what is due', async () => {
@@ -127,7 +155,7 @@ it('balance outstanding mirrors the summary and says what is due', async () => {
 		throw refusal(409, 'wcpos_balance_outstanding', { order: summary });
 	});
 
-	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+	expect(await closeSale(ctx, order, deps(post))).toEqual({
 		kind: 'outstanding',
 		order: summary,
 	});
@@ -148,7 +176,7 @@ it.each([
 		throw refusal(status, code, data);
 	});
 
-	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+	expect(await closeSale(ctx, order, deps(post))).toEqual({
 		kind: 'refused',
 		code,
 		message: `${code} says`,
@@ -165,7 +193,7 @@ it('a 409 wcpos_payment_in_flight naming an attempt is unanswered, its summary m
 		throw refusal(409, 'wcpos_payment_in_flight', { attempt_id: 'a-1', order: summary });
 	});
 
-	expect(await closeSale({} as never, {} as never, order, deps(post))).toEqual({
+	expect(await closeSale(ctx, order, deps(post))).toEqual({
 		kind: 'unanswered',
 		attemptId: 'a-1',
 	});
@@ -178,13 +206,26 @@ it('a 409 wcpos_payment_in_flight naming an attempt is unanswered, its summary m
 	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
+it('an in-flight attempt whose mirror rejects is still unanswered, and does not throw', async () => {
+	mockMirror.mockRejectedValueOnce(new Error('mirror_failed'));
+	const post = jest.fn(async () => {
+		throw refusal(409, 'wcpos_payment_in_flight', {
+			attempt_id: 'a-1',
+			order: { status: 'pos-partial' },
+		});
+	});
+
+	expect(await closeSale(ctx, order, deps(post))).toEqual({ kind: 'unanswered', attemptId: 'a-1' });
+	expect(mockRefresh).toHaveBeenCalledWith({}, 42);
+});
+
 it('an order the store has never seen sends nothing (connectivity is the caller’s check)', async () => {
 	const post = jest.fn();
 	const unsynced = {
 		uuid: 'order-2',
 		getLatest: () => ({ payload: { total: '0.00', currency: 'EUR' } }),
 	} as unknown as EngineRecord<'orders'>;
-	expect(await closeSale({} as never, {} as never, unsynced, deps(post))).toEqual({
+	expect(await closeSale(ctx, unsynced, deps(post))).toEqual({
 		kind: 'offline',
 	});
 	expect(post).not.toHaveBeenCalled();

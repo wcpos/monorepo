@@ -1145,6 +1145,93 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	// C5 round 2: an answered close obeys the press's answered rule, as record and gateway do.
+	describe('an answered zero-balance close', () => {
+		const answeredClose = () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockResolvedValueOnce({
+				data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
+			});
+		};
+
+		it('whose completion throws is a failed status check (PAYMENT101), never "nothing was taken"', async () => {
+			answeredClose();
+			mockCompleteOrderFlow.mockRejectedValueOnce(new Error('journal write failed'));
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.takeTender());
+
+			expect(mockWarn).toHaveBeenCalledWith(
+				'journal write failed',
+				expect.objectContaining({ code: 'PAYMENT101', showToast: true })
+			);
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.anything()
+			);
+			expect(result.current.busy).toBe(false);
+		});
+
+		it('whose mirror throws says "not synced" (PAYMENT111) and still runs the completion', async () => {
+			answeredClose();
+			mockManualMirror.mockRejectedValueOnce(new Error('resident write failed'));
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.takeTender());
+
+			expect(mockWarn).toHaveBeenCalledWith(
+				'pos_checkout.payment_recorded_not_synced',
+				expect.objectContaining({
+					code: 'PAYMENT111',
+					showToast: true,
+					context: expect.objectContaining({
+						type: 'payment.not-mirrored',
+						error: 'resident write failed',
+					}),
+				})
+			);
+			expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+				{ source: 'zero-balance', order: { status: 'completed' } },
+				expect.anything()
+			);
+			expect(mockError).not.toHaveBeenCalled();
+		});
+
+		it('with no answer reports "not answered" (PAYMENT201) even with a cash tile selected', async () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValueOnce(new Error('Network Error'));
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.pickMethod('pos_cash'));
+
+			await act(async () => result.current.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({ code: 'PAYMENT201', showToast: true })
+			);
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.anything()
+			);
+		});
+	});
+
+	// Nothing was sent: a throw before the close is "nothing was taken", whatever the tile.
+	it('a zero balance whose write fails before the close says it was not recorded (PAYMENT999)', async () => {
+		mockPayload = { id: 42, total: '0.00', meta_data: [] };
+		mockLocalPatch.mockResolvedValueOnce(false);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockManualPost).not.toHaveBeenCalledWith('orders/42/close', {});
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+		);
+	});
+
 	it('a zero balance offline is refused with CHECKOUT101 and writes nothing', async () => {
 		mockPayload = { id: 42, total: '0.00', meta_data: [] };
 		mockOnlineStatus = 'offline';
@@ -3381,6 +3468,25 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualMirror.mockResolvedValue(undefined);
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockGatewaysGet.mockResolvedValue({ data: [] });
+	});
+
+	// Nothing was submitted: a throw before the send is "nothing was taken", even on a gateway tile.
+	it('a gateway press whose sale attempt fails to journal says it was not recorded, not unanswered', async () => {
+		jest.mocked(provenance.recordSaleAttempt).mockRejectedValueOnce(new Error('journal failed'));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
 	});
 
 	it.each(['pos_cash', 'wcpos_email_invoice'])(
