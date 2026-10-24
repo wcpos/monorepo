@@ -85,8 +85,11 @@ function EditCartCustomerFields() {
 		defaultValues: { billing, shipping, tax_ids },
 	});
 
-	const handleChange = (changes: Partial<FormValues>) => {
+	const handleChange = async (changes: Partial<FormValues>) => {
 		const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+		// The writer takes the whole address set, so the whole set is validated before it goes: an
+		// invalid email left in one field must not ride along with an edit to another.
+		if (!(await form.trigger())) return false;
 		const values = form.getValues();
 		return setCartCustomer(currentOrderRecord, {
 			billing: values.billing,

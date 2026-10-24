@@ -38,7 +38,7 @@ import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-gro
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { parsePosData } from '../../../hooks/utils';
+import { parsePosData, withLinePosData } from '../../../hooks/utils';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -112,6 +112,9 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
+			// A meta-only edit carries the line's current pos_data row, not the draft's stale copy.
+			const metaValue =
+				root === 'meta_data' ? withLinePosData(value as { key?: string }[], item) : value;
 			const wireValue =
 				root === 'tax_class'
 					? taxClassToWire(form.getValues('tax_class'))
@@ -119,7 +122,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 						? form
 								.getValues('categories')
 								.map((opt) => ({ id: Number(opt.value), name: opt.label }))
-						: value;
+						: metaValue;
 			return updateCartLine('line_items', uuid, { [root]: wireValue }).then((written) => {
 				if (written) markSaved([root]);
 			});
