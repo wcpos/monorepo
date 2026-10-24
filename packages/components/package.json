@@ -57,7 +57,6 @@
     "./menu-row": "./src/menu-row/index.tsx",
     "./nav-item": "./src/nav-item/index.tsx",
     "./notice": "./src/notice/index.tsx",
-    "./numpad": "./src/numpad/index.tsx",
     "./page-bar": "./src/page-bar/index.tsx",
     "./pane-stack": "./src/pane-stack/index.tsx",
     "./panels": "./src/panels/index.tsx",

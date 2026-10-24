@@ -43,7 +43,7 @@ export function FormInput({
 	}
 
 	/**
-	 * There are cases where we want the FormInput to control a numeric value, eg: Numpad
+	 * There are cases where we want the FormInput to control a numeric value, eg: a NumberInput;
 	 * in these cases we should take and emit a number, this prevents confusion with numeric strings
 	 * which could be in alternate formats, eg: 1.000,00
 	 */
@@ -58,7 +58,7 @@ export function FormInput({
 
 	/**
 	 * Again, to prevent confusion, we should emit a number for numeric types
-	 * NOTE: The Component can be anything here, eg: Numpad
+	 * NOTE: The Component can be anything here, eg: a NumberInput, which already emits a number
 	 */
 	function handleChangeText(text: string | number | undefined) {
 		if (type === 'numeric' || type === 'decimal' || type === 'numbers') {

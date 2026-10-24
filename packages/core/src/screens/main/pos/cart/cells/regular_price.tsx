@@ -4,7 +4,7 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../../components/currency-input';
+import { EditableNumber } from '../../../components/editable-number';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
@@ -44,6 +44,7 @@ function EditableRegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
 	const { regular_price: value } = getLineItemData(item);
+	const { format } = useCurrentOrderCurrencyFormat();
 
 	/**
 	 * Discounts
@@ -55,8 +56,12 @@ function EditableRegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	 *
 	 */
 	return (
-		<CurrencyInput
+		<EditableNumber
+			testID="cart-regular-price"
 			value={value}
+			display={format(Number(value ?? 0))}
+			formatOptions={{ fixedDecimalScale: true }}
+			textClassName="text-muted-foreground text-right"
 			onChangeText={(regular_price) => updateCartLine('line_items', uuid, { regular_price })}
 			discounts={ensureNumberArray(quickDiscounts)}
 		/>

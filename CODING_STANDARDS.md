@@ -351,7 +351,7 @@ becomes a page.
 | Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator                                |
 | Display or column settings                                          | side panel (`UISettingsDialog`)     | on every screen, never a popover                                           |
 | Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons                                            |
-| A small non-modal choice (the bell, a date range, the numpad)       | `Popover`                           | a list, a picker or a keypad with at most a Done; never a settings form    |
+| A small non-modal choice (the bell, a date range, the quantity box) | `Popover`                           | a list, a picker or a keypad with at most a Done; never a settings form    |
 | The cashier (switch user, register, store; sign out)                | `UserSheet` (right panel)           | the one cashier surface on every screen                                    |
 | A multi-step task (checkout)                                        | full screen                         | never a centred modal that grew                                            |
 

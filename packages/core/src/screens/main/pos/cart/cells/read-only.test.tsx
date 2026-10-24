@@ -49,8 +49,8 @@ jest.mock('../../hooks/use-remove-line-item', () => ({
 jest.mock('../../../components/quantity-input', () => ({
 	QuantityInput: () => <input data-testid="cart-quantity-input" />,
 }));
-jest.mock('../../../components/currency-input', () => ({
-	CurrencyInput: () => <input data-testid="currency-input" />,
+jest.mock('../../../components/editable-number', () => ({
+	EditableNumber: () => <input data-testid="cart-price" />,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -89,7 +89,7 @@ it('lays each line out as text under the table head: qty, unit price, total per 
 	expect(screen.getByTestId('checkout-ledger-price-7').textContent).toBe('$55.00');
 	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$110.00');
 	expect(screen.queryByTestId('cart-quantity-input')).toBeNull();
-	expect(screen.queryByTestId('currency-input')).toBeNull();
+	expect(screen.queryByTestId('cart-price')).toBeNull();
 	unmount();
 	// A fractional quantity reads with the store's separators, as the input shows it.
 	const half = {
@@ -121,7 +121,7 @@ it('keeps the inputs, and no ledger testIDs, in the editable cart', () => {
 		</>
 	);
 	expect(screen.getByTestId('cart-quantity-input')).toBeTruthy();
-	expect(screen.getByTestId('currency-input')).toBeTruthy();
+	expect(screen.getByTestId('cart-price')).toBeTruthy();
 	expect(screen.queryByTestId('checkout-ledger-qty-7')).toBeNull();
 	expect(screen.queryByTestId('checkout-ledger-total-7')).toBeNull();
 });

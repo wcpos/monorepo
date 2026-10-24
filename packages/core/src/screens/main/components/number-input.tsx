@@ -1,26 +1,27 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { Input, InputProps } from '@wcpos/components/input';
 import { cn } from '@wcpos/components/lib/utils';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
-import { NumberFormatOptions } from '../hooks/use-number-format';
+import { NumberFormatOptions, useNumberFormat } from '../hooks/use-number-format';
 
 export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeText' | 'type'> {
 	/** The numeric value */
 	value?: number | string;
 
-	/** Called when the value changes */
+	/** Called on blur with the typed number, only when it differs from `value` */
 	onChangeText?: (value: number) => void;
 
-	/** Discount presets (used in web numpad) */
-	discounts?: number[];
+	/** Called on every text change with the raw text, readable or not */
+	onDraftChange?: (text: string) => void;
 
-	/** Popover placement (used in web) */
-	placement?: 'top' | 'bottom' | 'left' | 'right';
+	/** Raw text a parent owns (an in-place editor's draft): shown in place of `value`, unformatted. */
+	draft?: string;
 
-	/** Number formatting options (used in web for display) */
+	/** Web: how the number reads while the field is not focused (`3.20`); focused, the raw `3.2`. */
 	formatOptions?: NumberFormatOptions;
 
 	/** Classes for the displayed number */
@@ -28,17 +29,36 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 }
 
 /**
- * A numeric input that accepts and emits numbers.
+ * Read typed or pasted text with the store's separators. Both separators present: the
+ * thousands one is grouping (`1,234.50`, `1.234,50`). A `.` or `,` that occurs twice is
+ * grouping. A single `.` or `,` is the decimal point, either way round, so a fr_FR till takes
+ * a typed `.`. A space-like thousands separator is never a decimal. Anything else, or two
+ * points left over, is NaN: the caller writes nothing.
+ */
+export function parseNumber(text: string, decimal: string, thousands: string): number {
+	let t = text.trim();
+	if (t === '' || t === '-') return 0;
+	if (thousands && thousands !== decimal && t.includes(thousands) && t.includes(decimal)) {
+		t = t.split(thousands).join('').replace(decimal, '.');
+	} else {
+		if (thousands && thousands !== '.' && thousands !== ',') t = t.split(thousands).join('');
+		for (const sep of ['.', ',']) if (t.split(sep).length > 2) t = t.split(sep).join('');
+		t = t.replace(',', '.');
+	}
+	return /^-?(\d+\.?\d*|\.\d+)$/.test(t) ? parseFloat(t) : NaN;
+}
+
+/**
+ * A numeric input that accepts and emits numbers, on every platform.
  * Uses internal string state to allow typing decimals freely.
- * Emits number on blur.
+ * Emits number on blur, and only a changed one: focusing and leaving writes nothing.
  */
 export function NumberInput({
 	value,
 	onChangeText,
-	// These props are accepted for API parity with web but not used in native text input
-	discounts: _discounts,
-	placement: _placement,
-	formatOptions: _formatOptions,
+	onDraftChange,
+	draft,
+	formatOptions,
 	onBlur,
 	onFocus,
 	inputClassName,
@@ -47,6 +67,8 @@ export function NumberInput({
 }: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) || '.';
+	const thousandSeparator = useDocField(store, (state) => state.price_thousand_sep) || '';
+	const { format } = useNumberFormat(formatOptions);
 
 	/**
 	 * Convert number to display string using the store's decimal separator
@@ -61,27 +83,23 @@ export function NumberInput({
 		[decimalSeparator]
 	);
 
-	/**
-	 * Parse display string to number, handling the store's decimal separator
-	 */
-	const stringToNumber = React.useCallback((text: string): number => {
-		if (text === '' || text === '-') return 0;
-		// Normalize to dot for parseFloat (handles both comma and dot input)
-		const normalized = text.replace(',', '.');
-		const num = parseFloat(normalized);
-		return Number.isNaN(num) ? 0 : num;
-	}, []);
+	const stringToNumber = React.useCallback(
+		(text: string) => parseNumber(text, decimalSeparator, thousandSeparator),
+		[decimalSeparator, thousandSeparator]
+	);
 
 	// Internal string state for free-form typing
 	const [internalValue, setInternalValue] = React.useState(() => numberToString(value));
 	const [isFocused, setIsFocused] = React.useState(false);
 	const [syncKey, setSyncKey] = React.useState(0);
+	// Typed since this focus: a focus and leave writes nothing, a typed 0 over a blank writes 0.
+	const dirty = React.useRef(false);
 
 	// Sync from parent when the value changes externally (and not focused).
 	// Implemented as the React "adjust state during render" pattern (tracking the
 	// previous display value) rather than an effect, so it never sets state inside
 	// useEffect. While focused we skip syncing so typing isn't interrupted.
-	const displayValue = numberToString(value);
+	const displayValue = draft ?? numberToString(value);
 	const [prevDisplayValue, setPrevDisplayValue] = React.useState(displayValue);
 	const [prevIsFocused, setPrevIsFocused] = React.useState(isFocused);
 	if (displayValue !== prevDisplayValue || isFocused !== prevIsFocused) {
@@ -99,24 +117,52 @@ export function NumberInput({
 		}
 	}
 
-	// Emit number on blur
+	// Web only: at rest the field reads formatted, and focus swaps in the raw string that is
+	// edited and parsed, so the formatted one (grouping, a fixed scale) never reaches
+	// `stringToNumber`. Native keeps the raw string always: the swap is a controlled-text update
+	// while focused, which Fabric iOS can drop (#1957), and keystrokes would then edit the
+	// formatted string ("1,234.505" parses as 1.234).
+	const restNumber = stringToNumber(internalValue);
+	const shown =
+		Platform.OS === 'web' && !isFocused && internalValue !== '' && Number.isFinite(restNumber)
+			? format(restNumber)
+			: internalValue;
+
+	// Emit the number on blur only when something was typed and it changes the record: a focus
+	// and leave must not write (a blank regular price would become "0"), a typed 0 over a blank
+	// must. Unparseable text writes nothing and the field shows the stored value again.
 	const handleBlur = React.useCallback(
 		(e: any) => {
 			setIsFocused(false);
-			if (onChangeText) {
-				onChangeText(stringToNumber(internalValue));
+			const typed = stringToNumber(internalValue);
+			const incoming = numberToString(value);
+			const changed =
+				incoming === '' ? internalValue.trim() !== '' : typed !== stringToNumber(incoming);
+			if (onChangeText && dirty.current && Number.isFinite(typed) && changed) {
+				onChangeText(typed);
 			}
+			dirty.current = false;
 			onBlur?.(e);
 		},
-		[internalValue, onChangeText, onBlur, stringToNumber]
+		[internalValue, value, onChangeText, onBlur, stringToNumber, numberToString]
 	);
 
 	const handleFocus = React.useCallback(
 		(e: any) => {
 			setIsFocused(true);
+			dirty.current = false;
 			onFocus?.(e);
 		},
 		[onFocus]
+	);
+
+	const handleChangeText = React.useCallback(
+		(text: string) => {
+			dirty.current = true;
+			setInternalValue(text);
+			onDraftChange?.(text);
+		},
+		[onDraftChange]
 	);
 
 	return (
@@ -124,8 +170,8 @@ export function NumberInput({
 			key={syncKey}
 			{...props}
 			inputClassName={cn(inputClassName, textClassName)}
-			value={internalValue}
-			onChangeText={setInternalValue}
+			value={shown}
+			onChangeText={handleChangeText}
 			onFocus={handleFocus}
 			onBlur={handleBlur}
 			type="decimal"

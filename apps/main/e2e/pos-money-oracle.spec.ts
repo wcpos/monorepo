@@ -94,27 +94,22 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
 }
 
 /**
- * Type an amount into a `CurrencyInput`, which opens a numpad popover rather than
- * accepting keystrokes in place.
+ * Type an amount into a `CurrencyInput`, a plain number field on every platform.
  *
- * MUST type, never `fill()`. The numpad's value does not live in the input element:
- * `Numpad` holds it in `useCalculator` state fed by `onKeyPress`
- * (packages/components/src/numpad/index.tsx), and the Done button reads that state
- * via `numpadRef.current.getValue()`. `fill()` sets `.value` and dispatches a single
- * `input` event — no per-character key events — so the calculator never sees a digit
- * and Done commits the INITIAL value.
+ * Enter commits (the field blurs and emits the parsed number). Type `.` for the decimal:
+ * the field accepts the store's separator or a dot (dev-free is fr_FR and shows `9,99`),
+ * because `stringToNumber` normalises either. A negative amount is typed with a leading `-`.
  *
- * That is not a hypothetical. The first version of this file used `fill()`, and the
- * whole oracle went green against a deliberately un-fixed client: the fee was added
- * at its default 0.00, its taxes were 0 on both sides, and 0 === 0 passes. The
- * [money-oracle] log line is what exposed it:
+ * The read-back below is not decoration. An earlier version of this file drove a numpad
+ * whose value did not live in the input, and the whole oracle went green against a
+ * deliberately un-fixed client: the fee was added at its default 0.00, its taxes were 0
+ * on both sides, and 0 === 0 passes. The [money-oracle] log line is what exposed it:
  *
  *     [money-oracle] fee cart fee_lines[0] sent=[{"id":6,"total":"0"}]
  *                                        server=[{"id":6,"total":"0.000000"}]
  *
- * Hence the read-back below: this helper asserts the amount actually landed, at the
- * point of interaction, instead of letting a silent no-op surface three steps later
- * as a green test.
+ * So this helper asserts the amount actually landed, at the point of interaction,
+ * instead of letting a silent no-op surface three steps later as a green test.
  */
 async function fillCurrencyField(
 	page: Page,
@@ -124,54 +119,19 @@ async function fillCurrencyField(
 ) {
 	const field = page.getByTestId(testID);
 	await expect(field).toBeVisible({ timeout: 15_000 });
-	const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-	// A click that lands while the surrounding dialog is still moving focus is swallowed and
-	// the numpad never opens: re-check after each click and click again, never wait blind.
-	let clicks = 0;
-	await expect(async () => {
-		if (!(await numpad.isVisible())) {
-			if (clicks > 0)
-				console.log(
-					`WCPOS_E2E numpad.retry ${testID}: the numpad did not open after click ${clicks}, clicking again`
-				);
-			clicks += 1;
-			await field.click();
-		}
-		await expect(numpad).toBeVisible({ timeout: 2_000 });
-	}).toPass({ timeout: 15_000 });
-	// Press the numpad's own KEYS, one per character. Two reasons this is not typing
-	// into the input:
-	//
-	//  - The numpad's value lives in `useCalculator` state, not the input element (see
-	//    above), so the keys are the only interaction that actually moves it.
-	//  - The decimal character is the STORE's separator. dev-free is fr_FR and renders
-	//    a "," key, so a typed "." is dropped by `handleKeyPress` — "9.99" silently
-	//    becomes 999. Digit keys carry stable testIDs already; the separator carries
-	//    the role-based `numpad-key-decimal` so this works on any store's locale.
-	for (const character of value) {
-		const key =
-			character === '.' || character === ','
-				? numpad.getByTestId('numpad-key-decimal')
-				: numpad.getByTestId(`numpad-key-${character}`);
-		await expect(key, `numpad key for "${character}" is missing`).toBeVisible({ timeout: 5_000 });
-		await key.click();
-	}
-	if (options.negative) {
-		const sign = numpad.getByTestId('numpad-key-icon-plusMinus');
-		await expect(sign, 'numpad +/- key is missing').toBeVisible({ timeout: 5_000 });
-		await sign.click();
-	}
-	await page.getByTestId('numpad-done-button').click();
+	await field.click();
+	await field.fill(options.negative ? `-${value}` : value);
+	await field.press('Enter');
 
-	// The trigger renders the committed amount. Locale-agnostic on purpose: dev-free
-	// is fr_FR and formats "1,00", so this asserts "a non-zero digit is showing"
+	// The field renders the committed amount, formatted. Locale-agnostic on purpose:
+	// dev-free is fr_FR and formats "1,00", so this asserts "a non-zero digit is showing"
 	// rather than an exact string. Every amount this file mints has one.
 	await expect(
 		field,
-		`${testID}: the numpad committed nothing — the trigger still shows no non-zero ` +
-			`digit after entering "${value}". The amount never reached the form, so any ` +
-			`assertion downstream would be comparing zero against zero.`
-	).toHaveText(/[1-9]/, { timeout: 10_000 });
+		`${testID}: the field committed nothing — it still shows no non-zero digit after ` +
+			`entering "${value}". The amount never reached the form, so any assertion ` +
+			`downstream would be comparing zero against zero.`
+	).toHaveValue(/[1-9]/, { timeout: 10_000 });
 }
 
 async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' | 'none') {
@@ -181,7 +141,7 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	const dialog = page.getByTestId('add-misc-product-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	// The dialog defers its auto-focus to the first field (Name); wait for focus to settle inside
-	// it, or that focus move lands after the price click and the numpad never opens.
+	// it, or that focus move lands after the price click and pulls focus out of the price field.
 	await expect
 		.poll(
 			() =>
@@ -201,7 +161,7 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
-/** Adds a quick discount through the cashier's fixed-amount or percent numpad. */
+/** Adds a quick discount through the cashier's fixed-amount or percent field. */
 async function addQuickDiscount(page: Page, amount: string, percent = false) {
 	await openCartMenuAndClick(page, 'menu-add-discount');
 	const dialog = page.getByTestId('add-discount-dialog');

@@ -14,7 +14,6 @@ import { stories as alertDialog } from '@wcpos/components/alert-dialog/gallery';
 import { stories as label } from '@wcpos/components/label/gallery';
 import { stories as form } from '@wcpos/components/form/gallery';
 import { stories as calendar } from '@wcpos/components/calendar/gallery';
-import { stories as numpad } from '@wcpos/components/numpad/gallery';
 import { stories as treeCombobox } from '@wcpos/components/tree-combobox/gallery';
 import { stories as slider } from '@wcpos/components/slider/gallery';
 import { stories as switchStories } from '@wcpos/components/switch/gallery';
@@ -97,7 +96,6 @@ const registry: Record<string, Story[]> = {
 	label,
 	form,
 	calendar,
-	numpad,
 	'tree-combobox': treeCombobox,
 	slider,
 	switch: switchStories,

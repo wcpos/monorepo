@@ -32,7 +32,6 @@ const registered = [
 	'label',
 	'form',
 	'calendar',
-	'numpad',
 	"'tree-combobox': treeCombobox",
 	'slider',
 	'switch: switchStories',

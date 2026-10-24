@@ -68,11 +68,8 @@ async function addTestProductToCart(page: Page) {
 		const priceInput = page.getByTestId('misc-product-price-input');
 		await expect(priceInput).toBeVisible({ timeout: 15_000 });
 		await priceInput.click();
-		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-		await expect(numpad).toBeVisible({ timeout: 15_000 });
-		const numpadInput = numpad.locator('input');
-		await numpadInput.fill('15');
-		await page.getByTestId('numpad-done-button').click();
+		await priceInput.fill('15');
+		await priceInput.press('Enter');
 		await page.getByTestId('add-to-cart-submit').click();
 	}
 	await expect(page.getByTestId('checkout-button')).toBeVisible({

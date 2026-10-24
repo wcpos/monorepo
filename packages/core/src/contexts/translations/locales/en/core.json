@@ -541,7 +541,6 @@
 	"common.change_in_settings_tax": "Change in Settings › Tax",
 	"common.city": "City",
 	"common.backspace": "Delete last digit",
-	"common.change_sign": "Change sign",
 	"common.next_tab": "Next tab",
 	"common.no_address_on_the_order": "No address on the order",
 	"common.no_billing_address_using_shop": "This order has no billing address, so tax uses the shop address",
