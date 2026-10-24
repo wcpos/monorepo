@@ -207,8 +207,6 @@
 	"register.cash_refunds": "Cash refunds",
 	"register.expected_in_drawer": "Expected in the drawer",
 	"register.no_sales": "No sales",
-	"register.other_tenders_sales_one": "Other tenders · {count} sale",
-	"register.other_tenders_sales_other": "Other tenders · {count} sales",
 	"register.opened_suffix": "opened {time}",
 	"register.card": "Card",
 	"register.void": "Void",

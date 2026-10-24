@@ -243,7 +243,7 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	// In order: float, cash sales, refunds, in, out, the sum line, then the tenders kept apart.
 	expect(screen.getByTestId('register-panel').textContent).toMatch(
-		/register\.float.*£100\.00register\.cash_sales 2£62\.00register\.cash_refunds.*register\.paid_in.*register\.paid_out 1 · Milk\u2212£7\.00register\.expected_in_drawer£155\.00register\.other_tenders_sales 0Card£30\.00/
+		/register\.float.*£100\.00register\.cash_sales 2£62\.00register\.cash_refunds.*register\.paid_in.*register\.paid_out 1 · Milk\u2212£7\.00register\.expected_in_drawer£155\.00register\.other_tendersCard£30\.00/
 	);
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	// No session: no derivation, only the closure.
@@ -295,6 +295,18 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 		amount: '0',
 		reason: 'Wrong change',
 	});
+});
+
+it('the keypad decimal key stores a canonical point whatever the locale shows', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	fireEvent.click(screen.getByTestId('movement-reason-supplier'));
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	fireEvent.click(screen.getByTestId('movement-key-decimal'));
+	fireEvent.click(screen.getByTestId('movement-key-5'));
+	fireEvent.click(screen.getByTestId('movement-key-0'));
+	fireEvent.click(screen.getByTestId('movement-key-0'));
+	expect((screen.getByTestId('movement-confirm') as HTMLButtonElement).disabled).toBe(false);
 });
 
 it('a reason chip fills the reason and the verb names the amount', () => {

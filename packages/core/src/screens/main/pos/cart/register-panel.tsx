@@ -119,10 +119,11 @@ export function RegisterPanel({
 	// comes from the hook already scoped to this register and NOT to the current session, so
 	// the banner survives the close that would otherwise hide the last record of the cash.
 	const refused = refusedMovements;
-	const openedTime = new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
-		[],
-		{ hour: '2-digit', minute: '2-digit' }
-	);
+	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
+	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
+	const openedTime = stamp
+		? new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+		: undefined;
 	const paidIn = terms
 		? fromMinor(
 				terms.paidIn.reduce((sum, row) => sum + toMinor(row.amount, 4), 0),
@@ -228,11 +229,16 @@ export function RegisterPanel({
 							</DialogDescription>
 						) : (
 							<DialogDescription>
-								{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
-								{t('register.opened_at_by', { time: openedTime })}{' '}
-								<React.Suspense fallback={null}>
-									<Opener id={session?.opened_by} />
-								</React.Suspense>
+								{t('register.in_the_drawer')} · {binding.registerName}
+								{openedTime && (
+									<>
+										{' · '}
+										{t('register.opened_at_by', { time: openedTime })}{' '}
+										<React.Suspense fallback={null}>
+											<Opener id={session?.opened_by} />
+										</React.Suspense>
+									</>
+								)}
 							</DialogDescription>
 						)}
 					</View>
@@ -289,7 +295,10 @@ export function RegisterPanel({
 					{terms && (
 						<>
 							<View className={STATIC_ROW}>
-								{term(t('register.float'), t('register.opened_suffix', { time: openedTime }))}
+								{term(
+									t('register.float'),
+									openedTime && t('register.opened_suffix', { time: openedTime })
+								)}
 								{amount(format(Number(terms.float)))}
 							</View>
 							<View className={STATIC_ROW}>
@@ -339,12 +348,11 @@ export function RegisterPanel({
 							)}
 							{others.length > 0 && (
 								<>
-									{/* A band, not a row: these tenders are not in the drawer. */}
+									{/* A band, not a row: these tenders are not in the drawer. No count: a split
+									    sale is both a cash and a card sale, so no subtraction names it honestly. */}
 									<View className="h-band border-border mt-2 justify-center border-b px-2.5">
 										<Text className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-											{t('register.other_tenders_sales', {
-												count: Math.max(0, salesCount - terms.cashSales.count),
-											})}
+											{t('register.other_tenders')}
 										</Text>
 									</View>
 									{others.map(([method, value]) => (

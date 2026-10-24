@@ -173,7 +173,9 @@ export function MovementSheet({
 		setAmount((prev) => {
 			if (key === 'backspace') return prev.slice(0, -1);
 			if (key !== 'decimal') return prev + key;
-			return /[.,]/.test(prev) ? prev : `${prev || '0'}${separator}`;
+			// The state is canonical (a point): a keypad decimal is never a thousands separator,
+			// and `normalizeAmount` reads a comma before three digits as one. The key shows the locale's.
+			return prev.includes('.') ? prev : `${prev || '0'}.`;
 		});
 	let verb = t('register.open_the_drawer');
 	if (type === 'paid_in') {
@@ -203,13 +205,14 @@ export function MovementSheet({
 				<DialogHeader>
 					<DialogTitle>{type ? t(`register.question_${type}`) : ''}</DialogTitle>
 				</DialogHeader>
-				<DialogBody className="gap-3">
+				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
+				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
 					{type !== 'no_sale' && (
 						<RegisterAmount
 							variant="hero"
 							testID="movement-amount"
-							value={amount}
-							onChangeText={setAmount}
+							value={amount.replace('.', separator)}
+							onChangeText={(value) => setAmount(value.replace(separator, '.'))}
 						/>
 					)}
 					{/* The consequence, said once: what the drawer holds, and what it will after. */}
@@ -236,7 +239,6 @@ export function MovementSheet({
 								return (
 									<Chip
 										key={key}
-										size="sm"
 										label={label}
 										on={!other && reason === label}
 										testID={`movement-reason-${key.replace(/_/g, '-')}`}
