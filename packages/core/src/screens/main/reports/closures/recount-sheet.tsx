@@ -14,6 +14,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
+import { useExclusive } from '../../hooks/use-exclusive';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { ApprovalFields } from '../../pos/cart/approve-sheet';
 import { RegisterAmount } from '../../pos/cart/movement-sheet';
@@ -67,9 +68,8 @@ export function RecountSheet({
 	const [reason, setReason] = React.useState('');
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const [busy, setBusy] = React.useState(false);
 	// Duplicate taps must not append two fiscal corrections.
-	const busyRef = React.useRef(false);
+	const { busy, exclusive } = useExclusive();
 	const request = React.useRef<{ key: string; id: string } | null>(null);
 	const [error, setError] = React.useState('');
 	const faces = denominations[currency ?? ''] ?? denominations.default;
@@ -84,10 +84,8 @@ export function RecountSheet({
 		!reason.trim() ||
 		reasonTooLong ||
 		(!manager && (!username.trim() || !password));
-	const save = async () => {
-		if (invalid || busyRef.current) return;
-		busyRef.current = true;
-		setBusy(true);
+	const runSave = async () => {
+		if (invalid) return;
 		setError('');
 		const key = JSON.stringify([row.id, amounts, reason.trim(), username.trim(), password]);
 		if (request.current?.key !== key) request.current = { key, id: mintUuid() };
@@ -104,11 +102,9 @@ export function RecountSheet({
 			onOpenChange(false);
 		} catch {
 			setError(t('reports.recount_failed'));
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	};
+	const save = () => exclusive('save', runSave);
 	return (
 		<Dialog
 			open

@@ -8,6 +8,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+import { useExclusive } from '../hooks/use-exclusive';
 import { setTenderMethod } from '../pos/checkout/checkout-mode';
 import { useGatewayPayment } from '../pos/checkout/payments/use-gateway-payment';
 import { useReopenOrder } from './use-reopen-order';
@@ -30,13 +31,8 @@ export function InvoiceActions({
 	const { reopen, reopening } = useReopenOrder(order);
 	const gateway = useGatewayPayment();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const [busy, setBusy] = React.useState(false);
-	// State drives the button; the ref closes the same-tick gap a fast double tap falls into.
-	const busyRef = React.useRef(false);
-	const cancel = React.useCallback(async () => {
-		if (busyRef.current) return;
-		busyRef.current = true;
-		setBusy(true);
+	const { busy, exclusive } = useExclusive();
+	const runCancel = React.useCallback(async () => {
 		try {
 			const outcome = await gateway.cancel(order, stamp);
 			if (outcome.kind === 'refused') {
@@ -85,11 +81,9 @@ export function InvoiceActions({
 					error: error instanceof Error ? error.message : String(error),
 				},
 			});
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	}, [gateway, order, stamp, t]);
+	const cancel = () => exclusive('cancel', runCancel);
 	return (
 		<>
 			{/* Destructive sits apart from constructive: a red outline on the left, never filled. */}

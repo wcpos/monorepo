@@ -89,6 +89,7 @@ import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useExclusive } from '../../../hooks/use-exclusive';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
@@ -289,21 +290,7 @@ export function useTenderFlow(
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
-	const [running, setRunning] = React.useState<TenderCommand | null>(null);
-	const busy = running !== null;
-	const busyRef = React.useRef(false);
-	// One gate for the tender's commands: state renders it; the ref closes a same-tick double record.
-	const exclusive = React.useCallback(async (name: TenderCommand, task: () => Promise<void>) => {
-		if (busyRef.current) return;
-		busyRef.current = true;
-		setRunning(name);
-		try {
-			await task();
-		} finally {
-			busyRef.current = false;
-			setRunning(null);
-		}
-	}, []);
+	const { running, busy, exclusive, held } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
@@ -522,7 +509,7 @@ export function useTenderFlow(
 	// snapshot of the prefill; an edit clears that component's line and the gateway's own.
 	// Memoized by the compiler: a manual useCallback here cannot name the setter's identity.
 	const setFieldValues = (next: DeclaredValues, changedId: string) => {
-		if (busyRef.current || methodId === null) return;
+		if (held() || methodId === null) return;
 		attemptRef.current = null;
 		setValuesByMethod((previous) => ({ ...previous, [methodId]: next }));
 		setErrorsFor((previous) => {
@@ -650,7 +637,7 @@ export function useTenderFlow(
 
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
 		(action) => {
-			if (busyRef.current) return;
+			if (held()) return;
 			// The rounded prefill is what the cashier sees, so a backspace edits that figure.
 			if (action.type === 'key' && action.key === 'backspace' && entryMinor !== state.entryMinor)
 				reducerDispatch({ type: 'set-entry', minor: entryMinor });
@@ -661,7 +648,7 @@ export function useTenderFlow(
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
-		[order.uuid, reducerDispatch, entryMinor, state.entryMinor]
+		[held, order.uuid, reducerDispatch, entryMinor, state.entryMinor]
 	);
 
 	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
@@ -679,7 +666,7 @@ export function useTenderFlow(
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
-			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
+			if (held() || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
 			if (tile.disabled) return;
@@ -726,6 +713,7 @@ export function useTenderFlow(
 			service,
 			reducerDispatch,
 			getLoaded,
+			held,
 		]
 	);
 
