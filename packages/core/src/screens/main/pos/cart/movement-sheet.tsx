@@ -15,6 +15,7 @@ import {
 } from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useExclusive } from '../../hooks/use-exclusive';
 import { usePanelSide } from '../contexts/overlay-side';
 
 export function RegisterAmount({
@@ -74,19 +75,16 @@ export function MovementSheet({
 	const { openDrawer } = useSessionReport();
 	const [amount, setAmount] = React.useState('');
 	const [reason, setReason] = React.useState('');
-	const [busy, setBusy] = React.useState(false);
 	// Two taps before a render must not mint two paid-out rows.
-	const busyRef = React.useRef(false);
+	const { busy, exclusive } = useExclusive();
 	const [error, setError] = React.useState('');
 	const t = useT();
 	const side = usePanelSide('cart');
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
 	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';
-	const confirm = async () => {
-		if (!type || invalid || busyRef.current) return;
-		busyRef.current = true;
-		setBusy(true);
+	const runConfirm = async () => {
+		if (!type || invalid) return;
 		const normalized = type === 'no_sale' ? '0' : normalizeAmount(amount);
 		// Send exactly what was validated. The length check is on the trimmed reason, so 500
 		// characters and a trailing space passes here and 400s on arrival if sent raw.
@@ -98,11 +96,9 @@ export function MovementSheet({
 			onOpenChange(false);
 		} catch (e) {
 			setError(String(e));
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	};
+	const confirm = () => exclusive('confirm', runConfirm);
 	return (
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos">
