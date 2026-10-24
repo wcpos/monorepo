@@ -45,13 +45,25 @@ interface CouponFormProps {
 	onClose: () => void;
 	onSubmit: (data: z.infer<typeof couponFormSchema>) => void;
 	loading: boolean;
+	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
+	footerLeading?: React.ReactNode;
 }
 
-export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps) {
+export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: CouponFormProps) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 
 	const onSave = form.handleSubmit(onSubmit);
+	const formActions = (
+		<>
+			<Button variant="outline" onPress={onClose}>
+				<ButtonText>{t('common.close')}</ButtonText>
+			</Button>
+			<Button loading={loading} onPress={() => void onSave()}>
+				<ButtonText>{t('common.save')}</ButtonText>
+			</Button>
+		</>
+	);
 
 	// Live values drive affixes, conditional fields, and collapsed summaries.
 	const values = useWatch({ control: form.control });
@@ -327,14 +339,15 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 					<MetaDataForm />
 				</CollapsibleSection>
 			</DialogBody>
-			<DialogFooter>
-				<Button variant="outline" onPress={onClose}>
-					<ButtonText>{t('common.close')}</ButtonText>
-				</Button>
-				<Button loading={loading} onPress={() => void onSave()}>
-					<ButtonText>{t('common.save')}</ButtonText>
-				</Button>
-			</DialogFooter>
+			{footerLeading ? (
+				// Two wrapping groups: the record's actions on the left, Close/Save on the right.
+				<DialogFooter className="flex-wrap justify-between">
+					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
+					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+				</DialogFooter>
+			) : (
+				<DialogFooter>{formActions}</DialogFooter>
+			)}
 		</Form>
 	);
 }

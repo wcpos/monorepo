@@ -4,16 +4,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import type { CouponPayload, EngineRecord } from '@wcpos/query';
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
 import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useCouponRecord } from '../commands/use-coupon-record';
+import { DeleteCouponDialog, useCouponActions } from '../coupon-actions';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'coupon']);
 
@@ -27,6 +30,9 @@ export function EditCouponForm({ coupon }: Props) {
 	const { saveCouponFields } = useCouponRecord();
 	const pushDocument = usePushDocument();
 	const { close } = useDialog();
+	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
+	const readOnly = !(useAppInfo().license?.isPro ?? false);
+	const actions = useCouponActions(coupon, { onDeleted: close });
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,
@@ -70,5 +76,46 @@ export function EditCouponForm({ coupon }: Props) {
 		[close, saveCouponFields, coupon, pushDocument, t]
 	);
 
-	return <CouponForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
+	// The record's actions sit left of Close/Save: destructive first (orders #2904).
+	const footerLeading =
+		!readOnly && (actions.canDelete || actions.canSync) ? (
+			<>
+				{actions.canDelete && (
+					<Button
+						variant="outline-destructive"
+						testID="coupon-modal-delete"
+						onPress={actions.requestDelete}
+					>
+						{t('common.delete')}
+					</Button>
+				)}
+				{actions.canSync && (
+					<Button variant="outline" testID="coupon-modal-sync" onPress={actions.sync}>
+						{t('common.sync')}
+					</Button>
+				)}
+			</>
+		) : undefined;
+
+	return (
+		<>
+			<CouponForm
+				form={form}
+				onClose={close}
+				onSubmit={handleSave}
+				loading={loading}
+				footerLeading={footerLeading}
+			/>
+			{!readOnly && actions.canDelete && (
+				<DeleteCouponDialog
+					record={coupon}
+					open={actions.deleteOpen}
+					onOpenChange={actions.setDeleteOpen}
+					force={actions.force}
+					onForceChange={actions.setForce}
+					onConfirm={() => void actions.confirmDelete()}
+				/>
+			)}
+		</>
+	);
 }

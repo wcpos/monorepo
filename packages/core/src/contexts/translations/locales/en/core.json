@@ -998,6 +998,8 @@
 	"orders.delete_order_2": "Delete order {id}",
 	"orders.order_title": "Order #{number}",
 	"orders.open_order": "Open order",
+	"customers.open_customer": "Open customer",
+	"coupons.open_coupon": "Open coupon",
 	"orders.items": "Items",
 	"orders.local_refund_summary": "Local refund summary:",
 	"orders.net_payment": "Net Payment",
