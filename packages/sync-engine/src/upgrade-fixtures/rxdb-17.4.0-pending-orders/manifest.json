@@ -10,7 +10,6 @@
 		"cashierId": "till-1"
 	},
 	"databaseName": "pos_v5_faa4092e754e_s7_ctill-1",
-	"drainAtMs": 1790758800000,
 	"orders": [
 		{
 			"case": "a",

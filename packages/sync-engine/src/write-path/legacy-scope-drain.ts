@@ -31,7 +31,7 @@ import {
 	RESYNC_RECEIPT_PRINT_COUNTS_ID,
 	stashPrintCounts,
 } from './engine-order-repository';
-import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
+import { OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 
 /** The files a drainable database occupies, where the platform can see them (native). */
 export type LegacyScopeDatabaseFiles = {
@@ -41,10 +41,7 @@ export type LegacyScopeDatabaseFiles = {
 	remove(databaseName: string): Promise<unknown>;
 };
 
-export type LegacyScopeDrainPorts = Pick<
-	RxdbSyncEnginePorts,
-	'storage' | 'multiInstance' | 'now'
-> & {
+export type LegacyScopeDrainPorts = Pick<RxdbSyncEnginePorts, 'storage' | 'multiInstance'> & {
 	/**
 	 * File-level existence and deletion. Absent (web sahpool, Electron IPC): the
 	 * database is opened to check, and a removal drops its tables while the file
@@ -53,17 +50,6 @@ export type LegacyScopeDrainPorts = Pick<
 	databaseFiles?: LegacyScopeDatabaseFiles | null;
 	liveEngine?: Pick<RxdbSyncEngine, 'whenActive'>;
 };
-
-/**
- * Queue rows still left, by kind — only the kinds present:
- *  - `unsent`: rows a protocol-2 till would have sent (pending, claimed, backing off);
- *  - `held`: an open cart's held edits that were not carried over;
- *  - `deadLetters`: rows the store rejected;
- *  - `conflicts`: parked conflicts AND the rows queued behind one for the same record.
- */
-export type LegacyScopeRemainingWork = Partial<
-	Record<'unsent' | 'held' | 'deadLetters' | 'conflicts', number>
->;
 
 export type LegacyScopeDrainOutcome =
 	/** No drainable-generation database exists for this scope. */
@@ -82,33 +68,19 @@ export type LegacyScopeDrainOutcome =
 	| {
 			status: 'kept';
 			databaseName: string;
-			reason: string;
-			retryable: boolean;
-			remaining: LegacyScopeRemainingWork;
+			carryError: string | null;
+			remaining: number;
 			/**
 			 * The orders whose queue rows are left (sendable or not) — what a reader that
 			 * would give up on an order for "not being here" asks about.
 			 */
 			keptOrderUuids: string[];
-			/** Un-sendable work is due its once-a-day report (always true when retryable). */
-			reportDue: boolean;
 	  }
 	/** The database could not be checked or opened — nothing was sent or removed. */
 	| { status: 'failed'; databaseName: string; error: string };
 
-/**
- * Dead letters and conflicts stay in a kept database until Store health
- * resolves them; a start every few minutes must not repeat that line each
- * time. Once a day per scope is enough to keep it visible in the logs.
- */
-export const LEGACY_UNSENDABLE_REPORT_INTERVAL_MS = 24 * 60 * 60_000;
-
-/** The kept database's queue-local document recording when its un-sendable work was last reported. */
-const UNSENDABLE_REPORT_LOCAL_ID = 'legacy-drain-unsendable-report';
-
 type Classified = {
 	total: number;
-	remaining: LegacyScopeRemainingWork;
 	/** The orders the rows left belong to, sorted. */
 	orderUuids: string[];
 };
@@ -128,56 +100,11 @@ function queueOf(database: RxDatabase): RxCollection {
 	return database.collections[MUTATION_QUEUE_RXDB_COLLECTION]!;
 }
 
-/**
- * What the queue still holds, by kind. Every open cart counts as held; nothing is carried
- * over. Mirrors the drain lane's own rules: a conflicted / needs-revision row
- * blocks every later row for its record; an explicit row or a delete releases
- * its record's whole chain; an eligible row is held while its order is open.
- */
 async function classify(database: RxDatabase): Promise<Classified> {
 	const rows = (await findAllUncached(queueOf(database)))
 		.map((doc) => doc.toJSON() as QueuedMutation)
-		.filter((row) => !isInternalRow(row))
-		.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+		.filter((row) => !isInternalRow(row));
 	const orders = database.collections.orders;
-	const residents = new Map<string, Record<string, unknown>>();
-	if (orders) {
-		const ids = [
-			...new Set(rows.filter((row) => row.collectionName === 'orders').map((row) => row.recordId)),
-		];
-		for (const [id, doc] of await orders.findByIds(ids).exec()) {
-			residents.set(id, doc.toJSON() as Record<string, unknown>);
-		}
-	}
-	const isOpenCart = (recordId: string): boolean =>
-		residents.get(recordId)?.status === OPEN_CART_ORDER_STATUS;
-	const blocked = new Set(
-		rows
-			.filter((row) => row.status === 'conflicted' || row.status === 'needs-revision')
-			.map((row) => row.recordId)
-	);
-	const released = new Set(
-		rows
-			.filter((row) => row.status !== 'rejected')
-			.filter((row) => row.explicit === true || row.operation === 'delete')
-			.map((row) => row.recordId)
-	);
-	const remaining: LegacyScopeRemainingWork = {};
-	const count = (kind: keyof LegacyScopeRemainingWork) => {
-		remaining[kind] = (remaining[kind] ?? 0) + 1;
-	};
-	for (const row of rows) {
-		if (row.status === 'rejected') count('deadLetters');
-		else if (row.status === 'conflicted' || row.status === 'needs-revision') count('conflicts');
-		else if (blocked.has(row.recordId)) count('conflicts');
-		else if (
-			!released.has(row.recordId) &&
-			isOpenCartHoldCandidate(row) &&
-			isOpenCart(row.recordId)
-		) {
-			count('held');
-		} else count('unsent');
-	}
 	// ORPHAN SKELETONS: a till killed between inserting a new cart's order and enqueueing its
 	// create leaves a local-only open order with NO queue row (the app recovers it as an
 	// `orphanedSkeleton` on the next add). An empty queue is not "nothing unsent" while one
@@ -190,14 +117,13 @@ async function classify(database: RxDatabase): Promise<Classified> {
 					(order) => !queued.has(String(order.uuid)) && remoteIdOrNull(order.remoteId) === null
 				)
 		: [];
-	orphans.forEach(() => count('held'));
 	const orderUuids = [
 		...new Set([
 			...rows.filter((row) => row.collectionName === 'orders').map((row) => row.recordId),
 			...orphans.map((order) => String(order.uuid)),
 		]),
 	].sort();
-	return { total: rows.length + orphans.length, remaining, orderUuids };
+	return { total: rows.length + orphans.length, orderUuids };
 }
 
 /**
@@ -261,7 +187,7 @@ export const WRITTEN_BEFORE_PROTOCOL_3 = 'written-before-protocol-3';
 /**
  * Park a protocol-2 queue (Paul's ruling, ADR 0040 PR A): nothing is pushed and no cart is carried
  * over, but the receipt print counts are, so an order printed on this till still prints a COPY
- * after the re-sync. A failed carry is retried (only the carry); parking is final once it landed.
+ * after the re-sync. A failed carry waits for the next start and never hides the park.
  */
 async function settle(
 	ports: LegacyScopeDrainPorts,
@@ -271,36 +197,19 @@ async function settle(
 	before: Classified
 ): Promise<LegacyScopeDrainOutcome> {
 	const localState = await carryPosLocalState(ports, identity, database);
-	const retryable = localState.error !== null;
-	if (before.total === 0 && !retryable) {
+	if (before.total === 0 && localState.error === null) {
 		await database.close();
 		await removeRxDatabase(databaseName, storageFor(ports, identity), ports.multiInstance ?? false);
 		return { status: 'drained', databaseName, fileRemoved: await removeFiles(ports, databaseName) };
 	}
-	const reportDue = retryable || (await unsendableReportDue(database, (ports.now ?? Date.now)()));
 	await database.close();
 	return {
 		status: 'kept',
 		databaseName,
-		reason: retryable
-			? `receipt print counts not carried over: ${localState.error}`
-			: WRITTEN_BEFORE_PROTOCOL_3,
-		retryable,
-		remaining: before.remaining,
+		carryError: localState.error,
+		remaining: before.total,
 		keptOrderUuids: before.orderUuids,
-		reportDue,
 	};
-}
-
-/** True when the kept database's un-sendable work has not been reported within the interval; stamps it. */
-async function unsendableReportDue(database: RxDatabase, nowMs: number): Promise<boolean> {
-	// The queue: the one collection every drain opens, with local documents in the drainable recipe.
-	const queue = queueOf(database);
-	const stamp = await queue.getLocal(UNSENDABLE_REPORT_LOCAL_ID);
-	const last = Number(stamp?.get('at'));
-	if (Number.isFinite(last) && nowMs - last < LEGACY_UNSENDABLE_REPORT_INTERVAL_MS) return false;
-	await queue.upsertLocal(UNSENDABLE_REPORT_LOCAL_ID, { at: nowMs });
-	return true;
 }
 
 async function removeFiles(ports: LegacyScopeDrainPorts, databaseName: string): Promise<boolean> {

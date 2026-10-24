@@ -182,22 +182,7 @@ let legacyPurgeStarted = false;
  */
 const renderIntentSeq = new WeakMap<CachedEngine, number>();
 
-/** A failed print-count carry retries on a live write-drain tick that ran, no sooner than this. */
-const LEGACY_DRAIN_FIRST_RETRY_MS = 60_000;
-/** Doubling stops here: a carry that keeps failing is retried four times an hour. */
-const LEGACY_DRAIN_MAX_RETRY_MS = 15 * 60_000;
-
-/**
- * Per scope, per process: `running`, `waiting` to retry (not before
- * `notBeforeMs`, and only on a successful live write-drain tick), or `done` —
- * drained, absent, failed to open, or parked (its queue kept as it is: unsent rows, dead
- * letters, conflicts). A `done` scope is tried again on the next app start.
- */
-type LegacyDrainState =
-	| { phase: 'running'; retries: number }
-	| { phase: 'waiting'; retries: number; notBeforeMs: number }
-	| { phase: 'done' };
-const legacyDrainStates = new Map<string, LegacyDrainState>();
+const legacyDrainsStarted = new Set<string>();
 
 /**
  * Previous-generation databases the till may hold, besides the ones it visits. "Clear all local
@@ -382,9 +367,6 @@ function failLegacyInventory(error: unknown): void {
 	);
 }
 
-function legacyDrainBackoffMs(retries: number): number {
-	return Math.min(LEGACY_DRAIN_FIRST_RETRY_MS * 2 ** retries, LEGACY_DRAIN_MAX_RETRY_MS);
-}
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function canonicalSite(site: string): string {
@@ -481,16 +463,11 @@ async function requestScope(
 	void entry.drainLegacyScope(scope);
 }
 
-function remainingCount(remaining: Record<string, number | undefined>): number {
-	return Object.values(remaining).reduce<number>((total, count) => total + (count ?? 0), 0);
-}
-
 /**
  * One line per drain outcome; a quiet debug line when there was nothing to
- * drain. A parked database errors on a process's first attempt and then daily;
- * any other kept one warns on the first attempt, and its re-arms are debug.
+ * drain. A parked database errors once per start; a failed print-count carry warns once per start.
  */
-function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolean): void {
+function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome): void {
 	if (outcome.status === 'absent') {
 		engineLogger.debug('No previous-version database to drain', {
 			context: { databaseName: outcome.databaseName },
@@ -504,37 +481,28 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolea
 		});
 		return;
 	}
-	if (outcome.status === 'kept' && outcome.reason === WRITTEN_BEFORE_PROTOCOL_3) {
+	if (outcome.status === 'kept') {
 		// ADR 0040: a protocol-2 queue is parked, never sent. It sits in Store health's log, at
-		// error on the first attempt of a process and then daily, naming what was never sent.
-		const unsent = remainingCount(outcome.remaining);
-		if (!isRetry || outcome.reportDue)
+		// error once per start, naming what was never sent; a failed carry does not hide it.
+		const unsent = outcome.remaining;
+		if (unsent > 0)
 			engineLogger.error(
 				`${unsent} changes from before this update were never sent and will not be`,
 				{
 					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
 					context: {
 						databaseName: outcome.databaseName,
-						reason: outcome.reason,
+						reason: WRITTEN_BEFORE_PROTOCOL_3,
 						unsent,
 						orders: outcome.keptOrderUuids,
 					},
 				}
 			);
-		return;
-	}
-	if (outcome.status === 'kept') {
-		engineLogger[isRetry ? 'debug' : 'warn'](
-			'The previous database version is kept until its receipt print counts can be carried over',
-			{
-				context: {
-					databaseName: outcome.databaseName,
-					reason: outcome.reason,
-					retryable: outcome.retryable,
-					remaining: outcome.remaining,
-				},
-			}
-		);
+		if (outcome.carryError !== null)
+			engineLogger.warn(
+				'The previous database version is kept until its receipt print counts can be carried over',
+				{ context: { databaseName: outcome.databaseName, error: outcome.carryError } }
+			);
 		return;
 	}
 	engineLogger.info(
@@ -574,9 +542,7 @@ async function drainLegacyScopeOnce(
 	ports: () => LegacyScopeDrainPorts
 ): Promise<void> {
 	const key = scopeCacheKey(scope);
-	const state = legacyDrainStates.get(key);
-	if (state?.phase === 'done' || state?.phase === 'running') return;
-	if (state?.phase === 'waiting' && Date.now() < state.notBeforeMs) return;
+	if (legacyDrainsStarted.has(key)) return;
 	const databaseName = scopeDatabaseName(scope, {
 		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 	});
@@ -584,34 +550,23 @@ async function drainLegacyScopeOnce(
 	if (!active || scopeCacheKey(active.identity) !== key) {
 		// Not draining it now (switched away first): a mark must not outlive a drain that will not
 		// run — release its waiters as "uncountable". Returning to the scope drains and re-marks.
-		if (state === undefined) releaseLegacyDrainMark(databaseName);
+		releaseLegacyDrainMark(databaseName);
 		return;
 	}
 	// Until the drain reports, a previous-generation database MAY hold unsent work (usually
 	// already marked at engine construction; a switched-to scope is marked here).
-	if (state === undefined) markLegacyDrainPending(databaseName);
-	const retries = state?.retries ?? 0;
-	legacyDrainStates.set(key, { phase: 'running', retries });
-	let next: LegacyDrainState = { phase: 'done' };
+	markLegacyDrainPending(databaseName);
+	legacyDrainsStarted.add(key);
 	try {
 		const outcome = await drainLegacyScopeDatabase(ports(), scope);
-		if (stillLoggingFor(engine, scope)) {
-			logLegacyDrainOutcome(outcome, retries > 0);
-		}
+		if (stillLoggingFor(engine, scope)) logLegacyDrainOutcome(outcome);
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
 			reportLegacyDrain(databaseName, 0);
 		} else if (outcome.status === 'failed') {
 			// Reported, but uncountable: a wipe stays "unknown", and nothing waits on it any longer.
 			reportLegacyDrain(databaseName, null);
 		} else {
-			reportLegacyDrain(databaseName, remainingCount(outcome.remaining), outcome.keptOrderUuids);
-			if (outcome.retryable) {
-				next = {
-					phase: 'waiting',
-					retries: retries + 1,
-					notBeforeMs: Date.now() + legacyDrainBackoffMs(retries),
-				};
-			}
+			reportLegacyDrain(databaseName, outcome.remaining, outcome.keptOrderUuids);
 		}
 	} catch (error) {
 		// The drain itself never throws; this is the host failing to build its ports.
@@ -620,8 +575,6 @@ async function drainLegacyScopeOnce(
 			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },
 		});
-	} finally {
-		legacyDrainStates.set(key, next);
 	}
 }
 
@@ -916,7 +869,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// Marked now, during render — before any readiness callback or store-session effect — so a
 	// reader that waits on the drain's report (the completion journal) can never ask before the
 	// drain is known to be coming.
-	if (!legacyDrainStates.has(cacheKey)) {
+	if (!legacyDrainsStarted.has(cacheKey)) {
 		markLegacyDrainPending(
 			scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
 		);
@@ -984,17 +937,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>
 		drainLegacyScopeOnce(engine, scope, legacyDrainPorts);
-	// A drain waiting to retry runs after a live write-drain tick that finished `ran`. That
-	// proves the LANE ran (online, session not held, scope open) — not that the store answered
-	// (a tick over an empty queue sends nothing). So the trigger is only a cue: the backoff is
-	// what bounds real attempts (about four an hour at the 15-minute cap), and attempts per
-	// process are unbounded while a print-count carry keeps failing.
-	engine.events((event) => {
-		if (event.type !== 'lane-finish' || event.lane !== 'write-drain' || event.status !== 'ran')
-			return;
-		const active = engine.active();
-		if (active) void drainLegacyScope(active.identity);
-	});
 	// Draining and purging are session maintenance, not part of opening a store.
 	// Failed opens leave legacy data alone; neither ever rejects engine.ready.
 	void engine.ready.then(
@@ -1013,7 +955,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		},
 		() => {
 			// The scope never opened, so its drain never runs: release the construction-time mark.
-			if (!legacyDrainStates.has(cacheKey)) {
+			if (!legacyDrainsStarted.has(cacheKey)) {
 				releaseLegacyDrainMark(
 					scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
 				);

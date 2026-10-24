@@ -2042,23 +2042,19 @@ describe('previous-generation database drain', () => {
 	const LEGACY = scopeDatabaseName(BASE_OPTIONS.scope, {
 		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 	});
-	const keptRetryable: LegacyScopeDrainOutcome = {
+	const carryFailed: LegacyScopeDrainOutcome = {
 		status: 'kept',
 		databaseName: LEGACY,
-		reason: 'receipt print counts not carried over: the live engine is on another scope',
-		retryable: true,
-		remaining: { unsent: 4, held: 1 },
-		keptOrderUuids: ['order-held', 'order-unsent'],
-		reportDue: true,
+		carryError: 'the live engine is on another scope',
+		remaining: 0,
+		keptOrderUuids: [],
 	};
 	const parked: LegacyScopeDrainOutcome = {
 		status: 'kept',
 		databaseName: LEGACY,
-		reason: 'written-before-protocol-3',
-		retryable: false,
-		remaining: { deadLetters: 1, conflicts: 1 },
+		carryError: null,
+		remaining: 2,
 		keptOrderUuids: ['order-conflicted', 'order-rejected'],
-		reportDue: true,
 	};
 	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
 
@@ -2072,11 +2068,9 @@ describe('previous-generation database drain', () => {
 			databaseName: scopeDatabaseName(BASE_OPTIONS.scope, {
 				generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 			}),
-			reason: 'written-before-protocol-3',
-			retryable: false,
-			remaining: { unsent: 1, held: 1 },
+			carryError: null,
+			remaining: 2,
 			keptOrderUuids: ['order-cash', 'order-cart'],
-			reportDue: false,
 		});
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
@@ -2099,10 +2093,38 @@ describe('previous-generation database drain', () => {
 			'The previous database version is kept until its receipt print counts can be carried over',
 			expect.anything()
 		);
-		// Not retryable: no later attempt re-arms it in this process.
+		// A write-drain tick never runs it again in this process.
 		engine.emit(writeDrainRan);
 		await settle();
 		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+	});
+	it('a parked database whose print-count carry failed still reports PAYMENT201: the two facts are independent', async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkError, networkWarn } =
+			loadCreateAppEngine();
+		drainLegacyScopeDatabase.mockResolvedValue({
+			...parked,
+			carryError: 'no live engine to carry them into',
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+
+		expect(networkError).toHaveBeenCalledWith(
+			'2 changes from before this update were never sent and will not be',
+			expect.objectContaining({
+				code: 'PAYMENT201',
+				context: expect.objectContaining({
+					reason: 'written-before-protocol-3',
+					unsent: 2,
+					orders: ['order-conflicted', 'order-rejected'],
+				}),
+			})
+		);
+		expect(networkWarn).toHaveBeenCalledWith(
+			'The previous database version is kept until its receipt print counts can be carried over',
+			expect.objectContaining({
+				context: expect.objectContaining({ error: 'no live engine to carry them into' }),
+			})
+		);
 	});
 	/** Discovery completes and names nothing beyond the visited scope (a settled history). */
 	const discoveryFindsNothingElse = (loaded: ReturnType<typeof loadCreateAppEngine>) =>
@@ -2182,61 +2204,7 @@ describe('previous-generation database drain', () => {
 		]);
 	});
 
-	it('re-arms a drain whose print-count carry failed: after the next successful tick, no sooner than a bounded backoff', async () => {
-		let now = 1_000_000;
-		jest.spyOn(Date, 'now').mockImplementation(() => now);
-		const engine = createEngineDouble();
-		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn, networkDebug } =
-			loadCreateAppEngine(() => engine);
-		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
-		await createAppSyncEngine(BASE_OPTIONS).ready;
-		await settle();
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
-		const tickAt = async (ms: number) => {
-			now = ms;
-			engine.emit(writeDrainRan);
-			await settle();
-		};
-
-		await tickAt(1_000_000 + 59_000);
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
-		await tickAt(1_000_000 + 60_000);
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
-		// Doubled: two minutes after the second attempt.
-		await tickAt(1_060_000 + 119_000);
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
-		await tickAt(1_060_000 + 120_000);
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(3);
-		// Capped at fifteen minutes however long it keeps failing.
-		let at = 1_180_000;
-		for (const backoff of [240_000, 480_000, 900_000, 900_000]) {
-			await tickAt(at + backoff - 1);
-			const calls = drainLegacyScopeDatabase.mock.calls.length;
-			await tickAt(at + backoff);
-			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(calls + 1);
-			at += backoff;
-		}
-		// Warned once; the retries are quiet.
-		expect(networkWarn).toHaveBeenCalledTimes(1);
-		expect(networkDebug).toHaveBeenCalledWith(
-			'The previous database version is kept until its receipt print counts can be carried over',
-			expect.anything()
-		);
-
-		drainLegacyScopeDatabase.mockResolvedValue({
-			status: 'drained',
-			databaseName: LEGACY,
-			fileRemoved: true,
-		});
-		await tickAt(at + 900_000);
-		const total = drainLegacyScopeDatabase.mock.calls.length;
-		await tickAt(at + 10 * 900_000);
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(total);
-	});
-
-	it('a print-count carry cut short by a store switch is retried once the scope is back', async () => {
-		let now = 1_000_000;
-		jest.spyOn(Date, 'now').mockImplementation(() => now);
+	it('a print-count carry cut short by a store switch waits for the next start, not the scope coming back', async () => {
 		const engine = createEngineDouble();
 		const { createAppSyncEngine, drainLegacyScopeDatabase, switchAppEngineScope } =
 			loadCreateAppEngine(() => engine);
@@ -2256,50 +2224,34 @@ describe('previous-generation database drain', () => {
 					}),
 				};
 			}
-			if (drainLegacyScopeDatabase.mock.calls.length === 1) {
-				return new Promise<LegacyScopeDrainOutcome>((resolve) => {
-					finishFirst = resolve;
-				});
-			}
-			return {
-				status: 'drained',
-				databaseName: LEGACY,
-				fileRemoved: true,
-			};
+			return new Promise<LegacyScopeDrainOutcome>((resolve) => {
+				finishFirst = resolve;
+			});
 		});
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
 		// The cashier switches store while the drain is carrying print counts: the live engine left.
 		await switchAppEngineScope(session(target));
 		await settle();
-		finishFirst({
-			status: 'kept',
-			databaseName: LEGACY,
-			reason: 'receipt print counts not carried over: the live engine is on another scope',
-			retryable: true,
-			remaining: {},
-			keptOrderUuids: [],
-			reportDue: true,
-		});
+		finishFirst(carryFailed);
 		await settle();
 
-		// Back on the scope; the next write-drain tick that ran, past the backoff, carries them.
+		// Back on the scope, and a write-drain tick: neither runs the drain again in this process.
 		await switchAppEngineScope(session(BASE_OPTIONS.scope));
 		await settle();
-		now += 60_000;
 		engine.emit(writeDrainRan);
 		await settle();
 		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope.storeId)).toEqual([
 			BASE_OPTIONS.scope.storeId,
 			target.storeId,
-			BASE_OPTIONS.scope.storeId,
 		]);
 		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
 	});
 
-	it('a parked database, or one that failed to open, is not retried in this process', async () => {
+	it('a parked database, one whose carry failed, or one that failed to open, is not retried in this process', async () => {
 		for (const outcome of [
 			parked,
+			carryFailed,
 			{ status: 'failed', databaseName: LEGACY, error: 'DB6' } as const,
 		]) {
 			const engine = createEngineDouble();
@@ -2307,34 +2259,32 @@ describe('previous-generation database drain', () => {
 			drainLegacyScopeDatabase.mockResolvedValue(outcome);
 			await createAppSyncEngine(BASE_OPTIONS).ready;
 			await settle();
-			jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
 			engine.emit(writeDrainRan);
 			await settle();
 			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
-			jest.restoreAllMocks();
 		}
 	});
 
 	it('what a kept database holds is counted by the Clear local data warning; a drained one is not', async () => {
-		const engine = createEngineDouble();
-		const loaded = loadCreateAppEngine(() => engine);
-		const { createAppSyncEngine, drainLegacyScopeDatabase } = loaded;
-		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
-		await createAppSyncEngine(BASE_OPTIONS).ready;
+		const kept = loadCreateAppEngine();
+		kept.drainLegacyScopeDatabase.mockResolvedValue({ ...parked, carryError: 'no live engine' });
+		await kept.createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
-		await discoveryFindsNothingElse(loaded);
-		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
-		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
-		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held', 'order-unsent']);
+		await discoveryFindsNothingElse(kept);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 2 });
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 4 });
+		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-conflicted', 'order-rejected']);
 
-		jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
-		drainLegacyScopeDatabase.mockResolvedValue({
+		forgetUnsentChanges();
+		const drained = loadCreateAppEngine();
+		drained.drainLegacyScopeDatabase.mockResolvedValue({
 			status: 'drained',
 			databaseName: LEGACY,
 			fileRemoved: false,
 		});
-		engine.emit(writeDrainRan);
+		await drained.createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
+		await discoveryFindsNothingElse(drained);
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
 	});
@@ -2687,7 +2637,7 @@ describe('previous-generation database drain', () => {
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 	});
 
-	it('logs one line per outcome: failed is an error with a code, kept warns on a first attempt, drained says whether the file went', async () => {
+	it('logs one line per outcome: failed is an error with a code, a failed carry warns, drained says whether the file went', async () => {
 		for (const [outcome, level, message, context] of [
 			[
 				{ status: 'failed', databaseName: LEGACY, error: 'DB6: schema mismatch' },
@@ -2696,13 +2646,10 @@ describe('previous-generation database drain', () => {
 				{ databaseName: LEGACY, error: 'DB6: schema mismatch' },
 			],
 			[
-				keptRetryable,
+				carryFailed,
 				'warn',
 				'The previous database version is kept until its receipt print counts can be carried over',
-				{
-					reason: 'receipt print counts not carried over: the live engine is on another scope',
-					retryable: true,
-				},
+				{ databaseName: LEGACY, error: 'the live engine is on another scope' },
 			],
 			[
 				{ status: 'drained', databaseName: LEGACY, fileRemoved: true },
