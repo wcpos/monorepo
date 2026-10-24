@@ -1172,18 +1172,28 @@ describe('useTenderFlow', () => {
 			expect(result.current.busy).toBe(false);
 		});
 
-		it('whose mirror throws says "not synced" (PAYMENT111) and still runs the completion', async () => {
+		it('whose mirror throws says the sale is "not synced" (PAYMENT111), names no payment, and still runs the completion', async () => {
 			answeredClose();
 			mockManualMirror.mockRejectedValueOnce(new Error('resident write failed'));
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
 			await act(async () => result.current.takeTender());
 
-			expect(mockWarn).toHaveBeenCalledWith(
+			expect(mockWarn).not.toHaveBeenCalledWith(
 				'pos_checkout.payment_recorded_not_synced',
+				expect.anything()
+			);
+			expect(mockWarn).toHaveBeenCalledWith(
+				'pos_checkout.sale_closed_not_synced',
 				expect.objectContaining({
 					code: 'PAYMENT111',
 					showToast: true,
+					// The toast says the sale's own sentences; the code's summary and Help page name a payment.
+					toast: {
+						title: 'pos_checkout.sale_closed_not_synced',
+						text2: 'pos_checkout.sale_closed_not_synced_description',
+						showErrorCode: false,
+					},
 					context: expect.objectContaining({
 						type: 'payment.not-mirrored',
 						error: 'resident write failed',

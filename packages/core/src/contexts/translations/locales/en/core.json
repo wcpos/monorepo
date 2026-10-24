@@ -2680,6 +2680,8 @@
 	"pos_checkout.paid_but_order_not_finished": "The card was charged, but the order didn't finish.",
 	"pos_checkout.paid_but_order_not_finished_description": "Don't charge again. Open the order to finish it.",
 	"pos_checkout.payment_recorded_not_synced": "Your store has this payment — this till couldn't save its copy. Don't take it again.",
+	"pos_checkout.sale_closed_not_synced": "Your store has closed this sale — this till couldn't save its copy.",
+	"pos_checkout.sale_closed_not_synced_description": "Nothing to do — it catches up on the next sync.",
 	"pos_checkout.payment_not_recorded": "The payment wasn't recorded — nothing was taken. Try again.",
 	"pos_checkout.void_failed": "Some payments couldn't be voided, so that money is still held. Try again, or refund it from the order.",
 	"pos_checkout.status_pending": "Pending",
