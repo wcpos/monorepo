@@ -119,12 +119,12 @@ export async function commitAtBoundary(
 				revalidate,
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
-				complete: (target, queue, summary) =>
+				complete: (target, slotQueue, summary) =>
 					landAnswer(
 						{ kind: 'close', order: summary },
 						{ via: 'boundary' },
 						{
-							finish: (outcome) => ctx.complete(target, outcome, queue),
+							finish: (outcome) => ctx.complete(target, outcome, slotQueue),
 							// A close never calls it; only a `reopened` answer does.
 							resolveAttempt: () => resolveCompletionAttempt(ctx.storeDB, target.uuid),
 							dp: ctx.dp,
