@@ -27,6 +27,12 @@ describe('lib/utils', () => {
 			expect(result).toContain('valid');
 		});
 
+		it('lets a later animation of ours replace an earlier one', () => {
+			expect(cn('web:animate-pop-in', 'web:animate-quantity-grow')).toBe(
+				'web:animate-quantity-grow'
+			);
+		});
+
 		it('keeps the amount size beside a text colour', () => {
 			// `amt` is a font-size token, not a colour: neither class may drop the other.
 			expect(cn('text-foreground text-amt').split(' ').sort()).toEqual([

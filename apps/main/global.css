@@ -130,6 +130,7 @@
   --duration-crossfade: 200ms;
   --duration-image-fade: 250ms;
   --duration-popover-fade: 200ms;
+  --duration-quantity-grow: 180ms;
   --duration-sheet-rise: 200ms;
   --duration-beat: 220ms;
   --duration-panel-slide: 250ms;
@@ -142,6 +143,8 @@
   --ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
   --animate-pop-in: pop-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-pop-out: pop-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-quantity-grow: quantity-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-quantity-grow-up: quantity-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-indeterminate: indeterminate 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
   --animate-accordion-down: accordion-down 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-accordion-up: accordion-up 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -232,6 +235,19 @@
 @keyframes pop-out {
   from { opacity: 1; transform: none; }
   to { opacity: 0; transform: translateY(-6px); }
+}
+/* QuantityKeypad (components/quantity-keypad, decision 36): the panel is drawn growing out of
+   the cart's quantity box. The panel is a 3 x 5 grid of 48 px cells and opens with the box
+   centred in the stepper row's middle cell, so the clip starts as that cell less the 6 px above
+   and below a 36 px box: 48 px off each side, 6 px from the row's edge, 42 px down to its other
+   edge. `-up` is the same from the bottom row, for a panel that opened above the box. */
+@keyframes quantity-grow {
+  from { clip-path: inset(6px 48px calc(100% - 42px) 48px round 8px); }
+  to { clip-path: inset(0 round 8px); }
+}
+@keyframes quantity-grow-up {
+  from { clip-path: inset(calc(100% - 42px) 48px 6px 48px round 8px); }
+  to { clip-path: inset(0 round 8px); }
 }
 @keyframes dialog-in {
   from { opacity: 0; transform: scale(0.95); }

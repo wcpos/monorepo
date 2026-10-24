@@ -10,6 +10,8 @@ export const CROSSFADE = 200;
 // expo-image's fade-in for a freshly loaded picture.
 export const IMAGE_FADE = 250;
 export const POPOVER_FADE = 200;
+// The cart quantity box growing into its keypad (decision 36), as drawn in the prototype.
+export const QUANTITY_GROW = 180;
 export const SHEET_RISE = 200;
 export const BEAT = 220;
 export const PANEL_SLIDE = 250;
@@ -244,6 +246,8 @@ export const BEATS = {
 export const WEB_ANIMATIONS = {
 	'pop-in': `pop-in ${POPOVER_FADE}ms ${EASE_CSS}`,
 	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
+	'quantity-grow': `quantity-grow ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	'quantity-grow-up': `quantity-grow-up ${QUANTITY_GROW}ms ${EASE_CSS}`,
 	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
 	'accordion-down': `accordion-down ${CROSSFADE}ms ${EASE_CSS}`,
 	'accordion-up': `accordion-up ${CROSSFADE}ms ${EASE_CSS}`,

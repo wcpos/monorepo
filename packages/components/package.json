@@ -68,6 +68,8 @@
     "./print": "./src/print/index.ts",
     "./log-view": "./src/log-view/index.tsx",
     "./progress": "./src/progress/index.tsx",
+    "./quantity-keypad": "./src/quantity-keypad/index.tsx",
+    "./quantity-keypad/reducer": "./src/quantity-keypad/reducer.ts",
     "./radio-group": "./src/radio-group/index.tsx",
     "./segmented-control": "./src/segmented-control/index.tsx",
     "./select": "./src/select/index.tsx",
