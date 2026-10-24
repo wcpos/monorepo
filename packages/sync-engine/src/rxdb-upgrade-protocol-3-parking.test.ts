@@ -42,9 +42,7 @@ import { createEngineHarness, type EngineHarness, memoryEngineStorage, remoteId 
 import { queueFor } from './write-path/write-intents';
 import {
 	drainLegacyScopeDatabase,
-	LEGACY_UNSENDABLE_REPORT_INTERVAL_MS,
 	type LegacyScopeDrainPorts,
-	WRITTEN_BEFORE_PROTOCOL_3,
 } from './write-path/legacy-scope-drain';
 import {
 	EngineOrderRepository,
@@ -213,9 +211,8 @@ it('the protocol-2 queue stays parked while an already-printed synchronized orde
 
 	expect(outcome).toMatchObject({
 		status: 'kept',
-		reason: WRITTEN_BEFORE_PROTOCOL_3,
-		retryable: false,
-		remaining: { unsent: 1, held: 1 },
+		carryError: null,
+		remaining: 2,
 		keptOrderUuids: [PRINTED, CART].sort(),
 	});
 	// No cart was carried into generation 7, and the printed order keeps its count there.
@@ -226,26 +223,27 @@ it('the protocol-2 queue stays parked while an already-printed synchronized orde
 	// A later start parks it again: never a push, never a cart.
 	expect(await drainLegacyScopeDatabase(drain, identity)).toMatchObject({
 		status: 'kept',
-		reason: WRITTEN_BEFORE_PROTOCOL_3,
+		remaining: 2,
 	});
 	expect(await app.collection('orders').findOne(CART).exec()).toBeNull();
 });
 
-it('a failed print-count carry is retried without sending or carrying any protocol-2 order work, and the next receipt remains a COPY', async () => {
+it('a failed print-count carry still parks the protocol-2 queue, and the next start carries the counts without sending or carrying any order work', async () => {
 	const storage = memoryEngineStorage();
 	await protocol2Database(storage);
 
-	// No live engine to carry into (a scope switch mid-carry): kept, retryable.
+	// No live engine to carry into (a scope switch mid-carry): the park and the carry failure are
+	// two facts, each reported on its own.
 	expect(await drainLegacyScopeDatabase({ storage }, identity)).toMatchObject({
 		status: 'kept',
-		reason: expect.stringContaining('receipt print counts not carried over'),
-		retryable: true,
+		carryError: 'no live engine to carry them into',
+		remaining: 2,
 	});
 
 	const app = await appOn(storage);
 	expect(
 		await drainLegacyScopeDatabase({ storage, liveEngine: app.engine }, identity)
-	).toMatchObject({ status: 'kept', reason: WRITTEN_BEFORE_PROTOCOL_3, retryable: false });
+	).toMatchObject({ status: 'kept', carryError: null, remaining: 2 });
 	expect(await app.collection('orders').findOne(CART).exec()).toBeNull();
 	// The order is not resident yet: its count waits in the stash for the pull that lands it.
 	expect(await stashedCounts(app)).toEqual({ [PRINTED]: 2 });
@@ -258,8 +256,7 @@ it('a local-only open cart with no queue row (an orphan skeleton) parks generati
 	);
 	expect(await drainLegacyScopeDatabase({ storage }, identity)).toMatchObject({
 		status: 'kept',
-		reason: WRITTEN_BEFORE_PROTOCOL_3,
-		remaining: { held: 1 },
+		remaining: 1,
 		keptOrderUuids: [CART],
 	});
 });
@@ -346,7 +343,7 @@ describe('POS-local state on a synced order', () => {
 		const app = await appOn(storage);
 		expect(
 			await drainLegacyScopeDatabase({ storage, liveEngine: app.engine }, identity)
-		).toMatchObject({ status: 'kept', remaining: { deadLetters: 1 } });
+		).toMatchObject({ status: 'kept', remaining: 1 });
 		expect((await stashedCounts(app))?.[PRINTED]).toBe(2);
 	});
 
@@ -404,10 +401,12 @@ describe('POS-local state on a synced order', () => {
 			})
 		);
 		const app = await appOn(storage);
-		// Without a live engine it is kept: the count is not dropped with the database.
+		// Without a live engine it is kept: the count is not dropped with the database. Nothing is
+		// parked: the carry is the only reason.
 		expect(await drainLegacyScopeDatabase({ storage }, identity)).toMatchObject({
 			status: 'kept',
-			retryable: true,
+			carryError: 'no live engine to carry them into',
+			remaining: 0,
 		});
 		expect(
 			await drainLegacyScopeDatabase({ storage, liveEngine: app.engine }, identity)
@@ -477,27 +476,20 @@ describe('failures and file access', () => {
 		expect(existsSync(join(work, `${legacyName()}.sqlite`))).toBe(false);
 	});
 
-	it('reports un-sendable work once a day even when the database holds no orders collection', async () => {
+	it('parks a queue even when the database holds no orders collection', async () => {
 		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
 		const storage = sqliteIn(work);
 		await writeGeneration6(storage, (db) => db.collections.recordMutations!.insert(deadLetter), [
 			'recordMutations',
 		]);
 
-		const at = (nowMs: number): LegacyScopeDrainPorts => ({ storage, now: () => nowMs });
-		const t0 = Date.parse('2026-10-01T08:00:00.000Z');
-		expect(await drainLegacyScopeDatabase(at(t0), identity)).toMatchObject({
+		expect(await drainLegacyScopeDatabase({ storage }, identity)).toEqual({
 			status: 'kept',
-			retryable: false,
-			remaining: { deadLetters: 1 },
-			reportDue: true,
+			databaseName: legacyName(),
+			carryError: null,
+			remaining: 1,
+			keptOrderUuids: [],
 		});
-		expect(await drainLegacyScopeDatabase(at(t0 + 60_000), identity)).toMatchObject({
-			reportDue: false,
-		});
-		expect(
-			await drainLegacyScopeDatabase(at(t0 + LEGACY_UNSENDABLE_REPORT_INTERVAL_MS), identity)
-		).toMatchObject({ reportDue: true });
 	});
 
 	it('a database the drainable schemas cannot open is failed, not kept', async () => {
@@ -553,7 +545,6 @@ const manifest = JSON.parse(readFileSync(join(FIXTURE, 'manifest.json'), 'utf8')
 	writer: { rxdb: string };
 	identity: StoreScopeIdentity;
 	databaseName: string;
-	drainAtMs: number;
 	orders: { uuid: string }[];
 };
 const fixtureName = scopeDatabaseName(manifest.identity, {
@@ -593,24 +584,19 @@ describe.each(STORAGES)('a database rxdb 17.4.0 wrote (%s)', (_name, restore) =>
 		expect(String(RXDB_VERSION)).not.toBe(manifest.writer.rxdb);
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-parking-'));
 		const storage = restore(work);
-		const at = { storage, now: () => manifest.drainAtMs };
-		expect(await drainLegacyScopeDatabase(at, manifest.identity)).toEqual({
+		expect(await drainLegacyScopeDatabase({ storage }, manifest.identity)).toEqual({
 			status: 'kept',
 			databaseName: fixtureName,
-			reason: WRITTEN_BEFORE_PROTOCOL_3,
-			retryable: false,
+			carryError: null,
 			// Four sendable rows (one a dead drain's expired claim), the held cart, a dead letter and
 			// a parked conflict: none of it is sent.
-			remaining: { unsent: 4, held: 1, deadLetters: 1, conflicts: 1 },
+			remaining: 7,
 			keptOrderUuids: manifest.orders.map((order) => order.uuid).sort(),
-			reportDue: true,
 		});
 		// The next start reopens it the same way, and parks it again.
-		expect(await drainLegacyScopeDatabase(at, manifest.identity)).toMatchObject({
+		expect(await drainLegacyScopeDatabase({ storage }, manifest.identity)).toMatchObject({
 			status: 'kept',
-			reason: WRITTEN_BEFORE_PROTOCOL_3,
-			remaining: { unsent: 4, held: 1, deadLetters: 1, conflicts: 1 },
-			reportDue: false,
+			remaining: 7,
 		});
 	}, 30_000);
 });

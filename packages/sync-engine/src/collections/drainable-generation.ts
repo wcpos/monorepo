@@ -16,11 +16,7 @@
  * keyed by generation, and fails a bump that forgot this file.
  */
 
-import {
-	type CollectionCreator,
-	engineCollectionCreators,
-	MUTATION_QUEUE_RXDB_COLLECTION,
-} from './engine-collections';
+import { type CollectionCreator, engineCollectionCreators } from './engine-collections';
 
 /** The generation these schemas reproduce; `schema-behaviour.test.ts` pins it to the drainable one. */
 export const DRAINABLE_SCHEMAS_GENERATION = 6;
@@ -30,12 +26,5 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 	const creators = engineCollectionCreators();
 	return {
 		...creators,
-		// The drain keeps its once-a-day report stamp in the queue's local documents: the queue is
-		// the one collection every drain opens. Local documents live beside the collection, not in
-		// its schema, so no digest moves.
-		[MUTATION_QUEUE_RXDB_COLLECTION]: {
-			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
-			localDocuments: true,
-		},
 	};
 }
