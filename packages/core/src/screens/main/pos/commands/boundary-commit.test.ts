@@ -50,7 +50,11 @@ const closeSale = {
 	online: jest.fn(() => true),
 	close: jest.fn(async (target: ReadonlyEngineRecord<'orders'>): Promise<CloseOutcome> => {
 		Object.assign(target.getLatest().payload, { status: 'completed' });
-		return { kind: 'answered' as const, order: { status: 'completed' } as OrderPaymentSummary };
+		return {
+			kind: 'answered' as const,
+			order: { status: 'completed' } as OrderPaymentSummary,
+			notMirrored: null,
+		};
 	}),
 };
 const write = jest.fn(
@@ -216,10 +220,11 @@ describe('an answered close', () => {
 				}
 			)
 		);
-	const answeredWithoutMirror = () =>
+	const answeredWithoutMirror = (notMirrored: { cause: unknown } | null = null) =>
 		closeSale.close.mockImplementationOnce(async () => ({
 			kind: 'answered' as const,
 			order: { status: 'completed' } as OrderPaymentSummary,
+			notMirrored,
 		}));
 	const rows = (name: string) =>
 		[jest.mocked(getLogger(['test']).debug), jest.mocked(getLogger(['test']).warn)]
@@ -247,6 +252,20 @@ describe('an answered close', () => {
 		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
 			awaitingAdoption: true,
 		});
+	});
+
+	// C5 round 2: a close whose local mirror failed used to throw out of the action; it now lands
+	// through the completion like a record, which judges the pulled resident.
+	it('an answered close whose mirror failed lands through the completion and does not reject', async () => {
+		const order = orderFor();
+		Object.assign(order.payload, { id: 42 });
+		answeredWithoutMirror({ cause: new Error('mirror_failed') });
+		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
+		await expect(run(order)).resolves.toBeUndefined();
+		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
+			awaitingAdoption: true,
+		});
+		expect(rows('settlement.boundary-not-closed')).toEqual([]);
 	});
 
 	it('a close the store answers outstanding logs the not-closed row and keeps the attempt', async () => {

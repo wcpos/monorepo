@@ -10,7 +10,6 @@ import {
 	type ProvenanceCommand,
 	type ReadonlyEngineRecord,
 } from '@wcpos/query';
-import type { StoreLocalDatabase } from '@wcpos/query/store-local';
 import type { OrderPaymentSummary } from '@wcpos/order-math';
 import {
 	isCloseAnswer,
@@ -23,6 +22,7 @@ import {
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
+import { mirrorAnswer, type NotMirrored } from './land-answer';
 
 import type { SaleContext } from '../checkout/sale-completion';
 
@@ -30,9 +30,9 @@ export type CloseOutcome =
 	/**
 	 * The store's close answer, mirrored. The completion judges it (`zero-balance`): the answer and
 	 * the resident after the mirror must both read paid, and only a refresh tells a reopen from a
-	 * lag (Codex 4341491589, 4341491563 on #2798).
+	 * lag (Codex 4341491589, 4341491563 on #2798). A failed mirror pulled the store's copy instead.
 	 */
-	| { kind: 'answered'; order: OrderPaymentSummary }
+	| { kind: 'answered'; order: OrderPaymentSummary; notMirrored: NotMirrored }
 	| { kind: 'outstanding'; order: OrderPaymentSummary | null }
 	/** A gateway attempt on this sale has no outcome yet (409 `wcpos_payment_in_flight`). */
 	| { kind: 'unanswered'; attemptId: string }
@@ -46,8 +46,7 @@ export type CloseOutcome =
  * close and a changed total is re-approved before it completes.
  */
 export async function closeSale(
-	runtime: SaleContext['runtime'],
-	storeDB: StoreLocalDatabase,
+	ctx: SaleContext,
 	order: ReadonlyEngineRecord<'orders'>,
 	deps: {
 		post: Post;
@@ -60,7 +59,11 @@ export async function closeSale(
 	// write); an order the store has never seen has nothing to close yet.
 	const id = order.getLatest().payload.id;
 	if (!id) return { kind: 'offline' };
+	const { runtime, storeDB } = ctx;
 	const post = moneyCommandPoster({ runtime, storeDB, orderUuid: order.uuid, ...deps });
+	// A failed mirror pulls the store's copy; the provenance was stamped before the close, not here.
+	const mirrorOnce = mirrorAnswer({ ctx, order, poster: post });
+	const mirror = (order?: OrderPaymentSummary) => mirrorOnce({ order }, { accepted: false });
 	try {
 		const { data } = await post(`orders/${id}/close`, {});
 		// Only the store's own summary and completion say the sale closed (sync-core
@@ -68,21 +71,21 @@ export async function closeSale(
 		// filter) proves nothing: the entry stays journaled for a re-send.
 		if (!isCloseAnswer(data)) throw new Error('close_malformed_response');
 		const summary = data.order as unknown as OrderPaymentSummary;
-		await post.mirror({ order: summary });
-		return { kind: 'answered', order: summary };
+		const notMirrored = await mirror(summary);
+		return { kind: 'answered', order: summary, notMirrored };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
 			return { kind: 'order_changed' };
 		const refusal = moneyRefusalOf(error);
 		if (refusal?.code === MONEY_ANSWER_CODES.balanceOutstanding) {
 			const summary = refusal.data?.order as OrderPaymentSummary | undefined;
-			await post.mirror({ order: summary });
+			await mirror(summary);
 			return { kind: 'outstanding', order: summary ?? null };
 		}
 		const inMotion = moneyInMotionOf(refusal);
 		if (inMotion?.kind === 'attempt') {
 			const summary = refusal?.data?.order as OrderPaymentSummary | undefined;
-			await post.mirror({ order: summary }); // mirror ends in the settle and its refresh
+			await mirror(summary); // ends in the settle and its refresh
 			return { kind: 'unanswered', attemptId: inMotion.id };
 		}
 		// Any other named 4xx is the server's decision on this sale (sync-core's money answer
@@ -113,7 +116,7 @@ export function useCloseSale() {
 			order: ReadonlyEngineRecord<'orders'>,
 			options: { sessionId: string | null; approval?: OrderApproval }
 		) =>
-			closeSale(ctx.runtime, ctx.storeDB, order, {
+			closeSale(ctx, order, {
 				post: (url, body) => http.post(url, body),
 				approval: options.approval,
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId, command),

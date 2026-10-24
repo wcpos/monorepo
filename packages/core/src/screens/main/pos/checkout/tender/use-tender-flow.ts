@@ -941,6 +941,8 @@ export function useTenderFlow(
 		const journaledPlan = fixedAmount ? null : state.plan;
 		// Once answered, a throw is a failed status check (PAYMENT101), never "nothing was taken".
 		let answered = false;
+		// A gateway submit or a close the store did not answer stays journaled: it may have taken money.
+		let sentMoneyCommand = false;
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
@@ -1028,10 +1030,19 @@ export function useTenderFlow(
 					queue,
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
-					complete: (_order, slot, summary) =>
-						land({ kind: 'close', order: summary }, { queue: slot, press: true }, null),
+					complete: (_order, slot, { order: summary, notMirrored }) => {
+						answered = true;
+						return land(
+							{ kind: 'close', order: summary },
+							{ queue: slot, press: true, notMirrored },
+							null
+						);
+					},
 					online: () => sale.lane === 'online',
-					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
+					close: (target) => {
+						sentMoneyCommand = true;
+						return closeSale.close(target, { sessionId, approval: closeApproval });
+					},
 				});
 				if (closed && typeof closed === 'object' && 'kind' in closed) {
 					const context = {
@@ -1220,6 +1231,7 @@ export function useTenderFlow(
 				if (attemptRef.current && invoiceSent?.attempt_id === attemptRef.current)
 					attemptRef.current = null;
 				attemptRef.current ??= uuidv4();
+				sentMoneyCommand = true;
 				const outcome = await gateway.submit(
 					order,
 					method.id,
@@ -1359,9 +1371,7 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			// A gateway submit the store did not answer stays journaled: it may have taken money.
-			const lost =
-				method?.capture.mode === 'gateway' && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+			const lost = sentMoneyCommand && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 			const sentence = lost
 				? t('pos_checkout.payment_unanswered')
 				: t('pos_checkout.payment_not_recorded');

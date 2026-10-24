@@ -8,7 +8,7 @@ import {
 	type PaymentRow,
 	readAwaitingCustomer,
 } from '@wcpos/order-math';
-import type { EngineRecord, MoneyCommandPoster, ResentCommand } from '@wcpos/query';
+import type { MoneyCommandPoster, ReadonlyEngineRecord, ResentCommand } from '@wcpos/query';
 import { isPaidStatus } from '@wcpos/sync-core';
 
 import { refreshOrderRecord } from '../checkout/hooks/reconcile-completed-order';
@@ -26,7 +26,7 @@ export type NotMirrored = { cause: unknown } | null;
 /** A mirror that put a completing status on the order stamps its provenance, unless held. */
 export async function stampCompletionIfMissing(
 	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId' | 'stampCompletion'>,
-	order: EngineRecord<'orders'>,
+	order: ReadonlyEngineRecord<'orders'>,
 	status: string | null | undefined,
 	facts: Parameters<typeof completionMetaFor>[2] = {}
 ): Promise<void> {
@@ -38,12 +38,12 @@ export async function stampCompletionIfMissing(
 }
 
 /**
- * The one mirror policy for a store answer (record, gateway): mirror, stamp an accepted answer, and
- * pull the store's copy on any local failure. Never rejects: that failure is `{ cause }`.
+ * The one mirror policy for a store answer (record, gateway, close): mirror, stamp an accepted
+ * answer, and pull the store's copy on any local failure. Never rejects; a failure is `{ cause }`.
  */
 export function mirrorAnswer(deps: {
 	ctx: Pick<SaleContext, 'userDB' | 'siteUuid' | 'storeId' | 'stampCompletion' | 'runtime'>;
-	order: EngineRecord<'orders'>;
+	order: ReadonlyEngineRecord<'orders'>;
 	poster: Pick<MoneyCommandPoster, 'mirror'>;
 	facts?: Parameters<typeof completionMetaFor>[2];
 }) {
@@ -85,7 +85,7 @@ export type StoreAnswer =
  */
 export function answerOf(
 	{ kind, data }: ResentCommand,
-	resident: EngineRecord<'orders'>['payload']
+	resident: ReadonlyEngineRecord<'orders'>['payload']
 ): StoreAnswer | null {
 	const order = data.order as OrderPaymentSummary | undefined;
 	const row = data.payment as PaymentRow | undefined;
