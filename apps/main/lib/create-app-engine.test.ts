@@ -4,8 +4,9 @@ import {
 	awaitLegacyUnsentReport,
 	classifyUnsentChanges,
 	forgetUnsentChanges,
+	legacyDrainMarked,
+	legacyUnsentChangesCount,
 	legacyUnsentOrderUuids,
-	legacyUnsentReportOutstanding,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
@@ -2449,7 +2450,9 @@ describe('previous-generation database drain', () => {
 				});
 			}
 			// Every named scope reported nothing kept; the unresolved reference still blocks.
-			expect(legacyUnsentReportOutstanding(LEGACY)).toBe(false);
+			expect(legacyDrainMarked(LEGACY)).toBe(false);
+			expect(legacyUnsentReportUncountable(LEGACY)).toBe(false);
+			expect(legacyUnsentChangesCount()).toBe(0);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
 			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
 				String(message).startsWith('The store registry names records that are missing')
@@ -2477,7 +2480,7 @@ describe('previous-generation database drain', () => {
 				registry: [BASE_OPTIONS.scope],
 				history: opened,
 			});
-			expect(legacyUnsentReportOutstanding(removedSite)).toBe(true);
+			expect(legacyDrainMarked(removedSite)).toBe(true);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
 			expect(clearedBy(opened)).not.toContain(removedSite);
 		});
@@ -2499,9 +2502,9 @@ describe('previous-generation database drain', () => {
 				registry: [BASE_OPTIONS.scope],
 				history: reopened,
 			});
-			expect(legacyUnsentReportOutstanding(TARGET_LEGACY)).toBe(true);
+			expect(legacyDrainMarked(TARGET_LEGACY)).toBe(true);
 			// A cleared name is gone for good: never pending again.
-			expect(legacyUnsentReportOutstanding(older)).toBe(false);
+			expect(legacyDrainMarked(older)).toBe(false);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
 
 			await loaded.switchAppEngineScope(session(TARGET));

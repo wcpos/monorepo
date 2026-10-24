@@ -44,7 +44,7 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
-import { writeFacetFor as facetFor, type WriteAck } from '../collections/collection-descriptors';
+import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import {
 	classifyMoneyDivergence,
 	compareOrderMoney,
@@ -104,7 +104,7 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	database: RxDatabase,
 	mutation: T
 ): Promise<T> {
-	const facet = facetFor(mutation.collectionName);
+	const facet = writeFacetFor(mutation.collectionName);
 	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
 	if (mutation.operation === 'create') {
 		// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
@@ -497,7 +497,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
 							hasServerIdentity: async (mutation) => {
-								const facet = facetFor(mutation.collectionName);
+								const facet = writeFacetFor(mutation.collectionName);
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
 									.exec();
@@ -515,7 +515,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// `doc.remove()`, no server round-trip) — the same net local effect as
 							// enqueue-time annihilation's `resident.remove()`.
 							removeResident: async (mutation, signal) => {
-								const facet = facetFor(mutation.collectionName);
+								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) return; // enqueue guards this; nothing to remove otherwise
 								await facet.onDeleteAck(
 									database,
@@ -541,7 +541,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// collection keeps parking on the first conflict.
 							autoRecoverConflict: (mutation) => mutation.collectionName === 'orders',
 							reconcileConflict: async (mutation, current) => {
-								const facet = facetFor(mutation.collectionName);
+								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet?.graftAckIdentity || mutation.operation === 'delete') return;
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
@@ -556,7 +556,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 							},
 							refreshRevision: async (mutation) => {
-								const facet = facetFor(mutation.collectionName);
+								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
 									throw new Error(`No refresh seam for collection "${mutation.collectionName}"`);
 								}
@@ -640,7 +640,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}
 							},
 							applyAck: async (mutation, pushResult, signal) => {
-								const facet = facetFor(mutation.collectionName);
+								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
 									// Enqueue guards against this; a foreign row (older build) must
 									// not silently ack — leave it queued and surface loudly.
@@ -885,7 +885,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// Use the same server-existence evidence as conflict resolution: a
 							// CREATE is born-local only when neither the resident nor queued payload
 							// has a remote id and the rejection does not indicate a server match.
-							const rejectedFacet = facetFor(dead.collectionName);
+							const rejectedFacet = writeFacetFor(dead.collectionName);
 							const rejectedRemoteId =
 								doc !== null && rejectedFacet !== null
 									? doc.toJSON()[rejectedFacet.remoteIdField]

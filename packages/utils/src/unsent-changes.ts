@@ -86,15 +86,6 @@ export function markLegacyDrainPending(databaseName: string): void {
 	legacyReports().set(databaseName, { pending: true, count: null, orderUuids: [] });
 }
 
-/**
- * True while one database still stands between a wipe and an exact count: it is
- * pending, uncountable, or kept with work. False once it reported nothing kept
- * (drained or absent) — or was never marked.
- */
-export function legacyUnsentReportOutstanding(databaseName: string): boolean {
-	return legacyReports().has(databaseName);
-}
-
 /** True while one database is marked pending and its drain has not reported. */
 export function legacyDrainMarked(databaseName: string): boolean {
 	return legacyReports().get(databaseName)?.pending === true;
@@ -146,14 +137,13 @@ export function legacyUnsentReportUncountable(databaseName: string): boolean {
 /**
  * Wait until one database's drain has reported — at most `timeoutMs`. Resolves
  * `'reported'` at once when that database is not pending (never marked, or
- * already reported), and `'timed-out'` when the bound elapses first (an offline
- * till's drain may be a long way off). Other databases' marks never hold it up.
+ * already reported), `'timed-out'` once the bound elapses. Other databases' marks never hold it up.
  */
 export function awaitLegacyUnsentReport(
 	databaseName: string,
 	timeoutMs: number
 ): Promise<'reported' | 'timed-out'> {
-	const pending = () => legacyReports().get(databaseName)?.pending === true;
+	const pending = () => legacyDrainMarked(databaseName);
 	if (!pending()) return Promise.resolve('reported');
 	return new Promise((resolve) => {
 		const listeners = slot().legacyListeners!;

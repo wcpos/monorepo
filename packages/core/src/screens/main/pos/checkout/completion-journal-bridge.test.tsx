@@ -488,7 +488,7 @@ describe('a previous-generation database the drain keeps', () => {
 				lastError: 'order_not_resident',
 			})
 		);
-		// Looked again after the report: a carried-over cart would be found here.
+		// Looked again after the report: an order a pull landed meanwhile would be found here.
 		expect(mockFind).toHaveBeenCalledTimes(2);
 		expect(mockWarn).not.toHaveBeenCalled();
 	});
