@@ -72,7 +72,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 				<Button
 					variant="outline-destructive"
 					testID="checkout-cancel-confirm"
-					loading={flow.busy}
+					loading={flow.running === 'cancelPayment'}
 					disabled={flow.busy}
 					onPress={() => void flow.cancelPayment()}
 				>

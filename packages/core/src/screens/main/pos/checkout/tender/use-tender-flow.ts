@@ -217,6 +217,8 @@ export interface TenderFlow {
 
 	/** A tender command holds the gate (in flight or confirming); every action is inert while true. */
 	busy: boolean;
+	/** The command holding the gate, null while a confirm is open; a button spins only for its own. */
+	running: TenderCommand | null;
 	saveState: OrderSaveState | null;
 	pickMethod: (methodId: string) => void;
 	takeTender: () => Promise<void>;
@@ -234,6 +236,8 @@ export interface TenderFlow {
 	clearAttempt: () => Promise<void>;
 }
 
+type TenderCommand =
+	'takeTender' | 'retryCommand' | 'cancelInvoice' | 'clearAttempt' | 'cancelPayment';
 type OrderPayload = EngineRecord<'orders'>['payload'];
 type FeeLines = NonNullable<OrderPayload['fee_lines']>;
 // A fee edit moves the stored total by the fee money alone (the rounding fee has no tax) and
@@ -282,18 +286,20 @@ export function useTenderFlow(
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
-	const [busy, setBusy] = React.useState(false);
+	const [running, setRunning] = React.useState<TenderCommand | null>(null);
+	const busy = running !== null;
 	const busyRef = React.useRef(false);
-	// One gate for the tender's commands: state renders it; the ref closes a same-tick double record.
-	const exclusive = React.useCallback(async (task: () => Promise<void>) => {
+	// One gate for the tender's commands: state renders it and names the command running; the ref
+	// closes a same-tick double record.
+	const exclusive = React.useCallback(async (name: TenderCommand, task: () => Promise<void>) => {
 		if (busyRef.current) return;
 		busyRef.current = true;
-		setBusy(true);
+		setRunning(name);
 		try {
 			await task();
 		} finally {
 			busyRef.current = false;
-			setBusy(false);
+			setRunning(null);
 		}
 	}, []);
 	const payload = useRecordField(order, (record) => record.payload);
@@ -343,7 +349,7 @@ export function useTenderFlow(
 	const currency = payload.currency || storeCurrency;
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
-	const { confirm, dialog: confirmDialog } = useConfirm({ portalHost });
+	const { confirm, dialog: confirmDialog, open: confirming } = useConfirm({ portalHost });
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -893,7 +899,10 @@ export function useTenderFlow(
 			);
 		}
 	}, [recordLedger, ctx.runtime, storeDB, order, http, t, land, dp, balanceMinor, orderContext]);
-	const retryCommand = React.useCallback(() => exclusive(runRetry), [exclusive, runRetry]);
+	const retryCommand = React.useCallback(
+		() => exclusive('retryCommand', runRetry),
+		[exclusive, runRetry]
+	);
 
 	const runPress = React.useCallback(async () => {
 		if (
@@ -1419,7 +1428,10 @@ export function useTenderFlow(
 		tiles,
 		reducerDispatch,
 	]);
-	const takeTender = React.useCallback(() => exclusive(runPress), [exclusive, runPress]);
+	const takeTender = React.useCallback(
+		() => exclusive('takeTender', runPress),
+		[exclusive, runPress]
+	);
 
 	// A mounted tender is a checkout member: a restart restores the tender from a live ledger
 	// row without Pay, and the stage derivation and the provider's hold read membership, not
@@ -1589,7 +1601,7 @@ export function useTenderFlow(
 		}
 	}, [gateway, invoiceSent, order, orderContext, actor, t]);
 	const cancelInvoice = React.useCallback(
-		() => exclusive(runCancelInvoice),
+		() => exclusive('cancelInvoice', runCancelInvoice),
 		[exclusive, runCancelInvoice]
 	);
 
@@ -1633,7 +1645,10 @@ export function useTenderFlow(
 			});
 		}
 	}, [gateway, unansweredAttempt, confirm, order, orderContext, actor, dp, t]);
-	const clearAttempt = React.useCallback(() => exclusive(runClear), [exclusive, runClear]);
+	const clearAttempt = React.useCallback(
+		() => exclusive('clearAttempt', runClear),
+		[exclusive, runClear]
+	);
 
 	const runCancelPayment = React.useCallback(async () => {
 		if (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final') return;
@@ -1752,7 +1767,7 @@ export function useTenderFlow(
 		orderContext,
 	]);
 	const cancelPayment = React.useCallback(
-		() => exclusive(runCancelPayment),
+		() => exclusive('cancelPayment', runCancelPayment),
 		[exclusive, runCancelPayment]
 	);
 
@@ -1805,6 +1820,8 @@ export function useTenderFlow(
 			roundingMinor,
 			quickAmountsMinor,
 			busy,
+			// A confirm's own buttons are the state while it is open: no spinner behind it.
+			running: confirming ? null : running,
 			saveState,
 			pickMethod,
 			takeTender,
@@ -1865,6 +1882,8 @@ export function useTenderFlow(
 			roundingMinor,
 			quickAmountsMinor,
 			busy,
+			running,
+			confirming,
 			saveState,
 			pickMethod,
 			takeTender,

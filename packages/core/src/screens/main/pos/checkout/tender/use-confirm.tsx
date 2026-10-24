@@ -19,8 +19,8 @@ type Facts = { title: string; body: string; action: string; destructive?: boolea
 /**
  * The tender's one confirm: a tender the store cannot hear yet (ADR 0040 Decided 1 rule 1), the
  * staff clear (c5-2). `useTenderFlow` asks it (holding busy, so one question at a time) and
- * returns `dialog` for its host to render. Closing the question any way but the confirm
- * (Cancel, or the host unmounting) answers no.
+ * returns `dialog` for its host to render, and `open` while the question is asked. Closing the
+ * question any way but the confirm (Cancel, or the host unmounting) answers no.
  */
 export function useConfirm({
 	portalHost,
@@ -71,5 +71,5 @@ export function useConfirm({
 			</AlertDialogContent>
 		</AlertDialog>
 	) : null;
-	return { confirm, dialog };
+	return { confirm, dialog, open: question?.open ?? false };
 }

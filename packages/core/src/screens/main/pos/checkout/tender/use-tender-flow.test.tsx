@@ -476,13 +476,20 @@ function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 	};
 }
 
-// The flow asks the cashier through `useConfirm` (its own suite); yes by default.
+// The flow asks the cashier through `useConfirm` (its own suite); yes by default. `open` while asked.
 const mockConfirm = jest.fn();
 jest.mock('./use-confirm', () => ({
-	useConfirm: () => ({
-		confirm: (question: unknown) => mockConfirm(question) ?? Promise.resolve(true),
-		dialog: 'confirm-dialog',
-	}),
+	useConfirm: () => {
+		const [open, setOpen] = jest.requireActual('react').useState(false);
+		return {
+			confirm: (question: unknown) => {
+				setOpen(true);
+				return Promise.resolve(mockConfirm(question) ?? true).finally(() => setOpen(false));
+			},
+			dialog: 'confirm-dialog',
+			open,
+		};
+	},
 }));
 
 describe('useTenderFlow', () => {
@@ -620,11 +627,13 @@ describe('useTenderFlow', () => {
 			});
 			await waitFor(() => expect(mock).toHaveBeenCalledTimes(1));
 			expect(result.current.busy).toBe(true);
+			expect(result.current.running).toBe(command);
 			await act(async () => {
 				settle(settled);
 				await pending;
 			});
 			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
 		}
 	);
 
@@ -4194,6 +4203,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect(mockConfirm).toHaveBeenCalledTimes(1);
 			expect(mockManualPost).not.toHaveBeenCalled();
 			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
 			mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
 			await act(async () => result.current.clearAttempt());
 			expect(mockConfirm).toHaveBeenCalledTimes(2);
@@ -4213,12 +4223,15 @@ describe('gateway capture mode (contract 1.2)', () => {
 			});
 			expect(mockConfirm).toHaveBeenCalledTimes(1);
 			expect(result.current.busy).toBe(true);
+			// The dialog's own buttons are the state: no spinner behind it.
+			expect(result.current.running).toBeNull();
 			await act(async () => {
 				answer(false);
 				await cleared;
 			});
 			expect(mockManualPost).not.toHaveBeenCalled();
 			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
 		});
 
 		// R11: held on the store's answer, each holds busy; the other is refused by the gate, not its
@@ -4241,6 +4254,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				});
 				await waitFor(() => expect(mockManualPost).toHaveBeenCalledTimes(1));
 				expect(result.current.busy).toBe(true);
+				expect(result.current.running).toBe(command);
 				mockPayload.meta_data = otherMeta();
 				rerender();
 				expect(
@@ -4248,11 +4262,14 @@ describe('gateway capture mode (contract 1.2)', () => {
 				).not.toBeNull();
 				await act(async () => result.current[other]());
 				expect(mockManualPost).toHaveBeenCalledTimes(1);
+				// The refused call does not overwrite the holder.
+				expect(result.current.running).toBe(command);
 				await act(async () => {
 					settle({ data: { order: summary('pos-open') } });
 					await pending;
 				});
 				expect(result.current.busy).toBe(false);
+				expect(result.current.running).toBeNull();
 			}
 		);
 
@@ -5458,6 +5475,35 @@ describe('offline manual tenders', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
+	it('the offline confirm shows no spinner; a yes starts it on Commit', async () => {
+		let answer: (confirmed: boolean) => void = () => {};
+		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
+		let settle!: (value: unknown) => void;
+		mockRecordManualPayment.mockImplementationOnce(
+			() => new Promise((resolve) => (settle = resolve))
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			settlesLater: true,
+		});
+		let pressed!: Promise<void>;
+		act(() => {
+			pressed = result.current.takeTender();
+		});
+		expect(result.current.busy).toBe(true);
+		expect(result.current.running).toBeNull();
+		await act(async () => answer(true));
+		await waitFor(() => expect(mockRecordManualPayment).toHaveBeenCalledTimes(1));
+		expect(result.current.running).toBe('takeTender');
+		await act(async () => {
+			settle({ ...recorded, via: 'offline' });
+			await pressed;
+		});
+		expect(result.current.running).toBeNull();
+		expect(result.current.busy).toBe(false);
+	});
+
 	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
 		let answer: (confirmed: boolean) => void = () => {};
 		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
@@ -5469,8 +5515,9 @@ describe('offline manual tenders', () => {
 		});
 		await act(async () => result.current.takeTender());
 		expect(mockConfirm).toHaveBeenCalledTimes(1);
-		// The gate is held, and shown, while the cashier answers.
+		// The gate is held, and shown, while the cashier answers; no spinner behind the prompt.
 		expect(result.current.busy).toBe(true);
+		expect(result.current.running).toBeNull();
 		await act(async () => {
 			answer(false);
 			await first;

@@ -75,10 +75,11 @@ const clear = {
 const asked: { answer?: Promise<boolean> } = {};
 // The flow asks from an event (the Take or Clear attempt press), as here.
 function Host({ question }: { question: typeof offline }) {
-	const { confirm, dialog } = useConfirm({});
+	const { confirm, dialog, open } = useConfirm({});
 	return (
 		<>
 			<button data-testid="ask" onClick={() => (asked.answer = confirm(question))} />
+			<span data-testid="open">{String(open)}</span>
 			{dialog}
 		</>
 	);
@@ -117,6 +118,19 @@ it.each(['checkout-clear-attempt-cancel', 'dismiss'])('%s answers no', async (te
 	fireEvent.click(screen.getByTestId(testID));
 	await expect(answer).resolves.toBe(false);
 	expect(screen.queryByTestId('checkout-clear-attempt-dialog')).toBeNull();
+});
+
+it.each([
+	['a yes', 'checkout-clear-attempt-confirm', true],
+	['a no', 'checkout-clear-attempt-cancel', false],
+])('`open` is true while the question is asked and false after %s', async (_, testID, yes) => {
+	render(<Host question={clear} />);
+	expect(screen.getByTestId('open').textContent).toBe('false');
+	const answer = ask();
+	expect(screen.getByTestId('open').textContent).toBe('true');
+	fireEvent.click(screen.getByTestId(testID));
+	await expect(answer).resolves.toBe(yes);
+	expect(screen.getByTestId('open').textContent).toBe('false');
 });
 
 it('unmounting with the question open answers no', async () => {
