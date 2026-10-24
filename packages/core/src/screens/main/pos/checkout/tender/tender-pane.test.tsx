@@ -1231,6 +1231,29 @@ describe('declared UI (contract 1.2)', () => {
 		fireEvent.click(screen.getByTestId('checkout-cancel-invoice'));
 		expect(flow.cancelInvoice).toHaveBeenCalled();
 	});
+	// R11: while a command holds the gate, every control that could fire another is inert; Try
+	// again is not disabled by busy, because the flow refuses it itself.
+	it('busy disables Commit, the method tile and Cancel invoice; Try again still presses', () => {
+		const flow = invoiceFlow({
+			busy: true,
+			invoiceSent: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-0',
+				sent_at_gmt: '2026-10-08T10:35:00.000Z',
+				cashier_id: 7,
+			},
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('checkout-method-wcpos_email_invoice').hasAttribute('disabled')).toBe(
+			true
+		);
+		expect(screen.getByTestId('checkout-cancel-invoice').hasAttribute('disabled')).toBe(true);
+		render(<UnansweredGate flow={{ ...flow, unansweredCommand: true }} />);
+		fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
+		expect(flow.retryCommand).toHaveBeenCalledTimes(1);
+	});
 	describe('an unanswered gateway attempt', () => {
 		const stranded = {
 			id: 'attempt-9',
