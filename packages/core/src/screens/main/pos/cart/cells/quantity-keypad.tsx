@@ -7,7 +7,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../contexts/translations';
 import { QuantityInput } from '../../../components/quantity-input';
-import { useNumberFormat } from '../../../hooks/use-number-format';
+import { QUANTITY_FORMAT, useNumberFormat } from '../../../hooks/use-number-format';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 import { useSplitLineItem } from '../../hooks/use-split-line-item';
@@ -27,7 +27,7 @@ export function Quantity(props: CellContext<Props, 'quantity'>) {
 function ReadOnlyQuantity({ row }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	// The store's separators, as the quantity input shows a fractional quantity.
-	const { format } = useNumberFormat();
+	const { format } = useNumberFormat(QUANTITY_FORMAT);
 	return (
 		<VStack className="min-h-row items-center justify-center">
 			<Text

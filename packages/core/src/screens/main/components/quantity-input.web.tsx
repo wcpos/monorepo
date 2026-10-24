@@ -5,11 +5,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { type NumberFormatOptions, useNumberFormat } from '../hooks/use-number-format';
-
-// A quantity is not money: the currency's scale would cut 1.125 to 1.13. Six places, unpadded,
-// as the numpad showed it; the box and the open keypad share it so the number never jumps.
-const QUANTITY_FORMAT: NumberFormatOptions = { fixedDecimalScale: false, decimalScale: 6 };
+import { QUANTITY_FORMAT, useNumberFormat } from '../hooks/use-number-format';
 
 export interface QuantityInputProps {
 	value?: number | string;
