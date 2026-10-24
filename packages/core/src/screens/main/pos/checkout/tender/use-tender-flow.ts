@@ -217,7 +217,10 @@ export interface TenderFlow {
 
 	/** A tender command holds the gate (in flight or confirming); every action is inert while true. */
 	busy: boolean;
-	/** The command holding the gate, null while a confirm is open; a button spins only for its own. */
+	/**
+	 * The command holding the gate; null while a confirm is open (its buttons are the state). A
+	 * button spins only for its own.
+	 */
 	running: TenderCommand | null;
 	saveState: OrderSaveState | null;
 	pickMethod: (methodId: string) => void;
@@ -289,8 +292,7 @@ export function useTenderFlow(
 	const [running, setRunning] = React.useState<TenderCommand | null>(null);
 	const busy = running !== null;
 	const busyRef = React.useRef(false);
-	// One gate for the tender's commands: state renders it and names the command running; the ref
-	// closes a same-tick double record.
+	// One gate for the tender's commands: state renders it; the ref closes a same-tick double record.
 	const exclusive = React.useCallback(async (name: TenderCommand, task: () => Promise<void>) => {
 		if (busyRef.current) return;
 		busyRef.current = true;
@@ -1820,7 +1822,6 @@ export function useTenderFlow(
 			roundingMinor,
 			quickAmountsMinor,
 			busy,
-			// A confirm's own buttons are the state while it is open: no spinner behind it.
 			running: confirming ? null : running,
 			saveState,
 			pickMethod,

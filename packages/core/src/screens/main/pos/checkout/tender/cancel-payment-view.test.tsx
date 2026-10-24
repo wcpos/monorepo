@@ -17,8 +17,20 @@ jest.mock('../../../../../contexts/translations', () => ({
 		vars ? `${key} ${JSON.stringify(vars)}` : key,
 }));
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<button data-testid={testID}>{children}</button>
+	Button: ({
+		children,
+		testID,
+		disabled,
+		loading,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		disabled?: boolean;
+		loading?: boolean;
+	}) => (
+		<button data-testid={testID} data-loading={loading ? 'true' : undefined} disabled={!!disabled}>
+			{children}
+		</button>
 	),
 	ButtonText: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -105,4 +117,17 @@ it('a captured cash row a completion counted reads as a refund, through the void
 	expect(screen.getByTestId('checkout-cancel-leg-open').textContent).toContain(
 		'pos_checkout.return_cash'
 	);
+});
+
+// C5-S1: Cancel and void spins only for its own command; both buttons are disabled on busy.
+it.each([
+	['cancelPayment', true],
+	['takeTender', false],
+] as const)('Cancel and void while %s holds the gate spins: %s', (running, spins) => {
+	const cash = row('cash', { status: 'captured', kind: 'cash', capture_mode: 'manual' });
+	render(<CancelPaymentView flow={{ ...flow([cash], []), busy: true, running }} format={format} />);
+	const confirm = screen.getByTestId('checkout-cancel-confirm');
+	expect(confirm.hasAttribute('data-loading')).toBe(spins);
+	expect(confirm.hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('checkout-cancel-keep-going').hasAttribute('disabled')).toBe(true);
 });
