@@ -151,14 +151,8 @@ export function SettlementCoordinatorProvider() {
 							readBindingStatus: () =>
 								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
 							readRegisterId: () => bindingRef.current.registerId,
-							complete: (order, slot, summary) =>
-								completeSale(
-									saleContext,
-									order,
-									{ source: 'zero-balance', order: summary },
-									{ host: 'background' },
-									slot
-								),
+							complete: (order, outcome, slot) =>
+								completeSale(saleContext, order, outcome, { host: 'background' }, slot),
 							closeSale,
 						},
 						{

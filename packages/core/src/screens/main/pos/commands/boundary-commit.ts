@@ -23,7 +23,13 @@ import {
 	TENDER_COMMIT_EVENT,
 } from '../../../../extensions/actions';
 import { commitSale, type SaleCommitRequest } from '../checkout/commit-sale';
-import { recordSaleAttempt, type SaleContext } from '../checkout/sale-completion';
+import {
+	type CompletionResult,
+	recordSaleAttempt,
+	type SaleContext,
+	type SaleOutcome,
+} from '../checkout/sale-completion';
+import { landAnswer } from './land-answer';
 import {
 	type BoundaryResult,
 	crossesPaidBalanceBoundary,
@@ -44,7 +50,12 @@ export async function commitAtBoundary(
 		source?: 'user' | 'system';
 		configForOrder: (payload: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
-		complete: Parameters<typeof writeZeroBalanceCompletion>[1]['complete'];
+		/** The completion; it receives the answer table's outcome (`landAnswer`), never builds one. */
+		complete: (
+			order: EngineRecord<'orders'>,
+			outcome: SaleOutcome,
+			queue: OrderMutationContext
+		) => Promise<CompletionResult>;
 		closeSale: ReturnType<typeof useCloseSale>;
 	},
 	{
@@ -108,7 +119,17 @@ export async function commitAtBoundary(
 				revalidate,
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
-				complete: ctx.complete,
+				complete: (target, slotQueue, summary) =>
+					landAnswer(
+						{ kind: 'close', order: summary },
+						{ via: 'boundary' },
+						{
+							finish: (outcome) => ctx.complete(target, outcome, slotQueue),
+							// A close never calls it; only a `reopened` answer does.
+							resolveAttempt: () => resolveCompletionAttempt(ctx.storeDB, target.uuid),
+							dp: ctx.dp,
+						}
+					),
 				online: ctx.closeSale.online,
 				close: (target) => ctx.closeSale.close(target, { sessionId }),
 				changes: (payload) => {
@@ -177,6 +198,8 @@ export async function commitAtBoundary(
 				});
 				return completion;
 			}
+			// An answered close returns nothing (it landed in complete above): a truthy non-kind result
+			// is only a supersession.
 			if (completion) {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {
