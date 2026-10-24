@@ -397,8 +397,8 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 					<ScrollView
 						ref={scrollViewRef}
 						testID="cart-table-scroll"
-						// A tap on a control (an open price's discount chip) reaches it with the keyboard
-						// up; a tap on empty cart space still dismisses the keyboard.
+						// A tap on a control (another line's field or button) reaches it with the native
+						// price field's keyboard up; a tap on empty cart space still dismisses the keyboard.
 						keyboardShouldPersistTaps="handled"
 					>
 						<TableBody>
