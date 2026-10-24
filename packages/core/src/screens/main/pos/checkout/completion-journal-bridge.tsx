@@ -27,7 +27,8 @@ import {
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 import {
-	failCompletionAttempt,
+	awaitAdoption,
+	countCompletionStart,
 	observePendingCompletions,
 	pendingCompletions,
 	readAwaitingAnswer,
@@ -46,7 +47,7 @@ import {
 } from '../../../../services/terminal-payments';
 import { useSaleContext } from './hooks/use-sale-context';
 import { raisePaymentRefusal } from './payments/payment-refusal-attention';
-import { awaitAdoption, completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
+import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -359,13 +360,15 @@ export function SaleCompletionBridge(): null {
 							(legacy.database !== null &&
 								(legacyUnsentOrderUuids(legacy.database).has(uuid) ||
 									legacyUnsentReportUncountable(legacy.database)));
-						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
-							expectAt: attempt.at,
-							missingStart: !keptInLegacyDatabase,
-						});
-						if (current.stopped) return;
-						if (!keptInLegacyDatabase && (attempt.missingStarts ?? 0) + 1 >= 3) {
-							await resolveCompletionAttempt(storeDB, uuid, attempt.at);
+						if (keptInLegacyDatabase)
+							logger.debug(
+								'Sale completion start not counted: kept in previous-generation database',
+								{ context: { orderUUID: uuid } }
+							);
+						else if (
+							(await countCompletionStart(storeDB, uuid, { at: attempt.at, start: 'missing' })) ===
+							'abandoned'
+						)
 							logger.warn('Pending sale completion abandoned: order not resident', {
 								code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
 								context: {
@@ -374,7 +377,6 @@ export function SaleCompletionBridge(): null {
 									orderUUID: uuid,
 								},
 							});
-						}
 						continue;
 					}
 					let refreshed = false;
@@ -394,24 +396,24 @@ export function SaleCompletionBridge(): null {
 							if (outcome !== 'refreshed') throw new Error(`completion_refresh_${outcome}`);
 							refreshed = true;
 						} catch (error) {
-							await failCompletionAttempt(storeDB, uuid, error, { expectAt: attempt.at });
+							logger.debug('Sale completion refresh not confirmed', {
+								context: { orderUUID: uuid, error: String(error) },
+							});
 							continue;
 						}
 						if (current.stopped) return;
 					}
 					if (!isSaleComplete(replay, current.ctx.dp, resident.getLatest().payload)) {
-						const cancelled = resident.getLatest().payload.status === 'cancelled';
-						const count = cancelled ? 0 : (attempt.unpaidStarts ?? 0) + 1;
+						const reason =
+							resident.getLatest().payload.status === 'cancelled' ? 'cancelled' : 'unpaid';
 						// A resident refresh can report success after HTTP failure. Give the normal
 						// orders pull between starts time to reveal payment before deciding unpaid.
-						if (!cancelled)
-							await failCompletionAttempt(storeDB, uuid, 'unpaid', {
-								expectAt: attempt.at,
-								unpaidStart: true,
-							});
-						if (cancelled || count >= 3) await resolveCompletionAttempt(storeDB, uuid, attempt.at);
+						const counted = await countCompletionStart(storeDB, uuid, {
+							at: attempt.at,
+							start: reason,
+						});
 						logger.debug('Sale completion replay skipped: order is not completing', {
-							context: { orderUUID: uuid, reason: cancelled ? 'cancelled' : 'unpaid', count },
+							context: { orderUUID: uuid, reason, counted },
 						});
 					} else {
 						await completeSale(
@@ -530,8 +532,8 @@ export function SaleCompletionBridge(): null {
 		const watchAdoptions = () => {
 			adoptionWatch ??= observePendingCompletions(storeDB)
 				.pipe(
-					// Keyed on the eligible set: a journal write that changes only an attempt's count or
-					// error keeps the resident subscription (and its initial emission) as it is.
+					// Keyed on the eligible set: a journal write that changes only an attempt's count
+					// keeps the resident subscription (and its initial emission) as it is.
 					map((pending) =>
 						Object.keys(pending)
 							.filter((uuid) => pending[uuid].awaitingAdoption)

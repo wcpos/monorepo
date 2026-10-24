@@ -21,7 +21,7 @@ import type { EngineRecord } from '@wcpos/query';
 import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 import { RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import {
-	failCompletionAttempt,
+	awaitAdoption,
 	readAwaitingAnswer,
 	recordCompletionAttempt,
 	recordPaymentAttention,
@@ -3397,7 +3397,8 @@ jest.mock('@wcpos/query/store-local', () => ({
 	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
-	failCompletionAttempt: jest.fn(async () => {}),
+	awaitAdoption: jest.fn(async () => {}),
+	retainCompletionAttempt: jest.fn(async () => {}),
 	observeTenderGate: () => mockGate$,
 	readAwaitingAnswer: jest.fn(async () => []),
 	readJournaledRecordIds: jest.fn(async () => new Set()),
@@ -5501,9 +5502,7 @@ describe('offline manual tenders', () => {
 		expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(true);
 		// The store has not answered: the bridge finishes the sale once it does (rule 3).
 		// The sale context's storeDB is undefined in this suite (as `recordCompletionAttempt` above).
-		expect(failCompletionAttempt).toHaveBeenCalledWith(undefined, order.uuid, 'unconfirmed', {
-			awaitingAdoption: true,
-		});
+		expect(awaitAdoption).toHaveBeenCalledWith(undefined, order.uuid);
 		expect(resolveCompletionAttempt).not.toHaveBeenCalled();
 		expect(mockError).not.toHaveBeenCalled();
 	});

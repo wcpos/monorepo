@@ -16,7 +16,6 @@ type Attempt = {
 		| 'replay';
 	paymentId?: string;
 	at: string;
-	attempts: number;
 	missingStarts?: number;
 	unpaidStarts?: number;
 	actor?: { id: string; name: string };
@@ -34,15 +33,15 @@ type Attempt = {
 	settledOrderStatuses?: Record<string, string | null>;
 	/**
 	 * The store took the sale but no refresh confirmed the resident (`unconfirmed`): the store
-	 * session finishes it once a pull adopts the paid order. Its own field, never a `lastError`
-	 * value, so a later replay's error cannot clear it (Codex 4344119710 on #2836); it ends with
-	 * the attempt.
+	 * session finishes it once a pull adopts the paid order. Its own field, so a later replay's
+	 * error cannot clear it (Codex 4344119710 on #2836); it ends with the attempt.
 	 */
 	awaitingAdoption?: true;
-	lastError?: string;
 };
 type Journal = { pending: Record<string, Attempt> };
 const ID = 'sale-completions';
+/** The third counted start of one kind abandons the attempt (decided 2026-09-18, 0d2f07f29a). */
+const COMPLETION_START_LIMIT = 3;
 
 export async function recordCompletionAttempt(
 	storeDB: StoreLocalDatabase,
@@ -61,52 +60,74 @@ export async function recordCompletionAttempt(
 ) {
 	const doc = await ensureLocalDocument<Journal>(storeDB, ID, { pending: {} });
 	await doc.incrementalModify((data) => {
-		data.pending[orderUuid] = { ...facts, at: new Date().toISOString(), attempts: 0 };
+		data.pending[orderUuid] = { ...facts, at: new Date().toISOString() };
 		return data;
 	});
 }
 
-export async function resolveCompletionAttempt(
-	storeDB: StoreLocalDatabase,
-	orderUuid: string,
-	expectAt?: string
-) {
+export async function resolveCompletionAttempt(storeDB: StoreLocalDatabase, orderUuid: string) {
 	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
-		if (expectAt !== undefined && data.pending[orderUuid]?.at !== expectAt) return data;
 		delete data.pending[orderUuid];
 		return data;
 	});
 }
 
-export async function failCompletionAttempt(
+export type CountedStart = 'kept' | 'abandoned';
+
+/**
+ * One replay start that could not finish the attempt read at `at`: counted, and abandoned on the
+ * third of its kind (a cancelled order at once), in ONE serialised write. A replaced or missing
+ * entry is 'kept', untouched.
+ */
+export async function countCompletionStart(
 	storeDB: StoreLocalDatabase,
 	orderUuid: string,
-	error: unknown,
-	options: {
-		expectAt?: string;
-		missingStart?: boolean;
-		unpaidStart?: boolean;
-		awaitingAdoption?: true;
-		facts?: Pick<Attempt, 'source' | 'actor'>;
-	} = {}
-) {
-	const doc = options.facts
-		? await ensureLocalDocument<Journal>(storeDB, ID, { pending: {} })
-		: await storeDatabase(storeDB).getLocal<Journal>(ID);
+	{ at, start }: { at: string; start: 'missing' | 'unpaid' | 'cancelled' }
+): Promise<CountedStart> {
+	let counted: CountedStart = 'kept';
+	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
-		if (options.expectAt !== undefined && data.pending[orderUuid]?.at !== options.expectAt)
-			return data;
-		if (options.facts)
-			data.pending[orderUuid] ??= { ...options.facts, at: new Date().toISOString(), attempts: 0 };
+		counted = 'kept'; // incrementalModify may retry the callback
+		if (!Object.hasOwn(data.pending, orderUuid)) return data; // never a prototype key
 		const entry = data.pending[orderUuid];
-		if (entry) {
-			entry.attempts += 1;
-			if (options.missingStart) entry.missingStarts = (entry.missingStarts ?? 0) + 1;
-			if (options.unpaidStart) entry.unpaidStarts = (entry.unpaidStarts ?? 0) + 1;
-			if (options.awaitingAdoption) entry.awaitingAdoption = true;
-			entry.lastError = error instanceof Error ? error.message : String(error);
+		if (entry?.at !== at) return data;
+		if (start !== 'cancelled') {
+			const field = start === 'missing' ? 'missingStarts' : 'unpaidStarts';
+			const starts = (entry[field] ?? 0) + 1;
+			entry[field] = starts;
+			if (starts < COMPLETION_START_LIMIT) return data;
 		}
+		delete data.pending[orderUuid];
+		counted = 'abandoned';
+		return data;
+	});
+	return counted;
+}
+
+/**
+ * The store answered the sale paid but no refresh confirmed the resident: the attempt awaits the
+ * pull that adopts the paid order, and the bridge finishes it then. The one place this state is
+ * written, for a close at the till (`unconfirmed`) and a recovered answer alike. Never creates.
+ */
+export async function awaitAdoption(storeDB: StoreLocalDatabase, orderUuid: string) {
+	const doc = await storeDatabase(storeDB).getLocal<Journal>(ID);
+	await doc?.incrementalModify((data) => {
+		const entry = data.pending[orderUuid];
+		if (entry) entry.awaitingAdoption = true;
+		return data;
+	});
+}
+
+/** A finish threw: the attempt stays, created from `facts` if the throw came before it was recorded. */
+export async function retainCompletionAttempt(
+	storeDB: StoreLocalDatabase,
+	orderUuid: string,
+	facts: Pick<Attempt, 'source' | 'actor'>
+) {
+	const doc = await ensureLocalDocument<Journal>(storeDB, ID, { pending: {} });
+	await doc.incrementalModify((data) => {
+		data.pending[orderUuid] ??= { ...facts, at: new Date().toISOString() };
 		return data;
 	});
 }
@@ -115,7 +136,7 @@ export async function pendingCompletions(storeDB: StoreLocalDatabase) {
 	return (await storeDatabase(storeDB).getLocal<Journal>(ID))?.toJSON(true).data.pending ?? {};
 }
 
-/** The pending attempts, live: the store session finishes an unconfirmed one once it reads paid. */
+/** The pending completions, live: the store session finishes an unconfirmed one once it reads paid. */
 export function observePendingCompletions(storeDB: StoreLocalDatabase) {
 	return storeDatabase(storeDB)
 		.getLocal$<Journal>(ID)

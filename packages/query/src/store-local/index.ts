@@ -1,10 +1,12 @@
 export { observeAwaitingStore } from './awaiting-store';
 export {
-	failCompletionAttempt,
+	awaitAdoption,
+	countCompletionStart,
 	observePendingCompletions,
 	pendingCompletions,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
+	retainCompletionAttempt,
 } from './completion-journal';
 export { observeTenderGate, readAwaitingAnswer, readJournaledRecordIds } from './money-commands';
 export {

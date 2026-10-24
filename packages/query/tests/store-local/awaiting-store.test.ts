@@ -5,7 +5,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
-	failCompletionAttempt,
+	awaitAdoption,
 	observeAwaitingStore,
 	recordCompletionAttempt,
 } from '../../src/store-local';
@@ -58,7 +58,7 @@ it('marks a deferred record through its re-send until the store answers; online 
 	await claimRoute(db, route('online', 'row-o'), 'me', record('online', 'row-o'));
 	await markSent(db, 'online', 'row-o', 'r1', 'me');
 	await recordCompletionAttempt(db, { orderUuid: 'online', source: 'manual' });
-	await failCompletionAttempt(db, 'online', 'unconfirmed', { awaitingAdoption: true });
+	await awaitAdoption(db, 'online');
 	await settle();
 	// The offline record marks its order, and keeps it through the re-send.
 	await claimRoute(db, route('a', 'row-a'), 'me', record('a', 'row-a'));

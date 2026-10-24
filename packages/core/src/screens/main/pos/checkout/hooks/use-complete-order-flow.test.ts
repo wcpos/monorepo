@@ -330,7 +330,8 @@ jest.mock('@wcpos/query/store-local', () => ({
 	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
-	failCompletionAttempt: jest.fn(async () => {}),
+	awaitAdoption: jest.fn(async () => {}),
+	retainCompletionAttempt: jest.fn(async () => {}),
 }));
 
 it('completes inside the caller queue without waiting on itself', async () => {

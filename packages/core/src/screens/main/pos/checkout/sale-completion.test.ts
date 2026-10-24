@@ -607,10 +607,7 @@ it('offline provenance without a split does not write or allocate metadata', asy
 it('awaits the journal before returning the attempt to the money caller', async () => {
 	const insert = jest.spyOn(ctx.storeDB, 'insertLocal');
 	await recordSaleAttempt(ctx, { order, completing: true, source: 'manual' });
-	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
-		source: 'manual',
-		attempts: 0,
-	});
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({ source: 'manual' });
 	expect(insert).toHaveBeenCalled();
 });
 it('refuses the attempt if the journal cannot be written', async () => {
@@ -633,15 +630,12 @@ it.each([
 	if (result === 'completed') expect((await atAudit)?.order).toBeDefined();
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 });
-it('retains a thrown completion with lastError and propagates the original error', async () => {
+it('retains a thrown completion and propagates the original error', async () => {
 	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
 	const error = new Error('finish failed');
 	mockReconcile.mockRejectedValueOnce(error);
 	await expect(completeSale(ctx, order, manual, { host: 'background' })).rejects.toBe(error);
-	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
-		attempts: 1,
-		lastError: 'finish failed',
-	});
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({ source: 'manual' });
 	expect(mockInfo).not.toHaveBeenCalled();
 });
 it.each([42, 0])(
@@ -692,8 +686,6 @@ it('recreates a concurrently cleared attempt when finishing throws, with source 
 	expect(attempt).toMatchObject({
 		source: 'manual',
 		actor,
-		attempts: 1,
-		lastError: error.message,
 	});
 	expect(Date.parse(attempt.at)).toBeGreaterThanOrEqual(before);
 	expect(Date.parse(attempt.at)).toBeLessThanOrEqual(Date.now());
@@ -813,7 +805,6 @@ it.each([false, true])(
 			expect((await atReceipt)?.order).toMatchObject({
 				source: 'manual',
 				actor: context.actor,
-				attempts: 0,
 			});
 			expect(record).toHaveBeenCalledTimes(1);
 			expect(record.mock.invocationCallOrder[0]).toBeLessThan(
@@ -933,7 +924,7 @@ it('enqueues completion when no caller queue is supplied', async () => {
 		enqueue.mockRestore();
 	}
 });
-it('a refused completion dispatch throws and records a failed attempt', async () => {
+it('a refused completion dispatch throws and keeps its attempt', async () => {
 	const dispatch = jest
 		.spyOn(actions, 'dispatchAction')
 		.mockResolvedValueOnce({ deny: { reasonKey: 'unexpected_guard' } });
@@ -941,10 +932,7 @@ it('a refused completion dispatch throws and records a failed attempt', async ()
 		await expect(completeSale(ctx, order, manual, { host: 'background' })).rejects.toThrow(
 			'checkout.complete refused: unexpected_guard'
 		);
-		expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
-			attempts: 1,
-			lastError: 'checkout.complete refused: unexpected_guard',
-		});
+		expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({ source: 'manual' });
 	} finally {
 		dispatch.mockRestore();
 	}
