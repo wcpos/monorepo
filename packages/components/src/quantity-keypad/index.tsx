@@ -134,6 +134,7 @@ export function QuantityKeypad({
 			rows={[stepper, ...DIGIT_ROWS, ...closingRows(decimalSeparator, labels)]}
 			ruled={1}
 			cell={CELL}
+			align="center"
 			animation={ANIMATION}
 			disabled={disabled}
 			decimalSeparator={decimalSeparator}

@@ -5,7 +5,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { EditableNumber } from '../../../components/editable-number';
+import { MoneyInput } from '../../../components/money-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
@@ -58,17 +58,17 @@ function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const quickDiscounts = useDocField(uiSettings, (settings) => settings.quickDiscounts);
 	return (
-		// The cell's width, not its content's: the editor's quick discounts must not widen it.
+		// The cell's width, not its content's: the price's tint reaches past its text.
 		<VStack space="xs" className="self-stretch">
 			{isOnSale && column.columnDef.meta?.show?.('on_sale') && (
 				<Text className="text-muted-foreground text-right tabular-nums line-through">
 					{format(regular_price || 0)}
 				</Text>
 			)}
-			<EditableNumber
+			<MoneyInput
 				testID="cart-price"
 				value={price}
-				display={format(Number(price ?? 0))}
+				format={format}
 				formatOptions={{ fixedDecimalScale: true }}
 				textClassName="text-muted-foreground text-right"
 				onChangeText={(price) => updateCartLine('line_items', uuid, { price })}

@@ -248,6 +248,10 @@ export const WEB_ANIMATIONS = {
 	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
 	'quantity-grow': `quantity-grow ${QUANTITY_GROW}ms ${EASE_CSS}`,
 	'quantity-grow-up': `quantity-grow-up ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	// The price keypad grows on the quantity's beat (Paul 2026-10-24: the price does what the
+	// quantity does).
+	'price-grow': `price-grow ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	'price-grow-up': `price-grow-up ${QUANTITY_GROW}ms ${EASE_CSS}`,
 	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
 	'accordion-down': `accordion-down ${CROSSFADE}ms ${EASE_CSS}`,
 	'accordion-up': `accordion-up ${CROSSFADE}ms ${EASE_CSS}`,

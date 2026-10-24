@@ -7,42 +7,48 @@ import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { Text } from '../text';
+import { type Grow, growFrame, ROW } from './frame';
 
 import type { TriggerRef } from '@rn-primitives/popover';
 
-/** Material's minimum touch target (decision 36): every anchored row is this tall. */
-const ROW = 48;
 /** The keys every keypad types with; a physical digit is its own name. */
 const KEY_NAMES: Record<string, string> = { Backspace: 'backspace', Enter: 'done' };
 
-type Grow = 'down' | 'up';
-
 type GrowKey = {
 	name: string;
-	/** The digit, or the caller's translated name for an icon key. */
+	/** The accessible name: the digit, or the caller's translated name. */
 	label: string;
+	/** The key's text when it is not its name (`−10%`, named "Discount (10%)"). */
+	text?: string;
 	icon?: IconName;
 	variant?: 'destructive' | 'primary';
-	/** Cells wide (anchored); 1 when unset. */
+	/** Cells wide (anchored), fractions allowed so fewer keys fill a row; 1 when unset. */
 	span?: number;
+	/** A quick key: primary text, lit (`true`) while its value is the draft. */
+	on?: boolean;
+	testID?: string;
 };
 /** The number the keypad edits, drawn by the caller; the row it is in lands on the trigger. */
-type GrowDisplay = { display: React.ReactNode };
+type GrowDisplay = { display: React.ReactNode; span?: number };
 export type GrowCell = GrowKey | GrowDisplay;
 
 export const DIGIT_ROWS: GrowKey[][] = ['123', '456', '789'].map((row) =>
 	[...row].map((d) => ({ name: d, label: d }))
 );
 
-/** The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. */
+/**
+ * The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel.
+ * Without a separator (a currency with no decimal places) 0 takes the separator's cell too.
+ */
 export function closingRows(
-	decimalSeparator: string,
+	decimalSeparator: string | undefined,
 	labels: { backspace: string; done: string }
 ): GrowKey[][] {
+	const zero: GrowKey = { name: '0', label: '0', span: decimalSeparator ? 1 : 2 };
 	return [
 		[
-			{ name: 'decimal', label: decimalSeparator },
-			{ name: '0', label: '0' },
+			...(decimalSeparator ? [{ name: 'decimal', label: decimalSeparator }] : []),
+			zero,
 			{ name: 'backspace', label: labels.backspace, icon: 'backspace' },
 		],
 		[{ name: 'done', label: labels.done, icon: 'check', variant: 'primary', span: 3 }],
@@ -64,6 +70,7 @@ type GrowKeypadProps = {
 	ruled: number;
 	/** An anchored cell's width. */
 	cell: number;
+	align: 'center' | 'end';
 	/** The literal `web:animate-*` classes for growing down and up. */
 	animation: { down: string; up: string };
 	disabled?: boolean;
@@ -91,6 +98,7 @@ export function GrowKeypad({
 	rows,
 	ruled,
 	cell,
+	align,
 	animation,
 	disabled = false,
 	decimalSeparator,
@@ -126,12 +134,8 @@ export function GrowKeypad({
 		onOpenChangeProp?.(open);
 		if (open) {
 			discard.current = false;
-			// Measured once per open: the first row sits over the trigger.
 			const box = (trigger.current as unknown as HTMLElement | null)?.getBoundingClientRect?.();
-			const height = box?.height ?? 0;
-			const inset = (ROW - height) / 2;
-			const fits = !box || box.top - inset + rows.length * ROW <= window.innerHeight;
-			setFrame({ open, grow: fits ? 'down' : 'up', offset: -(height + inset) });
+			setFrame({ open, ...growFrame(box, rows.length * ROW, window.innerHeight) });
 			onOpen();
 		} else {
 			onClose(discard.current);
@@ -171,7 +175,7 @@ export function GrowKeypad({
 				{children}
 			</PopoverTrigger>
 			<PopoverContent
-				align="center"
+				align={align}
 				side={frame.grow === 'up' ? 'top' : 'bottom'}
 				sideOffset={frame.offset}
 				avoidCollisions={false}
@@ -256,7 +260,7 @@ function Keys({
 							'display' in key ? (
 								<View
 									key="display"
-									style={size()}
+									style={size(key.span)}
 									aria-live="polite"
 									className={cn('justify-center', sheet && 'min-h-ctl flex-1')}
 								>
@@ -275,20 +279,41 @@ function Keys({
 								<Pressable
 									key={key.name}
 									role="button"
-									testID={key.name === 'done' ? 'numpad-done-button' : `numpad-key-${key.name}`}
+									testID={
+										key.testID ??
+										(key.name === 'done' ? 'numpad-done-button' : `numpad-key-${key.name}`)
+									}
 									accessibilityLabel={key.label}
+									aria-pressed={key.on}
 									onPress={() => onPress(key.name)}
 									style={size(key.span)}
 									className={cn(
-										'web:hover:bg-muted active:bg-muted items-center justify-center',
-										sheet && (first ? 'min-h-ctl w-14' : 'min-h-ctl bg-muted flex-1 rounded-lg')
+										'items-center justify-center',
+										key.on ? 'bg-primary' : 'web:hover:bg-muted active:bg-muted',
+										sheet &&
+											(first
+												? 'min-h-ctl w-14'
+												: key.on === undefined
+													? 'min-h-ctl bg-muted flex-1 rounded-lg'
+													: cn('min-h-ctl flex-1 rounded-lg', !key.on && 'border-border border'))
 									)}
 								>
 									{key.icon ? (
 										<Icon name={key.icon} variant={key.variant} />
 									) : (
-										<Text className={cn('font-semibold', sheet ? 'text-xl' : 'text-lg')}>
-											{key.label}
+										<Text
+											className={cn(
+												'font-semibold',
+												key.on === undefined
+													? sheet
+														? 'text-xl'
+														: 'text-lg'
+													: key.on
+														? 'text-primary-foreground text-sm'
+														: 'text-primary text-sm'
+											)}
+										>
+											{key.text ?? key.label}
 										</Text>
 									)}
 								</Pressable>

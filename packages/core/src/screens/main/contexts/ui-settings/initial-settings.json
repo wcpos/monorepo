@@ -157,7 +157,7 @@
     "autoPrintReceipt": false,
     "receiptOutputType": "html",
     "openCashDrawer": false,
-    "quickDiscounts": [5, 10, 15, 20],
+    "quickDiscounts": [5, 10, 15],
     "columns": [
       {
         "key": "quantity",

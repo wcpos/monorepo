@@ -6,7 +6,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { EditableNumber } from '../../../components/editable-number';
+import { MoneyInput } from '../../../components/money-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -41,6 +41,9 @@ function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
 	);
 }
 
+/** A percentage fee is typed to hundredths (12.75 %), whatever the currency's places. */
+const PERCENT_PLACES = 2;
+
 function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
@@ -64,11 +67,12 @@ function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 		// The editor takes the cell beside the icon, so its field is the column's width.
 		<HStack space="xs" className="items-center self-stretch">
 			<View className="min-w-0 flex-1">
-				<EditableNumber
+				<MoneyInput
 					testID="cart-fee-price"
 					value={String(amount)}
-					display={percent ? formatNumber(Number(amount) || 0) : format(Number(amount) || 0)}
+					format={percent ? formatNumber : format}
 					formatOptions={percent ? undefined : { fixedDecimalScale: true }}
+					decimals={percent ? PERCENT_PLACES : undefined}
 					textClassName="text-muted-foreground text-right"
 					onChangeText={onAmount}
 				/>
