@@ -20,6 +20,7 @@ import { useT } from '../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 interface Props {
+	// Mutable by necessity: useEngineRecord returns a mutable resource and ObservableResource is invariant; the value read below is widened to the read-only record.
 	resource: ObservableResource<EngineRecord<'customers'> | null>;
 }
 
