@@ -71,5 +71,5 @@ export function useConfirm({
 			</AlertDialogContent>
 		</AlertDialog>
 	) : null;
-	return { confirm, dialog };
+	return { confirm, dialog, open: question?.open ?? false };
 }

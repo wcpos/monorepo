@@ -23,7 +23,9 @@ jest.mock('expo-haptics', () => ({
 jest.mock('../icon', () => ({
 	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
 }));
-jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('../loader', () => ({
+	Loader: () => React.createElement('span', { 'data-loader': '' }),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it.each([
@@ -63,6 +65,33 @@ it('renders two ordered actions and fires their own callbacks', () => {
 	expect(second).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('notice-action-1'));
 	expect(second).toHaveBeenCalledTimes(1);
+});
+it('an action with `loading` shows the Loader and is inert; one without is unchanged', () => {
+	const running = jest.fn();
+	const idle = jest.fn();
+	render(
+		<Notice
+			tone="warn"
+			title="Title"
+			testID="notice"
+			actions={[
+				{ label: 'Try again', onPress: running, loading: true },
+				{ label: 'Status', onPress: idle },
+			]}
+		/>
+	);
+	const [busy, free] = [
+		screen.getByTestId('notice-action-0'),
+		screen.getByTestId('notice-action-1'),
+	];
+	expect(busy.querySelector('[data-loader]')).not.toBeNull();
+	expect(busy).toHaveAttribute('aria-disabled', 'true');
+	fireEvent.click(busy);
+	expect(running).not.toHaveBeenCalled();
+	expect(free.querySelector('[data-loader]')).toBeNull();
+	expect(free).not.toHaveAttribute('aria-disabled', 'true');
+	fireEvent.click(free);
+	expect(idle).toHaveBeenCalledTimes(1);
 });
 it('composes a real DocsLink', () => {
 	render(

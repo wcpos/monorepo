@@ -53,7 +53,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						// The sale button: primary, never green (green is a status colour, not an action).
 						size="lg"
 						testID="checkout-complete-order"
-						loading={flow.busy}
+						loading={flow.running === 'takeTender'}
 						disabled={flow.busy}
 						onPress={() => void flow.takeTender()}
 					>

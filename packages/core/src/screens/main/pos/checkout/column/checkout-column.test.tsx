@@ -158,14 +158,21 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		disabled,
+		loading,
 		onPress,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
 		disabled?: boolean;
+		loading?: boolean;
 		onPress?: () => void;
 	}) => (
-		<button data-testid={testID} disabled={!!disabled} onClick={onPress}>
+		<button
+			data-testid={testID}
+			data-loading={loading ? 'true' : undefined}
+			disabled={!!disabled}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),
@@ -241,6 +248,17 @@ it.each([
 	expect(mockLegacyTab).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
 	expect(retryCommand).toHaveBeenCalledTimes(1);
+});
+// C5-S1: Done spins only for the press, never for another command holding the gate.
+it.each([
+	['takeTender', true],
+	['cancelPayment', false],
+] as const)('a zero-total Done while %s holds the gate spins: %s', (running, spins) => {
+	mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, busy: true, running });
+	mountColumn();
+	const done = screen.getByTestId('checkout-complete-order');
+	expect(done.hasAttribute('data-loading')).toBe(spins);
+	expect(done.hasAttribute('disabled')).toBe(true);
 });
 it('hosts the Legacy tab with the in-pane receipt (receiptHost="stage")', () => {
 	mockFlow = makeFlow({ state: { ...initialTenderState, tab: 'legacy' } });

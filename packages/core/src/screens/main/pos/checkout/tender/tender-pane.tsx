@@ -82,6 +82,7 @@ export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 				{
 					label: t('pos_checkout.try_again'),
 					onPress: () => void flow.retryCommand(),
+					loading: flow.running === 'retryCommand',
 					testID: 'checkout-unanswered-retry',
 				},
 			]}
@@ -618,7 +619,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					size="lg"
 					className="w-full"
 					testID="checkout-commit"
-					loading={busy}
+					loading={saving || flow.running === 'takeTender'}
 					disabled={
 						!method ||
 						busy ||
@@ -671,6 +672,7 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 				variant="outline-destructive"
 				size="sm"
 				testID="checkout-cancel-invoice"
+				loading={flow.running === 'cancelInvoice'}
 				disabled={busy || !flow.online}
 				onPress={() => void flow.cancelInvoice()}
 			>
@@ -700,6 +702,7 @@ function AttemptUnansweredLine({ flow, busy }: { flow: TenderFlow; busy: boolean
 				variant="outline-destructive"
 				size="sm"
 				testID="checkout-clear-attempt"
+				loading={flow.running === 'clearAttempt'}
 				disabled={busy || !flow.online}
 				onPress={() => void flow.clearAttempt()}
 			>
