@@ -51,12 +51,14 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
  * The scope-database generation this build opens. Every lower generation is
  * legacy: the purge that runs after a store is sale-ready removes it (#2242) —
  * EXCEPT the drainable one (`DRAINABLE_SCOPE_DATABASE_GENERATION`), which only
- * the drain removes, once its unsent work is sent. History is on
+ * the drain removes, once its queue is empty. History is on
  * `scopeDatabaseName`.
  *
  * A bump also means rewriting `sync-engine/src/collections/drainable-generation.ts`
  * to the schemas the generation being left behind shipped (its stamp and the
- * pinned digests in `schema-behaviour.test.ts` fail until it is). And any
+ * pinned digests in `schema-behaviour.test.ts` fail until it is), and rebuild the drain against
+ * protocol 3 (`legacy-scope-drain.ts` parks unconditionally; the protocol-2 drain is at
+ * 2017d7b901). And any
  * database of the generation BEFORE that one that a drain still keeps — unsent
  * work it could not send — becomes unreachable: it is neither drainable nor
  * opened again. So a bump should follow a quiet period in which kept databases
@@ -65,14 +67,6 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
 // 6: products promoted `tagIds` (promoted membership, not index-backed) — every resident re-ingests.
 // 7: protocol 3 (ADR 0040) — a protocol-2 queue is parked, never drained. No schema moved.
 export const SCOPE_DATABASE_GENERATION = 7;
-
-/**
- * The first scope generation whose queue was written by a protocol-3 till (ADR 0040). A drainable
- * generation below it is PARKED: never pushed, its open carts never carried over (its rows hold
- * offline tenders and copied statuses protocol 3 would erase or replay); only its receipt print
- * counts are carried. Paul's ruling, 2026-10-20: no shipped client has the payments ledger.
- */
-export const FIRST_PROTOCOL_3_SCOPE_GENERATION = 7;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,
@@ -192,8 +186,7 @@ export function containsLegacyScopeDatabaseName(name: string): boolean {
 
 /**
  * The one legacy generation a till DRAINS: its scope database is opened with
- * that generation's schemas, its unsent writes are pushed through the current
- * write path, and only then is it removed (`drainLegacyScopeDatabase`). Older
+ * that generation's schemas, parked, and removed once empty (`drainLegacyScopeDatabase`). Older
  * generations cannot be opened by this build's schemas.
  */
 export const DRAINABLE_SCOPE_DATABASE_GENERATION = SCOPE_DATABASE_GENERATION - 1;

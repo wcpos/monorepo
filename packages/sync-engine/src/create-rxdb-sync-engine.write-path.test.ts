@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
-import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
 import { awaitWriteOutcome } from '../../query/src/await-write-outcome';
@@ -2255,17 +2254,15 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'fence', 'v5', 'v5 abort'])(
+	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'fence'])(
 		'drain annihilation preserves the removal outcome on %s',
 		async (fault) => {
 			const events: SyncEvent[] = [];
 			const server = createFakeWriteServer();
-			const legacy = fault.startsWith('v5');
-			const aborted = fault.endsWith('abort');
+			const aborted = fault === 'abort';
 			const engine = engineWith({
 				fetch: server.fetch,
 				diagnostics: (e) => events.push(e),
-				ports: legacy ? { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION } : {},
 			});
 			try {
 				await engine.ready;
@@ -2289,10 +2286,9 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					if (aborted) vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
 					return ack(db, mutation, signal, ...rest);
 				});
-				if (!legacy)
-					vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
-						new Error('cleanup failed')
-					);
+				vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
+					new Error('cleanup failed')
+				);
 				const outcomes: EngineEvent[] = [];
 				engine.events((event) => outcomes.push(event));
 				if (fault === 'queue cleanup failure')

@@ -49,9 +49,7 @@ import { engineCollectionCreators } from './engine-collections';
 import {
 	DRAINABLE_SCHEMAS_GENERATION,
 	drainableGenerationCollectionCreators,
-	drainableGenerationWriteFacetFor,
 } from './drainable-generation';
-import { writeFacetFor } from './collection-descriptors';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -624,12 +622,6 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	it('the drainable generation opens with the schemas it shipped', () => {
 		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
 		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
-	});
-
-	it('the drainable generation also PROJECTS what it shipped: generation 6 moved nothing', () => {
-		for (const collection of ['products', 'orders', 'variations', 'customers', 'coupons']) {
-			expect(drainableGenerationWriteFacetFor(collection)).toBe(writeFacetFor(collection));
-		}
 	});
 
 	it('drainable-generation.ts reproduces exactly the generation before the current one', () => {

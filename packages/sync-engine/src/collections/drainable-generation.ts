@@ -9,27 +9,20 @@
  * the schemas that generation shipped: today's recipe with each moved schema put back.
  *
  * v6 → v7 moved NO schema: the bump is protocol 3 (ADR 0040), and a protocol-2 queue is
- * parked, never drained (`FIRST_PROTOCOL_3_SCOPE_GENERATION`). So generation 6's recipe is
+ * parked, never drained. So generation 6's recipe is
  * today's creators. When the generation moves again, this file becomes the schemas the NEW
  * previous generation shipped — and `DRAINABLE_SCHEMAS_GENERATION` below moves with it.
  * `schema-behaviour.test.ts` pins its digests as a literal map beside the current ones,
  * keyed by generation, and fails a bump that forgot this file.
  */
 
-import { type CollectionWriteFacet, writeFacetFor } from './collection-descriptors';
 import {
 	type CollectionCreator,
 	engineCollectionCreators,
 	MUTATION_QUEUE_RXDB_COLLECTION,
 } from './engine-collections';
 
-/**
- * The scope-database generation whose schemas this file reproduces. The engine
- * refuses to open the drainable generation with them unless this equals
- * `DRAINABLE_SCOPE_DATABASE_GENERATION` — a bump that left this file behind
- * fails closed (the drain reports `failed`) instead of opening a database with
- * the wrong schemas.
- */
+/** The generation these schemas reproduce; `schema-behaviour.test.ts` pins it to the drainable one. */
 export const DRAINABLE_SCHEMAS_GENERATION = 6;
 
 /** The full addCollections() argument for a drainable-generation scope database. */
@@ -45,9 +38,4 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 			localDocuments: true,
 		},
 	};
-}
-
-/** The write facets a drainable-generation engine uses: generation 6 shipped today's projections. */
-export function drainableGenerationWriteFacetFor(collection: string): CollectionWriteFacet | null {
-	return writeFacetFor(collection);
 }

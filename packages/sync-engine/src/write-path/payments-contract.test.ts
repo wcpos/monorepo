@@ -1,11 +1,9 @@
 import { expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import { createFakeWriteServer, ORDER_MONEY_ORACLE } from '@wcpos/sync-core/testing';
 
 import { createEngineHarness } from '../testing';
-import { writeFacetFor } from '../collections/collection-descriptors';
 import { queueFor } from './write-intents';
 
 setPremiumFlag();
@@ -81,47 +79,6 @@ it('no contract puts expectedEpoch or tillAggregate on the push envelope', async
 		for (const envelope of sent) {
 			expect(Object.keys(envelope).sort()).toEqual(ENVELOPE_KEYS);
 		}
-	} finally {
-		await engine.dispose();
-	}
-});
-
-it('pushes a drainable-generation row queued before the upgrade', async () => {
-	const server = createFakeWriteServer();
-	server.seed(id, { id: 42, revision: 'sha256:base-r1' });
-	const sent: Record<string, unknown>[] = [];
-	const { engine } = await createEngineHarness({
-		mode: 'manual',
-		ports: { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION },
-		fetch: async (url, init) => {
-			if (url.includes('/push/orders')) sent.push(JSON.parse(init!.body as string));
-			return server.fetch(url, init as never);
-		},
-	});
-	try {
-		const db = engine.active()!.database;
-		const facet = writeFacetFor('orders')!;
-		const payload = {
-			id: 42,
-			customer_note: 'queued before upgrade',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: id }],
-		};
-		await facet.upsertServerDocument(db, facet.documentFromServerPayload(payload));
-		// This row was queued by the old app, not by today's enqueue path.
-		await queueFor(db).enqueue({
-			mutationId: 'legacy-order-update',
-			collectionName: 'orders',
-			operation: 'update',
-			recordId: id,
-			origin: 'existing',
-			payload,
-			baseRevision: 'sha256:base-r1',
-			queuedAt: '2026-10-18T00:00:00.000Z',
-		});
-		await engine.sync('write-drain');
-		expect(sent).toHaveLength(1);
-		expect(Object.keys(sent[0]).sort()).toEqual(ENVELOPE_KEYS);
-		expect(await queueFor(db).pending()).toHaveLength(0);
 	} finally {
 		await engine.dispose();
 	}

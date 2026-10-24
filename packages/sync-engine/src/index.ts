@@ -50,7 +50,6 @@ export {
 	type LegacyScopeDatabaseFiles,
 	type LegacyScopeDrainOutcome,
 	type LegacyScopeDrainPorts,
-	type LegacyScopeDrainWriteEvent,
 	type LegacyScopeRemainingWork,
 	WRITTEN_BEFORE_PROTOCOL_3,
 } from './write-path/legacy-scope-drain';
