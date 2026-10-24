@@ -856,6 +856,44 @@ describe('useTenderFlow', () => {
 		expect(mockError).not.toHaveBeenCalled();
 	});
 
+	// The press's own moments (paid for the order, invoice sent) are said only at the press: a
+	// Try again lands the store's answer and says none of them.
+	it.each([
+		['settled', { outcome: 'settled', order: { status: 'pending' } }, false],
+		['sent', { outcome: 'sent', order: { status: 'pending' } }, true],
+	] as const)(
+		'a Try again answered %s says none of the press moments',
+		async (_, data, stamped) => {
+			mockAutoShowReceipt = false;
+			if (stamped)
+				mockPayload = {
+					...mockPayload,
+					meta_data: withAwaitingCustomer([], {
+						method_id: 'wcpos_email_invoice',
+						destination: 'a@b.c',
+						attempt_id: 'attempt-1',
+						sent_at_gmt: '2026-10-20T10:00:00Z',
+						cashier_id: 7,
+					}),
+				} as typeof mockPayload;
+			mockCompleteOrderFlow.mockResolvedValueOnce('completed');
+			mockResend.mockResolvedValueOnce([{ kind: 'submit', data }]);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			try {
+				await act(async () => result.current.retryCommand());
+				expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
+				for (const sentence of [
+					'pos_checkout.payment_completed_for_order',
+					'pos_checkout.invoice_sent',
+					'pos_checkout.invoice_sent_to',
+				])
+					expect(mockInfo).not.toHaveBeenCalledWith(sentence, expect.anything());
+			} finally {
+				mockAutoShowReceipt = true;
+			}
+		}
+	);
+
 	it('preselects the first available method once, without recording', async () => {
 		mockMethods = [noDriver, card];
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));

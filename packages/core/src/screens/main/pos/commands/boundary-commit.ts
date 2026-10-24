@@ -122,7 +122,6 @@ export async function commitAtBoundary(
 				complete: (target, slotQueue, summary) =>
 					landAnswer(
 						{ kind: 'close', order: summary },
-						{ via: 'boundary' },
 						{
 							finish: (outcome) => ctx.complete(target, outcome, slotQueue),
 							// A close never calls it; only a `reopened` answer does.

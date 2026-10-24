@@ -136,7 +136,6 @@ import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completi
 import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
 import {
 	answerOf,
-	type Arrival,
 	landAnswer,
 	type NotMirrored,
 	type StoreAnswer,
@@ -277,7 +276,13 @@ function noteUnanswered(t: ReturnType<typeof useT>, context: Record<string, unkn
 	logger.warn(t('pos_checkout.attempt_unanswered'), { showToast: true, context });
 }
 
-type LandOptions = { notMirrored?: NotMirrored; queue?: OrderMutationContext; method?: string };
+type LandOptions = {
+	notMirrored?: NotMirrored;
+	queue?: OrderMutationContext;
+	method?: string;
+	/** Set only by the press sites; a replay says none of the press's moments. */
+	press?: boolean;
+};
 
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
@@ -772,8 +777,8 @@ export function useTenderFlow(
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
 	const land = React.useCallback(
-		async (answer: StoreAnswer, arrival: Arrival, options: LandOptions = {}) => {
-			const { notMirrored = null, queue, method } = options;
+		async (answer: StoreAnswer, options: LandOptions, remainingMinor: number | null) => {
+			const { notMirrored = null, queue, method, press = false } = options;
 			const context = {
 				...orderContext,
 				method,
@@ -808,7 +813,7 @@ export function useTenderFlow(
 			// order, invoice sent, open again) only at the press, never over "not synced".
 			const presentLanded = (result: CompletionResult | 'reopened') => {
 				if (result === 'reopened') return toast(t('pos_checkout.sale_reopened_elsewhere'));
-				if (arrival.via !== 'press' || notMirrored) return;
+				if (!press || notMirrored) return;
 				const orderNumber = payload.number ?? String(payload.id);
 				if (answer.kind === 'settled' && result === 'completed' && !uiSettings.autoShowReceipt)
 					toast(t('pos_checkout.payment_completed_for_order', { orderNumber }));
@@ -822,12 +827,15 @@ export function useTenderFlow(
 							: t('pos_checkout.invoice_sent')
 					);
 			};
-			const result = await landAnswer(answer, arrival, {
+			const deps: Parameters<typeof landAnswer>[1] = {
 				finish: (outcome) => completeOrderFlow(outcome, queue),
 				resolveAttempt: () => resolveCompletionAttempt(storeDB, order.uuid),
 				dp,
 				notMirrored,
-			}).finally(() => answer.kind === 'recorded' && tenderRecorded(answer.row, answer.via));
+			};
+			const result = await landAnswer(answer, deps, remainingMinor).finally(
+				() => answer.kind === 'recorded' && tenderRecorded(answer.row, answer.via)
+			);
 			presentLanded(result);
 		},
 		[orderContext, t, completeOrderFlow, storeDB, order, dp, tenderRecorded, payload, uiSettings]
@@ -847,7 +855,7 @@ export function useTenderFlow(
 				const answer = answerOf(resent, order.getLatest().payload);
 				if (answer) {
 					const legMinor = answer.kind === 'recorded' ? toMinor(answer.row.amount, dp) : 0;
-					await land(answer, { via: 'try-again', remainingMinor: balanceMinor - legMinor });
+					await land(answer, {}, balanceMinor - legMinor);
 				}
 				// A recovered send the store already settled or cancelled finishes nothing; a later
 				// paid attempt can auto-print again.
@@ -1021,11 +1029,7 @@ export function useTenderFlow(
 					write: (changes) => writeLedgerChanges(order, changes),
 					changes: (latest) => (roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 					complete: (_order, slot, summary) =>
-						land(
-							{ kind: 'close', order: summary },
-							{ via: 'press', remainingMinor: 0 },
-							{ queue: slot }
-						),
+						land({ kind: 'close', order: summary }, { queue: slot, press: true }, null),
 					online: () => sale.lane === 'online',
 					close: (target) => closeSale.close(target, { sessionId, approval: closeApproval }),
 				});
@@ -1249,8 +1253,8 @@ export function useTenderFlow(
 				// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
 				await land(
 					outcome,
-					{ via: 'press', remainingMinor: sale.remainingMinor },
-					{ notMirrored: outcome.notMirrored, queue, method: method.id }
+					{ notMirrored: outcome.notMirrored, queue, method: method.id, press: true },
+					sale.remainingMinor
 				);
 				return;
 			}
@@ -1283,8 +1287,8 @@ export function useTenderFlow(
 				// A failed mirror trusts only the store's summary: the pane stays on what is left to pay.
 				await land(
 					outcome,
-					{ via: 'press', remainingMinor: sale.remainingMinor },
-					{ notMirrored: outcome.notMirrored, queue, method: method.id }
+					{ notMirrored: outcome.notMirrored, queue, method: method.id, press: true },
+					sale.remainingMinor
 				);
 				return;
 			}

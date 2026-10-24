@@ -77,9 +77,6 @@ export type StoreAnswer =
 	/** A replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
 	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'close'; order: OrderPaymentSummary };
-/** `remainingMinor`: a press's prediction for a recorded leg (`StampedSale`); others have none. */
-export type Arrival =
-	{ via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' | 'boundary' };
 
 /**
  * A replayed answer (Try again, recovery) as a store answer: it arrives mirrored, so this only
@@ -112,13 +109,12 @@ export function answerReadsPaid({ data }: ResentCommand): boolean {
 /** The one table from a store answer to the outcome the completion (`finishSale`) judges. */
 export function saleOutcomeOf(
 	answer: Exclude<StoreAnswer, { kind: 'reopened' }>,
-	arrival: Arrival,
-	mirrorFailed: boolean
+	mirrorFailed: boolean,
+	remainingMinor: number | null
 ): SaleOutcome {
 	switch (answer.kind) {
 		case 'recorded': {
 			const { row, order, via } = answer;
-			const remainingMinor = 'remainingMinor' in arrival ? arrival.remainingMinor : null;
 			return { source: 'manual', via, row, order, mirrorFailed, remainingMinor };
 		}
 		case 'close':
@@ -139,19 +135,19 @@ export function saleOutcomeOf(
  */
 export async function landAnswer(
 	answer: StoreAnswer,
-	arrival: Arrival,
 	deps: {
 		finish: (outcome: SaleOutcome) => Promise<CompletionResult>;
 		resolveAttempt: () => Promise<void>;
 		dp: number;
 		notMirrored?: NotMirrored;
-	}
+	},
+	remainingMinor: number | null = null // the press's (or Try again's) prediction for a recorded leg; null: none
 ): Promise<CompletionResult | 'reopened'> {
 	if (answer.kind === 'reopened') {
 		await deps.resolveAttempt();
 		return 'reopened';
 	}
-	const result = await deps.finish(saleOutcomeOf(answer, arrival, !!deps.notMirrored));
+	const result = await deps.finish(saleOutcomeOf(answer, !!deps.notMirrored, remainingMinor));
 	const reopened =
 		(result === 'not-completed' || result === 'partial') &&
 		(answer.kind === 'close' ||

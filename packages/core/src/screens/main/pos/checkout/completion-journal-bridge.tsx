@@ -291,7 +291,7 @@ export function SaleCompletionBridge(): null {
 		};
 		/**
 		 * A recovered gateway submit answered `sent` lands through the answer table (`landAnswer`,
-		 * `{ via: 'recovery' }`) as a sent sale (its `checkout.sent` audit, the attempt resolved),
+		 * with no press prediction) as a sent sale (its `checkout.sent` audit, the attempt resolved),
 		 * from the stamp the refresh adopted with the store's document: never the unpaid replay,
 		 * which would count starts and abandon it. A send is the only answer landed here: a recovered
 		 * record, a settled or recorded submit, a close and a capture go to the resident judge
@@ -314,18 +314,14 @@ export function SaleCompletionBridge(): null {
 					.find((answer) => answer?.kind === 'sent');
 				if (!sent) continue;
 				try {
-					await landAnswer(
-						sent,
-						{ via: 'recovery' },
-						{
-							finish: (outcome) =>
-								completeSale({ ...current.ctx, actor: attempt.actor }, resident, outcome, {
-									host: 'background',
-								}),
-							resolveAttempt: () => resolveCompletionAttempt(storeDB, uuid),
-							dp: current.ctx.dp,
-						}
-					);
+					await landAnswer(sent, {
+						finish: (outcome) =>
+							completeSale({ ...current.ctx, actor: attempt.actor }, resident, outcome, {
+								host: 'background',
+							}),
+						resolveAttempt: () => resolveCompletionAttempt(storeDB, uuid),
+						dp: current.ctx.dp,
+					});
 					finished.add(uuid);
 				} catch (error) {
 					logger.debug('Recovered sent sale not finished', {
