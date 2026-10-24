@@ -43,8 +43,11 @@ jest.mock('../../hooks/use-update-cart-line', () => ({
 jest.mock('../../hooks/use-split-line-item', () => ({
 	useSplitLineItem: () => ({ splitLineItem: jest.fn() }),
 }));
-jest.mock('../../../components/number-input', () => ({
-	NumberInput: () => <input data-testid="cart-quantity-input" />,
+jest.mock('../../hooks/use-remove-line-item', () => ({
+	useRemoveLineItem: () => ({ removeLineItem: jest.fn() }),
+}));
+jest.mock('../../../components/quantity-input', () => ({
+	QuantityInput: () => <input data-testid="cart-quantity-input" />,
 }));
 jest.mock('../../../components/currency-input', () => ({
 	CurrencyInput: () => <input data-testid="currency-input" />,

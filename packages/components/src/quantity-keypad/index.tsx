@@ -16,6 +16,8 @@ const CELL = 48;
 const CELL_STYLE = { width: CELL, height: CELL };
 /** Five rows; below the box when they fit in the window, above it when they do not. */
 const PANEL_HEIGHT = CELL * 5;
+// A step lands on the 3-place grid (the reducer's floor): 1.1 + 1 is 2.1, not 2.1000000000000005.
+const onGrid = (quantity: number) => Math.round(quantity * 1000) / 1000;
 const DIGIT_ROWS = ['123', '456', '789'].map((row) => [...row].map((d) => ({ name: d, label: d })));
 /** A physical key's name on the pad; a digit is its own name. */
 const KEY_NAMES: Record<string, string> = {
@@ -129,7 +131,9 @@ export function QuantityKeypad({
 		} else {
 			const typed = typedQuantity(entry.buffer);
 			const shown = entry.stepped ?? value;
-			if (!discard.current && typed !== undefined && typed !== shown) void onChange(typed);
+			// The write presents its own failure (a toast) and the keypad is already closed.
+			if (!discard.current && typed !== undefined && typed !== shown)
+				void Promise.resolve(onChange(typed)).catch(() => undefined);
 			setFrame((current) => ({ ...current, open }));
 		}
 		dispatch({ type: 'reset' });
@@ -143,8 +147,8 @@ export function QuantityKeypad({
 			return onRemove();
 		}
 		if (name === 'backspace') dispatch({ type: 'backspace' });
-		else if (name === 'increase') step(base + 1);
-		else if (name === 'decrease') step(base - 1);
+		else if (name === 'increase') step(onGrid(base + 1));
+		else if (name === 'decrease') step(onGrid(base - 1));
 		else dispatch({ type: 'digit', digit: name });
 		focusPanel();
 	};

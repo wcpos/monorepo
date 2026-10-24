@@ -6,7 +6,6 @@ import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../contexts/translations';
-import { isActionRefusal } from '../../../../../extensions/actions';
 import { QuantityInput } from '../../../components/quantity-input';
 import { useNumberFormat } from '../../../hooks/use-number-format';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
@@ -75,12 +74,10 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// does; selecting on focus makes the next keystroke do exactly that.
 				selectTextOnFocus
 				value={item.quantity}
-				// Web: whether the store took it (a refusal, the stock guard's, is presented and
-				// resolves `false`), so the keypad's − and + can take a refused step back.
+				// Web: whether the store took it (a refusal, the stock guard's, is presented by
+				// the queue and resolves `false`), so the keypad's − and + can take it back.
 				onChangeText={(quantity) =>
-					updateCartLine('line_items', uuid, { quantity }).then(
-						(result) => result !== false && !isActionRefusal(result)
-					)
+					updateCartLine('line_items', uuid, { quantity }).then((result) => result !== false)
 				}
 				// Web: − at 1 is the trash, the cart's own remove (and its Undo toast), as the
 				// conditions notice calls it.
