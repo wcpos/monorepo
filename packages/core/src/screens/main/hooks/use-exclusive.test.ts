@@ -18,20 +18,20 @@ describe('useExclusive', () => {
 		const task = jest.fn(() => gate.promise);
 		let first!: Promise<void>;
 		let second!: Promise<void>;
-		let heldBeforeRender = false;
+		let busyBeforeRender = false;
 		await act(async () => {
 			// One closure, no render in between: only the ref can refuse the second call.
 			first = result.current.exclusive('a', task);
-			heldBeforeRender = result.current.held();
+			busyBeforeRender = result.current.busyNow();
 			second = result.current.exclusive('a', task);
 		});
-		expect(heldBeforeRender).toBe(true);
+		expect(busyBeforeRender).toBe(true);
 		expect(task).toHaveBeenCalledTimes(1);
 		await act(async () => {
 			gate.resolve();
 			await Promise.all([first, second]);
 		});
-		expect(result.current.held()).toBe(false);
+		expect(result.current.busyNow()).toBe(false);
 	});
 
 	it('names the running task, and a refused call does not overwrite it', async () => {
@@ -64,7 +64,7 @@ describe('useExclusive', () => {
 			await expect(result.current.exclusive('a', () => Promise.reject(boom))).rejects.toBe(boom);
 		});
 		expect(result.current.running).toBeNull();
-		expect(result.current.held()).toBe(false);
+		expect(result.current.busyNow()).toBe(false);
 		const next = jest.fn(async () => {});
 		await act(async () => {
 			await result.current.exclusive('a', next);
@@ -92,14 +92,14 @@ describe('useExclusive', () => {
 		expect(next).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps exclusive and held stable across renders', async () => {
+	it('keeps exclusive and busyNow stable across renders', async () => {
 		const { result, rerender } = renderHook(() => useExclusive());
-		const { exclusive, held } = result.current;
+		const { exclusive, busyNow } = result.current;
 		await act(async () => {
 			await result.current.exclusive('a', async () => {});
 		});
 		rerender();
 		expect(result.current.exclusive).toBe(exclusive);
-		expect(result.current.held).toBe(held);
+		expect(result.current.busyNow).toBe(busyNow);
 	});
 });

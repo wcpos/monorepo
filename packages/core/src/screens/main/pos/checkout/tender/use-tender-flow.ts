@@ -290,7 +290,7 @@ export function useTenderFlow(
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
-	const { running, busy, exclusive, held } = useExclusive<TenderCommand>();
+	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
@@ -509,7 +509,7 @@ export function useTenderFlow(
 	// snapshot of the prefill; an edit clears that component's line and the gateway's own.
 	// Memoized by the compiler: a manual useCallback here cannot name the setter's identity.
 	const setFieldValues = (next: DeclaredValues, changedId: string) => {
-		if (held() || methodId === null) return;
+		if (busyNow() || methodId === null) return;
 		attemptRef.current = null;
 		setValuesByMethod((previous) => ({ ...previous, [methodId]: next }));
 		setErrorsFor((previous) => {
@@ -637,7 +637,7 @@ export function useTenderFlow(
 
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
 		(action) => {
-			if (held()) return;
+			if (busyNow()) return;
 			// The rounded prefill is what the cashier sees, so a backspace edits that figure.
 			if (action.type === 'key' && action.key === 'backspace' && entryMinor !== state.entryMinor)
 				reducerDispatch({ type: 'set-entry', minor: entryMinor });
@@ -648,7 +648,7 @@ export function useTenderFlow(
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
-		[held, order.uuid, reducerDispatch, entryMinor, state.entryMinor]
+		[busyNow, order.uuid, reducerDispatch, entryMinor, state.entryMinor]
 	);
 
 	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
@@ -666,7 +666,7 @@ export function useTenderFlow(
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
-			if (held() || (saveState && saveState.kind !== 'queued-offline')) return;
+			if (busyNow() || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile) return;
 			if (tile.disabled) return;
@@ -713,7 +713,7 @@ export function useTenderFlow(
 			service,
 			reducerDispatch,
 			getLoaded,
-			held,
+			busyNow,
 		]
 	);
 

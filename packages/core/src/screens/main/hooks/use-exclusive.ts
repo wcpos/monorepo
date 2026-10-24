@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 /**
- * One command at a time. State renders it; the ref refuses a second call in the same tick,
- * before any render (two taps, or a press and a key, landing together). A throw still frees it.
+ * One command at a time. `busy` renders it; `busyNow()` reads the ref, which refuses a second call
+ * in the same tick, before any render (two taps, or a press and a key). A throw still frees it.
  */
 export function useExclusive<Name extends string = string>() {
 	const [running, setRunning] = React.useState<Name | null>(null);
@@ -18,6 +18,6 @@ export function useExclusive<Name extends string = string>() {
 			setRunning(null);
 		}
 	}, []);
-	const held = React.useCallback(() => ref.current, []);
-	return { running, busy: running !== null, exclusive, held };
+	const busyNow = React.useCallback(() => ref.current, []);
+	return { running, busy: running !== null, exclusive, busyNow };
 }
