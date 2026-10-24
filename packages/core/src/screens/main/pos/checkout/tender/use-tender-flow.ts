@@ -215,7 +215,7 @@ export interface TenderFlow {
 	/** Quick tendered chips for the current method; empty when it gives no change. */
 	quickAmountsMinor: number[];
 
-	/** A record or a void is in flight; every action must be inert while true. */
+	/** A tender command holds the gate (in flight or confirming); every action is inert while true. */
 	busy: boolean;
 	saveState: OrderSaveState | null;
 	pickMethod: (methodId: string) => void;
@@ -283,8 +283,19 @@ export function useTenderFlow(
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
-	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
+	// One gate for the tender's commands: state renders it; the ref closes a same-tick double record.
+	const exclusive = React.useCallback(async (task: () => Promise<void>) => {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			await task();
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, []);
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
@@ -831,10 +842,7 @@ export function useTenderFlow(
 	 * replays what it did. An answer lands exactly as a first answer would. A terminal leg's
 	 * capture is left to the terminal service, which owns that leg's completion.
 	 */
-	const retryCommand = React.useCallback(async () => {
-		if (busyRef.current) return;
-		busyRef.current = true;
-		setBusy(true);
+	const runRetry = React.useCallback(async () => {
 		try {
 			const answers = await resendOpenCommands(ctx.runtime, storeDB, order.uuid, {
 				post: (url, body) => http.post(url, body),
@@ -883,22 +891,18 @@ export function useTenderFlow(
 			await sweepDeadRounding(storeDB, order, dp, (changes) => recordLedger(order, changes)).catch(
 				() => undefined
 			);
-			busyRef.current = false;
-			setBusy(false);
 		}
 	}, [recordLedger, ctx.runtime, storeDB, order, http, t, land, dp, balanceMinor, orderContext]);
+	const retryCommand = React.useCallback(() => exclusive(runRetry), [exclusive, runRetry]);
 
-	const takeTender = React.useCallback(async () => {
+	const runPress = React.useCallback(async () => {
 		if (
-			busyRef.current ||
 			unansweredCommand ||
 			(saveState && saveState.kind !== 'queued-offline') ||
 			service?.get(order.uuid)
 		)
 			return;
-		// Busy from here: a second press while the cashier is still answering the offline
-		// confirmation must not open a second prompt. A decline or a throwing prompt frees it.
-		busyRef.current = true;
+		// The gate is held across the offline confirmation: a second press cannot open a second prompt.
 		// Only a tile that settles later asks (rule 1); a disabled one is refused below, with its reason.
 		if (tiles.find((tile) => tile.method.id === method?.id)?.settlesLater && method) {
 			// The amount that will be RECORDED: cash rounding's, not the keyed entry.
@@ -912,13 +916,8 @@ export function useTenderFlow(
 				action: t('pos_checkout.take_amount_in', take),
 				testID: 'checkout-offline',
 			}).catch(() => false);
-			if (!confirmed) {
-				busyRef.current = false;
-				return;
-			}
+			if (!confirmed) return;
 		}
-		setBusy(true);
-		setPressing(true);
 		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
 		const approval = { total: String(order.getLatest().payload.total ?? ''), currency };
 		let savingProvenance = false;
@@ -1307,6 +1306,7 @@ export function useTenderFlow(
 				context: { ...orderContext, method: method.id },
 			});
 		};
+		setPressing(true);
 		try {
 			const outcome = await commitSale(
 				{ ...ctx, actionCtx, actionActor, dp },
@@ -1372,8 +1372,6 @@ export function useTenderFlow(
 				},
 			});
 		} finally {
-			busyRef.current = false;
-			setBusy(false);
 			setPressing(false);
 		}
 	}, [
@@ -1421,6 +1419,7 @@ export function useTenderFlow(
 		tiles,
 		reducerDispatch,
 	]);
+	const takeTender = React.useCallback(() => exclusive(runPress), [exclusive, runPress]);
 
 	// A mounted tender is a checkout member: a restart restores the tender from a live ledger
 	// row without Pay, and the stage derivation and the provider's hold read membership, not
@@ -1534,10 +1533,8 @@ export function useTenderFlow(
 	}, [service, order.uuid, dp, dispatch]);
 
 	/** §4.3: the stamp's attempt is named; a late retry of it is refused by the store. */
-	const cancelInvoice = React.useCallback(async () => {
-		if (busyRef.current || !invoiceSent) return;
-		busyRef.current = true;
-		setBusy(true);
+	const runCancelInvoice = React.useCallback(async () => {
+		if (!invoiceSent) return;
 		try {
 			attemptRef.current = null;
 			const outcome = await gateway.cancel(order, invoiceSent);
@@ -1589,15 +1586,15 @@ export function useTenderFlow(
 					error: error instanceof Error ? error.message : String(error),
 				},
 			});
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	}, [gateway, invoiceSent, order, orderContext, actor, t]);
+	const cancelInvoice = React.useCallback(
+		() => exclusive(runCancelInvoice),
+		[exclusive, runCancelInvoice]
+	);
 
-	const clearAttempt = React.useCallback(async () => {
-		if (busyRef.current || !unansweredAttempt) return;
-		busyRef.current = true;
+	const runClear = React.useCallback(async () => {
+		if (!unansweredAttempt) return;
 		const confirmed = await confirm({
 			title: t('pos_checkout.clear_attempt_title'),
 			body: t('pos_checkout.clear_attempt_body'),
@@ -1605,11 +1602,7 @@ export function useTenderFlow(
 			destructive: true,
 			testID: 'checkout-clear-attempt',
 		}).catch(() => false);
-		if (!confirmed) {
-			busyRef.current = false;
-			return;
-		}
-		setBusy(true);
+		if (!confirmed) return;
 		const { id: attemptId, methodId: method } = unansweredAttempt;
 		const context = { ...orderContext, attemptId, method };
 		try {
@@ -1638,17 +1631,12 @@ export function useTenderFlow(
 				showToast: true,
 				context: { ...context, error: getErrorMessage(error) },
 			});
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	}, [gateway, unansweredAttempt, confirm, order, orderContext, actor, dp, t]);
+	const clearAttempt = React.useCallback(() => exclusive(runClear), [exclusive, runClear]);
 
-	const cancelPayment = React.useCallback(async () => {
-		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
-			return;
-		busyRef.current = true;
-		setBusy(true);
+	const runCancelPayment = React.useCallback(async () => {
+		if (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final') return;
 		try {
 			if (
 				rows.some(
@@ -1750,9 +1738,6 @@ export function useTenderFlow(
 					error: error instanceof Error ? error.message : String(error),
 				},
 			});
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
 		}
 	}, [
 		order,
@@ -1766,6 +1751,10 @@ export function useTenderFlow(
 		actor,
 		orderContext,
 	]);
+	const cancelPayment = React.useCallback(
+		() => exclusive(runCancelPayment),
+		[exclusive, runCancelPayment]
+	);
 
 	return React.useMemo(
 		() => ({
