@@ -790,16 +790,26 @@ export function useTenderFlow(
 			// can still throw). PAYMENT111 names a payment; a reopened replay took no money.
 			if (notMirrored && answer.kind !== 'reopened') {
 				const sent = answer.kind === 'sent';
+				const close = answer.kind === 'close';
 				const row = answer.kind === 'recorded' ? answer.row : null;
+				// A zero-balance close took no payment: its sentences name the sale, and the toast
+				// carries them itself (the code's own summary and Help page describe a payment).
 				const sentence = sent
 					? t('pos_checkout.invoice_sent_not_synced')
-					: t('pos_checkout.payment_recorded_not_synced');
+					: close
+						? t('pos_checkout.sale_closed_not_synced')
+						: t('pos_checkout.payment_recorded_not_synced');
+				const closeToast = {
+					title: sentence,
+					text2: t('pos_checkout.sale_closed_not_synced_description'),
+					showErrorCode: false,
+				};
 				logger.warn(sentence, {
 					code: ERROR_CODES[
 						sent ? 'PAYMENT_INVOICE_NOT_MIRRORED' : 'PAYMENT_RECORDED_NOT_MIRRORED'
 					],
 					showToast: true,
-					...(sent ? { toast: { title: sentence } } : {}),
+					...(sent ? { toast: { title: sentence } } : close ? { toast: closeToast } : {}),
 					...(row ? { terminal: { operationId: row.id } } : {}),
 					context: {
 						...context,
