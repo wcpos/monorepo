@@ -13,18 +13,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type ReadonlyEngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditCustomerForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 interface Props {
+	// Mutable by necessity: useEngineRecord returns a mutable resource and ObservableResource is invariant; the value read below is widened to the read-only record.
 	resource: ObservableResource<EngineRecord<'customers'> | null>;
 }
 
 export function EditCustomer({ resource }: Props) {
-	const customer = useObservableSuspense(resource);
+	const customer: ReadonlyEngineRecord<'customers'> | null = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	const { format } = useCustomerNameFormat();

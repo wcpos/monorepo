@@ -26,7 +26,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
+import { type ReadonlyEngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -43,7 +43,9 @@ const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 /**
  *
  */
-export function Actions({ row }: CellContext<{ record: EngineRecord<'customers'> }, 'actions'>) {
+export function Actions({
+	row,
+}: CellContext<{ record: ReadonlyEngineRecord<'customers'> }, 'actions'>) {
 	const record = row.original.record;
 	const customer = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();

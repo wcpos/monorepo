@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { useDialog } from '@wcpos/components/dialog';
-import type { CustomerPayload, EngineRecord } from '@wcpos/query';
+import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -19,7 +19,7 @@ import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
 interface Props {
-	customer: EngineRecord<'customers'>;
+	customer: ReadonlyEngineRecord<'customers'>;
 }
 
 /**
