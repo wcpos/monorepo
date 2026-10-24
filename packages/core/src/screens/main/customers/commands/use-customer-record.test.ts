@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
-import type { EngineRecord } from '@wcpos/query';
+import type { ReadonlyEngineRecord } from '@wcpos/query';
 import { CreateScopeChangedTwiceError } from '@wcpos/query/mutations';
 
 import { useCustomerRecord } from './use-customer-record';
@@ -23,7 +23,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 const customer = {
 	uuid: 'customer-1',
 	payload: { first_name: 'Ada' },
-} as unknown as EngineRecord<'customers'>;
+} as unknown as ReadonlyEngineRecord<'customers'>;
 
 describe('useCustomerRecord', () => {
 	beforeEach(() => jest.resetAllMocks());

@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Icon } from '@wcpos/components/icon';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type ReadonlyEngineRecord, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 
 import { useProAccess } from '../contexts/pro-access';
@@ -14,7 +14,7 @@ import { getCustomerAvatarName } from '../components/user-avatar/customer-avatar
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 
-export function CustomerRow({ record }: { record: EngineRecord<'customers'> }) {
+export function CustomerRow({ record }: { record: ReadonlyEngineRecord<'customers'> }) {
 	const customer = useRecordField(record, ({ payload }) => payload);
 	const { format } = useCustomerNameFormat();
 	const { readOnly } = useProAccess();

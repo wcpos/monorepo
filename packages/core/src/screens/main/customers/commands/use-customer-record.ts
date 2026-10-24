@@ -9,7 +9,7 @@ export function useCustomerRecord() {
 	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const { localPatch } = useLocalMutation();
 	const createCustomer = React.useCallback(
-		(data: Record<string, unknown>): Promise<EngineRecord<'customers'> | undefined> =>
+		(data: Record<string, unknown>): Promise<ReadonlyEngineRecord<'customers'> | undefined> =>
 			create({ data }).catch(() => undefined) as Promise<EngineRecord<'customers'> | undefined>,
 		[create]
 	);

@@ -9,7 +9,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import type { QueryHandle, ReadonlyEngineRecord } from '@wcpos/query';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Actions } from './cells/actions';
@@ -40,7 +40,7 @@ import {
 
 import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
 
-type CustomerRow = { record: EngineRecord<'customers'> };
+type CustomerRow = { record: ReadonlyEngineRecord<'customers'> };
 
 const cells = {
 	avatar_url: Avatar,

@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import type { EngineRecord } from '@wcpos/query';
+import type { ReadonlyEngineRecord } from '@wcpos/query';
 
 import { CustomerRow } from './row';
 
@@ -35,7 +35,7 @@ const record = {
 		email: 'jane@example.com',
 		billing: { city: 'Madrid', country: 'ES' },
 	},
-} as EngineRecord<'customers'>;
+} as ReadonlyEngineRecord<'customers'>;
 beforeEach(() => {
 	mockReadOnly = false;
 	mockCanEdit = true;
