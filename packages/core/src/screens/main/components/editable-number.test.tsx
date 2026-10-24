@@ -58,39 +58,63 @@ it('rests as the cell text and opens to a field holding the raw value', async ()
 	expect(field.value).toBe('3.2');
 });
 
-it('Enter commits the typed number once and goes back to rest', async () => {
+it('Enter commits the typed number once, goes back to rest and hands focus to the price', async () => {
 	const onChangeText = setup();
 	const field = await open();
 	fireEvent.change(field, { target: { value: '4.5' } });
 	fireEvent.keyDown(field, { key: 'Enter' });
+	// The field's own blur (react-native-web blurs on submit in a timeout) commits and closes.
 	await act(async () => jest.runOnlyPendingTimers());
 
 	expect(onChangeText).toHaveBeenCalledTimes(1);
 	expect(onChangeText).toHaveBeenCalledWith(4.5);
 	expect(atRest()).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('price'));
 });
 
-it('Escape goes back to rest and emits nothing', async () => {
+it('a blur with the number unchanged closes and writes nothing', async () => {
 	const onChangeText = setup();
 	const field = await open();
-	fireEvent.change(field, { target: { value: '9' } });
-	fireEvent.keyDown(field, { key: 'Escape' });
-	fireEvent.blur(field);
-	await act(async () => jest.runOnlyPendingTimers());
+	await act(async () => field.blur());
 
 	expect(onChangeText).not.toHaveBeenCalled();
 	expect(atRest()).toBe(true);
 });
 
-it('a quick-discount chip commits the discounted price once, at the store places', async () => {
+it('Escape blurs the field, which closes it and emits nothing', async () => {
+	const onChangeText = setup();
+	const field = await open();
+	fireEvent.change(field, { target: { value: '9' } });
+	await act(async () => {
+		fireEvent.keyDown(field, { key: 'Escape' });
+	});
+
+	expect(onChangeText).not.toHaveBeenCalled();
+	expect(atRest()).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('price'));
+});
+
+it('a quick-discount chip discounts the typed number, once, at the store places', async () => {
 	const onChangeText = setup([5, 10]);
 	const field = await open();
 	expect(screen.getByTestId('price-discount-5-label').textContent).toBe('−5%');
-	fireEvent.click(screen.getByTestId('price-discount-10'));
-	fireEvent.blur(field);
-	await act(async () => jest.runOnlyPendingTimers());
+	fireEvent.change(field, { target: { value: '20' } });
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('price-discount-10'));
+	});
+
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(18);
+	expect(atRest()).toBe(true);
+});
+
+it('an untouched field: the chip discounts the stored number', async () => {
+	const onChangeText = setup([10]);
+	await open();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('price-discount-10'));
+	});
 
 	expect(onChangeText).toHaveBeenCalledTimes(1);
 	expect(onChangeText).toHaveBeenCalledWith(2.88);
-	expect(atRest()).toBe(true);
 });

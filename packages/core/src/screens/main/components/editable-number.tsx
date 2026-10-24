@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
@@ -48,16 +48,34 @@ export function EditableNumber({
 	const [editing, setEditing] = React.useState(false);
 	// Escape and a chip leave without the field's own value: the blur that follows must not commit.
 	const settled = React.useRef(false);
+	// The number typed so far, which a chip discounts (the stored one until a key is typed).
+	const draft = React.useRef(0);
+	// Enter, Escape and a chip hand focus back to the price, so Tab carries on from it; a click
+	// elsewhere keeps its own focus.
+	const refocus = React.useRef(false);
+	const input = React.useRef<TextInputInstance>(null);
+	const rest = React.useRef<{ focus?: () => void }>(null);
 
-	const finish = (next?: number) => {
+	React.useEffect(() => {
+		if (!editing && refocus.current) {
+			refocus.current = false;
+			rest.current?.focus?.();
+		}
+	}, [editing]);
+
+	/** Leave without the field's value: its blur closes the editor and the guard skips the commit. */
+	const leave = (next?: number) => {
 		settled.current = true;
-		setEditing(false);
+		refocus.current = true;
 		if (next !== undefined) onChangeText(next);
+		input.current?.blur();
+		setEditing(false);
 	};
 
 	if (!editing) {
 		return (
 			<Button
+				{...{ ref: rest }}
 				variant="ghost"
 				testID={testID}
 				disabled={disabled}
@@ -67,6 +85,7 @@ export function EditableNumber({
 				className="-mx-1 max-w-none items-end self-stretch px-1"
 				onPress={() => {
 					settled.current = false;
+					draft.current = toNumber(value) || 0;
 					setEditing(true);
 				}}
 			>
@@ -80,14 +99,19 @@ export function EditableNumber({
 		// content is 20 characters wide and spilled over the next column (dev-next, 2026-10-24).
 		<VStack space="xs" className="items-end self-stretch">
 			<NumberInput
+				ref={input}
 				testID={testID && `${testID}-field`}
 				autoFocus
 				selectTextOnFocus
 				value={value}
 				formatOptions={formatOptions}
 				inputClassName="px-1 text-right tabular-nums"
-				onChangeText={(next) => !settled.current && finish(next)}
-				onKeyPress={(event) => event.nativeEvent.key === 'Escape' && finish()}
+				// The field emits on blur only when the number changed; the blur always closes.
+				onChangeText={(next) => !settled.current && onChangeText(next)}
+				onBlur={() => setEditing(false)}
+				onDraftChange={(next) => (draft.current = next)}
+				onSubmitEditing={() => (refocus.current = true)}
+				onKeyPress={(event) => event.nativeEvent.key === 'Escape' && leave()}
 			/>
 			{!!discounts?.length && (
 				// Web: a press on a chip must not blur the field first (the blur would commit and
@@ -104,9 +128,10 @@ export function EditableNumber({
 							size="sm"
 							label={`−${discount}%`}
 							testID={testID && `${testID}-discount-${discount}`}
-							// Rounded to the store's price places (2, WooCommerce's default, before the store loads).
+							// The number in the field, rounded to the store's price places (2,
+							// WooCommerce's default, before the store loads).
 							onPress={() =>
-								finish(round(toNumber(value) * (1 - discount / 100), toNumber(decimals ?? 2)))
+								leave(round(draft.current * (1 - discount / 100), toNumber(decimals ?? 2)))
 							}
 						/>
 					))}

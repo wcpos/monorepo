@@ -394,7 +394,13 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 				) : data.length === 0 ? (
 					<EmptyCart />
 				) : (
-					<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
+					<ScrollView
+						ref={scrollViewRef}
+						testID="cart-table-scroll"
+						// A tap on a control (an open price's discount chip) reaches it with the keyboard
+						// up; a tap on empty cart space still dismisses the keyboard.
+						keyboardShouldPersistTaps="handled"
+					>
 						<TableBody>
 							{table.getRowModel().rows.map((row, index) => (
 								<PulseTableRow

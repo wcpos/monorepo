@@ -72,9 +72,9 @@ const DEFAULT_ORDER = 'default';
 /**
  * A cleared, unparsable, or zero price input means "no bound".
  *
- * Zero is folded into "no bound" on purpose: the shared NumberInput emits 0 when an empty
- * field is left without typing, so a stored 0 would be a bound nobody set (a max of 0
- * matches nothing).
+ * Zero is folded into "no bound" on purpose: the shared NumberInput emits 0 for a field
+ * the cashier cleared, so a stored 0 would be a bound nobody meant (a max of 0 matches
+ * nothing).
  */
 const priceBound = (value: number): number | undefined =>
 	Number.isFinite(value) && value !== 0 ? value : undefined;

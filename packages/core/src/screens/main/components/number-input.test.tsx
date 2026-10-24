@@ -101,8 +101,39 @@ describe('NumberInput', () => {
 
 		fireEvent.focus(field);
 		expect(field.value).toBe('12,5');
+		fireEvent.change(field, { target: { value: '12,75' } });
 		fireEvent.blur(field);
-		expect(onChange).toHaveBeenCalledWith(12.5);
+		expect(onChange).toHaveBeenCalledWith(12.75);
+	});
+
+	it('writes nothing on a focus and leave, or on retyping the same number', () => {
+		const onChange = jest.fn();
+		render(<NumberInput testID="price" value="3.2" onChangeText={onChange} />);
+		const field = screen.getByTestId('price') as HTMLInputElement;
+
+		fireEvent.focus(field);
+		fireEvent.blur(field);
+		expect(onChange).not.toHaveBeenCalled();
+
+		fireEvent.focus(field);
+		fireEvent.change(field, { target: { value: '3.20' } });
+		fireEvent.blur(field);
+		expect(onChange).not.toHaveBeenCalled();
+
+		fireEvent.focus(field);
+		fireEvent.change(field, { target: { value: '3.5' } });
+		fireEvent.blur(field);
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange).toHaveBeenCalledWith(3.5);
+	});
+
+	it('leaves a blank field blank: no 0 written for a focus and leave', () => {
+		const onChange = jest.fn();
+		render(<NumberInput testID="regular" value="" onChangeText={onChange} />);
+		const field = screen.getByTestId('regular') as HTMLInputElement;
+		fireEvent.focus(field);
+		fireEvent.blur(field);
+		expect(onChange).not.toHaveBeenCalled();
 	});
 
 	it('shows an empty value as an empty field', () => {

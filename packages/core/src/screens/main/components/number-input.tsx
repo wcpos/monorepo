@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { Platform, type TextInputInstance } from 'react-native';
+import { Platform } from 'react-native';
 
 import { Input, InputProps } from '@wcpos/components/input';
 import { cn } from '@wcpos/components/lib/utils';
-import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -13,10 +12,13 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 	/** The numeric value */
 	value?: number | string;
 
-	/** Called when the value changes */
+	/** Called on blur with the typed number, only when it differs from `value` */
 	onChangeText?: (value: number) => void;
 
-	/** How the number reads while the field is not focused (`3.20`); focused, it is the raw `3.2`. */
+	/** Called on every keystroke with the number typed so far */
+	onDraftChange?: (value: number) => void;
+
+	/** Web: how the number reads while the field is not focused (`3.20`); focused, the raw `3.2`. */
 	formatOptions?: NumberFormatOptions;
 
 	/** Classes for the displayed number */
@@ -26,25 +28,22 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 /**
  * A numeric input that accepts and emits numbers, on every platform.
  * Uses internal string state to allow typing decimals freely.
- * Shows the formatted number at rest and the raw editable string while focused.
- * Emits number on blur.
+ * Emits number on blur, and only a changed one: focusing and leaving writes nothing.
  */
 export function NumberInput({
 	value,
 	onChangeText,
+	onDraftChange,
 	formatOptions,
 	onBlur,
 	onFocus,
 	inputClassName,
 	textClassName,
-	ref,
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) || '.';
 	const { format } = useNumberFormat(formatOptions);
-	const inputRef = React.useRef<TextInputInstance>(null);
-	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**
 	 * Convert number to display string using the store's decimal separator
@@ -97,45 +96,53 @@ export function NumberInput({
 		}
 	}
 
-	// At rest the field reads formatted; the raw string is what is edited and parsed, so the
-	// formatted one (thousands separators, a fixed scale) never reaches `stringToNumber`.
+	// Web only: at rest the field reads formatted, and focus swaps in the raw string that is
+	// edited and parsed, so the formatted one (grouping, a fixed scale) never reaches
+	// `stringToNumber`. Native keeps the raw string always: the swap is a controlled-text update
+	// while focused, which Fabric iOS can drop (#1957), and keystrokes would then edit the
+	// formatted string ("1,234.505" parses as 1.234).
 	const shown =
-		isFocused || internalValue === '' ? internalValue : format(stringToNumber(internalValue));
+		Platform.OS === 'web' && !isFocused && internalValue !== ''
+			? format(stringToNumber(internalValue))
+			: internalValue;
 
-	// Emit number on blur
+	// Emit the number on blur, only when it differs from the incoming value: a focus and leave
+	// must not write the record (a blank regular price would become "0").
 	const handleBlur = React.useCallback(
 		(e: any) => {
 			setIsFocused(false);
-			if (onChangeText) {
-				onChangeText(stringToNumber(internalValue));
+			const typed = stringToNumber(internalValue);
+			if (onChangeText && typed !== stringToNumber(numberToString(value))) {
+				onChangeText(typed);
 			}
 			onBlur?.(e);
 		},
-		[internalValue, onChangeText, onBlur, stringToNumber]
+		[internalValue, value, onChangeText, onBlur, stringToNumber, numberToString]
 	);
 
 	const handleFocus = React.useCallback(
 		(e: any) => {
 			setIsFocused(true);
-			// Native selects on focus BEFORE the swap to the raw string, which then lands the caret
-			// at the end: select the raw string again once it renders. The web selects in a timeout.
-			if (props.selectTextOnFocus && Platform.OS !== 'web') {
-				const length = internalValue.length;
-				setTimeout(() => inputRef.current?.setSelection?.(0, length), 0);
-			}
 			onFocus?.(e);
 		},
-		[onFocus, props.selectTextOnFocus, internalValue]
+		[onFocus]
+	);
+
+	const handleChangeText = React.useCallback(
+		(text: string) => {
+			setInternalValue(text);
+			onDraftChange?.(stringToNumber(text));
+		},
+		[onDraftChange, stringToNumber]
 	);
 
 	return (
 		<Input
 			key={syncKey}
 			{...props}
-			ref={mergedRef}
 			inputClassName={cn(inputClassName, textClassName)}
 			value={shown}
-			onChangeText={setInternalValue}
+			onChangeText={handleChangeText}
 			onFocus={handleFocus}
 			onBlur={handleBlur}
 			type="decimal"
