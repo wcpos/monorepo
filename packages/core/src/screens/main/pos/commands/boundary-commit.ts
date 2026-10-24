@@ -119,12 +119,13 @@ export async function commitAtBoundary(
 				revalidate,
 				aggregateOnly: () => aggregateOnly,
 				queue: slot,
-				complete: (target, slot, summary) =>
+				complete: (target, queue, summary) =>
 					landAnswer(
 						{ kind: 'close', order: summary },
 						{ via: 'boundary' },
 						{
-							finish: (outcome) => ctx.complete(target, outcome, slot),
+							finish: (outcome) => ctx.complete(target, outcome, queue),
+							// A close never calls it; only a `reopened` answer does.
 							resolveAttempt: () => resolveCompletionAttempt(ctx.storeDB, target.uuid),
 							dp: ctx.dp,
 						}
@@ -191,13 +192,14 @@ export async function commitAtBoundary(
 			});
 			// A system pass that cannot close (offline, refused) leaves the order pos-partial; the
 			// coordinator retries an offline one when the till reconnects.
-			// An answered close lands through the table above; its completion keeps or resolves the attempt.
 			if (completion && typeof completion === 'object' && 'kind' in completion) {
 				logger.debug('settlement.boundary-not-closed', {
 					context: { orderId: order.uuid, outcome: completion.kind },
 				});
 				return completion;
 			}
+			// An answered close returns nothing (it landed in complete above): a truthy non-kind result
+			// is only a supersession.
 			if (completion) {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {

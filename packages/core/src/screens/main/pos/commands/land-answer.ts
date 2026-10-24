@@ -77,10 +77,7 @@ export type StoreAnswer =
 	/** A replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
 	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'close'; order: OrderPaymentSummary };
-/**
- * `remainingMinor`: the press's prediction for a recorded leg (`StampedSale`); a recovery or a
- * boundary close has none.
- */
+/** `remainingMinor`: a press's prediction for a recorded leg (`StampedSale`); others have none. */
 export type Arrival =
 	{ via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' | 'boundary' };
 

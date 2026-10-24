@@ -764,7 +764,7 @@ it('maps an unknown binding to none in both cart and coordinator boundary commit
 	}
 });
 
-it("both boundary hosts hand their completion the table's outcome unchanged", async () => {
+it('both boundary hosts hand their completion the outcome unchanged', async () => {
 	const a = record({
 		status: 'pos-partial',
 		line_items: [{ total: '4' }],

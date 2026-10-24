@@ -28,6 +28,7 @@ import { commitAtBoundary } from './boundary-commit';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CartConfigInputs } from './cart-config-for-order';
+import type { CloseOutcome } from './close-sale';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 
 jest.mock('@wcpos/query/register-session', () => ({
@@ -47,7 +48,7 @@ let ctx: SaleContext & { closeSale: typeof closeSale };
 // The server completes a covered sale through close (ADR 0040 D2); its mirror lands the status.
 const closeSale = {
 	online: jest.fn(() => true),
-	close: jest.fn(async (target: ReadonlyEngineRecord<'orders'>) => {
+	close: jest.fn(async (target: ReadonlyEngineRecord<'orders'>): Promise<CloseOutcome> => {
 		Object.assign(target.getLatest().payload, { status: 'completed' });
 		return { kind: 'answered' as const, order: { status: 'completed' } as OrderPaymentSummary };
 	}),
@@ -250,10 +251,7 @@ describe('an answered close', () => {
 
 	it('a close the store answers outstanding logs the not-closed row and keeps the attempt', async () => {
 		const order = orderFor();
-		// The fixture's close is typed by its answered default; a CloseOutcome also holds this kind.
-		closeSale.close.mockImplementationOnce(
-			async () => ({ kind: 'outstanding', order: null }) as never
-		);
+		closeSale.close.mockImplementationOnce(async () => ({ kind: 'outstanding', order: null }));
 		expect(await run(order)).toEqual({ kind: 'outstanding', order: null });
 		expect(getLogger(['test']).debug).toHaveBeenCalledWith('settlement.boundary-not-closed', {
 			context: { orderId: order.uuid, outcome: 'outstanding' },
