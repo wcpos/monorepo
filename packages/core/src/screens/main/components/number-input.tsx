@@ -15,8 +15,11 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 	/** Called on blur with the typed number, only when it differs from `value` */
 	onChangeText?: (value: number) => void;
 
-	/** Called on every keystroke with the number typed so far ('' once cleared; unreadable text skips) */
-	onDraftChange?: (value: number | '') => void;
+	/** Called on every text change with the raw text, readable or not */
+	onDraftChange?: (text: string) => void;
+
+	/** Raw text a parent owns (an in-place editor's draft): shown in place of `value`, unformatted. */
+	draft?: string;
 
 	/** Web: how the number reads while the field is not focused (`3.20`); focused, the raw `3.2`. */
 	formatOptions?: NumberFormatOptions;
@@ -54,6 +57,7 @@ export function NumberInput({
 	value,
 	onChangeText,
 	onDraftChange,
+	draft,
 	formatOptions,
 	onBlur,
 	onFocus,
@@ -95,7 +99,7 @@ export function NumberInput({
 	// Implemented as the React "adjust state during render" pattern (tracking the
 	// previous display value) rather than an effect, so it never sets state inside
 	// useEffect. While focused we skip syncing so typing isn't interrupted.
-	const displayValue = numberToString(value);
+	const displayValue = draft ?? numberToString(value);
 	const [prevDisplayValue, setPrevDisplayValue] = React.useState(displayValue);
 	const [prevIsFocused, setPrevIsFocused] = React.useState(isFocused);
 	if (displayValue !== prevDisplayValue || isFocused !== prevIsFocused) {
@@ -156,11 +160,9 @@ export function NumberInput({
 		(text: string) => {
 			dirty.current = true;
 			setInternalValue(text);
-			const draft = stringToNumber(text);
-			if (text.trim() === '') onDraftChange?.('');
-			else if (Number.isFinite(draft)) onDraftChange?.(draft);
+			onDraftChange?.(text);
 		},
-		[onDraftChange, stringToNumber]
+		[onDraftChange]
 	);
 
 	return (

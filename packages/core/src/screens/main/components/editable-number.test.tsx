@@ -189,6 +189,44 @@ it('typing the stored number back writes nothing; a re-focus alone is not typing
 	expect(atRest()).toBe(true);
 });
 
+it('typing 20 then changing it to unreadable text and leaving writes nothing', async () => {
+	const onChangeText = setup();
+	const field = await open();
+	fireEvent.change(field, { target: { value: '20' } });
+	fireEvent.change(field, { target: { value: '99x' } });
+	await act(async () => field.blur());
+
+	expect(onChangeText).not.toHaveBeenCalled();
+	expect(atRest()).toBe(true);
+});
+
+it('a cleared field is 0 to a chip: −10% writes 0, not the stored price discounted', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '' } });
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('price-discount-10'));
+	});
+
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(0);
+});
+
+it('Escape on a chip cancels: nothing written, closed, focus back on the price', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '20' } });
+	const chip = screen.getByTestId('price-discount-10');
+	await act(async () => chip.focus());
+	await act(async () => {
+		fireEvent.keyDown(chip, { key: 'Escape' });
+	});
+
+	expect(onChangeText).not.toHaveBeenCalled();
+	expect(atRest()).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('price'));
+});
+
 it('an untouched field: the chip discounts the stored number', async () => {
 	const onChangeText = setup([10]);
 	await open();

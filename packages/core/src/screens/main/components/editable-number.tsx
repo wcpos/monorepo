@@ -11,7 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
-import { NumberInput } from './number-input';
+import { NumberInput, parseNumber } from './number-input';
 
 import type { NumberFormatOptions } from '../hooks/use-number-format';
 
@@ -45,25 +45,26 @@ export function EditableNumber({
 }: EditableNumberProps) {
 	const { store } = useAppState();
 	const decimals = useDocField(store, (state) => state.price_num_decimals);
+	const decimalSep = useDocField(store, (state) => state.price_decimal_sep) || '.';
+	const thousandSep = useDocField(store, (state) => state.price_thousand_sep) || '';
 	const [editing, setEditing] = React.useState(false);
-	// Escape and a chip leave without the field's own value: the blur that follows must not commit.
-	const settled = React.useRef(false);
-	const box = React.useRef<{ contains?: (node: unknown) => boolean }>(null);
 	/**
-	 * The editor owns what was typed for the whole session: a number, '' for a cleared field, or
-	 * undefined while untouched. It is fed back as the field's value, so leaving to a chip and
-	 * coming back (Shift+Tab) shows it again, and it is committed when the session ends. State
+	 * While open, the draft IS the field's raw text (undefined: never typed). It is fed back to
+	 * the field, so leaving to a chip and coming back shows it, and every exit reads it. State
 	 * for the field, a ref for the handlers that read it in the same event.
 	 */
-	const [draft, setDraftState] = React.useState<number | '' | undefined>(undefined);
-	const draftRef = React.useRef<number | '' | undefined>(undefined);
-	const setDraft = (next: number | '' | undefined) => {
-		draftRef.current = next;
-		setDraftState(next);
+	const [draft, setDraftState] = React.useState<string | undefined>(undefined);
+	const draftRef = React.useRef<string | undefined>(undefined);
+	const setDraft = (text: string | undefined) => {
+		draftRef.current = text;
+		setDraftState(text);
 	};
+	// The session has ended: a blur that follows (the field's, after a chip or Escape) writes nothing.
+	const settled = React.useRef(false);
 	// Enter, Escape and a chip hand focus back to the price, so Tab carries on from it; a click
 	// elsewhere keeps its own focus.
 	const refocus = React.useRef(false);
+	const box = React.useRef<{ contains?: (node: unknown) => boolean }>(null);
 	const input = React.useRef<TextInputInstance>(null);
 	const rest = React.useRef<{ focus?: () => void }>(null);
 
@@ -74,40 +75,41 @@ export function EditableNumber({
 		}
 	}, [editing]);
 
-	/** End the session: the draft goes with it. */
-	const end = () => {
+	const stored = value == null || value === '' ? undefined : toNumber(value);
+	/** The draft as a number: the stored one while untouched; '' is 0 (nothing over a blank); NaN unreadable. */
+	const draftNumber = () => {
+		const text = draftRef.current;
+		if (text === undefined) return stored;
+		if (text.trim() === '') return stored === undefined ? undefined : 0;
+		return parseNumber(text, decimalSep, thousandSep);
+	};
+
+	/** The one exit: writes `next` once when it is a number that changes the record, then closes. */
+	const finish = (next: number | undefined) => {
+		if (!settled.current && next !== undefined && Number.isFinite(next) && next !== stored) {
+			onChangeText(next);
+		}
 		settled.current = true;
 		setDraft(undefined);
 		setEditing(false);
 	};
 
-	/** Leave without the draft (Escape, or a chip's own number): the field's blur then commits nothing. */
-	const leave = (next?: number) => {
-		settled.current = true;
+	/** A chip's number, or Escape (nothing): focus goes back to the price. */
+	const leave = (next: number | undefined) => {
 		refocus.current = true;
-		if (next !== undefined) onChangeText(next);
+		finish(next);
 		input.current?.blur();
-		end();
 	};
+	const onEscape = (event: { nativeEvent: { key: string } }) =>
+		event.nativeEvent.key === 'Escape' && leave(undefined);
 
-	/**
-	 * A blur in the editor. Web: focus moving to a chip (Tab) keeps it open, or the chip taking
-	 * focus would unmount. Focus leaving it commits the draft once, unless settled, and only when
-	 * it changes the record: untouched, or typed back to the stored number, writes nothing; a 0
-	 * over a blank writes 0; a cleared field writes 0 over a number and nothing over a blank.
-	 */
+	/** A blur in the editor: focus moving to a chip (Tab) keeps it open; leaving it writes the draft. */
 	const close = (blur?: unknown) => {
 		// Web's FocusEvent; native's blur event carries no target, so native always closes.
 		const event = blur as { relatedTarget?: unknown; nativeEvent?: { relatedTarget?: unknown } };
 		const next = event?.nativeEvent?.relatedTarget ?? event?.relatedTarget;
 		if (next && box.current?.contains?.(next)) return;
-		const typed = draftRef.current;
-		const blank = value == null || value === '';
-		if (!settled.current && typed !== undefined && !(typed === '' && blank)) {
-			const number = typed === '' ? 0 : typed;
-			if (blank || number !== toNumber(value)) onChangeText(number);
-		}
-		end();
+		finish(draftNumber());
 	};
 
 	if (!editing) {
@@ -135,19 +137,21 @@ export function EditableNumber({
 	return (
 		// Stretched to the cell, so the field is the column's width: an <input> sized by its
 		// content is 20 characters wide and spilled over the next column (dev-next, 2026-10-24).
-		<VStack {...{ ref: box }} space="xs" className="items-end self-stretch">
+		// Web: Escape on a chip reaches here; the field stops its own keys, so it has its own.
+		<VStack {...{ ref: box, onKeyDown: onEscape }} space="xs" className="items-end self-stretch">
 			<NumberInput
 				ref={input}
 				testID={testID && `${testID}-field`}
 				autoFocus
 				selectTextOnFocus
-				value={draft ?? value}
+				value={value}
+				draft={draft}
 				formatOptions={formatOptions}
 				inputClassName="px-1 text-right tabular-nums"
 				onBlur={close}
 				onDraftChange={setDraft}
 				onSubmitEditing={() => (refocus.current = true)}
-				onKeyPress={(event) => event.nativeEvent.key === 'Escape' && leave()}
+				onKeyPress={onEscape}
 			/>
 			{!!discounts?.length && (
 				// Web: a mouse press on a chip keeps focus in the field. Safari does not focus a
@@ -168,12 +172,11 @@ export function EditableNumber({
 							size="sm"
 							label={`−${discount}%`}
 							testID={testID && `${testID}-discount-${discount}`}
-							// The number in the field (the stored one while untouched), rounded to the
-							// store's price places (2, WooCommerce's default, before the store loads).
-							onPress={() => {
-								const base = typeof draftRef.current === 'number' ? draftRef.current : value;
-								leave(round((toNumber(base) || 0) * (1 - discount / 100), toNumber(decimals ?? 2)));
-							}}
+							// The draft as a number ('' is 0), rounded to the store's price places
+							// (2, WooCommerce's default, before the store loads).
+							onPress={() =>
+								leave(round((draftNumber() ?? 0) * (1 - discount / 100), toNumber(decimals ?? 2)))
+							}
 						/>
 					))}
 				</View>
