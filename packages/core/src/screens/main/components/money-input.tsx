@@ -13,6 +13,11 @@ export interface MoneyInputProps {
 	onChangeText: (value: number) => void;
 	/** Quick discounts (percent): the web keypad's quick keys. */
 	discounts?: number[];
+	/**
+	 * The places the number may carry; the store's price places when absent. A percentage
+	 * is not money: a percentage fee passes its own, so a zero-decimal store still takes 2.5 %.
+	 */
+	decimals?: number;
 	disabled?: boolean;
 	/** Rest-state text classes. */
 	textClassName?: string;
@@ -20,6 +25,12 @@ export interface MoneyInputProps {
 }
 
 /** Native: the price is the plain field in place (decision 16); the web price grows into a keypad. */
-export function MoneyInput({ value, format, discounts: _discounts, ...props }: MoneyInputProps) {
+export function MoneyInput({
+	value,
+	format,
+	discounts: _discounts,
+	decimals: _decimals,
+	...props
+}: MoneyInputProps) {
 	return <EditableNumber {...props} value={value} display={format(Number(value) || 0)} />;
 }

@@ -16,6 +16,7 @@ export function MoneyInput({
 	format,
 	onChangeText,
 	discounts,
+	decimals: ownDecimals,
 	disabled,
 	textClassName,
 	testID,
@@ -24,7 +25,8 @@ export function MoneyInput({
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) as
 		string | undefined;
 	// WooCommerce's default, 2, before the store loads.
-	const decimals = useDocField(store, (state) => state.price_num_decimals);
+	const priceDecimals = useDocField(store, (state) => state.price_num_decimals);
+	const decimals = ownDecimals ?? Number(priceDecimals ?? 2);
 	const t = useT();
 	// The percent in the store's number format: a comma store reads "12,5".
 	const { format: formatNumber } = useNumberFormat();
@@ -50,7 +52,7 @@ export function MoneyInput({
 			disabled={disabled}
 			value={Number(value) || 0}
 			format={format}
-			decimals={Number(decimals ?? 2)}
+			decimals={decimals}
 			decimalSeparator={decimalSeparator || '.'}
 			discounts={discounts}
 			labels={labels}

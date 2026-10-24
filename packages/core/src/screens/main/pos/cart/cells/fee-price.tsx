@@ -41,6 +41,9 @@ function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
 	);
 }
 
+/** A percentage fee is typed to hundredths (12.75 %), whatever the currency's places. */
+const PERCENT_PLACES = 2;
+
 function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
@@ -69,6 +72,7 @@ function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 					value={String(amount)}
 					format={percent ? formatNumber : format}
 					formatOptions={percent ? undefined : { fixedDecimalScale: true }}
+					decimals={percent ? PERCENT_PLACES : undefined}
 					textClassName="text-muted-foreground text-right"
 					onChangeText={onAmount}
 				/>

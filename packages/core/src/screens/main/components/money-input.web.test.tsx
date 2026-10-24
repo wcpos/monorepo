@@ -52,6 +52,11 @@ it("hands the keypad the store's places and separator, and names the quick keys"
 	expect(mockKeypad.labels.discountKey(12.5)).toBe('−12,5%');
 });
 
+it("takes its own places over the store's: a percentage fee on a zero-decimal store", () => {
+	render(<MoneyInput value="2.5" format={String} decimals={2} onChangeText={jest.fn()} />);
+	expect(mockKeypad.decimals).toBe(2);
+});
+
 describe('a scanner burst', () => {
 	const detector = (event: KeyboardEvent) => {
 		if (event.key !== 'first') event.preventDefault();
