@@ -9,7 +9,13 @@ import { map, startWith } from 'rxjs/operators';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
-import { readLedger, withLedger } from '@wcpos/order-math';
+import {
+	readAwaitingCustomer,
+	readLedger,
+	withAwaitingCustomer,
+	withGatewayAttempt,
+	withLedger,
+} from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
@@ -57,6 +63,19 @@ import type {
 	TerminalLegState,
 	TerminalPaymentsService,
 } from '../../../../../services/terminal-payments';
+
+/** Meta a mirror wrote, read as the till reads it: the awaiting stamp it leaves (null: none). */
+const stamped = (expected: unknown) => ({
+	asymmetricMatch: (meta: MetaDataEntry[]) => {
+		try {
+			expect(readAwaitingCustomer(meta)).toEqual(expected);
+			return true;
+		} catch {
+			return false;
+		}
+	},
+	toAsymmetricMatcher: () => `stamped(${JSON.stringify(expected)})`,
+});
 
 // The writer re-runs `requireOpenSession` (the pre-action write) after the gate's read; the
 // fixtures carry no session collection; both reads share the happy-path session id.
@@ -414,8 +433,10 @@ jest.mock('@wcpos/utils/logger', () => ({
 		debug: () => undefined,
 	}),
 }));
+// Keys as copy; the calls carry what a sentence interpolates (the offline confirm's amount).
+const mockT = jest.fn((key: string) => key);
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (key: string) => key,
+	useT: () => mockT,
 }));
 
 const order = {
@@ -455,13 +476,20 @@ function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 	};
 }
 
-// The flow asks the cashier through `useConfirmOfflineTender` (its own suite); yes by default.
-const mockConfirmOffline = jest.fn();
-jest.mock('./use-confirm-offline-tender', () => ({
-	useConfirmOfflineTender: () => ({
-		confirmOfflineTender: (facts: unknown) => mockConfirmOffline(facts) ?? Promise.resolve(true),
-		dialog: null,
-	}),
+// The flow asks the cashier through `useConfirm` (its own suite); yes by default. `open` while asked.
+const mockConfirm = jest.fn();
+jest.mock('./use-confirm', () => ({
+	useConfirm: () => {
+		const [open, setOpen] = jest.requireActual('react').useState(false);
+		return {
+			confirm: (question: unknown) => {
+				setOpen(true);
+				return Promise.resolve(mockConfirm(question) ?? true).finally(() => setOpen(false));
+			},
+			dialog: 'confirm-dialog',
+			open,
+		};
+	},
 }));
 
 describe('useTenderFlow', () => {
@@ -581,6 +609,85 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	// R11: the tender's commands share one busy gate, held while the command is in flight.
+	it.each([
+		['retryCommand', mockResend, []],
+		['takeTender', mockRecordManualPayment, recorded],
+		['cancelPayment', mockVoidPayments, { rows: [], failed: [] }],
+	] as const)(
+		'%s holds busy while in flight and frees it when it settles',
+		async (command, mock, settled) => {
+			let settle!: (value: unknown) => void;
+			const answer = new Promise((resolve) => (settle = resolve));
+			(mock as jest.Mock).mockImplementationOnce(() => answer);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			let pending!: Promise<void>;
+			act(() => {
+				pending = result.current[command]();
+			});
+			await waitFor(() => expect(mock).toHaveBeenCalledTimes(1));
+			expect(result.current.busy).toBe(true);
+			expect(result.current.running).toBe(command);
+			await act(async () => {
+				settle(settled);
+				await pending;
+			});
+			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
+		}
+	);
+
+	it.each(['takeTender', 'cancelPayment'] as const)(
+		'%s while Try again is in flight is refused by the gate',
+		async (command) => {
+			let settle!: (value: never[]) => void;
+			const answer = new Promise<never[]>((resolve) => (settle = resolve));
+			mockResend.mockImplementationOnce(() => answer);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			let retried!: Promise<void>;
+			act(() => {
+				retried = result.current.retryCommand();
+			});
+			await act(async () => result.current[command]());
+			expect(mockRecordManualPayment).not.toHaveBeenCalled();
+			expect(mockVoidPayments).not.toHaveBeenCalled();
+			await act(async () => {
+				settle([]);
+				await retried;
+			});
+		}
+	);
+
+	it('a command that throws past its own catch still frees the gate', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		mockVoidPayments.mockRejectedValueOnce(new Error('void lost'));
+		mockError.mockImplementationOnce(() => {
+			throw new Error('logger down');
+		});
+		await act(async () => {
+			await expect(result.current.cancelPayment()).rejects.toThrow('logger down');
+		});
+		expect(result.current.busy).toBe(false);
+		await act(async () => result.current.cancelPayment());
+		expect(mockVoidPayments).toHaveBeenCalledTimes(2);
+	});
+
+	// A throw before the press reaches its try frees the gate and leaves the journal gate unmasked.
+	it('a press that throws before its send frees busy and leaves the journal gate visible', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		const latest = jest.spyOn(order, 'getLatest').mockImplementationOnce(() => {
+			throw new Error('record gone');
+		});
+		await act(async () => {
+			await expect(result.current.takeTender()).rejects.toThrow('record gone');
+		});
+		latest.mockRestore();
+		expect(result.current.busy).toBe(false);
+		act(() => mockGate$.next(true));
+		expect(result.current.unansweredCommand).toBe(true);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+
 	it('Try again reports a changed order as such, never as an unanswered payment', async () => {
 		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
 		mockResend.mockRejectedValueOnce(
@@ -658,7 +765,7 @@ describe('useTenderFlow', () => {
 		};
 		mockPayload = {
 			...mockPayload,
-			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+			meta_data: withAwaitingCustomer([], stamp),
 		} as typeof mockPayload;
 		const summary = { status: 'pending' };
 		mockResend.mockResolvedValueOnce([
@@ -691,7 +798,7 @@ describe('useTenderFlow', () => {
 			mockPayload = {
 				...mockPayload,
 				status: 'on-hold',
-				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+				meta_data: withAwaitingCustomer([], stamp),
 			} as typeof mockPayload;
 			expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
 				'receipt'
@@ -3263,7 +3370,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockGatewaysGet.mockResolvedValue({
 			data: [{ id: 'wcpos_email_invoice', settled_order_status: 'pending' }],
 		});
-		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockPayload.meta_data = withAwaitingCustomer([], stamp);
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'settled', payment: null, order: summary('pending') },
 		});
@@ -3293,16 +3400,9 @@ describe('gateway capture mode (contract 1.2)', () => {
 			});
 			// The stale stamp goes with the mirror; no row is minted.
 			expect(mockManualMirror).toHaveBeenCalledWith(
-				expect.objectContaining({
-					changes: {
-						status: 'pending',
-						meta_data: expect.not.arrayContaining([
-							expect.objectContaining({ key: '_wcpos_awaiting_customer' }),
-							expect.objectContaining({ key: '_wcpos_payments' }),
-						]),
-					},
-				})
+				expect.objectContaining({ changes: { status: 'pending', meta_data: stamped(null) } })
 			);
+			expect(readLedger(order.getLatest().payload.meta_data)).toEqual([]);
 			expect(order.getLatest().payload.status).toBe('pending');
 			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(true);
 			expect(
@@ -3474,7 +3574,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		};
 		mockPayload = {
 			...mockPayload,
-			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+			meta_data: withAwaitingCustomer([], stamp),
 		} as typeof mockPayload;
 		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -3497,7 +3597,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		};
 		mockPayload = {
 			...mockPayload,
-			meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+			meta_data: withAwaitingCustomer([], stamp),
 		} as typeof mockPayload;
 		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
@@ -3549,12 +3649,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect.objectContaining({
 				changes: expect.objectContaining({
 					status: 'pending',
-					meta_data: expect.arrayContaining([
-						expect.objectContaining({
-							key: '_wcpos_awaiting_customer',
-							value: expect.objectContaining({ destination: 'buyer@example.com' }),
-						}),
-					]),
+					meta_data: stamped(expect.objectContaining({ destination: 'buyer@example.com' })),
 				}),
 			})
 		);
@@ -3661,9 +3756,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		);
 		await act(async () => result.current.takeTender());
 		const lost = (mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id;
-		mockPayload.meta_data = [
-			{ key: '_wcpos_awaiting_customer', value: { ...stamp, attempt_id: lost } },
-		];
+		mockPayload.meta_data = withAwaitingCustomer([], { ...stamp, attempt_id: lost });
 		rerender();
 		await act(async () => result.current.takeTender());
 		expect((mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id).not.toBe(
@@ -3690,7 +3783,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 	});
 
 	it('a cancel the store applied but the till could not save is still a cancel', async () => {
-		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockPayload.meta_data = withAwaitingCustomer([], stamp);
 		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -3737,7 +3830,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 
 	it('Send again prefills where the last invoice went when the order has no billing email', async () => {
 		mockPayload.billing = { email: '', phone: '' };
-		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockPayload.meta_data = withAwaitingCustomer([], stamp);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		expect(result.current.fieldValues.woocommerce_pos_invoice_email_address).toBe(
@@ -4016,6 +4109,209 @@ describe('gateway capture mode (contract 1.2)', () => {
 				})
 			);
 		});
+
+		// S2a: the store's attempt map names the attempt on every till, before any press.
+		const stranded = (fate = 'sent') =>
+			withGatewayAttempt([], 'attempt-9', {
+				fate,
+				method_id: 'wcpos_email_invoice',
+				cashier_id: 7,
+				sent_at_gmt: '2026-10-23T10:42:00Z',
+				awaiting: null,
+				attention_at_gmt: null,
+			});
+		const clearedRow = (copy: string) => mockInfo.mock.calls.find(([message]) => message === copy);
+
+		it('unansweredAttempt reads the resident: none, the sent entry, none once cancelled', () => {
+			const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.unansweredAttempt).toBeNull();
+			mockPayload.meta_data = stranded();
+			rerender();
+			expect(result.current.unansweredAttempt).toEqual({
+				id: 'attempt-9',
+				methodId: 'wcpos_email_invoice',
+				cashierId: 7,
+				sentAtGmt: '2026-10-23T10:42:00Z',
+				awaiting: null,
+				flagged: false,
+				title: 'Email Invoice',
+			});
+			mockMethods = [cash];
+			rerender();
+			// A gateway the till no longer has a descriptor for: no title, so the line's generic copy.
+			expect(result.current.unansweredAttempt?.title).toBeNull();
+			mockPayload.meta_data = stranded('cancelled');
+			rerender();
+			expect(result.current.unansweredAttempt).toBeNull();
+			// Adoption is not an answer: the warning belongs to presses, closes and Try again only.
+			expect(unanswered()).toEqual([]);
+		});
+
+		it('no one may clear beside an awaiting invoice: unansweredAttempt is null while it is sent', () => {
+			mockPayload.meta_data = withAwaitingCustomer(stranded(), stamp);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.invoiceSent?.attempt_id).toBe('attempt-0');
+			expect(result.current.unansweredAttempt).toBeNull();
+		});
+
+		it.each([
+			['pos-open', '92.95', 'pos_checkout.attempt_cleared_reopened'],
+			// Covered wins over an open status: "open for payment" would invite a second tender.
+			['pos-partial', '0.00', 'pos_checkout.attempt_cleared_covered'],
+			['on-hold', '0.00', 'pos_checkout.attempt_cleared_covered'],
+			['on-hold', '92.95', 'pos_checkout.attempt_cleared'],
+			// A balance the store did not state is not covered.
+			['on-hold', '', 'pos_checkout.attempt_cleared'],
+		])(
+			'clearAttempt answered %s with balance %s says %s, with the cashier and the attempt',
+			async (status, balance, copy) => {
+				mockPayload.meta_data = stranded();
+				mockManualPost.mockResolvedValue({ data: { order: { ...summary(status), balance } } });
+				const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+				await act(async () => result.current.clearAttempt());
+				expect(mockConfirm).toHaveBeenCalledWith({
+					title: 'pos_checkout.clear_attempt_title',
+					body: 'pos_checkout.clear_attempt_body',
+					action: 'pos_checkout.clear_attempt',
+					destructive: true,
+					testID: 'checkout-clear-attempt',
+				});
+				expect(mockManualPost).toHaveBeenCalledWith(
+					'orders/42/payment-methods/wcpos_email_invoice/cancel',
+					{ attempt_id: 'attempt-9' }
+				);
+				expect(clearedRow(copy)?.[1]).toEqual({
+					actor: { id: '7', name: 'Pat' },
+					showToast: true,
+					context: expect.objectContaining({
+						attemptId: 'attempt-9',
+						method: 'wcpos_email_invoice',
+					}),
+				});
+				expect(clearedRow(copy)?.[1].context).not.toHaveProperty('type');
+				expect(mockError).not.toHaveBeenCalled();
+				expect(result.current.busy).toBe(false);
+			}
+		);
+
+		it('clearAttempt asks first: a decline posts nothing and frees busy for the next press', async () => {
+			mockPayload.meta_data = stranded();
+			mockConfirm.mockResolvedValueOnce(false);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.confirmDialog).toBe('confirm-dialog');
+			await act(async () => result.current.clearAttempt());
+			expect(mockConfirm).toHaveBeenCalledTimes(1);
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
+			mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
+			await act(async () => result.current.clearAttempt());
+			expect(mockConfirm).toHaveBeenCalledTimes(2);
+			expect(mockManualPost).toHaveBeenCalledTimes(1);
+		});
+
+		it('clearAttempt holds busy while its confirmation is open', async () => {
+			mockPayload.meta_data = stranded();
+			let answer: (confirmed: boolean) => void = () => {};
+			mockConfirm.mockImplementationOnce(
+				() => new Promise<boolean>((resolve) => (answer = resolve))
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			let cleared!: Promise<void>;
+			act(() => {
+				cleared = result.current.clearAttempt();
+			});
+			expect(mockConfirm).toHaveBeenCalledTimes(1);
+			expect(result.current.busy).toBe(true);
+			// The dialog's own buttons are the state: no spinner behind it.
+			expect(result.current.running).toBeNull();
+			await act(async () => {
+				answer(false);
+				await cleared;
+			});
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(result.current.busy).toBe(false);
+			expect(result.current.running).toBeNull();
+		});
+
+		// R11: held on the store's answer, each holds busy; the other is refused by the gate, not its
+		// own precondition (the payload is switched so the other's precondition holds).
+		const invoiceStamped = () => withAwaitingCustomer([], stamp);
+		it.each([
+			['cancelInvoice', invoiceStamped, 'clearAttempt', stranded],
+			['clearAttempt', stranded, 'cancelInvoice', invoiceStamped],
+		] as const)(
+			'%s holds busy while in flight and refuses %s until it settles',
+			async (command, metaFor, other, otherMeta) => {
+				let settle!: (value: unknown) => void;
+				const answer = new Promise((resolve) => (settle = resolve));
+				mockManualPost.mockImplementationOnce(() => answer);
+				mockPayload.meta_data = metaFor();
+				const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+				let pending!: Promise<void>;
+				act(() => {
+					pending = result.current[command]();
+				});
+				await waitFor(() => expect(mockManualPost).toHaveBeenCalledTimes(1));
+				expect(result.current.busy).toBe(true);
+				expect(result.current.running).toBe(command);
+				mockPayload.meta_data = otherMeta();
+				rerender();
+				expect(
+					result.current[other === 'clearAttempt' ? 'unansweredAttempt' : 'invoiceSent']
+				).not.toBeNull();
+				await act(async () => result.current[other]());
+				expect(mockManualPost).toHaveBeenCalledTimes(1);
+				// The refused call does not overwrite the holder.
+				expect(result.current.running).toBe(command);
+				await act(async () => {
+					settle({ data: { order: summary('pos-open') } });
+					await pending;
+				});
+				expect(result.current.busy).toBe(false);
+				expect(result.current.running).toBeNull();
+			}
+		);
+
+		it('clearAttempt the store will not do yet warns attempt_not_cleared, no code', async () => {
+			mockPayload.meta_data = stranded();
+			mockManualPost.mockRejectedValue(
+				Object.assign(new Error('refused'), {
+					response: {
+						status: 409,
+						data: {
+							code: 'wcpos_invalid_transition',
+							message: 'This invoice cannot be cancelled.',
+						},
+					},
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.clearAttempt());
+			expect(mockWarn).toHaveBeenCalledWith('pos_checkout.attempt_not_cleared', {
+				showToast: true,
+				context: expect.objectContaining({
+					attemptId: 'attempt-9',
+					refusal: 'wcpos_invalid_transition',
+				}),
+			});
+			expect(mockError).not.toHaveBeenCalled();
+		});
+
+		it('clearAttempt with no answer warns that the clear is unanswered, no code', async () => {
+			mockPayload.meta_data = stranded();
+			mockManualPost.mockRejectedValue(
+				Object.assign(new Error('down'), { response: { status: 503 } })
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.clearAttempt());
+			expect(mockWarn).toHaveBeenCalledWith('pos_checkout.attempt_clear_unanswered', {
+				showToast: true,
+				context: expect.objectContaining({ attemptId: 'attempt-9', error: 'down' }),
+			});
+			expect(mockError).not.toHaveBeenCalled();
+			expect(result.current.busy).toBe(false);
+		});
 	});
 
 	it('a recorded answer is a manual leg: the returned row completes the sale', async () => {
@@ -4096,12 +4392,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		await act(async () => result.current.takeTender());
 		expect(mockManualMirror).toHaveBeenCalledWith(
 			expect.objectContaining({
-				changes: {
-					status: 'pos-open',
-					meta_data: expect.not.arrayContaining([
-						expect.objectContaining({ key: '_wcpos_awaiting_customer' }),
-					]),
-				},
+				changes: { status: 'pos-open', meta_data: stamped(null) },
 			})
 		);
 		expect(mockInfo).toHaveBeenCalledWith(
@@ -4123,7 +4414,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 	});
 
 	it('a sent order carries the stamp; Cancel invoice names its attempt and the order comes back open', async () => {
-		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockPayload.meta_data = withAwaitingCustomer([], stamp);
 		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.invoiceSent).toEqual(stamp);
@@ -4133,7 +4424,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 			{ attempt_id: 'attempt-0' }
 		);
 		expect(mockManualMirror).toHaveBeenCalledWith(
-			expect.objectContaining({ changes: { status: 'pos-open', meta_data: [] } })
+			expect.objectContaining({ changes: { status: 'pos-open', meta_data: stamped(null) } })
 		);
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.invoice_cancelled',
@@ -4146,10 +4437,9 @@ describe('gateway capture mode (contract 1.2)', () => {
 	});
 
 	it('a stamp beside a counting row is stale and not shown', async () => {
-		mockPayload.meta_data = [
-			{ key: '_wcpos_awaiting_customer', value: stamp },
-			...withLedger([], [payment({ amount: '10.00' })]),
-		];
+		mockPayload.meta_data = withLedger(withAwaitingCustomer([], stamp), [
+			payment({ amount: '10.00' }),
+		]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.invoiceSent).toBeNull();
 		await act(async () => {});
@@ -5011,6 +5301,13 @@ jest.mock('@wcpos/query/mutations', () => ({
 // ADR 0040 Decided 1: a manual `offline: 'record'` tender journals offline (rule 2) after the
 // cashier confirms it (rule 1).
 describe('offline manual tenders', () => {
+	// The offline confirm's copy: the amount and method ride on the title and the action.
+	const offlineQuestion = {
+		title: 'pos_checkout.confirm_offline_title',
+		body: 'pos_checkout.confirm_offline_body',
+		action: 'pos_checkout.take_amount_in',
+		testID: 'checkout-offline',
+	};
 	beforeEach(() => {
 		jest.clearAllMocks();
 		resetCheckoutMode();
@@ -5101,7 +5398,7 @@ describe('offline manual tenders', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 
-		expect(mockConfirmOffline).not.toHaveBeenCalled();
+		expect(mockConfirm).not.toHaveBeenCalled();
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
@@ -5114,22 +5411,26 @@ describe('offline manual tenders', () => {
 			},
 		];
 		mockPayload = { id: 42, total: '10.03', meta_data: [] };
-		mockConfirmOffline.mockResolvedValueOnce(false);
+		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
-		expect(mockConfirmOffline).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 1005 }));
+		expect(mockT).toHaveBeenCalledWith('pos_checkout.confirm_offline_title', {
+			amount: '10.05',
+			method: 'Cash',
+		});
 	});
 
 	it('the cashier declines the offline confirmation → nothing journaled', async () => {
-		mockConfirmOffline.mockResolvedValueOnce(false);
+		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 
-		expect(mockConfirmOffline).toHaveBeenCalledWith({
-			method: cash,
-			amountMinor: 1000,
+		expect(mockConfirm).toHaveBeenCalledWith(offlineQuestion);
+		expect(mockT).toHaveBeenCalledWith('pos_checkout.take_amount_in', {
+			amount: '10.00',
+			method: 'Cash',
 		});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(recordCompletionAttempt).not.toHaveBeenCalled();
@@ -5142,10 +5443,7 @@ describe('offline manual tenders', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		await act(async () => result.current.takeTender());
 
-		expect(mockConfirmOffline).toHaveBeenCalledWith({
-			method: cash,
-			amountMinor: 1000,
-		});
+		expect(mockConfirm).toHaveBeenCalledWith(offlineQuestion);
 		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
 			payment: expect.objectContaining({ amount: '10.00', recorded_offline: true }),
 		});
@@ -5158,29 +5456,81 @@ describe('offline manual tenders', () => {
 		);
 	});
 
-	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
+	it('Try again while the offline confirmation is open is refused by the gate', async () => {
 		let answer: (confirmed: boolean) => void = () => {};
-		mockConfirmOffline.mockImplementationOnce(
-			() => new Promise<boolean>((resolve) => (answer = resolve))
+		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		let pressed!: Promise<void>;
+		act(() => {
+			pressed = result.current.takeTender();
+		});
+		await act(async () => result.current.retryCommand());
+		expect(mockConfirm).toHaveBeenCalledTimes(1);
+		expect(mockResend).not.toHaveBeenCalled();
+		await act(async () => {
+			answer(false);
+			await pressed;
+		});
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('the offline confirm shows no spinner; a yes starts it on Commit', async () => {
+		let answer: (confirmed: boolean) => void = () => {};
+		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
+		let settle!: (value: unknown) => void;
+		mockRecordManualPayment.mockImplementationOnce(
+			() => new Promise((resolve) => (settle = resolve))
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		const first = result.current.takeTender();
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			settlesLater: true,
+		});
+		let pressed!: Promise<void>;
+		act(() => {
+			pressed = result.current.takeTender();
+		});
+		expect(result.current.busy).toBe(true);
+		expect(result.current.running).toBeNull();
+		await act(async () => answer(true));
+		await waitFor(() => expect(mockRecordManualPayment).toHaveBeenCalledTimes(1));
+		expect(result.current.running).toBe('takeTender');
+		await act(async () => {
+			settle({ ...recorded, via: 'offline' });
+			await pressed;
+		});
+		expect(result.current.running).toBeNull();
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('a second press while the confirmation is open asks once; a throwing prompt frees the flow', async () => {
+		let answer: (confirmed: boolean) => void = () => {};
+		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		let first!: Promise<void>;
+		act(() => {
+			first = result.current.takeTender();
+		});
 		await act(async () => result.current.takeTender());
-		expect(mockConfirmOffline).toHaveBeenCalledTimes(1);
+		expect(mockConfirm).toHaveBeenCalledTimes(1);
+		// The gate is held, and shown, while the cashier answers; no spinner behind the prompt.
+		expect(result.current.busy).toBe(true);
+		expect(result.current.running).toBeNull();
 		await act(async () => {
 			answer(false);
 			await first;
 		});
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 
-		mockConfirmOffline.mockRejectedValueOnce(new Error('prompt lost'));
+		mockConfirm.mockRejectedValueOnce(new Error('prompt lost'));
 		await act(async () => result.current.takeTender());
-		expect(mockConfirmOffline).toHaveBeenCalledTimes(2);
+		expect(mockConfirm).toHaveBeenCalledTimes(2);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Freed: the next press asks again.
-		mockConfirmOffline.mockResolvedValueOnce(false);
+		mockConfirm.mockResolvedValueOnce(false);
 		await act(async () => result.current.takeTender());
-		expect(mockConfirmOffline).toHaveBeenCalledTimes(3);
+		expect(mockConfirm).toHaveBeenCalledTimes(3);
 	});
 });

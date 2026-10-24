@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
@@ -11,7 +11,14 @@ import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
@@ -28,13 +35,19 @@ import { useStoreDay } from '../../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { RecordAvatar } from '../../components/user-avatar';
+import { RecordAvatar, UserAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
-import { ClearLocalData } from './clear-local-data';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
+
+/**
+ * The sheet is one list: every row, pressable or not, starts at the MenuRow's own inset
+ * (`px-2.5`) so the labels share one left edge, and the static rows draw the list's hairline.
+ */
+const STATIC_ROW =
+	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -69,10 +82,7 @@ function SalesToday() {
 	const { format } = useCurrencyFormat();
 	const t = useT();
 	return (
-		<View
-			testID="user-sheet-sales-today"
-			className="min-h-row border-border flex-row items-center justify-between gap-2 border-b"
-		>
+		<View testID="user-sheet-sales-today" className={STATIC_ROW}>
 			<Text>{t('register.your_sales_today')}</Text>
 			<Text className="tabular-nums">{format(total)}</Text>
 		</View>
@@ -90,7 +100,7 @@ function AwaitingStore() {
 	const t = useT();
 	if (count === 0) return null;
 	return (
-		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b py-3">
+		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b px-2.5 py-3">
 			<View className="flex-row items-center justify-between gap-2">
 				<Text>{t('register.awaiting_store_label')}</Text>
 				<Text className="text-warn-text tabular-nums">{t('register.sales_count', { count })}</Text>
@@ -98,6 +108,15 @@ function AwaitingStore() {
 			<Text className="text-muted-foreground text-sm">
 				{t('register.awaiting_store_sent_when_signed_in')}
 			</Text>
+		</View>
+	);
+}
+
+/** The sentence-case section heading of the cart ledger (cart LEDGER line 83). */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+	return (
+		<View className="min-h-row justify-center px-2.5">
+			<Text className="font-semibold">{children}</Text>
 		</View>
 	);
 }
@@ -158,6 +177,11 @@ function UserRows() {
 	);
 }
 
+/**
+ * The cashier's sheet: who is signed in, what they sold today, and the ways to change who
+ * or where. The till's money is the register panel's; Settings and Support are the drawer's;
+ * this sheet carries no second copy of either (Paul, 2026-10-23).
+ */
 export function UserSheet({
 	open,
 	onOpenChange,
@@ -180,128 +204,100 @@ export function UserSheet({
 	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
-	const router = useRouter();
+	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
 	return (
 		<>
-			<ClearLocalData
-				trigger={(handleResetPress) => (
-					<Dialog open={open} onOpenChange={onOpenChange}>
-						<DialogContent
-							side={side}
-							size="lg"
-							portalHost={portalHost ?? undefined}
-							testID="user-sheet"
-						>
-							<DialogHeader>
-								<DialogTitle>{displayName}</DialogTitle>
-							</DialogHeader>
-							{open && (
-								<ScrollView contentContainerClassName="grow px-4 pb-4">
-									<SalesToday />
-									<AwaitingStore />
-									<View testID="user-sheet-switch-user">
-										<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
-										<Suspense>
-											<UserRows />
-										</Suspense>
-										<AddUserButton site={site} hasExistingUsers compact />
-									</View>
-									{registers.length > 1 && onSwitchRegister && (
-										<MenuRow
-											testID="user-sheet-switch-register"
-											disabled={attributed}
-											aria-disabled={attributed}
-											onPress={() => {
-												onOpenChange(false);
-												onSwitchRegister();
-											}}
-											label={t('register.switch_register')}
-											description={
-												attributed
-													? currentOrder
-														? t('register.switch_register_blocked_cart')
-														: t('register.switch_register_unavailable_here')
-													: undefined
-											}
-										/>
-									)}
-									{(stores?.length ?? 0) > 1 && (
-										<MenuRow
-											testID="user-sheet-switch-store"
-											onPress={() => {
-												onOpenChange(false);
-												setStoreOpen(true);
-											}}
-											label={t('register.switch_store')}
-										/>
-									)}
-									<View className="mt-auto pt-4">
-										<MenuRowSeparator />
-										<Button
-											testID="user-sheet-sign-out"
-											variant="outline-destructive"
-											onPress={logout}
-										>
-											{/* The variant owns the label colour: a red Text here went red-on-red when pressed. */}
-											{t('register.sign_out')}
-										</Button>
-									</View>
-									<View className="mt-4 gap-2 pt-4">
-										<MenuRowSeparator />
-										<MenuRow
-											testID="user-sheet-settings"
-											onPress={() => {
-												onOpenChange(false);
-												router.push('/settings');
-											}}
-											leading={<Icon name="settings" className="text-muted-foreground" />}
-											label={t('common.settings')}
-										/>
-										<MenuRow
-											testID="user-sheet-support"
-											onPress={() => {
-												onOpenChange(false);
-												router.push('/support');
-											}}
-											leading={<Icon name="support" className="text-muted-foreground" />}
-											label={t('common.support')}
-										/>
-										{/* Web only, as the header's menu had them: a browser is where these two go. */}
-										{Platform.isWeb && (
-											<MenuRow
-												testID="user-sheet-wp-admin"
-												onPress={() => openExternalURL(`${site.url}/wp-admin`)}
-												leading={<Icon name="wordpress" className="text-muted-foreground" />}
-												label={t('common.wordpress_admin')}
-											/>
-										)}
-										{Platform.isWeb && (
-											<MenuRow
-												testID="user-sheet-desktop-app"
-												onPress={() =>
-													openExternalURL('https://github.com/wcpos/electron/releases')
-												}
-												leading={<Icon name="download" className="text-muted-foreground" />}
-												label={t('common.desktop_app')}
-											/>
-										)}
-										<MenuRow
-											testID="user-sheet-clear-local-data"
-											onPress={() => {
-												onOpenChange(false);
-												handleResetPress();
-											}}
-											variant="destructive"
-											leading={<Icon name="delete" />}
-											label={t('common.clear_all_local_data')}
-										/>
-									</View>
-								</ScrollView>
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent
+					side={side}
+					size="lg"
+					portalHost={portalHost ?? undefined}
+					testID="user-sheet"
+				>
+					<DialogHeader className="flex-row items-center gap-3">
+						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
+						<DialogTitle className="min-w-0 flex-1" numberOfLines={1}>
+							{displayName}
+						</DialogTitle>
+					</DialogHeader>
+					{open && (
+						<DialogBody className="gap-0">
+							<SalesToday />
+							<AwaitingStore />
+							<View testID="user-sheet-switch-user">
+								<SectionHeading>{t('register.switch_user')}</SectionHeading>
+								<Suspense>
+									<UserRows />
+								</Suspense>
+								<AddUserButton site={site} hasExistingUsers compact />
+							</View>
+							{registers.length > 1 && onSwitchRegister && (
+								<MenuRow
+									testID="user-sheet-switch-register"
+									disabled={attributed}
+									aria-disabled={attributed}
+									onPress={() => {
+										onOpenChange(false);
+										onSwitchRegister();
+									}}
+									leading={<Icon name="register" className="text-muted-foreground" />}
+									label={t('register.switch_register')}
+									description={
+										attributed
+											? currentOrder
+												? t('register.switch_register_blocked_cart')
+												: t('register.switch_register_unavailable_here')
+											: undefined
+									}
+								/>
 							)}
-						</DialogContent>
-					</Dialog>
-				)}
-			/>
+							{(stores?.length ?? 0) > 1 && (
+								<MenuRow
+									testID="user-sheet-switch-store"
+									onPress={() => {
+										onOpenChange(false);
+										setStoreOpen(true);
+									}}
+									leading={<Icon name="store" className="text-muted-foreground" />}
+									label={t('register.switch_store')}
+								/>
+							)}
+							{/* A browser is where these two go: the desktop app has no admin tab to open, and
+							    already is the desktop app. */}
+							{Platform.isWeb && (
+								<>
+									<MenuRowSeparator />
+									<MenuRow
+										testID="user-sheet-wp-admin"
+										onPress={() => openExternalURL(`${site.url}/wp-admin`)}
+										leading={<Icon name="wordpress" className="text-muted-foreground" />}
+										label={t('common.wordpress_admin')}
+										trailing={externalGlyph}
+									/>
+									<MenuRow
+										testID="user-sheet-desktop-app"
+										onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
+										leading={<Icon name="desktop" className="text-muted-foreground" />}
+										label={t('common.desktop_app')}
+										trailing={externalGlyph}
+									/>
+								</>
+							)}
+						</DialogBody>
+					)}
+					<DialogFooter>
+						{/* The variant owns the label colour: a red Text here went red-on-red when pressed. */}
+						<Button
+							testID="user-sheet-sign-out"
+							variant="outline-destructive"
+							className="flex-1"
+							onPress={logout}
+						>
+							{t('register.sign_out')}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} portalHost={portalHost} />
 		</>
 	);

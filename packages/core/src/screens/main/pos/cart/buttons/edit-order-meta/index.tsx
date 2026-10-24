@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { SavedFieldProvider } from '@wcpos/components/form';
 import { DialogBody } from '@wcpos/components/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -14,17 +15,14 @@ import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
 interface Props {
 	order: CurrentOrderRecord;
-	/**
-	 * Receives the form's submit so a footer action outside the form (the order sheet's
-	 * "Save order") can apply the edits before it pushes the order.
-	 */
-	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
+	/** The autosave's flush, for the sheet's Sync order (see `EditOrderMetaForm`). */
+	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
 /**
  *
  */
-export function EditOrderMeta({ order, submitRef }: Props) {
+export function EditOrderMeta({ order, flushRef }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -34,14 +32,20 @@ export function EditOrderMeta({ order, submitRef }: Props) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const formData = React.useMemo(() => {
 		return {
-			status: payload.status,
-			cashier_id: wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '',
 			customer_note: payload.customer_note ?? '',
 			currency: payload.currency,
-			transaction_id: payload.transaction_id,
 			meta_data: payload.meta_data,
 		};
 	}, [payload]);
+
+	// The two sends, kept apart from the fields that save as they change.
+	const handOverData = React.useMemo(
+		() => ({
+			status: payload.status ?? '',
+			cashier_id: wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '',
+		}),
+		[payload]
+	);
 
 	return (
 		<Tabs value={value} onValueChange={setValue} className="min-h-0 flex-1 gap-4">
@@ -54,11 +58,16 @@ export function EditOrderMeta({ order, submitRef }: Props) {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form" className="min-h-0 flex-1 gap-4">
-				<EditOrderMetaForm
-					order={order}
-					formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
-					submitRef={submitRef}
-				/>
+				<SavedFieldProvider>
+					{/* Keyed per order: the form holds its own draft (defaultValues) while it is open. */}
+					<EditOrderMetaForm
+						key={order.uuid}
+						order={order}
+						formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
+						handOverData={handOverData}
+						flushRef={flushRef}
+					/>
+				</SavedFieldProvider>
 			</TabsContent>
 			<TabsContent value="json" className="min-h-0 flex-1">
 				<DialogBody>

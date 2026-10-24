@@ -85,8 +85,6 @@ export {
 	answerAdopted,
 	MoneyCommandError,
 	moneyCommandPoster,
-	RECOVERY_RETRY_DELAYS_MS,
-	recoverMoneyCommands,
 	resendOpenCommands,
 	residentHoldsAnswer,
 	type CommandProvenance,
@@ -94,8 +92,10 @@ export {
 	type MoneyCommandPoster,
 	type Post,
 	type ProvenanceCommand,
+	type RecoveredOrder,
 	type ResentCommand,
 } from './commands/money-command';
+export { moneyCommandRecovery, RECOVERY_RETRY_DELAYS_MS } from './commands/money-command-recovery';
 export type { OrderApproval } from './store-local/money-commands';
 export { adoptStoreOrderSnapshot } from './commands/adopt-store-order';
 

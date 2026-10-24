@@ -305,7 +305,7 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 
 | Variant                         | Role                                                                                                                                               | Where it sits                                                                 | Examples                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Save order_, _Connect a reader_ when nothing is connected |
+| `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Sync order_, _Connect a reader_ when nothing is connected |
 | `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_                                                             |
 | `ghost` (muted label at rest)   | Quiet: navigation, escapes, more                                                                                                                   | after the buttons, on its own line, or in a toolbar                           | _Reader guide_, _Details_, _Cancel_ on a scan                                                                   |
 | `link`                          | Text that behaves as a button: no surface, the size's height                                                                                       | after the content; inline it is `DocsLink`, which drops the padding           | _Open docs_, _Reader settings_                                                                                  |
@@ -327,6 +327,12 @@ never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `I
 `ghost-destructive` is for a dense row that has no menu. A selected choice is a
 `Chip`, never a Button that toggles its variant. Icon-only actions are an `IconButton` (44, `size="sm"`
 32 in dense rows), with an `accessibilityLabel`.
+
+Saving (owner, 2026-10-23): an edit to what the device owns (a setting, a field of the open cart) saves as it is
+made — `useFormChangeHandler` writes it, validated, and the shared `SavedMark` acknowledges it beside the label; it is
+never a button. An action that reaches the store, creates a record or moves money has ONE explicit button named for
+what it does (_Sync order_, _Send_, _Add to cart_, _Refund_). The word Save is on no button, and the two kinds of
+saving never share one form: the cart's order sheet holds its hand-over (status, cashier) in its own form with its own Send.
 
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay

@@ -7,6 +7,7 @@ import { concat, firstValueFrom, NEVER, of, Subject } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import * as unsentChanges from '@wcpos/utils/unsent-changes';
@@ -50,6 +51,9 @@ jest.mock('../../../../services/terminal-payments', () => ({
 let mockManager = {};
 let mockContext: SaleContext;
 const mockRecover = jest.fn();
+const mockRecovery = jest.fn();
+const mockSuspend = jest.fn();
+const mockResume = jest.fn();
 const mockHoldsAnswer = jest.fn();
 const mockResidentOrders = jest.fn();
 let mockHttp = { post: jest.fn() };
@@ -57,7 +61,10 @@ let mockOnline = 'online-website-available';
 jest.mock('@wcpos/query', () => ({
 	RECOVERY_RETRY_DELAYS_MS: jest.requireActual('@wcpos/query').RECOVERY_RETRY_DELAYS_MS,
 	useQueryRuntime: () => mockManager,
-	recoverMoneyCommands: (...args: unknown[]) => mockRecover(...args),
+	moneyCommandRecovery: (input: unknown) => (
+		mockRecovery(input),
+		{ recover: () => mockRecover(), suspend: mockSuspend, resume: mockResume }
+	),
 	residentHoldsAnswer: (...args: unknown[]) => mockHoldsAnswer(...args),
 	observeResidentOrders: (...args: unknown[]) => mockResidentOrders(...args),
 }));
@@ -277,9 +284,9 @@ it('re-sends unanswered money commands at start, before replaying, and finishes 
 	});
 	render(<SaleCompletionBridge />);
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(mockRecover).toHaveBeenCalledWith(mockManager, mockContext.storeDB, {
-		post: expect.any(Function),
-	});
+	expect(mockRecovery).toHaveBeenCalledWith(
+		expect.objectContaining({ runtime: mockManager, storeDB: mockContext.storeDB })
+	);
 	expect(mockRecover.mock.invocationCallOrder[0]).toBeLessThan(
 		mockFind.mock.invocationCallOrder[0]
 	);
@@ -321,76 +328,24 @@ it('a reconnect re-sends what the outage left unanswered and finishes only the o
 	expect((await pendingCompletions(mockContext.storeDB)).other).toMatchObject({ unpaidStarts: 1 });
 });
 
-// A claim persisted by a process that crashed after its send holds the command for the lease:
-// the recovery skips it, and is run again when that lease lapses, while the till stays online.
-async function claimLapsingIn(ms: number) {
-	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-	const real = Date.now();
-	const now = jest.spyOn(Date, 'now').mockReturnValue(real - moneyJournal.CLAIM_LEASE_MS + ms);
-	await moneyJournal.claimRoute(
-		mockContext.storeDB,
-		{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
-		'crashed-tab',
-		{
-			orderUuid: 'order',
-			scope: 'scope-1',
-			kind: 'close',
-			path: 'orders/42/close',
-			target: null,
-			id: 'close-1',
-			body: {},
-			approval: { total: '0.00', currency: 'USD' },
-			sentAt: null,
-			sentRevision: null,
-		}
-	);
-	await moneyJournal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'crashed-tab');
-	now.mockRestore();
-}
-
-it('re-runs the recovery when a skipped claim lapses, without a reconnect', async () => {
-	await claimLapsingIn(400);
-	render(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
-});
-
-// The effect re-runs on the same session (a context change, StrictMode): its cleanup clears the
-// lapse timer, and the reused session must arm it again rather than lose the re-run.
-it('keeps the lapse re-run across an effect re-run of the same session', async () => {
-	await claimLapsingIn(600);
+// The recovery owns its schedule (`moneyCommandRecovery`, pinned in the query suite); the bridge
+// owns its lifetime: one per store session, suspended at cleanup and resumed on a re-run, and its
+// `due` runs in the bridge's run queue.
+it('suspends the recovery at cleanup, resumes it on a re-run, builds one per store session, and runs `due` in its queue', async () => {
 	const view = render(<SaleCompletionBridge />);
 	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-	await drain();
+	expect(mockRecovery).toHaveBeenCalledTimes(1);
+	expect(mockResume).toHaveBeenCalledTimes(1);
 	mockContext = { ...mockContext };
 	view.rerender(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2), { timeout: 3000 });
-});
-
-// Codex 4344063828 on #2836: a store or site switch while recovery awaits its preflight must not
-// send the old journal's command through the new session's client. The send is refused, so the
-// poster keeps the command journaled for its own session.
-it('refuses a recovery POST once its session has been switched away', async () => {
-	let preflight!: () => void;
-	let sent: Promise<unknown> | undefined;
-	mockRecover.mockImplementationOnce(
-		async (
-			_runtime: unknown,
-			_db: unknown,
-			deps: { post: (url: string, body: unknown) => Promise<unknown> }
-		) => {
-			await new Promise<void>((resolve) => {
-				preflight = resolve;
-			});
-			sent = deps.post('orders/42/close', {});
-			await sent.catch(() => undefined);
-			return [];
-		}
-	);
-	const view = render(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-	const before = { http: mockHttp, storeDB: mockContext.storeDB };
-	mockHttp = { post: jest.fn() };
+	await drain();
+	expect(mockSuspend).toHaveBeenCalledTimes(1);
+	expect(mockResume).toHaveBeenCalledTimes(2);
+	expect(mockRecovery).toHaveBeenCalledTimes(1);
+	const [[input]] = mockRecovery.mock.calls as [[{ due: () => void }]];
+	act(() => input.due());
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(2));
+	const before = mockContext.storeDB;
 	mockContext = {
 		...mockContext,
 		storeDB: await createRxDatabase({
@@ -401,12 +356,13 @@ it('refuses a recovery POST once its session has been switched away', async () =
 		}),
 	};
 	view.rerender(<SaleCompletionBridge />);
-	await act(async () => preflight());
-	await waitFor(() => expect(sent).toBeDefined());
-	await expect(sent).rejects.toThrow('money_command_session_stopped');
-	expect(before.http.post).not.toHaveBeenCalled();
-	expect(mockHttp.post).not.toHaveBeenCalled();
-	await before.storeDB.remove();
+	await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
+	expect(mockSuspend).toHaveBeenCalledTimes(2);
+	expect(mockRecovery).toHaveBeenCalledTimes(2);
+	expect(mockRecovery).toHaveBeenLastCalledWith(
+		expect.objectContaining({ storeDB: mockContext.storeDB })
+	);
+	await before.remove();
 });
 
 /** Record the ladder's delays; `fire` runs its steps at once, else no long timer runs. */
@@ -440,176 +396,6 @@ function ladderTimers(fire: boolean) {
 	};
 }
 
-// A failed send as the poster leaves it: claimed, sent, the claim given up. The claim is stamped
-// ahead, so it is never live and schedules no lapse.
-async function journalUnanswered(orderUuid: string, claimant: string) {
-	const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
-	const route = { orderUuid, kind: 'close' as const, target: null, rowId: null };
-	await moneyJournal.claimRoute(mockContext.storeDB, route, claimant, {
-		orderUuid,
-		scope: 'scope-1',
-		kind: 'close',
-		path: 'orders/42/close',
-		target: null,
-		id: `${orderUuid}-close`,
-		body: {},
-		approval: { total: '0.00', currency: 'USD' },
-		sentAt: null,
-		sentRevision: null,
-	});
-	await moneyJournal.markSent(
-		mockContext.storeDB,
-		orderUuid,
-		`${orderUuid}-close`,
-		'sha256:r1',
-		claimant
-	);
-	await moneyJournal.releaseClaim(mockContext.storeDB, orderUuid, `${orderUuid}-close`, claimant);
-	now.mockRestore();
-}
-
-/** A recovery that answered every command: the journal holds none (the poster settled them). */
-async function journalAnswered() {
-	await (await mockContext.storeDB.getLocal('money-commands'))?.remove();
-	return [];
-}
-
-// Codex 4344063834 on #2836: a real transient failure releases the poster's claim (the journal
-// watch arms a step) and then reports unanswered (the run arms again). Scheduling twice must
-// not advance the ladder; only an executed retry does.
-it('advances the ladder only when a retry runs, whoever schedules it', async () => {
-	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-	const failedResend = async (claimant: string) => {
-		await journalUnanswered('order', claimant);
-		return [{ orderUuid: 'order', answers: [], unanswered: true }];
-	};
-	const timers = ladderTimers(true);
-	try {
-		mockRecover
-			.mockImplementationOnce(() => failedResend('start'))
-			.mockImplementationOnce(() => failedResend('retry-1'))
-			.mockImplementation(journalAnswered);
-		render(<SaleCompletionBridge />);
-		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
-		await drain();
-		expect(timers.delays).toEqual([30_000, 120_000]);
-	} finally {
-		timers.restore();
-	}
-});
-
-it('keeps the armed step and its deadline across an effect re-run', async () => {
-	mockRecover.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }]);
-	const timers = ladderTimers(false);
-	try {
-		const view = render(<SaleCompletionBridge />);
-		await waitFor(() => expect(timers.delays).toEqual([30_000]));
-		mockContext = { ...mockContext };
-		view.rerender(<SaleCompletionBridge />);
-		await drain();
-		expect(timers.delays).toHaveLength(2);
-		expect(timers.delays[1]).toBeLessThanOrEqual(30_000);
-		expect(timers.delays[1]).toBeGreaterThan(25_000);
-		expect(mockRecover).toHaveBeenCalledTimes(1);
-	} finally {
-		timers.restore();
-	}
-});
-
-// A re-send that fails transiently (429, 5xx, no answer) leaves the command journaled and
-// unclaimed: while the till stays online nothing else would re-run the recovery, so it backs off.
-it('backs off and re-runs a recovery whose re-send failed, until one answers', async () => {
-	const realSetTimeout = global.setTimeout;
-	const delays: number[] = [];
-	const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
-		callback: () => void,
-		ms?: number
-	) => {
-		if ((ms ?? 0) >= 30_000) {
-			delays.push(ms!);
-			return realSetTimeout(callback, 0);
-		}
-		return realSetTimeout(callback, ms);
-	}) as never);
-	try {
-		mockRecover
-			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
-			.mockResolvedValueOnce([{ orderUuid: 'order', answers: [], unanswered: true }])
-			.mockResolvedValue([]);
-		render(<SaleCompletionBridge />);
-		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(3));
-		await drain();
-		expect(delays).toEqual([30_000, 120_000]);
-	} finally {
-		timers.mockRestore();
-	}
-});
-
-// A command whose answers are all lost after the session's first recovery, while the till stays
-// online: the bridge sees it in the journal and schedules the recovery, so a sale whose tender a
-// pull has closed still gets its receipt and audit. Another scope's command waits for that scope:
-// the recovery re-sends only the active scope's (Codex 4333124076 on #2798).
-it.each([
-	['schedules the recovery for', 'scope-1', [RECOVERY_RETRY_DELAYS_MS[0]]],
-	['leaves to its scope', 'other-scope', []],
-])(
-	'%s a command journaled and left unanswered after the session started (%s)',
-	async (_, scope, armed) => {
-		mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-		mockRecover.mockImplementation(journalAnswered);
-		const realSetTimeout = global.setTimeout;
-		const delays: number[] = [];
-		const timers = jest.spyOn(global, 'setTimeout').mockImplementation(((
-			callback: () => void,
-			ms?: number
-		) => {
-			// Only the ladder's steps run at once; a claim's lapse (below, not a step) keeps its delay.
-			if (RECOVERY_RETRY_DELAYS_MS.includes(ms ?? 0)) {
-				delays.push(ms!);
-				return realSetTimeout(callback, 0);
-			}
-			return realSetTimeout(callback, ms);
-		}) as never);
-		// The tender's claim is taken five seconds ahead, so its lapse is never a ladder step.
-		let now: jest.SpyInstance | undefined;
-		try {
-			render(<SaleCompletionBridge />);
-			await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-			await drain();
-			expect(delays).toEqual([]);
-			// The tender's send lost its answer: sent, its claim given up.
-			now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
-			await moneyJournal.claimRoute(
-				mockContext.storeDB,
-				{ orderUuid: 'order', kind: 'close', target: null, rowId: null },
-				'tender',
-				{
-					orderUuid: 'order',
-					scope,
-					kind: 'close',
-					path: 'orders/42/close',
-					target: null,
-					id: 'close-1',
-					body: {},
-					approval: { total: '0.00', currency: 'USD' },
-					sentAt: null,
-					sentRevision: null,
-				}
-			);
-			await moneyJournal.markSent(mockContext.storeDB, 'order', 'close-1', 'sha256:r1', 'tender');
-			await moneyJournal.releaseClaim(mockContext.storeDB, 'order', 'close-1', 'tender');
-			now.mockRestore();
-			await drain();
-			await drain();
-			await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1 + armed.length));
-			expect(delays).toEqual(armed);
-		} finally {
-			now?.mockRestore();
-			timers.mockRestore();
-		}
-	}
-);
-
 // A full-balance gateway submit answered `sent` whose answer was lost: the recovery's answer is
 // the sent outcome, finished as a sent sale (the `checkout.sent` audit, the attempt resolved),
 // never the unpaid replay that would count starts and abandon it.
@@ -628,7 +414,7 @@ it('finishes a recovered sent submit through the sent-sale path', async () => {
 			payload: {
 				id: 42,
 				status: 'pending',
-				meta_data: [{ key: '_wcpos_awaiting_customer', value: stamp }],
+				meta_data: withAwaitingCustomer([], stamp),
 				line_items: [],
 			},
 		}),
@@ -1189,7 +975,15 @@ it.each([
 	[
 		'at its stored status but still stamped stays unpaid',
 		'pending',
-		[{ method_id: 'wcpos_email_invoice', attempt_id: 'a' }],
+		[
+			{
+				method_id: 'wcpos_email_invoice',
+				destination: null,
+				attempt_id: 'a',
+				sent_at_gmt: '',
+				cashier_id: 0,
+			},
+		],
 		false,
 	],
 ] as const)(
@@ -1209,7 +1003,7 @@ it.each([
 					id: 42,
 					status: 'pending',
 					payment_method: 'a',
-					meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+					meta_data: stamps.flatMap((value) => withAwaitingCustomer([], value)),
 					line_items: [],
 				},
 			}),
@@ -1566,32 +1360,6 @@ it('keeps a recovered paid answer whose refresh failed eligible for adoption', a
 	);
 });
 
-// Codex 4345589102 on #2836: another order's command loses its answer while a run iterates its
-// snapshot. The watcher arms a retry; the run's clean result must not clear it, since the
-// current journal still holds that command.
-it('keeps the retry for a command that lost its answer during a recovery run', async () => {
-	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
-	let finish!: (recovered: unknown[]) => void;
-	mockRecover.mockImplementationOnce(
-		() =>
-			new Promise((resolve) => {
-				finish = resolve;
-			})
-	);
-	const timers = ladderTimers(false);
-	try {
-		render(<SaleCompletionBridge />);
-		await waitFor(() => expect(mockRecover).toHaveBeenCalledTimes(1));
-		await journalUnanswered('other', 'tender');
-		await waitFor(() => expect(timers.delays).toContain(30_000));
-		await act(async () => finish([]));
-		await drain();
-		expect(timers.armed()).toBe(1);
-	} finally {
-		timers.restore();
-	}
-});
-
 // Codex 4345589089 on #2836: a paid status the mirror copied is not an adoption. The attempt
 // finishes only once the resident holds a whole document adopted after the answer.
 it('waits for a whole-document adoption before finishing an adopted sale', async () => {
@@ -1776,4 +1544,27 @@ it('a crash leftover (unsent, claim expired) does not block finishing an adopted
 	act(() => adoptions.next(['order']));
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+});
+
+// A re-sent terminal capture lands nothing through answerOf, but its summary reading paid still
+// marks the attempt for adoption (answerReadsPaid reads the raw answer, captures included).
+it('a recovered terminal capture whose summary reads paid awaits adoption', async () => {
+	mockManager = { engine: { active: () => ({ scopeId: 'scope-1' }) } };
+	mockResidentOrders.mockReturnValue(new Subject<string[]>());
+	await record();
+	mockFind.mockResolvedValue(resident('order', 'pos-open'));
+	mockCatchUp.mockRejectedValueOnce(new Error('refresh failed'));
+	const payment = { id: 'leg', amount: '10.00' };
+	mockRecover.mockResolvedValueOnce([
+		{
+			orderUuid: 'order',
+			answers: [{ kind: 'capture', data: { payment, order: { status: 'completed' } } }],
+		},
+	]);
+	render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+			awaitingAdoption: true,
+		})
+	);
 });

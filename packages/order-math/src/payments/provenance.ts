@@ -1,3 +1,5 @@
+import { parseMetaValue } from './meta-value';
+
 import type { MetaDataEntry } from './ledger';
 
 /**
@@ -91,14 +93,7 @@ interface SaleCompletion {
 export function readCompletions(
 	meta: readonly MetaDataEntry[] | null | undefined
 ): SaleCompletion[] {
-	let value = meta?.find(({ key }) => key === COMPLETIONS_META_KEY)?.value;
-	if (typeof value === 'string') {
-		try {
-			value = JSON.parse(value);
-		} catch {
-			return [];
-		}
-	}
+	const value = parseMetaValue(meta?.find(({ key }) => key === COMPLETIONS_META_KEY)?.value);
 	return Array.isArray(value)
 		? value.filter(
 				(entry): entry is SaleCompletion =>

@@ -56,7 +56,7 @@ export function Customer({
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>
-				<EditCartCustomerForm />
+				<EditCartCustomerForm key={currentOrderRecord.uuid} />
 			</DialogContent>
 		</Dialog>
 	);

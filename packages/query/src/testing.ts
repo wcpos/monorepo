@@ -648,10 +648,4 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 export { queryHandleCount } from './query-handle';
 
 /** The money journal's writers and raw read: suites build and assert journal state; core reads meanings. */
-export {
-	CLAIM_LEASE_MS,
-	claimRoute,
-	markSent,
-	readOrderCommands,
-	releaseClaim,
-} from './store-local/money-commands';
+export { CLAIM_LEASE_MS, claimRoute, readOrderCommands } from './store-local/money-commands';

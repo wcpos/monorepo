@@ -95,6 +95,10 @@ jest.mock('@wcpos/components/form', () => ({
 	FormRadioGroup: () => null,
 	FormSelect: () => null,
 	FormSwitch: () => null,
+	SavedFieldProvider: ({ children }: React.PropsWithChildren) => children,
+	SavedMark: () => null,
+	savedKeys: (_before: unknown, changes: object) => Object.keys(changes),
+	useMarkSaved: () => jest.fn(),
 	useFormChangeHandler: (options: unknown) => mockUseFormChangeHandler(options),
 	// The dimmed shipping select names itself by its row's label id.
 	useFormField: () => ({ formItemNativeID: 'shipping-tax-class-label' }),

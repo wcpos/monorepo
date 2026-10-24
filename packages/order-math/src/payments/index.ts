@@ -48,12 +48,17 @@ export type { PaymentRounding } from './rounding';
 export type { PaymentMoney } from './money';
 export { FIELDS_SCHEMA, KNOWN_CAPTURE_MODES, KNOWN_KINDS, KNOWN_PREFILLS } from './types';
 export {
-	AWAITING_CUSTOMER_META_KEY,
 	activeAwaitingCustomer,
 	readAwaitingCustomer,
 	withAwaitingCustomer,
 } from './awaiting-customer';
 export type { AwaitingCustomerStamp } from './awaiting-customer';
+export {
+	type GatewayAttempt,
+	readGatewayAttempts,
+	withGatewayAttempt,
+	withAttemptAnswer,
+} from './gateway-attempts';
 export type {
 	PaymentKind,
 	CaptureMode,

@@ -5,7 +5,12 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { type MetaDataEntry, type OrderPaymentSummary, withLedger } from '@wcpos/order-math';
+import {
+	type MetaDataEntry,
+	type OrderPaymentSummary,
+	withAwaitingCustomer,
+	withLedger,
+} from '@wcpos/order-math';
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -194,8 +199,15 @@ it.each([
 		{ ...manual, mirrorFailed: true },
 		false,
 	],
+	// A recovery carries no press prediction: only a usable store balance decides.
+	[
+		'manual recovery with a zero store balance',
+		{ ...manual, remainingMinor: null, order: { balance: '0.00' } },
+		true,
+	],
+	['manual recovery without summary is never complete', { ...manual, remainingMinor: null }, false],
 	['terminal summary', { source: 'terminal', row, order: { balance: '0.00' } }, true],
-	['terminal fallback', { source: 'terminal', row, order: null, balance: '0.00' }, true],
+	['terminal without a summary is never complete', { source: 'terminal', row, order: null }, false],
 	['contract exact status', { source: 'gateway-contract', status: 'on-hold' }, false],
 	[
 		'snapshot on-hold',
@@ -250,7 +262,7 @@ it.each([
 	const resident = {
 		...payload,
 		status,
-		meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+		meta_data: stamps.flatMap((value) => withAwaitingCustomer([], value)),
 	};
 	expect(
 		isSaleComplete(
@@ -528,7 +540,7 @@ it('replay never completes a sent order, whatever status its gateway chose', () 
 	const onHold = {
 		...payload,
 		status: 'on-hold',
-		meta_data: [{ key: '_wcpos_awaiting_customer', value: sent.stamp }],
+		meta_data: withAwaitingCustomer([], sent.stamp),
 	};
 	expect(isSaleComplete({ source: 'replay' }, 2, onHold as never)).toBe(false);
 	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status: 'on-hold' } as never)).toBe(
@@ -949,7 +961,7 @@ it.each([
 		kind === 'manual'
 			? manual
 			: kind === 'terminal'
-				? { source: kind, row, order: null, balance: '0' }
+				? { source: kind, row, order: { balance: '0' } as never }
 				: { source: kind };
 	try {
 		await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, order, outcome, presentation);

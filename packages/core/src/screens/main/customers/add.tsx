@@ -47,7 +47,7 @@ export function AddCustomerScreen() {
 				const savedDoc = await createCustomer(data);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its payload.
-					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					const saved = savedDoc.getLatest().payload;
 					mutationLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {

@@ -9,7 +9,7 @@ import { enqueueCartAction } from './enqueue-cart-action';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { useCartConfig } from './use-cart-config';
-import { extractLineItemData } from './utils';
+import { extractLineItemData, lineMetaForWrite } from './utils';
 import {
 	type ActionContext,
 	type ActionRefusal,
@@ -53,6 +53,12 @@ export interface CartLineChanges {
 type EditableLineType = keyof CartLineChanges;
 export interface UpdateCartLineOptions {
 	skipStockGuard?: boolean;
+	/**
+	 * The order the edit belongs to, when the caller is not the cashier's press on the current
+	 * cart: a sheet's debounced autosave can land after the sheet closed and another order was
+	 * selected, and must still reach the order it was typed into.
+	 */
+	record?: CurrentOrderRecord;
 }
 const lineInfo = {
 	line_items: {
@@ -109,6 +115,18 @@ export const useUpdateCartLine = () => {
 			const previous = json[type]?.find((line) => wooMetaCarrier.lineUuid(line) === uuid);
 			const updatedLines = json[type]?.map((line) => {
 				if (updated || wooMetaCarrier.lineUuid(line) !== uuid) return line;
+				// A supplied meta_data is reconciled with the line AS IT STANDS here, inside the
+				// queue: the sheet's draft copy of the pos_data row is stale after an earlier
+				// autosave, and a just-added blank row is not an edit (see lineMetaForWrite).
+				if (Array.isArray(changes.meta_data)) {
+					changes = {
+						...changes,
+						meta_data: lineMetaForWrite(
+							changes.meta_data as { key?: string }[],
+							line as { meta_data?: { key?: string }[] }
+						),
+					};
+				}
 				// Fee basis and shipping inheritance come from the SAME snapshot being patched.
 				// Product lines must not receive cartLineItems: these are distinct engine inputs.
 				const calculated =
@@ -222,7 +240,7 @@ export const useUpdateCartLine = () => {
 			changes: CartLineChanges[T],
 			options?: UpdateCartLineOptions
 		) => {
-			const record = getCurrentOrderRecord();
+			const record = options?.record ?? getCurrentOrderRecord();
 			if (!record.uuid) throw new Error('Order is missing its uuid');
 			return enqueueCartAction(
 				record,

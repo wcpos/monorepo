@@ -1,5 +1,9 @@
 import * as React from 'react';
 
+import { useRouter } from 'expo-router';
+
+import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import {
 	Dialog,
 	DialogContent,
@@ -27,23 +31,36 @@ export function OrderSheet({
 }) {
 	const side = usePanelSide('cart');
 	const t = useT();
-	// The form's submit, applied by "Save order" before the push.
-	const submitRef = React.useRef<(() => Promise<boolean>) | null>(null);
+	const router = useRouter();
+	// The form's pending autosave, awaited before Sync order pushes (a debounced note write
+	// still in flight would otherwise be pushed as the value before it).
+	const flushRef = React.useRef<(() => Promise<boolean>) | null>(null);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="order-meta-dialog">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_details')}</DialogTitle>
 				</DialogHeader>
-				<EditOrderMeta order={order} submitRef={submitRef} />
+				<EditOrderMeta order={order} flushRef={flushRef} />
 				<DialogFooter className="flex-row justify-between gap-2">
 					<VoidButton onBeforeVoid={() => onOpenChange(false)} />
-					<SaveButton
-						label={t('pos_cart.save_order')}
-						// The push happens only when the form's edits were applied; a validation error
-						// or a pending identity confirmation stops it silently (the form shows why).
-						onBeforeSave={async () => (submitRef.current ? await submitRef.current() : true)}
-					/>
+					<HStack className="gap-2">
+						<Button
+							variant="outline"
+							leftIcon="print"
+							testID="order-print-button"
+							onPress={() => {
+								onOpenChange(false);
+								router.push({
+									pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+									params: { orderId: order.uuid },
+								});
+							}}
+						>
+							{t('common.print')}
+						</Button>
+						<SaveButton onBeforePush={() => flushRef.current?.() ?? Promise.resolve(true)} />
+					</HStack>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

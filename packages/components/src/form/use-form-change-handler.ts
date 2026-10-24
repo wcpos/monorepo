@@ -5,13 +5,14 @@ import debounce from 'lodash/debounce';
 import cloneDeep from 'lodash/cloneDeep';
 import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
-import { FieldValues, UseFormReturn } from 'react-hook-form';
+import { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
 
 import type { DebouncedFunc } from 'lodash';
 
 interface UseFormChangeHandlerOptions<T extends FieldValues> {
 	form: UseFormReturn<T>;
-	onChange: (changes: Partial<T>) => void;
+	/** The write. A returned promise is what `flush()` waits for. */
+	onChange: (changes: Partial<T>) => void | Promise<unknown>;
 	/**
 	 * Debounce delay in ms for text inputs. Set to 0 to disable.
 	 * @default 300
@@ -52,6 +53,8 @@ function isSameValue(a: unknown, b: unknown): boolean {
  * - Debounces text input changes to avoid saving on every keystroke
  * - Ignores programmatic changes (reset, setValue on entire form)
  * - Only fires onChange for user-initiated field changes
+ * - Validates the changed field's root path first; an invalid value is never written
+ * - Returns `flush()`, which lands the pending write before a caller acts on the record
  *
  * `onChange` may be an inline arrow (every ui-settings form passes one, and the React
  * Compiler deliberately skips any component that calls the `watch()` returned by
@@ -73,23 +76,49 @@ export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,
 	debounceMs = 300,
-}: UseFormChangeHandlerOptions<T>) {
+}: UseFormChangeHandlerOptions<T>): { flush: () => Promise<boolean> } {
 	const onChangeRef = React.useRef(onChange);
 	React.useEffect(() => {
 		onChangeRef.current = onChange;
 	}, [onChange]);
 
 	/**
+	 * The write in flight (validation, then the caller's onChange), so a caller that is about
+	 * to act on the persisted record (a push to the store) can wait for it: `flush()` below.
+	 */
+	const inFlightRef = React.useRef<Promise<boolean> | null>(null);
+	/** The field whose debounced write is waiting, so another field's edit can flush it first. */
+	const pendingNameRef = React.useRef<string | null>(null);
+	type Commit = (
+		changes: Partial<T>,
+		write: (changes: Partial<T>) => void | Promise<unknown>,
+		validate: () => Promise<boolean>
+	) => void;
+	const commit: Commit = (changes, write, validate) => {
+		pendingNameRef.current = null;
+		// The gate: an invalid value is never written; the field shows its own error instead.
+		// A write that returns false (the caller's writer reported a failure) or throws settles as
+		// false, so a caller waiting on flush() knows the record does not hold the edit.
+		const settled: Promise<boolean> = validate()
+			.then((valid) => (valid ? write(changes) : undefined))
+			.then(
+				(result) => result !== false,
+				() => false
+			)
+			.finally(() => {
+				if (inFlightRef.current === settled) inFlightRef.current = null;
+			});
+		inFlightRef.current = settled;
+	};
+
+	/**
 	 * One debounced writer per delay, held in a ref so a re-render never replaces it.
 	 * Unmount FLUSHES rather than cancels: closing the dialog within the debounce window
 	 * must not lose the value the cashier just chose.
 	 */
-	type Write = (changes: Partial<T>, write: (changes: Partial<T>) => void) => void;
-	const debouncedRef = React.useRef<DebouncedFunc<Write> | null>(null);
+	const debouncedRef = React.useRef<DebouncedFunc<Commit> | null>(null);
 	React.useEffect(() => {
-		const debounced = debounce<Write>((changes, write) => {
-			write(changes);
-		}, debounceMs);
+		const debounced = debounce<Commit>(commit, debounceMs);
 		debouncedRef.current = debounced;
 		return () => {
 			debounced.flush();
@@ -133,17 +162,42 @@ export function useFormChangeHandler<T extends FieldValues>({
 			if (isSameValue(value, get(lastSeen, name))) return;
 			set(lastSeen, name, cloneDeep(value));
 			const changes = { [name]: value } as unknown as Partial<T>;
+			// The changed path is what is validated, not its root: a root-wide gate refuses the edit
+			// for a sibling the cashier never touched (stored display settings predating a schema
+			// field blocked every column toggle). A caller that writes a whole root field owns the
+			// rest of that root (the order sheet filters its meta rows itself).
+			const validate = () => form.trigger(name as FieldPath<T>);
 
 			// Debounce text inputs to avoid saving on every keystroke
 			if (isTextValue(value) && debounceMs > 0 && debounced) {
-				debounced(changes, onChangeRef.current);
+				// One trailing debounce keeps only the LAST call's arguments: a second text field
+				// edited within the window would silently replace the first field's pending write
+				// (store name, Tab, city). A different field flushes the one before it.
+				if (pendingNameRef.current !== null && pendingNameRef.current !== name) debounced.flush();
+				pendingNameRef.current = name;
+				debounced(changes, onChangeRef.current, validate);
 			} else {
 				// Flush any pending debounced changes first
 				debounced?.flush();
-				onChangeRef.current(changes);
+				commit(changes, onChangeRef.current, validate);
 			}
 		});
 
 		return () => subscription.unsubscribe();
 	}, [form, debounceMs]);
+
+	/**
+	 * Run the pending debounced write now and resolve once it (validation and the caller's
+	 * onChange) has settled: true when the record holds the edit (or nothing was pending), false
+	 * when the write failed. For a caller that pushes the record next: the push must carry the
+	 * edit the cashier just made, not the one before it, and must not go out at all over a
+	 * failed write with a success toast.
+	 */
+	const flush = React.useCallback(async () => {
+		debouncedRef.current?.flush();
+		const landed = await inFlightRef.current;
+		return landed ?? true;
+	}, []);
+
+	return { flush };
 }

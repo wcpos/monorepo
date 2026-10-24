@@ -77,8 +77,8 @@ for (const [device, viewport] of Object.entries({
 					await openSettings(page);
 					await openSection(page, 'theme');
 					await page.getByTestId('theme-option-system').click();
-					await expect(page.getByTestId('settings-saved-theme')).toBeVisible();
-					await expect(page.getByTestId('settings-saved-theme')).toBeHidden();
+					await expect(page.getByTestId('saved-theme')).toBeVisible();
+					await expect(page.getByTestId('saved-theme')).toBeHidden();
 					const state = async (
 						name: string,
 						enter: () => Promise<void>,
@@ -114,15 +114,15 @@ for (const [device, viewport] of Object.entries({
 							await nameInput.click();
 							await nameInput.press('End');
 							await page.keyboard.type(' capture', { delay: 30 });
-							await expect(page.getByTestId('settings-saved-name')).toBeVisible();
+							await expect(page.getByTestId('saved-name')).toBeVisible();
 						},
 						async () => {
-							await expect(page.getByTestId('settings-saved-name')).toBeHidden();
+							await expect(page.getByTestId('saved-name')).toBeHidden();
 							await nameInput.click();
 							await nameInput.press('End');
 							for (let i = 0; i < ' capture'.length; i += 1) await nameInput.press('Backspace');
-							await expect(page.getByTestId('settings-saved-name')).toBeVisible();
-							await expect(page.getByTestId('settings-saved-name')).toBeHidden();
+							await expect(page.getByTestId('saved-name')).toBeVisible();
+							await expect(page.getByTestId('saved-name')).toBeHidden();
 						},
 						0
 					);

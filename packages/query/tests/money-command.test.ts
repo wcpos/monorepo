@@ -27,6 +27,7 @@ import {
 	markSent,
 	type MoneyCommandEntry,
 	type MoneyCommandKind,
+	owedResend,
 	readOrderCommands,
 	settleCommand,
 } from '../src/store-local/money-commands';
@@ -1066,15 +1067,16 @@ describe('defer: a record journaled offline (ADR 0040 Decided 1)', () => {
 		expect(store.post).not.toHaveBeenCalled();
 	});
 
-	it('a failed re-send pre-flight keeps a deferred entry and reports unanswered', async () => {
+	it('a failed re-send pre-flight keeps a deferred entry, owed its re-send', async () => {
 		await poster().defer('orders/5/payments', { payment: cash() });
 		await dirty();
 		jest.mocked(pushRecord).mockRejectedValue(httpError(422, 'rest_invalid_param'));
-		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(await recover()).toEqual([]);
 		expect(store.post).not.toHaveBeenCalled();
 		expect(await entries()).toEqual([
 			expect.objectContaining({ id: 'row-1', sentRevision: null, claimedBy: null }),
 		]);
+		expect(owedResend((await entries())[0], 'test-scope')).toBe(true);
 	});
 
 	it('a refused deferred record mirrors the failed row, settles, and is returned as refused', async () => {
@@ -1358,31 +1360,33 @@ describe('the store-session recovery', () => {
 		expect(store.post).toHaveBeenCalledTimes(2);
 	});
 
-	// The session retries an unanswered order on `RECOVERY_RETRY_DELAYS_MS` (Codex 4333265115).
-	it('reports a re-send that got no definitive answer as unanswered, and answers it on the next run', async () => {
+	// The session retries an owed command on `RECOVERY_RETRY_DELAYS_MS` (Codex 4333265115).
+	it('leaves a re-send that got no definitive answer owed, and answers it on the next run', async () => {
 		store.modes = ['lose'];
 		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
 		store.modes = ['malformed'];
-		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(await recover()).toEqual([]);
 		expect(await entries()).toHaveLength(1);
+		expect(owedResend((await entries())[0], 'test-scope')).toBe(true);
 		expect(await recover()).toEqual([
 			{ orderUuid: 'order', answers: [expect.objectContaining({ kind: 'close' })] },
 		]);
 		expect(await entries()).toEqual([]);
 	});
 
-	// A thrown read is not an absence: the command stays journaled and the run reports it
-	// unanswered, so the session retries it on RECOVERY_RETRY_DELAYS_MS.
+	// A thrown read is not an absence: the command stays journaled and owed, so the session
+	// retries it on RECOVERY_RETRY_DELAYS_MS.
 	it('a resident lookup that rejects leaves the command journaled and asks for a retry', async () => {
 		store.modes = ['lose'];
 		await expect(poster()('orders/5/payments/leg/capture', {})).rejects.toThrow('Network Error');
 		const lookup = jest
 			.spyOn(residents, 'findEngineResident')
 			.mockRejectedValue(new Error('storage read failed'));
-		expect(await recover()).toEqual([{ orderUuid: 'order', answers: [], unanswered: true }]);
+		expect(await recover()).toEqual([]);
 		expect(await entries()).toEqual([
 			expect.objectContaining({ kind: 'capture', claimedBy: null }),
 		]);
+		expect(owedResend((await entries())[0], 'test-scope')).toBe(true);
 		expect(store.post).toHaveBeenCalledTimes(1);
 		lookup.mockRestore();
 		expect(await recover()).toEqual([

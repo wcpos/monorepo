@@ -121,7 +121,14 @@ jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
-	return { Dialog: Box, DialogContent: Box, DialogHeader: Box, DialogTitle: Box };
+	return {
+		Dialog: Box,
+		DialogContent: Box,
+		DialogHeader: Box,
+		DialogTitle: Box,
+		DialogBody: Box,
+		DialogFooter: Box,
+	};
 });
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -204,62 +211,31 @@ it.each([
 	}
 );
 
-it('keeps settings, support and external links reachable below sign out', () => {
+it('keeps only the WordPress admin and desktop links beside the till actions', () => {
 	const { openExternalURL } = jest.requireMock('@wcpos/utils/open-external-url');
 	render(<UserSheet open onOpenChange={jest.fn()} />);
-	const ids = Array.from(
-		document.querySelectorAll('button[data-testid], [role="button"][data-testid]')
-	).map((node) => node.getAttribute('data-testid'));
-	expect(ids.slice(ids.indexOf('user-sheet-sign-out'))).toEqual([
-		'user-sheet-sign-out',
-		'user-sheet-settings',
-		'user-sheet-support',
-		'user-sheet-wp-admin',
-		'user-sheet-desktop-app',
-		'user-sheet-clear-local-data',
-	]);
-	fireEvent.click(screen.getByTestId('user-sheet-settings'));
-	expect(mockPush).toHaveBeenCalledWith('/settings');
-	fireEvent.click(screen.getByTestId('user-sheet-support'));
-	expect(mockPush).toHaveBeenCalledWith('/support');
+	// Settings and Support are the drawer's; the local reset lives in Settings (Paul, 2026-10-23).
+	expect(screen.queryByTestId('user-sheet-settings')).toBeNull();
+	expect(screen.queryByTestId('user-sheet-support')).toBeNull();
+	expect(screen.queryByTestId('user-sheet-clear-local-data')).toBeNull();
+	expect(screen.getByTestId('user-sheet-sign-out')).toBeTruthy();
 	fireEvent.click(screen.getByTestId('user-sheet-wp-admin'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://shop.example/wp-admin');
 	fireEvent.click(screen.getByTestId('user-sheet-desktop-app'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://github.com/wcpos/electron/releases');
 });
 
-it('omits the desktop download and WordPress admin on native while retaining local reset', () => {
+it('omits the desktop download and WordPress admin on native', () => {
 	const { Platform } = jest.requireMock('@wcpos/utils/platform');
 	Platform.isWeb = false;
 	try {
 		render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.queryByTestId('user-sheet-desktop-app')).toBeNull();
 		expect(screen.queryByTestId('user-sheet-wp-admin')).toBeNull();
-		expect(screen.getByTestId('user-sheet-clear-local-data')).toBeTruthy();
 	} finally {
 		Platform.isWeb = true;
 	}
 });
-
-it('opens the shared reset confirmation from the cashier row', async () => {
-	render(<UserSheet open onOpenChange={jest.fn()} />);
-	fireEvent.click(screen.getByTestId('user-sheet-clear-local-data'));
-	expect(
-		await screen.findByText('common.clear_all_local_data_unknown common.clear_all_local_data_body')
-	).toBeTruthy();
-});
-
-it.each(['settings', 'support', 'clear-local-data'])(
-	'closes the cashier sheet when opening %s',
-	async (action) => {
-		const onOpenChange = jest.fn();
-		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
-		await act(async () => {
-			fireEvent.click(screen.getByTestId(`user-sheet-${action}`));
-		});
-		expect(onOpenChange).toHaveBeenCalledWith(false);
-	}
-);
 
 let mockCart:
 	| {

@@ -5,6 +5,11 @@ import { act, fireEvent, render } from '@testing-library/react';
 
 import { GeneralSettings } from './general';
 
+// The reset's confirm is its own suite; here the danger zone only needs its trigger.
+jest.mock('../pos/cart/clear-local-data', () => ({
+	ClearLocalData: ({ trigger }: { trigger: (onPress: () => void) => React.ReactNode }) =>
+		trigger(jest.fn()),
+}));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('expo-crypto', () => ({}));
 const mockLocalPatch = jest.fn().mockResolvedValue({});
@@ -31,6 +36,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('@wcpos/components/form', () => ({
+	...jest.requireActual('@wcpos/components/form/saved-mark'),
 	Form: ({ children }: React.PropsWithChildren) => children,
 	FormField: () => null,
 	useFormChangeHandler: (options: unknown) => mockChangeHandler(options),
@@ -172,7 +178,7 @@ it('shows the failure line, not Restored, when the restore patch did not apply',
 	fireEvent.click(getByTestId('settings-general-restore-server'));
 	await act(async () => fireEvent.click(getByTestId('settings-general-restore-confirm')));
 	expect(getByText('settings.restore_failed')).toBeTruthy();
-	expect(queryByTestId('settings-saved-restore')).toBeNull();
+	expect(queryByTestId('saved-restore')).toBeNull();
 });
 it('asks before restoring, and cancelling does not fetch or patch', () => {
 	const { getByTestId, queryByRole } = render(<GeneralSettings />);
@@ -189,7 +195,7 @@ it('shows Restored after confirmation succeeds', async () => {
 	fireEvent.click(getByTestId('settings-general-restore-server'));
 	await act(async () => fireEvent.click(getByTestId('settings-general-restore-confirm')));
 	expect(mockGet).toHaveBeenCalledWith('stores/1');
-	expect(getByTestId('settings-saved-restore').textContent).toBe('settings.restored');
+	expect(getByTestId('saved-restore').textContent).toBe('settings.restored');
 	expect(queryByRole('alertdialog')).toBeNull();
 });
 it('shows the failure line, with retry reopening confirmation rather than fetching', async () => {

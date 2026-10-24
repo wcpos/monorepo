@@ -14,6 +14,7 @@
  */
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { type MetaDataEntry, readAwaitingCustomer } from '@wcpos/order-math';
 import { log } from '@wcpos/utils/logger';
 
 import { addCheckoutProbeProductAgain, checkoutProbeAddControl } from './checkout-probe';
@@ -796,10 +797,9 @@ function sendGateway(descriptors: Descriptor[]): GatewayDescriptor | undefined {
 	);
 }
 
-function awaitingCustomer(order: ServerOrder): { attempt_id?: string } | null {
-	const meta = order.meta_data as { key?: string; value?: unknown }[] | undefined;
-	const value = meta?.find((entry) => entry.key === '_wcpos_awaiting_customer')?.value;
-	return value && typeof value === 'object' ? (value as { attempt_id?: string }) : null;
+/** The store's awaiting-customer stamp, read from its attempt map as the app reads it. */
+function awaitingCustomer(order: ServerOrder) {
+	return readAwaitingCustomer(order.meta_data as MetaDataEntry[] | undefined);
 }
 
 liveTest.describe('POS declared UI: a gateway that sends the customer away (live store)', () => {

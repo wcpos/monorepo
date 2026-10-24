@@ -27,6 +27,7 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		disabled,
+		loading,
 		onPress,
 		variant,
 		className,
@@ -34,15 +35,18 @@ jest.mock('@wcpos/components/button', () => ({
 		children?: React.ReactNode;
 		testID?: string;
 		disabled?: boolean;
+		loading?: boolean;
 		onPress?: () => void;
 		variant?: string;
 		className?: string;
 	}) => (
+		// As the real Button: `loading` shows the spinner and makes it inert.
 		<button
 			className={className}
 			data-testid={testID}
 			data-variant={variant}
-			disabled={disabled}
+			data-loading={loading ? 'true' : undefined}
+			disabled={disabled || loading}
 			onClick={onPress}
 		>
 			{children}
@@ -80,7 +84,10 @@ jest.mock('@wcpos/components/tile', () => ({
 		</button>
 	),
 }));
-jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
+// The real hook answers null for a missing date; the line falls back to its unknown copy then.
+jest.mock('../../../hooks/use-date-format', () => ({
+	useDateFormat: (date: unknown) => (date === null ? null : 'Oct 8, 10:35 PM'),
+}));
 // The declared-fields helpers draw host controls; their native deps stay out of jsdom.
 type MockCheckboxProps = {
 	testID?: string;
@@ -252,6 +259,7 @@ function makeFlow(count = 1): TenderFlow {
 		roundingMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
+		running: null,
 		saveState: { kind: 'saving' },
 		pickMethod: jest.fn(),
 		takeTender: jest.fn(),
@@ -261,9 +269,11 @@ function makeFlow(count = 1): TenderFlow {
 		fieldErrors: {},
 		invoiceSent: null,
 		cancelInvoice: jest.fn(),
+		unansweredAttempt: null,
+		clearAttempt: jest.fn(),
 		unansweredCommand: false,
 		retryCommand: jest.fn(async () => undefined),
-		offlineDialog: null,
+		confirmDialog: null,
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
@@ -1041,6 +1051,7 @@ it.each([
 		// Saving or not, the method row is the same pills: the save settling moves nothing.
 		const tiles = screen.getAllByTestId(/^checkout-method-method-/);
 		expect(screen.getByTestId('checkout-commit').textContent === 'Saving order…').toBe(saving);
+		expect(screen.getByTestId('checkout-commit').hasAttribute('data-loading')).toBe(saving);
 		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
 		expect(rows).toHaveLength(phone ? 4 : 2);
 		for (const row of rows) {
@@ -1225,6 +1236,140 @@ describe('declared UI (contract 1.2)', () => {
 		);
 		fireEvent.click(screen.getByTestId('checkout-cancel-invoice'));
 		expect(flow.cancelInvoice).toHaveBeenCalled();
+	});
+	// R11: while a command holds the gate, every control that could fire another is inert; Try
+	// again is not disabled by busy, because the flow refuses it itself.
+	it('busy disables Commit, the method tile and Cancel invoice; Try again still presses', () => {
+		const flow = invoiceFlow({
+			busy: true,
+			invoiceSent: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-0',
+				sent_at_gmt: '2026-10-08T10:35:00.000Z',
+				cashier_id: 7,
+			},
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('checkout-method-wcpos_email_invoice').hasAttribute('disabled')).toBe(
+			true
+		);
+		expect(screen.getByTestId('checkout-cancel-invoice').hasAttribute('disabled')).toBe(true);
+		render(<UnansweredGate flow={{ ...flow, unansweredCommand: true }} />);
+		fireEvent.click(screen.getByTestId('checkout-unanswered-retry'));
+		expect(flow.retryCommand).toHaveBeenCalledTimes(1);
+	});
+	// C5-S1: a button spins only for its own command; every one is still disabled on busy.
+	const bothLines = (running: TenderFlow['running']) =>
+		invoiceFlow({
+			busy: true,
+			running,
+			invoiceSent: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-0',
+				sent_at_gmt: '2026-10-08T10:35:00.000Z',
+				cashier_id: 7,
+			},
+			unansweredAttempt: {
+				id: 'attempt-9',
+				methodId: 'wcpos_email_invoice',
+				cashierId: 7,
+				sentAtGmt: '2026-10-08T10:35:00.000Z',
+				awaiting: null,
+				flagged: false,
+				title: 'Email Invoice',
+			},
+		});
+	const spinners = [
+		'checkout-commit',
+		'checkout-cancel-invoice',
+		'checkout-clear-attempt',
+		'checkout-unanswered-retry',
+	];
+	const renderBoth = (flow: TenderFlow) => {
+		render(<TenderPane flow={flow} format={String} />);
+		render(<UnansweredGate flow={{ ...flow, unansweredCommand: true }} />);
+	};
+	it.each([
+		['takeTender', 'checkout-commit'],
+		['cancelInvoice', 'checkout-cancel-invoice'],
+		['clearAttempt', 'checkout-clear-attempt'],
+		['retryCommand', 'checkout-unanswered-retry'],
+	] as const)('%s spins only %s', (running, spinner) => {
+		renderBoth(bothLines(running));
+		for (const testID of spinners) {
+			expect(screen.getByTestId(testID).hasAttribute('data-loading')).toBe(testID === spinner);
+		}
+		for (const testID of spinners.slice(0, 3)) {
+			expect(screen.getByTestId(testID).hasAttribute('disabled')).toBe(true);
+		}
+	});
+	it('a confirm is open: busy, and no button spins behind it', () => {
+		renderBoth(bothLines(null));
+		for (const testID of spinners) {
+			expect(screen.getByTestId(testID).hasAttribute('data-loading')).toBe(false);
+		}
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	});
+	describe('an unanswered gateway attempt', () => {
+		const stranded = {
+			id: 'attempt-9',
+			methodId: 'wcpos_email_invoice',
+			cashierId: 7,
+			sentAtGmt: '2026-10-08T10:35:00.000Z',
+			awaiting: null,
+			flagged: false,
+			title: 'Email Invoice',
+		};
+		const check =
+			"Check the provider's dashboard before taking payment again; the store keeps checking and records it if the money was taken.";
+		const line = () => screen.queryByTestId('checkout-attempt-unanswered');
+		const sentence = () => line()?.querySelector('span')?.textContent;
+		it('names the method and the time, then what to check; never that it failed', () => {
+			render(<TenderPane flow={invoiceFlow({ unansweredAttempt: stranded })} format={String} />);
+			expect(sentence()).toBe(
+				`Your Email Invoice payment sent at Oct 8, 10:35 PM has no answer from the provider yet. ${check}`
+			);
+			expect(sentence()).not.toMatch(/fail/i);
+		});
+		it.each([
+			['no descriptor for its method', { ...stranded, title: null }],
+			['no send time', { ...stranded, sentAtGmt: null }],
+		])('with %s says the unknown copy', (_, unansweredAttempt) => {
+			render(<TenderPane flow={invoiceFlow({ unansweredAttempt })} format={String} />);
+			expect(sentence()).toBe(
+				`An earlier payment attempt on this order has no answer from the provider yet. ${check}`
+			);
+		});
+		it('shows on a covered sale (balance 0, total above 0)', () => {
+			const flow = invoiceFlow({ unansweredAttempt: stranded, balanceMinor: 0, paidMinor: 9295 });
+			render(<TenderPane flow={flow} format={String} />);
+			expect(screen.getByTestId('checkout-keypad')).not.toBeNull();
+			expect(line()).not.toBeNull();
+		});
+		it('Clear attempt is a quiet destructive button that asks the flow', () => {
+			const flow = invoiceFlow({ unansweredAttempt: stranded });
+			render(<TenderPane flow={flow} format={String} />);
+			const clear = screen.getByTestId('checkout-clear-attempt');
+			expect(clear.textContent).toBe('Clear attempt');
+			expect(clear.dataset.variant).toBe('outline-destructive');
+			fireEvent.click(clear);
+			expect(flow.clearAttempt).toHaveBeenCalledTimes(1);
+		});
+		it.each([
+			['offline', { online: false }],
+			['busy', { busy: true }],
+		])('Clear attempt is disabled while %s', (_, overrides) => {
+			render(
+				<TenderPane
+					flow={invoiceFlow({ unansweredAttempt: stranded, ...overrides })}
+					format={String}
+				/>
+			);
+			expect(screen.getByTestId('checkout-clear-attempt').hasAttribute('disabled')).toBe(true);
+		});
 	});
 	it('lists an unavailable gateway with the split reason', () => {
 		const flow = invoiceFlow({

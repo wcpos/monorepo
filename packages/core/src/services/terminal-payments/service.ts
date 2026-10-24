@@ -63,7 +63,6 @@ export interface TerminalPaymentsServiceOptions {
 		response: ServerLegResponse,
 		poster: MoneyCommandPoster
 	) => Promise<void>;
-	getBalance?: (orderUuid: string) => Promise<string>;
 	getActor?: () => { id: string; name: string };
 	completeOrder?: (
 		orderUuid: string,
@@ -405,14 +404,6 @@ export class TerminalPaymentsService {
 					reason: row.failure_reason ?? null,
 				},
 			});
-		if (outcome === 'captured' && !order) {
-			try {
-				sale.balance = await this.options.getBalance?.(orderUuid);
-				result.saleComplete = isSaleComplete(sale, dp);
-			} catch (error) {
-				result.finishingError = getErrorMessage(error);
-			}
-		}
 		if (this.stopped) return;
 		this.settlements.set(row.id, result);
 		// Let the foreground consume navigation before receipt entry can unmount it.

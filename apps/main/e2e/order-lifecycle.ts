@@ -30,6 +30,7 @@ import {
 
 import { isolatedProductTest } from './checkout-probe';
 import {
+	closeOrderSheet,
 	ensureRegisterOpen,
 	getStoreUrl,
 	type StoreAuthorization,
@@ -256,9 +257,10 @@ export async function stampRunLabel(page: Page, label: string): Promise<void> {
 	await page.getByTestId('order-meta-button').click();
 	const input = page.getByTestId('order-note-input');
 	await expect(input).toBeVisible({ timeout: 15_000 });
+	// The note saves as it is typed; the Saved mark beside the label is the write landing.
 	await input.fill(label);
-	await page.getByTestId('order-meta-save').click();
-	await expect(page.getByTestId('order-meta-dialog')).toBeHidden({ timeout: 15_000 });
+	await expect(page.getByTestId('saved-customer_note')).toBeVisible({ timeout: 15_000 });
+	await closeOrderSheet(page);
 }
 
 /**

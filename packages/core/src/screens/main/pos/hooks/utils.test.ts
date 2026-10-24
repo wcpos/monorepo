@@ -514,3 +514,42 @@ describe('Utilities', () => {
 		});
 	});
 });
+
+describe('lineMetaForWrite', () => {
+	const { lineMetaForWrite: withPos } = jest.requireActual('./utils') as typeof import('./utils');
+	it("replaces the draft's pos_data row with the line's current one and keeps the other rows", () => {
+		const formMeta = [
+			{ key: 'custom', value: 'edited' },
+			{ key: '_woocommerce_pos_data', value: { price: '1', virtual: false } },
+		];
+		const line = {
+			meta_data: [{ key: '_woocommerce_pos_data', value: { price: '2', virtual: true } }],
+		};
+		expect(withPos(formMeta, line)).toEqual([
+			{ key: 'custom', value: 'edited' },
+			{ key: '_woocommerce_pos_data', value: { price: '2', virtual: true } },
+		]);
+	});
+	it('drops a just-added row with no id and no key, keeps a saved row with an empty key', () => {
+		expect(
+			withPos(
+				[
+					{ key: '', value: '' },
+					{ id: 3, key: '', value: 'kept' },
+				],
+				{ meta_data: [] }
+			)
+		).toEqual([{ id: 3, key: '', value: 'kept' }]);
+	});
+	it('drops the draft row when the line has none', () => {
+		expect(
+			withPos(
+				[
+					{ key: '_woocommerce_pos_data', value: {} },
+					{ key: 'a', value: 1 },
+				],
+				{ meta_data: [] }
+			)
+		).toEqual([{ key: 'a', value: 1 }]);
+	});
+});

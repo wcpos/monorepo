@@ -14,6 +14,7 @@ import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary } from './boundary-commit';
+import { completeSale } from '../checkout/sale-completion';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
@@ -73,8 +74,13 @@ jest.mock('./boundary-commit', () => ({
 		await write(() => patch);
 	}),
 }));
+const mockComplete = jest.fn();
 jest.mock('../checkout/hooks/use-complete-order-flow', () => ({
-	useCompleteOrderFlowForOrder: () => jest.fn(),
+	useCompleteOrderFlowForOrder: () => mockComplete,
+}));
+jest.mock('../checkout/sale-completion', () => ({
+	...jest.requireActual('../checkout/sale-completion'),
+	completeSale: jest.fn(async () => 'completed'),
 }));
 const report = jest.fn();
 let currentConfig = config;
@@ -755,6 +761,57 @@ it('maps an unknown binding to none in both cart and coordinator boundary commit
 		view.unmount();
 		hook.unmount();
 		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
+});
+
+it('both boundary hosts hand their completion the outcome unchanged', async () => {
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
+	try {
+		await flush();
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			hook.result.current(
+				a as CurrentOrderRecord,
+				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+				queue
+			)
+		);
+		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
+		const order = a as never;
+		const queue = {} as never;
+		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls) {
+			const outcome = { source: 'zero-balance', order: { status: 'completed' } } as never;
+			await ctx.complete(order, outcome, queue);
+			if (ctx.source === 'system') {
+				expect(completeSale).toHaveBeenLastCalledWith(
+					saleContext,
+					order,
+					outcome,
+					{ host: 'background' },
+					queue
+				);
+				expect(jest.mocked(completeSale).mock.lastCall?.[2]).toBe(outcome);
+			} else {
+				expect(mockComplete).toHaveBeenLastCalledWith(order, outcome, queue);
+				expect(mockComplete.mock.lastCall?.[1]).toBe(outcome);
+			}
+		}
+		expect(completeSale).toHaveBeenCalledTimes(1);
+		expect(mockComplete).toHaveBeenCalledTimes(1);
+	} finally {
+		view.unmount();
+		hook.unmount();
 	}
 });
 

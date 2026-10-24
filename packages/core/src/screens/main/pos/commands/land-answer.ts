@@ -9,6 +9,7 @@ import {
 	readAwaitingCustomer,
 } from '@wcpos/order-math';
 import type { EngineRecord, MoneyCommandPoster, ResentCommand } from '@wcpos/query';
+import { isPaidStatus } from '@wcpos/sync-core';
 
 import { refreshOrderRecord } from '../checkout/hooks/reconcile-completed-order';
 import { submitStillDone } from '../checkout/payments/submit-gateway-payment';
@@ -76,13 +77,14 @@ export type StoreAnswer =
 	/** A replayed `settled`/`paid` whose sale was reopened since (`submitStillDone`). */
 	| { kind: 'reopened'; order: OrderPaymentSummary }
 	| { kind: 'close'; order: OrderPaymentSummary };
-/** `remainingMinor`: the press's prediction for a recorded leg (`StampedSale`). */
-export type Arrival = { via: 'press' | 'try-again'; remainingMinor: number };
+/** `remainingMinor`: a press's prediction for a recorded leg (`StampedSale`); others have none. */
+export type Arrival =
+	{ via: 'press' | 'try-again'; remainingMinor: number } | { via: 'recovery' | 'boundary' };
 
 /**
- * A replayed answer (Try again) as a store answer: it arrives mirrored, so this only reads it.
- * Null when it lands nothing: a cancel, a void, a terminal leg (its service finishes it), or a
- * send whose adopted order no longer carries the stamp (the store settled or cancelled it).
+ * A replayed answer (Try again, recovery) as a store answer: it arrives mirrored, so this only
+ * reads it. Null when it lands nothing: a cancel, a void, a terminal leg (its service finishes
+ * it), or a send whose adopted order lost the stamp (the store settled or cancelled it).
  */
 export function answerOf(
 	{ kind, data }: ResentCommand,
@@ -102,15 +104,21 @@ export function answerOf(
 	return { kind: submitStillDone(data.outcome, order.status) ? 'settled' : 'reopened', order };
 }
 
+/** Whether a re-sent answer's summary reads paid, a terminal capture's included (answerOf lands none). */
+export function answerReadsPaid({ data }: ResentCommand): boolean {
+	return isPaidStatus((data.order as { status?: unknown } | undefined)?.status);
+}
+
 /** The one table from a store answer to the outcome the completion (`finishSale`) judges. */
 export function saleOutcomeOf(
 	answer: Exclude<StoreAnswer, { kind: 'reopened' }>,
-	{ remainingMinor }: Arrival,
+	arrival: Arrival,
 	mirrorFailed: boolean
 ): SaleOutcome {
 	switch (answer.kind) {
 		case 'recorded': {
 			const { row, order, via } = answer;
+			const remainingMinor = 'remainingMinor' in arrival ? arrival.remainingMinor : null;
 			return { source: 'manual', via, row, order, mirrorFailed, remainingMinor };
 		}
 		case 'close':

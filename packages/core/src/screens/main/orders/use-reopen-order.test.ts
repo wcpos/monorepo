@@ -5,6 +5,7 @@ import type { EngineEvent } from '@wcpos/sync-engine';
 import { createOrderRevisionDoor } from '@wcpos/sync-engine/testing';
 import type { EngineRecord } from '@wcpos/query';
 import { applyLocalPatch, patchEngineResident } from '@wcpos/query/mutations';
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import { log } from '@wcpos/utils/logger';
 
 import { useReopenOrder } from './use-reopen-order';
@@ -369,18 +370,13 @@ it('a refusal that names an attempt resolves it through the awaiting-customer st
 			status: 'pending',
 			payment_method: 'wcpos_email_invoice',
 			payment_method_title: 'Email invoice',
-			meta_data: [
-				{
-					key: '_wcpos_awaiting_customer',
-					value: {
-						method_id: 'wcpos_email_invoice',
-						destination: 'buyer@example.com',
-						attempt_id: 'attempt-7',
-						sent_at_gmt: '2026-10-08T10:00:00.000Z',
-						cashier_id: 7,
-					},
-				},
-			],
+			meta_data: withAwaitingCustomer([], {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-7',
+				sent_at_gmt: '2026-10-08T10:00:00.000Z',
+				cashier_id: 7,
+			}),
 		},
 	} as unknown as EngineRecord<'orders'>;
 	jest

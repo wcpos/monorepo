@@ -1,4 +1,9 @@
-import { readLedger, withLedger } from '@wcpos/order-math';
+import {
+	readAwaitingCustomer,
+	readLedger,
+	withAwaitingCustomer,
+	withLedger,
+} from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { insertEngineResident } from '../../src/mutations';
@@ -177,23 +182,29 @@ describe('mirrorMoneyAnswer', () => {
 	])('a gateway stamp change applies only under %s', async (_, revision, kept) => {
 		const order = await seed([], revision);
 		const stamp = {
-			key: '_wcpos_awaiting_customer',
-			value: { method_id: 'invoice', attempt_id: 'new' },
+			method_id: 'invoice',
+			destination: null,
+			attempt_id: 'new',
+			sent_at_gmt: '',
+			cashier_id: 0,
 		};
 		await order.incrementalModify((doc) => ({
 			...doc,
-			payload: { ...doc.payload, meta_data: [...(doc.payload.meta_data as never[]), stamp] },
+			payload: {
+				...doc.payload,
+				meta_data: withAwaitingCustomer(doc.payload.meta_data as never[], stamp),
+			},
 		}));
 		await mirrorMoneyAnswer(manager, 'order', {
 			order: summary('pos-open'),
 			sentRevision: 'sha256:sent',
-			meta: (meta) => meta.filter(({ key }) => key !== '_wcpos_awaiting_customer'),
+			meta: (meta) => withAwaitingCustomer(meta, null),
 		});
 		const meta = (
 			(await database.orders.findOne('order').exec())!.toJSON() as {
-				payload: { meta_data: { key: string }[] };
+				payload: { meta_data: { key: string; value: unknown }[] };
 			}
 		).payload.meta_data;
-		expect(meta.some(({ key }) => key === '_wcpos_awaiting_customer')).toBe(kept);
+		expect(readAwaitingCustomer(meta) !== null).toBe(kept);
 	});
 });

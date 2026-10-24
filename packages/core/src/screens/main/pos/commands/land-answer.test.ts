@@ -1,7 +1,9 @@
+import { withAwaitingCustomer } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import {
 	answerOf,
+	answerReadsPaid,
 	landAnswer,
 	mirrorAnswer,
 	saleOutcomeOf,
@@ -290,7 +292,7 @@ describe('landAnswer', () => {
 // Try again: a replayed answer arrives mirrored; answerOf only reads it.
 describe('answerOf', () => {
 	const resident = (meta_data: unknown[] = []) => ({ meta_data }) as never;
-	const awaiting = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+	const awaiting = withAwaitingCustomer([], stamp);
 	it.each([
 		[
 			'a record',
@@ -367,4 +369,91 @@ describe('answerOf', () => {
 	] as const)('%s', (_, kind, data, meta, answer) =>
 		expect(answerOf({ kind, data }, resident([...meta]))).toEqual(answer)
 	);
+});
+
+// The bridge: a recovered send lands with no press prediction (ADR 0040 Decided 1 rule 3).
+describe('recovery', () => {
+	it('lands a recovered send as a sent sale, without resolving the attempt itself', async () => {
+		const finish = jest.fn(async () => 'completed' as const);
+		const resolveAttempt = jest.fn(async () => undefined);
+		const sent = { kind: 'sent', order: summary('pending'), stamp } as const;
+		await expect(
+			landAnswer(sent, { via: 'recovery' }, { finish, resolveAttempt, dp: 2 })
+		).resolves.toBe('completed');
+		expect(finish).toHaveBeenCalledWith({ source: 'gateway', order: summary('pending'), stamp });
+		expect(resolveAttempt).not.toHaveBeenCalled();
+	});
+
+	it('a recorded answer in a recovery carries no press prediction', () => {
+		const recorded = {
+			kind: 'recorded',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+		} as const;
+		expect(saleOutcomeOf(recorded, { via: 'recovery' }, false)).toEqual({
+			source: 'manual',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+			mirrorFailed: false,
+			remainingMinor: null,
+		});
+	});
+
+	it.each([
+		['a close completed', 'close', { order: summary('completed') }, true],
+		[
+			'a terminal capture with a completed summary',
+			'capture',
+			{ payment: row, order: summary('completed') },
+			true,
+		],
+		[
+			'a submit sent, summary pending',
+			'submit',
+			{ outcome: 'sent', order: summary('pending') },
+			false,
+		],
+		['a record, summary pos-open', 'record', { payment: row, order: summary('pos-open') }, false],
+		['a refund, row only', 'refund', { payment: row }, false],
+	] as const)('answerReadsPaid: %s', (_, kind, data, paid) =>
+		expect(answerReadsPaid({ kind, data } as never)).toBe(paid)
+	);
+});
+
+// The paid-balance boundary: a close carries no press prediction and lands like any other close.
+describe('boundary', () => {
+	it.each([
+		['a press', { via: 'press', remainingMinor: 0 }],
+		['a boundary', { via: 'boundary' }],
+		['a recovery', { via: 'recovery' }],
+	] as const)('a close does not depend on how it arrived: %s', (_, arrival) =>
+		expect(saleOutcomeOf({ kind: 'close', order: summary('completed') }, arrival, false)).toEqual({
+			source: 'zero-balance',
+			order: summary('completed'),
+		})
+	);
+
+	it('a boundary close the completion did not finish lands reopened, leaving the attempt to it', async () => {
+		const finish = jest.fn(async () => 'not-completed' as const);
+		const resolveAttempt = jest.fn(async () => undefined);
+		const close = { kind: 'close', order: summary('completed') } as const;
+		await expect(
+			landAnswer(close, { via: 'boundary' }, { finish, resolveAttempt, dp: 2 })
+		).resolves.toBe('reopened');
+		expect(resolveAttempt).not.toHaveBeenCalled();
+	});
+
+	it('a recorded answer at the boundary carries no press prediction', () => {
+		const recorded = {
+			kind: 'recorded',
+			via: 'online',
+			row,
+			order: summary('pos-partial'),
+		} as const;
+		expect(saleOutcomeOf(recorded, { via: 'boundary' }, false)).toMatchObject({
+			remainingMinor: null,
+		});
+	});
 });

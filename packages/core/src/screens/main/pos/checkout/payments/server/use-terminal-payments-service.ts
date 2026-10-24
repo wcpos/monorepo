@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { derive, isOfflineDeviceAuthorization, readLedger } from '@wcpos/order-math';
+import { isOfflineDeviceAuthorization, readLedger } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import { readResidentOrder } from '@wcpos/query/record-readers';
@@ -19,7 +19,6 @@ import {
 } from '../../../../../../services/terminal-payments';
 import { stampCompletionIfMissing } from '../../../commands/land-answer';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
-import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -30,16 +29,15 @@ export function useTerminalPaymentsService(): void {
 	const actor = ctx.actor;
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
-	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	// The service outlives a cashier change — its effect keys on store, site and
 	// manager only, so an in-flight leg is never torn down by a re-login — and the
 	// action row must name whoever is at the till when the money lands, not
 	// whoever started the service. So the actor is read live, like the rest.
-	const latest = React.useRef({ methods, online, actor, ctx });
+	const latest = React.useRef({ online, actor, ctx });
 	React.useLayoutEffect(() => {
-		latest.current = { methods, online, actor, ctx };
-	}, [methods, online, actor, ctx]);
+		latest.current = { online, actor, ctx };
+	}, [online, actor, ctx]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -125,15 +123,6 @@ export function useTerminalPaymentsService(): void {
 						context: { error: getErrorMessage(error) },
 					});
 				}
-			},
-			getBalance: async (orderUuid) => {
-				const resident = await readResidentOrder(manager, orderUuid);
-				if (!resident) throw new Error('Terminal payment order is not resident');
-				const payload = (resident.getLatest?.().payload ??
-					resident.payload) as EngineRecord<'orders'>['payload'];
-				return derive(payload.total, readLedger(payload.meta_data), latest.current.methods, {
-					dp: dp(),
-				}).balance;
 			},
 			getActor: () => latest.current.actor,
 			completeOrder: async (orderUuid, actor, outcome) => {

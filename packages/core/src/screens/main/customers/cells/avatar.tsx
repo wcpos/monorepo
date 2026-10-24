@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type ReadonlyEngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { RecordAvatar } from '../../components/user-avatar';
@@ -9,7 +9,9 @@ import { getCustomerAvatarName } from '../../components/user-avatar/customer-ava
 /**
  * The customers table's avatar cell: the customer's picture, else their initials on the primary.
  */
-export function Avatar({ row }: CellContext<{ record: EngineRecord<'customers'> }, 'avatar_url'>) {
+export function Avatar({
+	row,
+}: CellContext<{ record: ReadonlyEngineRecord<'customers'> }, 'avatar_url'>) {
 	const record = row.original.record;
 	const customer = useRecordField(record, ({ payload }) => payload);
 

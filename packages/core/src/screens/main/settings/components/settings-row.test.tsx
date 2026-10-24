@@ -8,9 +8,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 
 import { Text } from '@wcpos/components/text';
+import { SavedFieldProvider, useMarkSaved } from '@wcpos/components/form';
 
 import { SettingsRow } from './settings-row';
-import { SavedFieldProvider, useMarkSaved } from './saved-mark';
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual<typeof import('react-native')>('react-native').View },
@@ -36,6 +36,7 @@ jest.mock('@wcpos/components/label', () => ({
 jest.mock('@wcpos/components/form', () => {
 	const { useFormContext } = jest.requireActual('react-hook-form');
 	return {
+		...jest.requireActual('@wcpos/components/form/saved-mark'),
 		FormItem: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 			<div data-testid={testID}>{children}</div>
 		),
@@ -114,9 +115,9 @@ it.each([false, true])('puts Saved only beside the named control (inline=%s)', (
 		</SavedFieldProvider>
 	);
 	fireEvent.click(screen.getByText('Change'));
-	expect(screen.getByTestId('settings-saved-name')).toBeInTheDocument();
-	expect(screen.queryByTestId('settings-saved-currency')).not.toBeInTheDocument();
+	expect(screen.getByTestId('saved-name')).toBeInTheDocument();
+	expect(screen.queryByTestId('saved-currency')).not.toBeInTheDocument();
 	act(() => jest.advanceTimersByTime(1200));
-	expect(screen.queryByTestId('settings-saved-name')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('saved-name')).not.toBeInTheDocument();
 	jest.useRealTimers();
 });
