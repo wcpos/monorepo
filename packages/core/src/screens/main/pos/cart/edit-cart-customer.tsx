@@ -90,13 +90,16 @@ function EditCartCustomerFields() {
 		// The writer takes the whole address set, so the whole set is validated before it goes: an
 		// invalid email left in one field must not ride along with an edit to another.
 		if (!(await form.trigger())) return false;
-		const values = form.getValues();
+		// The validated output, as the old Save wrote it (unknown keys stripped), and a tax-id row
+		// the cashier has only just added (no value yet) is not an edit.
+		const values = formSchema.parse(form.getValues());
 		return setCartCustomer(currentOrderRecord, {
 			billing: values.billing,
 			shipping: values.shipping,
-			taxIds: values.tax_ids ?? [],
+			taxIds: (values.tax_ids ?? []).filter((row) => String(row?.value ?? '') !== ''),
 		}).then((written) => {
 			if (written) markSaved([root]);
+			return Boolean(written);
 		});
 	};
 	useFormChangeHandler({ form, onChange: handleChange });

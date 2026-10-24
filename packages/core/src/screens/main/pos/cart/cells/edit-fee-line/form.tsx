@@ -32,7 +32,7 @@ import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
-import { withLinePosData } from '../../../hooks/utils';
+import { lineMetaForWrite } from '../../../hooks/utils';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 
@@ -99,9 +99,11 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
-			// A meta-only edit carries the line's current pos_data row, not the draft's stale copy.
+			// A meta-only edit drops a just-added blank row and carries the line's current pos_data row.
 			const metaValue =
-				root === 'meta_data' ? withLinePosData(value as { key?: string }[], item) : value;
+				root === 'meta_data'
+					? lineMetaForWrite(value as { id?: number; key?: string }[], item)
+					: value;
 			const wireValue =
 				root === 'tax_class'
 					? taxClassToWire(form.getValues('tax_class'))
@@ -110,6 +112,7 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 						: metaValue;
 			return updateCartLine('fee_lines', uuid, { [root]: wireValue }).then((written) => {
 				if (written) markSaved([root]);
+				return Boolean(written);
 			});
 		},
 	});

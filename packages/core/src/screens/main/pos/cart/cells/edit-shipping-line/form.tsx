@@ -31,7 +31,7 @@ import { ShippingMethodSelect } from '../../../../components/shipping-method-sel
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { withLinePosData } from '../../../hooks/utils';
+import { lineMetaForWrite } from '../../../hooks/utils';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
@@ -95,12 +95,15 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		onChange: (changes) => {
 			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
 			const value = form.getValues(root);
-			// A meta-only edit carries the line's current pos_data row, not the draft's stale copy.
+			// A meta-only edit drops a just-added blank row and carries the line's current pos_data row.
 			const metaValue =
-				root === 'meta_data' ? withLinePosData(value as { key?: string }[], item) : value;
+				root === 'meta_data'
+					? lineMetaForWrite(value as { id?: number; key?: string }[], item)
+					: value;
 			const wireValue = metaValue;
 			return updateCartLine('shipping_lines', uuid, { [root]: wireValue }).then((written) => {
 				if (written) markSaved([root]);
+				return Boolean(written);
 			});
 		},
 	});
