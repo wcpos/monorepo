@@ -108,6 +108,43 @@ it('a quick-discount chip discounts the typed number, once, at the store places'
 	expect(atRest()).toBe(true);
 });
 
+it('Tab from the field to a chip keeps the editor open; Enter on the chip commits once', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '20' } });
+	const chip = screen.getByTestId('price-discount-10');
+	// Focus moves from the field to the chip, as Tab does: the field's blur names the chip.
+	await act(async () => chip.focus());
+
+	expect(document.activeElement).toBe(chip);
+	expect(screen.getByTestId('price-field')).toBeTruthy();
+	expect(onChangeText).not.toHaveBeenCalled();
+
+	// The chip renders a <button>: react-native-web leaves Enter to the browser, which clicks
+	// it. jsdom does not, so the click is the browser's half of the key press.
+	await act(async () => {
+		fireEvent.keyDown(chip, { key: 'Enter' });
+		fireEvent.keyUp(chip, { key: 'Enter' });
+		fireEvent.click(chip);
+	});
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(18);
+	expect(atRest()).toBe(true);
+});
+
+it('Tab on past the chips commits what was typed, once', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '7' } });
+	const chip = screen.getByTestId('price-discount-10');
+	await act(async () => chip.focus());
+	await act(async () => chip.blur());
+
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(7);
+	expect(atRest()).toBe(true);
+});
+
 it('an untouched field: the chip discounts the stored number', async () => {
 	const onChangeText = setup([10]);
 	await open();

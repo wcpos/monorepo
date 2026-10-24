@@ -48,6 +48,9 @@ export function EditableNumber({
 	const [editing, setEditing] = React.useState(false);
 	// Escape and a chip leave without the field's own value: the blur that follows must not commit.
 	const settled = React.useRef(false);
+	// What the field emitted on its blur, committed when focus leaves the editor (not a chip).
+	const pending = React.useRef<number | undefined>(undefined);
+	const box = React.useRef<{ contains?: (node: unknown) => boolean }>(null);
 	// The number typed so far, which a chip discounts (the stored one until a key is typed).
 	const draft = React.useRef(0);
 	// Enter, Escape and a chip hand focus back to the price, so Tab carries on from it; a click
@@ -72,6 +75,20 @@ export function EditableNumber({
 		setEditing(false);
 	};
 
+	/**
+	 * A blur in the editor. Web: focus moving to a chip (Tab) keeps it open, or the chip taking
+	 * focus would unmount. Focus leaving it commits what the field emitted, unless settled.
+	 */
+	const close = (blur?: unknown) => {
+		// Web's FocusEvent; native's blur event carries no target, so native always closes.
+		const event = blur as { relatedTarget?: unknown; nativeEvent?: { relatedTarget?: unknown } };
+		const next = event?.nativeEvent?.relatedTarget ?? event?.relatedTarget;
+		if (next && box.current?.contains?.(next)) return;
+		if (!settled.current && pending.current !== undefined) onChangeText(pending.current);
+		settled.current = true;
+		setEditing(false);
+	};
+
 	if (!editing) {
 		return (
 			<Button
@@ -85,6 +102,7 @@ export function EditableNumber({
 				className="-mx-1 max-w-none items-end self-stretch px-1"
 				onPress={() => {
 					settled.current = false;
+					pending.current = undefined;
 					draft.current = toNumber(value) || 0;
 					setEditing(true);
 				}}
@@ -97,7 +115,7 @@ export function EditableNumber({
 	return (
 		// Stretched to the cell, so the field is the column's width: an <input> sized by its
 		// content is 20 characters wide and spilled over the next column (dev-next, 2026-10-24).
-		<VStack space="xs" className="items-end self-stretch">
+		<VStack {...{ ref: box }} space="xs" className="items-end self-stretch">
 			<NumberInput
 				ref={input}
 				testID={testID && `${testID}-field`}
@@ -106,21 +124,30 @@ export function EditableNumber({
 				value={value}
 				formatOptions={formatOptions}
 				inputClassName="px-1 text-right tabular-nums"
-				// The field emits on blur only when the number changed; the blur always closes.
-				onChangeText={(next) => !settled.current && onChangeText(next)}
-				onBlur={() => setEditing(false)}
+				// The field emits on blur only when the number changed; `close` commits it.
+				onChangeText={(next) => (pending.current = next)}
+				onBlur={close}
+				// Back in the field (from a chip): it shows the stored number again, so start over.
+				onFocus={() => {
+					pending.current = undefined;
+					draft.current = toNumber(value) || 0;
+				}}
 				onDraftChange={(next) => (draft.current = next)}
 				onSubmitEditing={() => (refocus.current = true)}
 				onKeyPress={(event) => event.nativeEvent.key === 'Escape' && leave()}
 			/>
 			{!!discounts?.length && (
-				// Web: a press on a chip must not blur the field first (the blur would commit and
-				// unmount the chips before the click lands).
+				// Web: a mouse press on a chip keeps focus in the field. Safari does not focus a
+				// clicked button, so the blur would carry no chip as its target and close the editor
+				// before the click lands. A chip reached by Tab blurs here when focus moves on.
 				<View
 					// One line, wider than the price column, reaching left over the row: wrapping
 					// in the column stacked the chips four deep (dev-next, 2026-10-24).
 					className="flex-row justify-end gap-1"
-					{...{ onMouseDown: (event: { preventDefault: () => void }) => event.preventDefault() }}
+					{...{
+						onMouseDown: (event: { preventDefault: () => void }) => event.preventDefault(),
+						onBlur: close,
+					}}
 				>
 					{discounts.map((discount) => (
 						<Chip

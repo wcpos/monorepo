@@ -26,6 +26,26 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 }
 
 /**
+ * Read typed or pasted text with the store's separators. Both separators present: the
+ * thousands one is grouping (`1,234.50`, `1.234,50`). A `.` or `,` that occurs twice is
+ * grouping. A single `.` or `,` is the decimal point, either way round, so a fr_FR till takes
+ * a typed `.`. A space-like thousands separator is never a decimal. Anything else, or two
+ * points left over, is NaN: the caller writes nothing.
+ */
+export function parseNumber(text: string, decimal: string, thousands: string): number {
+	let t = text.trim();
+	if (t === '' || t === '-') return 0;
+	if (thousands && thousands !== decimal && t.includes(thousands) && t.includes(decimal)) {
+		t = t.split(thousands).join('').replace(decimal, '.');
+	} else {
+		if (thousands && thousands !== '.' && thousands !== ',') t = t.split(thousands).join('');
+		for (const sep of ['.', ',']) if (t.split(sep).length > 2) t = t.split(sep).join('');
+		t = t.replace(',', '.');
+	}
+	return /^-?(\d+\.?\d*|\.\d+)$/.test(t) ? parseFloat(t) : NaN;
+}
+
+/**
  * A numeric input that accepts and emits numbers, on every platform.
  * Uses internal string state to allow typing decimals freely.
  * Emits number on blur, and only a changed one: focusing and leaving writes nothing.
@@ -43,6 +63,7 @@ export function NumberInput({
 }: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) || '.';
+	const thousandSeparator = useDocField(store, (state) => state.price_thousand_sep) || '';
 	const { format } = useNumberFormat(formatOptions);
 
 	/**
@@ -58,21 +79,17 @@ export function NumberInput({
 		[decimalSeparator]
 	);
 
-	/**
-	 * Parse display string to number, handling the store's decimal separator
-	 */
-	const stringToNumber = React.useCallback((text: string): number => {
-		if (text === '' || text === '-') return 0;
-		// Normalize to dot for parseFloat (handles both comma and dot input)
-		const normalized = text.replace(',', '.');
-		const num = parseFloat(normalized);
-		return Number.isNaN(num) ? 0 : num;
-	}, []);
+	const stringToNumber = React.useCallback(
+		(text: string) => parseNumber(text, decimalSeparator, thousandSeparator),
+		[decimalSeparator, thousandSeparator]
+	);
 
 	// Internal string state for free-form typing
 	const [internalValue, setInternalValue] = React.useState(() => numberToString(value));
 	const [isFocused, setIsFocused] = React.useState(false);
 	const [syncKey, setSyncKey] = React.useState(0);
+	// Typed since this focus: a focus and leave writes nothing, a typed 0 over a blank writes 0.
+	const dirty = React.useRef(false);
 
 	// Sync from parent when the value changes externally (and not focused).
 	// Implemented as the React "adjust state during render" pattern (tracking the
@@ -101,20 +118,26 @@ export function NumberInput({
 	// `stringToNumber`. Native keeps the raw string always: the swap is a controlled-text update
 	// while focused, which Fabric iOS can drop (#1957), and keystrokes would then edit the
 	// formatted string ("1,234.505" parses as 1.234).
+	const restNumber = stringToNumber(internalValue);
 	const shown =
-		Platform.OS === 'web' && !isFocused && internalValue !== ''
-			? format(stringToNumber(internalValue))
+		Platform.OS === 'web' && !isFocused && internalValue !== '' && Number.isFinite(restNumber)
+			? format(restNumber)
 			: internalValue;
 
-	// Emit the number on blur, only when it differs from the incoming value: a focus and leave
-	// must not write the record (a blank regular price would become "0").
+	// Emit the number on blur only when something was typed and it changes the record: a focus
+	// and leave must not write (a blank regular price would become "0"), a typed 0 over a blank
+	// must. Unparseable text writes nothing and the field shows the stored value again.
 	const handleBlur = React.useCallback(
 		(e: any) => {
 			setIsFocused(false);
 			const typed = stringToNumber(internalValue);
-			if (onChangeText && typed !== stringToNumber(numberToString(value))) {
+			const incoming = numberToString(value);
+			const changed =
+				incoming === '' ? internalValue.trim() !== '' : typed !== stringToNumber(incoming);
+			if (onChangeText && dirty.current && Number.isFinite(typed) && changed) {
 				onChangeText(typed);
 			}
+			dirty.current = false;
 			onBlur?.(e);
 		},
 		[internalValue, value, onChangeText, onBlur, stringToNumber, numberToString]
@@ -123,6 +146,7 @@ export function NumberInput({
 	const handleFocus = React.useCallback(
 		(e: any) => {
 			setIsFocused(true);
+			dirty.current = false;
 			onFocus?.(e);
 		},
 		[onFocus]
@@ -130,8 +154,10 @@ export function NumberInput({
 
 	const handleChangeText = React.useCallback(
 		(text: string) => {
+			dirty.current = true;
 			setInternalValue(text);
-			onDraftChange?.(stringToNumber(text));
+			const draft = stringToNumber(text);
+			if (Number.isFinite(draft)) onDraftChange?.(draft);
 		},
 		[onDraftChange, stringToNumber]
 	);
