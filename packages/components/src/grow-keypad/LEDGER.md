@@ -2,7 +2,7 @@
 
 Seeded 2026-10-24 when the shell was lifted out of `quantity-keypad` for the price keypad (Paul 2026-10-24, price-keypad-variants board, variant 1). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3.
 
-**Job:** The one shell both keypads grow from: the trigger that grows in place into an anchored panel or the phone sheet, the grid, focus, the physical keyboard and Done. Package-internal; `QuantityKeypad` is its caller, the price keypad its next.
+**Job:** The one shell both keypads grow from: the trigger that grows in place into an anchored panel or the phone sheet, the grid, focus, the physical keyboard and Done. Package-internal; callers use `QuantityKeypad` or `PriceKeypad`.
 
 **Base:** `popover`, `button`, `icon`, `text`; `react-native` View and Pressable for the flat keys. The entry (what was typed, what commits) is the caller's.
 
@@ -13,3 +13,6 @@ Seeded 2026-10-24 when the shell was lifted out of `quantity-keypad` for the pri
 3. The panel, not its first key, holds focus (on open, after every key press, and on the phone sheet once it has risen); the physical keyboard types digits, `.`, `,` or the store's separator as `decimal`, Backspace, and Enter as Done unless a focused key takes it; Escape closes discarding — evidence: `quantity-keypad` line 9 as origin.
 4. Every key has a role, an accessible name and a stable testID; ✓ is `numpad-done-button`, a digit or an icon key `numpad-key-<name>` — evidence: `quantity-keypad` line 10 as origin.
 5. On a phone the same rows open in the app's bottom sheet: the first row bordered, the digit and icon keys stretched and muted, Done as the filled `Button` in ✓'s place — evidence: `quantity-keypad` line 11 as origin.
+6. A caller may give a key its own testID (the price keypad's `cart-price-discount-10`) and text apart from its accessible name (`−10%`, named "Discount (10%)"); a quick key is a toggle, filled with the primary while lit and saying so with `aria-pressed` — evidence: Paul 2026-10-24, price-keypad-variants board, variant 1; `price-keypad` tests.
+7. On the phone sheet quick keys are outlined, filled while lit — evidence: Paul 2026-10-24, price-keypad-variants board, variant 1 (the phone frame).
+8. Without a decimal separator (a currency with no places) the separator key is not drawn and 0 spans its cell — evidence: review of the price keypad, 2026-10-24 (JPY stores); test "no decimal key for a currency without places" in `price-keypad/index.test.tsx`.

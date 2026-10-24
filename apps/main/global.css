@@ -145,6 +145,8 @@
   --animate-pop-out: pop-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   --animate-quantity-grow: quantity-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-quantity-grow-up: quantity-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-price-grow: price-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-price-grow-up: price-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-indeterminate: indeterminate 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
   --animate-accordion-down: accordion-down 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-accordion-up: accordion-up 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -247,6 +249,17 @@
 }
 @keyframes quantity-grow-up {
   from { clip-path: inset(calc(100% - 42px) 48px 6px 48px round 8px); }
+  to { clip-path: inset(0 round 8px); }
+}
+/* PriceKeypad (components/price-keypad, Paul 2026-10-24): the panel grows out of the cart's
+   price. Its first row is the display, the panel's full width and 48 px tall, opened over the
+   price; the clip starts as that row. `-up` is the same from the bottom row. */
+@keyframes price-grow {
+  from { clip-path: inset(0 0 calc(100% - 48px) 0 round 8px); }
+  to { clip-path: inset(0 round 8px); }
+}
+@keyframes price-grow-up {
+  from { clip-path: inset(calc(100% - 48px) 0 0 0 round 8px); }
   to { clip-path: inset(0 round 8px); }
 }
 @keyframes dialog-in {
