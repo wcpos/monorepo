@@ -126,16 +126,14 @@ const stamp = {
 	cashier_id: 7,
 } as never;
 const summary = (status: string, balance = '0.00') => ({ status, balance }) as never;
-const press = { via: 'press', remainingMinor: 0 } as const;
-const tryAgain = { via: 'try-again', remainingMinor: 0 } as const;
 
-// The one table: a store answer plus how it arrived is the outcome the completion judges.
+// The one table: a store answer plus the press's prediction is the outcome the completion judges.
 describe('saleOutcomeOf', () => {
 	it.each([
 		[
 			'a record online at the press',
 			{ kind: 'recorded', via: 'online', row, order: summary('completed') },
-			press,
+			0,
 			false,
 			{
 				source: 'manual',
@@ -149,7 +147,7 @@ describe('saleOutcomeOf', () => {
 		[
 			'a record offline, a balance still due',
 			{ kind: 'recorded', via: 'offline', row, order: null },
-			{ via: 'press', remainingMinor: 500 },
+			500,
 			false,
 			{
 				source: 'manual',
@@ -163,7 +161,7 @@ describe('saleOutcomeOf', () => {
 		[
 			'a record whose mirror failed',
 			{ kind: 'recorded', via: 'online', row, order: summary('completed') },
-			press,
+			0,
 			true,
 			{
 				source: 'manual',
@@ -177,32 +175,29 @@ describe('saleOutcomeOf', () => {
 		[
 			'a submit sent',
 			{ kind: 'sent', order: summary('pending', '10.00'), stamp },
-			press,
+			0,
 			false,
 			{ source: 'gateway', order: summary('pending', '10.00'), stamp },
 		],
 		[
 			'a submit settled',
 			{ kind: 'settled', order: summary('pending', '10.00') },
-			tryAgain,
+			0,
 			false,
 			{ source: 'gateway-settled', order: summary('pending', '10.00') },
 		],
 		[
 			'a close',
 			{ kind: 'close', order: summary('completed') },
-			tryAgain,
+			null,
 			false,
 			{ source: 'zero-balance', order: summary('completed') },
 		],
-	] as const)('%s', (_, answer, arrival, mirrorFailed, outcome) =>
-		expect(saleOutcomeOf(answer as StoreAnswer as never, arrival, mirrorFailed)).toEqual(outcome)
+	] as const)('%s', (_, answer, remainingMinor, mirrorFailed, outcome) =>
+		expect(saleOutcomeOf(answer as StoreAnswer as never, mirrorFailed, remainingMinor)).toEqual(
+			outcome
+		)
 	);
-
-	it('a press and a Try again with the same prediction land the same outcome', () => {
-		const answer = { kind: 'recorded', via: 'online', row, order: null } as const;
-		expect(saleOutcomeOf(answer, press, false)).toEqual(saleOutcomeOf(answer, tryAgain, false));
-	});
 });
 
 // Only the answer settles the command; `finish` (the resident's judge) completes the sale.
@@ -254,11 +249,7 @@ describe('landAnswer', () => {
 	] as const)('%s lands as %s → %s', async (_, answer, finished, result) => {
 		const finish = jest.fn(async () => finished);
 		const resolveAttempt = jest.fn(async () => undefined);
-		const landed = await landAnswer(answer as StoreAnswer, press, {
-			finish,
-			resolveAttempt,
-			dp: 2,
-		});
+		const landed = await landAnswer(answer as StoreAnswer, { finish, resolveAttempt, dp: 2 }, 0);
 		expect(landed).toBe(result);
 		expect(finish).toHaveBeenCalledTimes(1);
 		expect(resolveAttempt).not.toHaveBeenCalled();
@@ -268,7 +259,7 @@ describe('landAnswer', () => {
 		const finish = jest.fn();
 		const resolveAttempt = jest.fn(async () => undefined);
 		const answer = { kind: 'reopened', order: summary('pos-open') } as const;
-		const landed = await landAnswer(answer, press, { finish, resolveAttempt, dp: 2 });
+		const landed = await landAnswer(answer, { finish, resolveAttempt, dp: 2 }, 0);
 		expect(landed).toBe('reopened');
 		expect(finish).not.toHaveBeenCalled();
 		expect(resolveAttempt).toHaveBeenCalledTimes(1);
@@ -278,12 +269,11 @@ describe('landAnswer', () => {
 		const finish = jest.fn(async () => 'partial' as const);
 		const notMirrored = { cause: new Error('disk') };
 		const answer = { kind: 'recorded', via: 'online', row, order: null } as const;
-		const landed = await landAnswer(answer, press, {
-			finish,
-			resolveAttempt: jest.fn(),
-			dp: 2,
-			notMirrored,
-		});
+		const landed = await landAnswer(
+			answer,
+			{ finish, resolveAttempt: jest.fn(), dp: 2, notMirrored },
+			0
+		);
 		expect(finish).toHaveBeenCalledWith(expect.objectContaining({ mirrorFailed: true }));
 		expect(landed).toBe('partial');
 	});
@@ -377,21 +367,19 @@ describe('recovery', () => {
 		const finish = jest.fn(async () => 'completed' as const);
 		const resolveAttempt = jest.fn(async () => undefined);
 		const sent = { kind: 'sent', order: summary('pending'), stamp } as const;
-		await expect(
-			landAnswer(sent, { via: 'recovery' }, { finish, resolveAttempt, dp: 2 })
-		).resolves.toBe('completed');
+		await expect(landAnswer(sent, { finish, resolveAttempt, dp: 2 })).resolves.toBe('completed');
 		expect(finish).toHaveBeenCalledWith({ source: 'gateway', order: summary('pending'), stamp });
 		expect(resolveAttempt).not.toHaveBeenCalled();
 	});
 
-	it('a recorded answer in a recovery carries no press prediction', () => {
+	it('a recorded answer with no prediction carries none', () => {
 		const recorded = {
 			kind: 'recorded',
 			via: 'online',
 			row,
 			order: summary('pos-partial'),
 		} as const;
-		expect(saleOutcomeOf(recorded, { via: 'recovery' }, false)).toEqual({
+		expect(saleOutcomeOf(recorded, false, null)).toEqual({
 			source: 'manual',
 			via: 'online',
 			row,
@@ -425,11 +413,13 @@ describe('recovery', () => {
 // The paid-balance boundary: a close carries no press prediction and lands like any other close.
 describe('boundary', () => {
 	it.each([
-		['a press', { via: 'press', remainingMinor: 0 }],
-		['a boundary', { via: 'boundary' }],
-		['a recovery', { via: 'recovery' }],
-	] as const)('a close does not depend on how it arrived: %s', (_, arrival) =>
-		expect(saleOutcomeOf({ kind: 'close', order: summary('completed') }, arrival, false)).toEqual({
+		['a prediction of 0', 0],
+		['a prediction of 500', 500],
+		['no prediction', null],
+	] as const)('a close does not read the prediction: %s', (_, remainingMinor) =>
+		expect(
+			saleOutcomeOf({ kind: 'close', order: summary('completed') }, false, remainingMinor)
+		).toEqual({
 			source: 'zero-balance',
 			order: summary('completed'),
 		})
@@ -439,21 +429,7 @@ describe('boundary', () => {
 		const finish = jest.fn(async () => 'not-completed' as const);
 		const resolveAttempt = jest.fn(async () => undefined);
 		const close = { kind: 'close', order: summary('completed') } as const;
-		await expect(
-			landAnswer(close, { via: 'boundary' }, { finish, resolveAttempt, dp: 2 })
-		).resolves.toBe('reopened');
+		await expect(landAnswer(close, { finish, resolveAttempt, dp: 2 })).resolves.toBe('reopened');
 		expect(resolveAttempt).not.toHaveBeenCalled();
-	});
-
-	it('a recorded answer at the boundary carries no press prediction', () => {
-		const recorded = {
-			kind: 'recorded',
-			via: 'online',
-			row,
-			order: summary('pos-partial'),
-		} as const;
-		expect(saleOutcomeOf(recorded, { via: 'boundary' }, false)).toMatchObject({
-			remainingMinor: null,
-		});
 	});
 });
