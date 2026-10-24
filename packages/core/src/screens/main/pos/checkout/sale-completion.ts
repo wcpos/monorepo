@@ -15,9 +15,10 @@ import {
 import { answerAdopted, type EngineRecord, type useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import {
-	failCompletionAttempt,
+	awaitAdoption,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
+	retainCompletionAttempt,
 } from '@wcpos/query/store-local';
 
 import {
@@ -502,14 +503,6 @@ async function finishSale(
 	};
 }
 
-/**
- * The store answered the sale paid but no refresh confirmed the resident: the attempt awaits the
- * pull that adopts the paid order, and the bridge finishes it then. The one place this state is
- * written, for a close at the till (`unconfirmed`) and a recovered answer alike.
- */
-export const awaitAdoption = (storeDB: StoreDatabase, orderUuid: string) =>
-	failCompletionAttempt(storeDB, orderUuid, 'unconfirmed', { awaitingAdoption: true });
-
 export type CompletionResult = Awaited<ReturnType<typeof completeSale>>;
 
 export async function completeSale(
@@ -519,7 +512,7 @@ export async function completeSale(
 	presentation: Presentation,
 	queue?: OrderMutationContext
 ) {
-	// No entry snapshot: resolve/fail unconditionally belong to the current attempt, even in replay.
+	// No entry snapshot: resolve/retain unconditionally belong to the current attempt, even in replay.
 	// A paid order cannot start a new completing attempt while its finish is running.
 	try {
 		if (outcome.source === 'manual' && outcome.remainingMinor !== 0) {
@@ -578,8 +571,9 @@ export async function completeSale(
 		return result.outcome;
 	} catch (error) {
 		try {
-			await failCompletionAttempt(ctx.storeDB, order.uuid, error, {
-				facts: { source: outcome.source, ...(ctx.actor ? { actor: ctx.actor } : {}) },
+			await retainCompletionAttempt(ctx.storeDB, order.uuid, {
+				source: outcome.source,
+				...(ctx.actor ? { actor: ctx.actor } : {}),
 			});
 		} finally {
 			throw error;

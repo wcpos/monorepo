@@ -968,7 +968,8 @@ jest.mock('@wcpos/query/store-local', () => ({
 	...jest.requireActual('@wcpos/query/store-local'),
 	recordCompletionAttempt: jest.fn(async () => {}),
 	resolveCompletionAttempt: jest.fn(async () => {}),
-	failCompletionAttempt: jest.fn(async () => {}),
+	awaitAdoption: jest.fn(async () => {}),
+	retainCompletionAttempt: jest.fn(async () => {}),
 }));
 
 let mockSessionsOn = false;

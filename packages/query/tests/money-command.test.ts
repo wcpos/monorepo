@@ -1017,12 +1017,15 @@ describe('moneyCommandPoster', () => {
 		expect(capture.approval).toEqual({ total: '77.00', currency: 'USD' });
 	});
 
-	it('a path that is not a money route passes through without an envelope or a journal entry', async () => {
+	it('a path that is not a money route is refused: nothing sent, no journal entry', async () => {
 		const post = jest.fn(async () => ({ data: { ok: true } }));
-		await poster({ post })('payment-methods/stripe/bootstrap', { a: 1 });
-		await poster({ post })('orders/5/payments/leg-1/status', {});
-		expect(post).toHaveBeenNthCalledWith(1, 'payment-methods/stripe/bootstrap', { a: 1 });
-		expect(post).toHaveBeenNthCalledWith(2, 'orders/5/payments/leg-1/status', {});
+		await expect(poster({ post })('payment-methods/stripe/bootstrap', { a: 1 })).rejects.toThrow(
+			'money_command_unknown_route'
+		);
+		await expect(poster({ post })('orders/5/payments/leg-1/status', {})).rejects.toThrow(
+			'money_command_unknown_route'
+		);
+		expect(post).not.toHaveBeenCalled();
 		expect(await entries()).toEqual([]);
 	});
 

@@ -564,7 +564,8 @@ function answerChain(revision: unknown, at: number): RevisionChain | undefined {
 /**
  * A drop-in `post` for the money routes: classifies the path, freezes the body (provenance for
  * the completion-capable kinds, minted once here), journals it, and sends it through the
- * envelope. Any other path passes through untouched (the status poll, bootstraps).
+ * envelope. Any other path is refused (`money_command_unknown_route`): nothing reaches the
+ * server outside the journal.
  *
  * A retry is a re-send: a call for a command the journal already holds as dispatched (the same
  * kind and target, or for `record` the same row id) re-sends that entry, with its id, frozen
@@ -668,10 +669,10 @@ export function moneyCommandPoster(input: {
 			scope,
 		};
 	};
-	/** Get or create, and claim, the route's command; null when the path is no money route. */
+	/** Get or create, and claim, the route's command; a path that is no money route is refused. */
 	const claimFor = async (url: string, body: unknown) => {
 		const route = classifyMoneyRoute(url);
-		if (!route) return null;
+		if (!route) throw new Error('money_command_unknown_route');
 		const frozen = { ...(body as Record<string, unknown>) };
 		const rowId =
 			route.kind === 'record'
@@ -700,11 +701,11 @@ export function moneyCommandPoster(input: {
 	};
 	const poster = async (url: string, body: unknown) => {
 		const claim = await claimFor(url, body);
-		return claim ? dispatch(claim.entry) : input.post(url, body);
+		return dispatch(claim.entry);
 	};
 	const defer = async (url: string, body: unknown) => {
 		if (classifyMoneyRoute(url)?.kind !== 'record') throw new Error('money_command_not_deferrable');
-		const claim = (await claimFor(url, body))!;
+		const claim = await claimFor(url, body);
 		// Already journaled under this row id (a press after a crash between defer and mirror):
 		// the same record, never a second one for the same cash.
 		if (claim.status === 'open') {
