@@ -6,20 +6,20 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 
@@ -30,6 +30,7 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
+import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 
 /**
@@ -56,10 +57,21 @@ interface Props {
 /**
  *
  */
-export function EditShippingLineForm({ uuid, item }: Props) {
+export function EditShippingLineForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditShippingLineFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditShippingLineFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { updateCartLine } = useUpdateCartLine();
-	const { close: closeDialog } = useDialog();
+	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
+	// another order was selected still reaches it.
+	const { currentOrderRecord } = useCurrentOrder();
+	const markSaved = useMarkSaved();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
 
@@ -81,29 +93,23 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
-	const handleSave = React.useCallback(
-		async (data: FormValues) => {
-			await updateCartLine('shipping_lines', uuid, {
-				method_title: data.method_title,
-				method_id: data.method_id,
-				instance_id: data.instance_id,
-				amount: data.amount,
-				tax_status: data.tax_status,
-				prices_include_tax: data.prices_include_tax,
-				meta_data: data.meta_data as import('@wcpos/query').OrderShippingLine['meta_data'],
+	useFormChangeHandler({
+		form,
+		onChange: (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			const wireValue = value;
+			return updateCartLine(
+				'shipping_lines',
+				uuid,
+				{ [root]: wireValue },
+				{ record: currentOrderRecord }
+			).then((written) => {
+				if (written) markSaved([root]);
+				return Boolean(written);
 			});
-			closeDialog();
 		},
-		[updateCartLine, uuid, closeDialog]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
+	});
 
 	/**
 	 *
@@ -116,7 +122,13 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 					control={form.control}
 					name="method_title"
 					render={({ field }) => (
-						<FormInput label={t('pos_cart.shipping_method_title')} {...field} />
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('pos_cart.shipping_method_title')}</FormLabel>
+								<SavedMark name="method_title" label={t('settings.saved')} />
+							</HStack>
+							<FormInput testID="edit-shipping-line-method_title-input" {...field} />
+						</FormItem>
 					)}
 				/>
 				<HStack className="gap-4">
@@ -139,9 +151,13 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 						control={form.control}
 						name="instance_id"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('pos_cart.instance_id')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('pos_cart.instance_id')}</FormLabel>
+									<SavedMark name="instance_id" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="edit-shipping-line-instance_id-input" {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -150,16 +166,20 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 						control={form.control}
 						name="amount"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('pos_cart.amount')}</FormLabel>
+									<SavedMark name="amount" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('pos_cart.amount')}
+									testID="edit-shipping-line-amount-input"
 									type="numeric"
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 					<View className="flex-1 justify-center">
@@ -189,7 +209,6 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.close')}</DialogClose>
-				<DialogAction onPress={() => void onSave()}>{t('common.save')}</DialogAction>
 			</DialogFooter>
 		</Form>
 	);
