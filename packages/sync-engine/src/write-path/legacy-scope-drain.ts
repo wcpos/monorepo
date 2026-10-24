@@ -68,15 +68,17 @@ export type LegacyScopeDrainOutcome =
 	| {
 			status: 'kept';
 			databaseName: string;
+			/** Why the print counts were not carried; null when carried or there were none. */
 			carryError: string | null;
+			/** Every non-internal queue row plus orphan open carts. */
 			remaining: number;
 			/**
-			 * The orders whose queue rows are left (sendable or not) — what a reader that
+			 * The orders whose queue rows or orphan carts are left — what a reader that
 			 * would give up on an order for "not being here" asks about.
 			 */
 			keptOrderUuids: string[];
 	  }
-	/** The database could not be checked or opened — nothing was sent or removed. */
+	/** The drain threw (probe, open, or the file removal after the tables were dropped); the next start probes again. */
 	| { status: 'failed'; databaseName: string; error: string };
 
 type Classified = {
@@ -108,7 +110,7 @@ async function classify(database: RxDatabase): Promise<Classified> {
 	// ORPHAN SKELETONS: a till killed between inserting a new cart's order and enqueueing its
 	// create leaves a local-only open order with NO queue row (the app recovers it as an
 	// `orphanedSkeleton` on the next add). An empty queue is not "nothing unsent" while one
-	// exists: it is a cart, counted as held, and it keeps the database.
+	// exists: it is a cart, counted in `remaining`, and it keeps the database.
 	const queued = new Set(rows.map((row) => row.recordId));
 	const orphans: Record<string, unknown>[] = orders
 		? (await orders.find({ selector: { status: OPEN_CART_ORDER_STATUS } }).exec())

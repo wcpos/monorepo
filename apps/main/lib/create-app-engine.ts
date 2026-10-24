@@ -182,6 +182,7 @@ let legacyPurgeStarted = false;
  */
 const renderIntentSeq = new WeakMap<CachedEngine, number>();
 
+/** Scopes whose drain this process started; every outcome is final until the next app start. */
 const legacyDrainsStarted = new Set<string>();
 
 /**

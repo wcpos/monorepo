@@ -7,7 +7,7 @@ import {
 	type SyncObserver,
 } from '@wcpos/sync-core';
 
-import { writeFacetFor as facetFor } from '../collections/collection-descriptors';
+import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { type ResidentSync, stampedSync } from './order-revision';
 import { requeueRejectedMutation } from './write-intents';
@@ -247,7 +247,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						if (resolution === 'retry-with-server-base') {
 							serverBase = entry.conflictRevision ?? null;
 							if (!serverBase) {
-								const facet = facetFor(entry.collectionName);
+								const facet = writeFacetFor(entry.collectionName);
 								if (!facet) {
 									throw new Error(
 										`resolveConflict: no server revision on "${mutationId}" and no refresh seam for "${entry.collectionName}" — discard instead`
@@ -292,7 +292,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						let discardServerDocument: Record<string, unknown> | null = null;
 						let discardRemovesResident = false;
 						if (resolution === 'discard' && entry.collectionName !== 'orders') {
-							const facet = facetFor(entry.collectionName);
+							const facet = writeFacetFor(entry.collectionName);
 							if (!facet) {
 								throw new Error(
 									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
@@ -352,7 +352,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								} = entry;
 								const graft =
 									entry.operation !== 'delete'
-										? facetFor(entry.collectionName)?.graftAckIdentity
+										? writeFacetFor(entry.collectionName)?.graftAckIdentity
 										: undefined;
 								const reconcile = (payload: Record<string, unknown>) =>
 									graft && entry.conflictDocument
@@ -406,7 +406,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									remove(): Promise<unknown>;
 								} | null;
 								const row = doc?.toJSON() as Record<string, unknown> | undefined;
-								const facet = facetFor(entry.collectionName);
+								const facet = writeFacetFor(entry.collectionName);
 								// BORN-LOCAL CREATE ⇒ discard DESTROYS the record (#832 follow-up,
 								// ruling R7b). A rejected create never reached the server: there is no
 								// server truth to restore and nothing will ever sync it again, so

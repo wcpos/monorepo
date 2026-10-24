@@ -52,12 +52,7 @@ const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 /**
  * How long a replay waits for the previous-generation drain to report before it
- * decides an order is missing. The drain sends one write-drain tick and carries
- * open carts over; on a healthy store that settles in a few seconds even with a
- * full queue. Thirty seconds is well clear of that and still well inside one
- * session, so a completion the drain is about to make resident is not counted
- * as a missed start. An offline till's drain waits for the store, so the bound
- * — not the report — ends that wait.
+ * decides an order is missing (and for the active scope); the local drain reports in seconds.
  */
 const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
@@ -170,7 +165,7 @@ export function SaleCompletionBridge(): null {
 		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
 		 * Resolved by waiting for the engine's active scope, not by reading it once: on a cold boot
 		 * the bridge mounts before the engine's open completes, and deciding "no legacy database"
-		 * then would count a missed start before the drain could carry the order over. Bounded
+		 * then would count a missed start before the drain could report the order kept. Bounded
 		 * like the report wait.
 		 *
 		 * Two outcomes, kept apart: `resolved` (an active scope, or an engine with no scope to
@@ -343,8 +338,7 @@ export function SaleCompletionBridge(): null {
 					let resident = await findOrder(uuid);
 					if (current.stopped) return;
 					if (!resident) {
-						// The previous-generation drain may be about to make it resident (a carried-over
-						// cart): wait for its report, bounded, then look again.
+						// Wait, bounded, for the drain's report; only a pull landing it meanwhile is found here.
 						await legacyDrainReported();
 						if (current.stopped) return;
 						resident = await findOrder(uuid);
