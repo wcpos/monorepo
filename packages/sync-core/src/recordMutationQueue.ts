@@ -230,7 +230,6 @@ export class RecordMutationQueue {
 	public constructor(
 		private readonly storage: RecordMutationStorage,
 		private readonly recovery: {
-			enabled?: () => boolean;
 			now?: () => number;
 			removeResident?: (row: QueuedMutation) => Promise<void | boolean>;
 			restoreCoalesced?: (prior: QueuedMutation, replacementId: string) => Promise<void>;
@@ -415,43 +414,20 @@ export class RecordMutationQueue {
 			(row.status !== undefined && row.status !== 'pending')
 		)
 			return false;
+		// Revision-checked: a drain-in-flight claim in another process must not be
+		// removed. If the row moved to 'claimed' after our read, the remove is refused.
 		return this.storage.removeIfUnchanged(mutationId, stored.rev);
 	}
 
 	/**
-	 * Conditional remove (CAS) — annihilation's transition: drop the row ONLY
-	 * IF it is still pending. Returns false when it is gone or claimed — a
-	 * drain-in-flight create must NOT be annihilated (the server may already be
-	 * applying it); the delete queues behind it instead.
+	 * Conditional remove (CAS): drop the row ONLY IF it is still pending. Returns
+	 * false when it is gone or claimed, because the server may already be applying
+	 * a claimed row. Callers: the writer's unwind of its own append, dead-letter
+	 * recovery's compensation for a lost settle (both `write-intents.ts`), and the
+	 * order pull guard's discard of an open-cart hold (`order-pull-guard.ts`).
 	 */
-	async removePending(
-		mutationId: string,
-		options: { requireNeverPushed?: boolean } = {}
-	): Promise<boolean> {
-		return this.transact(async () => {
-			const stored = (await this.storage.listStored()).find(
-				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
-			);
-			const row = stored?.mutation;
-			if (
-				!row ||
-				row.supersededBy !== undefined ||
-				(row.status !== undefined && row.status !== 'pending')
-			)
-				return false;
-			// Reassert annihilation's premise on the same revision the CAS removes.
-			if (
-				options.requireNeverPushed &&
-				((row.attempts ?? 0) !== 0 ||
-					row.claimedBy !== undefined ||
-					row.nextAttemptAt !== undefined)
-			)
-				return false;
-			// Revision-checked: a drain-in-flight claim in another process must not be
-			// annihilated. If the row moved to 'claimed' after our read, the remove is
-			// refused and the delete queues behind the in-flight create instead.
-			return this.storage.removeIfUnchanged(mutationId, stored.rev);
-		});
+	async removePending(mutationId: string): Promise<boolean> {
+		return this.transact(() => this.removePendingInternal(mutationId));
 	}
 
 	/** Reset protects admitted writers and durable instructions to finish a committed void. */
@@ -648,17 +624,12 @@ export class RecordMutationQueue {
 		await this.storage.removeIfUnchanged(holder.mutation.mutationId, holder.rev);
 	}
 
-	get supportsVoidFences(): boolean {
-		return this.recovery.enabled?.() !== false;
-	}
-
 	async fenceForVoid(
 		collection: string,
 		record: string,
 		token: string,
 		nowMs: number
 	): Promise<boolean> {
-		if (!this.supportsVoidFences) return false; // Frozen v5 cannot persist fences.
 		return this.holdRecord(collection, record, token, nowMs, false);
 	}
 
@@ -789,7 +760,6 @@ export class RecordMutationQueue {
 		nowMs: number,
 		removeResident = this.recovery.removeResident
 	): Promise<void> {
-		if (this.recovery.enabled?.() === false) return;
 		const stored = await this.storage.listStored();
 		for (const { mutation: row } of stored) {
 			if (isInternalRow(row) && row.admittedBy)
@@ -1060,12 +1030,7 @@ export class RecordMutationQueue {
 	 * would enqueue a rebuild and both would remove, leaving two live writes for
 	 * one recovery.
 	 */
-	/** `unclaimedAtMs` makes a void also refuse a live resolution claim in this CAS turn. */
-	async removeIfStatus(
-		mutationId: string,
-		status: QueuedMutation['status'],
-		unclaimedAtMs?: number
-	): Promise<boolean> {
+	async removeIfStatus(mutationId: string, status: QueuedMutation['status']): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
@@ -1074,12 +1039,6 @@ export class RecordMutationQueue {
 				!stored ||
 				stored.mutation.status !== status ||
 				stored.mutation.supersededBy !== undefined
-			)
-				return false;
-			if (
-				unclaimedAtMs !== undefined &&
-				stored.mutation.resolutionClaimBy !== undefined &&
-				Date.parse(stored.mutation.resolutionClaimUntil ?? '') > unclaimedAtMs
 			)
 				return false;
 			// Revision-checked: two concurrent resolutions of one dead letter (two

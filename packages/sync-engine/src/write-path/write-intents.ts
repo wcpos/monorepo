@@ -185,7 +185,6 @@ export function queueFor(
 		),
 		{
 			...recovery,
-			enabled: () => collectionOf(db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version !== 5,
 			restoreCoalesced: async (prior, replacementId) => {
 				const doc = await collectionOf(db, prior.collectionName).findOne(prior.recordId).exec();
 				await doc?.incrementalModify((data: Record<string, unknown>) => {
@@ -281,8 +280,6 @@ export async function enqueueWriteIntent(input: {
 	const queue = queueFor(input.db);
 	const { collection: name, recordId } = requested;
 	const nowMs = () => Date.parse(input.now());
-	// The frozen v5 queue retains conditional removal; it cannot persist marks or fences.
-	const legacyQueue = collectionOf(input.db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version === 5;
 
 	const isRecordRow = (item: QueuedMutation) =>
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
@@ -295,16 +292,10 @@ export async function enqueueWriteIntent(input: {
 		return live;
 	};
 	const mark = (row: QueuedMutation, token: string) =>
-		legacyQueue
-			? queue.removePending(row.mutationId, { requireNeverPushed: true })
-			: queue.markForAnnihilation(row.mutationId, token, nowMs());
+		queue.markForAnnihilation(row.mutationId, token, nowMs());
 	const phase = (token: string, value: 'preparing' | 'committed') =>
-		legacyQueue ? Promise.resolve(true) : queue.setVoidPhase(name, recordId, token, value);
+		queue.setVoidPhase(name, recordId, token, value);
 	const unmark = async (marked: QueuedMutation[], token: string) => {
-		if (legacyQueue) {
-			for (const row of marked) await queue.replace(row);
-			return;
-		}
 		if (!(await phase(token, 'preparing'))) return;
 		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
 		await queue.releaseVoidFence(name, recordId, token);
@@ -318,7 +309,6 @@ export async function enqueueWriteIntent(input: {
 			.map((row) => row.mutationId),
 	});
 	const cleanupCommittedVoid = async (marked: QueuedMutation[], token: string) => {
-		if (legacyQueue) return;
 		let step = 'removeMarked';
 		try {
 			for (const row of marked) await queue.removeMarked(row.mutationId, token);
@@ -374,13 +364,8 @@ export async function enqueueWriteIntent(input: {
 				marked!.push(row);
 			}
 			for (const row of deadLetters) {
-				if (
-					!(await (legacyQueue
-						? queue.removeIfStatus(row.mutationId, 'rejected')
-						: queue.markForAnnihilation(row.mutationId, token, nowMs(), 'rejected')))
-				) {
+				if (!(await queue.markForAnnihilation(row.mutationId, token, nowMs(), 'rejected')))
 					throw refuse();
-				}
 				marked!.push(row);
 			}
 		}
@@ -393,8 +378,7 @@ export async function enqueueWriteIntent(input: {
 			reason: 'void-in-progress' as const,
 		});
 	const fence = async (token: string) => {
-		if (!legacyQueue && !(await queue.fenceForVoid(name, recordId, token, nowMs())))
-			throw voidInProgress();
+		if (!(await queue.fenceForVoid(name, recordId, token, nowMs()))) throw voidInProgress();
 	};
 
 	// The bounded CAS retry loop: each iteration re-reads the queue, decides
@@ -405,7 +389,7 @@ export async function enqueueWriteIntent(input: {
 	// fresh queue, never forced through. Contention is microtask-scale, so the
 	// bound is generous; hitting it means something is livelocking the queue.
 	for (let attempt = 0; attempt < 10; attempt += 1) {
-		if (!legacyQueue && (await queue.hasVoidFence(name, recordId, nowMs()))) throw voidInProgress();
+		if (await queue.hasVoidFence(name, recordId, nowMs())) throw voidInProgress();
 		const rows = await queue.pending();
 		const recordRows = await liveRecordRows(rows);
 		// Read the resident before placement so delete deferral sees the same
@@ -698,14 +682,13 @@ export async function enqueueWriteIntent(input: {
 			};
 		}
 
-		if (!legacyQueue) mutation = { ...mutation, admittedBy: mutation.mutationId };
+		mutation = { ...mutation, admittedBy: mutation.mutationId };
 		const residentSnapshot = JSON.stringify(stored);
 		const queueSnapshot = JSON.stringify(recordRows);
 		// Hold admission through bookkeeping/compensation as well as the append: a
 		// void cannot remove the resident while this writer still owns its changes.
-		if (!legacyQueue && !(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs()))) {
-			if (!legacyQueue && (await queue.hasVoidFence(name, recordId, nowMs())))
-				throw voidInProgress();
+		if (!(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs()))) {
+			if (await queue.hasVoidFence(name, recordId, nowMs())) throw voidInProgress();
 			await new Promise((resolve) => setTimeout(resolve, WRITER_ADMISSION_BACKOFF_MS));
 			attempt -= 1;
 			continue;
@@ -713,16 +696,14 @@ export async function enqueueWriteIntent(input: {
 		let committed = false;
 		let writeFailed = false;
 		const renew = async () => {
-			if (!legacyQueue && !(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs())))
+			if (!(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs())))
 				throw voidInProgress();
 		};
 		try {
-			if (!legacyQueue) {
-				const freshDoc = await collection.findOne(recordId).exec();
-				if (JSON.stringify(await liveRecordRows(await queue.pending())) !== queueSnapshot) continue;
-				if (doc && !freshDoc) throw voidInProgress();
-				if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) continue;
-			}
+			const freshDoc = await collection.findOne(recordId).exec();
+			if (JSON.stringify(await liveRecordRows(await queue.pending())) !== queueSnapshot) continue;
+			if (doc && !freshDoc) throw voidInProgress();
+			if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) continue;
 			await renew();
 			if (prior) {
 				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
@@ -829,8 +810,7 @@ export async function enqueueWriteIntent(input: {
 					// the queue as-is (the enqueue stands; only the dirty-mark is missing,
 					// and the drain's ack/reject bookkeeping self-heals it) and rethrow.
 					const unwound =
-						(legacyQueue ||
-							(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs(), true))) &&
+						(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs(), true)) &&
 						(await queue.removePending(mutation.mutationId));
 					if (unwound && prior) await queue.replace(prior);
 					throw error;
@@ -847,27 +827,25 @@ export async function enqueueWriteIntent(input: {
 			writeFailed = true;
 			throw error;
 		} finally {
-			if (!legacyQueue) {
+			try {
 				try {
-					try {
-						await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
-					} catch (error) {
-						if (!committed) throw error;
-						await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
-					}
+					await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
 				} catch (error) {
-					if (!committed && !writeFailed) throw error;
-					if (committed) await queue.recordWriterReceipt(mutation.mutationId);
-					try {
-						input.observe?.({
-							type: 'write.admission-release-failed',
-							level: 'warn',
-							collection: name,
-							fields: { mutationId: mutation.mutationId, error: String(error) },
-						});
-					} catch {
-						/* Telemetry cannot undo a durable write either. */
-					}
+					if (!committed) throw error;
+					await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
+				}
+			} catch (error) {
+				if (!committed && !writeFailed) throw error;
+				if (committed) await queue.recordWriterReceipt(mutation.mutationId);
+				try {
+					input.observe?.({
+						type: 'write.admission-release-failed',
+						level: 'warn',
+						collection: name,
+						fields: { mutationId: mutation.mutationId, error: String(error) },
+					});
+				} catch {
+					/* Telemetry cannot undo a durable write either. */
 				}
 			}
 		}

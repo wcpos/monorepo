@@ -211,7 +211,6 @@ async function annihilateNeverPushedChains(input: {
 	signal?: AbortSignal;
 	emit: (event: SyncEvent) => void;
 }): Promise<{ chains: number; mutations: QueuedMutation[] }> {
-	const legacyQueue = !input.queue.supportsVoidFences;
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
@@ -240,10 +239,7 @@ async function annihilateNeverPushedChains(input: {
 		}
 		const head = pendingRows[0];
 		const token = `drain-void:${input.now()}:${Math.random()}`;
-		if (
-			!legacyQueue &&
-			!(await input.queue.fenceForVoid(head.collectionName, head.recordId, token, input.now()))
-		)
+		if (!(await input.queue.fenceForVoid(head.collectionName, head.recordId, token, input.now())))
 			continue;
 		const marked: QueuedMutation[] = [];
 		let residentRemoved = false;
@@ -278,9 +274,7 @@ async function annihilateNeverPushedChains(input: {
 				continue;
 			for (const row of fresh.filter((row) => row.status === 'rejected')) {
 				if (
-					!(await (legacyQueue
-						? input.queue.removeIfStatus(row.mutationId, 'rejected', input.now())
-						: input.queue.markForAnnihilation(row.mutationId, token, input.now(), 'rejected')))
+					!(await input.queue.markForAnnihilation(row.mutationId, token, input.now(), 'rejected'))
 				) {
 					settlementRefused = true;
 					break;
@@ -290,11 +284,7 @@ async function annihilateNeverPushedChains(input: {
 			if (settlementRefused) continue;
 			let refused = false;
 			for (const row of [...pendingRows].reverse()) {
-				if (
-					await (legacyQueue
-						? input.queue.removePending(row.mutationId, { requireNeverPushed: true })
-						: input.queue.markForAnnihilation(row.mutationId, token, input.now()))
-				)
+				if (await input.queue.markForAnnihilation(row.mutationId, token, input.now()))
 					marked.push(row);
 				else {
 					refused = true;
@@ -304,10 +294,7 @@ async function annihilateNeverPushedChains(input: {
 			if (refused) continue;
 			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
 				continue;
-			if (
-				!legacyQueue &&
-				!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed'))
-			)
+			if (!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed')))
 				continue;
 			if (input.removeResident) {
 				try {
@@ -318,10 +305,8 @@ async function annihilateNeverPushedChains(input: {
 			}
 			residentRemoved = true;
 			try {
-				if (!legacyQueue) {
-					for (const row of marked) await input.queue.removeMarked(row.mutationId, token, true);
-					await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
-				}
+				for (const row of marked) await input.queue.removeMarked(row.mutationId, token, true);
+				await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
 			} catch (error) {
 				// The void committed; retain its fence for expiry recovery and report success.
 				input.emit({
@@ -334,11 +319,9 @@ async function annihilateNeverPushedChains(input: {
 			annihilated += 1;
 			// Failed cleanup is still durable in the committed fence; the lane acks after emitting.
 			annihilatedMutations.push(
-				...(legacyQueue
-					? pendingRows
-					: marked
-							.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
-							.map((row): QueuedMutation => ({ ...row, status: 'internal' })))
+				...marked
+					.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+					.map((row): QueuedMutation => ({ ...row, status: 'internal' }))
 			);
 			input.emit({
 				type: 'queue.write.annihilate',
@@ -349,15 +332,11 @@ async function annihilateNeverPushedChains(input: {
 		} finally {
 			if (
 				!residentRemoved &&
-				(legacyQueue ||
-					(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'preparing')))
+				(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'preparing'))
 			) {
-				for (const row of marked) {
-					if (legacyQueue) await input.queue.replace(row);
-					else await input.queue.unmarkForAnnihilation(row.mutationId, token);
-				}
+				for (const row of marked) await input.queue.unmarkForAnnihilation(row.mutationId, token);
 			}
-			if (!residentRemoved && !legacyQueue)
+			if (!residentRemoved)
 				await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
 		}
 	}

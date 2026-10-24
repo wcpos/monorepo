@@ -443,7 +443,6 @@ describe('enqueueWriteIntent', () => {
 	);
 
 	it.each([
-		{ name: 'legacy rejected create', legacy: true, id: 0, rejected: true, annihilated: true },
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
 		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
 		{ name: 'bare-ack server record', id: 0, remoteId: '42', rejected: false, annihilated: false },
@@ -458,15 +457,8 @@ describe('enqueueWriteIntent', () => {
 			annihilated: false,
 		},
 	])('deletes $name only when it is born-local', async (testCase) => {
-		const { id, remoteId, rejected, reason, annihilated, legacy } = testCase;
-		const mutationCollection = Object.assign(createFakeMutationCollection(), {
-			schema: { version: legacy ? 5 : 7 },
-		});
-		const insert = mutationCollection.bulkInsert.bind(mutationCollection);
-		mutationCollection.bulkInsert = async (rows) => {
-			if (legacy) for (const row of rows) expect(row).not.toHaveProperty('expiresAt');
-			return insert(rows);
-		};
+		const { id, remoteId, rejected, reason, annihilated } = testCase;
+		const mutationCollection = createFakeMutationCollection();
 		if (rejected) {
 			await mutationCollection.bulkUpsert([
 				{
@@ -488,10 +480,9 @@ describe('enqueueWriteIntent', () => {
 		const resident = {
 			toJSON: () => ({ remoteId, payload: { id, status: 'pos-open' }, sync: {} }),
 			remove: async () => {
-				if (!legacy)
-					expect(mutationCollection.store.get('orders/order-1')?.mutation.payload.phase).toBe(
-						'committed'
-					);
+				expect(mutationCollection.store.get('orders/order-1')?.mutation.payload.phase).toBe(
+					'committed'
+				);
 				removed = true;
 			},
 		};
