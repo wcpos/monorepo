@@ -1,35 +1,19 @@
 import * as React from 'react';
-import { type KeyDownEvent, Pressable, View, type ViewInstance } from 'react-native';
 
 import { Button, ButtonText } from '../button';
-import { Icon, type IconName } from '../icon';
-import { isWeb, useOverlayPresentation } from '../lib/overlay';
+import { DIGIT_ROWS, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
+import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { Text } from '../text';
 import { EMPTY_ENTRY, QUANTITY_PLACES, quantityEntryReducer, typedQuantity } from './reducer';
 
-import type { TriggerRef } from '@rn-primitives/popover';
-
-/** Material's minimum touch target (decision 36): the anchored panel is a 3 × 5 grid of them. */
+/** Material's minimum touch target (decision 36): the anchored panel is a grid of them. */
 const CELL = 48;
-const CELL_STYLE = { width: CELL, height: CELL };
-/** Five rows; below the box when they fit in the window, above it when they do not. */
-const PANEL_HEIGHT = CELL * 5;
 // A step lands on the quantity's own places: 1.015 + 1 is 2.015, never 2.0149999999999997.
 const GRID = 10 ** QUANTITY_PLACES;
 const onGrid = (quantity: number) => Math.round(quantity * GRID) / GRID;
-const DIGIT_ROWS = ['123', '456', '789'].map((row) => [...row].map((d) => ({ name: d, label: d })));
-/** A physical key's name on the pad; a digit is its own name. */
-const KEY_NAMES: Record<string, string> = {
-	Backspace: 'backspace',
-	Enter: 'done',
-	ArrowUp: 'increase',
-	ArrowDown: 'decrease',
-};
-
-type Grow = 'down' | 'up';
-type Key = { name: string; label: string; icon?: IconName; variant?: 'destructive' | 'primary' };
+const ARROW_KEYS = { ArrowUp: 'increase', ArrowDown: 'decrease' };
+const ANIMATION = { down: 'web:animate-quantity-grow', up: 'web:animate-quantity-grow-up' };
 
 export type QuantityKeypadLabels = {
 	decrease: string;
@@ -86,28 +70,15 @@ export function QuantityKeypad({
 	testID,
 	className,
 	textClassName,
-	onOpenChange: onOpenChangeProp,
+	onOpenChange,
 	ref,
 }: QuantityKeypadProps) {
-	const trigger = React.useRef<TriggerRef>(null);
-	const panel = React.useRef<ViewInstance>(null);
+	const shell = React.useRef<GrowKeypadHandle>(null);
 	const [entry, dispatch] = React.useReducer(quantityEntryReducer, EMPTY_ENTRY);
-	const [frame, setFrame] = React.useState({ open: false, grow: 'down' as Grow, offset: 0 });
-	// Escape is the one close that keeps the stored quantity; every other close commits.
-	const discard = React.useRef(false);
-	const isOpen = React.useRef(false);
-	const close = () => trigger.current?.close();
-	const dismiss = () => {
-		discard.current = true;
-		close();
-	};
 	React.useImperativeHandle(ref, () => ({
-		focus: () => !disabled && trigger.current?.open(),
-		dismiss,
+		focus: () => shell.current?.open(),
+		dismiss: () => shell.current?.dismiss(),
 	}));
-	// A pointer press leaves focus on the key; back on the panel, the next Enter is Done.
-	const focusPanel = () =>
-		isWeb && (panel.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
 
 	const base = typedQuantity(entry.buffer) ?? entry.stepped ?? value;
 	const trash = base <= 1;
@@ -117,224 +88,86 @@ export function QuantityKeypad({
 		void Promise.resolve(onChange(quantity)).then((ok) => ok === false && unstep(), unstep);
 	};
 
-	const onOpenChange = (open: boolean) => {
-		if (open === isOpen.current) return;
-		isOpen.current = open;
-		onOpenChangeProp?.(open);
-		if (open) {
-			discard.current = false;
-			// Measured once per open: the first row's middle cell sits over the box.
-			const box = (trigger.current as unknown as HTMLElement | null)?.getBoundingClientRect?.();
-			const height = box?.height ?? 0;
-			const inset = (CELL - height) / 2;
-			const fits = !box || box.top - inset + PANEL_HEIGHT <= window.innerHeight;
-			setFrame({ open, grow: fits ? 'down' : 'up', offset: -(height + inset) });
-		} else {
-			const typed = typedQuantity(entry.buffer);
-			const shown = entry.stepped ?? value;
-			// The write presents its own failure (a toast) and the keypad is already closed.
-			if (!discard.current && typed !== undefined && typed !== shown)
-				void Promise.resolve(onChange(typed)).catch(() => undefined);
-			setFrame((current) => ({ ...current, open }));
-		}
+	const onClose = (discarded: boolean) => {
+		const typed = typedQuantity(entry.buffer);
+		const shown = entry.stepped ?? value;
+		// The write presents its own failure (a toast) and the keypad is already closed.
+		if (!discarded && typed !== undefined && typed !== shown)
+			void Promise.resolve(onChange(typed)).catch(() => undefined);
 		dispatch({ type: 'reset' });
 	};
 
-	const press = (name: string) => {
-		if (name === 'done') return close();
+	const press = (name: string, fromKeyboard: boolean) => {
 		if (name === 'decrease' && trash) {
-			// The line goes: nothing typed is committed on the way out.
-			dismiss();
+			// A held ArrowDown stops at 1; only a press on the trash removes the line, and
+			// nothing typed is committed on the way out.
+			if (fromKeyboard) return;
+			shell.current?.dismiss();
 			return onRemove();
 		}
 		if (name === 'backspace') dispatch({ type: 'backspace' });
+		else if (name === 'decimal') dispatch({ type: 'decimal' });
 		else if (name === 'increase') step(onGrid(base + 1));
 		else if (name === 'decrease') step(onGrid(base - 1));
 		else dispatch({ type: 'digit', digit: name });
-		focusPanel();
-	};
-
-	// Web: the physical keyboard while the panel holds focus.
-	const onKeyDown = (event: KeyDownEvent) => {
-		const { key } = event.nativeEvent;
-		if (key === 'Escape') {
-			discard.current = true;
-			return;
-		}
-		// A focused key takes its own Enter; the panel's Enter is Done.
-		if (key === 'Enter' && event.target !== event.currentTarget) return;
-		const name = /^[0-9]$/.test(key) ? key : KEY_NAMES[key];
-		// Both: a numeric keypad types '.' on a ',' store.
-		if (key === '.' || key === ',' || key === decimalSeparator) dispatch({ type: 'decimal' });
-		// A held ArrowDown stops at 1; only a press on the trash removes the line.
-		else if (name && !(key === 'ArrowDown' && trash)) press(name);
-		else if (!name) return;
-		event.preventDefault();
 	};
 
 	const display = entry.buffer
 		? entry.buffer.replace('.', decimalSeparator)
 		: format(entry.stepped ?? value);
-	const stepper: (Key | null)[] = [
+	const stepper: GrowCell[] = [
 		trash
 			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'destructive' }
 			: { name: 'decrease', label: labels.decrease, icon: 'minus' },
-		null,
+		{ display: <Value display={display} textClassName={textClassName} /> },
 		{ name: 'increase', label: labels.increase, icon: 'plus' },
 	];
-	const last: Key[] = [
+	const last: GrowCell[] = [
 		{ name: 'backspace', label: labels.backspace, icon: 'backspace' },
 		{ name: '0', label: '0' },
 		{ name: 'done', label: labels.done, icon: 'check', variant: 'primary' },
 	];
 
 	return (
-		<Popover onOpenChange={onOpenChange}>
-			<PopoverTrigger ref={trigger} asChild disabled={disabled}>
-				<Button
-					testID={testID}
-					variant="outline"
-					disabled={disabled}
-					className={cn('min-w-10 items-start', className)}
-				>
-					<ButtonText className={textClassName}>{format(value)}</ButtonText>
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				align="center"
-				side={frame.grow === 'up' ? 'top' : 'bottom'}
-				sideOffset={frame.offset}
-				avoidCollisions={false}
-				onEscapeKeyDown={() => {
-					discard.current = true;
-				}}
-				// The panel takes the keys, not its first key: Enter is Done, never a press of −.
-				onOpenAutoFocus={(event) => {
-					event.preventDefault();
-					(panel.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
-				}}
-				{...({ dataSet: { grow: frame.grow } } as object)}
-				className={cn(
-					'w-auto overflow-hidden p-0',
-					frame.open &&
-						(frame.grow === 'up' ? 'web:animate-quantity-grow-up' : 'web:animate-quantity-grow')
-				)}
+		<GrowKeypad
+			ref={shell}
+			rows={[stepper, ...DIGIT_ROWS, last]}
+			ruled={1}
+			cell={CELL}
+			animation={ANIMATION}
+			disabled={disabled}
+			decimalSeparator={decimalSeparator}
+			keyNames={ARROW_KEYS}
+			onPress={press}
+			onOpen={() => dispatch({ type: 'reset' })}
+			onClose={onClose}
+			onOpenChange={onOpenChange}
+		>
+			<Button
+				testID={testID}
+				variant="outline"
+				disabled={disabled}
+				className={cn('min-w-10 items-start', className)}
 			>
-				<Keys
-					panel={panel}
-					rows={[stepper, ...DIGIT_ROWS, last]}
-					grow={frame.grow}
-					display={display}
-					textClassName={textClassName}
-					onPress={press}
-					onKeyDown={onKeyDown}
-				/>
-			</PopoverContent>
-		</Popover>
+				<ButtonText className={textClassName}>{format(value)}</ButtonText>
+			</Button>
+		</GrowKeypad>
 	);
 }
 
-/**
- * The grid: flat 48 px cells under the panel's one border when anchored, the stepper row
- * hairlined off the keys; on the phone sheet, stretched muted keys and Done in ✓'s place.
- */
-function Keys({
-	panel,
-	rows,
-	grow,
-	display,
-	textClassName,
-	onPress,
-	onKeyDown,
-}: {
-	panel: React.RefObject<ViewInstance | null>;
-	rows: (Key | null)[][];
-	grow: Grow;
-	display: string;
-	textClassName?: string;
-	onPress: (name: string) => void;
-	onKeyDown: (event: KeyDownEvent) => void;
-}) {
+/** The number, centred in the stepper row's middle cell. */
+function Value({ display, textClassName }: { display: string; textClassName?: string }) {
 	const sheet = useOverlayPresentation() === 'bottom';
-	// Growing up, the keys sit above and the stepper row lands on the box.
-	const ordered = grow === 'up' && !sheet ? [...rows.slice(1), rows[0]] : rows;
 	return (
-		<View
-			ref={panel}
-			// The sheet has no primitive Content to focus it: tabbable, the panel is what the
-			// shell focuses once the sheet has risen, so Enter is Done there too, never the −.
-			tabIndex={sheet ? 0 : -1}
-			onKeyDown={onKeyDown}
-			className={cn('web:outline-none', sheet && 'gap-2')}
+		<Text
+			testID="quantity-keypad-value"
+			className={cn(
+				'text-center font-semibold tabular-nums',
+				sheet ? 'text-xl' : 'text-base',
+				textClassName
+			)}
 		>
-			{ordered.map((row, index) => {
-				const stepperRow = row === rows[0];
-				return (
-					<View
-						key={index}
-						className={cn(
-							'flex-row',
-							sheet && (stepperRow ? 'border-border overflow-hidden rounded-lg border' : 'gap-2'),
-							!sheet &&
-								stepperRow &&
-								(grow === 'up' ? 'border-border border-t' : 'border-border border-b')
-						)}
-					>
-						{row.map((key) =>
-							key === null ? (
-								<View
-									key="value"
-									style={sheet ? undefined : CELL_STYLE}
-									aria-live="polite"
-									className={cn('items-center justify-center', sheet && 'flex-1')}
-								>
-									<Text
-										testID="quantity-keypad-value"
-										className={cn(
-											'font-semibold tabular-nums',
-											sheet ? 'text-xl' : 'text-base',
-											textClassName
-										)}
-									>
-										{display}
-									</Text>
-								</View>
-							) : sheet && key.name === 'done' ? (
-								<Button
-									key="done"
-									testID="numpad-done-button"
-									className="flex-1"
-									onPress={() => onPress('done')}
-								>
-									{key.label}
-								</Button>
-							) : (
-								<Pressable
-									key={key.name}
-									role="button"
-									testID={key.name === 'done' ? 'numpad-done-button' : `numpad-key-${key.name}`}
-									accessibilityLabel={key.label}
-									onPress={() => onPress(key.name)}
-									style={sheet ? undefined : CELL_STYLE}
-									className={cn(
-										'web:hover:bg-muted active:bg-muted items-center justify-center',
-										sheet &&
-											(stepperRow ? 'min-h-ctl w-14' : 'min-h-ctl bg-muted flex-1 rounded-lg')
-									)}
-								>
-									{key.icon ? (
-										<Icon name={key.icon} variant={key.variant} />
-									) : (
-										<Text className={cn('font-semibold', sheet ? 'text-xl' : 'text-lg')}>
-											{key.label}
-										</Text>
-									)}
-								</Pressable>
-							)
-						)}
-					</View>
-				);
-			})}
-		</View>
+			{display}
+		</Text>
 	);
 }
