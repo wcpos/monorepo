@@ -77,6 +77,13 @@ describe('a scanner burst while the keypad is open', () => {
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
 	});
 
+	it('after the keypad has closed, a full burst does nothing: the listener is gone', () => {
+		act(() => mockKeypad.onOpenChange(false));
+		key('first');
+		for (let i = 0; i < 7; i++) key(String(i));
+		expect(mockDismiss).not.toHaveBeenCalled();
+	});
+
 	it('an unmarked key ends the run', () => {
 		key('2');
 		key('3');

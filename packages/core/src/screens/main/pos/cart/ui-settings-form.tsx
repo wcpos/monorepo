@@ -108,7 +108,13 @@ export function UISettingsForm() {
 					<FormField
 						control={form.control}
 						name="quickDiscounts"
-						render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
+						render={({ field }) => (
+							<FormInput
+								label={getUILabel('quickDiscounts')}
+								description={t('pos_cart.quick_discounts_help')}
+								{...field}
+							/>
+						)}
 					/>
 					<FormField
 						control={form.control}
