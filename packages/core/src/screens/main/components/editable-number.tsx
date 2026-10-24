@@ -48,11 +48,19 @@ export function EditableNumber({
 	const [editing, setEditing] = React.useState(false);
 	// Escape and a chip leave without the field's own value: the blur that follows must not commit.
 	const settled = React.useRef(false);
-	// What the field emitted on its blur, committed when focus leaves the editor (not a chip).
-	const pending = React.useRef<number | undefined>(undefined);
 	const box = React.useRef<{ contains?: (node: unknown) => boolean }>(null);
-	// The number typed so far, which a chip discounts (the stored one until a key is typed).
-	const draft = React.useRef(0);
+	/**
+	 * The editor owns what was typed for the whole session: a number, '' for a cleared field, or
+	 * undefined while untouched. It is fed back as the field's value, so leaving to a chip and
+	 * coming back (Shift+Tab) shows it again, and it is committed when the session ends. State
+	 * for the field, a ref for the handlers that read it in the same event.
+	 */
+	const [draft, setDraftState] = React.useState<number | '' | undefined>(undefined);
+	const draftRef = React.useRef<number | '' | undefined>(undefined);
+	const setDraft = (next: number | '' | undefined) => {
+		draftRef.current = next;
+		setDraftState(next);
+	};
 	// Enter, Escape and a chip hand focus back to the price, so Tab carries on from it; a click
 	// elsewhere keeps its own focus.
 	const refocus = React.useRef(false);
@@ -66,27 +74,40 @@ export function EditableNumber({
 		}
 	}, [editing]);
 
-	/** Leave without the field's value: its blur closes the editor and the guard skips the commit. */
+	/** End the session: the draft goes with it. */
+	const end = () => {
+		settled.current = true;
+		setDraft(undefined);
+		setEditing(false);
+	};
+
+	/** Leave without the draft (Escape, or a chip's own number): the field's blur then commits nothing. */
 	const leave = (next?: number) => {
 		settled.current = true;
 		refocus.current = true;
 		if (next !== undefined) onChangeText(next);
 		input.current?.blur();
-		setEditing(false);
+		end();
 	};
 
 	/**
 	 * A blur in the editor. Web: focus moving to a chip (Tab) keeps it open, or the chip taking
-	 * focus would unmount. Focus leaving it commits what the field emitted, unless settled.
+	 * focus would unmount. Focus leaving it commits the draft once, unless settled, and only when
+	 * it changes the record: untouched, or typed back to the stored number, writes nothing; a 0
+	 * over a blank writes 0; a cleared field writes 0 over a number and nothing over a blank.
 	 */
 	const close = (blur?: unknown) => {
 		// Web's FocusEvent; native's blur event carries no target, so native always closes.
 		const event = blur as { relatedTarget?: unknown; nativeEvent?: { relatedTarget?: unknown } };
 		const next = event?.nativeEvent?.relatedTarget ?? event?.relatedTarget;
 		if (next && box.current?.contains?.(next)) return;
-		if (!settled.current && pending.current !== undefined) onChangeText(pending.current);
-		settled.current = true;
-		setEditing(false);
+		const typed = draftRef.current;
+		const blank = value == null || value === '';
+		if (!settled.current && typed !== undefined && !(typed === '' && blank)) {
+			const number = typed === '' ? 0 : typed;
+			if (blank || number !== toNumber(value)) onChangeText(number);
+		}
+		end();
 	};
 
 	if (!editing) {
@@ -102,8 +123,7 @@ export function EditableNumber({
 				className="-mx-1 max-w-none items-end self-stretch px-1"
 				onPress={() => {
 					settled.current = false;
-					pending.current = undefined;
-					draft.current = toNumber(value) || 0;
+					setDraft(undefined);
 					setEditing(true);
 				}}
 			>
@@ -121,18 +141,11 @@ export function EditableNumber({
 				testID={testID && `${testID}-field`}
 				autoFocus
 				selectTextOnFocus
-				value={value}
+				value={draft ?? value}
 				formatOptions={formatOptions}
 				inputClassName="px-1 text-right tabular-nums"
-				// The field emits on blur only when the number changed; `close` commits it.
-				onChangeText={(next) => (pending.current = next)}
 				onBlur={close}
-				// Back in the field (from a chip): it shows the stored number again, so start over.
-				onFocus={() => {
-					pending.current = undefined;
-					draft.current = toNumber(value) || 0;
-				}}
-				onDraftChange={(next) => (draft.current = next)}
+				onDraftChange={setDraft}
 				onSubmitEditing={() => (refocus.current = true)}
 				onKeyPress={(event) => event.nativeEvent.key === 'Escape' && leave()}
 			/>
@@ -155,11 +168,12 @@ export function EditableNumber({
 							size="sm"
 							label={`−${discount}%`}
 							testID={testID && `${testID}-discount-${discount}`}
-							// The number in the field, rounded to the store's price places (2,
-							// WooCommerce's default, before the store loads).
-							onPress={() =>
-								leave(round(draft.current * (1 - discount / 100), toNumber(decimals ?? 2)))
-							}
+							// The number in the field (the stored one while untouched), rounded to the
+							// store's price places (2, WooCommerce's default, before the store loads).
+							onPress={() => {
+								const base = typeof draftRef.current === 'number' ? draftRef.current : value;
+								leave(round((toNumber(base) || 0) * (1 - discount / 100), toNumber(decimals ?? 2)));
+							}}
 						/>
 					))}
 				</View>

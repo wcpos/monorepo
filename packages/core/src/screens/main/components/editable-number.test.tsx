@@ -145,6 +145,50 @@ it('Tab on past the chips commits what was typed, once', async () => {
 	expect(atRest()).toBe(true);
 });
 
+it('Shift+Tab back from a chip shows the draft, and Tab past the chips commits it once', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '20' } });
+	const chip = screen.getByTestId('price-discount-10');
+	await act(async () => chip.focus());
+	await act(async () => field.focus());
+
+	expect(screen.getByTestId('price-field')).toBe(field);
+	expect(field.value).toBe('20');
+	expect(onChangeText).not.toHaveBeenCalled();
+
+	await act(async () => chip.focus());
+	await act(async () => chip.blur());
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(20);
+	expect(atRest()).toBe(true);
+});
+
+it('Shift+Tab back from a chip and typing on commits the final number once', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '20' } });
+	await act(async () => screen.getByTestId('price-discount-10').focus());
+	await act(async () => field.focus());
+	fireEvent.change(field, { target: { value: '205' } });
+	await act(async () => field.blur());
+
+	expect(onChangeText).toHaveBeenCalledTimes(1);
+	expect(onChangeText).toHaveBeenCalledWith(205);
+});
+
+it('typing the stored number back writes nothing; a re-focus alone is not typing', async () => {
+	const onChangeText = setup([10]);
+	const field = await open();
+	fireEvent.change(field, { target: { value: '3.20' } });
+	await act(async () => screen.getByTestId('price-discount-10').focus());
+	await act(async () => field.focus());
+	await act(async () => field.blur());
+
+	expect(onChangeText).not.toHaveBeenCalled();
+	expect(atRest()).toBe(true);
+});
+
 it('an untouched field: the chip discounts the stored number', async () => {
 	const onChangeText = setup([10]);
 	await open();

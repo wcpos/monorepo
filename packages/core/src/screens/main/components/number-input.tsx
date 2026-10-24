@@ -15,8 +15,8 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 	/** Called on blur with the typed number, only when it differs from `value` */
 	onChangeText?: (value: number) => void;
 
-	/** Called on every keystroke with the number typed so far */
-	onDraftChange?: (value: number) => void;
+	/** Called on every keystroke with the number typed so far ('' once cleared; unreadable text skips) */
+	onDraftChange?: (value: number | '') => void;
 
 	/** Web: how the number reads while the field is not focused (`3.20`); focused, the raw `3.2`. */
 	formatOptions?: NumberFormatOptions;
@@ -157,7 +157,8 @@ export function NumberInput({
 			dirty.current = true;
 			setInternalValue(text);
 			const draft = stringToNumber(text);
-			if (Number.isFinite(draft)) onDraftChange?.(draft);
+			if (text.trim() === '') onDraftChange?.('');
+			else if (Number.isFinite(draft)) onDraftChange?.(draft);
 		},
 		[onDraftChange, stringToNumber]
 	);
