@@ -7,15 +7,12 @@ import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { Text } from '../text';
+import { type Grow, growFrame, ROW } from './frame';
 
 import type { TriggerRef } from '@rn-primitives/popover';
 
-/** Material's minimum touch target (decision 36): every anchored row is this tall. */
-const ROW = 48;
 /** The keys every keypad types with; a physical digit is its own name. */
 const KEY_NAMES: Record<string, string> = { Backspace: 'backspace', Enter: 'done' };
-
-type Grow = 'down' | 'up';
 
 type GrowKey = {
 	name: string;
@@ -137,12 +134,8 @@ export function GrowKeypad({
 		onOpenChangeProp?.(open);
 		if (open) {
 			discard.current = false;
-			// Measured once per open: the first row sits over the trigger.
 			const box = (trigger.current as unknown as HTMLElement | null)?.getBoundingClientRect?.();
-			const height = box?.height ?? 0;
-			const inset = (ROW - height) / 2;
-			const fits = !box || box.top - inset + rows.length * ROW <= window.innerHeight;
-			setFrame({ open, grow: fits ? 'down' : 'up', offset: -(height + inset) });
+			setFrame({ open, ...growFrame(box, rows.length * ROW, window.innerHeight) });
 			onOpen();
 		} else {
 			onClose(discard.current);

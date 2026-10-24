@@ -287,6 +287,21 @@ it('grows down from the price, and up when the panel would leave the window', as
 	rect.mockRestore();
 });
 
+it('in a window it fits neither way, it opens the way with more room', async () => {
+	// 1024 × 480, the price at y=150: the frame slides the panel inside (grow-keypad/frame.test.ts).
+	const { innerHeight } = window;
+	Object.defineProperty(window, 'innerHeight', { value: 480, configurable: true });
+	const rect = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+	rect.mockReturnValue({ top: 150, height: 44 } as DOMRect);
+	await open();
+	expect(screen.getByTestId('price-keypad-value').closest('[data-grow]')).toHaveAttribute(
+		'data-grow',
+		'down'
+	);
+	rect.mockRestore();
+	Object.defineProperty(window, 'innerHeight', { value: innerHeight, configurable: true });
+});
+
 it('on a phone it is the sheet, with Done across the last row', async () => {
 	await open({}, true);
 	expect(screen.getByTestId('numpad-done-button')).toHaveTextContent('Done');

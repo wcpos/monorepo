@@ -32,9 +32,17 @@ jest.mock('../../../contexts/translations', () => ({
 		options ? `${key}:${options.percent}` : key,
 }));
 // A store that prices to three places with a ',' separator and four-character barcodes.
+const mockStore: Record<string, unknown> = {};
+beforeEach(() =>
+	Object.assign(mockStore, {
+		price_decimal_sep: ',',
+		price_num_decimals: 3,
+		barcode_scanning_min_chars: 4,
+	})
+);
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, select: (store: Record<string, unknown>) => unknown) =>
-		select({ price_decimal_sep: ',', price_num_decimals: 3, barcode_scanning_min_chars: 4 }),
+		select(mockStore),
 }));
 
 const renderInput = () =>
@@ -50,6 +58,14 @@ it("hands the keypad the store's places and separator, and names the quick keys"
 	// The store's number format: a comma store reads 12,5.
 	expect(mockKeypad.labels.discount(12.5)).toBe('pos_cart.discount_percent:12,5');
 	expect(mockKeypad.labels.discountKey(12.5)).toBe('−12,5%');
+});
+
+it("a quick key's percent keeps its own places on a store that prices to none", () => {
+	mockStore.price_num_decimals = 0;
+	renderInput();
+	expect(mockKeypad.decimals).toBe(0);
+	expect(mockKeypad.labels.discountKey(12.5)).toBe('−12,5%');
+	expect(mockKeypad.labels.discount(12.5)).toBe('pos_cart.discount_percent:12,5');
 });
 
 it("takes its own places over the store's: a percentage fee on a zero-decimal store", () => {

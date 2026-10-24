@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useNumberFormat } from '../hooks/use-number-format';
+import { decimalSeparatorFormatter } from '../pos/hooks/quick-discount';
 import { useScannerBurstDismiss } from './use-scanner-burst-dismiss';
 
 import type { MoneyInputProps } from './money-input';
@@ -28,8 +28,12 @@ export function MoneyInput({
 	const priceDecimals = useDocField(store, (state) => state.price_num_decimals);
 	const decimals = ownDecimals ?? Number(priceDecimals ?? 2);
 	const t = useT();
-	// The percent in the store's number format: a comma store reads "12,5".
-	const { format: formatNumber } = useNumberFormat();
+	// The percent with the store's separator at its own scale, as the cart's discount line names
+	// it: a comma store reads "12,5", and a store pricing to 0 places never reads 12.5 % as "12".
+	const formatNumber = React.useMemo(
+		() => decimalSeparatorFormatter(decimalSeparator),
+		[decimalSeparator]
+	);
 	const keypad = React.useRef<PriceKeypadHandle>(null);
 	const [open, setOpen] = React.useState(false);
 	useScannerBurstDismiss(open, keypad);
