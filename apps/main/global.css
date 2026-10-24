@@ -237,7 +237,7 @@
   to { opacity: 0; transform: translateY(-6px); }
 }
 /* QuantityKeypad (components/quantity-keypad, decision 36): the panel is drawn growing out of
-   the cart's quantity box. The panel is a 3 x 5 grid of 48 px cells and opens with the box
+   the cart's quantity box. The panel is a 3 x 6 grid of 48 px cells and opens with the box
    centred in the stepper row's middle cell, so the clip starts as that cell less the 6 px above
    and below a 36 px box: 48 px off each side, 6 px from the row's edge, 42 px down to its other
    edge. `-up` is the same from the bottom row, for a panel that opened above the box. */

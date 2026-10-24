@@ -89,6 +89,31 @@ it('opens on a press, with every key named and carrying its testID', async () =>
 		'Delete last digit'
 	);
 	expect(screen.getByTestId('numpad-done-button')).toHaveAttribute('aria-label', 'Done');
+	expect(screen.getByTestId('numpad-key-decimal')).toHaveAttribute('aria-label', '.');
+});
+
+it('six rows: the stepper, three of digits, separator 0 ⌫, and ✓ across the panel', async () => {
+	await open();
+	const rows = Array.from(panelNode()!.children);
+	expect(rows).toHaveLength(6);
+	const ids = (row: Element) =>
+		Array.from(row.querySelectorAll('[data-testid]')).map((node) =>
+			node.getAttribute('data-testid')
+		);
+	expect(ids(rows[4])).toEqual(['numpad-key-decimal', 'numpad-key-0', 'numpad-key-backspace']);
+	expect(ids(rows[5])).toEqual(['numpad-done-button']);
+});
+
+it('the decimal key is labelled with the store separator and types a fraction once', async () => {
+	await open({ value: 3, decimalSeparator: ',' });
+	expect(screen.getByTestId('numpad-key-decimal')).toHaveTextContent(',');
+	await press('numpad-key-1');
+	await press('numpad-key-decimal');
+	await press('numpad-key-decimal');
+	await press('numpad-key-5');
+	expect(shown()).toBe('1,5');
+	await press('numpad-done-button');
+	expect(onChange).toHaveBeenCalledWith(1.5);
 });
 
 it('− at 1 is the trash: it removes the line and closes', async () => {
@@ -174,9 +199,10 @@ it('grows down from the box, and up when the panel would leave the window', asyn
 	rect.mockReturnValue({ top: window.innerHeight - 100, height: 36 } as DOMRect);
 	await press('cart-quantity-input');
 	expect(panel()).toHaveAttribute('data-grow', 'up');
-	// Keys above in their usual order, the stepper row last, over the box.
+	// Keys above in their usual order, ✓ under them, the stepper row last, over the box.
 	const rows = Array.from(panelNode()!.children);
 	expect(rows[0].querySelector('[data-testid="numpad-key-1"]')).not.toBeNull();
+	expect(rows[rows.length - 2].querySelector('[data-testid="numpad-done-button"]')).not.toBeNull();
 	expect(rows[rows.length - 1].querySelector('[data-testid="numpad-key-decrease"]')).not.toBeNull();
 	expect(
 		rows[rows.length - 1].querySelector('[data-testid="quantity-keypad-value"]')
