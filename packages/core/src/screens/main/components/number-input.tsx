@@ -1,11 +1,13 @@
 import * as React from 'react';
+import { Platform, type TextInputInstance } from 'react-native';
 
 import { Input, InputProps } from '@wcpos/components/input';
 import { cn } from '@wcpos/components/lib/utils';
+import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
-import { NumberFormatOptions } from '../hooks/use-number-format';
+import { NumberFormatOptions, useNumberFormat } from '../hooks/use-number-format';
 
 export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeText' | 'type'> {
 	/** The numeric value */
@@ -14,13 +16,7 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 	/** Called when the value changes */
 	onChangeText?: (value: number) => void;
 
-	/** Discount presets (used in web numpad) */
-	discounts?: number[];
-
-	/** Popover placement (used in web) */
-	placement?: 'top' | 'bottom' | 'left' | 'right';
-
-	/** Number formatting options (used in web for display) */
+	/** How the number reads while the field is not focused (`3.20`); focused, it is the raw `3.2`. */
 	formatOptions?: NumberFormatOptions;
 
 	/** Classes for the displayed number */
@@ -28,25 +24,27 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 }
 
 /**
- * A numeric input that accepts and emits numbers.
+ * A numeric input that accepts and emits numbers, on every platform.
  * Uses internal string state to allow typing decimals freely.
+ * Shows the formatted number at rest and the raw editable string while focused.
  * Emits number on blur.
  */
 export function NumberInput({
 	value,
 	onChangeText,
-	// These props are accepted for API parity with web but not used in native text input
-	discounts: _discounts,
-	placement: _placement,
-	formatOptions: _formatOptions,
+	formatOptions,
 	onBlur,
 	onFocus,
 	inputClassName,
 	textClassName,
+	ref,
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) || '.';
+	const { format } = useNumberFormat(formatOptions);
+	const inputRef = React.useRef<TextInputInstance>(null);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**
 	 * Convert number to display string using the store's decimal separator
@@ -99,6 +97,11 @@ export function NumberInput({
 		}
 	}
 
+	// At rest the field reads formatted; the raw string is what is edited and parsed, so the
+	// formatted one (thousands separators, a fixed scale) never reaches `stringToNumber`.
+	const shown =
+		isFocused || internalValue === '' ? internalValue : format(stringToNumber(internalValue));
+
 	// Emit number on blur
 	const handleBlur = React.useCallback(
 		(e: any) => {
@@ -114,17 +117,24 @@ export function NumberInput({
 	const handleFocus = React.useCallback(
 		(e: any) => {
 			setIsFocused(true);
+			// Native selects on focus BEFORE the swap to the raw string, which then lands the caret
+			// at the end: select the raw string again once it renders. The web selects in a timeout.
+			if (props.selectTextOnFocus && Platform.OS !== 'web') {
+				const length = internalValue.length;
+				setTimeout(() => inputRef.current?.setSelection?.(0, length), 0);
+			}
 			onFocus?.(e);
 		},
-		[onFocus]
+		[onFocus, props.selectTextOnFocus, internalValue]
 	);
 
 	return (
 		<Input
 			key={syncKey}
 			{...props}
+			ref={mergedRef}
 			inputClassName={cn(inputClassName, textClassName)}
-			value={internalValue}
+			value={shown}
 			onChangeText={setInternalValue}
 			onFocus={handleFocus}
 			onBlur={handleBlur}

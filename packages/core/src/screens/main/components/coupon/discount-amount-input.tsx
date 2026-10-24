@@ -16,8 +16,8 @@ interface DiscountAmountInputProps {
 }
 
 /**
- * The affix sits *next to* the input, not inside it, because on web the number
- * input renders as a numpad button (not a text field). Affix side and symbol are
+ * The affix sits *next to* the field, not inside it, so the field's own value stays
+ * numeric (it is parsed back to a number on blur). Affix side and symbol are
  * locale-correct via the hook's `prefix`/`suffix` (a right-positioned currency
  * renders on the right).
  */

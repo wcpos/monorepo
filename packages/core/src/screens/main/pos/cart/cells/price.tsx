@@ -5,9 +5,8 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../../components/currency-input';
+import { EditableNumber } from '../../../components/editable-number';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
@@ -51,7 +50,7 @@ function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
 	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price } = getLineItemData(item);
-	const { format } = useCurrencyFormat();
+	const { format } = useCurrentOrderCurrencyFormat();
 	const isOnSale = price !== regular_price;
 	/**
 	 * Discounts
@@ -59,17 +58,19 @@ function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const quickDiscounts = useDocField(uiSettings, (settings) => settings.quickDiscounts);
 	return (
-		<VStack space="xs">
+		// The cell's width, not its content's: the editor's quick discounts must not widen it.
+		<VStack space="xs" className="self-stretch">
 			{isOnSale && column.columnDef.meta?.show?.('on_sale') && (
 				<Text className="text-muted-foreground text-right tabular-nums line-through">
 					{format(regular_price || 0)}
 				</Text>
 			)}
-			<CurrencyInput
-				className="items-end border-0 bg-transparent tabular-nums"
-				textClassName="text-muted-foreground text-right tabular-nums"
-				inputClassName="border-0 tabular-nums"
+			<EditableNumber
+				testID="cart-price"
 				value={price}
+				display={format(Number(price ?? 0))}
+				formatOptions={{ fixedDecimalScale: true }}
+				textClassName="text-muted-foreground text-right"
 				onChangeText={(price) => updateCartLine('line_items', uuid, { price })}
 				discounts={ensureNumberArray(quickDiscounts)}
 			/>

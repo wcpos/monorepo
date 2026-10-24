@@ -32,16 +32,22 @@ import { CategoryTreeLoader } from '../../../../components/product/category-sele
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
-import { NumberInput } from '../../../../components/number-input';
+import { NumberInput, type NumberInputProps } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
+import { QUANTITY_FORMAT } from '../../../../hooks/use-number-format';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { parsePosData } from '../../../hooks/utils';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
+
+/** The quantity reads at its own scale, as the cart's box does, never the price's (0.125, not 0.13). */
+function QuantityField(props: NumberInputProps) {
+	return <NumberInput {...props} formatOptions={QUANTITY_FORMAT} />;
+}
 
 /**
  *
@@ -199,7 +205,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 									<SavedMark name="quantity" label={t('settings.saved')} />
 								</HStack>
 								<FormInput
-									customComponent={NumberInput}
+									customComponent={QuantityField}
 									testID="edit-line-item-quantity-input"
 									type="numeric"
 									value={value}

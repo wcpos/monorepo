@@ -143,6 +143,13 @@ jest.mock('../../components/currency-input', () => ({
 		return <NumberInput {...props} />;
 	},
 }));
+// The cart cell's in-place editor, open: the field and the cell's own commit.
+jest.mock('../../components/editable-number', () => ({
+	EditableNumber: (props: object) => {
+		const { NumberInput } = jest.requireMock('../../components/number-input');
+		return <NumberInput {...props} />;
+	},
+}));
 jest.mock('../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
 jest.mock('../../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../../components/meta-data-form', () => ({
@@ -243,12 +250,12 @@ it.each([false, true])(
 			typeof FeePrice
 		>;
 		render(<FeePrice {...props} />);
-		expect((screen.getByTestId('price') as HTMLInputElement).value).toBe('-10');
+		expect((screen.getByTestId('cart-fee-price') as HTMLInputElement).value).toBe('-10');
 		// The input re-emits its own value on blur: a legacy negative fee must survive that.
-		fireEvent.change(screen.getByTestId('price'), { target: { value: '-10' } });
-		fireEvent.change(screen.getByTestId('price'), { target: { value: '-5' } });
+		fireEvent.change(screen.getByTestId('cart-fee-price'), { target: { value: '-10' } });
+		fireEvent.change(screen.getByTestId('cart-fee-price'), { target: { value: '-5' } });
 		expect(mockUpdate).not.toHaveBeenCalled();
-		fireEvent.change(screen.getByTestId('price'), { target: { value: '5' } });
+		fireEvent.change(screen.getByTestId('cart-fee-price'), { target: { value: '5' } });
 		expect(mockUpdate).toHaveBeenCalledWith('fee_lines', 'fee', { amount: '5' });
 	}
 );
