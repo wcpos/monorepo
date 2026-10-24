@@ -13,6 +13,17 @@ jest.mock('@wcpos/query', () => ({
 }));
 let blind = false;
 let expected: Record<string, string> = { cash: '155', card: '30' };
+const baseTerms = {
+	float: '100',
+	cashSales: { amount: '62', count: 2 },
+	paidIn: [] as { amount: string; note?: string }[],
+	paidOut: { amount: '7', count: 1, note: 'Milk' },
+	cashRefunds: { amount: '0', count: 0 },
+	noSales: 0,
+	voids: 0,
+	expected: '155',
+};
+let terms: typeof baseTerms | undefined = baseTerms;
 let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
@@ -33,6 +44,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		session: currentSession,
 		binding: { registerName: 'Front' },
 		expected,
+		terms,
 		salesCount: 2,
 		movements,
 		refusedMovements,
@@ -113,8 +125,13 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
+jest.mock('@wcpos/components/input', () => {
+	function Field({
 		value,
 		onChangeText,
 		testID,
@@ -122,7 +139,52 @@ jest.mock('@wcpos/components/input', () => ({
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
-	}) => <input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />,
+	}) {
+		return (
+			<input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />
+		);
+	}
+	function Wrap({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	// The movement amount is the `hero` variant: Input.Root / InputField.
+	return {
+		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
+	};
+});
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({
+		label,
+		on,
+		onPress,
+		testID,
+	}: {
+		label: string;
+		on?: boolean;
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} aria-pressed={on} onClick={onPress}>
+			{label}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/keypad', () => ({
+	Keypad: ({
+		rows,
+		onPress,
+	}: {
+		rows: { value: string; testID: string; label?: string }[][];
+		onPress: (value: string) => void;
+	}) => (
+		<div>
+			{rows.flat().map((key) => (
+				<button key={key.value} data-testid={key.testID} onClick={() => onPress(key.value)}>
+					{key.label}
+				</button>
+			))}
+		</div>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -154,6 +216,7 @@ const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButton
 beforeEach(() => {
 	blind = false;
 	expected = { cash: '155', card: '30' };
+	terms = baseTerms;
 	capabilities = ['view_woocommerce_pos_reports'];
 	currentSession = {
 		id: 'session',
@@ -168,12 +231,26 @@ beforeEach(() => {
 	syncStatus = 'pending';
 	jest.clearAllMocks();
 });
-it('draws a non-cash tender only while it holds money; cash always has its row', () => {
+it('lists a non-cash tender only while it holds money; cash is the derivation, not a tender', () => {
 	expected = { cash: '0.0000', card: '0.0000', stripe_terminal_for_woocommerce: '-5.0000' };
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.getByText('register.cash')).toBeTruthy();
+	expect(screen.queryByText('Cash')).toBeNull();
 	expect(screen.queryByText('Card')).toBeNull();
 	expect(screen.getByText('Stripe Terminal')).toBeTruthy();
+});
+
+it("the body is the drawer's derivation and ends in Expected", () => {
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	// In order: float, cash sales, refunds, in, out, the sum line, then the tenders kept apart.
+	expect(screen.getByTestId('register-panel').textContent).toMatch(
+		/register\.float.*£100\.00register\.cash_sales 2£62\.00register\.cash_refunds.*register\.paid_in.*register\.paid_out 1 · Milk\u2212£7\.00register\.expected_in_drawer£155\.00register\.other_tendersCard£30\.00/
+	);
+	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
+	// No session: no derivation, only the closure.
+	terms = undefined;
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-expected')).toBeNull();
+	expect(screen.getByTestId('register-panel-last-closure')).toBeTruthy();
 });
 
 it('hides every amount and the X report for blind cashiers', () => {
@@ -218,6 +295,41 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 		amount: '0',
 		reason: 'Wrong change',
 	});
+});
+
+it('the keypad decimal key stores a canonical point whatever the locale shows', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	fireEvent.click(screen.getByTestId('movement-reason-supplier'));
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	fireEvent.click(screen.getByTestId('movement-key-decimal'));
+	fireEvent.click(screen.getByTestId('movement-key-5'));
+	fireEvent.click(screen.getByTestId('movement-key-0'));
+	fireEvent.click(screen.getByTestId('movement-key-0'));
+	expect((screen.getByTestId('movement-confirm') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('a reason chip fills the reason and the verb names the amount', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	expect(confirmButton().textContent).toBe('register.take_cash_out');
+	fireEvent.click(screen.getByTestId('movement-reason-supplier'));
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	expect(confirmButton().textContent).toBe('register.take_out £7.00');
+	// The mocked translator returns keys, so the chip's label is its key.
+	expect((screen.getByTestId('movement-reason') as HTMLInputElement).value).toBe(
+		'register.reason_supplier'
+	);
+	expect(screen.getByTestId('movement-reason-supplier').getAttribute('aria-pressed')).toBe('true');
+	expect(confirmButton().disabled).toBe(false);
+});
+
+it('the consequence line says what is left after a paid out', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	expect(screen.getByTestId('movement-after').textContent).toBe('register.drawer_holds £155.00');
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	expect(screen.getByTestId('movement-after').textContent).toContain('£148.00');
 });
 
 it('will not record a movement the server would refuse for a blank reason', () => {

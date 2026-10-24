@@ -6,6 +6,8 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
+import { IconButton } from '@wcpos/components/icon-button';
+import { cn } from '@wcpos/components/lib/utils';
 import {
 	Dialog,
 	DialogBody,
@@ -19,6 +21,7 @@ import { MenuRow } from '@wcpos/components/menu-row';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -40,6 +43,7 @@ const STATIC_ROW =
 /** A pressable row of the same list: the MenuRow's surface, squared, with the hairline. */
 const ACTION_ROW = 'border-border rounded-none border-b';
 const NOTE = 'text-muted-foreground px-2.5 py-1 text-sm';
+const MUTED = 'text-muted-foreground';
 
 function Opener({ id }: { id?: number | null }) {
 	const { site } = useStoreSession();
@@ -63,6 +67,7 @@ export function RegisterPanel({
 		session,
 		binding,
 		expected,
+		terms,
 		salesCount,
 		blind,
 		movements,
@@ -71,7 +76,7 @@ export function RegisterPanel({
 		actions,
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
-	const [expanded, setExpanded] = React.useState(false);
+	const [expanded, setExpanded] = React.useState<string | null>(null);
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
@@ -87,9 +92,10 @@ export function RegisterPanel({
 	// The same fallback as the closure document for a method the store no longer advertises.
 	const { byId } = usePaymentMethods();
 	const tenderLabel = (method: string) =>
-		method === 'cash'
-			? t('register.cash')
-			: (byId.get(method)?.title ?? method.charAt(0).toUpperCase() + method.slice(1));
+		byId.get(method)?.title ?? method.charAt(0).toUpperCase() + method.slice(1);
+	// Money out of the drawer reads as a minus (U+2212), never as a colour: it is not destructive.
+	const minus = (amount: string | number) =>
+		Number(amount) ? `\u2212${format(Math.abs(Number(amount)))}` : format(0);
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
 			await action();
@@ -113,35 +119,139 @@ export function RegisterPanel({
 	// comes from the hook already scoped to this register and NOT to the current session, so
 	// the banner survives the close that would otherwise hide the last record of the cash.
 	const refused = refusedMovements;
+	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
+	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
+	const openedTime = stamp
+		? new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+		: undefined;
+	const paidIn = terms
+		? fromMinor(
+				terms.paidIn.reduce((sum, row) => sum + toMinor(row.amount, 4), 0),
+				4
+			)
+		: '0';
+	const others = Object.entries(expected).filter(
+		([method, amount]) => method !== 'cash' && Number(amount) !== 0
+	);
+	/** One term of the derivation: the label with its muted count or note, the amount at the right. */
+	const term = (label: string, suffix?: React.ReactNode, quiet?: boolean, strong?: boolean) => (
+		<Text
+			numberOfLines={1}
+			className={cn('min-w-0 flex-1', quiet && MUTED, strong && 'font-semibold')}
+		>
+			{label}
+			{suffix != null && suffix !== '' && <Text className={`${MUTED} text-sm`}> {suffix}</Text>}
+		</Text>
+	);
+	const amount = (value: string, quiet?: boolean, strong?: boolean) =>
+		!blind && (
+			<Text className={cn('tabular-nums', quiet && MUTED, strong && 'font-semibold')}>{value}</Text>
+		);
+	/**
+	 * A term whose movements sit under it: pressing it lists them, each with its Void. A term with
+	 * nothing recorded on this device (a count the server's baseline carries) is a plain row.
+	 */
+	const fold = (
+		type: 'paid_in' | 'paid_out' | 'no_sale',
+		testID: string,
+		label: React.ReactNode,
+		value: React.ReactNode
+	) => {
+		const rows = activeMovements.filter((row) => row.type === type);
+		const open = expanded === type && rows.length > 0;
+		return (
+			<React.Fragment key={type}>
+				{rows.length > 0 ? (
+					<MenuRow
+						testID={testID}
+						className={ACTION_ROW}
+						onPress={() => setExpanded(open ? null : type)}
+						label={label}
+						trailing={
+							<>
+								{value}
+								<Icon
+									name={open ? 'chevronUp' : 'chevronDown'}
+									size="sm"
+									className="text-muted-foreground"
+								/>
+							</>
+						}
+					/>
+				) : (
+					<View testID={testID} className={STATIC_ROW}>
+						{label}
+						{value}
+					</View>
+				)}
+				{open &&
+					rows.map((row) => (
+						<View key={row.id} className={STATIC_ROW}>
+							<Text
+								testID={`movement-row-${row.id}`}
+								className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
+							>
+								{row.reason}
+								{!blind && type !== 'no_sale'
+									? ` · ${type === 'paid_out' ? minus(row.amount ?? 0) : format(Number(row.amount))}`
+									: ''}
+								{row.sync_status === 'failed' ? ` · ${t('register.refused_row')}` : ''}
+							</Text>
+							<Button
+								variant="ghost"
+								size="sm"
+								testID={`movement-void-${row.id}`}
+								disabled={session?.status !== 'open'}
+								onPress={() => attempt(() => actions.voidMovement(row.id))}
+							>
+								{t('register.void')}
+							</Button>
+						</View>
+					))}
+			</React.Fragment>
+		);
+	};
+	const noteOf = (count: number, note?: string | null) =>
+		count === 1 && note ? `1 · ${note}` : count > 0 ? count : undefined;
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
 				{/* The header block: on the phone the panel is a page, and its padding comes from here. */}
-				<DialogHeader>
-					<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
-						{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
-					</DialogTitle>
-					{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
-					{blind ? (
-						<DialogDescription>
-							{t('register.sales_count', { count: salesCount })}
-						</DialogDescription>
-					) : (
-						<DialogDescription>
-							{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
-							{t('register.opened_at_by', {
-								time: new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
-									[],
-									{
-										hour: '2-digit',
-										minute: '2-digit',
-									}
-								),
-							})}{' '}
-							<React.Suspense fallback={null}>
-								<Opener id={session?.opened_by} />
-							</React.Suspense>
-						</DialogDescription>
+				<DialogHeader className="flex-row items-start gap-2">
+					<View className="min-w-0 flex-1 gap-1.5">
+						<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
+							{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+						</DialogTitle>
+						{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
+						{blind ? (
+							<DialogDescription>
+								{t('register.sales_count', { count: salesCount })}
+							</DialogDescription>
+						) : (
+							<DialogDescription>
+								{t('register.in_the_drawer')} · {binding.registerName}
+								{openedTime && (
+									<>
+										{' · '}
+										{t('register.opened_at_by', { time: openedTime })}{' '}
+										<React.Suspense fallback={null}>
+											<Opener id={session?.opened_by} />
+										</React.Suspense>
+									</>
+								)}
+							</DialogDescription>
+						)}
+					</View>
+					{/* The X-report is a glyph beside the figure it prints. `mr-3` clears the panel's own ×,
+					    which sits 4 px past the header's `pr-ctl` reserve, and leaves the 8 between targets. */}
+					{!blind && !!session && (
+						<IconButton
+							name="print"
+							testID="register-panel-print"
+							className="mr-3"
+							accessibilityLabel={t('register.print_x_report')}
+							onPress={() => attempt(print)}
+						/>
 					)}
 				</DialogHeader>
 				{refused.length > 0 && (
@@ -180,62 +290,80 @@ export function RegisterPanel({
 					))}
 				</View>
 				<DialogBody className="gap-0">
-					{/* Cash always has a row (the float lives there); every other tender only once it holds
-					    money, so a server baseline's `card: '0.0000'` draws nothing. A negative (refunds
-					    over sales) is money and stays. */}
-					{Object.entries({ cash: '0', ...expected })
-						.filter(([method, amount]) => method === 'cash' || Number(amount) !== 0)
-						.map(([method, amount]) => (
-							<View key={method} className={STATIC_ROW}>
-								<Text numberOfLines={1} className="min-w-0 flex-1">
-									{tenderLabel(method)}
-								</Text>
-								{!blind && <Text className="tabular-nums">{format(Number(amount))}</Text>}
+					{/* The drawer's derivation in the order every till uses, ending in its sum line; a zero
+					    term goes quiet rather than vanishing. Blind cashiers get the labels and counts. */}
+					{terms && (
+						<>
+							<View className={STATIC_ROW}>
+								{term(
+									t('register.float'),
+									openedTime && t('register.opened_suffix', { time: openedTime })
+								)}
+								{amount(format(Number(terms.float)))}
 							</View>
-						))}
-					<MenuRow
-						testID="register-panel-movements"
-						className={ACTION_ROW}
-						onPress={() => setExpanded(!expanded)}
-						label={t('register.paid_in_out')}
-						trailing={
-							<Icon
-								name={expanded ? 'chevronUp' : 'chevronDown'}
-								size="sm"
-								className="text-muted-foreground"
-							/>
-						}
-					/>
-					{expanded &&
-						activeMovements.map((row) => (
-							<View key={row.id} className={STATIC_ROW}>
-								<Text
-									testID={`movement-row-${row.id}`}
-									className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
-								>
-									{t(`register.${row.type}`)}
-									{!blind ? ` · ${format(Number(row.amount))} · ${row.reason}` : ''}
-									{row.sync_status === 'failed' ? ` · ${t('register.refused_row')}` : ''}
-								</Text>
-								<Button
-									variant="ghost"
-									size="sm"
-									testID={`movement-void-${row.id}`}
-									disabled={session?.status !== 'open'}
-									onPress={() => attempt(() => actions.voidMovement(row.id))}
-								>
-									{t('register.void')}
-								</Button>
+							<View className={STATIC_ROW}>
+								{term(t('register.cash_sales'), terms.cashSales.count)}
+								{amount(format(Number(terms.cashSales.amount)))}
 							</View>
-						))}
-					{!blind && !!session && (
-						<MenuRow
-							testID="register-panel-print"
-							className={ACTION_ROW}
-							onPress={() => attempt(print)}
-							label={t('register.print_x_report')}
-							trailing={<Icon name="print" size="sm" className="text-muted-foreground" />}
-						/>
+							<View className={STATIC_ROW}>
+								{term(
+									t('register.cash_refunds'),
+									noteOf(terms.cashRefunds.count),
+									!Number(terms.cashRefunds.amount)
+								)}
+								{amount(minus(terms.cashRefunds.amount), !Number(terms.cashRefunds.amount))}
+							</View>
+							{fold(
+								'paid_in',
+								'register-panel-paid-in-row',
+								term(
+									t('register.paid_in'),
+									noteOf(terms.paidIn.length, terms.paidIn[0]?.note),
+									!Number(paidIn)
+								),
+								amount(format(Number(paidIn)), !Number(paidIn))
+							)}
+							{fold(
+								'paid_out',
+								'register-panel-movements',
+								term(
+									t('register.paid_out'),
+									noteOf(terms.paidOut.count, terms.paidOut.note),
+									!Number(terms.paidOut.amount)
+								),
+								amount(minus(terms.paidOut.amount), !Number(terms.paidOut.amount))
+							)}
+							{terms.noSales > 0 &&
+								fold(
+									'no_sale',
+									'register-panel-no-sales',
+									term(t('register.no_sales'), undefined, true),
+									<Text className={`${MUTED} tabular-nums`}>{terms.noSales}</Text>
+								)}
+							{!blind && (
+								<View testID="register-panel-expected" className={STATIC_ROW}>
+									{term(t('register.expected_in_drawer'), undefined, false, true)}
+									{amount(format(Number(terms.expected)), false, true)}
+								</View>
+							)}
+							{others.length > 0 && (
+								<>
+									{/* A band, not a row: these tenders are not in the drawer. No count: a split
+									    sale is both a cash and a card sale, so no subtraction names it honestly. */}
+									<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+										<Text className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+											{t('register.other_tenders')}
+										</Text>
+									</View>
+									{others.map(([method, value]) => (
+										<View key={method} className={STATIC_ROW}>
+											{term(tenderLabel(method))}
+											{amount(format(Number(value)))}
+										</View>
+									))}
+								</>
+							)}
+						</>
 					)}
 					{lastClosure && (
 						<View testID="register-panel-last-closure" className="border-border border-b">
