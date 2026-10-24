@@ -130,8 +130,8 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
+jest.mock('@wcpos/components/input', () => {
+	function Field({
 		value,
 		onChangeText,
 		testID,
@@ -139,7 +139,52 @@ jest.mock('@wcpos/components/input', () => ({
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
-	}) => <input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />,
+	}) {
+		return (
+			<input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />
+		);
+	}
+	function Wrap({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	// The movement amount is the `hero` variant: Input.Root / InputField.
+	return {
+		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
+	};
+});
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({
+		label,
+		on,
+		onPress,
+		testID,
+	}: {
+		label: string;
+		on?: boolean;
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} aria-pressed={on} onClick={onPress}>
+			{label}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/keypad', () => ({
+	Keypad: ({
+		rows,
+		onPress,
+	}: {
+		rows: { value: string; testID: string; label?: string }[][];
+		onPress: (value: string) => void;
+	}) => (
+		<div>
+			{rows.flat().map((key) => (
+				<button key={key.value} data-testid={key.testID} onClick={() => onPress(key.value)}>
+					{key.label}
+				</button>
+			))}
+		</div>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -250,6 +295,29 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 		amount: '0',
 		reason: 'Wrong change',
 	});
+});
+
+it('a reason chip fills the reason and the verb names the amount', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	expect(confirmButton().textContent).toBe('register.take_cash_out');
+	fireEvent.click(screen.getByTestId('movement-reason-supplier'));
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	expect(confirmButton().textContent).toBe('register.take_out £7.00');
+	// The mocked translator returns keys, so the chip's label is its key.
+	expect((screen.getByTestId('movement-reason') as HTMLInputElement).value).toBe(
+		'register.reason_supplier'
+	);
+	expect(screen.getByTestId('movement-reason-supplier').getAttribute('aria-pressed')).toBe('true');
+	expect(confirmButton().disabled).toBe(false);
+});
+
+it('the consequence line says what is left after a paid out', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	expect(screen.getByTestId('movement-after').textContent).toBe('register.drawer_holds £155.00');
+	fireEvent.click(screen.getByTestId('movement-key-7'));
+	expect(screen.getByTestId('movement-after').textContent).toContain('£148.00');
 });
 
 it('will not record a movement the server would refuse for a blank reason', () => {
