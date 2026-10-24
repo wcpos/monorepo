@@ -28,7 +28,7 @@ const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
 /** The coupon's record actions, for the coupon modal's footer (the row only opens it). */
 export function useCouponActions(
 	record: EngineRecord<'coupons'>,
-	{ onDeleted }: { onDeleted?: () => void } = {}
+	{ onDeleted, onSynced }: { onDeleted?: () => void; onSynced?: () => void } = {}
 ) {
 	const id = useRecordField(record, ({ payload }) => payload.id);
 	const t = useT();
@@ -41,18 +41,21 @@ export function useCouponActions(
 		void refreshCollection(runtime.engine, {
 			id: 'coupon-actions:refresh',
 			collection: 'coupons',
-		}).catch((error) => {
-			// The engine already wrote the coded row for this require (SYNC321), and the
-			// device's copy is untouched: the cashier only needs to know it didn't refresh.
-			syncLogger.debug('Failed to refresh coupons', {
-				showToast: true,
-				toast: { title: t('common.refresh_failed'), type: 'warning' },
-				context: {
-					error: getErrorMessage(error),
-				},
+		})
+			// Only a refresh that landed hands the form the store's copy.
+			.then(() => onSynced?.())
+			.catch((error) => {
+				// The engine already wrote the coded row for this require (SYNC321), and the
+				// device's copy is untouched: the cashier only needs to know it didn't refresh.
+				syncLogger.debug('Failed to refresh coupons', {
+					showToast: true,
+					toast: { title: t('common.refresh_failed'), type: 'warning' },
+					context: {
+						error: getErrorMessage(error),
+					},
+				});
 			});
-		});
-	}, [runtime, t]);
+	}, [runtime, t, onSynced]);
 
 	// Each opening starts from the default: a coupon never pushed is force-deleted.
 	const setDeleteOpen = React.useCallback(

@@ -56,7 +56,11 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 });
 jest.mock('@wcpos/components/checkbox', () => ({ Checkbox: () => null }));
 jest.mock('@wcpos/components/label', () => ({
-	Label: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Label: ({ children, onPress }: React.PropsWithChildren<{ onPress: () => void }>) => (
+		<span data-testid="force-label" onClick={onPress}>
+			{children}
+		</span>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -75,15 +79,18 @@ const record = (id?: number) =>
 function Harness({
 	customer,
 	onDeleted,
+	onSynced,
 }: {
 	customer: ReturnType<typeof record>;
 	onDeleted: () => void;
+	onSynced?: () => void;
 }) {
-	const actions = useCustomerActions(customer, { onDeleted });
+	const actions = useCustomerActions(customer, { onDeleted, onSynced });
 	return (
 		<>
 			{actions.canDelete && <button data-testid="delete" onClick={actions.requestDelete} />}
 			{actions.canSync && <button data-testid="sync" onClick={actions.sync} />}
+			<button data-testid="cancel" onClick={() => actions.setDeleteOpen(false)} />
 			<DeleteCustomerDialog
 				record={customer}
 				open={actions.deleteOpen}
@@ -142,4 +149,25 @@ it('offers no Delete without the delete capability', () => {
 	mockCanDelete = false;
 	render(<Harness customer={record(42)} onDeleted={jest.fn()} />);
 	expect(screen.queryByTestId('delete')).toBeNull();
+});
+
+it('every opening re-arms the confirm: a checked force does not survive Cancel', () => {
+	render(<Harness customer={record(42)} onDeleted={jest.fn()} />);
+	const confirm = () => screen.getByTestId('customer-delete-confirm-button') as HTMLButtonElement;
+	fireEvent.click(screen.getByTestId('delete'));
+	fireEvent.click(screen.getByTestId('force-label'));
+	expect(confirm().disabled).toBe(false);
+	fireEvent.click(screen.getByTestId('cancel'));
+	fireEvent.click(screen.getByTestId('delete'));
+	expect(confirm().disabled).toBe(true);
+});
+
+it('a refresh that lands hands the form the store copy; a failed one does not', async () => {
+	const onSynced = jest.fn();
+	render(<Harness customer={record(42)} onDeleted={jest.fn()} onSynced={onSynced} />);
+	await act(async () => fireEvent.click(screen.getByTestId('sync')));
+	expect(onSynced).toHaveBeenCalledTimes(1);
+	mockRefresh.mockRejectedValueOnce(new Error('offline'));
+	await act(async () => fireEvent.click(screen.getByTestId('sync')));
+	expect(onSynced).toHaveBeenCalledTimes(1);
 });

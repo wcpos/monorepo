@@ -32,13 +32,19 @@ export function EditCouponForm({ coupon }: Props) {
 	const { close } = useDialog();
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
 	const readOnly = !(useAppInfo().license?.isPro ?? false);
-	const actions = useCouponActions(coupon, { onDeleted: close });
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,
 		defaultValues: {
 			...coupon.toMutableJSON().payload,
 		} as z.infer<typeof couponFormSchema>,
+	});
+	// Sync means "take the store's copy": the landed refresh replaces unsaved edits, so a later
+	// Save cannot write the stale defaults back over it.
+	const actions = useCouponActions(coupon, {
+		onDeleted: close,
+		onSynced: () =>
+			form.reset({ ...coupon.getLatest().payload } as z.infer<typeof couponFormSchema>),
 	});
 
 	const handleSave = React.useCallback(

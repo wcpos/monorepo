@@ -29,7 +29,7 @@ const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 /** The customer's record actions, for the customer modal's footer (the row only opens it). */
 export function useCustomerActions(
 	record: ReadonlyEngineRecord<'customers'>,
-	{ onDeleted }: { onDeleted?: () => void } = {}
+	{ onDeleted, onSynced }: { onDeleted?: () => void; onSynced?: () => void } = {}
 ) {
 	const id = useRecordField(record, ({ payload }) => payload.id);
 	const t = useT();
@@ -44,19 +44,22 @@ export function useCustomerActions(
 			id: `customer-actions:refresh:${id}`,
 			collection: 'customers',
 			wooId: id,
-		}).catch((error) => {
-			// The engine already wrote the coded row for this require (SYNC321), and the
-			// device's copy is untouched: the cashier only needs to know it didn't refresh.
-			syncLogger.debug('Failed to refresh customer', {
-				showToast: true,
-				toast: { title: t('common.refresh_failed'), type: 'warning' },
-				context: {
-					customerId: id,
-					error: getErrorMessage(error),
-				},
+		})
+			// Only a refresh that landed hands the form the store's copy.
+			.then(() => onSynced?.())
+			.catch((error) => {
+				// The engine already wrote the coded row for this require (SYNC321), and the
+				// device's copy is untouched: the cashier only needs to know it didn't refresh.
+				syncLogger.debug('Failed to refresh customer', {
+					showToast: true,
+					toast: { title: t('common.refresh_failed'), type: 'warning' },
+					context: {
+						customerId: id,
+						error: getErrorMessage(error),
+					},
+				});
 			});
-		});
-	}, [id, runtime, t]);
+	}, [id, runtime, t, onSynced]);
 
 	const confirmDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
@@ -70,7 +73,11 @@ export function useCustomerActions(
 		sync,
 		canSync: Boolean(id),
 		canDelete: caps.canDeleteCustomers,
-		requestDelete: React.useCallback(() => setDeleteOpen(true), []),
+		// Each opening starts from the default: a customer never pushed is force-deleted.
+		requestDelete: React.useCallback(() => {
+			setForce(!id);
+			setDeleteOpen(true);
+		}, [id]),
 		confirmDelete,
 		deleteOpen,
 		setDeleteOpen,
