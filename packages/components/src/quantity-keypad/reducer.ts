@@ -15,8 +15,11 @@ export type QuantityEntryAction =
 
 export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
 
-// Three places: a typed fraction never commits under 0.001, the smallest quantity a line takes.
-const FRACTION_DIGITS = 3;
+/**
+ * A quantity's decimal places: six, as the edit-line sheet takes and the cart shows them
+ * (`QUANTITY_FORMAT`), so a typed fraction or a step never cuts a line's own digits.
+ */
+export const QUANTITY_PLACES = 6;
 // Four: a line never holds 10 000, and "9999" is what the 48 px cell fits.
 const INTEGER_DIGITS = 4;
 
@@ -28,7 +31,7 @@ export function quantityEntryReducer(
 	switch (action.type) {
 		case 'digit': {
 			const point = buffer.indexOf('.');
-			if (point >= 0 && buffer.length - point > FRACTION_DIGITS) return entry;
+			if (point >= 0 && buffer.length - point > QUANTITY_PLACES) return entry;
 			// A lone 0 only ever starts a fraction: the next digit takes its place.
 			const next = buffer === '0' ? action.digit : buffer + action.digit;
 			return point < 0 && next.length > INTEGER_DIGITS ? entry : { ...entry, buffer: next };

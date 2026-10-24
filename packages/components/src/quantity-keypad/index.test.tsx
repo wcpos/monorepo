@@ -294,7 +294,7 @@ it('a step the store takes (true) stands', async () => {
 	expect(onChange).toHaveBeenLastCalledWith(5);
 });
 
-it('a step from a fraction lands on the 3-place grid', async () => {
+it('a step from a fraction lands on the quantity’s six places', async () => {
 	// In floating point 1.015 + 1 is 2.0149999999999997 and 2.3 - 1 is 1.2999999999999998.
 	await open({ value: 1.015 });
 	await press('numpad-key-increase');
@@ -302,4 +302,10 @@ it('a step from a fraction lands on the 3-place grid', async () => {
 	await press('numpad-key-increase');
 	await press('numpad-key-decrease');
 	expect(onChange).toHaveBeenLastCalledWith(2.015);
+});
+
+it('a step keeps a line’s own fraction digits', async () => {
+	await open({ value: 1.2345 });
+	await press('numpad-key-increase');
+	expect(onChange).toHaveBeenLastCalledWith(2.2345);
 });

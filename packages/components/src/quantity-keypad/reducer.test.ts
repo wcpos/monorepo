@@ -40,9 +40,9 @@ describe('quantityEntryReducer', () => {
 		expect(typedQuantity(run(...digits('.5')).buffer)).toBe(0.5);
 	});
 
-	it('stops a fraction at three places, so it never commits under 0.001', () => {
-		expect(run(...digits('0.0019')).buffer).toBe('0.001');
-		expect(typedQuantity('0.001')).toBe(0.001);
+	it('stops a fraction at six places, as the edit-line sheet does', () => {
+		expect(run(...digits('0.0000019')).buffer).toBe('0.000001');
+		expect(typedQuantity('0.000001')).toBe(0.000001);
 	});
 
 	it('stops the whole number at four digits; a fraction may follow', () => {

@@ -36,6 +36,8 @@ export function QuantityInput({
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) as
 		string | undefined;
+	const minChars = useDocField(store, (state) => state.barcode_scanning_min_chars) as
+		number | undefined;
 	const { format } = useNumberFormat(QUANTITY_FORMAT);
 	const t = useT();
 	const keypad = React.useRef<QuantityKeypadHandle>(null);
@@ -46,17 +48,23 @@ export function QuantityInput({
 	 * never latches a burst's first key, so that digit reaches the keypad, and it swallows the
 	 * rest. Its mark on a latched key is `defaultPrevented`, set in its own capture listener on
 	 * the document. This one is registered on open, after the route's detector, and same-node
-	 * listeners run in registration order whatever `stopPropagation` says, so it sees the mark:
-	 * the keypad closes, keeping the stored quantity. An effect: the document is outside React.
+	 * listeners run in registration order whatever `stopPropagation` says, so it sees the mark.
+	 * The detector latches on timing alone, so a quick typist's second key is marked too; only
+	 * a run of marked keys as long as the store's minimum barcode (less the unmarked first key)
+	 * is a scan, the length the detector itself accepts. Then the keypad closes, keeping the
+	 * stored quantity. Any unmarked key ends the run. An effect: the document is outside React.
 	 */
+	const scanRun = Math.max(1, (Number(minChars) || 0) - 1);
 	React.useEffect(() => {
 		if (!open) return;
+		let marked = 0;
 		const onKey = (event: KeyboardEvent) => {
-			if (event.defaultPrevented) keypad.current?.dismiss();
+			marked = event.defaultPrevented ? marked + 1 : 0;
+			if (marked >= scanRun) keypad.current?.dismiss();
 		};
 		document.addEventListener('keydown', onKey, true);
 		return () => document.removeEventListener('keydown', onKey, true);
-	}, [open]);
+	}, [open, scanRun]);
 	const labels = React.useMemo(
 		() => ({
 			decrease: t('pos_cart.quantity_decrease'),

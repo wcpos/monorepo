@@ -4,6 +4,7 @@ import defaults from 'lodash/defaults';
 import round from 'lodash/round';
 import { NumericFormatProps, numericFormatter } from 'react-number-format';
 
+import { QUANTITY_PLACES } from '@wcpos/components/quantity-keypad/reducer';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -14,7 +15,10 @@ export type NumberFormatOptions = NumericFormatProps;
  * A quantity's format: the store's separators, but never the currency's decimal scale. A
  * weighed line holds 0.125 whatever the prices round to, and an integer shows no decimals.
  */
-export const QUANTITY_FORMAT: NumberFormatOptions = { fixedDecimalScale: false, decimalScale: 6 };
+export const QUANTITY_FORMAT: NumberFormatOptions = {
+	fixedDecimalScale: false,
+	decimalScale: QUANTITY_PLACES,
+};
 
 /**
  * Custom hook to format numbers based on application state and provided options.

@@ -7,7 +7,7 @@ import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { Text } from '../text';
-import { EMPTY_ENTRY, quantityEntryReducer, typedQuantity } from './reducer';
+import { EMPTY_ENTRY, QUANTITY_PLACES, quantityEntryReducer, typedQuantity } from './reducer';
 
 import type { TriggerRef } from '@rn-primitives/popover';
 
@@ -16,8 +16,9 @@ const CELL = 48;
 const CELL_STYLE = { width: CELL, height: CELL };
 /** Five rows; below the box when they fit in the window, above it when they do not. */
 const PANEL_HEIGHT = CELL * 5;
-// A step lands on the 3-place grid (the reducer's floor): 1.1 + 1 is 2.1, not 2.1000000000000005.
-const onGrid = (quantity: number) => Math.round(quantity * 1000) / 1000;
+// A step lands on the quantity's own places: 1.015 + 1 is 2.015, never 2.0149999999999997.
+const GRID = 10 ** QUANTITY_PLACES;
+const onGrid = (quantity: number) => Math.round(quantity * GRID) / GRID;
 const DIGIT_ROWS = ['123', '456', '789'].map((row) => [...row].map((d) => ({ name: d, label: d })));
 /** A physical key's name on the pad; a digit is its own name. */
 const KEY_NAMES: Record<string, string> = {
@@ -44,7 +45,7 @@ export type QuantityKeypadProps = {
 	/** The store's number format (separators). */
 	format: (value: number) => string;
 	/**
-	 * A committed quantity: at least 1, or a fraction of at least 0.001. Resolving `false`
+	 * A committed quantity, above 0 to six places. Resolving `false`
 	 * says the store refused it (the stock guard), and a − or + step is taken back.
 	 */
 	onChange: (quantity: number) => void | boolean | Promise<void | boolean>;
