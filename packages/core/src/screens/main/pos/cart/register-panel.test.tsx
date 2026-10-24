@@ -13,6 +13,17 @@ jest.mock('@wcpos/query', () => ({
 }));
 let blind = false;
 let expected: Record<string, string> = { cash: '155', card: '30' };
+const baseTerms = {
+	float: '100',
+	cashSales: { amount: '62', count: 2 },
+	paidIn: [] as { amount: string; note?: string }[],
+	paidOut: { amount: '7', count: 1, note: 'Milk' },
+	cashRefunds: { amount: '0', count: 0 },
+	noSales: 0,
+	voids: 0,
+	expected: '155',
+};
+let terms: typeof baseTerms | undefined = baseTerms;
 let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
@@ -33,6 +44,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		session: currentSession,
 		binding: { registerName: 'Front' },
 		expected,
+		terms,
 		salesCount: 2,
 		movements,
 		refusedMovements,
@@ -113,6 +125,11 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
 jest.mock('@wcpos/components/input', () => ({
 	Input: ({
 		value,
@@ -154,6 +171,7 @@ const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButton
 beforeEach(() => {
 	blind = false;
 	expected = { cash: '155', card: '30' };
+	terms = baseTerms;
 	capabilities = ['view_woocommerce_pos_reports'];
 	currentSession = {
 		id: 'session',
@@ -168,12 +186,26 @@ beforeEach(() => {
 	syncStatus = 'pending';
 	jest.clearAllMocks();
 });
-it('draws a non-cash tender only while it holds money; cash always has its row', () => {
+it('lists a non-cash tender only while it holds money; cash is the derivation, not a tender', () => {
 	expected = { cash: '0.0000', card: '0.0000', stripe_terminal_for_woocommerce: '-5.0000' };
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.getByText('register.cash')).toBeTruthy();
+	expect(screen.queryByText('Cash')).toBeNull();
 	expect(screen.queryByText('Card')).toBeNull();
 	expect(screen.getByText('Stripe Terminal')).toBeTruthy();
+});
+
+it("the body is the drawer's derivation and ends in Expected", () => {
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	// In order: float, cash sales, refunds, in, out, the sum line, then the tenders kept apart.
+	expect(screen.getByTestId('register-panel').textContent).toMatch(
+		/register\.float.*£100\.00register\.cash_sales 2£62\.00register\.cash_refunds.*register\.paid_in.*register\.paid_out 1 · Milk\u2212£7\.00register\.expected_in_drawer£155\.00register\.other_tenders_sales 0Card£30\.00/
+	);
+	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
+	// No session: no derivation, only the closure.
+	terms = undefined;
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-expected')).toBeNull();
+	expect(screen.getByTestId('register-panel-last-closure')).toBeTruthy();
 });
 
 it('hides every amount and the X report for blind cashiers', () => {
