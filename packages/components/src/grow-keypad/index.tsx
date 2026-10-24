@@ -34,6 +34,21 @@ export const DIGIT_ROWS: GrowKey[][] = ['123', '456', '789'].map((row) =>
 	[...row].map((d) => ({ name: d, label: d }))
 );
 
+/** The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. */
+export function closingRows(
+	decimalSeparator: string,
+	labels: { backspace: string; done: string }
+): GrowKey[][] {
+	return [
+		[
+			{ name: 'decimal', label: decimalSeparator },
+			{ name: '0', label: '0' },
+			{ name: 'backspace', label: labels.backspace, icon: 'backspace' },
+		],
+		[{ name: 'done', label: labels.done, icon: 'check', variant: 'primary', span: 3 }],
+	];
+}
+
 export type GrowKeypadHandle = {
 	open: () => void;
 	/** Closes keeping the stored value, as Escape does. */

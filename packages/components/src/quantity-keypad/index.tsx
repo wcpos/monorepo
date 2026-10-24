@@ -1,7 +1,13 @@
 import * as React from 'react';
 
 import { Button, ButtonText } from '../button';
-import { DIGIT_ROWS, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
+import {
+	closingRows,
+	DIGIT_ROWS,
+	type GrowCell,
+	GrowKeypad,
+	type GrowKeypadHandle,
+} from '../grow-keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
@@ -122,16 +128,10 @@ export function QuantityKeypad({
 		{ display: <Value display={display} textClassName={textClassName} /> },
 		{ name: 'increase', label: labels.increase, icon: 'plus' },
 	];
-	const last: GrowCell[] = [
-		{ name: 'backspace', label: labels.backspace, icon: 'backspace' },
-		{ name: '0', label: '0' },
-		{ name: 'done', label: labels.done, icon: 'check', variant: 'primary' },
-	];
-
 	return (
 		<GrowKeypad
 			ref={shell}
-			rows={[stepper, ...DIGIT_ROWS, last]}
+			rows={[stepper, ...DIGIT_ROWS, ...closingRows(decimalSeparator, labels)]}
 			ruled={1}
 			cell={CELL}
 			animation={ANIMATION}
