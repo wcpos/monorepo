@@ -44,11 +44,7 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
-import {
-	type CollectionWriteFacet,
-	type WriteAck,
-	writeFacetFor,
-} from '../collections/collection-descriptors';
+import { writeFacetFor as facetFor, type WriteAck } from '../collections/collection-descriptors';
 import {
 	classifyMoneyDivergence,
 	compareOrderMoney,
@@ -106,8 +102,7 @@ const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
  */
 async function withGraftedLineIdentity<T extends QueuedMutation>(
 	database: RxDatabase,
-	mutation: T,
-	facetFor: (collection: string) => CollectionWriteFacet | null
+	mutation: T
 ): Promise<T> {
 	const facet = facetFor(mutation.collectionName);
 	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
@@ -333,12 +328,6 @@ export type WriteDrainLaneDeps = {
 	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
 	 * the carrier field, and an ack re-materialization derives it again. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
-	/**
-	 * The write facets this lane acknowledges through. Default: the current
-	 * generation's. A drainable-generation engine passes the facets whose
-	 * projections fit that generation's schemas.
-	 */
-	writeFacetFor?: (collection: string) => CollectionWriteFacet | null;
 };
 
 export type WriteDrainLane = {
@@ -352,7 +341,6 @@ export type WriteDrainLane = {
  * see `open-cart-hold.ts`). Leader-only, so a follower window never drains.
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
-	const facetFor = deps.writeFacetFor ?? writeFacetFor;
 	let restoredScope: string | null = null;
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
 	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
@@ -602,7 +590,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							},
 							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
-								const outbound = await withGraftedLineIdentity(database, mutation, facetFor);
+								const outbound = await withGraftedLineIdentity(database, mutation);
 								if (outbound.collectionName === 'orders' && outbound.operation !== 'delete') {
 									const resident = await database.collections.orders
 										?.findOne(outbound.recordId)

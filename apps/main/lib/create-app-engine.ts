@@ -43,7 +43,6 @@ import {
 	drainLegacyScopeDatabase,
 	type LegacyScopeDrainOutcome,
 	type LegacyScopeDrainPorts,
-	type LegacyScopeDrainWriteEvent,
 	type RxdbSyncEngine,
 	setSyncEngineLogger,
 	type StoreScopeIdentity,
@@ -183,22 +182,15 @@ let legacyPurgeStarted = false;
  */
 const renderIntentSeq = new WeakMap<CachedEngine, number>();
 
-/**
- * A drain that kept SENDABLE work (offline, a refused session, a failed push, a
- * row still backing off) retries within the process — on the live engine's next
- * write-drain tick that finished `ran` (the lane ran; not proof the store
- * answered), and no sooner than this backoff. A minute first: long enough for a
- * reconnect or a session renewal to settle, short enough that a sale made just
- * before the upgrade reaches the store within the shift.
- */
+/** A failed print-count carry retries on a live write-drain tick that ran, no sooner than this. */
 const LEGACY_DRAIN_FIRST_RETRY_MS = 60_000;
-/** Doubling stops here: a store that stays unreachable is asked four times an hour, not hammered. */
+/** Doubling stops here: a carry that keeps failing is retried four times an hour. */
 const LEGACY_DRAIN_MAX_RETRY_MS = 15 * 60_000;
 
 /**
  * Per scope, per process: `running`, `waiting` to retry (not before
  * `notBeforeMs`, and only on a successful live write-drain tick), or `done` —
- * drained, absent, failed to open, or kept with nothing sendable left (dead
+ * drained, absent, failed to open, or parked (its queue kept as it is: unsent rows, dead
  * letters, conflicts). A `done` scope is tried again on the next app start.
  */
 type LegacyDrainState =
@@ -495,9 +487,8 @@ function remainingCount(remaining: Record<string, number | undefined>): number {
 
 /**
  * One line per drain outcome; a quiet debug line when there was nothing to
- * drain. A kept database warns on the first attempt of a process and then only
- * when its un-sendable work is due its daily report — re-arms and restarts are
- * debug.
+ * drain. A parked database errors on a process's first attempt and then daily;
+ * any other kept one warns on the first attempt, and its re-arms are debug.
  */
 function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolean): void {
 	if (outcome.status === 'absent') {
@@ -507,7 +498,7 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolea
 		return;
 	}
 	if (outcome.status === 'failed') {
-		engineLogger.error('Could not open the previous database version to send its unsent changes', {
+		engineLogger.error('Could not open the previous database version', {
 			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: { databaseName: outcome.databaseName, error: outcome.error },
 		});
@@ -533,73 +524,32 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolea
 		return;
 	}
 	if (outcome.status === 'kept') {
-		// Dead letters and parked conflicts keep it too: live work is never removed.
-		const loud = outcome.retryable ? !isRetry : outcome.reportDue;
-		engineLogger[loud ? 'warn' : 'debug'](
-			'Unsent changes from the previous database version are kept until they can be sent',
+		engineLogger[isRetry ? 'debug' : 'warn'](
+			'The previous database version is kept until its receipt print counts can be carried over',
 			{
 				context: {
 					databaseName: outcome.databaseName,
 					reason: outcome.reason,
 					retryable: outcome.retryable,
-					pushed: outcome.pushed,
-					carried: outcome.carried,
 					remaining: outcome.remaining,
 				},
 			}
 		);
 		return;
 	}
-	const moved = outcome.carried > 0 ? ` and moved ${outcome.carried} open carts` : '';
 	engineLogger.info(
 		outcome.fileRemoved
-			? `Sent ${outcome.pushed} unsent changes${moved} from the previous database version and removed it`
-			: `Sent ${outcome.pushed} unsent changes${moved} from the previous database version and dropped its tables (its file remains)`,
+			? 'Removed the previous database version: nothing in it was left to send'
+			: 'Dropped the previous database version: nothing in it was left to send (its file remains)',
 		{
 			context: {
 				databaseName: outcome.databaseName,
-				pushed: outcome.pushed,
-				carried: outcome.carried,
 				fileRemoved: outcome.fileRemoved,
 			},
 		}
 	);
 }
 
-/** A push from the drain the store refused or conflicted on — with the store's own words. */
-function logLegacyDrainWriteEvent(databaseName: string, event: LegacyScopeDrainWriteEvent): void {
-	engineLogger.warn(
-		event.type === 'write-rejected'
-			? 'The store refused a change from the previous database version'
-			: 'A change from the previous database version conflicts with the store',
-		{
-			context: {
-				databaseName,
-				collection: event.collection,
-				recordId: event.recordId,
-				mutationId: event.mutationId,
-				...(event.type === 'write-rejected'
-					? {
-							...(event.status !== undefined ? { status: event.status } : {}),
-							...(event.reason !== undefined ? { reason: event.reason } : {}),
-							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-						}
-					: { currentRevision: event.currentRevision }),
-			},
-		}
-	);
-}
-
-/**
- * A scope generation bump opens a fresh database; the previous one may still
- * hold unsent sales. Drain it only while it is the engine's active scope (so the
- * session's credentials are that cashier's). While the session is refused (a
- * refused push would dead-letter them) or the till is offline it never PUSHES —
- * but it still probes (local), carries open carts over and reports what it kept,
- * then waits for the live engine's next write-drain tick that ran. A drain that
- * kept sendable work after a real attempt re-arms with a bounded backoff;
- * anything else is once per process.
- */
 /** Report a marked-but-not-drained database as uncountable, so nothing waits on it. */
 function releaseLegacyDrainMark(databaseName: string): void {
 	if (legacyDrainMarked(databaseName)) reportLegacyDrain(databaseName, null);
@@ -621,8 +571,7 @@ function stillLoggingFor(engine: RxdbSyncEngine, scope: StoreScopeIdentity): boo
 async function drainLegacyScopeOnce(
 	engine: RxdbSyncEngine,
 	scope: StoreScopeIdentity,
-	ports: () => LegacyScopeDrainPorts,
-	sessionRefused: () => boolean
+	ports: () => LegacyScopeDrainPorts
 ): Promise<void> {
 	const key = scopeCacheKey(scope);
 	const state = legacyDrainStates.get(key);
@@ -642,21 +591,12 @@ async function drainLegacyScopeOnce(
 	// already marked at engine construction; a switched-to scope is marked here).
 	if (state === undefined) markLegacyDrainPending(databaseName);
 	const retries = state?.retries ?? 0;
-	// Offline or a refused session blocks only the PUSH: the probe is local, so the drain still
-	// checks, carries open carts over and reports what it kept — the report never waits on the
-	// network. A blocked drain is not an attempt: no backoff, the next live tick re-arms it.
-	const pushBlockedReason = sessionRefused()
-		? 'the store refused the session'
-		: getEngineConnectivity() === 'offline'
-			? 'write-drain skipped: offline'
-			: null;
 	legacyDrainStates.set(key, { phase: 'running', retries });
 	let next: LegacyDrainState = { phase: 'done' };
 	try {
-		const outcome = await drainLegacyScopeDatabase({ ...ports(), pushBlockedReason }, scope);
-		// A blocked drain logs as a retry would: the warn waits for a real attempt.
+		const outcome = await drainLegacyScopeDatabase(ports(), scope);
 		if (stillLoggingFor(engine, scope)) {
-			logLegacyDrainOutcome(outcome, retries > 0 || pushBlockedReason !== null);
+			logLegacyDrainOutcome(outcome, retries > 0);
 		}
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
 			reportLegacyDrain(databaseName, 0);
@@ -665,9 +605,7 @@ async function drainLegacyScopeOnce(
 			reportLegacyDrain(databaseName, null);
 		} else {
 			reportLegacyDrain(databaseName, remainingCount(outcome.remaining), outcome.keptOrderUuids);
-			if (outcome.retryable && pushBlockedReason !== null) {
-				next = { phase: 'waiting', retries, notBeforeMs: 0 };
-			} else if (outcome.retryable) {
+			if (outcome.retryable) {
 				next = {
 					phase: 'waiting',
 					retries: retries + 1,
@@ -1035,56 +973,22 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		options.scope
 	);
 	engineSelf = engine;
-	// The drain's own transport: pinned to the drained scope's store, with the
-	// session as it stands when the drain starts — a later cashier swap mutates
-	// `fetcherOptions` in place and must not re-sign a sale already in flight.
-	const legacyDrainPorts = (scope: StoreScopeIdentity): LegacyScopeDrainPorts => {
-		const databaseName = scopeDatabaseName(scope, {
-			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
-		});
+	const legacyDrainPorts = (): LegacyScopeDrainPorts => {
 		return {
-			site,
 			storage: defaultConfig.storage,
-			getInstanceId,
-			fetcher: createEngineFetcher({
-				auth: { ...fetcherOptions },
-				clockSkew: { generation: 0, evaluated: false },
-				scope: { storeId: scope.storeId },
-				emitTransport,
-				wpJsonRoot: site.wpJsonRoot,
-				...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
-			}),
-			connectivity: getEngineConnectivity,
 			multiInstance,
 			// Native lists and deletes files; web and Electron cannot (null): open-to-check there.
 			databaseFiles: scopeDatabaseFiles,
-			// An open cart left in the old database is carried into this engine's.
 			liveEngine: engine,
-			// The sync log only: the drain's own queue must not move this engine's status.
-			diagnostics: (event) => {
-				if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
-				syncLogObserver.observe(event);
-			},
-			onWriteEvent: (event) => {
-				if (stillLoggingFor(engine, scope)) logLegacyDrainWriteEvent(databaseName, event);
-			},
 		};
 	};
 	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>
-		drainLegacyScopeOnce(
-			engine,
-			scope,
-			() => legacyDrainPorts(scope),
-			() =>
-				requestStateManager.isAuthFailed() ||
-				(authExhaustedToken !== null &&
-					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token)
-		);
+		drainLegacyScopeOnce(engine, scope, legacyDrainPorts);
 	// A drain waiting to retry runs after a live write-drain tick that finished `ran`. That
 	// proves the LANE ran (online, session not held, scope open) — not that the store answered
 	// (a tick over an empty queue sends nothing). So the trigger is only a cue: the backoff is
 	// what bounds real attempts (about four an hour at the 15-minute cap), and attempts per
-	// process are unbounded while sendable work stays kept.
+	// process are unbounded while a print-count carry keeps failing.
 	engine.events((event) => {
 		if (event.type !== 'lane-finish' || event.lane !== 'write-drain' || event.status !== 'ran')
 			return;

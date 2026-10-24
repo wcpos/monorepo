@@ -7,7 +7,7 @@ import {
 	type SyncObserver,
 } from '@wcpos/sync-core';
 
-import { type CollectionWriteFacet, writeFacetFor } from '../collections/collection-descriptors';
+import { writeFacetFor as facetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { type ResidentSync, stampedSync } from './order-revision';
 import { requeueRejectedMutation } from './write-intents';
@@ -112,13 +112,6 @@ export type ConflictResolutionDeps = {
 	/** The active scope's barcode carriers — a discard rebuilds the optimistic
 	 * document through the same projection an ordinary pull uses. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
-	/**
-	 * The write facets a resolution refreshes and restores through. Default: the
-	 * current generation's; a drainable-generation engine passes the facets whose
-	 * projections fit its schemas (a discard must not restore a current-generation
-	 * document into a previous-generation collection).
-	 */
-	writeFacetFor?: (collection: string) => CollectionWriteFacet | null;
 };
 
 export type ConflictResolution = {
@@ -129,7 +122,6 @@ export type ConflictResolution = {
 export function createConflictResolution(deps: ConflictResolutionDeps): ConflictResolution {
 	// prettier-ignore
 	const { assertUsable, settled, manager, databaseFor, fetcher, syncBaseUrl, now, mintUuid, diagnostics, persistOrderRepull, repullOrdersNow, queueFor, resolutionInstanceIdFor, serializeResolution, onQueueChanged } = deps;
-	const facetFor = deps.writeFacetFor ?? writeFacetFor;
 	const activeDatabase = (): RxDatabase | null => {
 		const scopeId = manager.activeScope;
 		return scopeId === null ? null : databaseFor(scopeId);
