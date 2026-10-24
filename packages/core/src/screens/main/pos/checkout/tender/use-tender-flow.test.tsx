@@ -4200,6 +4200,27 @@ describe('gateway capture mode (contract 1.2)', () => {
 			expect(mockManualPost).toHaveBeenCalledTimes(1);
 		});
 
+		it('clearAttempt holds busy while its confirmation is open', async () => {
+			mockPayload.meta_data = stranded();
+			let answer: (confirmed: boolean) => void = () => {};
+			mockConfirm.mockImplementationOnce(
+				() => new Promise<boolean>((resolve) => (answer = resolve))
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			let cleared!: Promise<void>;
+			act(() => {
+				cleared = result.current.clearAttempt();
+			});
+			expect(mockConfirm).toHaveBeenCalledTimes(1);
+			expect(result.current.busy).toBe(true);
+			await act(async () => {
+				answer(false);
+				await cleared;
+			});
+			expect(mockManualPost).not.toHaveBeenCalled();
+			expect(result.current.busy).toBe(false);
+		});
+
 		// R11: held on the store's answer, each holds busy; the other is refused by the gate, not its
 		// own precondition (the payload is switched so the other's precondition holds).
 		const invoiceStamped = () => withAwaitingCustomer([], stamp);

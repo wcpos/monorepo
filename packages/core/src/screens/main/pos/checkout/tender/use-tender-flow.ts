@@ -215,7 +215,7 @@ export interface TenderFlow {
 	/** Quick tendered chips for the current method; empty when it gives no change. */
 	quickAmountsMinor: number[];
 
-	/** A record or a void is in flight; every action must be inert while true. */
+	/** A tender command holds the gate (in flight or confirming); every action is inert while true. */
 	busy: boolean;
 	saveState: OrderSaveState | null;
 	pickMethod: (methodId: string) => void;
@@ -283,9 +283,8 @@ export function useTenderFlow(
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
-	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
-	// The one gate for the five tender commands (retry, take, cancel invoice, clear, cancel payment).
+	// One gate for the tender's commands: state renders it; the ref closes a same-tick double record.
 	const exclusive = React.useCallback(async (task: () => Promise<void>) => {
 		if (busyRef.current) return;
 		busyRef.current = true;
@@ -903,8 +902,7 @@ export function useTenderFlow(
 			service?.get(order.uuid)
 		)
 			return;
-		// The gate is held across the offline confirmation: a second press while the cashier is still
-		// answering it must not open a second prompt. A decline or a throwing prompt frees it.
+		// The gate is held across the offline confirmation: a second press cannot open a second prompt.
 		// Only a tile that settles later asks (rule 1); a disabled one is refused below, with its reason.
 		if (tiles.find((tile) => tile.method.id === method?.id)?.settlesLater && method) {
 			// The amount that will be RECORDED: cash rounding's, not the keyed entry.
