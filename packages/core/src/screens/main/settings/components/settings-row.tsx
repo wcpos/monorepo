@@ -3,11 +3,11 @@ import { View } from 'react-native';
 
 import { useFormContext } from 'react-hook-form';
 
-import { FormItem, FormLabel } from '@wcpos/components/form';
+import { FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 
-import { SavedMark } from './saved-mark';
+import { useT } from '../../../../contexts/translations';
 
 interface SettingsRowProps {
 	label: string;
@@ -38,6 +38,7 @@ export function SettingsRow({
 	// Inside a react-hook-form <Form>, FormItem + FormLabel wire the label to its
 	// control. Screens without a form (customer display) have no provider, where
 	// FormLabel's useFormField() throws, so those rows fall back to a plain label.
+	const t = useT();
 	const inForm = useFormContext() !== null;
 	const Row = inForm ? FormItem : View;
 	const RowLabel = inForm ? FormLabel : PlainLabel;
@@ -54,7 +55,7 @@ export function SettingsRow({
 					{children}
 					{name && (
 						<View className="pointer-events-none absolute inset-y-0 right-full mr-3 justify-center">
-							<SavedMark name={name} />
+							<SavedMark name={name} label={t('settings.saved')} />
 						</View>
 					)}
 				</View>
@@ -74,7 +75,7 @@ export function SettingsRow({
 					{/* Out of flow, under the control's right edge, inside the row's padding: no height change. */}
 					{name && (
 						<View className="pointer-events-none absolute top-full right-0 mt-0.5">
-							<SavedMark name={name} />
+							<SavedMark name={name} label={t('settings.saved')} />
 						</View>
 					)}
 				</View>

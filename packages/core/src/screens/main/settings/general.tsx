@@ -18,7 +18,11 @@ import {
 	FormInput,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
+	savedKeys,
+	SavedMark,
 	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
@@ -30,7 +34,6 @@ import {
 import { useDocField } from '@wcpos/query';
 
 import { LockedRow } from './components/locked-row';
-import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './components/saved-mark';
 import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { ClearLocalData } from '../pos/cart/clear-local-data';
@@ -61,13 +64,15 @@ const formSchema = z.object({
 	store_city: z.string().optional(),
 	store_postcode: z.string().optional(),
 	locale: z.string().optional(),
-	default_customer: z.number().default(0),
+	// The customer select hands back a string id; the gate in useFormChangeHandler validates
+	// before it writes, so the schema coerces what the control gives (the write is unchanged).
+	default_customer: z.coerce.number().default(0),
 	default_customer_is_cashier: z.boolean().default(false),
 	currency: z.string().default('USD'),
 	currency_pos: z.string().default('left'),
 	price_thousand_sep: z.string().default(','),
 	price_decimal_sep: z.string().default('.'),
-	price_num_decimals: z.number().default(2),
+	price_num_decimals: z.coerce.number().default(2),
 	thousands_group_style: z.enum(['thousand', 'lakh', 'wan']).default('thousand'),
 });
 

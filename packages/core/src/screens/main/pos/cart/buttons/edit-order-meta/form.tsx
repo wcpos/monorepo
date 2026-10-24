@@ -16,31 +16,21 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxInput,
-	ComboboxTrigger,
-} from '@wcpos/components/combobox';
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { DialogBody, useDialog } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormCombobox,
 	FormField,
-	FormInput,
 	FormItem,
 	FormLabel,
 	FormSelect,
 	FormTextarea,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
 import {
@@ -53,10 +43,9 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
-import { useSearchSelect } from '../../../../../../query';
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
-import { CustomerList } from '../../../../components/customer-select';
+import { CashierSelect } from '../../../../components/cashier-select';
 import { OrderStatusSelect } from '../../../../components/order/order-status-select';
 import { pushFailureCode } from '../../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../../contexts/use-push-document';
@@ -75,29 +64,65 @@ import type { CurrentOrderRecord } from '../../../contexts/current-order';
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 
 const formSchema = z.object({
-	status: z.string(),
-	cashier_id: z.string(),
 	customer_note: z.string().optional(),
-	// number: z.string().optional(), // Order number is read only??!
 	currency: z.string().optional(),
-	// currency_symbol: z.string().optional(), // Currency symbol is read only
-	transaction_id: z.string().optional(),
 	meta_data: metaDataSchema,
 });
 
+const handOverSchema = z.object({ status: z.string(), cashier_id: z.string() });
+
+type MetaRow = { id?: number; key?: string; value?: unknown };
+
 /**
- *
+ * The draft's rows reconciled with the order's: a draft row with no id takes the id the order
+ * already holds for the same key (the store numbered it during a sync while the sheet stayed
+ * open), and a numbered row the draft no longer has goes out as a tombstone, or the store would
+ * keep it — but only a row the draft OPENED with (deleted after that sync, so the form saw no id
+ * and removed it instead of tombstoning it). A row that arrived from the store while the sheet
+ * was open was never the cashier's to delete; the draft simply does not know it.
  */
+function reconcileMetaWithOrder<Row extends MetaRow>(
+	rows: Row[],
+	stored: readonly MetaRow[],
+	openedWith: ReadonlySet<string>
+): (Row | MetaRow)[] {
+	const claimed = new Set<number>();
+	for (const row of rows) if (row.id != null) claimed.add(row.id);
+	const reconciled: (Row | MetaRow)[] = rows.map((row) => {
+		if (row.id != null) return row;
+		const id = stored.find(
+			(entry) => entry.id != null && entry.key === row.key && !claimed.has(entry.id)
+		)?.id;
+		if (id == null) return row;
+		claimed.add(id);
+		return { ...row, id };
+	});
+	for (const entry of stored) {
+		if (entry.id == null || claimed.has(entry.id)) continue;
+		if (!openedWith.has(String(entry.key ?? ''))) continue;
+		if (PROTECTED_ORDER_META_KEYS.includes(String(entry.key ?? ''))) continue;
+		reconciled.push({ id: entry.id, key: entry.key, value: null });
+	}
+	return reconciled;
+}
+type HandOverValues = z.infer<typeof handOverSchema>;
+
 type FormValues = z.infer<typeof formSchema>;
 
 export function EditOrderMetaForm({
 	order,
 	formData,
-	submitRef,
+	handOverData,
+	flushRef,
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
-	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
+	handOverData: HandOverValues;
+	/**
+	 * Receives the autosave's flush, so an action outside the form that pushes the order
+	 * (the sheet's Sync order) carries the edit the cashier just made, not the one before.
+	 */
+	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }) {
 	const t = useT();
 	const { writeOrderFields } = useOrderFieldsWrite();
@@ -109,79 +134,122 @@ export function EditOrderMetaForm({
 	const storeID = useDocField(store, (value) => value.id);
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
 	// The staged hand-off, with whether the cashier changed the status (judged when staged).
-	const [pending, setPending] = React.useState<(FormValues & { statusEdit: boolean }) | null>(null);
+	const [pending, setPending] = React.useState<(HandOverValues & { statusEdit: boolean }) | null>(
+		null
+	);
 	const [loading, setLoading] = React.useState(false);
-	const cashierSelect = useSearchSelect('cashier');
+	const markSaved = useMarkSaved();
+	// The meta keys the draft opened with: only one of these, gone from the draft, is a deletion.
+	const openedWithMetaKeys = React.useRef(
+		new Set((formData.meta_data ?? []).map((row) => String(row?.key ?? '')))
+	);
 
 	/**
-	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
-	 * This makes the form reactive to external data changes (react-hook-form best practice).
+	 * `defaultValues`, not reactive `values`: this form IS the writer of what it shows. Every
+	 * write it makes comes back as a payload change, and a reactive re-bind would reset the
+	 * form to the persisted snapshot under the cashier's hands, dropping the keystrokes typed
+	 * while the write was in flight and cancelling the debounce that held them. The sheet
+	 * remounts the form per order (its key), so a different order never shows stale values.
 	 */
 	const form = useForm<FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: formData,
+		defaultValues: formData,
 	});
 
-	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
+	// The hand-over is read, never written, until Send: reactive values are right here.
+	const handOverForm = useForm<HandOverValues>({
+		resolver: zodResolver(handOverSchema),
+		values: handOverData,
+	});
+	const { flush } = useFormChangeHandler({
+		form,
+		// A nested path (meta_data.0.value) writes its whole root field; the mark lands on the root.
+		onChange: (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			// Autosave never writes the identity rows (the hand-over does, on Send; the local patch
+			// keeps the stored ones), and a row the cashier has only just added (no key yet) is not
+			// an edit: it would be pushed as blank meta. The draft is the form's own, so a row the
+			// store has numbered since (a sync while the sheet stayed open) takes its id back from
+			// the order by key, or the store would append a copy instead of updating the row.
+			const patch = {
+				[root]:
+					root === 'meta_data' && Array.isArray(value)
+						? reconcileMetaWithOrder(
+								value.filter(
+									(row) =>
+										!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
+										(row?.id != null || String(row?.key ?? '') !== '')
+								),
+								order.getLatest().payload.meta_data ?? [],
+								openedWithMetaKeys.current
+							)
+						: value,
+			};
+			// Resolves whether the record holds the edit: flush() hands that to Sync order and Send.
+			return writeOrderFields(order, () => patch).then((written) => {
+				if (written) markSaved([root]);
+				return written;
+			});
+		},
+	});
+	React.useEffect(() => {
+		if (!flushRef) return;
+		flushRef.current = flush;
+		return () => {
+			flushRef.current = null;
+		};
+	}, [flush, flushRef]);
+	const [status, cashierId] = useWatch({
+		control: handOverForm.control,
+		name: ['status', 'cashier_id'],
+	});
+	const payload = order.getLatest().payload;
+	const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
-	const statusPushable = isPushableOrderStatus(formData.status);
+	const statusPushable = isPushableOrderStatus(handOverData.status);
 	const allowedStatuses = statusPushable
 		? PUSHABLE_ORDER_STATUSES
-		: [...PUSHABLE_ORDER_STATUSES, formData.status];
+		: [...PUSHABLE_ORDER_STATUSES, handOverData.status];
 	const { label: cashierLabel } = useCashierLabel(cashierId);
-
-	/**
-	 * Apply the form. Resolves true only when the edits are written locally; false when the
-	 * identity change awaits its confirmation (the send flow owns that) — a caller that pushes
-	 * next must then stop, or the server gets the old values under a success toast.
-	 */
-	async function applySave(data: FormValues, { close }: { close: boolean }): Promise<boolean> {
-		const payload = order.getLatest().payload;
-		const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
-		const statusEdit = data.status !== payload.status;
-		if (statusEdit || data.cashier_id !== currentCashierId) {
-			setPending({ ...data, statusEdit });
-			return false;
-		}
-		// Status is an intent, never an echo (ADR 0040): it is unchanged here (a change goes
-		// through the send below), and re-writing it would queue a reopen from a stale copy.
-		// transaction_id is the server's (stripped on the wire), shown read-only.
-		const {
-			cashier_id: _cashierId,
-			status: _unchanged,
-			transaction_id: _transaction,
-			...patch
-		} = data;
-		const written = await writeOrderFields(order, () => patch);
-		if (written && close) closeDialog();
-		return written;
-	}
-	async function handleSave(data: FormValues) {
-		await applySave(data, { close: true });
-	}
+	// Only the hand-over's own values are staged: the edit form's fields are already on the order
+	// (or refused by the gate), so the send never carries them.
+	const onSend = handOverForm.handleSubmit((data) => {
+		const statusEdit = data.status !== order.getLatest().payload.status;
+		setPending({ ...data, statusEdit });
+	});
 
 	async function handleSend() {
 		if (!pending || loading) return;
 		if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.payload.id })) return;
+		// Busy from here: the confirmation's buttons disable, so a Cancel pressed while a slow
+		// autosave is flushing cannot dismiss a send that then goes ahead anyway.
+		setLoading(true);
+		// A note still debounced or being written lands first, or the push would miss it and the
+		// rollback snapshot below would carry the value before it. A failed write stops the send;
+		// its failure was already reported.
+		if (!(await flush())) {
+			setLoading(false);
+			setPending(null);
+			return;
+		}
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, transaction_id: _transaction, status, ...rest } = pending;
-		const { statusEdit: statusChanged, ...fields } = rest;
+		const { cashier_id, status, statusEdit: statusChanged } = pending;
 		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
 		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
 		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till
-		// completed, and its rollback restores the cashier alone.
+		// completed, and its rollback restores the cashier alone. The identity is stamped onto the
+		// order's meta as it stands (the autosaved rows included), never onto a form snapshot.
 		const patch = () => ({
-			...fields,
 			...(statusChanged ? { status } : {}),
-			meta_data: wooMetaCarrier.stampIdentity(fields.meta_data, {
+			meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
 				tillId: identity.tillId,
 			}),
 		});
-		setLoading(true);
 		let patched = false;
 		try {
 			if (!(await writeOrderFields(order, patch))) return;
@@ -230,140 +298,109 @@ export function EditOrderMetaForm({
 	}
 
 	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
-	// Hand the submit to the sheet's footer (an effect: refs are not written during render). It
-	// resolves whether the edits were applied: false on a validation failure or while an
-	// identity change awaits confirmation, and it never closes the sheet under the push.
-	React.useEffect(() => {
-		if (!submitRef) return;
-		submitRef.current = () =>
-			new Promise<boolean>((resolve) => {
-				void form.handleSubmit(
-					async (data) => resolve(await applySave(data, { close: false })),
-					() => resolve(false)
-				)();
-			});
-		return () => {
-			submitRef.current = null;
-		};
-	});
-
-	/**
 	 *
 	 */
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="status"
-						render={({ field }) => (
-							<View className="flex-1" testID="order-meta-status">
-								<FormSelect
-									label={t('common.status')}
-									customComponent={OrderStatusSelect}
-									allowed={allowedStatuses}
-									disabled={!statusPushable}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="cashier_id"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormItem>
-									<FormLabel>{t('common.cashier')}</FormLabel>
-									<Combobox
-										value={{ value: field.value, label: cashierLabel }}
-										onValueChange={(option) => {
-											if (option) field.onChange(String(option.value));
-										}}
-									>
-										<ComboboxTrigger asChild>
-											<Button variant="outline" testID="order-meta-cashier">
-												{cashierLabel || t('common.select_cashier')}
-											</Button>
-										</ComboboxTrigger>
-										<ComboboxContent portalHost="pos">
-											<ComboboxInput
-												testID="order-meta-cashier-search"
-												placeholder={t('common.search_cashiers')}
-												value={cashierSelect.search}
-												onChangeText={cashierSelect.setSearch}
-											/>
-											<Suspense>
-												<CustomerList select={cashierSelect} withGuest={false} />
-											</Suspense>
-										</ComboboxContent>
-									</Combobox>
-								</FormItem>
-							</View>
-						)}
-					/>
-				</HStack>
-				<Text className="text-muted-foreground text-sm">
-					{t('pos_cart.status_cashier_warning')}
-				</Text>
 				<FormField
 					control={form.control}
 					name="customer_note"
 					render={({ field }) => (
-						<FormTextarea
-							label={t('common.customer_note')}
-							testID="order-note-input"
-							minHeight={80}
-							{...field}
-						/>
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('common.customer_note')}</FormLabel>
+								<SavedMark name="customer_note" label={t('settings.saved')} />
+							</HStack>
+							<FormTextarea testID="order-note-input" minHeight={80} {...field} />
+						</FormItem>
 					)}
 				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="currency"
-						render={({ field: { onChange, value, ...rest } }) => (
-							<View className="flex-1">
-								<FormCombobox
-									customComponent={CurrencySelect}
-									label={t('common.currency')}
-									onChange={onChange}
-									value={value ?? ''}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="transaction_id"
-						render={({ field: { onChange, value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('common.transaction_id')}
-									testID="order-meta-transaction-id"
-									editable={false}
-									onChange={onChange}
-									value={value ?? ''}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<MetaDataForm hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+				<Form {...handOverForm}>
+					<View className="border-border gap-3 rounded-lg border p-4">
+						<Text className="font-semibold">{t('pos_cart.hand_over')}</Text>
+						<HStack className="gap-4">
+							<FormField
+								control={handOverForm.control}
+								name="status"
+								render={({ field }) => (
+									<View className="flex-1" testID="order-meta-status">
+										<FormSelect
+											label={t('common.status')}
+											customComponent={OrderStatusSelect}
+											allowed={allowedStatuses}
+											disabled={!statusPushable}
+											{...field}
+										/>
+									</View>
+								)}
+							/>
+							<FormField
+								control={handOverForm.control}
+								name="cashier_id"
+								render={({ field }) => (
+									<View className="flex-1" testID="order-meta-cashier">
+										<FormCombobox
+											label={t('common.cashier')}
+											customComponent={CashierSelect}
+											portalHost="pos"
+											{...field}
+											// An order with no cashier names the choice, not an empty box.
+											value={{
+												value: field.value,
+												label: cashierLabel || t('common.select_cashier'),
+											}}
+										/>
+									</View>
+								)}
+							/>
+						</HStack>
+						<HStack>
+							<Text className="text-muted-foreground flex-1 text-sm">
+								{t('pos_cart.hand_over_hint')}
+							</Text>
+							<Button
+								variant="outline"
+								testID="order-meta-send"
+								disabled={loading || (status === payload.status && cashierId === currentCashierId)}
+								onPress={() => void onSend()}
+							>
+								{t('common.send')}
+							</Button>
+						</HStack>
+					</View>
+				</Form>
+				<Collapsible>
+					<HStack className="justify-between">
+						<CollapsibleTrigger>
+							<Text>{t('common.more')}</Text>
+						</CollapsibleTrigger>
+						{/* The meta rows have no label row of their own; their mark sits on the disclosure. */}
+						<SavedMark name="meta_data" label={t('settings.saved')} />
+					</HStack>
+					<CollapsibleContent className="gap-4">
+						<FormField
+							control={form.control}
+							name="currency"
+							render={({ field }) => (
+								<FormItem>
+									<HStack className="justify-between">
+										<FormLabel>{t('common.currency')}</FormLabel>
+										<SavedMark name="currency" label={t('settings.saved')} />
+									</HStack>
+									<FormCombobox
+										customComponent={CurrencySelect}
+										{...field}
+										value={field.value ?? ''}
+									/>
+								</FormItem>
+							)}
+						/>
+						<MetaDataForm hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					</CollapsibleContent>
+				</Collapsible>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction testID="order-meta-save" onPress={() => void onSave()} disabled={loading}>
-					{t('common.save')}
-				</DialogAction>
-			</DialogFooter>
 			<AlertDialog
 				open={!!pending}
 				onOpenChange={(open) => {

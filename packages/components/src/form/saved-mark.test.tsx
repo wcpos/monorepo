@@ -15,14 +15,13 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 function Marks() {
 	const markSaved = useMarkSaved();
 	return (
 		<>
 			<button onClick={() => markSaved(['name'])}>Save name</button>
 			<button onClick={() => markSaved(['restore'])}>Restore</button>
-			<SavedMark name="name" />
+			<SavedMark name="name" label="Saved" />
 			<SavedMark name="restore" label="Restored" />
 		</>
 	);
@@ -41,14 +40,14 @@ it('shows only the last saved field, holds for 1200ms and uses the short opacity
 			<Marks />
 		</SavedFieldProvider>
 	);
-	expect(queryByTestId('settings-saved-name')).toBeNull();
+	expect(queryByTestId('saved-name')).toBeNull();
 	fireEvent.click(getByText('Save name'));
-	expect(getByTestId('settings-saved-name').textContent).toBe('settings.saved');
-	expect(queryByTestId('settings-saved-restore')).toBeNull();
+	expect(getByTestId('saved-name').textContent).toBe('Saved');
+	expect(queryByTestId('saved-restore')).toBeNull();
 	act(() => jest.advanceTimersByTime(1199));
-	expect(getByTestId('settings-saved-name')).toBeTruthy();
+	expect(getByTestId('saved-name')).toBeTruthy();
 	act(() => jest.advanceTimersByTime(1));
-	expect(queryByTestId('settings-saved-name')).toBeNull();
+	expect(queryByTestId('saved-name')).toBeNull();
 	expect(mockDuration).toHaveBeenCalledWith(220);
 });
 it('supports a result label and switches to the latest saved field', () => {
@@ -59,15 +58,15 @@ it('supports a result label and switches to the latest saved field', () => {
 	);
 	fireEvent.click(getByText('Save name'));
 	fireEvent.click(getByText('Restore'));
-	expect(getByTestId('settings-saved-restore').textContent).toBe('Restored');
-	expect(queryByTestId('settings-saved-name')).toBeNull();
+	expect(getByTestId('saved-restore').textContent).toBe('Restored');
+	expect(queryByTestId('saved-name')).toBeNull();
 });
 it('renders no mark and ignores writes on a page without a provider', () => {
 	const { getByText, queryByTestId } = render(<Marks />);
 	fireEvent.click(getByText('Save name'));
 	fireEvent.click(getByText('Restore'));
-	expect(queryByTestId('settings-saved-name')).toBeNull();
-	expect(queryByTestId('settings-saved-restore')).toBeNull();
+	expect(queryByTestId('saved-name')).toBeNull();
+	expect(queryByTestId('saved-restore')).toBeNull();
 });
 it('disappears without a fade under reduced motion', () => {
 	mockReduced = true;
@@ -78,7 +77,7 @@ it('disappears without a fade under reduced motion', () => {
 	);
 	fireEvent.click(getByText('Save name'));
 	act(() => jest.advanceTimersByTime(1200));
-	expect(queryByTestId('settings-saved-name')).toBeNull();
+	expect(queryByTestId('saved-name')).toBeNull();
 	expect(mockDuration).not.toHaveBeenCalled();
 });
 

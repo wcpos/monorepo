@@ -65,6 +65,7 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../../../contexts/translations', () => ({
@@ -113,10 +114,11 @@ it('closes through onBeforeVoid before the real VoidButton starts its flow', asy
 	await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
 	expect(mockSequence).toEqual(['close', 'guard', 'void']);
 });
-it('renders Save order on the existing save-to-server-button', async () => {
+it('renders Sync order on the existing save-to-server-button', async () => {
 	renderSheet();
+	expect(screen.getByTestId('order-print-button')).toBeTruthy();
 	const save = screen.getByTestId('save-to-server-button');
-	expect(save.textContent).toBe('Save order');
+	expect(save.textContent).toBe('Sync order');
 	fireEvent.click(save);
 	await waitFor(() => expect(mockPush).toHaveBeenCalledWith(mockOrder));
 });

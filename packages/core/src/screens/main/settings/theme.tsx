@@ -18,8 +18,8 @@ import { type Segment, SegmentedControl } from '@wcpos/components/segmented-cont
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import { patchStoreSettings } from '@wcpos/query/user-db';
+import { SavedFieldProvider, SavedMark, useMarkSaved } from '@wcpos/components/form';
 
-import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-mark';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -140,7 +140,7 @@ function ThemeGrid({
 				</Text>
 				{/* Out of flow beside the status line: the Scale row below never moves. */}
 				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-					<SavedMark name="theme" />
+					<SavedMark name="theme" label={t('settings.saved')} />
 				</View>
 			</View>
 		</>
@@ -232,7 +232,7 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 				<Text className="text-muted-foreground text-xs">{t('settings.icons.description')}</Text>
 				{/* Out of flow beside the description, like the theme's: the rows never move. */}
 				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-					<SavedMark name="icons" />
+					<SavedMark name="icons" label={t('settings.saved')} />
 				</View>
 			</View>
 			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
