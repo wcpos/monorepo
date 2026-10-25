@@ -31,12 +31,8 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 
-import {
-	createQuickFilterId,
-	getNamedOrderLabel,
-	isQuickFilterValid,
-	NAMED_ORDERS,
-} from './filter-bar-layout';
+import { getNamedOrderLabel, isQuickFilterValid, NAMED_ORDERS } from './filter-bar-layout';
+import { createQuickFilterId } from './quick-filter-id';
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { QUICK_FILTER_STARTERS } from './quick-filter-starters';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';

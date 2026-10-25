@@ -20,12 +20,12 @@ import { CaptureQuickFilter } from './capture-quick-filter';
 import { useFilterBarCommands } from './use-filter-bar-commands';
 import { FilterBarList } from './filter-bar-list';
 import {
-	createQuickFilterId,
 	isQuickFilterValid,
 	normalizeFilterBar,
 	quickFilterConditionSchema,
 	quickFilterSortSchema,
 } from './filter-bar-layout';
+import { createQuickFilterId } from './quick-filter-id';
 import { usePanelSide } from '../../contexts/overlay-side';
 import { QuickFilterEditor } from './quick-filter-editor';
 import { useT } from '../../../../../contexts/translations';

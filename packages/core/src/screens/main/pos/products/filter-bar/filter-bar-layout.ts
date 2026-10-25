@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import * as z from 'zod';
 
 export const BUILT_IN_PILL_IDS = [
@@ -88,8 +87,6 @@ export const DEFAULT_FILTER_BAR: FilterBarItem[] = BUILT_IN_PILL_IDS.map((id) =>
 	type: 'pill',
 	show: true,
 }));
-
-export const createQuickFilterId = (): string => uuidv4();
 
 export function normalizeFilterBar(persisted: unknown): FilterBarItem[] {
 	if (!Array.isArray(persisted)) return DEFAULT_FILTER_BAR;

@@ -8,7 +8,8 @@ import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { createQuickFilterId, describeCondition, getNamedOrderLabel } from './filter-bar-layout';
+import { describeCondition, getNamedOrderLabel } from './filter-bar-layout';
+import { createQuickFilterId } from './quick-filter-id';
 import { CONDITION_FIELDS, KIND_ICONS, TermSummary } from './quick-filter-editor';
 import { QuickFilterBarPreview } from './quick-filter-bar-preview';
 import { QuickFilterPreview } from './quick-filter-preview';
