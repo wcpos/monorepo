@@ -116,6 +116,29 @@ it('billing keeps following while it still equals the value the record held: a p
 	});
 	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'John');
 });
+it('an invalid billing draft does not ride along with the mirror: the stored billing carries it', async () => {
+	(payload as { billing?: unknown }).billing = { first_name: '', city: 'Paris', email: 'ok@x.io' };
+	formValues.billing = { first_name: '', city: 'Paris', email: 'not-an-email' };
+	form.trigger.mockResolvedValueOnce(false);
+	renderForm();
+	await expect(capturedChange({ first_name: 'Ada' })).resolves.toBe(true);
+	expect(form.trigger).toHaveBeenCalledWith('billing');
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: record,
+		data: { first_name: 'Ada', billing: { first_name: 'Ada', city: 'Paris', email: 'ok@x.io' } },
+	});
+	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'Ada');
+	delete (payload as { billing?: unknown }).billing;
+});
+it('a billing identity typed while the write was in flight is not levelled away', async () => {
+	mockLocalPatch.mockImplementationOnce(async () => {
+		(formValues.billing as Record<string, unknown>).first_name = 'Grace';
+		return { document: record, changes: {} };
+	});
+	renderForm();
+	await expect(capturedChange({ first_name: 'Ada' })).resolves.toBe(true);
+	expect(form.setValue).not.toHaveBeenCalled();
+});
 it('does not overwrite a billing identity the cashier set apart', async () => {
 	formValues.billing = { first_name: 'Grace' };
 	renderForm();

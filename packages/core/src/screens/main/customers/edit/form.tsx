@@ -82,11 +82,21 @@ function EditCustomerFormFields({ customer }: Props) {
 								writtenMetaKeys.current
 							)
 						: value;
+			// The mirror rides on the billing draft only while that draft is valid; otherwise on the
+			// stored billing, so an invalid email left in the draft never enters by the side door.
+			const billingBase = follows
+				? (await form.trigger('billing'))
+					? form.getValues('billing')
+					: customer.getLatest().payload.billing
+				: undefined;
 			const written = await saveCustomerFields(customer, {
 				[root]: wire,
-				...(follows ? { billing: { ...form.getValues('billing'), [root]: value } } : {}),
+				...(follows ? { billing: { ...billingBase, [root]: value } } : {}),
 			} as Partial<CustomerPayload>);
-			if (written && follows) form.setValue(`billing.${root}`, value as string);
+			// Level the draft only if the cashier has not typed into the billing field meanwhile.
+			if (written && follows && String(form.getValues(`billing.${root}`) ?? '') === mirrored) {
+				form.setValue(`billing.${root}`, value as string);
+			}
 			if (written) markSaved([root]);
 			return written;
 		},
