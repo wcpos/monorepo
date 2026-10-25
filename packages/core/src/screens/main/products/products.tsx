@@ -433,7 +433,10 @@ function ProductsList({
 				 */
 				variationStockStatus: state.filters.stock_status,
 			},
-			extraData: state.filters.stock_status,
+			// The style too: the variations button and the touch row read `meta.drill` when they
+			// render, so a flipped style must re-render them or they keep the other style's handler
+			// (a drill the inline style drops, a toggle the drill style wipes) and the button wedges.
+			extraData: [state.filters.stock_status, drillStyle],
 		}),
 		[
 			expandedRef,

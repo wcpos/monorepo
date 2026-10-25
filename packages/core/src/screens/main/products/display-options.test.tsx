@@ -72,7 +72,8 @@ it('shows the POS panel’s variations style above the columns and writes it to 
 	const drill = screen.getByTestId('products-variations-style-drill');
 	// The same words as the POS panel's control, above the columns.
 	expect(drill.textContent).toBe('pos_products.variations_open_in_place');
-	expect(inline.textContent).toBe('pos_products.variations_popover_and_rows');
+	// Always a table here, so never "popover".
+	expect(inline.textContent).toBe('pos_products.variations_expanded_rows');
 	expect(screen.getByText('pos_products.variations_style')).toBeTruthy();
 	expect(
 		drill.compareDocumentPosition(screen.getByTestId('columns-list')) &

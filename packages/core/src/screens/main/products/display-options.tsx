@@ -32,7 +32,8 @@ function VariationsStyle() {
 					},
 					{
 						value: 'inline',
-						label: t('pos_products.variations_popover_and_rows'),
+						// This page is always a table: no popover here.
+						label: t('pos_products.variations_expanded_rows'),
 						testID: 'products-variations-style-inline',
 					},
 				]}
