@@ -5,27 +5,24 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, VariationPayload } from '@wcpos/query';
-import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { useAppInfo } from '../../../../../hooks/use-app-info';
@@ -44,8 +41,6 @@ import {
 } from '../../product-actions';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
-const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
-
 const schema = z.object({
 	regular_price: z.string(),
 	sale_price: z.string(),
@@ -58,6 +53,8 @@ const schema = z.object({
 	tax_class: z.string(),
 	meta_data: metaDataSchema,
 });
+
+type FormValues = z.infer<typeof schema>;
 
 interface Props {
 	variation: EngineRecord<'variations'>;
@@ -82,9 +79,16 @@ function formValues(variationData: VariationPayload): z.infer<typeof schema> {
 /**
  *
  */
-export function EditVariationForm({ variation }: Props) {
+export function EditVariationForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditVariationFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditVariationFormFields({ variation }: Props) {
 	const t = useT();
-	const [loading, setLoading] = React.useState(false);
 	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
@@ -93,71 +97,39 @@ export function EditVariationForm({ variation }: Props) {
 	if (!variation) {
 		throw new Error('Variation not found');
 	}
-	const form = useForm<z.infer<typeof schema>>({
+	const form = useForm<FormValues>({
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(variation.toMutableJSON().payload),
 	});
-	// Sync means "take the store's copy": the landed refresh replaces unsaved edits.
+	const markSaved = useMarkSaved();
+	const { flush } = useFormChangeHandler({
+		form,
+		onChange: async (changes) => {
+			// The licence-gated read-only form never writes: the route is closed to it, a typed URL is not.
+			if (readOnly) return false;
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			const wire =
+				root === 'tax_class'
+					? taxClassToWire(form.getValues('tax_class'))
+					: root === 'meta_data' && Array.isArray(value)
+						? value.filter((row) => row?.id != null || String(row?.key ?? '') !== '')
+						: value;
+			const written = await saveCatalogueFields(variation, {
+				[root]: wire,
+			} as Partial<VariationPayload>);
+			if (written) markSaved([root]);
+			return written;
+		},
+	});
+	// Sync flushes the pending edit first, then takes the store's copy; resetting the draft
+	// prevents a debounced write from putting stale values back over the pulled ones.
 	const actions = useVariationActions(variation, {
 		onDeleted: close,
+		beforeSync: flush,
 		onSynced: () => form.reset(formValues(variation.getLatest().payload as VariationPayload)),
 	});
-
-	/**
-	 * Handle save button click
-	 */
-	const handleSave = React.useCallback(
-		async (data: z.infer<typeof schema>) => {
-			data.tax_class = taxClassToWire(data.tax_class);
-			setLoading(true);
-			try {
-				const savedFields = await saveCatalogueFields(variation, data as Partial<VariationPayload>);
-				// localPatch reports its own failure (row + toast) and resolves undefined;
-				// reporting it again put a second row and toast on one failed save.
-				if (!savedFields) return;
-				const saved = variation.getLatest().payload;
-				mutationLogger.success(t('common.saved', { name: saved.name }), {
-					showToast: true,
-					context: {
-						variationId: saved.id,
-						variationName: saved.name,
-					},
-				});
-				close();
-			} catch (error) {
-				// A localPatch rethrow (the scope moved twice) is already reported.
-				if (isErrorReported(error)) return;
-				const errorMessage = getErrorMessage(error);
-				mutationLogger.error('Failed to save product variation', {
-					showToast: true,
-					// A local save: the store was never contacted, so no "store refused" code.
-					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-					toast: { title: t('products.failed_to_save_variation') },
-					context: {
-						variationId: variation.getLatest().payload.id,
-						error: errorMessage,
-					},
-				});
-			} finally {
-				setLoading(false);
-			}
-		},
-		[close, saveCatalogueFields, variation, t]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
-	const formActions = (
-		<>
-			<DialogClose>{t('common.cancel')}</DialogClose>
-			<DialogAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
-				<Button loading={loading}>{t('common.save')}</Button>
-			</DialogAction>
-		</>
-	);
-	// With record actions, two wrapping groups: the record's on the left, Cancel/Save on the right.
+	// The record's actions on the left, Close on the right.
 	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
@@ -172,18 +144,26 @@ export function EditVariationForm({ variation }: Props) {
 						control={form.control}
 						name="sku"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.sku')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.sku')}</FormLabel>
+									<SavedMark name="sku" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="barcode"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.barcode')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.barcode')}</FormLabel>
+									<SavedMark name="barcode" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -192,26 +172,26 @@ export function EditVariationForm({ variation }: Props) {
 						control={form.control}
 						name="regular_price"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('common.regular_price')}
-									{...field}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.regular_price')}</FormLabel>
+									<SavedMark name="regular_price" label={t('settings.saved')} />
+								</HStack>
+								<FormInput customComponent={CurrencyInput} {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="sale_price"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('common.sale_price')}
-									{...field}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.sale_price')}</FormLabel>
+									<SavedMark name="sale_price" label={t('settings.saved')} />
+								</HStack>
+								<FormInput customComponent={CurrencyInput} {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -236,13 +216,18 @@ export function EditVariationForm({ variation }: Props) {
 							control={form.control}
 							name="stock_quantity"
 							render={({ field: { value, ...rest } }) => (
-								<FormInput
-									customComponent={NumberInput}
-									type="numeric"
-									label={t('products.stock_quantity')}
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
+								<FormItem>
+									<HStack className="justify-between">
+										<FormLabel>{t('products.stock_quantity')}</FormLabel>
+										<SavedMark name="stock_quantity" label={t('settings.saved')} />
+									</HStack>
+									<FormInput
+										customComponent={NumberInput}
+										type="numeric"
+										value={value != null ? String(value) : undefined}
+										{...rest}
+									/>
+								</FormItem>
 							)}
 						/>
 						<FormField
@@ -285,14 +270,8 @@ export function EditVariationForm({ variation }: Props) {
 				<MetaDataForm />
 			</DialogBody>
 			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
-				{leading ? (
-					<>
-						<RecordFooterActions actions={actions} testIDPrefix="variation" />
-						<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
-					</>
-				) : (
-					formActions
-				)}
+				{leading && <RecordFooterActions actions={actions} testIDPrefix="variation" />}
+				<DialogClose testID="variation-edit-close-button">{t('common.close')}</DialogClose>
 			</DialogFooter>
 			{!readOnly && actions.canDelete && (
 				<DeleteVariationDialog

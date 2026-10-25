@@ -3,19 +3,19 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { EditProductForm } from './form';
 import { EditVariationForm } from '../variation/form';
 
 const mockLocalPatch = jest.fn();
-const mockDialogClose = jest.fn();
-const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
+const mockMarkSaved = jest.fn();
+const mockFlush = jest.fn(async () => true);
+let capturedChange: (changes: Record<string, unknown>) => boolean | Promise<boolean>;
 
-const formValues = {
+const formValues: Record<string, unknown> = {
 	name: 'Test product',
 	categories: [{ value: '7', label: 'Category 7' }],
 	regular_price: '10',
@@ -31,10 +31,8 @@ const formValues = {
 
 const form = {
 	control: {},
-	handleSubmit: jest.fn(
-		(callback: (data: typeof formValues) => unknown) => () =>
-			callback({ ...formValues, categories: [...formValues.categories] })
-	),
+	getValues: jest.fn((name?: string) => (name ? formValues[name] : formValues)),
+	reset: jest.fn(),
 };
 const mockUseForm = jest.fn((_options: unknown) => form);
 
@@ -51,6 +49,15 @@ jest.mock('@wcpos/components/form', () => ({
 		name: string;
 		render: (input: { field: Record<string, unknown> }) => React.ReactNode;
 	}) => renderField({ field: { name, value: '', onChange: jest.fn() } }),
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedMark: () => null,
+	useMarkSaved: () => mockMarkSaved,
+	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
+		capturedChange = options.onChange;
+		return { flush: mockFlush };
+	},
 	FormInput: () => null,
 	FormRadioGroup: () => null,
 	FormSelect: () => null,
@@ -63,29 +70,11 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogAction: ({
-		children,
-		onPress,
-		disabled,
-		testID,
-	}: React.PropsWithChildren<{
-		onPress?: () => unknown;
-		disabled?: boolean;
-		testID?: string;
-	}>) => {
-		if (testID) {
-			modalActions.set(testID, { onPress, disabled: !!disabled });
-		}
-		return <>{children}</>;
-	},
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useDialog: () => ({ close: mockDialogClose }),
+	useDialog: () => ({ close: jest.fn() }),
 }));
 
 jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
@@ -118,20 +107,21 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 
 let mockIsPro = true;
 let mockOnSynced: (() => void) | undefined;
+let mockBeforeSync: (() => Promise<boolean>) | undefined;
+type ActionCallbacks = { onSynced?: () => void; beforeSync?: () => Promise<boolean> };
 jest.mock('../../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
 }));
 // The record actions are `product-actions.test.tsx`'s; here only their place in the footer.
 jest.mock('../../product-actions', () => {
-	const actions = (callbacks: { onSynced?: () => void }) => {
+	const actions = (callbacks: ActionCallbacks) => {
 		mockOnSynced = callbacks.onSynced;
+		mockBeforeSync = callbacks.beforeSync;
 		return { canDelete: true, canSync: true, deleteOpen: false };
 	};
 	return {
-		useProductActions: (_record: unknown, callbacks: { onSynced?: () => void }) =>
-			actions(callbacks),
-		useVariationActions: (_record: unknown, callbacks: { onSynced?: () => void }) =>
-			actions(callbacks),
+		useProductActions: (_record: unknown, callbacks: ActionCallbacks) => actions(callbacks),
+		useVariationActions: (_record: unknown, callbacks: ActionCallbacks) => actions(callbacks),
 		RecordFooterActions: ({ testIDPrefix }: { testIDPrefix: string }) => (
 			<div data-testid={`${testIDPrefix}-record-actions`} />
 		),
@@ -144,7 +134,7 @@ const productData = {
 	id: 5,
 	name: 'Test product',
 	categories: [],
-	meta_data: [],
+	meta_data: [] as { id?: number; key?: string; value?: unknown }[],
 };
 const product = {
 	uuid: 'product-5',
@@ -154,14 +144,15 @@ const product = {
 	collection: { name: 'products' },
 } as unknown as EngineRecord<'products'>;
 
-/**
- * The edit modal must dismiss itself after a successful save, but a failed
- * save has to keep the form on screen so the cashier can correct and retry.
- */
-describe('EditProductForm save', () => {
+/** Field edits write only their root and acknowledge only a successful local patch. */
+describe('catalogue form autosave', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		modalActions.clear();
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
+		formValues.name = 'Test product';
+		formValues.meta_data = [];
+		productData.meta_data = [];
+		mockBeforeSync = undefined;
 		mockIsPro = true;
 	});
 
@@ -186,45 +177,93 @@ describe('EditProductForm save', () => {
 	});
 
 	it('puts the record actions in the footer on Pro only, and Sync resets the form from the store copy', () => {
-		const reset = jest.fn();
-		Object.assign(form, { reset });
 		const { unmount } = render(<EditProductForm product={product} />);
 		expect(screen.getByTestId('product-record-actions')).toBeTruthy();
 		mockOnSynced!();
-		expect(reset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test product' }));
+		expect(form.reset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test product' }));
 		unmount();
 		mockIsPro = false;
 		render(<EditProductForm product={product} />);
 		expect(screen.queryByTestId('product-record-actions')).toBeNull();
 	});
 
-	it('closes the modal after a successful save', async () => {
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
+	it('a name edit writes only the name and marks it saved', async () => {
+		formValues.name = 'Renamed';
 		render(<EditProductForm product={product} />);
 
-		await act(async () => {
-			await modalActions.get('product-edit-save-button')!.onPress!();
-		});
+		await expect(capturedChange({ name: 'Renamed' })).resolves.toBe(true);
 
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		// The form's 'standard' must leave as the wire spelling '' (WC REST rejects 'standard').
-		expect(mockLocalPatch).toHaveBeenCalledWith(
-			expect.objectContaining({ data: expect.objectContaining({ tax_class: '' }) })
-		);
-		expect(mockDialogClose).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: product, data: { name: 'Renamed' } });
+		expect(mockMarkSaved).toHaveBeenCalledWith(['name']);
 	});
 
-	it('keeps the modal open when the local patch fails', async () => {
-		// localPatch swallows write errors and resolves undefined
-		mockLocalPatch.mockResolvedValue(undefined);
+	it('categories write id and name rows rather than form options', async () => {
 		render(<EditProductForm product={product} />);
 
-		await act(async () => {
-			await modalActions.get('product-edit-save-button')!.onPress!();
+		await capturedChange({ categories: formValues.categories });
+
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: product,
+			data: { categories: [{ id: 7, name: 'Category 7' }] },
+		});
+	});
+
+	describe.each(['product', 'variation'] as const)('%s', (kind) => {
+		const renderForm = () =>
+			render(
+				kind === 'product' ? (
+					<EditProductForm product={product} />
+				) : (
+					<EditVariationForm variation={product as unknown as EngineRecord<'variations'>} />
+				)
+			);
+
+		it('tax_class leaves as the wire spelling', async () => {
+			renderForm();
+
+			await capturedChange({ tax_class: 'standard' });
+
+			expect(mockLocalPatch).toHaveBeenCalledWith({ document: product, data: { tax_class: '' } });
 		});
 
-		expect(mockDialogClose).not.toHaveBeenCalled();
-		// localPatch already wrote its SYNC101 row and toast; no second report here.
-		expect(getLogger([]).error).not.toHaveBeenCalled();
+		it('a nested meta path writes the root without a just-added blank row', async () => {
+			formValues.meta_data = [
+				{ id: 3, key: 'a', value: 'b' },
+				{ key: '', value: '' },
+			];
+			renderForm();
+
+			await capturedChange({ 'meta_data.1.key': '' });
+
+			expect(mockLocalPatch).toHaveBeenCalledWith({
+				document: product,
+				data: { meta_data: [{ id: 3, key: 'a', value: 'b' }] },
+			});
+		});
+
+		it('a failed write returns false with no mark', async () => {
+			mockLocalPatch.mockResolvedValue(undefined);
+			renderForm();
+
+			await expect(capturedChange({ tax_class: 'standard' })).resolves.toBe(false);
+
+			expect(mockMarkSaved).not.toHaveBeenCalled();
+		});
+
+		it('the read-only form refuses the write and marks nothing', async () => {
+			mockIsPro = false;
+			renderForm();
+
+			expect(await capturedChange({ name: 'x' })).toBe(false);
+
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockMarkSaved).not.toHaveBeenCalled();
+		});
+
+		it('gives Sync the autosave flush', () => {
+			renderForm();
+			expect(mockBeforeSync).toBe(mockFlush);
+		});
 	});
 });
