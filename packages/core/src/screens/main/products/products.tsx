@@ -231,6 +231,9 @@ function DrillPane({
 /** The products table's head over the pane's rows: plain labels at the rows' widths. */
 function PaneHeadRow({ table }: { table: Drill['row']['table'] }) {
 	// Mirrors `DataTableBody`'s head row (components/data-table), without its sort and resize.
+	// No memo: the table instance is stable across a column change, so a compiled cache keyed
+	// on it would keep the old labels over rows that already moved (facebook/react#33057).
+	'use no memo';
 	return (
 		<TableHeader>
 			{table.getHeaderGroups().map((group) => (
