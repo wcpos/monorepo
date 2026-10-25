@@ -23,6 +23,7 @@ export function EditableField({
 	variant = 'outline',
 	numberOfLines = 1,
 	startEditing = false,
+	onChangeDraft,
 	...props
 }: InputProps & {
 	bold?: boolean;
@@ -30,6 +31,12 @@ export function EditableField({
 	numberOfLines?: number;
 	/** Mount in edit mode, focused: a field the owner has just added. */
 	startEditing?: boolean;
+	/**
+	 * Every keystroke, not only the commit. A form that other actions read (a footer's
+	 * "Update customer too", an autosave) sees the draft even when the editor never blurs,
+	 * which a native Pressable does not force. `onChangeText` still fires on blur or Enter.
+	 */
+	onChangeDraft?: (text: string) => void;
 }) {
 	const [editing, setEditing] = React.useState(startEditing && editable);
 	// Internal editing value - separate from controlled prop
@@ -90,6 +97,7 @@ export function EditableField({
 				onChangeText={(text) => {
 					setEditDirty(true);
 					setEditValue(text);
+					onChangeDraft?.(text);
 				}}
 				autoFocus
 				onBlur={handleSubmit}

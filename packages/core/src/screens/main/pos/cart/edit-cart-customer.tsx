@@ -394,6 +394,9 @@ function TextPart(props: { name: string; placeholder: string; autoFocus?: boolea
 						bold={false}
 						value={field.value ?? ''}
 						onChangeText={field.onChange}
+						// The draft reaches the form as it is typed: a footer action or a dismissal
+						// on native does not blur the editor, and must not read the previous value.
+						onChangeDraft={field.onChange}
 						placeholder={props.placeholder}
 						startEditing={props.autoFocus}
 					/>

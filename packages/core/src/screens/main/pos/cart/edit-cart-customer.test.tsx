@@ -174,14 +174,17 @@ jest.mock('../../../../contexts/translations', () => ({
 		options?.label ? `${key}:${options.label}` : key,
 }));
 jest.mock('../../components/editable-field', () => ({
+	// Like the real field: the draft on every change, the commit on blur.
 	EditableField: ({
 		value,
 		onChangeText,
+		onChangeDraft,
 		placeholder,
 		startEditing,
 	}: {
 		value: string;
 		onChangeText: (value: string) => void;
+		onChangeDraft?: (value: string) => void;
 		placeholder: string;
 		startEditing?: boolean;
 	}) => (
@@ -189,7 +192,8 @@ jest.mock('../../components/editable-field', () => ({
 			aria-label={placeholder}
 			value={value}
 			autoFocus={startEditing}
-			onChange={(event) => onChangeText(event.target.value)}
+			onChange={(event) => onChangeDraft!(event.target.value)}
+			onBlur={(event) => onChangeText(event.target.value)}
 		/>
 	),
 }));
@@ -308,6 +312,26 @@ describe('EditCartCustomerForm', () => {
 		// The form toasts "Saved {name}" itself, so the hook's generic toast stays off.
 		expect(mockUseMutationProps).toHaveBeenCalledWith(
 			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
+		);
+	});
+
+	it('Update customer too saves the draft still being typed, with no blur', async () => {
+		const customer = { id: 42, first_name: 'Ada' };
+		customerFindOne.mockReturnValue({ exec: () => Promise.resolve(customer) });
+		render(<EditCartCustomerForm />);
+		// A change without a blur: on native a footer press does not blur the editor.
+		fireEvent.change(screen.getByRole('textbox', { name: 'common.first_name' }), {
+			target: { value: 'Grace' },
+		});
+		fireEvent.click(screen.getByRole('button', { name: 'pos_cart.update_customer_too' }));
+		await waitFor(() =>
+			expect(patchCustomer).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({
+						billing: expect.objectContaining({ first_name: 'Grace' }),
+					}),
+				})
+			)
 		);
 	});
 
