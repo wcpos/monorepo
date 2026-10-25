@@ -661,7 +661,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		// A simple product's caret (a variable product's is `product-expand-button`).
+		// Every row opens its product: a simple product's caret, a variable product's name.
 		const openButton = screen.getByTestId('product-open-button').first();
 		await expect(openButton).toBeVisible({ timeout: 15_000 });
 		test.skip(

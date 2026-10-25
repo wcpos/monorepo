@@ -71,6 +71,7 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../data-table/rows', () => ({ DataTableRow: () => null }));
+jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../data-table/column-style', () => ({
 	getColumnStyle: () => ({}),
 }));

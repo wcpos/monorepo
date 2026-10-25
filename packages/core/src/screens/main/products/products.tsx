@@ -143,7 +143,8 @@ function renderFineItem(
 		index: number;
 		table: Table<ProductRow, DataTableFeatures>;
 	},
-	openProduct?: (uuid: string) => void
+	openProduct?: (uuid: string) => void,
+	openLabel?: string
 ) {
 	// The row is the open control on every pointer, as the touch row is: a variable product's
 	// toggles its variations, a simple one's opens the product when the cashier may edit it.
@@ -155,6 +156,8 @@ function renderFineItem(
 			<DataTableRow
 				item={item}
 				onPress={openProduct ? () => openProduct(item.original.record.uuid) : undefined}
+				// The row's name when it is the only control (the Actions column hidden).
+				accessibilityLabel={openProduct ? openLabel : undefined}
 			/>
 		</VirtualizedList.Item>
 	);
@@ -317,7 +320,7 @@ function ProductsList({
 					actions={tableActions}
 					renderItem={(props) =>
 						pointer === 'fine' ? (
-							renderFineItem(props, openProduct)
+							renderFineItem(props, openProduct, t('products.open_product', { _: 'Open product' }))
 						) : (
 							<VirtualizedList.Item>
 								<View

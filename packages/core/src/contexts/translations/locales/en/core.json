@@ -1007,6 +1007,7 @@
 	"products.open_product": "Open product",
 	"products.open_variation": "Open variation",
 	"products.show_variations": "Show variations",
+	"products.hide_variations": "Hide variations",
 	"orders.items": "Items",
 	"orders.local_refund_summary": "Local refund summary:",
 	"orders.net_payment": "Net Payment",

@@ -38,12 +38,17 @@ export function useCouponActions(
 	const [force, setForce] = React.useState(!id);
 
 	const sync = React.useCallback(() => {
+		// A pull can resolve without applying the row (the engine keeps a row with pending local
+		// work): only a new revision, a new document object, is the store's copy landing.
+		const before = record.getLatest();
 		void refreshCollection(runtime.engine, {
 			id: 'coupon-actions:refresh',
 			collection: 'coupons',
 		})
 			// Only a refresh that landed hands the form the store's copy.
-			.then(() => onSynced?.())
+			.then(() => {
+				if (record.getLatest() !== before) onSynced?.();
+			})
 			.catch((error) => {
 				// The engine already wrote the coded row for this require (SYNC321), and the
 				// device's copy is untouched: the cashier only needs to know it didn't refresh.
@@ -55,7 +60,7 @@ export function useCouponActions(
 					},
 				});
 			});
-	}, [runtime, t, onSynced]);
+	}, [runtime, t, onSynced, record]);
 
 	// Each opening starts from the default: a coupon never pushed is force-deleted.
 	const setDeleteOpen = React.useCallback(

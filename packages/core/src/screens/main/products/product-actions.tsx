@@ -44,13 +44,18 @@ function useCatalogueActions(
 
 	const sync = React.useCallback(() => {
 		if (!id) return;
+		// A pull can resolve without applying the row (the engine keeps a row with pending local
+		// work): only a new revision, a new document object, is the store's copy landing.
+		const before = record.getLatest();
 		void refreshRecordByWooId(runtime.engine, {
 			id: `${product ? 'product' : 'variation'}-actions:refresh:${id}`,
 			collection,
 			wooId: id,
 		})
 			// Only a refresh that landed hands the form the store's copy.
-			.then(() => onSynced?.())
+			.then(() => {
+				if (record.getLatest() !== before) onSynced?.();
+			})
 			.catch((error) => {
 				// The engine already wrote the coded row for this require (SYNC321), and the
 				// device's copy is untouched: the cashier only needs to know it didn't refresh.
@@ -60,7 +65,7 @@ function useCatalogueActions(
 					context: { [product ? 'productId' : 'variationId']: id, error: getErrorMessage(error) },
 				});
 			});
-	}, [id, runtime, t, onSynced, collection, product]);
+	}, [id, runtime, t, onSynced, collection, product, record]);
 
 	const confirmDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, { collection, recordId: record.uuid });

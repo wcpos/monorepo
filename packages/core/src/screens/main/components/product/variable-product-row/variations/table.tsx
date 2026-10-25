@@ -131,6 +131,8 @@ export function VariationsTable({ handle, row, stockStatus, openVariation }: Pro
 							item={row}
 							testID={testID ?? `data-table-row-variation-${hit.record.uuid}`}
 							onPress={() => openVariation(hit.record)}
+							// The row's name when it is the only control (the Actions column hidden).
+							accessibilityLabel={hit.record.payload.name || hit.record.uuid}
 							renderCell={(cell) => flexRender(cellRenderer, subrowContext(cell, hit))}
 						/>
 					);
