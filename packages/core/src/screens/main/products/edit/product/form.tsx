@@ -31,6 +31,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
 import { useT } from '../../../../../contexts/translations';
+import { useAppInfo } from '../../../../../hooks/use-app-info';
 import { CurrencyInput } from '../../../components/currency-input';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
@@ -40,6 +41,7 @@ import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
 import { useCatalogueRecord } from '../../commands/use-catalogue-record';
+import { DeleteProductDialog, RecordFooterActions, useProductActions } from '../../product-actions';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
@@ -68,6 +70,31 @@ interface Props {
 	product: EngineRecord<'products'>;
 }
 
+/** The form's values for a payload: at open, and again when Sync lands the store's copy. */
+function formValues(productData: ProductPayload): z.infer<typeof schema> {
+	return {
+		name: productData.name,
+		categories:
+			productData.categories?.map((c) => ({
+				value: String(c.id),
+				label: c.name ?? '',
+			})) ?? [],
+		status: productData.status,
+		featured: productData.featured,
+		virtual: productData.virtual ?? false,
+		downloadable: productData.downloadable ?? false,
+		sku: productData.sku,
+		regular_price: productData.regular_price,
+		sale_price: productData.sale_price,
+		stock_quantity: productData.stock_quantity,
+		manage_stock: productData.manage_stock,
+		barcode: productData.barcode,
+		tax_status: productData.tax_status,
+		tax_class: taxClassFromWire(productData.tax_class),
+		meta_data: productData.meta_data,
+	} as z.infer<typeof schema>;
+}
+
 /**
  *
  */
@@ -77,38 +104,21 @@ export function EditProductForm({ product }: Props) {
 	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
+	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
+	const readOnly = !(useAppInfo().license?.isPro ?? false);
 
 	if (!product) {
 		throw new Error(t('products.product_not_found'));
 	}
-	const productData = product.toMutableJSON().payload;
-
-	/**
-	 *
-	 */
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema as never) as never,
-		defaultValues: {
-			name: productData.name,
-			categories:
-				productData.categories?.map((c) => ({
-					value: String(c.id),
-					label: c.name ?? '',
-				})) ?? [],
-			status: productData.status,
-			featured: productData.featured,
-			virtual: productData.virtual ?? false,
-			downloadable: productData.downloadable ?? false,
-			sku: productData.sku,
-			regular_price: productData.regular_price,
-			sale_price: productData.sale_price,
-			stock_quantity: productData.stock_quantity,
-			manage_stock: productData.manage_stock,
-			barcode: productData.barcode,
-			tax_status: productData.tax_status,
-			tax_class: taxClassFromWire(productData.tax_class),
-			meta_data: productData.meta_data,
-		},
+		defaultValues: formValues(product.toMutableJSON().payload),
+	});
+	// Sync means "take the store's copy": the landed refresh replaces unsaved edits, so a later
+	// Save cannot write the stale values back over it.
+	const actions = useProductActions(product, {
+		onDeleted: close,
+		onSynced: () => form.reset(formValues(product.getLatest().payload as ProductPayload)),
 	});
 
 	/**
@@ -165,6 +175,16 @@ export function EditProductForm({ product }: Props) {
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSave);
+	const formActions = (
+		<>
+			<DialogClose testID="product-edit-cancel-button">{t('common.cancel')}</DialogClose>
+			<DialogAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
+				<Button loading={loading}>{t('common.save')}</Button>
+			</DialogAction>
+		</>
+	);
+	// With record actions, two wrapping groups: the record's on the left, Cancel/Save on the right.
+	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
 	 *
@@ -349,12 +369,24 @@ export function EditProductForm({ product }: Props) {
 				</HStack>
 				<MetaDataForm />
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose testID="product-edit-cancel-button">{t('common.cancel')}</DialogClose>
-				<DialogAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
-					<Button loading={loading}>{t('common.save')}</Button>
-				</DialogAction>
+			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
+				{leading ? (
+					<>
+						<RecordFooterActions actions={actions} testIDPrefix="product" />
+						<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+					</>
+				) : (
+					formActions
+				)}
 			</DialogFooter>
+			{!readOnly && actions.canDelete && (
+				<DeleteProductDialog
+					record={product}
+					open={actions.deleteOpen}
+					onOpenChange={actions.setDeleteOpen}
+					onConfirm={() => void actions.confirmDelete()}
+				/>
+			)}
 		</Form>
 	);
 }

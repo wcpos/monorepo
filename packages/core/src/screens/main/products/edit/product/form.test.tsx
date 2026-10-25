@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -116,6 +116,30 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
+let mockIsPro = true;
+let mockOnSynced: (() => void) | undefined;
+jest.mock('../../../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+// The record actions are `product-actions.test.tsx`'s; here only their place in the footer.
+jest.mock('../../product-actions', () => {
+	const actions = (callbacks: { onSynced?: () => void }) => {
+		mockOnSynced = callbacks.onSynced;
+		return { canDelete: true, canSync: true, deleteOpen: false };
+	};
+	return {
+		useProductActions: (_record: unknown, callbacks: { onSynced?: () => void }) =>
+			actions(callbacks),
+		useVariationActions: (_record: unknown, callbacks: { onSynced?: () => void }) =>
+			actions(callbacks),
+		RecordFooterActions: ({ testIDPrefix }: { testIDPrefix: string }) => (
+			<div data-testid={`${testIDPrefix}-record-actions`} />
+		),
+		DeleteProductDialog: () => null,
+		DeleteVariationDialog: () => null,
+	};
+});
+
 const productData = {
 	id: 5,
 	name: 'Test product',
@@ -138,6 +162,7 @@ describe('EditProductForm save', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		modalActions.clear();
+		mockIsPro = true;
 	});
 
 	it('reports a missing product before reading its payload', () => {
@@ -158,6 +183,19 @@ describe('EditProductForm save', () => {
 		expect(mockUseForm).toHaveBeenCalledWith(
 			expect.objectContaining({ defaultValues: expect.objectContaining({ name: 'Test product' }) })
 		);
+	});
+
+	it('puts the record actions in the footer on Pro only, and Sync resets the form from the store copy', () => {
+		const reset = jest.fn();
+		Object.assign(form, { reset });
+		const { unmount } = render(<EditProductForm product={product} />);
+		expect(screen.getByTestId('product-record-actions')).toBeTruthy();
+		mockOnSynced!();
+		expect(reset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test product' }));
+		unmount();
+		mockIsPro = false;
+		render(<EditProductForm product={product} />);
+		expect(screen.queryByTestId('product-record-actions')).toBeNull();
 	});
 
 	it('closes the modal after a successful save', async () => {

@@ -28,6 +28,7 @@ import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
+import { useAppInfo } from '../../../../../hooks/use-app-info';
 import { CurrencyInput } from '../../../components/currency-input';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
@@ -36,6 +37,11 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { useCatalogueRecord } from '../../commands/use-catalogue-record';
+import {
+	DeleteVariationDialog,
+	RecordFooterActions,
+	useVariationActions,
+} from '../../product-actions';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
@@ -57,6 +63,22 @@ interface Props {
 	variation: EngineRecord<'variations'>;
 }
 
+/** The form's values for a payload: at open, and again when Sync lands the store's copy. */
+function formValues(variationData: VariationPayload): z.infer<typeof schema> {
+	return {
+		status: variationData.status,
+		sku: variationData.sku,
+		regular_price: variationData.regular_price,
+		sale_price: variationData.sale_price,
+		stock_quantity: variationData.stock_quantity,
+		manage_stock: variationData.manage_stock,
+		barcode: variationData.barcode,
+		tax_status: variationData.tax_status,
+		tax_class: taxClassFromWire(variationData.tax_class),
+		meta_data: variationData.meta_data,
+	} as z.infer<typeof schema>;
+}
+
 /**
  *
  */
@@ -65,29 +87,20 @@ export function EditVariationForm({ variation }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
+	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
+	const readOnly = !(useAppInfo().license?.isPro ?? false);
 
 	if (!variation) {
 		throw new Error('Variation not found');
 	}
-	const variationData = variation.toMutableJSON().payload;
-
-	/**
-	 *
-	 */
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema as never) as never,
-		defaultValues: {
-			status: variationData.status,
-			sku: variationData.sku,
-			regular_price: variationData.regular_price,
-			sale_price: variationData.sale_price,
-			stock_quantity: variationData.stock_quantity,
-			manage_stock: variationData.manage_stock,
-			barcode: variationData.barcode,
-			tax_status: variationData.tax_status,
-			tax_class: taxClassFromWire(variationData.tax_class),
-			meta_data: variationData.meta_data,
-		},
+		defaultValues: formValues(variation.toMutableJSON().payload),
+	});
+	// Sync means "take the store's copy": the landed refresh replaces unsaved edits.
+	const actions = useVariationActions(variation, {
+		onDeleted: close,
+		onSynced: () => form.reset(formValues(variation.getLatest().payload as VariationPayload)),
 	});
 
 	/**
@@ -136,6 +149,16 @@ export function EditVariationForm({ variation }: Props) {
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSave);
+	const formActions = (
+		<>
+			<DialogClose>{t('common.cancel')}</DialogClose>
+			<DialogAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
+				<Button loading={loading}>{t('common.save')}</Button>
+			</DialogAction>
+		</>
+	);
+	// With record actions, two wrapping groups: the record's on the left, Cancel/Save on the right.
+	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
 	 *
@@ -261,12 +284,24 @@ export function EditVariationForm({ variation }: Props) {
 				</HStack>
 				<MetaDataForm />
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
-					<Button loading={loading}>{t('common.save')}</Button>
-				</DialogAction>
+			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
+				{leading ? (
+					<>
+						<RecordFooterActions actions={actions} testIDPrefix="variation" />
+						<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+					</>
+				) : (
+					formActions
+				)}
 			</DialogFooter>
+			{!readOnly && actions.canDelete && (
+				<DeleteVariationDialog
+					record={variation}
+					open={actions.deleteOpen}
+					onOpenChange={actions.setDeleteOpen}
+					onConfirm={() => void actions.confirmDelete()}
+				/>
+			)}
 		</Form>
 	);
 }

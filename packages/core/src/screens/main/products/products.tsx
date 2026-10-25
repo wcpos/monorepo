@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import omit from 'lodash/omit';
+import { useRouter } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -39,7 +40,9 @@ import { VariableProductPrice } from '../components/product/variable-price';
 import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
+import { useProAccess } from '../contexts/pro-access';
 import { useTaxSettings } from '../contexts/tax-rates';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import { useCatalogueRecord } from './commands/use-catalogue-record';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
@@ -130,21 +133,29 @@ function variationRenderCell({ column }: { column: { id: string } }) {
 /**
  *
  */
-function renderFineItem({
-	item,
-	index,
-	table,
-}: {
-	item: Row<ProductRow, DataTableFeatures>;
-	index: number;
-	table: Table<ProductRow, DataTableFeatures>;
-}) {
+function renderFineItem(
+	{
+		item,
+		index,
+		table,
+	}: {
+		item: Row<ProductRow, DataTableFeatures>;
+		index: number;
+		table: Table<ProductRow, DataTableFeatures>;
+	},
+	openProduct?: (uuid: string) => void
+) {
+	// The row is the open control on every pointer, as the touch row is: a variable product's
+	// toggles its variations, a simple one's opens the product when the cashier may edit it.
 	if (item.original.record.payload.type === 'variable') {
-		return <VariableProductRow item={item} index={index} table={table} />;
+		return <VariableProductRow item={item} index={index} table={table} toggleOnPress />;
 	}
 	return (
 		<VirtualizedList.Item>
-			<DataTableRow item={item} />
+			<DataTableRow
+				item={item}
+				onPress={openProduct ? () => openProduct(item.original.record.uuid) : undefined}
+			/>
 		</VirtualizedList.Item>
 	);
 }
@@ -188,6 +199,18 @@ function ProductsList({
 
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 	const t = useT();
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const openProduct =
+		!readOnly && caps.canEditProducts
+			? (uuid: string) =>
+					router.push({
+						pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+						params: { productId: uuid },
+					})
+			: undefined;
+	const canOpenVariation = !readOnly && caps.canEditVariations;
 
 	/**
 	 * Barcode
@@ -254,6 +277,13 @@ function ProductsList({
 					void saveCatalogueChange(document, changes);
 				},
 				variationRenderCell,
+				openVariation: canOpenVariation
+					? (record: EngineRecord<'variations'>) =>
+							router.push({
+								pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+								params: { variationId: record.uuid },
+							})
+					: undefined,
 				/**
 				 * Expanded variation rows answer to the same Stock Status pill as the rows around
 				 * them. `extraData` carries it into FlashList so rendered rows refresh when the
@@ -263,7 +293,15 @@ function ProductsList({
 			},
 			extraData: state.filters.stock_status,
 		}),
-		[expandedRef, expanded$, setRowExpanded, saveCatalogueChange, state.filters.stock_status]
+		[
+			expandedRef,
+			expanded$,
+			setRowExpanded,
+			saveCatalogueChange,
+			state.filters.stock_status,
+			canOpenVariation,
+			router,
+		]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 
@@ -279,7 +317,7 @@ function ProductsList({
 					actions={tableActions}
 					renderItem={(props) =>
 						pointer === 'fine' ? (
-							renderFineItem(props)
+							renderFineItem(props, openProduct)
 						) : (
 							<VirtualizedList.Item>
 								<View
