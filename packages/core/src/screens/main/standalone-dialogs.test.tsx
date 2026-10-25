@@ -138,6 +138,9 @@ jest.mock('@wcpos/core/hooks/use-app-info', () => ({
 	useAppInfo: () => ({ appVersion: 'test-build', platformVersion: 'test-build', platform: 'web' }),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('./hooks/use-sync-order', () => ({
+	useSyncOrder: () => ({ sync: jest.fn(), loading: false, disabled: false }),
+}));
 jest.mock('./receipt/email', () => ({ EmailForm: () => <span>Email form</span> }));
 // The reports panels keep their real dialog wiring; their data hooks and bodies are stubs.
 jest.mock('@wcpos/components/breadcrumb', () => ({ Breadcrumb: () => null }));
@@ -272,6 +275,7 @@ it.each([false, true])(
 		type Props = React.ComponentProps<typeof ReceiptActions>;
 		const doc = {
 			document: null,
+			unsaved: false,
 			canDownloadPdf: false,
 			isDownloadingPdf: false,
 			isPrinting: false,

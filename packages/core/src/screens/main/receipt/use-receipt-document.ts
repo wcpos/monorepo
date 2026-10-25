@@ -87,8 +87,13 @@ export function useReceiptDocument({
 	// document and the auto-print. A document with no order never awaits.
 	const awaiting = useAwaitsStore(order?.uuid ?? '');
 	const awaits = order ? awaiting : false;
+	const unsaved = !!order && !orderId && awaits === false;
 	const localOnly = useOnlineStatus().status !== 'online-website-available' || awaits !== false;
-	const awaitingStoreLine = awaits ? t('receipt.awaiting_store_line') : undefined;
+	const awaitingStoreLine = awaits
+		? t('receipt.awaiting_store_line')
+		: unsaved
+			? t('receipt.not_saved_line')
+			: undefined;
 	// Legacy receipt URL from order links
 	const baseReceiptURL = localOnly ? undefined : orderData?.links?.receipt?.[0]?.href;
 
@@ -114,6 +119,7 @@ export function useReceiptDocument({
 		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
+		orderUuid: order?.uuid,
 		isReprint,
 		templateType,
 		storeId,
@@ -584,6 +590,7 @@ export function useReceiptDocument({
 			(awaitingSettledData && !dataWaitExpired));
 
 	return {
+		unsaved,
 		documentError,
 		refetch,
 		receiptData,

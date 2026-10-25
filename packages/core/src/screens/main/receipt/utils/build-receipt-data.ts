@@ -8,6 +8,7 @@
 
 import { getI18n } from 'react-i18next';
 
+import { isCompletingStatus } from '@wcpos/order-math';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type { TaxId } from '@wcpos/database';
@@ -820,6 +821,8 @@ export function buildReceiptData(
 	const taxSummary = buildTaxSummary(order);
 
 	const rawStatus = String(order.status ?? '');
+	// Mirrors WC_Order::needs_payment() (payable status, positive total); local status is fresher after offline capture and temporary carts never carry needs_payment.
+	const needsPayment = !isCompletingStatus(rawStatus) && toNum(order.total) > 0;
 	// `useOrderStatusLabel.getLabel` returns the raw status when the
 	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
 	// instead of printing the lowercase identifier.
@@ -879,7 +882,7 @@ export function buildReceiptData(
 			customer_note: order.customer_note || '',
 			wc_status: rawStatus,
 			status_label: statusLabel,
-			needs_payment: Boolean(order.needs_payment),
+			needs_payment: needsPayment,
 			payment_url: typeof order.payment_url === 'string' ? order.payment_url : '',
 			created: { datetime: order.date_created || '' },
 			printed: { datetime: printedDatetime },
@@ -965,13 +968,16 @@ export function buildReceiptData(
 		tax: buildTaxSection(store, displayTax),
 		tax_summary: taxSummary,
 		has_tax_summary: taxSummary.length > 0,
-		payments: [
-			{
-				method: order.payment_method_title || order.payment_method || '',
-				amount: order.total || '0.00',
-				transaction_id: order.transaction_id || '',
-			},
-		],
+		// A payable order has taken no payment; ledger-driven rows are ADR 0040 follow-up work.
+		payments: needsPayment
+			? []
+			: [
+					{
+						method: order.payment_method_title || order.payment_method || '',
+						amount: order.total || '0.00',
+						transaction_id: order.transaction_id || '',
+					},
+				],
 		software: {
 			name: 'WCPOS',
 			plugin_version: options.pluginVersion ?? '',

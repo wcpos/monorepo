@@ -13,6 +13,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { EmailForm } from './email';
 import { useT } from '../../../contexts/translations';
+import { useSyncOrder } from '../hooks/use-sync-order';
 
 import type { useReceiptDocument } from './use-receipt-document';
 
@@ -28,8 +29,19 @@ export function ReceiptActions({
 	>;
 }) {
 	const t = useT();
+	const { sync, loading, disabled } = useSyncOrder(order);
 	return (
 		<>
+			{doc.unsaved && !doc.document && (
+				<Action
+					testID="receipt-sync-order-button"
+					onPress={sync}
+					loading={loading}
+					disabled={disabled}
+				>
+					{t('pos_cart.sync_order')}
+				</Action>
+			)}
 			{/* Reachable offline on purpose (#165). The 2026-03-06 stopgap
 					    (ba8729a77) disabled this button when the store was unreachable,
 					    because a send could only fail. It cannot any more: EmailForm owns
@@ -38,11 +50,14 @@ export function ReceiptActions({
 					    cashier finishing a sale offline is the whole reason the queue
 					    exists, so this is the one entry point that must NOT be gated on
 					    connectivity. The PDF download above still is: that one genuinely
-					    needs the server. */}
+					    needs the server.
+					    An unsaved order cannot be emailed yet: the queue is keyed by numeric order id; this is the only gate besides document. */}
 			{!doc.document && (
 				<Dialog>
 					<DialogTrigger asChild>
-						<Action testID="receipt-email-button">{t('receipt.email_receipt')}</Action>
+						<Action testID="receipt-email-button" disabled={doc.unsaved}>
+							{t('receipt.email_receipt')}
+						</Action>
 					</DialogTrigger>
 					<DialogContent closeLabel={t('common.close')}>
 						<DialogHeader>

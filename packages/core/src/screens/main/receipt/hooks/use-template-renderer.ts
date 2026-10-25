@@ -66,6 +66,7 @@ interface UseTemplateRendererOptions {
 	storeId?: number;
 	previewEnabled?: boolean;
 	orderId: number | undefined;
+	orderUuid?: string;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
 	document?: string;
@@ -110,6 +111,7 @@ interface TemplateRendererResult {
 export function useTemplateRenderer({
 	nextLocalClosureCount,
 	orderId,
+	orderUuid,
 	baseReceiptURL,
 	mode: requestedMode,
 	document,
@@ -240,21 +242,22 @@ export function useTemplateRenderer({
 	// Track the user's explicit pick together with the order it was made for.
 	// When the order changes the pick no longer applies, so the effective
 	// selection falls back to the default - derived during render, no effect.
+	const orderKey = orderUuid ?? orderId;
 	const [pick, setPick] = React.useState<{
-		orderId: number | undefined;
+		orderKey: string | number | undefined;
 		id: string | number | null;
-	}>({ orderId, id: null });
+	}>({ orderKey, id: null });
 
 	const setSelectedTemplateId = React.useCallback(
 		(id: string | number) => {
-			setPick({ orderId, id });
+			setPick({ orderKey, id });
 		},
-		[orderId]
+		[orderKey]
 	);
 
 	// The pick is only honoured for the current order and an existing template.
 	const pickedId =
-		pick.orderId === orderId && templates.some((t) => t.id === pick.id) ? pick.id : null;
+		pick.orderKey === orderKey && templates.some((t) => t.id === pick.id) ? pick.id : null;
 	const selectedTemplateId = pickedId ?? defaultId;
 
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;

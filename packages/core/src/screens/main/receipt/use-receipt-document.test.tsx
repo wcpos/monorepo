@@ -175,6 +175,29 @@ it('waits for final data and frame load, then auto-prints once', async () => {
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
+it('marks an order without a server id as not saved in the renderer', () => {
+	const { result } = renderHook(() =>
+		useReceiptDocument({
+			order: { uuid: 'unsaved', payload: { currency: 'USD' } } as never,
+			autoPrintAllowed: false,
+		})
+	);
+	expect(mockRendererOptions.awaitingStoreLine).toBe('receipt.not_saved_line');
+	expect(result.current.unsaved).toBe(true);
+});
+
+it('marks an order without a server id awaiting the store as not unsaved', () => {
+	mockAwaiting = true;
+	const { result } = renderHook(() =>
+		useReceiptDocument({
+			order: { uuid: 'awaiting', payload: { currency: 'USD' } } as never,
+			autoPrintAllowed: false,
+		})
+	);
+	expect(mockRendererOptions.awaitingStoreLine).toBe('receipt.awaiting_store_line');
+	expect(result.current.unsaved).toBe(false);
+});
+
 // ADR 0040 Decided 1 rule 1: one local-only rule; a journal not read yet holds the document.
 it('a sale the store has not heard renders locally with its line: no store page, no order cloud print', async () => {
 	mockAwaiting = null;
