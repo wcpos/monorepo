@@ -76,6 +76,10 @@ it('pads the key of a part of an open compound, and tops a multi-line value', ()
 	);
 	expect(classes(screen.getByText('City').parentElement as HTMLElement)).toContain('pl-4');
 	expect(classes(screen.getByTestId('row'))).toContain('md:items-start');
+	// A bare string under a View throws on native, so a plain value renders as a Text.
+	expect(classes(screen.getByText('Leeds'))).toEqual(
+		expect.arrayContaining(['text-foreground', 'text-base'])
+	);
 });
 
 it('an add is a 36-tall outline Button with the plus icon, and presses', () => {

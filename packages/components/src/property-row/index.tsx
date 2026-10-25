@@ -52,7 +52,12 @@ export function PropertyRow(props: {
 			</View>
 			<View className="min-w-0 md:flex-1">
 				<TextClassContext.Provider value="text-foreground text-base">
-					{props.children}
+					{/* A bare string under a View throws on native: a plain value is a Text. */}
+					{typeof props.children === 'string' || typeof props.children === 'number' ? (
+						<Text>{props.children}</Text>
+					) : (
+						props.children
+					)}
 				</TextClassContext.Provider>
 			</View>
 			{props.trailing ? (

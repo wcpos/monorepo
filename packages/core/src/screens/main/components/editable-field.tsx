@@ -31,7 +31,7 @@ export function EditableField({
 	/** Mount in edit mode, focused: a field the owner has just added. */
 	startEditing?: boolean;
 }) {
-	const [editing, setEditing] = React.useState(startEditing);
+	const [editing, setEditing] = React.useState(startEditing && editable);
 	// Internal editing value - separate from controlled prop
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
 

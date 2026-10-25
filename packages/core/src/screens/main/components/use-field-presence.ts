@@ -9,13 +9,16 @@ export interface FieldSpec<Name extends string> {
 /**
  * Which of a record's facts are rows (property rows, Paul 2026-10-25). Presence is per record,
  * not per session: an asked field is always present; a field with a value is present; a field
- * the owner added, or one that held a value, stays present once emptied until its Remove. Both
- * lists keep the array's canonical order, so an added field lands in its place, never appended.
+ * the owner added, or one that held a value, stays present once emptied until its Remove, which
+ * clears the value through `onClear` (required: a Remove that left the value would leave the row).
+ * Both lists keep the array's canonical order, so an added field lands in its place, never
+ * appended. Mount one hook per record: the state belongs to the record it was mounted with, so a
+ * caller that can switch records keys its form by the record (the cart dialog keys by order UUID).
  */
 export function useFieldPresence<Name extends string>(
 	fields: readonly FieldSpec<Name>[],
 	isEmpty: (name: Name) => boolean,
-	onClear?: (name: Name) => void
+	onClear: (name: Name) => void
 ) {
 	const filled = fields.filter((field) => !isEmpty(field.name)).map((field) => field.name);
 	const [kept, setKept] = React.useState<ReadonlySet<Name>>(() => new Set(filled));
@@ -28,7 +31,7 @@ export function useFieldPresence<Name extends string>(
 	const add = (name: Name) => setKept((current) => new Set(current).add(name));
 	const remove = (name: Name) => {
 		setKept((current) => new Set([...current].filter((item) => item !== name)));
-		onClear?.(name);
+		onClear(name);
 	};
 	return {
 		present: fields.filter(isPresent).map((field) => field.name),
