@@ -305,11 +305,11 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 
 | Variant                         | Role                                                                                                                                               | Where it sits                                                                 | Examples                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Sync order_, _Connect a reader_ when nothing is connected |
-| `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_                                                             |
+| `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Sync order_ (the cart's unsaved sale), _Connect a reader_ when nothing is connected |
+| `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_, _Sync_ as a record's own action                                                             |
 | `ghost` (muted label at rest)   | Quiet: navigation, escapes, more                                                                                                                   | after the buttons, on its own line, or in a toolbar                           | _Reader guide_, _Details_, _Cancel_ on a scan                                                                   |
 | `link`                          | Text that behaves as a button: no surface, the size's height                                                                                       | after the content; inline it is `DocsLink`, which drops the padding           | _Open docs_, _Reader settings_                                                                                  |
-| `outline-destructive`           | Destructive: what loses something (never filled)                                                                                                   | never in the same row as a primary                                            | _Void_, _Cancel payment_, _Restore defaults_, _Cancel on terminal_                                              |
+| `outline-destructive`           | Destructive: what loses something (never filled)                                                                                                   | the footer's leading group, apart from the primary                                            | _Void_, _Cancel payment_, _Restore defaults_, _Cancel on terminal_                                              |
 | `ghost-destructive`             | The quiet form of the same, in a dense row                                                                                                         | inside a table or list row                                                    | _Remove_ on a queued email's row                                                                                |
 | `destructive` (solid red)       | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | _Delete_ in _Delete this order?_, _Reset and restart_                                                           |
 | any, `disabled`                 | Unavailable, with one line beside it saying why                                                                                                    | in the SAME slot the live button uses                                         | _Connecting…_, _Installing…_                                                                                    |
@@ -342,6 +342,25 @@ its own form and button, as the cart's Order details sheet does with its Hand ov
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
 never shares a colour with Void (§7).
+
+#### Footers
+
+A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` take slots and own the variant, the order, the side and the phone stacking; a `Button`, `DialogClose`, `DialogAction`, `AlertDialogAction` or `AlertDialogCancel` is never written inside a footer (ruled 2026-10-25, after two Sync buttons shipped in two looks).
+
+| Slot | Variant | Side | Examples |
+| --- | --- | --- | --- |
+| `intent` | `default` | rightmost; phone first | Add to cart, Send, the cart's Sync order |
+| `secondary` | `outline` | right, before intent; phone after intent | Print, Email receipt, Download PDF, Update customer too |
+| `record` | `outline` | left, after destructive; phone after close | Sync, Re-open |
+| `destructive` | `outline-destructive` | left, after aside; phone after record | Void, Delete, Refund, Restore defaults, Sign out |
+| `close` | `outline` | right, before secondary; phone after secondary | Cancel with intent, Close without |
+| `aside` | no button | leftmost; phone last | Count, status line |
+| alert `confirm` | `destructive` for a loss, otherwise `default` | rightmost; phone first | Delete, Confirm |
+| alert `cancel` | `outline` | before confirm; phone after confirm | Cancel |
+
+One intent per footer. A record action is never the intent. The footer chooses Cancel versus Close from `DialogLabels`; the caller never chooses the word.
+
+The ratchet is `packages/eslint/tests/footer-children-fence.test.mjs`; its allowlist only shrinks, and the `children` path goes when it is empty.
 
 #### Situation → overlay
 

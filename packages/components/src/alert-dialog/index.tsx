@@ -6,6 +6,7 @@ import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import { Slot } from '@rn-primitives/slot';
 
 import { Button, type ButtonProps } from '../button';
+import { useDialogLabels } from '../dialog/labels';
 import { useIsPhone } from '../lib/device';
 import {
 	OVERLAY_MOTION,
@@ -16,6 +17,8 @@ import {
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
+
+import type { FooterButton } from '../dialog';
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -75,17 +78,80 @@ function AlertDialogHeader({ className, ...props }: ViewProps) {
 	return <View className={cn('flex flex-col gap-2 px-4', className)} {...props} />;
 }
 
-function AlertDialogFooter({ className, ...props }: ViewProps) {
+export type AlertDialogFooterProps = {
+	/** The confirm: solid red only for a loss, otherwise primary. */
+	confirm: FooterButton & { destructive?: boolean };
+	/** The translated Cancel, present unless false. */
+	cancel?: boolean | Pick<FooterButton, 'testID' | 'onPress' | 'disabled'>;
+	size?: 'default' | 'lg';
+	testID?: string;
+};
+type LegacyFooterProps = ViewProps & { children: React.ReactNode };
+function AlertDialogFooter(
+	allProps:
+		| (AlertDialogFooterProps & { children?: never; className?: never; style?: never })
+		| LegacyFooterProps
+) {
 	const presentation = useOverlayPresentation() ?? 'center';
+	const phone = useIsPhone();
+	const labels = useDialogLabels();
+	if ('children' in allProps) {
+		const { children, className, ...props } = allProps;
+		return (
+			<View
+				className={cn(
+					'flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
+					presentation === 'bottom' && 'border-border border-t pt-4',
+					className
+				)}
+				{...props}
+			>
+				{children}
+			</View>
+		);
+	}
+	const { confirm, cancel = true, size = 'default', testID } = allProps;
+	const { label, icon, destructive, ...button } = confirm;
+	const buttonClass = cn(phone && 'w-full', size === 'lg' && !cancel && 'flex-1');
+	const action = (
+		<Button
+			{...button}
+			leftIcon={icon}
+			size={size}
+			variant={destructive ? 'destructive' : 'default'}
+			className={buttonClass}
+		>
+			{label}
+		</Button>
+	);
+	const dismiss = cancel ? (
+		<AlertDialogCancel asChild {...(typeof cancel === 'object' ? cancel : {})}>
+			<Button variant="outline" size={size} className={buttonClass}>
+				{labels.cancel}
+			</Button>
+		</AlertDialogCancel>
+	) : null;
 	return (
 		<View
+			testID={testID}
 			className={cn(
-				'flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
-				presentation === 'bottom' && 'border-border border-t pt-4',
-				className
+				'flex max-w-full gap-2 px-4',
+				phone ? 'flex-col' : 'flex-row flex-wrap items-center justify-end',
+				presentation !== 'center' && 'border-border border-t pt-4'
 			)}
-			{...props}
-		/>
+		>
+			{phone ? (
+				<>
+					{action}
+					{dismiss}
+				</>
+			) : (
+				<>
+					{dismiss}
+					{action}
+				</>
+			)}
+		</View>
 	);
 }
 
@@ -117,6 +183,7 @@ function AlertDialogDescription({
 	);
 }
 
+/** @deprecated Use AlertDialogFooter's confirm slot. */
 function AlertDialogAction({
 	asChild,
 	disabled,
@@ -134,6 +201,7 @@ function AlertDialogAction({
 	);
 }
 
+/** @deprecated Use AlertDialogFooter's cancel slot. */
 function AlertDialogCancel({
 	asChild,
 	disabled,

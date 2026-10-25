@@ -5,6 +5,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { CartFoot } from './foot';
 import { OrderSheet } from './order-sheet';
+import * as syncOrder from '../../hooks/use-sync-order';
+import * as voidOrder from '../hooks/use-void-order';
 
 const mockSequence: string[] = [];
 const mockOrder = {
@@ -44,7 +46,27 @@ jest.mock('@wcpos/components/dialog', () => {
 		Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
 			open ? <>{children}</> : null,
 		DialogContent: Wrapper,
-		DialogFooter: Wrapper,
+		DialogFooter: ({
+			destructive,
+			secondary,
+			intent,
+		}: import('@wcpos/components/dialog').DialogFooterProps) => (
+			<>
+				{[destructive, secondary, intent]
+					.flat()
+					.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
+					.map((action) => (
+						<button
+							key={action.testID}
+							data-testid={action.testID}
+							disabled={action.disabled || action.loading}
+							onClick={action.onPress as unknown as React.MouseEventHandler}
+						>
+							{action.label}
+						</button>
+					))}
+			</>
+		),
 		DialogHeader: Wrapper,
 		DialogTitle: Wrapper,
 	};
@@ -107,7 +129,7 @@ function renderSheet() {
 	);
 	return onOpenChange;
 }
-it('closes through onBeforeVoid before the real VoidButton starts its flow', async () => {
+it('closes through onBeforeVoid before the real void hook starts its flow', async () => {
 	const onOpenChange = renderSheet();
 	fireEvent.click(screen.getByTestId('void-button'));
 	expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -166,4 +188,27 @@ it('keeps Void out of the cart column until the order sheet opens', () => {
 	expect(screen.queryByTestId('void-button')).toBeNull();
 	fireEvent.click(screen.getByTestId('order-meta-button'));
 	expect(screen.getByTestId('void-button')).toBeTruthy();
+});
+
+it('does not run the footer action hooks while the sheet is closed', () => {
+	const sync = jest.spyOn(syncOrder, 'useSyncOrder');
+	const voidHook = jest.spyOn(voidOrder, 'useVoidOrder');
+	try {
+		const props = {
+			onOpenChange: jest.fn(),
+			order: mockOrder as unknown as React.ComponentProps<typeof OrderSheet>['order'],
+		};
+		const view = render(<OrderSheet {...props} open={false} />);
+		expect(sync).not.toHaveBeenCalled();
+		expect(voidHook).not.toHaveBeenCalled();
+		view.rerender(<OrderSheet {...props} open />);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(voidHook).toHaveBeenCalledTimes(1);
+		view.rerender(<OrderSheet {...props} open={false} />);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(voidHook).toHaveBeenCalledTimes(1);
+	} finally {
+		sync.mockRestore();
+		voidHook.mockRestore();
+	}
 });

@@ -19,8 +19,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { PayButton } from './pay';
-import { SaveButton } from './save-order';
-import { VoidButton } from './void';
+import { OrderSheet } from '../order-sheet';
 
 /**
  * Ruling R5 (#163): a dead storage worker HARD-BLOCKS the money paths. A payment
@@ -264,8 +263,7 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		render(
 			<>
 				<PayButton />
-				<SaveButton />
-				<VoidButton />
+				<Sheet />
 			</>
 		);
 
@@ -344,7 +342,7 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	});
 
 	it('disables save to server and refuses to push the order', async () => {
-		render(<SaveButton />);
+		render(<Sheet />);
 		await degradeStorage('degraded-save');
 
 		const button = screen.getByTestId('save-to-server-button');
@@ -361,7 +359,7 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	});
 
 	it('disables void and refuses to write the delete', async () => {
-		render(<VoidButton />);
+		render(<Sheet />);
 		await degradeStorage('degraded-void');
 
 		const button = screen.getByTestId('void-button');
@@ -464,3 +462,43 @@ describe('checkout failure report', () => {
 		expect(mockLogger.warn).not.toHaveBeenCalled();
 	});
 });
+
+// The sheet now owns both buttons; keep the real storage guard and captured handlers above.
+jest.mock('./edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
+jest.mock('@wcpos/components/dialog', () => {
+	function Pass({ children }: React.PropsWithChildren) {
+		return <>{children}</>;
+	}
+	const { Button } = jest.requireMock('@wcpos/components/button');
+	return {
+		Dialog: Pass,
+		DialogContent: Pass,
+		DialogHeader: Pass,
+		DialogTitle: Pass,
+		DialogFooter: ({
+			destructive,
+			intent,
+		}: import('@wcpos/components/dialog').DialogFooterProps) => (
+			<>
+				{[destructive, intent]
+					.flat()
+					.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
+					.map((action) => (
+						<Button key={action.testID} {...action}>
+							{action.label}
+						</Button>
+					))}
+			</>
+		),
+	};
+});
+function Sheet() {
+	return (
+		<OrderSheet
+			open
+			onOpenChange={() => {}}
+			order={mockCurrentOrderRecord as unknown as React.ComponentProps<typeof OrderSheet>['order']}
+		/>
+	);
+}

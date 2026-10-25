@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { ScrollView, type ScrollViewProps, View, type ViewProps } from 'react-native';
+import {
+	type GestureResponderEvent,
+	ScrollView,
+	type ScrollViewProps,
+	View,
+	type ViewProps,
+} from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import { useComposedRefs } from '@rn-primitives/hooks';
@@ -24,6 +30,7 @@ import { Text, TextClassContext } from '../text';
 import { isToastTarget } from '../toast/target';
 import { useDialogLabels } from './labels';
 
+import type { IconName } from '../icon';
 import type { OverlayPresentation } from '../lib/overlay';
 import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
 export { DialogLabelsProvider, type DialogLabels } from './labels';
@@ -245,26 +252,145 @@ export function DialogBody({ className, ...props }: ScrollViewProps): React.JSX.
 		/>
 	);
 }
-/**
- * Stacked on a phone (the primary on top: `flex-col-reverse`), a right-aligned row otherwise. The
- * fold is the app's one layout boundary (`useIsPhone`), not `sm`, so a 640–767 window or a
- * landscape phone stacks with the rest of its phone layout.
- */
-export function DialogFooter({ className, ...props }: ViewProps): React.JSX.Element {
+export type FooterButton = {
+	label: string;
+	onPress?: (event: GestureResponderEvent) => void;
+	testID?: string;
+	loading?: boolean;
+	disabled?: boolean;
+	/** Drawn as the Button's `leftIcon`. */
+	icon?: IconName;
+	accessibilityLabel?: string;
+	/** The rendered Button, for a caller that must return focus to it (a dialog it opened closing). */
+	ref?: React.Ref<View>;
+};
+/** A slot entry; `false`/`null` is skipped, so a conditional button needs no array juggling. */
+export type FooterSlot = FooterButton | false | null | undefined;
+const isButton = (entry: FooterSlot): entry is FooterButton => !!entry;
+export type DialogFooterProps = {
+	/** The one primary: creating, moving money, sending, or a status intent. */
+	intent?: FooterButton | false | null;
+	/** Reversible alternatives beside the intent. */
+	secondary?: FooterSlot | FooterSlot[];
+	/** The record's own non-losing actions, never primary. */
+	record?: FooterSlot | FooterSlot[];
+	/** What loses something, outlined and apart from the intent. */
+	destructive?: FooterSlot | FooterSlot[];
+	/** The footer chooses Cancel with an intent, Close otherwise, from DialogLabels. */
+	close?: boolean | Pick<FooterButton, 'testID' | 'onPress' | 'disabled'>;
+	/** Non-button content leading the footer. Never a Button. */
+	aside?: React.ReactNode;
+	/** Register sheets' sale height; applies to every button. */
+	size?: 'default' | 'lg';
+	testID?: string;
+};
+type LegacyFooterProps = ViewProps & { children: React.ReactNode };
+export function DialogFooter(
+	allProps:
+		(DialogFooterProps & { children?: never; className?: never; style?: never }) | LegacyFooterProps
+): React.JSX.Element {
 	const { presentation } = useOverlay();
 	const phone = useIsPhone();
+	const labels = useDialogLabels();
+	const chrome = cn(
+		'flex max-w-full gap-2 px-4',
+		presentation !== 'center' && 'border-border border-t pt-4'
+	);
+	if ('children' in allProps) {
+		const { children, className, ...props } = allProps;
+		return (
+			<View
+				className={cn(
+					chrome,
+					phone ? 'flex-col-reverse' : 'flex-row items-center justify-end',
+					className
+				)}
+				{...props}
+			>
+				{children}
+			</View>
+		);
+	}
+	const { intent, secondary, record, destructive, close, aside } = allProps;
+	const { size = 'default', testID } = allProps;
+	const alternatives = [secondary ?? []].flat().filter(isButton);
+	const records = [record ?? []].flat().filter(isButton);
+	const losses = [destructive ?? []].flat().filter(isButton);
+	const count =
+		alternatives.length + records.length + losses.length + Number(!!intent) + Number(!!close);
+	const fill = size === 'lg' && count === 1;
+	const buttonClass = cn(phone && 'w-full', fill && 'flex-1');
+	const buttons = (items: FooterButton[], variant: 'default' | 'outline' | 'outline-destructive') =>
+		items.map(({ label, icon, ...button }) => (
+			<Button
+				key={button.testID ?? label}
+				{...button}
+				leftIcon={icon}
+				variant={variant}
+				size={size}
+				className={buttonClass}
+			>
+				{label}
+			</Button>
+		));
+	const dismiss = close ? (
+		<DialogPrimitive.Close asChild>
+			<Button
+				{...(typeof close === 'object' ? close : {})}
+				variant="outline"
+				size={size}
+				className={buttonClass}
+			>
+				{intent ? labels.cancel : labels.close}
+			</Button>
+		</DialogPrimitive.Close>
+	) : null;
+	const primary = buttons(intent ? [intent] : [], 'default');
+	const other = buttons(alternatives, 'outline');
+	const own = buttons(records, 'outline');
+	const losing = buttons(losses, 'outline-destructive');
+	const left = (aside != null && aside !== false) || losses.length > 0 || records.length > 0;
+	const group = 'min-w-0 shrink flex-row flex-wrap gap-2';
 	return (
 		<View
+			testID={testID}
 			className={cn(
-				'flex max-w-full gap-2 px-4',
-				phone ? 'flex-col-reverse' : 'flex-row items-center justify-end',
-				presentation !== 'center' && 'border-border border-t pt-4',
-				className
+				chrome,
+				phone ? 'flex-col' : 'flex-row flex-wrap items-center',
+				!phone && (left ? 'justify-between' : 'justify-end')
 			)}
-			{...props}
-		/>
+		>
+			{phone ? (
+				<>
+					{primary}
+					{other}
+					{dismiss}
+					{own}
+					{losing}
+					{aside}
+				</>
+			) : (
+				<>
+					{left && (
+						<View className={group}>
+							{aside}
+							{losing}
+							{own}
+						</View>
+					)}
+					{(close || alternatives.length > 0 || intent) && (
+						<View className={cn(group, fill && 'flex-1')}>
+							{dismiss}
+							{other}
+							{primary}
+						</View>
+					)}
+				</>
+			)}
+		</View>
 	);
 }
+/** @deprecated Use DialogFooter's close slot. */
 export function DialogClose({ asChild, ...props }: DialogPrimitive.CloseProps): React.JSX.Element {
 	return (
 		<DialogPrimitive.Close asChild>
@@ -272,6 +398,7 @@ export function DialogClose({ asChild, ...props }: DialogPrimitive.CloseProps): 
 		</DialogPrimitive.Close>
 	);
 }
+/** @deprecated Use DialogFooter's intent or secondary slot. */
 export function DialogAction(allProps: SlottablePressableProps): React.JSX.Element {
 	const { asChild, disabled, ...props } = allProps;
 	return asChild ? (

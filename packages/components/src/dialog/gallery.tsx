@@ -12,12 +12,53 @@ import {
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
+	type DialogFooterProps,
 	DialogHeader,
 	DialogTitle,
 } from './index';
 
 const noop = () => {};
 export const stories = [
+	...(
+		[
+			{ id: 'footer-intent', close: true, intent: { label: 'Add to cart' } },
+			{
+				id: 'footer-record',
+				destructive: { label: 'Delete' },
+				record: { label: 'Sync' },
+				close: true,
+			},
+			{
+				id: 'footer-sale',
+				destructive: { label: 'Void' },
+				secondary: { label: 'Print', icon: 'print' },
+				intent: { label: 'Sync order' },
+			},
+			{
+				id: 'footer-register',
+				size: 'lg',
+				secondary: { label: 'Print Z report' },
+				intent: { label: 'Done' },
+			},
+		] satisfies (DialogFooterProps & { id: string })[]
+	).map(({ id, ...footer }) => ({
+		id,
+		render: () => (
+			<View className="border-border bg-background relative h-96 w-full overflow-hidden rounded-lg border">
+				<Dialog open onOpenChange={noop}>
+					<DialogContent inline side="center" testID={`gallery-${id}`}>
+						<DialogHeader>
+							<DialogTitle>Footer actions</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<Text>Actions for this record or sale.</Text>
+						</DialogBody>
+						<DialogFooter {...footer} />
+					</DialogContent>
+				</Dialog>
+			</View>
+		),
+	})),
 	{
 		id: 'center',
 		render: () => (

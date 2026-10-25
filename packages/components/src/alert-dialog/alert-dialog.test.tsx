@@ -6,9 +6,12 @@ import { View, type ViewProps } from 'react-native';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DialogLabelsProvider } from '../dialog/labels';
 import { DeviceScope } from '../lib/device';
 import * as overlay from '../lib/overlay';
 import * as C from './index';
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
+jest.mock('../loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/alert-dialog', () => {
 	const Context = React.createContext({ open: false, onOpenChange: (_open: boolean) => {} });
 	function Part(props: ViewProps) {
@@ -35,16 +38,26 @@ jest.mock('@rn-primitives/alert-dialog', () => {
 	};
 });
 jest.mock('@rn-primitives/slot', () => ({
-	Slot: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	Slot: ({ children, ...props }: React.PropsWithChildren) =>
+		React.isValidElement(children) ? React.cloneElement(children, props) : null,
 }));
 jest.mock('../button', () => ({
 	Button: ({
 		children,
 		onPress,
 		testID,
-	}: React.PropsWithChildren<{ onPress?: () => void; testID?: string }>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
+		variant,
+		size,
+		className,
+		disabled,
+	}: React.ComponentProps<typeof import('../button').Button>) => (
+		<button
+			data-testid={testID}
+			onClick={onPress as unknown as React.MouseEventHandler}
+			disabled={disabled ?? false}
+			className={jest.requireActual('../button').buttonVariants({ variant, size, className })}
+		>
+			{typeof children === 'function' ? children({ pressed: false }) : children}
 		</button>
 	),
 }));
@@ -108,6 +121,56 @@ it('calls the user cancel handler before dismissing', () => {
 	expect(screen.queryByTestId('panel')).toBeNull();
 });
 it('allows a footer outside the shell', () => {
-	render(<C.AlertDialogFooter testID="footer" />);
+	render(<C.AlertDialogFooter testID="footer">Legacy footer</C.AlertDialogFooter>);
 	expect(screen.getByTestId('footer')).not.toHaveClass('border-t');
+});
+
+it.each([false, true])('slot confirm owns its loss variant (%s)', (destructive) => {
+	render(
+		<C.AlertDialog defaultOpen>
+			<C.AlertDialogFooter confirm={{ label: 'Confirm', destructive }} />
+		</C.AlertDialog>
+	);
+	expect(screen.getByText('Confirm')).toHaveClass(destructive ? 'bg-destructive' : 'bg-primary');
+	expect(screen.getByText('Cancel')).toHaveClass('border-border', 'bg-card');
+});
+it.each([false, true])('orders cancel and confirm by device (%s)', (phone) => {
+	render(
+		<DeviceScope phone={phone}>
+			<C.AlertDialog defaultOpen>
+				<C.AlertDialogFooter size="lg" confirm={{ label: 'Confirm' }} />
+			</C.AlertDialog>
+		</DeviceScope>
+	);
+	expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(
+		phone ? ['Confirm', 'Cancel'] : ['Cancel', 'Confirm']
+	);
+	for (const button of screen.getAllByRole('button')) {
+		expect(button).toHaveClass('h-14');
+		if (phone) expect(button).toHaveClass('w-full');
+	}
+});
+it('translated slot cancel calls its handler and dismisses', () => {
+	const onPress = jest.fn();
+	render(
+		<DialogLabelsProvider labels={{ close: 'Close', cancel: 'Not now' }}>
+			<C.AlertDialog defaultOpen>
+				<C.AlertDialogContent inline testID="slot-panel">
+					<C.AlertDialogTitle>Confirm</C.AlertDialogTitle>
+					<C.AlertDialogFooter
+						cancel={{ onPress }}
+						confirm={{ label: 'Delete', destructive: true }}
+					/>
+				</C.AlertDialogContent>
+			</C.AlertDialog>
+		</DialogLabelsProvider>
+	);
+	fireEvent.click(screen.getByText('Not now'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(screen.queryByTestId('slot-panel')).toBeNull();
+});
+it('can omit cancel and fills a lone lg confirm', () => {
+	render(<C.AlertDialogFooter cancel={false} size="lg" confirm={{ label: 'Confirm' }} />);
+	expect(screen.queryByText('Cancel')).toBeNull();
+	expect(screen.getByText('Confirm')).toHaveClass('flex-1');
 });
