@@ -30,6 +30,30 @@ jest.mock('../../components/product/attributes', () => ({
 }));
 jest.mock('../../components/product/grouped-names', () => ({ GroupedNames: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+// A web button, as react-native-web renders the Button: the row's press guard sees a `button`.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		accessibilityLabel,
+		disabled,
+		onPress,
+	}: React.PropsWithChildren<{
+		testID: string;
+		accessibilityLabel: string;
+		disabled?: boolean;
+		onPress: () => void;
+	}>) => (
+		<button
+			data-testid={testID}
+			aria-label={accessibilityLabel}
+			disabled={disabled}
+			onClick={onPress}
+		>
+			{children}
+		</button>
+	),
+}));
 jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipPassiveTriggers: ({ children }: React.PropsWithChildren) => children,
 }));
@@ -89,8 +113,8 @@ it("a variable product's name opens its modal, and the row does not toggle", () 
 it('without the edit capability the name is disabled and opens nothing', () => {
 	mockCanEdit = false;
 	render(<Row type="variable" onToggle={jest.fn()} />);
-	const name = screen.getByTestId('product-open-button');
-	expect(name.getAttribute('aria-disabled')).toBe('true');
+	const name = screen.getByTestId('product-open-button') as HTMLButtonElement;
+	expect(name.disabled).toBe(true);
 	fireEvent.click(name);
 	expect(mockPush).not.toHaveBeenCalled();
 });

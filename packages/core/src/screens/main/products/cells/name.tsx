@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { Text } from '@wcpos/components/text';
+import { Button } from '@wcpos/components/button';
+import { Text, TextClassContext } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -50,14 +51,12 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 					// A variable row's press and caret toggle its variations, so its name opens the
 					// product (one "open this product" action, the simple caret's testID). A control
 					// inside the row: the row's press guard leaves it alone.
-					<Text
+					<Button
 						testID="product-open-button"
-						variant={editable ? 'link' : 'default'}
-						className="font-medium"
-						accessibilityRole="button"
+						variant="ghost"
+						className="justify-start px-0"
 						accessibilityLabel={t('products.open_product', { _: 'Open product' })}
-						// react-native-web's Text ignores `disabled`: a name that cannot open takes no press.
-						aria-disabled={!editable}
+						disabled={!editable}
 						onPress={
 							editable
 								? () =>
@@ -67,10 +66,13 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 										})
 								: undefined
 						}
-						decodeHtml
 					>
-						{fields.name}
-					</Text>
+						<TextClassContext.Provider value={undefined}>
+							<Text className="text-foreground font-medium" numberOfLines={1} decodeHtml>
+								{fields.name}
+							</Text>
+						</TextClassContext.Provider>
+					</Button>
 				) : (
 					<EditableField
 						value={fields.name}
