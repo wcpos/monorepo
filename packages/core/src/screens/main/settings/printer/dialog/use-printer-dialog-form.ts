@@ -422,7 +422,9 @@ export function usePrinterDialogForm({
 	});
 
 	const handleClose = async () => {
+		// The flush lands the pending edit; the queue is every write still in flight before it.
 		await flush();
+		await writeQueue.current;
 		onClose();
 	};
 

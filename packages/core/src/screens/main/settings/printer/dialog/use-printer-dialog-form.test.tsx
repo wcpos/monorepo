@@ -498,6 +498,28 @@ describe('usePrinterDialogForm autosave', () => {
 			columns: 48,
 		});
 	});
+	it('waits for a write still in flight behind a later edit before onClose', async () => {
+		let releaseFirst: (value: { id: string }) => void = () => {};
+		jest
+			.mocked(savePrinterProfile)
+			.mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)) as never);
+		await act(async () => {
+			latest().form.setValue('name', 'First');
+			jest.advanceTimersByTime(300);
+		});
+		let closing: Promise<void> | undefined;
+		await act(async () => {
+			latest().form.setValue('columns', 48);
+			closing = latest().handleClose();
+		});
+		expect(onClose).not.toHaveBeenCalled();
+		await act(async () => {
+			releaseFirst({ id: printer.id });
+			await closing;
+		});
+		expect(savePrinterProfile).toHaveBeenCalledTimes(2);
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
 	it('flushes the pending write before onClose', async () => {
 		let finish!: () => void;
 		jest.mocked(savePrinterProfile).mockImplementationOnce(
