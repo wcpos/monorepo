@@ -95,10 +95,11 @@ export function PayButton() {
 		const tenderFlow = loaded && !unsupportedSchema;
 		const state = getOrderSaveState(uuid);
 		// Pay never resends the save the store just refused; a cart changed since is a new
-		// save, and its accepted write settles the dead letter in the drain (#2946).
+		// save, and its accepted write settles the dead letter in the drain (#2946). A parked
+		// record (conflict) blocks every later write until it is resolved, so it is never retried.
 		const retry = state?.kind === 'rejected';
 		if (retry) {
-			if (!orderChangedSinceRefusal(currentOrderRecord.payload, state.refused)) {
+			if (state.parked || !orderChangedSinceRefusal(currentOrderRecord.payload, state.refused)) {
 				showRefusal(state);
 				return;
 			}

@@ -343,6 +343,7 @@ it('renders the refusal, not a skeleton, for a rejected save', () => {
 					reason: 'rest_invalid_param',
 					message: null,
 					refused: null,
+					parked: false,
 				},
 			}}
 			format={String}

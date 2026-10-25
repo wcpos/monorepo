@@ -20,6 +20,11 @@ export type OrderSaveState =
 			message: string | null;
 			/** The wire projection of the payload the store refused; `null` when unknown. */
 			refused: RefusedWire | null;
+			/**
+			 * A `conflicted` or `needs-revision` row: the drain blocks every later write of the
+			 * record until it is resolved, so a changed cart is no retry.
+			 */
+			parked: boolean;
 	  };
 
 export interface CheckoutModeSnapshot {
@@ -88,15 +93,21 @@ export function markOrderQueuedOffline(uuid: string, mutationId: string) {
 }
 export function markOrderSaveRejected(
 	uuid: string,
-	rejection: Omit<Extract<OrderSaveState, { kind: 'rejected' }>, 'kind' | 'refused'> & {
+	rejection: Omit<Extract<OrderSaveState, { kind: 'rejected' }>, 'kind' | 'refused' | 'parked'> & {
 		refused?: RefusedWire | null;
+		parked?: boolean;
 	}
 ) {
-	// The durable mirror can land before or after the save hook's own mark, which
-	// never knows the payload: a known one is never downgraded to unknown.
+	// The durable mirror can land before or after the save hook's own mark, which knows
+	// neither the payload nor the row's status: what the mirror knew is never downgraded.
 	const current = getOrderSaveState(uuid);
-	const known = current?.kind === 'rejected' ? current.refused : null;
-	setOrderSaveState(uuid, { ...rejection, kind: 'rejected', refused: rejection.refused ?? known });
+	const known = current?.kind === 'rejected' ? current : null;
+	setOrderSaveState(uuid, {
+		...rejection,
+		kind: 'rejected',
+		refused: rejection.refused ?? known?.refused ?? null,
+		parked: rejection.parked ?? known?.parked ?? false,
+	});
 }
 export function clearOrderSaving(uuid: string) {
 	if (!snapshot.saveStates.has(uuid)) return;

@@ -40,3 +40,13 @@ it('reads a change only in what the till would send again', () => {
 	).toBe(true);
 	expect(orderChangedSinceRefusal(order, null)).toBe(true);
 });
+
+it("a guest sale's empty billing email projects as the queue row did: absent", () => {
+	// The enqueue seam drops `billing.email: ''`, so the refused row never carries it;
+	// the resident still does. Both sides go through that seam, or an unchanged guest
+	// cart would read as changed on every Pay press.
+	const guest = { ...order, billing: { first_name: 'Ada', email: '' } };
+	const refused = refusedWireOf({ ...guest, billing: { first_name: 'Ada' } });
+	expect(refusedWireOf(guest).billing).toEqual({ first_name: 'Ada' });
+	expect(orderChangedSinceRefusal(guest, refused)).toBe(false);
+});

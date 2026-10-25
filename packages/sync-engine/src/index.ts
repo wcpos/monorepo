@@ -88,6 +88,7 @@ export { mergeProtectedOrderMeta } from './write-path/merge-protected-order-meta
 
 export { residentRevision } from './write-path/order-revision';
 
+export { sanitizeOutboundOrderPayload } from './materialization/sanitize-outbound-order-payload';
 export {
 	type QueueRow,
 	type QueueRowStatus,

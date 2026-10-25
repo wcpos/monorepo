@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-import { observeQueueRows, TERMINAL_QUEUE_STATUSES, useQueryRuntime } from '@wcpos/query';
+import {
+	observeQueueRows,
+	PARKED_QUEUE_STATUSES,
+	TERMINAL_QUEUE_STATUSES,
+	useQueryRuntime,
+} from '@wcpos/query';
 
 import { clearOrderSaving, getOrderSaveState, markOrderSaveRejected } from './checkout-mode';
 import { refusedWireOf } from './refused-wire';
@@ -39,6 +44,8 @@ export function useRejectedOrderSavesSync(storeId: number | string | undefined):
 					reason: row.rejectedReason ?? null,
 					message: row.rejectedMessage ?? null,
 					refused: refusedWireOf(row.payload),
+					// A parked row blocks every later write of the record; only a dead letter may be retried.
+					parked: (PARKED_QUEUE_STATUSES as readonly string[]).includes(row.status),
 				});
 			}
 			// The mirror owns only the hold: a retry's wait belongs to the save hook, which

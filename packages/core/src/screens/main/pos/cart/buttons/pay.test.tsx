@@ -207,6 +207,14 @@ it('refuses again while the order is still the one the store refused', () => {
 	expect(mockSave).not.toHaveBeenCalled();
 	expect(mockMarkSaving).not.toHaveBeenCalled();
 });
+it('keeps the hold on a parked (conflicted) order even when the cart changed', () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: {}, parked: true };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockRefusal).toHaveBeenCalledTimes(1);
+	expect(mockSave).not.toHaveBeenCalled();
+	expect(mockMarkSaving).not.toHaveBeenCalled();
+});
 it('retries a refused order whose cart changed since the refusal', async () => {
 	mockSaveState = {
 		kind: 'rejected',
