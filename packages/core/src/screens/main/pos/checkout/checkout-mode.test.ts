@@ -222,9 +222,33 @@ it('rejection is final, idempotent by fields, and can be cleared', () => {
 	clearOrderSaveIfMutation('a', 'm');
 	expect(getCheckoutModeSnapshot()).toBe(held);
 	markOrderSaveRejected('a', { ...rejection, message: 'Changed' });
-	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, message: 'Changed' });
+	expect(getOrderSaveState('a')).toEqual({
+		kind: 'rejected',
+		...rejection,
+		message: 'Changed',
+		refused: null,
+	});
 	clearOrderSaving('a');
 	expect(getOrderSaveState('a')).toBeNull();
+});
+it('a retry replaces a rejection; a plain save still holds', () => {
+	markOrderSaveRejected('a', { status: 403, reason: 'refused', message: null });
+	markOrderSaving('a');
+	expect(getOrderSaveState('a')?.kind).toBe('rejected');
+	markOrderSaving('a', { retry: true });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
+});
+it('a rejection without a payload keeps the refused payload already known', () => {
+	const rejection = { status: 400, reason: 'rest_invalid_param', message: null };
+	const refused = { line_items: [{ product_id: 1, quantity: 2 }] };
+	markOrderSaveRejected('a', { ...rejection, refused });
+	markOrderSaveRejected('a', rejection);
+	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, refused });
+	markOrderSaveRejected('a', { ...rejection, refused: null });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, refused });
+	const next = { line_items: [{ product_id: 1, quantity: 3 }] };
+	markOrderSaveRejected('a', { ...rejection, refused: next });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, refused: next });
 });
 it('derives offline immediately without changing the stored saving state', () => {
 	markOrderSaving('a');

@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { PayButton } from './pay';
 import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../checkout/checkout-mode';
+import { refusedWireOf } from '../../checkout/refused-wire';
 import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
 let mockSize = 'lg';
@@ -13,7 +14,7 @@ let mockUnsupported = false;
 const mockPush = jest.fn();
 const mockEnter = jest.fn();
 const mockSave = jest.fn();
-let mockSaveState: { kind: string } | null = null;
+let mockSaveState: { kind: string; [field: string]: unknown } | null = null;
 const mockLegacySave = jest.fn();
 const mockRefusal = jest.fn();
 const mockLeave = jest.fn();
@@ -51,7 +52,7 @@ jest.mock('../../checkout/checkout-mode', () => ({
 		jest.requireActual('../../checkout/checkout-mode').enterCheckout(id);
 	},
 	leaveCheckout: (id: string) => mockLeave(id),
-	markOrderSaving: (id: string) => mockMarkSaving(id),
+	markOrderSaving: (id: string, options?: { retry?: boolean }) => mockMarkSaving(id, options),
 	clearOrderSaving: (id: string) => mockClearSaving(id),
 	getOrderSaveState: () => mockSaveState,
 	useOrderSaveState: () => mockSaveState,
@@ -139,7 +140,7 @@ it('enters checkout before the push resolves', () => {
 	mockSave.mockReturnValue(new Promise(() => {}));
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
-	expect(mockMarkSaving).toHaveBeenCalledWith('order-1');
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: false });
 	expect(mockEnter).toHaveBeenCalledWith('order-1');
 	expect(mockClearSaving).not.toHaveBeenCalled();
 });
@@ -190,13 +191,36 @@ it('keeps queued-offline checkout open without clearing the save entry', async (
 	expect(mockLeave).not.toHaveBeenCalled();
 	expect(mockClearSaving).not.toHaveBeenCalled();
 });
-it('refuses a held order without enqueueing', () => {
-	mockSaveState = { kind: 'rejected', ...rejection };
+it('retries a held order whose refused payload is unknown', async () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: null };
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: true });
+	await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).not.toHaveBeenCalled();
+});
+it('refuses again while the order is still the one the store refused', () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: refusedWireOf(mockOrder.payload) };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockRefusal).toHaveBeenCalledTimes(1);
 	expect(mockSave).not.toHaveBeenCalled();
-	expect(mockLegacySave).not.toHaveBeenCalled();
-	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection: mockSaveState }));
+	expect(mockMarkSaving).not.toHaveBeenCalled();
+});
+it('retries a refused order whose cart changed since the refusal', async () => {
+	mockSaveState = {
+		kind: 'rejected',
+		...rejection,
+		refused: refusedWireOf({ ...mockOrder.payload, line_items: [{ product_id: 1, quantity: 2 }] }),
+	};
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: true });
+	await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith('Checkout retries a refused save', {
+		context: { orderId: 'order-1', refusedStatus: 403, refusedReason: 'refused' },
+	});
 });
 it.each(['lg', 'sm'])(
 	'releases checkout and toasts a late refusal without navigating (%s)',
@@ -264,7 +288,7 @@ describe('a checkout condition is unmet (roadmap#62)', () => {
 it('registers its pay path as the checkout surface while mounted (roadmap#428)', async () => {
 	const { unmount } = render(<PayButton />);
 	await act(() => invokeSurface('pay'));
-	expect(mockMarkSaving).toHaveBeenCalledWith('order-1');
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: false });
 	expect(mockEnter).toHaveBeenCalledWith('order-1');
 	unmount();
 	await expect(invokeSurface('pay')).rejects.toBeInstanceOf(SurfaceNotMountedError);

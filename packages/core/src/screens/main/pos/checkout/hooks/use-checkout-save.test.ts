@@ -83,7 +83,7 @@ it('returns immediate rejection without throwing or toasting', async () => {
 		outcome: 'rejected',
 		rejection,
 	});
-	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, refused: null });
 	expect(mockError).not.toHaveBeenCalled();
 });
 it.each(['ack', 'reject', 'durable-first-reject', 'stale-ack', 'stale-reject'])(
@@ -115,7 +115,7 @@ it.each(['ack', 'reject', 'durable-first-reject', 'stale-ack', 'stale-reject'])(
 				? { kind: 'saving' }
 				: outcome === 'ack'
 					? null
-					: { kind: 'rejected', ...rejection }
+					: { kind: 'rejected', ...rejection, refused: null }
 		);
 		if (outcome.endsWith('reject') && !outcome.startsWith('stale'))
 			expect(onLateRejected).toHaveBeenCalledWith(rejection);
