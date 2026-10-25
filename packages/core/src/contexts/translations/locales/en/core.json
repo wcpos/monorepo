@@ -1298,8 +1298,6 @@
 	"products.are_you_sure_you_want_to_2": "Are you sure you want to delete this variation? Deleting a variation is permanent, there is no Trash for variations.",
 	"products.delete": "Delete {product}",
 	"products.downloadable": "Downloadable",
-	"products.failed_to_save_product": "Failed to save product",
-	"products.failed_to_save_variation": "Failed to save variation",
 	"products.manage": "Manage",
 	"products.manage_stock": "Manage Stock",
 	"products.no_product_found": "No product found",

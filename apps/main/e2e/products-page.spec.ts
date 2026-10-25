@@ -433,15 +433,13 @@ test.describe('Products Page (Pro)', () => {
 
 			const modal = page.getByTestId('product-edit-modal');
 			await expect(modal).toBeVisible({ timeout: 15_000 });
-			const nameInput = modal.getByTestId('product-edit-name-input');
-			await nameInput.clear();
-			await nameInput.fill(newName);
-
 			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
 				timeout: 60_000,
 			});
 			pushResponsePending.catch(() => {});
-			await modal.getByTestId('product-edit-save-button').click();
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.fill(newName);
+			await expect(modal.getByTestId('saved-name')).toBeVisible({ timeout: 15_000 });
 
 			const pushResponse = await pushResponsePending;
 			if (pushResponse.status() === 403) {
@@ -451,6 +449,7 @@ test.describe('Products Page (Pro)', () => {
 				);
 			}
 			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+			await modal.getByTestId('product-edit-close-button').click();
 
 			await expect
 				.poll(
@@ -550,15 +549,13 @@ test.describe('Products Page (Pro)', () => {
 
 			const modal = page.getByTestId('product-edit-modal');
 			await expect(modal).toBeVisible({ timeout: 15_000 });
-			const nameInput = modal.getByTestId('product-edit-name-input');
-			await nameInput.clear();
-			await nameInput.fill(newName);
-
 			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
 				timeout: 60_000,
 			});
 			pushResponsePending.catch(() => {});
-			await modal.getByTestId('product-edit-save-button').click();
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.fill(newName);
+			await expect(modal.getByTestId('saved-name')).toBeVisible({ timeout: 15_000 });
 
 			const pushResponse = await pushResponsePending;
 			if (pushResponse.status() === 403) {
@@ -568,6 +565,7 @@ test.describe('Products Page (Pro)', () => {
 				);
 			}
 			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+			await modal.getByTestId('product-edit-close-button').click();
 
 			const pushRequestBody = pushResponse.request().postDataJSON() as {
 				mutationId: unknown;

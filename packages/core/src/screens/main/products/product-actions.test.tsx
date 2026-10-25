@@ -82,14 +82,17 @@ function Harness({
 	item,
 	onDeleted,
 	onSynced,
+	beforeSync,
 }: {
 	kind: Kind;
 	item: ReturnType<typeof record>;
 	onDeleted: () => void;
 	onSynced?: () => void;
+	beforeSync?: () => Promise<boolean>;
 }) {
-	const productActions = useProductActions(item, { onDeleted, onSynced });
-	const variationActions = useVariationActions(item, { onDeleted, onSynced });
+	const callbacks = { onDeleted, onSynced, beforeSync };
+	const productActions = useProductActions(item, callbacks);
+	const variationActions = useVariationActions(item, callbacks);
 	const actions = kind === 'product' ? productActions : variationActions;
 	const Dialog = kind === 'product' ? DeleteProductDialog : DeleteVariationDialog;
 	return (
@@ -142,6 +145,24 @@ describe.each([
 		unmount();
 		render(<Harness kind={kind} item={record(42)} onDeleted={jest.fn()} />);
 		fireEvent.click(screen.getByTestId(`${kind}-modal-sync`));
+		expect(mockRefresh).toHaveBeenCalledWith(mockEngine, {
+			id: `${kind}-actions:refresh:42`,
+			collection,
+			wooId: 42,
+		});
+	});
+
+	it('Sync waits for autosave and only pulls when it succeeds', async () => {
+		const beforeSync = jest.fn().mockResolvedValue(false);
+		render(<Harness kind={kind} item={record(42)} onDeleted={jest.fn()} beforeSync={beforeSync} />);
+		fireEvent.click(screen.getByTestId(`${kind}-modal-sync`));
+		await act(async () => {});
+		expect(mockRefresh).not.toHaveBeenCalled();
+
+		beforeSync.mockResolvedValue(true);
+		fireEvent.click(screen.getByTestId(`${kind}-modal-sync`));
+		expect(mockRefresh).not.toHaveBeenCalled();
+		await act(async () => {});
 		expect(mockRefresh).toHaveBeenCalledWith(mockEngine, {
 			id: `${kind}-actions:refresh:42`,
 			collection,

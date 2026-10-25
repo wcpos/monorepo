@@ -22,7 +22,12 @@ import { useUserCapabilities } from '../hooks/use-user-capabilities';
 
 type Catalogue = 'products' | 'variations';
 type CatalogueRecord = EngineRecord<'products'> | EngineRecord<'variations'>;
-type Callbacks = { onDeleted?: () => void; onSynced?: () => void };
+type Callbacks = {
+	onDeleted?: () => void;
+	onSynced?: () => void;
+	/** Land pending autosave before pulling; false stops a pull from resetting over a failed draft. */
+	beforeSync?: () => Promise<boolean>;
+};
 
 const syncLoggers = {
 	products: getLogger(['wcpos', 'products', 'actions', 'sync']),
@@ -33,7 +38,7 @@ const syncLoggers = {
 function useCatalogueActions(
 	collection: Catalogue,
 	record: CatalogueRecord,
-	{ onDeleted, onSynced }: Callbacks = {}
+	{ onDeleted, onSynced, beforeSync }: Callbacks = {}
 ) {
 	const id = useRecordField(record, ({ payload }) => payload.id);
 	const t = useT();
@@ -44,26 +49,29 @@ function useCatalogueActions(
 
 	const sync = React.useCallback(() => {
 		if (!id) return;
-		void refreshRecordByWooId(runtime.engine, {
-			id: `${product ? 'product' : 'variation'}-actions:refresh:${id}`,
-			collection,
-			wooId: id,
-		})
-			// Only the engine's applied answer hands the form the store's copy: a pull can settle
-			// with the row kept back for its pending local work.
-			.then((applied) => {
-				if (applied) onSynced?.();
+		void (async () => {
+			if (beforeSync && !(await beforeSync())) return;
+			await refreshRecordByWooId(runtime.engine, {
+				id: `${product ? 'product' : 'variation'}-actions:refresh:${id}`,
+				collection,
+				wooId: id,
 			})
-			.catch((error) => {
-				// The engine already wrote the coded row for this require (SYNC321), and the
-				// device's copy is untouched: the cashier only needs to know it didn't refresh.
-				syncLoggers[collection].debug(`Failed to refresh ${product ? 'product' : 'variation'}`, {
-					showToast: true,
-					toast: { title: t('common.refresh_failed'), type: 'warning' },
-					context: { [product ? 'productId' : 'variationId']: id, error: getErrorMessage(error) },
+				// Only the engine's applied answer hands the form the store's copy: a pull can settle
+				// with the row kept back for its pending local work.
+				.then((applied) => {
+					if (applied) onSynced?.();
+				})
+				.catch((error) => {
+					// The engine already wrote the coded row for this require (SYNC321), and the
+					// device's copy is untouched: the cashier only needs to know it didn't refresh.
+					syncLoggers[collection].debug(`Failed to refresh ${product ? 'product' : 'variation'}`, {
+						showToast: true,
+						toast: { title: t('common.refresh_failed'), type: 'warning' },
+						context: { [product ? 'productId' : 'variationId']: id, error: getErrorMessage(error) },
+					});
 				});
-			});
-	}, [id, runtime, t, onSynced, collection, product]);
+		})();
+	}, [id, runtime, t, beforeSync, onSynced, collection, product]);
 
 	const confirmDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, { collection, recordId: record.uuid });
@@ -89,7 +97,7 @@ export const useVariationActions = (record: EngineRecord<'variations'>, callback
 
 /**
  * The footer's left group: the record's own actions, destructive first (orders #2904), beside
- * the form's Cancel/Save group.
+ * the form's Close.
  */
 export function RecordFooterActions({
 	actions,

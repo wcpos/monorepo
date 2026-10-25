@@ -6,28 +6,25 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
 	FormTreeCombobox,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, ProductPayload } from '@wcpos/query';
-import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
 import { useT } from '../../../../../contexts/translations';
@@ -43,8 +40,6 @@ import { CategoryTreeLoader } from '../../../components/product/category-select'
 import { useCatalogueRecord } from '../../commands/use-catalogue-record';
 import { DeleteProductDialog, RecordFooterActions, useProductActions } from '../../product-actions';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -65,6 +60,8 @@ const schema = z.object({
 	tax_class: z.string(),
 	meta_data: metaDataSchema,
 });
+
+type FormValues = z.infer<typeof schema>;
 
 interface Props {
 	product: EngineRecord<'products'>;
@@ -98,9 +95,16 @@ function formValues(productData: ProductPayload): z.infer<typeof schema> {
 /**
  *
  */
-export function EditProductForm({ product }: Props) {
+export function EditProductForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditProductFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditProductFormFields({ product }: Props) {
 	const t = useT();
-	const [loading, setLoading] = React.useState(false);
 	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
@@ -110,80 +114,45 @@ export function EditProductForm({ product }: Props) {
 	if (!product) {
 		throw new Error(t('products.product_not_found'));
 	}
-	const form = useForm<z.infer<typeof schema>>({
+	const form = useForm<FormValues>({
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(product.toMutableJSON().payload),
 	});
-	// Sync means "take the store's copy": the landed refresh replaces unsaved edits, so a later
-	// Save cannot write the stale values back over it.
+	const markSaved = useMarkSaved();
+	const { flush } = useFormChangeHandler({
+		form,
+		onChange: async (changes) => {
+			// The licence-gated read-only form never writes: the route is closed to it, a typed URL is not.
+			if (readOnly) return false;
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			const value = form.getValues(root);
+			const wire =
+				root === 'tax_class'
+					? taxClassToWire(form.getValues('tax_class'))
+					: root === 'categories'
+						? form
+								.getValues('categories')
+								.map((opt) => ({ id: toNumber(opt.value), name: opt.label }))
+						: root === 'meta_data' && Array.isArray(value)
+							? form
+									.getValues('meta_data')
+									?.filter((row) => row?.id != null || String(row?.key ?? '') !== '')
+							: value;
+			const written = await saveCatalogueFields(product, {
+				[root]: wire,
+			} as Partial<ProductPayload>);
+			if (written) markSaved([root]);
+			return written;
+		},
+	});
+	// Sync flushes the pending edit first, then takes the store's copy; resetting the draft
+	// prevents a debounced write from putting stale values back over the pulled ones.
 	const actions = useProductActions(product, {
 		onDeleted: close,
+		beforeSync: flush,
 		onSynced: () => form.reset(formValues(product.getLatest().payload as ProductPayload)),
 	});
-
-	/**
-	 * Handle save button click
-	 */
-	const handleSave = React.useCallback(
-		async (data: z.infer<typeof schema>) => {
-			data.tax_class = taxClassToWire(data.tax_class);
-			const { categories: categoryOptions, ...rest } = data;
-			const patchData: Partial<ProductPayload> = {
-				...rest,
-				categories: categoryOptions.map((opt) => ({
-					id: toNumber(opt.value),
-					name: opt.label,
-				})),
-			} as Partial<ProductPayload>;
-			setLoading(true);
-			try {
-				const savedFields = await saveCatalogueFields(product, patchData);
-				// localPatch reports its own failure (row + toast) and resolves undefined;
-				// reporting it again put a second row and toast on one failed save.
-				if (!savedFields) return;
-				const saved = product.getLatest().payload;
-				mutationLogger.success(t('common.saved', { name: saved.name }), {
-					showToast: true,
-					context: {
-						productId: saved.id,
-						productName: saved.name,
-					},
-				});
-				close();
-			} catch (error) {
-				// A localPatch rethrow (the scope moved twice) is already reported.
-				if (isErrorReported(error)) return;
-				const errorMessage = getErrorMessage(error);
-				mutationLogger.error('Failed to save product', {
-					showToast: true,
-					// A local save: the store was never contacted, so no "store refused" code.
-					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-					toast: { title: t('products.failed_to_save_product') },
-					context: {
-						productId: product.getLatest().payload.id,
-						error: errorMessage,
-					},
-				});
-			} finally {
-				setLoading(false);
-			}
-		},
-		[close, saveCatalogueFields, product, t]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
-	const formActions = (
-		<>
-			<DialogClose testID="product-edit-cancel-button">{t('common.cancel')}</DialogClose>
-			<DialogAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
-				<Button loading={loading}>{t('common.save')}</Button>
-			</DialogAction>
-		</>
-	);
-	// With record actions, two wrapping groups: the record's on the left, Cancel/Save on the right.
+	// The record's actions on the left, Close on the right.
 	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
@@ -197,7 +166,13 @@ export function EditProductForm({ product }: Props) {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput testID="product-edit-name-input" label={t('common.name')} {...field} />
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('common.name')}</FormLabel>
+								<SavedMark name="name" label={t('settings.saved')} />
+							</HStack>
+							<FormInput testID="product-edit-name-input" {...field} />
+						</FormItem>
 					)}
 				/>
 				<FormField
@@ -222,18 +197,26 @@ export function EditProductForm({ product }: Props) {
 						control={form.control}
 						name="sku"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.sku')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.sku')}</FormLabel>
+									<SavedMark name="sku" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="barcode"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.barcode')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.barcode')}</FormLabel>
+									<SavedMark name="barcode" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -242,26 +225,26 @@ export function EditProductForm({ product }: Props) {
 						control={form.control}
 						name="regular_price"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('common.regular_price')}
-									{...field}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.regular_price')}</FormLabel>
+									<SavedMark name="regular_price" label={t('settings.saved')} />
+								</HStack>
+								<FormInput customComponent={CurrencyInput} {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="sale_price"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('common.sale_price')}
-									{...field}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.sale_price')}</FormLabel>
+									<SavedMark name="sale_price" label={t('settings.saved')} />
+								</HStack>
+								<FormInput customComponent={CurrencyInput} {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -315,15 +298,18 @@ export function EditProductForm({ product }: Props) {
 							control={form.control}
 							name="stock_quantity"
 							render={({ field: { value, ...rest } }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('products.stock_quantity')}</FormLabel>
+										<SavedMark name="stock_quantity" label={t('settings.saved')} />
+									</HStack>
 									<FormInput
 										customComponent={NumberInput}
 										type="numeric"
-										label={t('products.stock_quantity')}
 										value={value != null ? String(value) : undefined}
 										{...rest}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
@@ -370,14 +356,8 @@ export function EditProductForm({ product }: Props) {
 				<MetaDataForm />
 			</DialogBody>
 			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
-				{leading ? (
-					<>
-						<RecordFooterActions actions={actions} testIDPrefix="product" />
-						<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
-					</>
-				) : (
-					formActions
-				)}
+				{leading && <RecordFooterActions actions={actions} testIDPrefix="product" />}
+				<DialogClose testID="product-edit-close-button">{t('common.close')}</DialogClose>
 			</DialogFooter>
 			{!readOnly && actions.canDelete && (
 				<DeleteProductDialog

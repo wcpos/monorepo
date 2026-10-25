@@ -328,11 +328,16 @@ never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `I
 `Chip`, never a Button that toggles its variant. Icon-only actions are an `IconButton` (44, `size="sm"`
 32 in dense rows), with an `accessibilityLabel`.
 
-Saving (owner, 2026-10-23): an edit to what the device owns (a setting, a field of the open cart) saves as it is
-made — `useFormChangeHandler` writes it, validated, and the shared `SavedMark` acknowledges it beside the label; it is
-never a button. An action that reaches the store, creates a record or moves money has ONE explicit button named for
-what it does (_Sync order_, _Send_, _Add to cart_, _Refund_). The word Save is on no button, and the two kinds of
-saving never share one form: the cart's order sheet holds its hand-over (status, cashier) in its own form with its own Send.
+Saving (owner, 2026-10-23 and 2026-10-25): an edit to a record that already exists (a setting, a field of the open
+cart, a product, a customer, a coupon, an order) saves as it is made — `useFormChangeHandler` validates the changed path
+and writes it, the shared `SavedMark` acknowledges it beside the label, and the footer is Close plus the record's own
+actions, never Cancel or Save. A record the store owns reaches the store through the outbox, not a button: `localPatch`
+enqueues a store mutation for every non-cart write and the queue coalesces them per record, so "Saved" means saved on the
+device and on its way. ONE explicit button remains only for an action named for what it does — creating a record
+(_Add customer_, _Add to cart_), moving money (_Pay_, _Refund_), sending something (_Send_), a status intent on an order
+(a status is an intent, never an echo) and the footer's record actions (_Sync_, _Delete_) — and the word Save is on no
+button. The two kinds never share one form: where a sheet carries both, the intent lives in its own bordered card with
+its own form and button, as the cart's Order details sheet does with its Hand over card.
 
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
