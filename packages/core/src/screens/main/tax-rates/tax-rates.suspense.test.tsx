@@ -91,11 +91,10 @@ function passthrough({ children }: { children?: React.ReactNode }) {
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: passthrough,
 	DialogBody: passthrough,
-	DialogClose: passthrough,
 	DialogContent: ({ children }: { children?: React.ReactNode }) => (
 		<div data-testid="tax-rates-modal">{children}</div>
 	),
-	DialogFooter: passthrough,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 	DialogHeader: passthrough,
 	DialogTitle: passthrough,
 }));

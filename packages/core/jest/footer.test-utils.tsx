@@ -25,7 +25,6 @@ function actionButton(
 
 /** Slot-aware stand-ins for suites that already mock the dialog shell. */
 export function DialogFooter({
-	children,
 	intent,
 	secondary,
 	record,
@@ -33,14 +32,8 @@ export function DialogFooter({
 	close,
 	aside,
 	size = 'default',
-}: DialogFooterProps & React.PropsWithChildren) {
-	if (children) return <>{children}</>;
-	const Close = jest.requireMock('@wcpos/components/dialog').DialogClose;
-	if (close && !Close) {
-		throw new Error(
-			`${expect.getState().testPath}: @wcpos/components/dialog mock needs DialogClose for the close slot`
-		);
-	}
+}: DialogFooterProps) {
+	const closeProps = typeof close === 'object' ? close : {};
 	return (
 		<>
 			{aside}
@@ -49,9 +42,13 @@ export function DialogFooter({
 				.filter(isButton)
 				.map((action) => actionButton(action, size))}
 			{close ? (
-				<Close size={size} {...(typeof close === 'object' ? close : {})}>
+				<button
+					data-testid={closeProps.testID}
+					disabled={closeProps.disabled}
+					onClick={closeProps.onPress as unknown as React.MouseEventHandler}
+				>
 					{intent ? 'Cancel' : 'Close'}
-				</Close>
+				</button>
 			) : null}
 			{[secondary, intent]
 				.flat()
@@ -61,22 +58,22 @@ export function DialogFooter({
 	);
 }
 
-export function AlertDialogFooter({
-	children,
-	confirm,
-	cancel = true,
-}: AlertDialogFooterProps & React.PropsWithChildren) {
-	if (children) return <>{children}</>;
-	const Cancel = jest.requireMock('@wcpos/components/alert-dialog').AlertDialogCancel;
+export function AlertDialogFooter({ confirm, cancel = true }: AlertDialogFooterProps) {
+	const cancelProps = typeof cancel === 'object' ? cancel : {};
 	return (
 		<>
-			{cancel && Cancel ? (
-				<Cancel {...(typeof cancel === 'object' ? cancel : {})}>Cancel</Cancel>
+			{cancel ? (
+				<button
+					data-testid={cancelProps.testID}
+					disabled={cancelProps.disabled}
+					onClick={cancelProps.onPress as unknown as React.MouseEventHandler}
+				>
+					Cancel
+				</button>
 			) : null}
-			{confirm &&
-				React.cloneElement(actionButton(confirm), {
-					'data-variant': confirm.destructive ? 'destructive' : 'default',
-				} as React.HTMLAttributes<HTMLButtonElement>)}
+			{React.cloneElement(actionButton(confirm), {
+				'data-variant': confirm.destructive ? 'destructive' : 'default',
+			} as React.HTMLAttributes<HTMLButtonElement>)}
 		</>
 	);
 }

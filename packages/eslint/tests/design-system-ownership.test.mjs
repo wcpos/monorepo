@@ -35,6 +35,47 @@ async function lint(code, filePath, ruleId, baseConfig = config, cwd = REPO_ROOT
 
 const variantOwnership = (code) => lint(code, IN_APP, 'no-restricted-syntax');
 
+test('rejects a button in a footer aside through the core and main package configs', async () => {
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(
+			'export const Bad = () => <DialogFooter aside={<Button/>} close />;',
+			file,
+			'no-restricted-syntax',
+			base,
+			cwd
+		);
+		assert.equal(
+			messages.filter((m) => m.message.includes("A footer's buttons are its slots")).length,
+			1
+		);
+	}
+});
+
+for (const markup of [
+	"<Alert.AlertDialogFooter confirm={{ label: 'Delete' }} aside={<Button/>} />",
+	'<DialogFooter aside={<UI.Button/>} close />',
+]) {
+	test(`rejects a button inside a namespace-qualified footer or button: ${markup}`, async () => {
+		const messages = await variantOwnership(`export const Bad = () => ${markup};`);
+		assert.equal(
+			messages.filter((m) => m.message.includes("A footer's buttons are its slots")).length,
+			1
+		);
+	});
+}
+
+for (const markup of [
+	"<DialogFooter close intent={{ label: 'Send' }} />",
+	"<Alert.AlertDialogFooter confirm={{ label: 'Delete' }} />",
+]) {
+	test(`allows footer actions expressed as slots: ${markup}`, async () => {
+		assert.deepEqual(await variantOwnership(`export const Fine = () => ${markup};`), []);
+	});
+}
+
 test('rejects colour utilities on components that own colour as a variant', async () => {
 	// The Store Health regression this rule exists to prevent: a destructive label
 	// painted onto a `default` (blue) confirm button.
@@ -42,10 +83,6 @@ test('rejects colour utilities on components that own colour as a variant', asyn
 		export function Bad() {
 			return (
 				<>
-					<AlertDialogAction>
-						<Text className="text-destructive">Clear</Text>
-					</AlertDialogAction>
-					<ModalAction><Text className="text-destructive">Remove</Text></ModalAction>
 					<Button className="bg-transparent">Menu</Button>
 					<Badge className="border-destructive">3</Badge>
 				</>
@@ -53,7 +90,7 @@ test('rejects colour utilities on components that own colour as a variant', asyn
 		}
 	`);
 
-	assert.equal(messages.length, 4);
+	assert.equal(messages.length, 2);
 });
 
 test('rejects height and radius utilities on Button and IconButton: the size prop owns them', async () => {

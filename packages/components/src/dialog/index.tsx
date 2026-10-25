@@ -32,7 +32,7 @@ import { useDialogLabels } from './labels';
 
 import type { IconName } from '../icon';
 import type { OverlayPresentation } from '../lib/overlay';
-import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
+import type { SlottableTextProps } from '@rn-primitives/types';
 export { DialogLabelsProvider, type DialogLabels } from './labels';
 
 export type DialogSide = 'center' | 'left' | 'right' | 'bottom';
@@ -194,7 +194,7 @@ function DialogPanel(allProps: DialogContentProps) {
 		>
 			{children}
 			<View className={cn('absolute right-1', fill ? 'top-0' : 'top-1')}>
-				<DialogClose asChild>
+				<DialogPrimitive.Close asChild>
 					<IconButton
 						name="close"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
@@ -204,7 +204,7 @@ function DialogPanel(allProps: DialogContentProps) {
 						// After the spread: the type omits it, but a runtime object could still carry one.
 						accessibilityLabel={closeLabel ?? labels.close}
 					/>
-				</DialogClose>
+				</DialogPrimitive.Close>
 			</View>
 		</DialogPrimitive.Content>
 	);
@@ -284,35 +284,19 @@ export type DialogFooterProps = {
 	size?: 'default' | 'lg';
 	testID?: string;
 };
-type LegacyFooterProps = ViewProps & { children: React.ReactNode };
-export function DialogFooter(
-	allProps:
-		(DialogFooterProps & { children?: never; className?: never; style?: never }) | LegacyFooterProps
-): React.JSX.Element {
+export function DialogFooter({
+	intent,
+	secondary,
+	record,
+	destructive,
+	close,
+	aside,
+	size = 'default',
+	testID,
+}: DialogFooterProps): React.JSX.Element {
 	const { presentation } = useOverlay();
 	const phone = useIsPhone();
 	const labels = useDialogLabels();
-	const chrome = cn(
-		'flex max-w-full gap-2 px-4',
-		presentation !== 'center' && 'border-border border-t pt-4'
-	);
-	if ('children' in allProps) {
-		const { children, className, ...props } = allProps;
-		return (
-			<View
-				className={cn(
-					chrome,
-					phone ? 'flex-col-reverse' : 'flex-row items-center justify-end',
-					className
-				)}
-				{...props}
-			>
-				{children}
-			</View>
-		);
-	}
-	const { intent, secondary, record, destructive, close, aside } = allProps;
-	const { size = 'default', testID } = allProps;
 	const alternatives = [secondary ?? []].flat().filter(isButton);
 	const records = [record ?? []].flat().filter(isButton);
 	const losses = [destructive ?? []].flat().filter(isButton);
@@ -355,7 +339,8 @@ export function DialogFooter(
 		<View
 			testID={testID}
 			className={cn(
-				chrome,
+				'flex max-w-full gap-2 px-4',
+				presentation !== 'center' && 'border-border border-t pt-4',
 				phone ? 'flex-col' : 'flex-row flex-wrap items-center',
 				!phone && (left ? 'justify-between' : 'justify-end')
 			)}
@@ -388,27 +373,5 @@ export function DialogFooter(
 				</>
 			)}
 		</View>
-	);
-}
-/** @deprecated Use DialogFooter's close slot. */
-export function DialogClose({ asChild, ...props }: DialogPrimitive.CloseProps): React.JSX.Element {
-	return (
-		<DialogPrimitive.Close asChild>
-			{asChild ? <Slot {...props} /> : <Button variant="outline" {...props} />}
-		</DialogPrimitive.Close>
-	);
-}
-/** @deprecated Use DialogFooter's intent or secondary slot. */
-export function DialogAction(allProps: SlottablePressableProps): React.JSX.Element {
-	const { asChild, disabled, ...props } = allProps;
-	return asChild ? (
-		<Slot
-			aria-disabled={disabled ?? undefined}
-			role="button"
-			disabled={disabled ?? undefined}
-			{...props}
-		/>
-	) : (
-		<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
 	);
 }

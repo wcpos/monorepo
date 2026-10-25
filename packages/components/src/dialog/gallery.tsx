@@ -1,14 +1,11 @@
 import { View } from 'react-native';
 
-import { Button } from '../button';
 import { Input } from '../input';
 import { DeviceScope } from '../lib/device';
 import { Text } from '../text';
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
@@ -72,14 +69,10 @@ export const stories = [
 						<DialogBody>
 							<Input testID="center-email" placeholder="Email address" />
 						</DialogBody>
-						<DialogFooter>
-							<DialogClose testID="center-cancel">
-								<Text>Cancel</Text>
-							</DialogClose>
-							<DialogAction testID="center-send">
-								<Text>Send</Text>
-							</DialogAction>
-						</DialogFooter>
+						<DialogFooter
+							close={{ testID: 'center-cancel' }}
+							intent={{ label: 'Send', testID: 'center-send' }}
+						/>
 					</DialogContent>
 				</Dialog>
 			</View>
@@ -99,14 +92,10 @@ export const stories = [
 							<Input testID="right-price" placeholder="Price" />
 							<Input testID="right-quantity" placeholder="Quantity" />
 						</DialogBody>
-						<DialogFooter>
-							<DialogClose testID="right-cancel">
-								<Text>Cancel</Text>
-							</DialogClose>
-							<DialogAction testID="right-save">
-								<Text>Save</Text>
-							</DialogAction>
-						</DialogFooter>
+						<DialogFooter
+							close={{ testID: 'right-cancel' }}
+							intent={{ label: 'Save', testID: 'right-save' }}
+						/>
 					</DialogContent>
 				</Dialog>
 			</View>
@@ -124,17 +113,11 @@ export const stories = [
 						<DialogBody>
 							<Text>2 items</Text>
 						</DialogBody>
-						<DialogFooter>
-							<Button testID="left-void" variant="outline">
-								<Text>Void</Text>
-							</Button>
-							<Button testID="left-print" variant="ghost">
-								<Text>Print bill</Text>
-							</Button>
-							<Button testID="left-save">
-								<Text>Save</Text>
-							</Button>
-						</DialogFooter>
+						<DialogFooter
+							destructive={{ label: 'Void', testID: 'left-void' }}
+							secondary={{ label: 'Print bill', testID: 'left-print' }}
+							intent={{ label: 'Save', testID: 'left-save' }}
+						/>
 					</DialogContent>
 				</Dialog>
 			</View>
@@ -190,14 +173,10 @@ export const stories = [
 							<DialogBody>
 								<Input testID="phone-center-email" placeholder="Email address" />
 							</DialogBody>
-							<DialogFooter>
-								<DialogClose testID="phone-center-cancel">
-									<Text>Cancel</Text>
-								</DialogClose>
-								<DialogAction testID="phone-center-send">
-									<Text>Send</Text>
-								</DialogAction>
-							</DialogFooter>
+							<DialogFooter
+								close={{ testID: 'phone-center-cancel' }}
+								intent={{ label: 'Send', testID: 'phone-center-send' }}
+							/>
 						</DialogContent>
 					</Dialog>
 				</View>

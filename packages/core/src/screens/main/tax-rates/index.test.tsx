@@ -89,9 +89,8 @@ jest.mock('@wcpos/components/suspense', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogClose: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
 	DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

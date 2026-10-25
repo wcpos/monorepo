@@ -75,12 +75,6 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 
 jest.mock('@wcpos/components/dialog', () => ({
-	DialogAction: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
-		<button type="button" data-testid={String(children)} onClick={onPress}>
-			{children}
-		</button>
-	),
-	DialogClose: () => <button>common.close</button>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
 		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
@@ -200,9 +194,7 @@ describe('EditCartCustomerForm', () => {
 		customerFindOne.mockReturnValue({ exec: () => lookup });
 
 		render(<EditCartCustomerForm />);
-		expect(screen.getByRole('contentinfo').textContent).toBe(
-			'common.closepos_cart.update_customer_too'
-		);
+		expect(screen.getByRole('contentinfo').textContent).toBe('Closepos_cart.update_customer_too');
 		fireEvent.click(screen.getByRole('button', { name: 'pos_cart.update_customer_too' }));
 
 		await waitFor(() => expect(customerFindOne).toHaveBeenCalled());
@@ -266,7 +258,7 @@ describe('EditCartCustomerForm', () => {
 
 		render(<EditCartCustomerForm />);
 
-		expect(screen.getByRole('contentinfo').textContent).toBe('common.close');
+		expect(screen.getByRole('contentinfo').textContent).toBe('Close');
 	});
 
 	it.each([null, 0])('shows only Close for a missing or guest customer (%s)', (customerId) => {
@@ -274,7 +266,7 @@ describe('EditCartCustomerForm', () => {
 
 		render(<EditCartCustomerForm />);
 
-		expect(screen.getByRole('contentinfo').textContent).toBe('common.close');
+		expect(screen.getByRole('contentinfo').textContent).toBe('Close');
 	});
 });
 

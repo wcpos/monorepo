@@ -39,11 +39,10 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	return {
 		AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
 			open ? <div>{children}</div> : null,
-		AlertDialogAction: Part,
-		AlertDialogCancel: Part,
 		AlertDialogContent: Part,
 		AlertDialogDescription: Part,
-		AlertDialogFooter: Part,
+		AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils')
+			.AlertDialogFooter,
 		AlertDialogHeader: Part,
 		AlertDialogTitle: Part,
 	};

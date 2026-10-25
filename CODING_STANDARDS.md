@@ -345,7 +345,7 @@ never shares a colour with Void (§7).
 
 #### Footers
 
-A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` take slots and own the variant, the order, the side and the phone stacking; a `Button`, `DialogClose`, `DialogAction`, `AlertDialogAction` or `AlertDialogCancel` is never written inside a footer (ruled 2026-10-25, after two Sync buttons shipped in two looks).
+A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` take slots and own the variant, the order, the side and the phone stacking; a `Button` is never written inside a footer (ruled 2026-10-25, after two Sync buttons shipped in two looks).
 
 | Slot | Variant | Side | Examples |
 | --- | --- | --- | --- |
@@ -360,7 +360,7 @@ A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` ta
 
 One intent per footer. A record action is never the intent. The footer chooses Cancel versus Close from `DialogLabels`; the caller never chooses the word.
 
-The ratchet is `packages/eslint/tests/footer-children-fence.test.mjs`; its allowlist only shrinks, and the `children` path goes when it is empty.
+The ESLint `designSystemOwnershipSelectors` footer selector in `packages/eslint/index.js` refuses a button written inside a footer, including its `aside` prop; a button rendered by a child component inside `aside` (the tax rates' sync control) is the caller's responsibility and the one place this rule is review, not lint.
 
 #### Situation → overlay
 

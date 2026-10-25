@@ -8,11 +8,9 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
-	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
@@ -160,20 +158,19 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	return (
 		<CustomerForm
 			form={form}
-			footer={
-				<>
-					<Button testID="customer-form-close" variant="outline" onPress={onClose}>
-						<ButtonText>{t('common.close')}</ButtonText>
-					</Button>
-					<Button testID="customer-form-add" loading={loading} onPress={() => void onSubmit()}>
-						<ButtonText>{t('customers.add_customer')}</ButtonText>
-					</Button>
-				</>
-			}
+			footer={{
+				intent: {
+					label: t('customers.add_customer'),
+					testID: 'customer-form-add',
+					loading,
+					onPress: () => void onSubmit(),
+				},
+				close: { testID: 'customer-form-close' },
+			}}
 			renderLayout={(body, footer) => (
 				<>
 					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
-					<DialogFooter>{footer}</DialogFooter>
+					{footer}
 				</>
 			)}
 		/>

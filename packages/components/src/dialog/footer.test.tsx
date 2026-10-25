@@ -169,12 +169,6 @@ it('passes size to all roles and forwards icon, loading, disabled and press', ()
 	fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
-it('keeps legacy children and ignores slots', () => {
-	// @ts-expect-error Legacy children cannot be combined with role slots.
-	footer({ children: <span>Legacy</span>, intent: action('Intent') });
-	expect(screen.getByText('Legacy')).toBeInTheDocument();
-	expect(screen.queryByTestId('Intent')).toBeNull();
-});
 // @ts-expect-error A caller chooses a role, never a variant.
 const forbidden: FooterButton = { label: 'Sync', variant: 'default' };
 void forbidden;
@@ -183,7 +177,7 @@ void forbidden;
 const forbiddenDialogClass = <DialogFooter close className="flex-1" />;
 // @ts-expect-error Slot callers cannot supply legacy styles.
 const forbiddenDialogStyle = <DialogFooter close style={{ flex: 1 }} />;
-// @ts-expect-error Legacy layout props require children.
+// @ts-expect-error Footers cannot supply layout props.
 const missingDialogChildren = <DialogFooter className="flex-1" />;
 // @ts-expect-error Slot confirmations require a confirm action.
 const missingConfirm = <AlertDialogFooter />;
@@ -191,7 +185,7 @@ const missingConfirm = <AlertDialogFooter />;
 const forbiddenAlertClass = <AlertDialogFooter confirm={action('Confirm')} className="flex-1" />;
 // @ts-expect-error Slot confirmations cannot supply legacy styles.
 const forbiddenAlertStyle = <AlertDialogFooter confirm={action('Confirm')} style={{ flex: 1 }} />;
-// @ts-expect-error Legacy alert layout props require children.
+// @ts-expect-error Alert footers cannot supply layout props.
 const missingAlertChildren = <AlertDialogFooter className="flex-1" />;
 void [
 	forbiddenDialogClass,
@@ -234,3 +228,17 @@ it('hands a slot ref to the rendered button, so a caller can return focus to it'
 	);
 	expect(ref.current).toBe(screen.getByTestId('email'));
 });
+
+const forbiddenDialogChildren = (
+	// @ts-expect-error Footer children are no longer accepted.
+	<DialogFooter>
+		<Button>Legacy</Button>
+	</DialogFooter>
+);
+const forbiddenAlertChildren = (
+	// @ts-expect-error Alert footer children are no longer accepted.
+	<AlertDialogFooter confirm={{ label: 'Delete' }}>
+		<Button>Legacy</Button>
+	</AlertDialogFooter>
+);
+void [forbiddenDialogChildren, forbiddenAlertChildren];

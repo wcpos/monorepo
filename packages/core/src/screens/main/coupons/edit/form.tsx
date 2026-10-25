@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import { SavedFieldProvider } from '@wcpos/components/form';
 import type { EngineRecord } from '@wcpos/query';
@@ -55,37 +54,25 @@ function EditCouponFormFields({ coupon }: Props) {
 			form.reset({ ...coupon.getLatest().payload } as z.infer<typeof couponFormSchema>),
 	});
 
-	// The record's actions sit left of Close: destructive first (orders #2904).
-	const footerLeading =
-		!readOnly && (actions.canDelete || actions.canSync) ? (
-			<>
-				{actions.canDelete && (
-					<Button
-						variant="outline-destructive"
-						testID="coupon-modal-delete"
-						onPress={actions.requestDelete}
-					>
-						{t('common.delete')}
-					</Button>
-				)}
-				{actions.canSync && (
-					<Button variant="outline" testID="coupon-modal-sync" onPress={actions.sync}>
-						{t('common.sync')}
-					</Button>
-				)}
-			</>
-		) : undefined;
-
 	return (
 		<>
 			<CouponForm
 				form={form}
-				footer={
-					<Button testID="coupon-form-close" variant="outline" onPress={close}>
-						<ButtonText>{t('common.close')}</ButtonText>
-					</Button>
-				}
-				footerLeading={footerLeading}
+				footer={{
+					destructive: !readOnly &&
+						actions.canDelete && {
+							label: t('common.delete'),
+							testID: 'coupon-modal-delete',
+							onPress: actions.requestDelete,
+						},
+					record: !readOnly &&
+						actions.canSync && {
+							label: t('common.sync'),
+							testID: 'coupon-modal-sync',
+							onPress: actions.sync,
+						},
+					close: { testID: 'coupon-form-close' },
+				}}
 			/>
 			{!readOnly && actions.canDelete && (
 				<DeleteCouponDialog

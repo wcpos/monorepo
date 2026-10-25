@@ -52,17 +52,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialog: ({ children, open }: Kids & { open?: boolean }) => (open ? <>{children}</> : null),
 		AlertDialogContent: Passthrough,
 		AlertDialogDescription: Passthrough,
-		AlertDialogFooter: Passthrough,
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 		AlertDialogHeader: Passthrough,
 		AlertDialogTitle: Passthrough,
-		AlertDialogCancel: ({ children, testID }: PressProps) => (
-			<button data-testid={testID}>{children}</button>
-		),
-		AlertDialogAction: ({ children, testID, onPress }: PressProps) => (
-			<button data-testid={testID} onClick={onPress}>
-				{children}
-			</button>
-		),
 	};
 });
 jest.mock('@wcpos/components/button', () => ({

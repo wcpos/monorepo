@@ -18,7 +18,7 @@ import {
 	SavedMark,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, type DialogFooterProps } from '@wcpos/components/dialog';
 
 import { CollapsibleSection } from './collapsible-section';
 import { couponFormSchema } from './coupon-schema';
@@ -43,12 +43,10 @@ export { couponFormSchema } from './coupon-schema';
 
 interface CouponFormProps {
 	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof couponFormSchema>>>;
-	footer: React.ReactNode;
-	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
-	footerLeading?: React.ReactNode;
+	footer: DialogFooterProps;
 }
 
-export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
+export function CouponForm({ form, footer }: CouponFormProps) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 
@@ -377,15 +375,7 @@ export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 					</View>
 				</CollapsibleSection>
 			</DialogBody>
-			{footerLeading ? (
-				// Two wrapping groups: the record's actions on the left, the footer on the right.
-				<DialogFooter className="flex-wrap justify-between">
-					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
-					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footer}</View>
-				</DialogFooter>
-			) : (
-				<DialogFooter>{footer}</DialogFooter>
-			)}
+			<DialogFooter {...footer} />
 		</Form>
 	);
 }

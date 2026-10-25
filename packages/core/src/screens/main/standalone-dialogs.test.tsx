@@ -239,7 +239,7 @@ function Printer({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 			onOpenChange={onOpenChange}
 			connectionSection={<span>Connection</span>}
 			advancedSettings={<span>Options</span>}
-			footer={<span>Close printer</span>}
+			footer={{ record: { label: 'Test print' } }}
 		/>
 	);
 }
@@ -250,7 +250,7 @@ it.each([false, true])('printer keeps its wide desktop panel or phone page (phon
 	const close = jest.fn();
 	render(<Printer onOpenChange={close} />);
 	expect(screen.getByRole('dialog')).toHaveClass(phone ? 'w-full' : 'w-200');
-	expect(screen.getByText('Close printer').parentElement).toHaveClass('border-t');
+	expect(screen.getByText('Test print').closest('.border-t')).toBeInTheDocument();
 	fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
 	expect(close).toHaveBeenCalledWith(false);
 });

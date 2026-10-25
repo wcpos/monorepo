@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import {
@@ -379,8 +379,9 @@ describe('EditOrderForm autosave', () => {
 		});
 		expect(mockMarkSaved).toHaveBeenCalledWith(['customer_note']);
 		expect(mockPushDocument).not.toHaveBeenCalled();
-		expect(modalActions.has('order-edit-close-button')).toBe(true);
-		expect(modalActions.has('order-edit-save-button')).toBe(false);
+		// The footer's Close is the slot stand-in's own button; Save is gone from the footer.
+		expect(screen.getByTestId('order-edit-close-button')).toBeTruthy();
+		expect(screen.queryByTestId('order-edit-save-button')).toBeNull();
 	});
 
 	it('validates and writes the whole billing root for a billing.city edit', async () => {

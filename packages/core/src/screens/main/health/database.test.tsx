@@ -67,23 +67,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	}
 	return {
 		AlertDialog: Component,
-		AlertDialogAction: ({
-			children,
-			testID,
-			onPress,
-		}: {
-			children: React.ReactNode;
-			testID?: string;
-			onPress?: () => void;
-		}) => (
-			<button data-testid={testID} onClick={onPress}>
-				{children}
-			</button>
-		),
-		AlertDialogCancel: Component,
 		AlertDialogContent: Component,
 		AlertDialogDescription: Component,
-		AlertDialogFooter: Component,
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 		AlertDialogHeader: Component,
 		AlertDialogTitle: Component,
 	};

@@ -5,8 +5,6 @@ import { useRouter } from 'expo-router';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -307,22 +305,19 @@ export function ConflictedMutationsPanel() {
 								: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-conflicted-resend-delete-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-conflicted-resend-delete-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-conflicted-resend-delete-cancel' }}
+						confirm={{
+							label: t('health.database.conflicted.resend_delete_confirm'),
+							destructive: true,
+							testID: 'db-conflicted-resend-delete-confirm',
+							onPress: () => {
 								const row = resendingDelete;
 								setResendingDelete(null);
 								if (row) void settle(row, 'retry-with-server-base');
-							}}
-						>
-							<Text>{t('health.database.conflicted.resend_delete_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 
@@ -361,28 +356,23 @@ export function ConflictedMutationsPanel() {
 											: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-conflicted-discard-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-conflicted-discard-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-conflicted-discard-cancel' }}
+						confirm={{
+							label: discarding?.destroysRecord
+								? t('health.database.conflicted.delete_local_confirm')
+								: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
+									? t('health.database.conflicted.discard_change_confirm')
+									: t('health.database.conflicted.use_server_confirm'),
+							destructive: true,
+							testID: 'db-conflicted-discard-confirm',
+							onPress: () => {
 								const row = discarding;
 								setDiscarding(null);
 								if (row) void settle(row, 'discard');
-							}}
-						>
-							<Text>
-								{discarding?.destroysRecord
-									? t('health.database.conflicted.delete_local_confirm')
-									: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
-										? t('health.database.conflicted.discard_change_confirm')
-										: t('health.database.conflicted.use_server_confirm')}
-							</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</VStack>

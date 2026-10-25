@@ -34,10 +34,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: React.PropsWithChildren) => children,
 	DialogTitle: ({ children }: React.PropsWithChildren) => children,
 	DialogBody: ({ children }: React.PropsWithChildren) => children,
-	DialogFooter: ({ children }: React.PropsWithChildren) => children,
-	DialogClose: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<button data-testid={testID}>{children}</button>
-	),
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: ({ children }: React.PropsWithChildren) => children,

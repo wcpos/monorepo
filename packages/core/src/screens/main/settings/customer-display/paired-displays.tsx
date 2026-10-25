@@ -5,8 +5,6 @@ import { formatDistance } from 'date-fns/formatDistance';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -145,12 +143,14 @@ export function PairedDisplays({
 							})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={confirmForget}>
-							{t('settings.customer_display.forget')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('settings.customer_display.forget'),
+							destructive: true,
+							onPress: confirmForget,
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</SettingsSection>

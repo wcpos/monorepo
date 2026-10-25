@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import type { DialogAction } from '@wcpos/components/dialog';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -20,15 +19,6 @@ function mockWebProps({ testID, ...props }: any) {
 
 let mockEnableRefundActions = false;
 
-/** The DialogAction props the form passes; `asChild` is taken out so it never reaches the DOM. */
-type MockDialogActionProps = Pick<
-	React.ComponentProps<typeof DialogAction>,
-	'asChild' | 'disabled' | 'testID'
-> & {
-	children?: React.ReactNode;
-	onPress?: () => void;
-};
-
 // The tax provider's own boundary (its fallback loads an icon jest's CommonJS runtime cannot).
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
@@ -39,17 +29,6 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 			{children}
 		</div>
 	),
-	AlertDialogAction: ({ children, onPress, loading, disabled, ...props }: any) => (
-		<button
-			type="button"
-			onClick={onPress}
-			disabled={mockEnableRefundActions ? false : disabled}
-			{...mockWebProps(props)}
-		>
-			{children}
-		</button>
-	),
-	AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: any) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
 	AlertDialogFooter: (props: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
@@ -99,23 +78,6 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogAction: ({
-		children,
-		onPress,
-		disabled,
-		asChild: _asChild,
-		...props
-	}: MockDialogActionProps) => (
-		<button
-			type="button"
-			onClick={onPress}
-			disabled={mockEnableRefundActions ? false : (disabled ?? undefined)}
-			{...mockWebProps(props)}
-		>
-			{children}
-		</button>
-	),
-	DialogClose: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
 	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
 		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
 		return (

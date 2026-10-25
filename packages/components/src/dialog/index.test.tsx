@@ -16,7 +16,6 @@ import { registerPortalContainer } from '../lib/portal-container';
 import {
 	Dialog,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -542,9 +541,7 @@ it.each(['right', 'center'] as const)(
 				<DialogContent inline side={side}>
 					<DialogHeader testID="header" />
 					<DialogBody testID="body" />
-					<DialogFooter testID="footer">
-						<Text>Legacy footer</Text>
-					</DialogFooter>
+					<DialogFooter testID="footer" close />
 				</DialogContent>
 			</Dialog>
 		);
@@ -565,20 +562,18 @@ it.each([true, false])(
 			<DeviceScope phone={phone}>
 				<Dialog open>
 					<DialogContent inline side="right">
-						<DialogFooter testID="footer">
-							<Text>Legacy footer</Text>
-						</DialogFooter>
+						<DialogFooter testID="footer" close />
 					</DialogContent>
 				</Dialog>
 			</DeviceScope>
 		);
 		const footer = screen.getByTestId('footer');
 		if (phone) {
-			expect(footer).toHaveClass('flex-col-reverse');
+			expect(footer).toHaveClass('flex-col');
 			expect(footer).not.toHaveClass('flex-row');
 		} else {
 			expect(footer).toHaveClass('flex-row', 'items-center', 'justify-end');
-			expect(footer).not.toHaveClass('flex-col-reverse');
+			expect(footer).not.toHaveClass('flex-col');
 		}
 		expect(footer.className).not.toMatch(/\bsm:/);
 		expect(footer).toHaveClass('gap-2', 'px-4', 'border-t', 'pt-4', 'max-w-full');
@@ -751,21 +746,11 @@ it('15. uses provider close labels, falls back to English, and lets closeLabel w
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
 });
 
-it('16. keeps the generated close borderless and muted, and preserves a slotted child variant', () => {
+it('16. keeps the header close borderless and the footer close outlined', () => {
 	render(
 		<Dialog open>
 			<DialogContent inline testID="d">
-				<DialogClose asChild>
-					<Button variant="outline" testID="outline-close">
-						Close
-					</Button>
-				</DialogClose>
-				<DialogClose asChild>
-					<Button variant="ghost" testID="ghost-close">
-						Close
-					</Button>
-				</DialogClose>
-				<DialogClose testID="plain-close">Close</DialogClose>
+				<DialogFooter close={{ testID: 'plain-close' }} />
 			</DialogContent>
 		</Dialog>
 	);
@@ -776,11 +761,10 @@ it('16. keeps the generated close borderless and muted, and preserves a slotted 
 	);
 	expect(classes('d-close')).not.toContain('border');
 	expect(screen.getByTestId('d-close').querySelector('svg')).toHaveClass('text-muted-foreground');
-	for (const testID of ['outline-close', 'plain-close']) {
+	for (const testID of ['plain-close']) {
 		expect(classes(testID)).toEqual(expect.arrayContaining(['border', 'border-border', 'bg-card']));
 		expect(classes(testID)).not.toContain('bg-primary');
 	}
-	expect(classes('ghost-close')).not.toContain('border');
 });
 
 it.each([

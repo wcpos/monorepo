@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
@@ -55,16 +54,15 @@ export function AddCouponScreen() {
 				<ErrorBoundary>
 					<CouponForm
 						form={form}
-						footer={
-							<>
-								<Button testID="coupon-form-close" variant="outline" onPress={() => router.back()}>
-									<ButtonText>{t('common.close')}</ButtonText>
-								</Button>
-								<Button testID="coupon-form-add" loading={loading} onPress={() => void onSubmit()}>
-									<ButtonText>{t('coupons.add_coupon')}</ButtonText>
-								</Button>
-							</>
-						}
+						footer={{
+							intent: {
+								label: t('coupons.add_coupon'),
+								testID: 'coupon-form-add',
+								loading,
+								onPress: () => void onSubmit(),
+							},
+							close: { testID: 'coupon-form-close' },
+						}}
 					/>
 				</ErrorBoundary>
 			</DialogContent>

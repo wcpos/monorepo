@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import { SavedFieldProvider } from '@wcpos/components/form';
 import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
@@ -95,40 +94,25 @@ function EditCustomerFormFields({ customer }: Props) {
 			form.reset({ ...customer.getLatest().payload } as z.infer<typeof customerFormSchema>),
 	});
 
-	/**
-	 *
-	 */
-	// The record's actions sit left of Close: destructive first (orders #2904).
-	const footerLeading =
-		!readOnly && (actions.canDelete || actions.canSync) ? (
-			<>
-				{actions.canDelete && (
-					<Button
-						variant="outline-destructive"
-						testID="customer-modal-delete"
-						onPress={actions.requestDelete}
-					>
-						{t('common.delete')}
-					</Button>
-				)}
-				{actions.canSync && (
-					<Button variant="outline" testID="customer-modal-sync" onPress={actions.sync}>
-						{t('common.sync')}
-					</Button>
-				)}
-			</>
-		) : undefined;
-
 	return (
 		<>
 			<CustomerForm
 				form={form}
-				footer={
-					<Button testID="customer-form-close" variant="outline" onPress={close}>
-						<ButtonText>{t('common.close')}</ButtonText>
-					</Button>
-				}
-				footerLeading={footerLeading}
+				footer={{
+					destructive: !readOnly &&
+						actions.canDelete && {
+							label: t('common.delete'),
+							testID: 'customer-modal-delete',
+							onPress: actions.requestDelete,
+						},
+					record: !readOnly &&
+						actions.canSync && {
+							label: t('common.sync'),
+							testID: 'customer-modal-sync',
+							onPress: actions.sync,
+						},
+					close: { testID: 'customer-form-close' },
+				}}
 			/>
 			{!readOnly && actions.canDelete && (
 				<DeleteCustomerDialog

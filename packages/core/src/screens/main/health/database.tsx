@@ -4,8 +4,6 @@ import type { LayoutChangeEvent } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -500,18 +498,15 @@ function CollectionRowView({
 												})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID={`db-row-clear-confirm-${row.key}`}
-							onPress={() => void resetCollection()}
-						>
-							<Text>{t('health.database.clear_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('health.database.clear_confirm'),
+							destructive: true,
+							testID: `db-row-clear-confirm-${row.key}`,
+							onPress: () => void resetCollection(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

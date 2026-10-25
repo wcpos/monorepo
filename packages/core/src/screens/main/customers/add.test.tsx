@@ -59,7 +59,10 @@ jest.mock('../../../contexts/translations', () => ({
 
 jest.mock('../components/customer/customer-form', () => ({
 	...jest.requireActual('../components/customer/customer-form'),
-	CustomerForm: ({ footer }: { footer: React.ReactNode }) => <>{footer}</>,
+	CustomerForm: ({ footer }: { footer: import('@wcpos/components/dialog').DialogFooterProps }) => {
+		const { DialogFooter } = jest.requireActual('../../../../jest/footer.test-utils');
+		return <DialogFooter {...footer} />;
+	},
 }));
 
 jest.mock('../hooks/mutations/use-mutation', () => ({

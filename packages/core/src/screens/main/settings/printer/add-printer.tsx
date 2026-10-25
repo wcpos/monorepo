@@ -14,7 +14,7 @@ import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-pick
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { UsbDevicePicker } from './dialog/connection/usb-device-picker';
-import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
+import { usePrinterFooter } from './dialog/use-printer-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
@@ -142,6 +142,14 @@ function EditPrinterDialog({
 		);
 	}
 
+	const footer = usePrinterFooter({
+		showOpenDrawer: canOpenDrawer,
+		testLoading,
+		drawerLoading,
+		onOpenDrawer: () => void handleOpenDrawer(),
+		onTestPrint: () => void handleTestPrint(),
+	});
+
 	return (
 		<PrinterDialogLayout
 			form={form}
@@ -180,16 +188,7 @@ function EditPrinterDialog({
 				/>
 			}
 			errorSection={<TestPrintError error={testError} />}
-			footer={
-				<PrinterDialogFooter
-					showOpenDrawer={canOpenDrawer}
-					testLoading={testLoading}
-					drawerLoading={drawerLoading}
-					onOpenDrawer={handleOpenDrawer}
-					onTestPrint={handleTestPrint}
-					onClose={handleClose}
-				/>
-			}
+			footer={footer}
 		/>
 	);
 }

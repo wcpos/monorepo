@@ -426,18 +426,15 @@ function GeneralSettingsForm({
 								{t('settings.restore_server_settings_description')}
 							</Alert.AlertDialogDescription>
 						</Alert.AlertDialogHeader>
-						<Alert.AlertDialogFooter>
-							<Alert.AlertDialogCancel testID="settings-general-restore-cancel">
-								{t('common.cancel')}
-							</Alert.AlertDialogCancel>
-							<Alert.AlertDialogAction
-								variant="destructive"
-								testID="settings-general-restore-confirm"
-								onPress={handleRestoreServerSettings}
-							>
-								{t('settings.restore_server_settings')}
-							</Alert.AlertDialogAction>
-						</Alert.AlertDialogFooter>
+						<Alert.AlertDialogFooter
+							cancel={{ testID: 'settings-general-restore-cancel' }}
+							confirm={{
+								label: t('settings.restore_server_settings'),
+								destructive: true,
+								testID: 'settings-general-restore-confirm',
+								onPress: () => void handleRestoreServerSettings(),
+							}}
+						/>
 					</Alert.AlertDialogContent>
 				</Alert.AlertDialog>
 			</VStack>

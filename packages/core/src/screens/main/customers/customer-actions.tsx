@@ -2,8 +2,6 @@ import * as React from 'react';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -150,17 +148,16 @@ export function DeleteCustomerDialog({
 						</VStack>
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-					<AlertDialogAction
-						testID="customer-delete-confirm-button"
-						variant="destructive"
-						disabled={!force}
-						onPress={onConfirm}
-					>
-						{t('common.delete')}
-					</AlertDialogAction>
-				</AlertDialogFooter>
+				<AlertDialogFooter
+					cancel={true}
+					confirm={{
+						label: t('common.delete'),
+						testID: 'customer-delete-confirm-button',
+						destructive: true,
+						disabled: !force,
+						onPress: onConfirm,
+					}}
+				/>
 			</AlertDialogContent>
 		</AlertDialog>
 	);

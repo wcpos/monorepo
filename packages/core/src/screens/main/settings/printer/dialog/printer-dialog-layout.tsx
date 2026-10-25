@@ -6,6 +6,7 @@ import {
 	DialogBody,
 	DialogContent,
 	DialogFooter,
+	type DialogFooterProps,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -28,7 +29,7 @@ interface PrinterDialogLayoutProps {
 	advancedSettings: React.ReactNode;
 	/** Test failure alert, rendered inside the form body above the footer. */
 	errorSection?: React.ReactNode;
-	footer: React.ReactNode;
+	footer: DialogFooterProps;
 }
 
 export function PrinterDialogLayout({
@@ -77,7 +78,7 @@ export function PrinterDialogLayout({
 						</VStack>
 					</Form>
 				</DialogBody>
-				<DialogFooter>{footer}</DialogFooter>
+				<DialogFooter {...footer} />
 			</DialogContent>
 		</Dialog>
 	);

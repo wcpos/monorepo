@@ -36,26 +36,35 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogDescription: ({ children }: React.PropsWithChildren) => (
 			<div data-testid="body">{children}</div>
 		),
-		AlertDialogFooter: jest.requireActual('../../../../../../jest/footer.test-utils')
-			.AlertDialogFooter,
-		AlertDialogCancel: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => {
+		AlertDialogFooter: ({
+			confirm,
+			cancel,
+		}: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
 			const onOpenChange = React.useContext(mockOpenChange);
+			const cancelProps = typeof cancel === 'object' ? cancel : {};
 			return (
-				<button data-testid={testID} onClick={() => onOpenChange(false)}>
-					{children}
-				</button>
+				<>
+					{cancel !== false && (
+						<button
+							data-testid={cancelProps.testID}
+							onClick={(event) => {
+								cancelProps.onPress?.(event as never);
+								onOpenChange(false);
+							}}
+						>
+							Cancel
+						</button>
+					)}
+					<button
+						data-testid={confirm.testID}
+						data-variant={confirm.destructive ? 'destructive' : 'default'}
+						onClick={confirm.onPress as unknown as React.MouseEventHandler}
+					>
+						{confirm.label}
+					</button>
+				</>
 			);
 		},
-		AlertDialogAction: ({
-			children,
-			testID,
-			onPress,
-			variant,
-		}: React.PropsWithChildren<{ testID: string; onPress: () => void; variant: string }>) => (
-			<button data-testid={testID} data-variant={variant} onClick={onPress}>
-				{children}
-			</button>
-		),
 	};
 });
 

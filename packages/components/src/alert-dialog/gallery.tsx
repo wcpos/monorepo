@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 
 import { DeviceScope } from '../lib/device';
-import { Text } from '../text';
 import * as C from './index';
 export const stories = ['confirm', 'sheet'].map((id) => ({
 	id,
@@ -19,14 +18,10 @@ export const stories = ['confirm', 'sheet'].map((id) => ({
 								The receipt printer will be removed from this till.
 							</C.AlertDialogDescription>
 						</C.AlertDialogHeader>
-						<C.AlertDialogFooter>
-							<C.AlertDialogCancel testID="cancel">
-								<Text>Cancel</Text>
-							</C.AlertDialogCancel>
-							<C.AlertDialogAction variant="destructive" testID="delete">
-								<Text>Delete</Text>
-							</C.AlertDialogAction>
-						</C.AlertDialogFooter>
+						<C.AlertDialogFooter
+							cancel={{ testID: 'cancel' }}
+							confirm={{ label: 'Delete', destructive: true, testID: 'delete' }}
+						/>
 					</C.AlertDialogContent>
 				</C.AlertDialog>
 			</View>

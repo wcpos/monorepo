@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Pressable } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -12,7 +11,6 @@ import {
 	DialogTrigger,
 } from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -99,14 +97,13 @@ function AboutDialogContent() {
 					)}
 				</VStack>
 			</DialogBody>
-			<DialogFooter>
-				<Button variant="outline" onPress={() => openExternalURL('https://updates.wcpos.com')}>
-					<HStack>
-						<Icon name="globe" size="sm" />
-						<Text>{t('common.release_notes')}</Text>
-					</HStack>
-				</Button>
-			</DialogFooter>
+			<DialogFooter
+				secondary={{
+					label: t('common.release_notes'),
+					icon: 'globe',
+					onPress: () => void openExternalURL('https://updates.wcpos.com'),
+				}}
+			/>
 		</>
 	);
 }
