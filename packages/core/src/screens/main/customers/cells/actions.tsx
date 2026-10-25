@@ -2,180 +2,42 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@wcpos/components/alert-dialog';
-import { Checkbox } from '@wcpos/components/checkbox';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Label } from '@wcpos/components/label';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
-import { type ReadonlyEngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { refreshRecordByWooId } from '@wcpos/query/record-readers';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import type { ReadonlyEngineRecord } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
-
-/**
- *
- */
+// The orders caret (#2897): it opens the customer like the row does. The cell sits beside the
+// row's pressable (a button cannot nest in a button), so it needs its own. Sync and Delete
+// live in the modal's footer.
 export function Actions({
 	row,
 }: CellContext<{ record: ReadonlyEngineRecord<'customers'> }, 'actions'>) {
-	const record = row.original.record;
-	const customer = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
-	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const { format } = useCustomerNameFormat();
-	const [force, setForce] = React.useState(!customer.id);
-	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-
-	const handleRefresh = React.useCallback(() => {
-		if (!customer.id) return;
-		void refreshRecordByWooId(runtime.engine, {
-			id: `customer-actions:refresh:${customer.id}`,
-			collection: 'customers',
-			wooId: customer.id,
-		}).catch((error) => {
-			// The engine already wrote the coded row for this require (SYNC321), and the
-			// device's copy is untouched: the cashier only needs to know it didn't refresh.
-			syncLogger.debug('Failed to refresh customer', {
-				showToast: true,
-				toast: { title: t('common.refresh_failed'), type: 'warning' },
-				context: {
-					customerId: customer.id,
-					error: getErrorMessage(error),
-				},
-			});
-		});
-	}, [customer.id, runtime, t]);
-
-	/**
-	 * Handle delete button click
-	 */
-	const handleDelete = React.useCallback(async () => {
-		await requestServerDelete(runtime.engine, {
-			collection: 'customers',
-			recordId: record.uuid,
-		});
-	}, [record.uuid, runtime]);
-
-	if (readOnly) {
-		return null;
-	}
-
-	/**
-	 *
-	 */
+	const editable = !readOnly && caps.canEditCustomers;
 	return (
-		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<IconButton name="more" accessibilityLabel={t('common.more_actions')} />
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<CapabilityTooltip show={!caps.canEditCustomers} hint="editCustomers">
-						<DropdownMenuItem
-							disabled={!caps.canEditCustomers}
-							onPress={() =>
-								router.push({
-									pathname: '/customers/edit/[customerId]',
-									params: { customerId: record.uuid },
-								})
-							}
-						>
-							<Icon name="edit" />
-							<Text>{t('common.edit')}</Text>
-						</DropdownMenuItem>
-					</CapabilityTooltip>
-					{customer.id && (
-						<DropdownMenuItem onPress={handleRefresh}>
-							<Icon name="refresh" />
-							<Text>{t('common.sync')}</Text>
-						</DropdownMenuItem>
-					)}
-					{caps.canDeleteCustomers && (
-						<>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-								<Icon
-									name="delete"
-									className="fill-destructive web:group-focus:fill-accent-foreground"
-								/>
-								<Text>{t('common.delete')}</Text>
-							</DropdownMenuItem>
-						</>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
-			{caps.canDeleteCustomers && (
-				<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>
-								{t('customers.delete', {
-									name: format(customer),
-								})}
-							</AlertDialogTitle>
-							<AlertDialogDescription>
-								<VStack>
-									<Text className="text-destructive">
-										{t('customers.are_you_sure_you_want_to')}
-									</Text>
-									<HStack>
-										<Checkbox
-											aria-labelledby="confirm"
-											onCheckedChange={setForce}
-											checked={force}
-										/>
-										<Label
-											nativeID="confirm"
-											onPress={() => {
-												setForce(!force);
-											}}
-										>
-											{t('customers.confirm')}
-										</Label>
-									</HStack>
-								</VStack>
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-								{t('common.delete')}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
-			)}
-		</>
+		<CapabilityTooltip show={!caps.canEditCustomers} hint="editCustomers">
+			<IconButton
+				testID="customer-open-button"
+				name="chevronRight"
+				size="sm"
+				variant="muted"
+				accessibilityLabel={t('customers.open_customer', { _: 'Open customer' })}
+				disabled={!editable}
+				onPress={() =>
+					router.push({
+						pathname: '/customers/edit/[customerId]',
+						params: { customerId: row.original.record.uuid },
+					})
+				}
+			/>
+		</CapabilityTooltip>
 	);
 }

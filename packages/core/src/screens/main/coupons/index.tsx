@@ -31,8 +31,10 @@ import { useAppInfo } from '../../../hooks/use-app-info';
 import { ListColumn, ListPage } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
+import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
+import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
 import { useCouponRecord } from './commands/use-coupon-record';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
@@ -112,6 +114,13 @@ function CouponsList({
 	const emptyStore = !state.search && Object.keys(state.filters).length === 0;
 	const pointer = usePointer();
 	const t = useT();
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	// The row opens the coupon modal on every pointer, as the orders row does (#2897).
+	const editable = !readOnly && caps.canEditCoupons;
+	const open = (uuid: string) =>
+		router.push({ pathname: '/coupons/edit/[couponId]', params: { couponId: uuid } });
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'coupons'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -154,17 +163,20 @@ function CouponsList({
 					cells={cells}
 					estimatedItemSize={56}
 					tableConfig={tableConfig}
-					renderItem={
-						pointer === 'coarse'
-							? ({ item }) => (
-									<VirtualizedList.Item>
-										<View testID={`data-table-row-${item.original.record.uuid}`}>
-											<CoarseRow record={item.original.record} />
-										</View>
-									</VirtualizedList.Item>
-								)
-							: undefined
-					}
+					renderItem={({ item }) => (
+						<VirtualizedList.Item>
+							{pointer === 'coarse' ? (
+								<View testID={`data-table-row-${item.original.record.uuid}`}>
+									<CoarseRow record={item.original.record} />
+								</View>
+							) : (
+								<DataTableRow
+									item={item}
+									onPress={editable ? () => open(item.original.record.uuid) : undefined}
+								/>
+							)}
+						</VirtualizedList.Item>
+					)}
 					noDataMessage={
 						<EmptyState
 							testID="no-data-message"

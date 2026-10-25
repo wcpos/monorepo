@@ -4,16 +4,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useCustomerRecord } from '../commands/use-customer-record';
+import { DeleteCustomerDialog, useCustomerActions } from '../customer-actions';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
@@ -32,6 +35,8 @@ export function EditCustomerForm({ customer }: Props) {
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
 	const { close } = useDialog();
+	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
+	const readOnly = !(useAppInfo().license?.isPro ?? false);
 
 	/**
 	 *
@@ -41,6 +46,13 @@ export function EditCustomerForm({ customer }: Props) {
 		defaultValues: {
 			...customer.toMutableJSON().payload,
 		} as z.infer<typeof customerFormSchema>,
+	});
+	// Sync means "take the store's copy": the landed refresh replaces unsaved edits, so a later
+	// Save cannot write the stale defaults back over it.
+	const actions = useCustomerActions(customer, {
+		onDeleted: close,
+		onSynced: () =>
+			form.reset({ ...customer.getLatest().payload } as z.infer<typeof customerFormSchema>),
 	});
 
 	/**
@@ -96,5 +108,46 @@ export function EditCustomerForm({ customer }: Props) {
 	/**
 	 *
 	 */
-	return <CustomerForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
+	// The record's actions sit left of Close/Save: destructive first (orders #2904).
+	const footerLeading =
+		!readOnly && (actions.canDelete || actions.canSync) ? (
+			<>
+				{actions.canDelete && (
+					<Button
+						variant="outline-destructive"
+						testID="customer-modal-delete"
+						onPress={actions.requestDelete}
+					>
+						{t('common.delete')}
+					</Button>
+				)}
+				{actions.canSync && (
+					<Button variant="outline" testID="customer-modal-sync" onPress={actions.sync}>
+						{t('common.sync')}
+					</Button>
+				)}
+			</>
+		) : undefined;
+
+	return (
+		<>
+			<CustomerForm
+				form={form}
+				onClose={close}
+				onSubmit={handleSave}
+				loading={loading}
+				footerLeading={footerLeading}
+			/>
+			{!readOnly && actions.canDelete && (
+				<DeleteCustomerDialog
+					record={customer}
+					open={actions.deleteOpen}
+					onOpenChange={actions.setDeleteOpen}
+					force={actions.force}
+					onForceChange={actions.setForce}
+					onConfirm={() => void actions.confirmDelete()}
+				/>
+			)}
+		</>
+	);
 }

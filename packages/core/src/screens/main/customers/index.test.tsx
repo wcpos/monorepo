@@ -22,6 +22,7 @@ const answered = (hits: unknown[] = []) =>
 		total: 7,
 	});
 let mockCanCreate = true;
+let mockCanEdit = true;
 const mockPush = jest.fn();
 let mockHandle: FakeHandle = answered();
 const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
@@ -149,6 +150,21 @@ jest.mock('../components/data-table', () => ({
 		);
 	},
 }));
+jest.mock('../components/data-table/rows', () => ({
+	DataTableRow: ({
+		item,
+		onPress,
+	}: {
+		item: { original: { record: { uuid: string } } };
+		onPress?: () => void;
+	}) => (
+		<button
+			data-testid={`data-table-row-${item.original.record.uuid}`}
+			disabled={!onPress}
+			onClick={onPress}
+		/>
+	),
+}));
 jest.mock('../components/data-table/skeleton', () => ({
 	DataTableSkeleton: ({ id }: { id: string }) => <div data-testid={`skeleton-${id}`} />,
 }));
@@ -168,7 +184,7 @@ jest.mock('../contexts/pro-access', () => ({
 }));
 jest.mock('../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({
-		caps: { canCreateCustomers: mockCanCreate },
+		caps: { canCreateCustomers: mockCanCreate, canEditCustomers: mockCanEdit },
 		known: false,
 	}),
 }));
@@ -495,3 +511,32 @@ it('shows retained rows as searching only while results are pending', () => {
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children }: React.PropsWithChildren) => children,
 }));
+
+it.each([
+	[false, true, true],
+	[true, true, false],
+	[false, false, false],
+])(
+	'a fine-pointer row opens the edit modal when readOnly=%s canEdit=%s',
+	(readOnly, canEdit, opens) => {
+		mockPointer = 'fine';
+		mockReadOnly = readOnly;
+		mockCanEdit = canEdit;
+		const original = mockHandle;
+		mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
+		try {
+			render(<CustomersScreen />);
+			mockPush.mockClear();
+			fireEvent.click(screen.getByTestId('data-table-row-one'));
+			if (opens)
+				expect(mockPush).toHaveBeenCalledWith({
+					pathname: '/customers/edit/[customerId]',
+					params: { customerId: 'one' },
+				});
+			else expect(mockPush).not.toHaveBeenCalled();
+		} finally {
+			mockHandle = original;
+			mockCanEdit = true;
+		}
+	}
+);

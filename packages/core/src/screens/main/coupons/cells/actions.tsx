@@ -2,170 +2,40 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@wcpos/components/alert-dialog';
-import { Checkbox } from '@wcpos/components/checkbox';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Label } from '@wcpos/components/label';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { refreshCollection } from '@wcpos/query/record-readers';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import type { EngineRecord } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
-
+// The orders caret (#2897): it opens the coupon like the row does. The cell sits beside the
+// row's pressable (a button cannot nest in a button), so it needs its own. Sync and Delete
+// live in the modal's footer.
 export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }, 'actions'>) {
-	const record = row.original.record;
-	const fields = useRecordField(record, ({ payload }) => ({
-		id: payload.id,
-		code: payload.code,
-	}));
 	const router = useRouter();
-	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const initialForce = !fields.id;
-	const [force, setForce] = React.useState(initialForce);
-	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-
-	const handleRefresh = React.useCallback(() => {
-		void refreshCollection(runtime.engine, {
-			id: 'coupon-actions:refresh',
-			collection: 'coupons',
-		}).catch((error) => {
-			// The engine already wrote the coded row for this require (SYNC321), and the
-			// device's copy is untouched: the cashier only needs to know it didn't refresh.
-			syncLogger.debug('Failed to refresh coupons', {
-				showToast: true,
-				toast: { title: t('common.refresh_failed'), type: 'warning' },
-				context: {
-					error: getErrorMessage(error),
-				},
-			});
-		});
-	}, [runtime, t]);
-
-	const handleDelete = React.useCallback(async () => {
-		await requestServerDelete(runtime.engine, {
-			collection: 'coupons',
-			recordId: record.uuid,
-		});
-	}, [record.uuid, runtime]);
-
-	if (readOnly) {
-		return null;
-	}
-
+	const editable = !readOnly && caps.canEditCoupons;
 	return (
-		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<IconButton name="more" accessibilityLabel={t('common.more_actions')} />
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<CapabilityTooltip show={!caps.canEditCoupons} hint="editCoupons">
-						<DropdownMenuItem
-							disabled={!caps.canEditCoupons}
-							onPress={() =>
-								router.push({
-									pathname: '/coupons/edit/[couponId]',
-									params: { couponId: record.uuid },
-								})
-							}
-						>
-							<Icon name="edit" />
-							<Text>{t('common.edit')}</Text>
-						</DropdownMenuItem>
-					</CapabilityTooltip>
-					{fields.id && (
-						<DropdownMenuItem onPress={handleRefresh}>
-							<Icon name="refresh" />
-							<Text>{t('common.sync')}</Text>
-						</DropdownMenuItem>
-					)}
-					{caps.canDeleteCoupons && (
-						<>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-								<Icon
-									name="delete"
-									className="fill-destructive web:group-focus:fill-accent-foreground"
-								/>
-								<Text>{t('common.delete')}</Text>
-							</DropdownMenuItem>
-						</>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
-			{caps.canDeleteCoupons && (
-				<AlertDialog
-					open={deleteDialogOpened}
-					onOpenChange={(open) => {
-						setDeleteDialogOpened(open);
-						if (open) {
-							setForce(initialForce);
-						}
-					}}
-				>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>{t('coupons.delete', { name: fields.code })}</AlertDialogTitle>
-							<AlertDialogDescription>
-								<VStack>
-									<Text className="text-destructive">{t('coupons.are_you_sure_you_want_to')}</Text>
-									<HStack>
-										<Checkbox
-											aria-labelledby="confirm"
-											onCheckedChange={setForce}
-											checked={force}
-										/>
-										<Label
-											nativeID="confirm"
-											onPress={() => {
-												setForce(!force);
-											}}
-										>
-											{t('coupons.confirm')}
-										</Label>
-									</HStack>
-								</VStack>
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-								{t('common.delete')}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
-			)}
-		</>
+		<CapabilityTooltip show={!caps.canEditCoupons} hint="editCoupons">
+			<IconButton
+				testID="coupon-open-button"
+				name="chevronRight"
+				size="sm"
+				variant="muted"
+				accessibilityLabel={t('coupons.open_coupon', { _: 'Open coupon' })}
+				disabled={!editable}
+				onPress={() =>
+					router.push({
+						pathname: '/coupons/edit/[couponId]',
+						params: { couponId: row.original.record.uuid },
+					})
+				}
+			/>
+		</CapabilityTooltip>
 	);
 }

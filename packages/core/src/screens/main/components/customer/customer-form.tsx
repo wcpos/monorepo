@@ -44,10 +44,12 @@ interface CustomerFormProps {
 	onSubmit: (data: z.infer<typeof customerFormSchema>) => void;
 	loading: boolean;
 	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
+	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
+	footerLeading?: React.ReactNode;
 }
 
 export function CustomerForm(props: CustomerFormProps) {
-	const { form, onClose, onSubmit, loading, renderLayout } = props;
+	const { form, onClose, onSubmit, loading, renderLayout, footerLeading } = props;
 	const t = useT();
 
 	/**
@@ -202,7 +204,7 @@ export function CustomerForm(props: CustomerFormProps) {
 		</Form>
 	);
 	// Siblings, not an HStack: the footer owns the row/column direction per breakpoint.
-	const footer = (
+	const formActions = (
 		<>
 			<Button testID="customer-form-close" variant="outline" onPress={onClose}>
 				<ButtonText>{t('common.close')}</ButtonText>
@@ -212,12 +214,23 @@ export function CustomerForm(props: CustomerFormProps) {
 			</Button>
 		</>
 	);
+	// With record actions, two wrapping groups: the record's on the left, Close/Save on the right.
+	const footer = footerLeading ? (
+		<>
+			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
+			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+		</>
+	) : (
+		formActions
+	);
 
 	if (renderLayout) return renderLayout(body, footer);
 	return (
 		<>
 			<DialogBody>{body}</DialogBody>
-			<DialogFooter>{footer}</DialogFooter>
+			<DialogFooter className={footerLeading ? 'flex-wrap justify-between' : undefined}>
+				{footer}
+			</DialogFooter>
 		</>
 	);
 }
