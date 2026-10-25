@@ -205,7 +205,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({

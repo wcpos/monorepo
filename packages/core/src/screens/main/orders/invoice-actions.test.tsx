@@ -1,12 +1,12 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 
 import { getCheckoutModeSnapshot, resetCheckoutMode } from '../pos/checkout/checkout-mode';
-import { InvoiceActions } from './invoice-actions';
+import { useInvoiceActions } from './invoice-actions';
 
 const mockCancel = jest.fn();
 const mockReopen = jest.fn();
@@ -33,24 +33,24 @@ jest.mock('@wcpos/utils/logger', () => ({
 		error: (...args: unknown[]) => mockError(...args),
 	}),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		testID,
-		disabled,
-		onPress,
-	}: {
-		children?: React.ReactNode;
-		testID?: string;
-		disabled?: boolean;
-		onPress?: () => void;
-	}) => (
-		<button data-testid={testID} disabled={disabled} onClick={onPress}>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
-}));
+
+function InvoiceActions(props: Parameters<typeof useInvoiceActions>[0]) {
+	const { destructive, secondary } = useInvoiceActions(props);
+	return (
+		<>
+			{[...destructive, ...secondary].map((action) => (
+				<button
+					key={action.testID}
+					data-testid={action.testID}
+					disabled={action.disabled}
+					onClick={action.onPress as React.MouseEventHandler}
+				>
+					{action.label}
+				</button>
+			))}
+		</>
+	);
+}
 
 const order = { uuid: 'order-1' } as EngineRecord<'orders'>;
 const stamp = {
@@ -188,4 +188,10 @@ it('a refused cancel is reported with the gateway code and nothing else changes'
 		expect.objectContaining({ code: 'PAYMENT212', showToast: true })
 	);
 	expect(mockInfo).not.toHaveBeenCalled();
+});
+
+it('returns no invoice actions without an invoice stamp', () => {
+	const { result } = renderHook(() => useInvoiceActions({ order, stamp: null }));
+	expect(result.current.destructive).toEqual([]);
+	expect(result.current.secondary).toEqual([]);
 });

@@ -62,7 +62,11 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AlertDialogFooter: (props: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
+		recordAction(props.confirm.testID, props.confirm.onPress as () => void, props.confirm.disabled);
+		const Footer = jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter;
+		return <Footer {...props} />;
+	},
 	AlertDialogCancel: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogAction: ({
 		children,

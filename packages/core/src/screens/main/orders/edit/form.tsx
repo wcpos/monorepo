@@ -23,7 +23,7 @@ import {
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
@@ -503,9 +503,7 @@ function EditOrderFormFields({ order }: Props) {
 					</View>
 				</VStack>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose testID="order-edit-close-button">{t('common.close')}</DialogClose>
-			</DialogFooter>
+			<DialogFooter close={{ testID: 'order-edit-close-button' }} />
 		</Form>
 	);
 }

@@ -55,7 +55,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: mockDiv,
 	DialogTitle: mockDiv,
 	DialogBody: mockDiv,
-	DialogFooter: mockDiv,
+	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
 	useDialog: () => ({ close: mockClose }),
 }));
 jest.mock('@wcpos/components/tabs', () => {
@@ -70,9 +70,14 @@ jest.mock('@wcpos/components/tabs', () => {
 			React.useContext(Tab) === value ? <div>{children}</div> : null,
 	};
 });
-function mockButton({ children, testID, onPress }: Props & { onPress?: () => void }) {
+function mockButton({
+	children,
+	testID,
+	onPress,
+	variant,
+}: Props & { onPress?: () => void; variant?: string }) {
 	return (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} data-variant={variant} onClick={onPress}>
 			{children}
 		</button>
 	);
@@ -84,7 +89,7 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: mockDiv,
 	AlertDialogTitle: mockDiv,
 	AlertDialogDescription: mockDiv,
-	AlertDialogFooter: mockDiv,
+	AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter,
 	AlertDialogCancel: mockDiv,
 	AlertDialogAction: mockButton,
 }));
@@ -108,7 +113,9 @@ jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }))
 jest.mock('./form', () => ({ EditOrderForm: () => <div data-testid="order-edit-form" /> }));
 jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null }));
 jest.mock('../cells/status', () => ({ OrderStatusBadge: () => null }));
-jest.mock('../invoice-actions', () => ({ InvoiceActions: () => null }));
+jest.mock('../invoice-actions', () => ({
+	useInvoiceActions: () => ({ destructive: [], secondary: [] }),
+}));
 jest.mock('../view/refunds-boundary', () => ({ RefundsBoundary: () => null }));
 jest.mock('../view/sections/line-items', () => ({ LineItemsSection: () => null }));
 jest.mock('../view/sections/totals', () => ({ TotalsSection: () => null }));
@@ -139,7 +146,7 @@ it('opens on the View tab by default and on the Edit tab when the route asks for
 
 it('puts Delete and Refund apart from Sync, Re-open and Receipt, each on its own action', async () => {
 	render(<OrderModal resource={{} as never} />);
-	expect(footer()).toEqual(['delete', 'refund', 'sync', 'reopen', 'receipt']);
+	expect(footer()).toEqual(['delete', 'refund', 'sync', 'receipt', 'reopen']);
 	fireEvent.click(screen.getByTestId('order-modal-receipt'));
 	expect(mockPush).toHaveBeenLastCalledWith({
 		pathname: '/orders/receipt/[orderId]',
@@ -191,3 +198,25 @@ it('leads with the status and one identity line, no big total; the store only wh
 	render(<OrderModal resource={{} as never} />);
 	expect(screen.getByTestId('order-modal-identity').textContent).toBe('Today · 12:47 · Alice · ');
 });
+
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	useOverlay: () => ({ presentation: 'right' }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+it('makes Re-open the only primary and groups Sync with Delete', () => {
+	render(<OrderModal resource={{} as never} />);
+	expect(
+		screen
+			.getAllByRole('button')
+			.filter((button) => button.dataset.variant === 'default')
+			.map((button) => button.dataset.testid)
+	).toEqual(['order-modal-reopen']);
+	expect(screen.getByTestId('order-modal-sync').parentElement).toBe(
+		screen.getByTestId('order-modal-delete').parentElement
+	);
+	expect(screen.getByTestId('order-modal-sync').parentElement).not.toBe(
+		screen.getByTestId('order-modal-reopen').parentElement
+	);
+});
+
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));

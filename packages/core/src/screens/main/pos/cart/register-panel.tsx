@@ -417,23 +417,19 @@ export function RegisterPanel({
 					)}
 					{!!error && <Text className="text-destructive px-2.5 py-2 text-sm">{error}</Text>}
 				</DialogBody>
-				<DialogFooter>
-					{/* Closing is not destructive: the primary, at the register's own height (decision 2). */}
-					<Button
-						testID="register-panel-close-register"
-						disabled={!session}
-						size="lg"
-						className="flex-1"
-						onPress={() =>
-							attempt(async () => {
+				<DialogFooter
+					size="lg"
+					intent={{
+						label: t('register.close_register'),
+						testID: 'register-panel-close-register',
+						disabled: !session,
+						onPress: () =>
+							void attempt(async () => {
 								await actions.startCounting();
 								onOpenChange(false);
-							})
-						}
-					>
-						{t('register.close_register')}
-					</Button>
-				</DialogFooter>
+							}),
+					}}
+				/>
 				{movement && (
 					<MovementSheet
 						type={movement}

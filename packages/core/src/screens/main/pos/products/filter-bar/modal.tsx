@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import {
 	Dialog,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -86,9 +85,7 @@ export function FilterBarModal() {
 						</View>
 					</View>
 				</DialogBody>
-				<DialogFooter>
-					<DialogClose testID="filter-bar-modal-close">{t('common.close')}</DialogClose>
-				</DialogFooter>
+				<DialogFooter close={{ testID: 'filter-bar-modal-close' }} />
 			</DialogContent>
 		</Dialog>
 	);

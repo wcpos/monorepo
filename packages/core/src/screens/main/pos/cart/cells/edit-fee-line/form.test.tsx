@@ -43,7 +43,7 @@ jest.mock('@wcpos/components/form', () => ({
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: mockWrap,
-	DialogFooter: mockWrap,
+	DialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils').DialogFooter,
 	DialogClose: mockWrap,
 	DialogAction: mockWrap,
 	useDialog: () => ({ close: jest.fn() }),

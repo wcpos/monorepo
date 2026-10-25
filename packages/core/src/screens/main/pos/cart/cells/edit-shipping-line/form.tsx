@@ -6,7 +6,7 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -207,9 +207,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 				/>
 				<MetaDataForm />
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.close')}</DialogClose>
-			</DialogFooter>
+			<DialogFooter close />
 		</Form>
 	);
 }

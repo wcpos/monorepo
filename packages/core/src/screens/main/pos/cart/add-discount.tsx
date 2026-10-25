@@ -5,13 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
@@ -94,16 +88,15 @@ export function AddDiscount() {
 					</VStack>
 				</HStack>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					disabled={form.formState.isSubmitting}
-					testID="add-discount-submit"
-					onPress={() => void onAdd()}
-				>
-					{t('pos_cart.add_discount')}
-				</DialogAction>
-			</DialogFooter>
+			<DialogFooter
+				close
+				intent={{
+					label: t('pos_cart.add_discount'),
+					disabled: form.formState.isSubmitting,
+					testID: 'add-discount-submit',
+					onPress: () => void onAdd(),
+				}}
+			/>
 		</Form>
 	);
 }

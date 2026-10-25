@@ -6,7 +6,7 @@ import toNumber from 'lodash/toNumber';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -223,9 +223,7 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 				</HStack>
 				<MetaDataForm />
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.close')}</DialogClose>
-			</DialogFooter>
+			<DialogFooter close />
 		</Form>
 	);
 }

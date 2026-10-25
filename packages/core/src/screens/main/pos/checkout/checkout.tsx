@@ -9,15 +9,12 @@ import {
 
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Button } from '@wcpos/components/button';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -245,39 +242,30 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						)}
 					</VStack>
 				</DialogBody>
-				<DialogFooter>
-					{!showStockRejection && (
-						<DialogClose testID="cancel-checkout-button">{t('common.cancel')}</DialogClose>
-					)}
-					{showStockRejection ? (
-						<DialogAction
-							testID="return-to-cart-button"
-							onPress={() => returnToTill(router, screenSize === 'sm', 'cart')}
-						>
-							{t('pos_checkout.return_to_cart')}
-						</DialogAction>
-					) : (
-						<DialogAction
-							testID="process-payment-button"
-							onPress={handleProcessPayment}
-							asChild
-							disabled={
-								mode === 'pending' ||
-								storageDegraded ||
-								error === 'payment_gateways_fetch_failed' ||
-								paymentLinkMissing ||
-								(mode === 'contract' && loading) ||
-								paymentFrameBlocked
-							}
-						>
-							<Button
-								loading={mode === 'contract' ? loading : frameGate.busy || paymentFrameLoading}
-							>
-								{t('pos_checkout.process_payment')}
-							</Button>
-						</DialogAction>
-					)}
-				</DialogFooter>
+				<DialogFooter
+					close={!showStockRejection && { testID: 'cancel-checkout-button' }}
+					intent={
+						showStockRejection
+							? {
+									label: t('pos_checkout.return_to_cart'),
+									testID: 'return-to-cart-button',
+									onPress: () => returnToTill(router, screenSize === 'sm', 'cart'),
+								}
+							: {
+									label: t('pos_checkout.process_payment'),
+									testID: 'process-payment-button',
+									onPress: () => void handleProcessPayment(),
+									disabled:
+										mode === 'pending' ||
+										storageDegraded ||
+										error === 'payment_gateways_fetch_failed' ||
+										paymentLinkMissing ||
+										(mode === 'contract' && loading) ||
+										paymentFrameBlocked,
+									loading: mode === 'contract' ? loading : frameGate.busy || paymentFrameLoading,
+								}
+					}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

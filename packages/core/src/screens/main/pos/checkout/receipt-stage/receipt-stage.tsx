@@ -27,17 +27,12 @@ import { CapturedUnfinishedNotice } from '../tender/captured-unfinished-notice';
 import { useAwaitsStore } from '../use-awaiting-store';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
-import { ReceiptActions } from '../../../receipt/receipt-actions';
+import { useReceiptActions } from '../../../receipt/receipt-actions';
 import { ReceiptBody } from '../../../receipt/receipt-body';
 import { useReceiptDocument } from '../../../receipt/use-receipt-document';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
-
-/** The receipt actions are choices, not the primary action: `New sale` alone is filled. */
-function StageAction(props: React.ComponentProps<typeof Button>) {
-	return <Button variant="outline" {...props} />;
-}
 
 /**
  * The moment after a sale. Paid is green with a tick and a success haptic; sent (contract 1.2,
@@ -175,6 +170,8 @@ function ReceiptStageDocument({
 	compact: boolean;
 }) {
 	const doc = useReceiptDocument({ order, autoPrintAllowed: true });
+	const { sync, choices, dialog } = useReceiptActions(doc, order);
+	const actions = sync ? [sync, ...choices] : choices;
 	const leg = useTerminalLeg(order.uuid);
 	const { uiSettings } = useUISettings('pos-cart');
 	const payload = useRecordField(order, (record) => record.payload);
@@ -282,7 +279,12 @@ function ReceiptStageDocument({
 							: t('pos_checkout.new_sale')}
 					</ButtonText>
 				</Button>
-				<ReceiptActions doc={doc} order={order} buttonComponent={StageAction} />
+				{/* The receipt actions are choices, not the primary action: New sale alone is filled. */}
+				{actions.map(({ label, icon, ...action }) => (
+					<Button key={action.testID} variant="outline" leftIcon={icon} {...action}>
+						{label}
+					</Button>
+				))}
 				<Button
 					variant="outline"
 					className="shrink-0"
@@ -295,6 +297,7 @@ function ReceiptStageDocument({
 					</ButtonText>
 				</Button>
 			</HStack>
+			{dialog}
 		</View>
 	);
 }

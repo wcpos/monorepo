@@ -10,7 +10,6 @@ import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
-import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -285,17 +284,13 @@ export function UserSheet({
 							)}
 						</DialogBody>
 					)}
-					<DialogFooter>
-						{/* The variant owns the label colour: a red Text here went red-on-red when pressed. */}
-						<Button
-							testID="user-sheet-sign-out"
-							variant="outline-destructive"
-							className="flex-1"
-							onPress={logout}
-						>
-							{t('register.sign_out')}
-						</Button>
-					</DialogFooter>
+					<DialogFooter
+						destructive={{
+							label: t('register.sign_out'),
+							testID: 'user-sheet-sign-out',
+							onPress: () => void logout(),
+						}}
+					/>
 				</DialogContent>
 			</Dialog>
 			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} portalHost={portalHost} />

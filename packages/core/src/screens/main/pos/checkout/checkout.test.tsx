@@ -50,7 +50,7 @@ const notRendered = (name: string) => () => {
 let paymentWebviewProps: MockPaymentWebviewProps = {
 	setFrameStatus: notRendered('PaymentWebview'),
 };
-/** Props last handed to the Process Payment DialogAction. */
+/** Props last handed to the Process Payment footer intent. */
 let processPaymentProps: MockDialogActionProps = {
 	onPress: notRendered('process-payment-button'),
 };
@@ -112,23 +112,13 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
 	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
-	// Capture the action handler; the slotted Button owns the loading affordance.
-	DialogAction: ({ children, asChild, ...props }: MockDialogActionProps) => {
-		if (props.testID === 'process-payment-button') {
-			processPaymentProps = props;
-		}
-		if (asChild && React.isValidElement<MockDialogActionProps>(children)) {
-			// The real Slot merges slot props under the child's own, so the child wins on a clash.
-			return React.cloneElement(children, { ...props, ...children.props });
-		}
-		return (
-			<button data-testid={props.testID} disabled={!!props.disabled} onClick={props.onPress}>
-				{children}
-			</button>
-		);
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		if ((props.intent || undefined)?.testID === 'process-payment-button')
+			processPaymentProps = props.intent as unknown as MockDialogActionProps;
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return <Footer {...props} />;
 	},
+	DialogClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 }));
 
 jest.mock('@wcpos/components/button', () => ({

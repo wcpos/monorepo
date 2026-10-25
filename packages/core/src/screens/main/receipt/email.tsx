@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -197,36 +197,40 @@ export function EmailForm({ order, localOnly = false }: Props) {
 	 *
 	 */
 	return (
-		<VStack className="gap-4">
-			<Form {...form}>
-				<FormErrors />
-				<VStack>
-					<FormField
-						control={form.control}
-						name="email"
-						render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
-					/>
-					<FormField
-						control={form.control}
-						name="saveEmail"
-						render={({ field }) => (
-							<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
-						)}
-					/>
-				</VStack>
-			</Form>
-			{isOffline ? (
-				<Text testID="receipt-email-offline-notice" className="text-muted-foreground text-xs">
-					{t('receipt.email_offline_notice')}
-				</Text>
-			) : null}
-			<DialogFooter className="px-0">
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				{/* @ts-expect-error: loading prop is forwarded to Button via rest props but not in SlottablePressableProps type */}
-				<DialogAction testID="receipt-email-send" onPress={sendEmail} loading={loading}>
-					{isOffline ? t('receipt.send_when_online') : t('receipt.send')}
-				</DialogAction>
-			</DialogFooter>
-		</VStack>
+		<>
+			<DialogBody className="gap-4">
+				<Form {...form}>
+					<FormErrors />
+					<VStack>
+						<FormField
+							control={form.control}
+							name="email"
+							render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
+						/>
+						<FormField
+							control={form.control}
+							name="saveEmail"
+							render={({ field }) => (
+								<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
+							)}
+						/>
+					</VStack>
+				</Form>
+				{isOffline ? (
+					<Text testID="receipt-email-offline-notice" className="text-muted-foreground text-xs">
+						{t('receipt.email_offline_notice')}
+					</Text>
+				) : null}
+			</DialogBody>
+			<DialogFooter
+				close
+				intent={{
+					label: isOffline ? t('receipt.send_when_online') : t('receipt.send'),
+					testID: 'receipt-email-send',
+					onPress: () => void sendEmail(),
+					loading,
+				}}
+			/>
+		</>
 	);
 }

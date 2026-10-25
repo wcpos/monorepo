@@ -3,8 +3,6 @@ import { View } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -116,14 +114,13 @@ export function FilterBarList({
 							{t('pos_products.delete_quick_filter_description')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="filter-bar-delete-cancel">
-							{t('common.cancel')}
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="filter-bar-delete-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'filter-bar-delete-cancel' }}
+						confirm={{
+							destructive: true,
+							label: t('common.delete'),
+							testID: 'filter-bar-delete-confirm',
+							onPress: () => {
 								if (deleting) {
 									void modifyUI(
 										'filterBar',
@@ -133,11 +130,9 @@ export function FilterBarList({
 									onDelete?.(deleting);
 								}
 								setDeleting(null);
-							}}
-						>
-							{t('common.delete')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</VStack>
