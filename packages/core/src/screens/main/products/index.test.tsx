@@ -33,6 +33,19 @@ const mockUseProductsQueryHandle = jest.fn((_state: unknown) => mockHandle);
 let mockDataTableProps: Record<string, unknown> = {};
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
+let mockReadOnly = false;
+let mockCanEdit = true;
+const mockPush = jest.fn();
+
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('../contexts/pro-access', () => ({
+	useProAccess: () => ({ readOnly: mockReadOnly }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({
+		caps: { canEditProducts: mockCanEdit, canEditVariations: mockCanEdit },
+	}),
+}));
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -441,8 +454,18 @@ it('throws a failed read to the boundary, whose reset asks the handle again and 
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('../components/data-table/rows', () => ({
-	DataTableRow: ({ item }: { item: { original: { record: { uuid: string } } } }) => (
-		<div data-testid={`products-row-${item.original.record.uuid}`} />
+	DataTableRow: ({
+		item,
+		onPress,
+	}: {
+		item: { original: { record: { uuid: string } } };
+		onPress?: () => void;
+	}) => (
+		<button
+			data-testid={`products-row-${item.original.record.uuid}`}
+			disabled={!onPress}
+			onClick={onPress}
+		/>
 	),
 }));
 
@@ -496,4 +519,51 @@ it('shows the skeleton, not the failure, when a superseded handle fails, then th
 		consoleError.mockRestore();
 		mockHandle = original;
 	}
+});
+
+it.each([
+	[false, true, true],
+	[true, true, false],
+	[false, false, false],
+])(
+	'a fine-pointer simple row opens the edit modal when readOnly=%s canEdit=%s',
+	(readOnly, canEdit, opens) => {
+		mockReadOnly = readOnly;
+		mockCanEdit = canEdit;
+		const original = mockHandle;
+		mockHandle = answered([productHit('one')]);
+		try {
+			render(<ProductsScreen />);
+			mockPush.mockClear();
+			fireEvent.click(screen.getByTestId('products-row-one'));
+			if (opens)
+				expect(mockPush).toHaveBeenCalledWith({
+					pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+					params: { productId: 'one' },
+				});
+			else expect(mockPush).not.toHaveBeenCalled();
+		} finally {
+			mockHandle = original;
+			mockReadOnly = false;
+			mockCanEdit = true;
+		}
+	}
+);
+
+it('hands the variations table an opener only when the cashier may edit variations', () => {
+	const meta = () =>
+		(mockDataTableProps.tableConfig as { meta: { openVariation?: (record: unknown) => void } })
+			.meta;
+	mockCanEdit = false;
+	const { unmount } = render(<ProductsScreen />);
+	expect(meta().openVariation).toBeUndefined();
+	unmount();
+	mockCanEdit = true;
+	render(<ProductsScreen />);
+	mockPush.mockClear();
+	meta().openVariation?.({ uuid: 'v1' });
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+		params: { variationId: 'v1' },
+	});
 });

@@ -42,18 +42,27 @@ export async function refreshCollection(
 	}
 }
 
-/** Force a single remote record refresh and release its demand when settled. */
-export function refreshRecordByWooId(
+/**
+ * Force a single remote record refresh and release its demand when settled. Resolves whether
+ * the store's copy is now resident: the engine applied the row (a write, or an unchanged row
+ * confirmed without one), and not kept the local row back for its pending work.
+ */
+export async function refreshRecordByWooId(
 	engine: RxdbSyncEngine,
 	request: {
 		id: string;
 		collection: 'products' | 'variations' | 'customers' | 'orders';
 		wooId: number;
 	}
-): Promise<void> {
-	return fetchFreshRecords(engine, [
+): Promise<boolean> {
+	const [outcome] = await fetchFreshRecords(engine, [
 		{ id: request.id, collection: request.collection, wooIds: [request.wooId] },
 	]);
+	// Applied ids are the engine's remote ids as strings (`String(document.remoteId)`).
+	return (
+		outcome?.action === 'fetched' &&
+		(outcome.appliedRecordIds ?? []).includes(String(request.wooId))
+	);
 }
 
 /** Force an order's refunds refresh, preserving release outcomes for the caller's loop. */

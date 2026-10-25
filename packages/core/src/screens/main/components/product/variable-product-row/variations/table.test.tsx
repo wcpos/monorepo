@@ -9,7 +9,7 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { VariationsTable } from './table';
 
@@ -29,6 +29,26 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 jest.mock('../../../data-table/column-style', () => ({ getColumnStyle: () => ({}) }));
 jest.mock('../../../record-text-cell', () => ({ RecordTextCell: () => null }));
+// The products page's pressable row: the cells it draws come from `renderCell`.
+jest.mock('../../../data-table/rows', () => ({
+	DataTableRow: ({
+		item,
+		testID,
+		onPress,
+		renderCell,
+	}: {
+		item: { getVisibleCells: () => unknown[] };
+		testID: string;
+		onPress: () => void;
+		renderCell: (cell: unknown) => React.ReactNode;
+	}) => (
+		<div data-testid={testID} onClick={onPress}>
+			{item.getVisibleCells().map((cell, index) => (
+				<React.Fragment key={index}>{renderCell(cell)}</React.Fragment>
+			))}
+		</div>
+	),
+}));
 let mockFooterProps: { handle?: unknown; shown?: unknown } = {};
 jest.mock('./footer', () => ({
 	VariationTableFooter: (props: { drawnCount: number; handle: unknown; shown: unknown }) => {
@@ -149,5 +169,16 @@ describe('VariationsTable on the variations handle', () => {
 		);
 		expect(renderedNames()).toEqual(['Black']);
 		expect(mockFooterProps).toMatchObject({ handle: next, shown: next });
+	});
+});
+
+describe('VariationsTable on the products page', () => {
+	it('a variation row opens that variation when the page hands it an opener', () => {
+		const openVariation = jest.fn();
+		render(<VariationsTable handle={handle} row={row} openVariation={openVariation} />);
+
+		expect(renderedNames()).toEqual(['Black', 'Red', 'Blue', 'Gold']);
+		fireEvent.click(screen.getByTestId('data-table-row-variation-1'));
+		expect(openVariation).toHaveBeenCalledWith(expect.objectContaining({ remoteId: '1' }));
 	});
 });

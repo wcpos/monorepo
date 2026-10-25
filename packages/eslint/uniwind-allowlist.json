@@ -116,14 +116,8 @@
 	"packages/core/src/screens/main/pos/products/tiles/inline-variable-tile.tsx": {
 		"raw-pressable": 1
 	},
-	"packages/core/src/screens/main/products/cells/actions.tsx": {
-		"group-*": 1
-	},
 	"packages/core/src/screens/main/products/cells/stock-status.tsx": {
 		"raw-pressable": 1
-	},
-	"packages/core/src/screens/main/products/cells/variation-actions.tsx": {
-		"group-*": 1
 	},
 	"packages/core/src/screens/main/products/index.tsx": {
 		"bare-Suspense": 2

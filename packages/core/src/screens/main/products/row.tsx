@@ -2,8 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
-import { map, type Observable } from 'rxjs';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Image } from '@wcpos/components/image';
@@ -25,6 +23,7 @@ import { PriceWithTax } from '../components/product/price-with-tax';
 import { getVariablePrices } from '../components/product/get-variable-prices';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../components/product/product-image-placeholder';
 import { VariationRowProvider } from '../components/product/variable-product-row/context';
+import { useRowExpansion } from '../components/product/variable-product-row/use-row-expansion';
 import { VariationsFilterBar } from '../components/product/variable-product-row/variations/filters';
 import { VariationTableFooter } from '../components/product/variable-product-row/variations/footer';
 import { matchesStockStatusFilter } from '../components/product/stock-filter';
@@ -161,24 +160,8 @@ export function VariableRow(props: VariableRowProps) {
 	);
 }
 function VariableRowContent({ item, table }: VariableRowProps) {
-	const meta = table.options.meta as unknown as {
-		expanded$: Observable<Record<string, boolean>>;
-		setRowExpanded: (id: string, expanded: boolean) => void;
-		variationStockStatus?: string;
-	};
-	const expanded$ = React.useMemo(
-		() => meta.expanded$.pipe(map((value) => !!value[item.id])),
-		[meta, item.id]
-	);
-	const expanded = useObservableEagerState(expanded$);
-	const actions = useQueryStateActions<'variations'>();
-	const toggle = () => {
-		if (!expanded && (item.original.childrenSearchCount ?? 0) > 0) {
-			actions.setSearch(item.original.parentSearchTerm ?? '');
-			actions.clearFilter('attributeMatches');
-		}
-		meta.setRowExpanded(item.id, !expanded);
-	};
+	const meta = table.options.meta as unknown as { variationStockStatus?: string };
+	const { expanded, toggle } = useRowExpansion(item, table);
 	return (
 		<>
 			<ProductRow record={item.original.record} expanded={expanded} onToggle={toggle} />

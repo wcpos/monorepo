@@ -30,6 +30,7 @@ export function DataTableRow<TData extends RowData>({
 	testID,
 	trailing,
 	accessibilityLabel,
+	renderCell,
 }: {
 	item: Row<TData, DataTableFeatures>;
 	onPress?: PressableProps['onPress'];
@@ -41,6 +42,10 @@ export function DataTableRow<TData extends RowData>({
 	 * button is present it is ignored, so no button nests in a button on web.
 	 */
 	accessibilityLabel?: string;
+	/** A sub-row's cells render against their own context (the inline variations table). */
+	renderCell?: (
+		cell: ReturnType<Row<TData, DataTableFeatures>['getVisibleCells']>[number]
+	) => React.ReactNode;
 }) {
 	const pointer = usePointer();
 	// On web the pressable's host node: the press guard below must tell it from inner controls.
@@ -51,7 +56,9 @@ export function DataTableRow<TData extends RowData>({
 			<Suspense>
 				{cell.column.id === 'actions' && trailing !== undefined
 					? trailing
-					: flexRender(cell.column.columnDef.cell, cell.getContext())}
+					: renderCell
+						? renderCell(cell)
+						: flexRender(cell.column.columnDef.cell, cell.getContext())}
 			</Suspense>
 		</ErrorBoundary>
 	);

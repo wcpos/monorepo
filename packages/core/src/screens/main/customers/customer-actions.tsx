@@ -45,8 +45,11 @@ export function useCustomerActions(
 			collection: 'customers',
 			wooId: id,
 		})
-			// Only a refresh that landed hands the form the store's copy.
-			.then(() => onSynced?.())
+			// Only the engine's applied answer hands the form the store's copy: a pull can settle
+			// with the row kept back for its pending local work.
+			.then((applied) => {
+				if (applied) onSynced?.();
+			})
 			.catch((error) => {
 				// The engine already wrote the coded row for this require (SYNC321), and the
 				// device's copy is untouched: the cashier only needs to know it didn't refresh.

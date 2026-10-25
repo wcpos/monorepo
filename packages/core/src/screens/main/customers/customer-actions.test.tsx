@@ -9,7 +9,8 @@ import { DeleteCustomerDialog, useCustomerActions } from './customer-actions';
 
 const mockEngine = { id: 'engine' };
 const mockRequestServerDelete = jest.fn(async (..._args: unknown[]) => ({ annihilated: true }));
-const mockRefresh = jest.fn(async (..._args: unknown[]) => undefined);
+// The engine's answer: true when the store's copy was applied.
+const mockRefresh = jest.fn(async (..._args: unknown[]) => true);
 let mockCanDelete = true;
 
 jest.mock('@wcpos/query', () => ({
@@ -170,4 +171,12 @@ it('a refresh that lands hands the form the store copy; a failed one does not', 
 	mockRefresh.mockRejectedValueOnce(new Error('offline'));
 	await act(async () => fireEvent.click(screen.getByTestId('sync')));
 	expect(onSynced).toHaveBeenCalledTimes(1);
+});
+
+it('a refresh that settles without applying the row keeps what the cashier typed', async () => {
+	const onSynced = jest.fn();
+	mockRefresh.mockResolvedValueOnce(false);
+	render(<Harness customer={record(42)} onDeleted={jest.fn()} onSynced={onSynced} />);
+	await act(async () => fireEvent.click(screen.getByTestId('sync')));
+	expect(onSynced).not.toHaveBeenCalled();
 });

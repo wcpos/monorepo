@@ -1,6 +1,6 @@
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import type { RemoteId } from '@wcpos/sync-core';
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { CoverageOutcome, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -13,7 +13,7 @@ export async function fetchFreshRecords(
 		collection: 'products' | 'variations' | 'customers' | 'orders';
 		wooIds: number[];
 	}[]
-): Promise<void> {
+): Promise<CoverageOutcome[]> {
 	const handles = [];
 	try {
 		for (const request of requests) {
@@ -28,7 +28,7 @@ export async function fetchFreshRecords(
 				})
 			);
 		}
-		await Promise.all(handles.map((handle) => handle.ready));
+		return await Promise.all(handles.map((handle) => handle.ready));
 	} finally {
 		for (const handle of handles) {
 			handle.release();

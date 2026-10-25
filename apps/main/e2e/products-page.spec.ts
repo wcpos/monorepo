@@ -409,8 +409,8 @@ test.describe('Products Page (Pro)', () => {
 
 			const row = screen.getByTestId(rowTestId);
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.getByTestId('product-actions-button').click();
-			const editAction = page.getByTestId('product-actions-edit');
+			// The row's caret opens the product's modal (it replaced the row menu's Edit item).
+			const editAction = row.getByTestId('product-open-button');
 			const editDisabled = await editAction.evaluate(
 				(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
 			);
@@ -526,8 +526,8 @@ test.describe('Products Page (Pro)', () => {
 				poisonedProducts,
 				'catalog GET was never intercepted — the poisoned-store premise did not apply'
 			).toBeGreaterThan(0);
-			await row.getByTestId('product-actions-button').click();
-			const editAction = page.getByTestId('product-actions-edit');
+			// The row's caret opens the product's modal (it replaced the row menu's Edit item).
+			const editAction = row.getByTestId('product-open-button');
 			const editDisabled = await editAction.evaluate(
 				(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
 			);
@@ -652,23 +652,33 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
-	test('should show product actions menu', async ({ posPage: page }) => {
+	test("should open a product's modal, with its record actions, from the row caret", async ({
+		posPage: page,
+	}) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
 
-		const actionsButton = screen.getByTestId('product-actions-button').first();
-		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
-		await actionsButton.click();
+		// Every row opens its product: a simple product's caret, a variable product's name.
+		const openButton = screen.getByTestId('product-open-button').first();
+		await expect(openButton).toBeVisible({ timeout: 15_000 });
+		test.skip(
+			await openButton.isDisabled(),
+			'Product caret is disabled: the signed-in cashier has no catalog write capability on this store'
+		);
+		await openButton.click();
 
-		await expect(page.getByRole('menuitem').first()).toBeVisible({
-			timeout: 15_000,
-		});
+		// The menu's Sync now sits in the modal's footer (a store product always has a Woo id).
+		const modal = page.getByTestId('product-edit-modal');
+		await expect(modal).toBeVisible({ timeout: 15_000 });
+		await expect(modal.getByTestId('product-modal-sync')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
+	test("should open a variation's modal, with sync, from its row caret", async ({
+		posPage: page,
+	}) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
@@ -687,15 +697,18 @@ test.describe('Products Page (Pro)', () => {
 			expandLink.click(),
 		]);
 
-		// Click the variation actions menu (ellipsis button)
-		const variationActionsMenu = screen
-			.locator('[data-testid="variation-actions-menu"]:visible')
+		// The variation row's caret opens its modal; the menu's Sync now sits in that footer.
+		const variationOpenButton = screen
+			.locator('[data-testid="variation-open-button"]:visible')
 			.first();
-		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
-		await variationActionsMenu.click();
+		await expect(variationOpenButton).toBeVisible({ timeout: 15_000 });
+		test.skip(
+			await variationOpenButton.isDisabled(),
+			'Variation caret is disabled: the signed-in cashier has no variation write capability on this store'
+		);
+		await variationOpenButton.click();
 
-		// The dropdown should show menu items (Edit, Sync, Delete)
-		await expect(page.getByRole('menuitem').first()).toBeVisible({
+		await expect(page.getByTestId('variation-modal-sync')).toBeVisible({
 			timeout: 15_000,
 		});
 	});
@@ -719,14 +732,14 @@ test.describe('Products Page (Pro)', () => {
 			expandLink.click(),
 		]);
 
-		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
+		const variationActionsMenu = screen.locator('[data-testid="variation-open-button"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 
 		// Collapse
 		await expandLink.click();
 		await page.waitForTimeout(1_000);
 
-		// Variation actions should no longer be visible
+		// The variation carets should no longer be visible
 		await expect(variationActionsMenu.first()).not.toBeVisible({
 			timeout: 10_000,
 		});

@@ -42,7 +42,8 @@ export function useCouponActions(
 			id: 'coupon-actions:refresh',
 			collection: 'coupons',
 		})
-			// Only a refresh that landed hands the form the store's copy.
+			// A collection refresh has no single-record answer: a settled one hands the form the
+			// store's copy.
 			.then(() => onSynced?.())
 			.catch((error) => {
 				// The engine already wrote the coded row for this require (SYNC321), and the
