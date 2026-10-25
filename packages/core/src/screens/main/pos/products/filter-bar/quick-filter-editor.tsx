@@ -4,12 +4,11 @@ import toNumber from 'lodash/toNumber';
 import { decode } from 'html-entities';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 // The deep path on purpose: the form barrel pulls the combobox into this jsdom-tested editor.
 import { SavedFieldProvider, SavedMark, useMarkSaved } from '@wcpos/components/form/saved-mark';
 import { HStack } from '@wcpos/components/hstack';
-import { IconButton } from '@wcpos/components/icon-button';
+import { Icon } from '@wcpos/components/icon';
 import { Input } from '@wcpos/components/input';
 import { ListRow } from '@wcpos/components/list-row';
 import {
@@ -17,12 +16,10 @@ import {
 	SelectContent,
 	SelectGroup,
 	SelectItem,
-	SelectTrigger,
-	SelectValue,
+	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import {
 	TreeCombobox,
 	TreeComboboxContent,
@@ -36,11 +33,13 @@ import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 
 import {
 	createQuickFilterId,
-	getQuickFilterSortLabel,
+	getNamedOrderLabel,
 	isQuickFilterValid,
-	SORT_FIELD_VALUES,
+	NAMED_ORDERS,
 } from './filter-bar-layout';
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
+import { QUICK_FILTER_STARTERS } from './quick-filter-starters';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { QuickFilterPreview } from './quick-filter-preview';
 import { CurrencyInput } from '../../../components/currency-input';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
@@ -83,17 +82,25 @@ const DEFAULT_ORDER = 'default';
 const priceBound = (value: number): number | undefined =>
 	Number.isFinite(value) && value !== 0 ? value : undefined;
 
-const FIELD_LABEL_KEYS: Record<ConditionField, string> = {
-	categories: 'common.category',
-	tags: 'common.tag',
-	brands: 'common.brand',
-	price: 'common.price',
-	on_sale: 'common.on_sale',
-	featured: 'common.featured',
-	stock_status: 'common.stock_status',
-	type: 'common.type',
-	search: 'common.search',
-};
+const KIND_ICONS = {
+	categories: 'category',
+	tags: 'tag',
+	brands: 'category',
+	price: 'currency',
+	on_sale: 'currency',
+	featured: 'featured',
+	stock_status: 'warehouse',
+	type: 'viewGrid',
+	search: 'search',
+} as const;
+
+function hasConditionValue(condition: QuickFilterCondition): boolean {
+	if (Array.isArray(condition.value)) return condition.value.length > 0;
+	if (condition.field === 'price')
+		return condition.value.min !== undefined || condition.value.max !== undefined;
+	if (condition.field === 'search') return condition.value.trim() !== '';
+	return true;
+}
 
 function createCondition(field: ConditionField): QuickFilterCondition {
 	switch (field) {
@@ -118,8 +125,10 @@ function createCondition(field: ConditionField): QuickFilterCondition {
 function CategoryValueEditor({
 	condition,
 	onChange,
+	children,
 }: {
 	condition: Extract<QuickFilterCondition, { field: 'categories' }>;
+	children: React.ReactElement;
 	onChange: ChangeCondition;
 }) {
 	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
@@ -128,9 +137,6 @@ function CategoryValueEditor({
 		const option = options.find((entry) => entry.value === String(id));
 		return { value: String(id), label: option?.label ?? t('common.loading') };
 	});
-	const names = selected
-		.filter((option) => option.label !== t('common.loading'))
-		.map((option) => option.label);
 
 	return (
 		<TreeCombobox
@@ -141,13 +147,7 @@ function CategoryValueEditor({
 				onChange({ field: 'categories', value: value.map((option) => toNumber(option.value)) })
 			}
 		>
-			<TreeComboboxTrigger asChild>
-				<Button variant="outline" testID="quick-filter-categories" className="flex-1">
-					<ButtonText decodeHtml>
-						{names.length > 0 ? names.join(', ') : t('pos_products.quick_filter_choose_categories')}
-					</ButtonText>
-				</Button>
-			</TreeComboboxTrigger>
+			<TreeComboboxTrigger asChild>{children}</TreeComboboxTrigger>
 			<TreeComboboxContent
 				searchPlaceholder={t('common.search_categories')}
 				emptyMessage={t('common.no_category_found')}
@@ -223,23 +223,55 @@ function TermValueEditor<C extends 'tags' | 'brands'>({
 	);
 }
 
+function TermNames<C extends 'categories' | 'tags' | 'brands'>({
+	resource,
+	ids,
+}: {
+	resource: ObservableResource<EngineRecord<C>[]>;
+	ids: number[];
+}) {
+	const t = useT();
+	const records = useObservableSuspense(resource);
+	return ids
+		.map((id) =>
+			decode(records.find((entry) => entry.payload.id === id)?.payload.name ?? t('common.loading'))
+		)
+		.join(', ');
+}
+
+function TermSummary({
+	taxonomy,
+	ids,
+}: {
+	taxonomy: 'categories' | 'tags' | 'brands';
+	ids: number[];
+}) {
+	const t = useT();
+	const resource = useEngineRecordsByWooId(taxonomy, ids);
+	return (
+		<Suspense fallback={t('common.loading')}>
+			<TermNames resource={resource} ids={ids} />
+		</Suspense>
+	);
+}
+
 function SimpleSelect({
+	children,
 	value,
 	items,
 	testID,
 	onChange,
 }: {
+	children: React.ReactElement;
 	value: string;
 	items: { value: string; label: string }[];
 	testID: string;
 	onChange: (value: string) => void;
 }) {
-	const selected = items.find((item) => item.value === value);
+	const selected = items.find((item) => item.value === value) ?? { value, label: '' };
 	return (
 		<Select value={selected} onValueChange={(option) => option && onChange(option.value)}>
-			<SelectTrigger testID={testID} className="flex-1">
-				<SelectValue placeholder={selected?.label ?? ''} />
-			</SelectTrigger>
+			<SelectPrimitiveTrigger asChild>{children}</SelectPrimitiveTrigger>
 			<SelectContent>
 				<SelectGroup>
 					{items.map((item) => (
@@ -259,9 +291,7 @@ function ConditionValueEditor({
 	onChange: ChangeCondition;
 }) {
 	const t = useT();
-	const { items: stockStatuses } = useStockStatusLabel();
-	if (condition.field === 'categories')
-		return <CategoryValueEditor condition={condition} onChange={onChange} />;
+
 	if (condition.field === 'tags' || condition.field === 'brands') {
 		return (
 			<TermValueEditor
@@ -297,57 +327,8 @@ function ConditionValueEditor({
 			</HStack>
 		);
 	}
-	if (condition.field === 'on_sale' || condition.field === 'featured') {
-		return (
-			<SegmentedControl
-				value={condition.value ? 'yes' : 'no'}
-				testID={`quick-filter-toggle-${condition.field}`}
-				onValueChange={(value) =>
-					value && onChange({ field: condition.field, value: value === 'yes' })
-				}
-				segments={
-					[
-						{
-							value: 'yes',
-							label: t('common.yes'),
-							testID: `quick-filter-toggle-${condition.field}-yes`,
-						},
-						{
-							value: 'no',
-							label: t('common.no'),
-							testID: `quick-filter-toggle-${condition.field}-no`,
-						},
-					] satisfies [Segment, Segment]
-				}
-			/>
-		);
-	}
-	if (condition.field === 'stock_status') {
-		return (
-			<SimpleSelect
-				value={condition.value}
-				items={stockStatuses}
-				testID="quick-filter-stock-status"
-				onChange={(value) =>
-					onChange({ field: 'stock_status', value: value as typeof condition.value })
-				}
-			/>
-		);
-	}
-	if (condition.field === 'type') {
-		const items = ['simple', 'variable', 'grouped', 'external'].map((value) => ({
-			value,
-			label: t(`common.${value}`),
-		}));
-		return (
-			<SimpleSelect
-				value={condition.value}
-				items={items}
-				testID="quick-filter-product-type"
-				onChange={(value) => onChange({ field: 'type', value: value as typeof condition.value })}
-			/>
-		);
-	}
+	if (condition.field !== 'search') return null;
+
 	return (
 		<Input
 			value={condition.value}
@@ -356,6 +337,158 @@ function ConditionValueEditor({
 			testID="quick-filter-search-term"
 			className="flex-1"
 		/>
+	);
+}
+
+function ConditionRow({
+	field,
+	condition,
+	waiting,
+	expanded,
+	onToggle,
+	onChange,
+}: {
+	field: ConditionField;
+	condition?: QuickFilterCondition;
+	waiting: boolean;
+	expanded: boolean;
+	onToggle: () => void;
+	onChange: (condition?: QuickFilterCondition) => void;
+}) {
+	const t = useT();
+	const { format } = useCurrencyFormat();
+	const { items: stockStatuses } = useStockStatusLabel();
+	const set = !!condition && hasConditionValue(condition);
+	const placeholder =
+		field === 'price'
+			? 'any_price'
+			: field === 'on_sale' || field === 'featured'
+				? 'either'
+				: field === 'search'
+					? 'nothing_typed'
+					: 'any';
+	let summary: React.ReactNode = t(`pos_products.kind_value_${placeholder}`);
+	if (set && condition) {
+		if (
+			condition.field === 'categories' ||
+			condition.field === 'tags' ||
+			condition.field === 'brands'
+		) {
+			summary = <TermSummary taxonomy={condition.field} ids={condition.value} />;
+		} else if (condition.field === 'price') {
+			const { min, max } = condition.value;
+			summary =
+				min !== undefined && max !== undefined
+					? t('pos_products.kind_price_between', { min: format(min), max: format(max) })
+					: min !== undefined
+						? t('pos_products.kind_price_from', { min: format(min) })
+						: t('pos_products.kind_price_up_to', { max: format(max!) });
+		} else if (condition.field === 'on_sale' || condition.field === 'featured') {
+			summary = t(condition.value ? 'common.yes' : 'common.no');
+		} else if (condition.field === 'stock_status') {
+			summary = stockStatuses.find((item) => item.value === condition.value)?.label;
+		} else if (condition.field === 'type') summary = t(`common.${condition.value}`);
+		else summary = `“${condition.value}”`;
+	}
+	const inline = field === 'tags' || field === 'brands' || field === 'price' || field === 'search';
+	const row = (
+		<ListRow
+			size="sm"
+			testID={`quick-filter-row-${field}`}
+			className={waiting ? 'bg-muted' : undefined}
+			leading={<Icon name={KIND_ICONS[field]} />}
+			onPress={inline ? onToggle : undefined}
+			trailing={
+				<HStack className="max-w-[55%] items-center gap-2">
+					<Text
+						numberOfLines={1}
+						className={
+							waiting
+								? 'text-primary shrink'
+								: set
+									? 'text-foreground shrink font-medium'
+									: 'text-muted-foreground shrink'
+						}
+					>
+						{waiting ? t('pos_products.kind_value_choose') : summary}
+					</Text>
+					<Icon
+						name={expanded ? 'chevronDown' : 'chevronRight'}
+						className="text-muted-foreground"
+					/>
+				</HStack>
+			}
+		>
+			<Text>{t(`pos_products.kind_${field}`)}</Text>
+		</ListRow>
+	);
+	const change = (next: QuickFilterCondition) =>
+		onChange(hasConditionValue(next) ? next : undefined);
+	if (field === 'categories')
+		return (
+			<CategoryValueEditor
+				condition={
+					(condition as Extract<QuickFilterCondition, { field: 'categories' }>) ?? {
+						field,
+						value: [],
+					}
+				}
+				onChange={change}
+			>
+				{row}
+			</CategoryValueEditor>
+		);
+	if (inline)
+		return (
+			<>
+				{row}
+				{expanded && (
+					<VStack className="border-border border-b px-3 py-2">
+						<ConditionValueEditor
+							condition={condition ?? createCondition(field)}
+							onChange={change}
+						/>
+					</VStack>
+				)}
+			</>
+		);
+	const boolean = field === 'on_sale' || field === 'featured';
+	const unset = boolean ? 'either' : 'any';
+	const items = boolean
+		? [
+				{ value: 'yes', label: t('common.yes') },
+				{ value: 'no', label: t('common.no') },
+				{ value: unset, label: t('pos_products.kind_value_either') },
+			]
+		: [
+				{ value: unset, label: t('pos_products.kind_value_any') },
+				...(field === 'stock_status'
+					? stockStatuses
+					: ['simple', 'variable', 'grouped', 'external'].map((value) => ({
+							value,
+							label: t(`common.${value}`),
+						}))),
+			];
+	return (
+		<SimpleSelect
+			value={
+				condition ? (boolean ? (condition.value ? 'yes' : 'no') : String(condition.value)) : unset
+			}
+			items={items}
+			testID={`quick-filter-${field === 'stock_status' ? 'stock-status' : field}`}
+			onChange={(value) =>
+				onChange(
+					value === unset
+						? undefined
+						: ({
+								...createCondition(field),
+								value: boolean ? value === 'yes' : value,
+							} as QuickFilterCondition)
+				)
+			}
+		>
+			{row}
+		</SimpleSelect>
 	);
 }
 
@@ -382,6 +515,9 @@ function QuickFilterEditorBody({
 	const [draft, setDraft] = React.useState<QuickFilter>(
 		() => initial ?? { id: createQuickFilterId(), type: 'quick', label: '', conditions: [] }
 	);
+	const [started, setStarted] = React.useState(false);
+	const [waiting, setWaiting] = React.useState<ConditionField>();
+	const [expanded, setExpanded] = React.useState<ConditionField>();
 	const [deleting, setDeleting] = React.useState(false);
 	const markSaved = useMarkSaved();
 	const pending = React.useRef<{
@@ -428,15 +564,56 @@ function QuickFilterEditorBody({
 		if (text) pending.current = { timer: setTimeout(flush, 300), write };
 		else void write();
 	};
-	const usedFields = draft.conditions.map((condition) => condition.field);
-	const firstUnused = CONDITION_FIELDS.find((field) => !usedFields.includes(field));
-	const updateCondition = (index: number, condition: QuickFilterCondition, text = false) =>
+	const updateCondition = (field: ConditionField, condition?: QuickFilterCondition) => {
+		if (condition && waiting === field) setWaiting(undefined);
 		updateDraft(
 			(value) => ({
 				...value,
-				conditions: value.conditions.map((entry, row) => (row === index ? condition : entry)),
+				conditions: condition
+					? value.conditions.some((entry) => entry.field === field)
+						? value.conditions.map((entry) => (entry.field === field ? condition : entry))
+						: [...value.conditions, condition]
+					: value.conditions.filter((entry) => entry.field !== field),
 			}),
-			text
+			field === 'search'
+		);
+	};
+	if (!initial && !started && !draft.label && !draft.conditions.length && !draft.sort)
+		return (
+			<VStack className="gap-2">
+				<Text className="text-muted-foreground">{t('pos_products.starters_hint')}</Text>
+				{QUICK_FILTER_STARTERS.map((starter) => (
+					<ListRow
+						key={starter.id}
+						testID={`quick-filter-starter-${starter.id}`}
+						leading={<Icon name={starter.icon} />}
+						trailing={<Icon name="chevronRight" className="text-muted-foreground" />}
+						onPress={() => {
+							setStarted(true);
+							setWaiting(starter.waiting);
+							updateDraft((value) => ({
+								...value,
+								label: starter.sort ? t(`pos_products.starter_${starter.id}_title`) : '',
+								conditions: starter.conditions,
+								sort: starter.sort,
+							}));
+						}}
+					>
+						<Text>{t(`pos_products.starter_${starter.id}_title`)}</Text>
+						<Text className="text-muted-foreground text-sm">
+							{t(`pos_products.starter_${starter.id}_line`)}
+						</Text>
+					</ListRow>
+				))}
+				<ListRow
+					size="sm"
+					testID="quick-filter-start-scratch"
+					leading={<Icon name="plus" className="text-primary" />}
+					onPress={() => setStarted(true)}
+				>
+					<Text className="text-primary font-medium">{t('pos_products.start_from_scratch')}</Text>
+				</ListRow>
+			</VStack>
 		);
 
 	return (
@@ -454,147 +631,76 @@ function QuickFilterEditorBody({
 				/>
 			</VStack>
 			<VStack className="gap-2">
+				<Text className="text-muted-foreground text-xs tracking-wide uppercase">
+					{t('pos_products.on_the_bar')}
+				</Text>
+				<HStack className="bg-background rounded-lg p-2" testID="quick-filter-bar-preview">
+					<Chip
+						label={draft.label.trim() || t('pos_products.quick_filter_name_placeholder')}
+						count={draft.conditions.length || undefined}
+						on={isQuickFilterValid(draft)}
+						add={!draft.label.trim()}
+					/>
+				</HStack>
+			</VStack>
+			<VStack className="gap-2">
 				<HStack className="justify-between">
 					<Text className="font-medium">{t('pos_products.quick_filter_conditions_heading')}</Text>
 					<SavedMark name="conditions" label={t('settings.saved')} />
 				</HStack>
-				{draft.conditions.map((condition, index) => (
-					<React.Fragment key={`${index}-${condition.field}`}>
-						{index > 0 && (
-							<Text className="text-muted-foreground">{t('pos_products.quick_filter_and')}</Text>
-						)}
-						<HStack className="items-center">
-							<Select
-								value={{ value: condition.field, label: t(FIELD_LABEL_KEYS[condition.field]) }}
-								onValueChange={(option) =>
-									option && updateCondition(index, createCondition(option.value as ConditionField))
-								}
-							>
-								<SelectTrigger testID={`quick-filter-condition-field-${index}`} className="w-40">
-									<SelectValue placeholder={t(FIELD_LABEL_KEYS[condition.field])} />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectGroup>
-										{CONDITION_FIELDS.filter(
-											(field) => field === condition.field || !usedFields.includes(field)
-										).map((field) => (
-											<SelectItem
-												key={field}
-												value={field}
-												label={t(FIELD_LABEL_KEYS[field])}
-												testID={`quick-filter-condition-option-${index}-${field}`}
-											/>
-										))}
-									</SelectGroup>
-								</SelectContent>
-							</Select>
-							<ConditionValueEditor
-								condition={condition}
-								onChange={(value) => updateCondition(index, value, value.field === 'search')}
-							/>
-							<IconButton
-								name="close"
-								accessibilityLabel={t('common.remove')}
-								testID={`quick-filter-condition-remove-${index}`}
-								onPress={() =>
-									updateDraft((value) => ({
-										...value,
-										conditions: value.conditions.filter((_, row) => row !== index),
-									}))
-								}
-							/>
-						</HStack>
-					</React.Fragment>
-				))}
-				<Button
-					variant="outline"
-					size="sm"
-					testID="quick-filter-add-condition"
-					disabled={!firstUnused}
-					onPress={() =>
-						firstUnused &&
-						updateDraft((value) => ({
-							...value,
-							conditions: [...value.conditions, createCondition(firstUnused)],
-						}))
-					}
-				>
-					<ButtonText>{t('pos_products.quick_filter_add_condition')}</ButtonText>
-				</Button>
+				<VStack className="gap-0">
+					{CONDITION_FIELDS.map((field) => (
+						<ConditionRow
+							key={field}
+							field={field}
+							condition={draft.conditions.find((condition) => condition.field === field)}
+							waiting={waiting === field}
+							expanded={expanded === field}
+							onToggle={() => setExpanded(expanded === field ? undefined : field)}
+							onChange={(condition) => updateCondition(field, condition)}
+						/>
+					))}
+				</VStack>
 			</VStack>
 			<VStack className="gap-2">
 				<HStack className="justify-between">
-					<Text className="font-medium">{t('pos_products.quick_filter_order_by')}</Text>
+					<Text className="font-medium">{t('pos_products.then')}</Text>
 					<SavedMark name="sort" label={t('settings.saved')} />
 				</HStack>
-				<Select
-					value={
-						draft.sort
-							? { value: draft.sort.field, label: getQuickFilterSortLabel(draft.sort.field, t) }
-							: { value: DEFAULT_ORDER, label: t('pos_products.quick_filter_default_order') }
-					}
-					onValueChange={(option) =>
+				<SimpleSelect
+					value={draft.sort ? `${draft.sort.field}-${draft.sort.direction}` : DEFAULT_ORDER}
+					items={NAMED_ORDERS.map((order) => ({ value: order.value, label: t(order.labelKey) }))}
+					testID="quick-filter-sort"
+					onChange={(selected) =>
 						updateDraft((value) => ({
 							...value,
-							sort:
-								option?.value && option.value !== DEFAULT_ORDER
-									? {
-											field: option.value as NonNullable<QuickFilter['sort']>['field'],
-											direction: value.sort?.direction ?? 'asc',
-										}
-									: undefined,
+							sort: NAMED_ORDERS.find((order) => order.value === selected)?.sort,
 						}))
 					}
 				>
-					<SelectTrigger testID="quick-filter-sort-field">
-						<SelectValue placeholder={t('pos_products.quick_filter_default_order')} />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectGroup>
-							<SelectItem
-								value={DEFAULT_ORDER}
-								label={t('pos_products.quick_filter_default_order')}
-								testID="quick-filter-sort-option-default"
-							/>
-							{SORT_FIELD_VALUES.map((field) => (
-								<SelectItem
-									key={field}
-									value={field}
-									label={getQuickFilterSortLabel(field, t)}
-									testID={`quick-filter-sort-option-${field}`}
-								/>
-							))}
-						</SelectGroup>
-					</SelectContent>
-				</Select>
-				{draft.sort && (
-					<SegmentedControl
-						value={draft.sort.direction}
-						testID="quick-filter-sort-direction"
-						onValueChange={(direction) =>
-							direction &&
-							updateDraft((value) =>
-								value.sort
-									? { ...value, sort: { ...value.sort, direction: direction as 'asc' | 'desc' } }
-									: value
-							)
+					<ListRow
+						size="sm"
+						testID="quick-filter-sort-field"
+						leading={<Icon name="arrowDown" />}
+						trailing={
+							<HStack className="max-w-[55%] items-center gap-2">
+								<Text
+									numberOfLines={1}
+									className={
+										draft.sort
+											? 'text-foreground shrink font-medium'
+											: 'text-muted-foreground shrink'
+									}
+								>
+									{getNamedOrderLabel(draft.sort, t)}
+								</Text>
+								<Icon name="chevronRight" className="text-muted-foreground" />
+							</HStack>
 						}
-						segments={
-							[
-								{
-									value: 'asc',
-									label: t('common.ascending'),
-									testID: 'quick-filter-sort-direction-asc',
-								},
-								{
-									value: 'desc',
-									label: t('common.descending'),
-									testID: 'quick-filter-sort-direction-desc',
-								},
-							] satisfies [Segment, Segment]
-						}
-					/>
-				)}
+					>
+						<Text>{t('pos_products.quick_filter_order_by')}</Text>
+					</ListRow>
+				</SimpleSelect>
 			</VStack>
 			<QuickFilterPreview draft={draft} />
 			{initial && (

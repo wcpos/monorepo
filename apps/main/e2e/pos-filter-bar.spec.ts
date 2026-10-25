@@ -40,21 +40,19 @@ test('a quick filter authored in the editor applies and clears its conditions fr
 	try {
 		await openFilterBarEditor(page);
 		await page.getByTestId('filter-bar-add-quick-filter').click();
+		await page.getByTestId('quick-filter-start-scratch').click();
 		await page.getByTestId('quick-filter-name').fill(label);
 
 		// Add stays disabled until the button has something to apply.
 		await expect(page.getByTestId('quick-filter-add')).toBeDisabled();
 
-		// One condition: "On sale" — the first row defaults to Category, so switch its field.
-		await page.getByTestId('quick-filter-add-condition').click();
-		await page.getByTestId('quick-filter-condition-field-0').click();
-		await page.getByTestId('quick-filter-condition-option-0-on_sale').click();
-		await expect(page.getByTestId('quick-filter-toggle-on_sale')).toBeVisible();
+		// One condition, chosen from its kind row.
+		await page.getByTestId('quick-filter-row-on_sale').click();
+		await page.getByTestId('quick-filter-on_sale-option-yes').click();
 
 		// A sort, so the button carries an order as well as a filter.
 		await page.getByTestId('quick-filter-sort-field').click();
-		await page.getByTestId('quick-filter-sort-option-sortable_price').click();
-		await page.getByTestId('quick-filter-sort-direction-desc').click();
+		await page.getByTestId('quick-filter-sort-option-sortable_price-desc').click();
 
 		// The preview reports a device-local count; its exact value is the store's business.
 		await expect(page.getByTestId('quick-filter-preview-count')).toBeVisible({ timeout: 15_000 });

@@ -23,6 +23,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 13. Long-press / right-click opens a chip menu: quick filters offer Edit, Customise filter bar, then Remove from bar (last, destructive); built-ins offer Hide from bar and Customise filter bar. The Customise chip is gone — evidence: this commit; `filter-bar.test.tsx` — platform: all (right-click: web).
 
+14. The editor is nine fixed kind rows in `CONDITION_FIELDS` order, each reading its value or a muted placeholder; a choice kind opens its chooser anchored to the row, while a typed/searched kind expands inline. Order by is a Select of `NAMED_ORDERS`; a stored sort outside the table keeps its fallback label and value until changed (`getNamedOrderLabel`). A new filter opens on `QUICK_FILTER_STARTERS` plus Start from scratch — evidence: this commit; `quick-filter-editor.test.tsx`; `filter-bar-layout.test.ts` — platform: all.
+
 ## Query-handle compat removal (added 2026-10-13)
 
 Line 10: the preview owns a products query handle above its boundary (`useProductsQueryHandle`) and draws it with `useQuerySnapshot(useDrawnHandle(handle), [])`: the owner’s retain commits, the reader suspends, and a changed draft keeps the previous matches while it loads (`quick-filter-preview.test.tsx`, “keeps the previous matches while a changed draft loads”). `pos-filter-bar.tsx` and `quick-filter-button.tsx` (v1, mounted only by the deleted v1 screen) are deleted with their tests.
