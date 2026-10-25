@@ -18,10 +18,27 @@ type Props = CellContext<{ record: EngineRecord<'products'> }, 'actions'>;
 // row's pressable (a button cannot nest in a button), so it needs its own. Sync and Delete
 // live in the modal's footer. A variable product's caret opens its variations instead.
 export function Actions(props: Props) {
-	return props.row.original.record.payload.type === 'variable' ? (
-		<VariationsCaret {...props} />
+	if (props.row.original.record.payload.type !== 'variable') return <OpenCaret {...props} />;
+	const meta = props.table.options.meta as { drill?: (row: Props['row']) => void } | undefined;
+	// The drill style (`variationsStyle`): the caret slides the product's variations in.
+	return meta?.drill ? (
+		<DrillCaret onPress={() => meta.drill?.(props.row)} />
 	) : (
-		<OpenCaret {...props} />
+		<VariationsCaret {...props} />
+	);
+}
+
+function DrillCaret({ onPress }: { onPress: () => void }) {
+	const t = useT();
+	return (
+		<IconButton
+			testID="product-expand-button"
+			name="chevronRight"
+			size="sm"
+			variant="muted"
+			accessibilityLabel={t('products.show_variations', { _: 'Show variations' })}
+			onPress={onPress}
+		/>
 	);
 }
 

@@ -141,6 +141,7 @@ export function QueryStateProvider<C extends CollectionKey>({
 	initialPageSize,
 	initialSort,
 	initialFilters,
+	initialSearch = '',
 	persistKey,
 	children,
 }: {
@@ -148,6 +149,7 @@ export function QueryStateProvider<C extends CollectionKey>({
 	initialPageSize: number;
 	initialSort: QueryStateOf<C>['sort'];
 	initialFilters?: Partial<FiltersOf<C>>;
+	initialSearch?: string;
 	/**
 	 * Keep the store across remounts of this provider under a `PersistedStateProvider`: a
 	 * screen that the host unmounts and mounts again (the register's layout switching trees at
@@ -164,7 +166,7 @@ export function QueryStateProvider<C extends CollectionKey>({
 		const clearFilters = clone(DEFAULT_FILTERS[collection]);
 		const filters = { ...clearFilters, ...initialFilters } as FiltersOf<C>;
 		return createStore(
-			{ search: '', filters, sort: initialSort, limit: initialPageSize },
+			{ search: initialSearch, filters, sort: initialSort, limit: initialPageSize },
 			clearFilters,
 			filters,
 			initialPageSize

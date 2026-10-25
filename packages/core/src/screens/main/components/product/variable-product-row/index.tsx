@@ -43,7 +43,8 @@ export function VariableProductRow({
 	item: Row<ProductRow, DataTableFeatures>;
 	index: number;
 	table: Table<ProductRow, DataTableFeatures>;
-	/** The products page: a press on the row (not on a control in it) toggles its variations. */
+	/** The products page: a press on the row (not on a control in it) toggles its variations, or
+	 * drills into them when the table's meta carries `drill`. */
 	toggleOnPress?: boolean;
 }) {
 	/**
@@ -59,6 +60,7 @@ export function VariableProductRow({
 				setRowExpanded?: (rowId: string, expanded: boolean) => void;
 				variationStockStatus?: string;
 				openVariation?: (record: EngineRecord<'variations'>) => void;
+				drill?: (row: Row<ProductRow, DataTableFeatures>) => void;
 		  }
 		| undefined;
 	/**
@@ -118,7 +120,14 @@ export function VariableProductRow({
 	return (
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
-				{toggleOnPress ? (
+				{toggleOnPress && meta?.drill ? (
+					// The drill style: the press slides the variations in; no row expands.
+					<DataTableRow
+						item={item}
+						testID={`data-table-row-${stableId}`}
+						onPress={() => meta.drill?.(item)}
+					/>
+				) : toggleOnPress ? (
 					<ToggleRow item={item} table={table} testID={`data-table-row-${stableId}`} />
 				) : (
 					<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>

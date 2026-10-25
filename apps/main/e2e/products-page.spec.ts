@@ -69,6 +69,15 @@ async function editStockQuantityField(page: Page, rowTestId: string, digit: stri
 /**
  * Products page (pro-only drawer page with inline editing).
  */
+// The Products page drills into a variable product by default (the POS panel's
+// `variationsStyle`); the tests that cover the inline expand choose it first.
+async function chooseInlineVariations(page: Page) {
+	const screen = page.locator('[data-testid="screen-products"]:visible');
+	await screen.getByTestId('products-bar-display').click();
+	await page.getByTestId('products-variations-style-inline').click();
+	await page.getByTestId('products-display-close').click();
+}
+
 test.describe('Products Page (Pro)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
@@ -685,6 +694,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
+		await chooseInlineVariations(page);
 		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -720,6 +730,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
+		await chooseInlineVariations(page);
 		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();

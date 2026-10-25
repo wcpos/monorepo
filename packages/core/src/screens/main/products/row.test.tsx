@@ -295,3 +295,28 @@ it('keeps a failed variations read inside the row; its reset retries the variati
 		mockServedVariationHandle = mockVariationHandle;
 	}
 });
+
+// The drill style (the POS panel's `variationsStyle`): the touch row hands itself to the
+// screen's drill and draws nothing under it; it is a way in, not an expander.
+it('drills on press in the drill style, with no inline variations and no expanded state', async () => {
+	const drill = jest.fn();
+	const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
+	const item = {
+		id: 'one',
+		original: { record: { ...record, payload: { ...record.payload, type: 'variable' } } },
+	};
+	render(
+		<VariableRow
+			{...({
+				item,
+				table: { options: { meta: { expanded$, drill } } },
+			} as unknown as React.ComponentProps<typeof VariableRow>)}
+		/>
+	);
+	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+	expect(drill).toHaveBeenCalledWith(item);
+	expect(expanded$.value).toEqual({});
+	expect(screen.queryByTestId('products-row-variation')).toBeNull();
+	expect(screen.getByTestId('products-row-one').hasAttribute('aria-expanded')).toBe(false);
+	expect(screen.getByTestId('icon-chevronRight')).toBeTruthy();
+});

@@ -58,7 +58,14 @@ jest.mock('@wcpos/query', () => ({
 	useRelationalQuery: () => {
 		throw new Error('legacy useRelationalQuery reached');
 	},
+	useDocField: (doc: object, select: (value: object) => unknown) => select(doc),
 }));
+// The drill's stage and pane are drill.test.tsx's subject.
+jest.mock('@wcpos/components/pane-stack', () => ({
+	PaneStack: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('../pos/products/drill-in', () => ({ DrillIn: () => null }));
+jest.mock('@wcpos/components/table', () => ({}));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -202,6 +209,9 @@ jest.mock('../components/product/tax-based-on', () => ({ TaxBasedOn: () => null 
 jest.mock('../components/product/variable-image', () => ({ VariableProductImage: () => null }));
 jest.mock('../components/product/variable-price', () => ({ VariableProductPrice: () => null }));
 jest.mock('../components/product/variable-product-row', () => ({ VariableProductRow: () => null }));
+jest.mock('../components/product/variable-product-row/variations', () => ({
+	Variations: () => null,
+}));
 jest.mock('../components/product/variation-image', () => ({ ProductVariationImage: () => null }));
 jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
@@ -328,6 +338,7 @@ jest.mock('../components/management-bar', () => ({
 	),
 }));
 jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('./display-options', () => ({ ProductsDisplayOptions: () => null }));
 jest.mock('../components/pro-guard', () => ({
 	withProAccess: (Body: React.ComponentType<object>) =>
 		function Guard(props: object) {
@@ -342,7 +353,11 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => 'fine',
 	useIsPhone: () => false,
 }));
-jest.mock('./row', () => ({ ProductRow: () => null, VariableRow: () => null }));
+jest.mock('./row', () => ({
+	ProductRow: () => null,
+	VariableRow: () => null,
+	InlineVariations: () => null,
+}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
