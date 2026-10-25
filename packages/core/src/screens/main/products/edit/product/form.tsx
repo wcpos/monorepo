@@ -18,8 +18,6 @@ import {
 	FormTreeCombobox,
 	SavedFieldProvider,
 	SavedMark,
-	useFormChangeHandler,
-	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
@@ -37,9 +35,9 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { useCatalogueRecord } from '../../commands/use-catalogue-record';
 import { DeleteProductDialog, RecordFooterActions, useProductActions } from '../../product-actions';
-import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
+import { taxClassFromWire } from '../../../hooks/tax-class';
+import { useCatalogueAutosave } from '../use-catalogue-autosave';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -105,7 +103,6 @@ export function EditProductForm(props: Props) {
 
 function EditProductFormFields({ product }: Props) {
 	const t = useT();
-	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
@@ -118,32 +115,14 @@ function EditProductFormFields({ product }: Props) {
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(product.toMutableJSON().payload),
 	});
-	const markSaved = useMarkSaved();
-	const { flush } = useFormChangeHandler({
+	const { flush } = useCatalogueAutosave({
+		record: product,
 		form,
-		onChange: async (changes) => {
-			// The licence-gated read-only form never writes: the route is closed to it, a typed URL is not.
-			if (readOnly) return false;
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const value = form.getValues(root);
-			const wire =
-				root === 'tax_class'
-					? taxClassToWire(form.getValues('tax_class'))
-					: root === 'categories'
-						? form
-								.getValues('categories')
-								.map((opt) => ({ id: toNumber(opt.value), name: opt.label }))
-						: root === 'meta_data' && Array.isArray(value)
-							? form
-									.getValues('meta_data')
-									?.filter((row) => row?.id != null || String(row?.key ?? '') !== '')
-							: value;
-			const written = await saveCatalogueFields(product, {
-				[root]: wire,
-			} as Partial<ProductPayload>);
-			if (written) markSaved([root]);
-			return written;
-		},
+		readOnly,
+		wire: (root, value) =>
+			root === 'categories'
+				? form.getValues('categories').map((opt) => ({ id: toNumber(opt.value), name: opt.label }))
+				: value,
 	});
 	// Sync flushes the pending edit first, then takes the store's copy; resetting the draft
 	// prevents a debounced write from putting stale values back over the pulled ones.

@@ -242,6 +242,19 @@ describe('catalogue form autosave', () => {
 			});
 		});
 
+		it('tombstones a removed row after the store numbers an earlier meta write', async () => {
+			formValues.meta_data = [{ key: 'colour', value: 'red' }];
+			renderForm();
+			await capturedChange({ 'meta_data.0.value': 'red' });
+			productData.meta_data = [{ id: 9, key: 'colour', value: 'red' }];
+			formValues.meta_data = [];
+			await capturedChange({ meta_data: [] });
+			expect(mockLocalPatch).toHaveBeenCalledTimes(2);
+			expect(mockLocalPatch.mock.calls[1][0].data.meta_data).toEqual([
+				{ id: 9, key: 'colour', value: null },
+			]);
+		});
+
 		it('a failed write returns false with no mark', async () => {
 			mockLocalPatch.mockResolvedValue(undefined);
 			renderForm();

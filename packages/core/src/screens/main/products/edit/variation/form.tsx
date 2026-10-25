@@ -16,8 +16,6 @@ import {
 	FormSwitch,
 	SavedFieldProvider,
 	SavedMark,
-	useFormChangeHandler,
-	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
@@ -33,13 +31,13 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
-import { useCatalogueRecord } from '../../commands/use-catalogue-record';
 import {
 	DeleteVariationDialog,
 	RecordFooterActions,
 	useVariationActions,
 } from '../../product-actions';
-import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
+import { taxClassFromWire } from '../../../hooks/tax-class';
+import { useCatalogueAutosave } from '../use-catalogue-autosave';
 
 const schema = z.object({
 	regular_price: z.string(),
@@ -89,7 +87,6 @@ export function EditVariationForm(props: Props) {
 
 function EditVariationFormFields({ variation }: Props) {
 	const t = useT();
-	const { saveCatalogueFields } = useCatalogueRecord();
 	const { close } = useDialog();
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
 	const readOnly = !(useAppInfo().license?.isPro ?? false);
@@ -101,26 +98,10 @@ function EditVariationFormFields({ variation }: Props) {
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(variation.toMutableJSON().payload),
 	});
-	const markSaved = useMarkSaved();
-	const { flush } = useFormChangeHandler({
+	const { flush } = useCatalogueAutosave({
+		record: variation,
 		form,
-		onChange: async (changes) => {
-			// The licence-gated read-only form never writes: the route is closed to it, a typed URL is not.
-			if (readOnly) return false;
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const value = form.getValues(root);
-			const wire =
-				root === 'tax_class'
-					? taxClassToWire(form.getValues('tax_class'))
-					: root === 'meta_data' && Array.isArray(value)
-						? value.filter((row) => row?.id != null || String(row?.key ?? '') !== '')
-						: value;
-			const written = await saveCatalogueFields(variation, {
-				[root]: wire,
-			} as Partial<VariationPayload>);
-			if (written) markSaved([root]);
-			return written;
-		},
+		readOnly,
 	});
 	// Sync flushes the pending edit first, then takes the store's copy; resetting the draft
 	// prevents a debounced write from putting stale values back over the pulled ones.
