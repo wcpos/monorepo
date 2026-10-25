@@ -8,7 +8,6 @@ import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useT } from '../../../../contexts/translations';
 import { EditableField } from '../../components/editable-field';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
@@ -33,7 +32,6 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 	const canEdit = caps.canEditProducts;
 	const editable = !readOnly && canEdit;
 	const router = useRouter();
-	const t = useT();
 	const meta = props.table.options.meta as unknown as {
 		onChange: (arg: {
 			document: EngineRecord<'products'>;
@@ -54,8 +52,8 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 					<Button
 						testID="product-open-button"
 						variant="ghost"
+						// No label: the button's name is the product's name, so each opener is told apart.
 						className="justify-start px-0"
-						accessibilityLabel={t('products.open_product', { _: 'Open product' })}
 						disabled={!editable}
 						onPress={
 							editable

@@ -100,7 +100,7 @@ it("a variable product's name opens its modal, and the row does not toggle", () 
 	render(<Row type="variable" onToggle={onToggle} />);
 	const name = screen.getByTestId('product-open-button');
 	expect(name.textContent).toBe('Hoodie');
-	expect(name.getAttribute('aria-label')).toBe('products.open_product');
+	expect(name.getAttribute('aria-label')).toBeNull();
 	expect(screen.getByTestId('attribute-chips')).toBeTruthy();
 	fireEvent.click(name);
 	expect(mockPush).toHaveBeenCalledWith({
