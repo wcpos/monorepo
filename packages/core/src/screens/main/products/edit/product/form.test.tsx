@@ -52,7 +52,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	SavedMark: () => null,
+	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
@@ -218,6 +218,29 @@ describe('catalogue form autosave', () => {
 					<EditVariationForm variation={product as unknown as EngineRecord<'variations'>} />
 				)
 			);
+
+		it('renders a Saved mark for every writable field root', () => {
+			renderForm();
+
+			const fields = [
+				'sku',
+				'barcode',
+				'regular_price',
+				'sale_price',
+				'status',
+				'stock_quantity',
+				'manage_stock',
+				'tax_class',
+				'tax_status',
+				'meta_data',
+				...(kind === 'product'
+					? ['name', 'categories', 'featured', 'virtual', 'downloadable']
+					: []),
+			];
+			for (const name of fields) {
+				expect(screen.getByTestId(`saved-${name}`)).toBeTruthy();
+			}
+		});
 
 		it('tax_class leaves as the wire spelling', async () => {
 			renderForm();

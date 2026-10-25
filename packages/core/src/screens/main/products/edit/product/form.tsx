@@ -158,17 +158,22 @@ function EditProductFormFields({ product }: Props) {
 					control={form.control}
 					name="categories"
 					render={({ field }) => (
-						<FormTreeCombobox
-							label={t('common.categories')}
-							options={categoryOptions}
-							cascadeSelection={false}
-							placeholder={t('common.select_category')}
-							searchPlaceholder={t('common.search_categories')}
-							emptyMessage={t('common.no_category_found')}
-							{...field}
-						>
-							<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
-						</FormTreeCombobox>
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('common.categories')}</FormLabel>
+								<SavedMark name="categories" label={t('settings.saved')} />
+							</HStack>
+							<FormTreeCombobox
+								options={categoryOptions}
+								cascadeSelection={false}
+								placeholder={t('common.select_category')}
+								searchPlaceholder={t('common.search_categories')}
+								emptyMessage={t('common.no_category_found')}
+								{...field}
+							>
+								<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
+							</FormTreeCombobox>
+						</FormItem>
 					)}
 				/>
 				<HStack className="gap-4">
@@ -233,42 +238,54 @@ function EditProductFormFields({ product }: Props) {
 							control={form.control}
 							name="status"
 							render={({ field: { value, onChange, ...rest } }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('common.status')}</FormLabel>
+										<SavedMark name="status" label={t('settings.saved')} />
+									</HStack>
 									<FormSelect
-										label={t('common.status')}
 										customComponent={ProductStatusSelect}
 										value={value as string}
 										onChange={onChange}
 										{...rest}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="featured"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormSwitch label={t('common.featured')} {...field} />
-								</View>
+								<HStack className="items-center justify-between">
+									<View className="flex-1">
+										<FormSwitch label={t('common.featured')} {...field} />
+									</View>
+									<SavedMark name="featured" label={t('settings.saved')} />
+								</HStack>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="virtual"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormSwitch label={t('products.virtual')} {...field} />
-								</View>
+								<HStack className="items-center justify-between">
+									<View className="flex-1">
+										<FormSwitch label={t('products.virtual')} {...field} />
+									</View>
+									<SavedMark name="virtual" label={t('settings.saved')} />
+								</HStack>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="downloadable"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormSwitch label={t('products.downloadable')} {...field} />
-								</View>
+								<HStack className="items-center justify-between">
+									<View className="flex-1">
+										<FormSwitch label={t('products.downloadable')} {...field} />
+									</View>
+									<SavedMark name="downloadable" label={t('settings.saved')} />
+								</HStack>
 							)}
 						/>
 					</VStack>
@@ -295,9 +312,12 @@ function EditProductFormFields({ product }: Props) {
 							control={form.control}
 							name="manage_stock"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormSwitch label={t('products.manage_stock')} {...field} />
-								</View>
+								<HStack className="items-center justify-between">
+									<View className="flex-1">
+										<FormSwitch label={t('products.manage_stock')} {...field} />
+									</View>
+									<SavedMark name="manage_stock" label={t('settings.saved')} />
+								</HStack>
 							)}
 						/>
 					</VStack>
@@ -307,32 +327,41 @@ function EditProductFormFields({ product }: Props) {
 						control={form.control}
 						name="tax_class"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.tax_class')}</FormLabel>
+									<SavedMark name="tax_class" label={t('settings.saved')} />
+								</HStack>
 								<FormSelect
-									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="tax_status"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									{...field}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.tax_status')}</FormLabel>
+									<SavedMark name="tax_status" label={t('settings.saved')} />
+								</HStack>
+								<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
-				<MetaDataForm />
+				<View className="relative">
+					<MetaDataForm />
+					{/* Out of flow, beside the component's own heading: the mark never moves the rows. */}
+					<View className="pointer-events-none absolute top-0 right-0">
+						<SavedMark name="meta_data" label={t('settings.saved')} />
+					</View>
+				</View>
 			</DialogBody>
 			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
 				{leading && <RecordFooterActions actions={actions} testIDPrefix="product" />}
