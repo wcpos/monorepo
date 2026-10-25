@@ -42,7 +42,7 @@ it('a field emptied after holding a value stays until its Remove, which clears i
 	values.company = '';
 	hook.rerender();
 	expect(hook.result.current.present).toContain('company');
-	act(() => hook.result.current.remove('company'));
+	act(() => hook.result.current.withdraw('company'));
 	expect(onClear).toHaveBeenCalledWith('company');
 	expect(hook.result.current.offered).toEqual(['company', 'billing', 'shipping']);
 });

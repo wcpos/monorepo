@@ -304,7 +304,7 @@ function EditCartCustomerFields() {
 										label={labels[name]}
 										trailing={
 											name === 'company' &&
-											verb(['remove-company', t('common.remove'), () => presence.remove(name)])
+											verb(['remove-company', t('common.remove'), () => presence.withdraw(name)])
 										}
 									>
 										<TextPart
@@ -324,7 +324,7 @@ function EditCartCustomerFields() {
 								autoFocus={focus === 'billing'}
 								verbs={[
 									open.billing
-										? ['remove-billing', t('common.remove'), () => presence.remove('billing')]
+										? ['remove-billing', t('common.remove'), () => presence.withdraw('billing')]
 										: ['edit-billing', t('common.edit'), openPart('billing')],
 								]}
 							/>

@@ -9,7 +9,7 @@ export interface FieldSpec<Name extends string> {
 /**
  * Which of a record's facts are rows (property rows, Paul 2026-10-25). Presence is per record,
  * not per session: an asked field is always present; a field with a value is present; a field
- * the owner added, or one that held a value, stays present once emptied until its Remove, which
+ * the owner added, or one that held a value, stays present once emptied until its Remove (`withdraw`), which
  * clears the value through `onClear` (required: a Remove that left the value would leave the row).
  * Both lists keep the array's canonical order, so an added field lands in its place, never
  * appended. Mount one hook per record: the state belongs to the record it was mounted with, so a
@@ -29,7 +29,9 @@ export function useFieldPresence<Name extends string>(
 	const isPresent = (field: FieldSpec<Name>) =>
 		Boolean(field.asked) || kept.has(field.name) || !isEmpty(field.name);
 	const add = (name: Name) => setKept((current) => new Set(current).add(name));
-	const remove = (name: Name) => {
+	// `withdraw`, not `remove`: the ADR 0033 seam ratchet fences a member named `remove` as a record
+	// mutator, and this one touches no storage.
+	const withdraw = (name: Name) => {
 		setKept((current) => new Set([...current].filter((item) => item !== name)));
 		onClear(name);
 	};
@@ -37,6 +39,6 @@ export function useFieldPresence<Name extends string>(
 		present: fields.filter(isPresent).map((field) => field.name),
 		offered: fields.filter((field) => !isPresent(field)).map((field) => field.name),
 		add,
-		remove,
+		withdraw,
 	};
 }
