@@ -54,10 +54,9 @@ function EditCustomerFormFields({ customer }: Props) {
 	// The billing identity follows the top-level one (ledger line 9) while it is empty OR still equal
 	// to the value the record held before the write: an autosave writes on every pause, so "fill when
 	// empty" alone would pin the first partial word ("Jo") into billing for good. It rides in the SAME
-	// patch, so a close or a Sync cannot drop it. `mirrors` carries each identity write's capture to
-	// its own `after`, keyed by root: writes overlap, and a password save must not evict a name's.
+	// patch, so a close or a Sync cannot drop it. Writes overlap (even two of one root), so each
+	// write's capture lives in its own `after` closure, never in a shared slot.
 	type Identity = 'first_name' | 'last_name' | 'email';
-	const mirrors = React.useRef(new Map<Identity, { was: string; value: string }>());
 	const { flush } = useRecordAutosave({
 		form,
 		readOnly,
@@ -70,23 +69,22 @@ function EditCustomerFormFields({ customer }: Props) {
 				identity &&
 				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
 			if (!follows) return { [root]: value } as Partial<CustomerPayload>;
-			mirrors.current.set(root as Identity, { was: mirrored as string, value: value as string });
+			const key = root as Identity;
+			const was = mirrored as string;
 			// The mirror rides on the billing draft only while that draft is valid; otherwise on the
 			// stored billing, so an invalid email left in the draft never enters by the side door.
 			const base = (await form.trigger('billing'))
 				? form.getValues('billing')
 				: customer.getLatest().payload.billing;
-			return { [root]: value, billing: { ...base, [root]: value } } as Partial<CustomerPayload>;
-		},
-		after: (root, written) => {
-			const captured = mirrors.current.get(root as Identity);
-			if (!captured) return;
-			mirrors.current.delete(root as Identity);
-			if (!written) return;
-			// Level the draft only if the cashier has not typed into the billing field meanwhile.
-			if (String(form.getValues(`billing.${root as Identity}`) ?? '') === captured.was) {
-				form.setValue(`billing.${root as Identity}`, captured.value);
-			}
+			return {
+				data: { [root]: value, billing: { ...base, [root]: value } } as Partial<CustomerPayload>,
+				after: (written: boolean) => {
+					// Level the draft only if the cashier has not typed into the billing field meanwhile.
+					if (written && String(form.getValues(`billing.${key}`) ?? '') === was) {
+						form.setValue(`billing.${key}`, value as string);
+					}
+				},
+			};
 		},
 	});
 	// Sync flushes pending edits before taking the store's copy.

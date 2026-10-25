@@ -176,6 +176,23 @@ it('a password write overlapping a first-name write does not evict the name mirr
 	await expect(nameWrite).resolves.toBe(true);
 	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'John');
 });
+it('two overlapping writes of one root keep their own captures: a failed first does not rob the second', async () => {
+	(payload as { first_name?: string }).first_name = 'Jo';
+	formValues.first_name = 'John';
+	formValues.billing = { first_name: 'Jo', city: 'London' };
+	let failFirst: (value: undefined) => void = () => {};
+	mockLocalPatch.mockImplementationOnce(() => new Promise((resolve) => (failFirst = resolve)));
+	renderForm();
+	const first = capturedChange({ first_name: 'John' });
+	await Promise.resolve();
+	formValues.first_name = 'Johnny';
+	const second = capturedChange({ first_name: 'Johnny' });
+	await Promise.resolve();
+	failFirst(undefined);
+	await expect(first).resolves.toBe(false);
+	await expect(second).resolves.toBe(true);
+	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'Johnny');
+});
 it('does not overwrite a billing identity the cashier set apart', async () => {
 	formValues.billing = { first_name: 'Grace' };
 	renderForm();

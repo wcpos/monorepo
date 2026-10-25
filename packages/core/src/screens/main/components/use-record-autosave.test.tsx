@@ -114,11 +114,13 @@ it.each([true, false, undefined])(
 	'after sees written=%s; only a truthy save marks the root',
 	async (written) => {
 		save.mockResolvedValue(written);
+		values.name = 'Ada';
 		const after = jest.fn();
-		const { result } = mount({ after });
+		const { result } = mount({ patch: (root, value) => ({ data: { [root]: value }, after }) });
 		expect(result.current.flush).toBe(mockFlush);
 		expect(await change({ name: 'Ada' })).toBe(Boolean(written));
-		expect(after).toHaveBeenCalledWith('name', Boolean(written));
+		expect(save).toHaveBeenCalledWith({ name: 'Ada' });
+		expect(after).toHaveBeenCalledWith(Boolean(written));
 		if (written) expect(mockMarkSaved).toHaveBeenCalledWith(['name']);
 		else expect(mockMarkSaved).not.toHaveBeenCalled();
 	}

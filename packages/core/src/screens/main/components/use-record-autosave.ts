@@ -8,6 +8,9 @@ import type { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
 
 type MetaRows = Parameters<typeof metaForWrite>[0];
 
+/** A form's own patch, optionally with the step that follows ITS write (writes overlap, so the capture lives in the closure). */
+export type RecordPatch<P> = Partial<P> | { data: Partial<P>; after?: (written: boolean) => void };
+
 export function useRecordAutosave<T extends FieldValues, P extends { meta_data?: unknown[] }>({
 	form,
 	readOnly = false,
@@ -16,7 +19,6 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 	before,
 	wire,
 	patch,
-	after,
 	metaDraft,
 }: {
 	form: UseFormReturn<T>;
@@ -26,8 +28,7 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 	save: (patch: Partial<P>) => Promise<boolean | undefined>;
 	before?: (root: string) => boolean | Promise<boolean>;
 	wire?: (root: string, value: unknown) => unknown;
-	patch?: (root: string, wireValue: unknown) => Partial<P> | Promise<Partial<P>>;
-	after?: (root: string, written: boolean) => void;
+	patch?: (root: string, wireValue: unknown) => RecordPatch<P> | Promise<RecordPatch<P>>;
 	/** Remove record-owned meta from the draft before reconciliation. */
 	metaDraft?: (rows: MetaRows) => MetaRows;
 }): { flush: () => Promise<boolean> } {
@@ -52,10 +53,13 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 								writtenRef.current
 							)
 						: (wire?.(root, value) ?? value);
-			const written = Boolean(
-				await save((await patch?.(root, wireValue)) ?? ({ [root]: wireValue } as Partial<P>))
-			);
-			after?.(root, written);
+			const own = (await patch?.(root, wireValue)) ?? ({ [root]: wireValue } as Partial<P>);
+			const { data, after } =
+				'data' in own && typeof own.after === 'function'
+					? (own as { data: Partial<P>; after: (written: boolean) => void })
+					: { data: own as Partial<P>, after: undefined };
+			const written = Boolean(await save(data));
+			after?.(written);
 			if (written) markSaved([root]);
 			return written;
 		},
