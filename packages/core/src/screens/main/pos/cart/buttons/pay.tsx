@@ -100,7 +100,10 @@ export function PayButton() {
 		const retry = state?.kind === 'rejected';
 		if (retry) {
 			if (state.parked || !orderChangedSinceRefusal(currentOrderRecord.payload, state.refused)) {
-				showRefusal(state);
+				// The refusal alone: the state also carries the refused payload (billing included),
+				// which belongs in neither the toast nor the log context.
+				const { status, reason, message } = state;
+				showRefusal({ status, reason, message });
 				return;
 			}
 			orderLogger.info('Checkout retries a refused save', {

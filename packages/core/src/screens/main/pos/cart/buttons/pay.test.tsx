@@ -204,6 +204,8 @@ it('refuses again while the order is still the one the store refused', () => {
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	expect(mockRefusal).toHaveBeenCalledTimes(1);
+	// The refused payload (billing included) stays out of the toast and the log context.
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
 	expect(mockSave).not.toHaveBeenCalled();
 	expect(mockMarkSaving).not.toHaveBeenCalled();
 });
