@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
@@ -12,7 +12,11 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
-import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
+import {
+	CustomerForm,
+	customerFormSchema,
+	fillBillingFromIdentity,
+} from '../../components/customer/customer-form';
 import { reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useCustomerRecord } from '../commands/use-customer-record';
@@ -129,13 +133,22 @@ export function EditCustomerForm({ customer }: Props) {
 			</>
 		) : undefined;
 
+	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
+
 	return (
 		<>
 			<CustomerForm
 				form={form}
-				onClose={close}
-				onSubmit={handleSave}
-				loading={loading}
+				footer={
+					<>
+						<Button testID="customer-form-close" variant="outline" onPress={close}>
+							<ButtonText>{t('common.close')}</ButtonText>
+						</Button>
+						<Button testID="customer-form-save" loading={loading} onPress={() => void onSubmit()}>
+							<ButtonText>{t('common.save')}</ButtonText>
+						</Button>
+					</>
+				}
 				footerLeading={footerLeading}
 			/>
 			{!readOnly && actions.canDelete && (

@@ -3,11 +3,9 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AddCustomerScreen } from './add';
-
-type SubmitCustomer = (data: Record<string, unknown>) => Promise<void>;
 
 const mockCreate = jest.fn();
 const mockUseMutationProps = jest.fn();
@@ -15,7 +13,6 @@ const mockFormat = jest.fn(() => 'Ada Lovelace');
 const mockLoggerSuccess = jest.fn();
 const mockLoggerError = jest.fn();
 const mockRouterBack = jest.fn();
-let mockSubmitCustomer: SubmitCustomer | undefined;
 
 jest.mock('@hookform/resolvers/zod', () => ({
 	zodResolver: () => undefined,
@@ -26,7 +23,10 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('react-hook-form', () => ({
-	useForm: () => ({}),
+	useForm: () => ({
+		handleSubmit: (submit: (data: Record<string, unknown>) => Promise<void>) => () =>
+			submit({ first_name: 'Ada', email: 'ada@example.com', billing: {} }),
+	}),
 }));
 
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -58,11 +58,8 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 
 jest.mock('../components/customer/customer-form', () => ({
-	CustomerForm: ({ onSubmit }: { onSubmit: SubmitCustomer }) => {
-		mockSubmitCustomer = onSubmit;
-		return null;
-	},
-	customerFormSchema: {},
+	...jest.requireActual('../components/customer/customer-form'),
+	CustomerForm: ({ footer }: { footer: React.ReactNode }) => <>{footer}</>,
 }));
 
 jest.mock('../hooks/mutations/use-mutation', () => ({
@@ -82,7 +79,6 @@ jest.mock('../hooks/use-customer-name-format', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockSubmitCustomer = undefined;
 });
 
 it('formats the newly created customer from the raw record payload', async () => {
@@ -95,12 +91,17 @@ it('formats the newly created customer from the raw record payload', async () =>
 	});
 
 	render(<AddCustomerScreen />);
-	expect(mockSubmitCustomer).toBeDefined();
 
 	await act(async () => {
-		await mockSubmitCustomer?.({ first_name: 'Ada' });
+		fireEvent.click(screen.getByTestId('customer-form-add'));
 	});
 
+	expect(mockCreate).toHaveBeenCalledWith({
+		data: expect.objectContaining({
+			first_name: 'Ada',
+			billing: expect.objectContaining({ first_name: 'Ada' }),
+		}),
+	});
 	expect(mockFormat).toHaveBeenCalledWith(payload);
 	// The screen toasts "Saved {name}" itself, so the hook's generic toast stays off.
 	expect(mockUseMutationProps).toHaveBeenCalledWith(
@@ -116,3 +117,24 @@ it('formats the newly created customer from the raw record payload', async () =>
 	expect(toJSON).not.toHaveBeenCalled();
 	expect(mockRouterBack).toHaveBeenCalledTimes(1);
 });
+
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: React.PropsWithChildren<{ onPress: () => void; testID: string }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+
+// Keep the billing helper real while excluding platform-only field controls.
+jest.mock('@wcpos/components/collapsible', () => ({}));
+jest.mock('@wcpos/components/form', () => ({}));
+jest.mock('../components/country-state-select/country-combobox', () => ({}));
+jest.mock('../components/country-state-select/state-forminput', () => ({}));
+jest.mock('../components/meta-data-form', () => ({ metaDataSchema: {} }));
+jest.mock('../components/customer/tax-ids-form', () => ({ taxIdsFormSchema: {} }));

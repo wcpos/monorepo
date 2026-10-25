@@ -12,6 +12,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
@@ -24,7 +25,11 @@ import { recordCustomerLink } from '@wcpos/query/store-local';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
+import {
+	CustomerForm,
+	customerFormSchema,
+	fillBillingFromIdentity,
+} from '../../components/customer/customer-form';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -150,12 +155,21 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		[createCustomer, currentOrderRecord, format, setCartCustomer, onClose, runtime, storeDB, t]
 	);
 
+	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
+
 	return (
 		<CustomerForm
 			form={form}
-			onClose={onClose}
-			onSubmit={handleSave}
-			loading={loading}
+			footer={
+				<>
+					<Button testID="customer-form-close" variant="outline" onPress={onClose}>
+						<ButtonText>{t('common.close')}</ButtonText>
+					</Button>
+					<Button testID="customer-form-add" loading={loading} onPress={() => void onSubmit()}>
+						<ButtonText>{t('customers.add_customer')}</ButtonText>
+					</Button>
+				</>
+			}
 			renderLayout={(body, footer) => (
 				<>
 					<DialogBody className="min-h-0 shrink">{body}</DialogBody>

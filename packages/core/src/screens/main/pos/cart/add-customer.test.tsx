@@ -3,11 +3,9 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AddCustomerDialog, AddNewCustomer } from './add-customer';
-
-type SubmitCustomer = (data: Record<string, unknown>) => Promise<void>;
 
 const mockCreate = jest.fn();
 const mockUseMutationProps = jest.fn();
@@ -19,7 +17,6 @@ const mockReset = jest.fn();
 const mockOnOpenChange = jest.fn();
 const mockRecordCustomerLink = jest.fn();
 const mockStoreDB = { name: 'store-db' };
-let mockSubmitCustomer: SubmitCustomer | undefined;
 
 const currentOrderRecord = {
 	uuid: 'order-1',
@@ -35,7 +32,11 @@ jest.mock('@hookform/resolvers/zod', () => ({
 }));
 
 jest.mock('react-hook-form', () => ({
-	useForm: () => ({ reset: mockReset }),
+	useForm: () => ({
+		reset: mockReset,
+		handleSubmit: (submit: (data: Record<string, unknown>) => Promise<void>) => () =>
+			submit({ first_name: 'Ada', email: 'ada@example.com', billing: {} }),
+	}),
 }));
 
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -80,11 +81,8 @@ jest.mock('@wcpos/query/store-local', () => ({
 }));
 
 jest.mock('../../components/customer/customer-form', () => ({
-	CustomerForm: ({ onSubmit }: { onSubmit: SubmitCustomer }) => {
-		mockSubmitCustomer = onSubmit;
-		return null;
-	},
-	customerFormSchema: {},
+	...jest.requireActual('../../components/customer/customer-form'),
+	CustomerForm: ({ footer }: { footer: React.ReactNode }) => <>{footer}</>,
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
@@ -131,7 +129,6 @@ describe.each([
 ])('%s customer creation', (_name, renderComponent) => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockSubmitCustomer = undefined;
 		// The attach mocks write into this record; start each case from the same order.
 		currentOrderRecord.payload = { customer_id: 7 };
 	});
@@ -162,10 +159,9 @@ describe.each([
 		});
 
 		render(renderComponent());
-		expect(mockSubmitCustomer).toBeDefined();
 
 		await act(async () => {
-			await mockSubmitCustomer?.({ first_name: 'Ada' });
+			fireEvent.click(screen.getByTestId('customer-form-add'));
 		});
 
 		// The cart's own "{name} saved" is the one toast (the hook is built with showSuccessToast: false).
@@ -206,7 +202,7 @@ describe.each([
 
 		render(renderComponent());
 		await act(async () => {
-			await mockSubmitCustomer?.({ first_name: 'Ada' });
+			fireEvent.click(screen.getByTestId('customer-form-add'));
 		});
 
 		expect(mockLoggerError).toHaveBeenCalledWith(
@@ -225,7 +221,7 @@ describe.each([
 
 		render(renderComponent());
 		await act(async () => {
-			await mockSubmitCustomer?.({ first_name: 'Ada' });
+			fireEvent.click(screen.getByTestId('customer-form-add'));
 		});
 
 		expect(mockLoggerError).not.toHaveBeenCalled();
@@ -247,7 +243,7 @@ describe.each([
 		});
 		render(renderComponent());
 		await act(async () => {
-			await mockSubmitCustomer?.({ first_name: 'Ada' });
+			fireEvent.click(screen.getByTestId('customer-form-add'));
 		});
 		const { data } = mockLocalPatch.mock.calls[0][0];
 		expect(data).toMatchObject({ customer_id: 0, billing: payload.billing, shipping: undefined });
@@ -259,7 +255,7 @@ describe.each([
 
 		render(renderComponent());
 		await act(async () => {
-			await mockSubmitCustomer?.({ first_name: 'Ada' });
+			fireEvent.click(screen.getByTestId('customer-form-add'));
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -279,7 +275,7 @@ it('closes the controlled dialog as soon as the customer is attached', async () 
 
 	render(<AddCustomerDialog open onOpenChange={mockOnOpenChange} />);
 	await act(async () => {
-		await mockSubmitCustomer?.({ first_name: 'Ada' });
+		fireEvent.click(screen.getByTestId('customer-form-add'));
 	});
 
 	expect(mockOnOpenChange).toHaveBeenCalledWith(false);
@@ -324,3 +320,24 @@ jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../j
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
 }));
+
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: React.PropsWithChildren<{ onPress: () => void; testID: string }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+
+// Keep the billing helper real while excluding platform-only field controls.
+jest.mock('@wcpos/components/collapsible', () => ({}));
+jest.mock('@wcpos/components/form', () => ({}));
+jest.mock('../../components/country-state-select/country-combobox', () => ({}));
+jest.mock('../../components/country-state-select/state-forminput', () => ({}));
+jest.mock('../../components/meta-data-form', () => ({ metaDataSchema: {} }));
+jest.mock('../../components/customer/tax-ids-form', () => ({ taxIdsFormSchema: {} }));

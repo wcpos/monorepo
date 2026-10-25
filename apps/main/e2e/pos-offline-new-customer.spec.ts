@@ -68,7 +68,7 @@ async function createCustomerFromCart(page: Page, probe: string, email: string):
 	await dialog.getByTestId('customer-first-name-input').fill(probe);
 	await dialog.getByTestId('customer-last-name-input').fill('Probe');
 	await dialog.getByTestId('customer-email-input').fill(email);
-	await dialog.getByTestId('customer-form-save').click();
+	await dialog.getByTestId('customer-form-add').click();
 
 	// Well inside the 15 s the old flow spent waiting for a Woo id before it
 	// reported failure: the dialog closing here is the attach not waiting.
