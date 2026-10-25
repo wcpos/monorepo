@@ -437,7 +437,8 @@ export function POSFilterBar({
 	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const active = Object.entries(state.filters).filter(([key, value]) => {
 		if (isPlaceCondition(place, key, value)) return false;
-		const set = Array.isArray(value) ? value.length > 0 : !!value;
+		// Absence, not falsiness: `on_sale: false` from a "No" quick filter is a set group too.
+		const set = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null;
 		return (
 			set &&
 			JSON.stringify(value) !== JSON.stringify(initialFilters[key as keyof typeof initialFilters])

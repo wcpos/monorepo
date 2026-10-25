@@ -362,6 +362,24 @@ it('offers Save as button at one group, not zero, and routes the captured group 
 	});
 	expect(modifyUI).not.toHaveBeenCalled();
 });
+it('counts an explicit false predicate as a set group, so Save as button offers it', () => {
+	render(
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish', on_sale: false }}
+		>
+			<POSFilterBar initialFilters={{ status: 'publish' }} />
+			<State />
+		</QueryStateProvider>
+	);
+	fireEvent.click(screen.getByTestId('filter-bar-save-as-button'));
+	expect(push).toHaveBeenCalledWith({
+		pathname: '/(app)/(modals)/filter-bar',
+		params: { capture: JSON.stringify({ conditions: [{ field: 'on_sale', value: false }] }) },
+	});
+});
 it('clears an applied built-in before hiding it', () => {
 	mount();
 	press('filter-pill-featured');
