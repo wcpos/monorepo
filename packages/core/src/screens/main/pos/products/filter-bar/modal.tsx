@@ -35,7 +35,8 @@ export function FilterBarModal() {
 		filterBarRef.current = filterBar;
 	});
 	// Deleting the filter being edited unmounts its editor, and the unmount flushes a pending text
-	// edit before the delete's write has landed; a deleted id is never written back (ids are uuids).
+	// edit before the delete's write has landed; a deleted id is not written back. A filter opened
+	// for editing again (the delete's write failed, the row is still there) leaves the set.
 	const deletedIds = React.useRef(new Set<string>());
 	const handleSave = (quickFilter: QuickFilter) => {
 		const exists = filterBar.some((item) => item.id === quickFilter.id);
@@ -56,9 +57,10 @@ export function FilterBarModal() {
 					<View className="flex-col gap-4 md:flex-row">
 						<View className="md:w-2/5">
 							<FilterBarList
-								onEdit={(quickFilter) =>
-									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' })
-								}
+								onEdit={(quickFilter) => {
+									if (quickFilter) deletedIds.current.delete(quickFilter.id);
+									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' });
+								}}
 								onDelete={(quickFilter) => {
 									deletedIds.current.add(quickFilter.id);
 									setEditing((value) =>

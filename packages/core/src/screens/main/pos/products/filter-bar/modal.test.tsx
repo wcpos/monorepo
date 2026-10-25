@@ -105,3 +105,14 @@ it('a pending edit flushed by the delete of its own filter is not written back',
 	onChange({ ...saved, label: 'Renamed' });
 	expect(patchUI).not.toHaveBeenCalled();
 });
+
+it('a filter opened for editing again after a failed delete writes its edits', () => {
+	render(<FilterBarModal />);
+	fireEvent.click(screen.getByText('Edit'));
+	fireEvent.click(screen.getByText('Delete'));
+	// The delete's write failed: the row is still listed and the cashier opens it again.
+	fireEvent.click(screen.getByText('Edit'));
+	editorOnChange!({ ...saved, label: 'Renamed' });
+	expect(patchUI).toHaveBeenCalledTimes(1);
+	expect(patchUI.mock.calls[0][0].filterBar.slice(0, 1)).toEqual([{ ...saved, label: 'Renamed' }]);
+});
