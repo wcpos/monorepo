@@ -6,12 +6,17 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { POSFilterBar } from './filter-bar/filter-bar';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+const push = jest.fn();
+const modifyUI = jest.fn();
+let filterBar: unknown[] | undefined;
+jest.mock('expo-router', () => ({ useRouter: () => ({ push }) }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_: unknown, select: (value: object) => unknown) =>
-		select({ showOutOfStock: true, sortBy: 'name', sortDirection: 'asc' }),
+		select({ showOutOfStock: true, sortBy: 'name', sortDirection: 'asc', filterBar }),
 }));
-jest.mock('../../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
+jest.mock('../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: {}, modifyUI }),
+}));
 jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: (_field: string, ids: number[]) =>
 		ids.map((id) => ({ payload: { name: id === 1 ? 'Drinks' : 'Food' } })),
@@ -36,6 +41,7 @@ jest.mock('@wcpos/components/chip', () => ({
 		clearTestID,
 		onPress,
 		onClear,
+		onLongPress,
 	}: {
 		label: string;
 		count?: number;
@@ -45,9 +51,10 @@ jest.mock('@wcpos/components/chip', () => ({
 		clearTestID?: string;
 		onPress: () => void;
 		onClear?: () => void;
+		onLongPress?: () => void;
 	}) => (
 		<div data-testid={testID} data-on={!!on} data-dimmed={!!dimmed}>
-			<button disabled={dimmed} onClick={onPress}>
+			<button disabled={dimmed} onClick={onPress} onContextMenu={onLongPress}>
 				{label}
 				{count !== undefined && ` +${count}`}
 			</button>
@@ -71,9 +78,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 	ButtonText: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
-}));
+
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
 }));
@@ -251,3 +256,94 @@ it('inside a shortcut level, Clear all keeps the shortcut’s own conditions', (
 });
 
 jest.mock('uuid', () => ({ v4: () => 'test-id' }));
+
+jest.mock('@rn-primitives/dropdown-menu', () =>
+	jest.requireActual(
+		require.resolve('@rn-primitives/dropdown-menu').replace(/index\.js$/, 'dropdown-menu.web.js')
+	)
+);
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/text', () => ({
+	TextClassContext: React.createContext(''),
+	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	OVERLAY_PANEL: {},
+	OVERLAY_MOTION: { anchored: {} },
+	OverlayShell: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('@wcpos/components/alert-dialog', () => ({
+	AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	AlertDialogContent: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogHeader: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogTitle: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogDescription: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogFooter: ({ confirm }: { confirm: { testID: string; onPress: () => void } }) => (
+		<button data-testid={confirm.testID} onClick={confirm.onPress} />
+	),
+}));
+beforeEach(() => {
+	filterBar = undefined;
+	jest.clearAllMocks();
+});
+it('opens the quick filter Edit menu from the long-press callback', () => {
+	filterBar = [
+		{
+			id: 'saved',
+			type: 'quick',
+			label: 'Saved',
+			conditions: [{ field: 'featured', value: true }],
+		},
+	];
+	mount();
+	expect(screen.queryByText('pos_products.edit_quick_filter')).toBeNull();
+	fireEvent.contextMenu(screen.getByTestId('quick-filter-saved').querySelector('button')!);
+	fireEvent.click(screen.getByText('pos_products.edit_quick_filter'));
+	expect(push).toHaveBeenCalledWith('/(app)/(modals)/filter-bar?edit=saved');
+});
+it('hides a built-in pill from its menu without changing other items', () => {
+	mount();
+	fireEvent.contextMenu(screen.getByTestId('filter-pill-featured').querySelector('button')!);
+	fireEvent.click(screen.getByText('pos_products.hide_from_bar'));
+	const [, modifier] = modifyUI.mock.calls[0];
+	expect(modifier([{ id: 'featured', type: 'pill', show: true }])[0]).toEqual({
+		id: 'featured',
+		type: 'pill',
+		show: false,
+	});
+});
+
+it('keeps the empty menu trigger out of the tab order and after the chip', () => {
+	mount();
+	const chip = screen.getByTestId('filter-pill-featured');
+	const trigger = chip.parentElement!.querySelector('[aria-haspopup="menu"]')!;
+	expect(trigger.getAttribute('tabindex')).toBe('-1');
+	expect(trigger.getAttribute('aria-hidden')).toBe('true');
+	expect(chip.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+it('puts Remove last and removes the quick filter only after confirmation', () => {
+	filterBar = [
+		{
+			id: 'saved',
+			type: 'quick',
+			label: 'Saved',
+			conditions: [{ field: 'featured', value: true }],
+		},
+	];
+	mount();
+	fireEvent.contextMenu(screen.getByTestId('quick-filter-saved').querySelector('button')!);
+	expect(screen.getAllByRole('menuitem').map((row) => row.getAttribute('data-testid'))).toEqual([
+		'filter-bar-menu-edit-saved',
+		'filter-bar-menu-customize-saved',
+		'filter-bar-menu-remove-saved',
+	]);
+	fireEvent.click(screen.getByTestId('filter-bar-menu-remove-saved'));
+	expect(modifyUI).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
+	const [, remove] = modifyUI.mock.calls[0];
+	expect(remove(filterBar)).not.toEqual(
+		expect.arrayContaining([expect.objectContaining({ id: 'saved' })])
+	);
+});

@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { View } from 'react-native';
+
+import { useLocalSearchParams } from 'expo-router';
 
 import {
 	Dialog,
@@ -9,22 +10,37 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Text } from '@wcpos/components/text';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { PaneStack } from '@wcpos/components/pane-stack';
+import { useDocField } from '@wcpos/query';
 
 import { FilterBarList } from './filter-bar-list';
-import { normalizeFilterBar } from './filter-bar-layout';
+import { createQuickFilterId, isQuickFilterValid, normalizeFilterBar } from './filter-bar-layout';
+import { usePanelSide } from '../../contexts/overlay-side';
 import { QuickFilterEditor } from './quick-filter-editor';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 
 import type { QuickFilter } from './filter-bar-layout';
 
-type Editing = { mode: 'new' } | { mode: 'edit'; quickFilter: QuickFilter } | null;
+type Editing = { mode: 'new'; key: string } | { mode: 'edit'; quickFilter: QuickFilter } | null;
 
 export function FilterBarModal() {
 	const t = useT();
-	const { modifyUI } = useUISettings('pos-products');
-	const [editing, setEditing] = React.useState<Editing>(null);
+	const { uiSettings, modifyUI } = useUISettings('pos-products');
+	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const side = usePanelSide('products');
+	const params = useLocalSearchParams<{ edit?: string }>();
+	const [editing, setEditing] = React.useState<Editing>(() => {
+		const quickFilter = items.find((item) => item.type === 'quick' && item.id === params.edit);
+		return quickFilter?.type === 'quick' ? { mode: 'edit', quickFilter } : null;
+	});
+	const [draft, setDraft] = React.useState<QuickFilter | null>(null);
+	const valid = draft !== null && isQuickFilterValid(draft);
+	const flushRef = React.useRef<() => void>(null);
+	if (editing?.mode === 'edit' && !items.some((item) => item.id === editing.quickFilter.id))
+		setEditing(null);
 	const handleSave = (quickFilter: QuickFilter) => {
 		void modifyUI('filterBar', (old) => {
 			const items = normalizeFilterBar(old);
@@ -39,53 +55,86 @@ export function FilterBarModal() {
 
 	return (
 		<Dialog route>
-			<DialogContent size="2xl">
+			<DialogContent side={side} size="lg">
 				<DialogHeader>
-					<DialogTitle>{t('common.filter_bar')}</DialogTitle>
-				</DialogHeader>
-				<DialogBody>
-					<View className="flex-col gap-4 md:flex-row">
-						<View className="md:w-2/5">
-							<FilterBarList
-								onEdit={(quickFilter) => {
-									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' });
-								}}
-								onDelete={(quickFilter) => {
-									setEditing((value) =>
-										value?.mode === 'edit' && value.quickFilter.id === quickFilter.id ? null : value
-									);
+					<HStack className="items-center">
+						{editing && (
+							<IconButton
+								name="chevronLeft"
+								accessibilityLabel={t('common.back')}
+								testID="filter-bar-back"
+								onPress={() => {
+									flushRef.current?.();
+									setEditing(null);
 								}}
 							/>
-						</View>
-						<View className="border-border md:flex-1 md:border-l md:pl-4">
-							{editing ? (
-								<QuickFilterEditor
-									key={editing.mode === 'new' ? 'new' : editing.quickFilter.id}
-									initial={editing.mode === 'edit' ? editing.quickFilter : null}
-									onChange={
-										editing.mode === 'edit'
-											? (quickFilter) =>
-													modifyUI(
-														'filterBar',
-														(old) =>
-															normalizeFilterBar(old).map((item) =>
-																item.id === quickFilter.id ? quickFilter : item
-															) as never
-													)
-											: undefined
-									}
-									onSave={handleSave}
-									onCancel={() => setEditing(null)}
-								/>
-							) : (
-								<Text className="text-muted-foreground">
-									{t('pos_products.quick_filter_editor_hint')}
-								</Text>
-							)}
-						</View>
-					</View>
-				</DialogBody>
-				<DialogFooter close={{ testID: 'filter-bar-modal-close' }} />
+						)}
+						<DialogTitle>
+							{editing
+								? editing.mode === 'edit'
+									? (items.find(
+											(item): item is QuickFilter =>
+												item.type === 'quick' && item.id === editing.quickFilter.id
+										)?.label ?? editing.quickFilter.label)
+									: t('pos_products.new_quick_filter')
+								: t('common.filter_bar')}
+						</DialogTitle>
+					</HStack>
+				</DialogHeader>
+				<PaneStack
+					detail={editing}
+					paneClassName="bg-card"
+					renderDetail={(detail) => (
+						<DialogBody>
+							<QuickFilterEditor
+								key={detail.mode === 'new' ? detail.key : detail.quickFilter.id}
+								initial={detail.mode === 'edit' ? detail.quickFilter : null}
+								flushRef={flushRef}
+								onDraftChange={setDraft}
+								onChange={
+									detail.mode === 'edit'
+										? (quickFilter) =>
+												modifyUI(
+													'filterBar',
+													(old) =>
+														normalizeFilterBar(old).map((item) =>
+															item.id === quickFilter.id ? quickFilter : item
+														) as never
+												)
+										: undefined
+								}
+							/>
+						</DialogBody>
+					)}
+				>
+					<DialogBody>
+						<FilterBarList
+							onEdit={(quickFilter) => {
+								setDraft(null);
+								setEditing(
+									quickFilter
+										? { mode: 'edit', quickFilter }
+										: { mode: 'new', key: createQuickFilterId() }
+								);
+							}}
+						/>
+					</DialogBody>
+				</PaneStack>
+				<DialogFooter
+					close={{ testID: 'filter-bar-modal-close' }}
+					intent={
+						editing?.mode === 'new'
+							? {
+									label: t('pos_products.add_to_bar'),
+									testID: 'quick-filter-add',
+									disabled: !valid,
+									onPress: () => {
+										if (draft && valid) handleSave({ ...draft, label: draft.label.trim() });
+									},
+								}
+							: undefined
+					}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

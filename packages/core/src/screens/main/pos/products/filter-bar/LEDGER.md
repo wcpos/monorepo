@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Render and edit merchant-ordered built-in pills and reusable multi-condition filters.
 
-**Composes:** `@wcpos/components/{alert-dialog,button,dnd,error-boundary,hstack,icon,icon-button,input,modal,select,suspense,switch,text,tooltip,tree-combobox,vstack}`; type-only imports from `combobox/types` and `lib/use-hierarchy`.
+**Composes:** `@wcpos/components/{alert-dialog,button,chip,combobox,dialog,dnd,dropdown-menu,error-boundary,form/saved-mark,hstack,icon,icon-button,input,list-row,pane-stack,segmented-control,select,skeleton,suspense,switch,text,tooltip,tree-combobox,vstack}`; type-only imports from `combobox/types` and `lib/use-hierarchy`.
 
 ## Lines
 
@@ -18,8 +18,10 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 8. The live preview reports device matches capped at 200+, lists five names and warns without blocking Save at zero — incomplete local residency must not prevent saving a valid preset — evidence: `61e988f8e5 2026-09-04 feat(pos): quick-filter editor pane with live device-match preview` — platform: all.
 9. Preview starts from the same publication, stock and default-sort baseline as the POS — otherwise it counts products the saved button cannot show — evidence: `18f0bbde6d 2026-09-04 fix(pos): carry price/type through the browse-window seeder; sort-aware activation; preview on the POS baseline` — platform: all.
 10. Preview updates debounce by 250 ms and create the binding above Suspense — typing must not recreate queries on every keystroke, and suspended retries must reuse their resource — evidence: `quick-filter-preview.tsx:67`, “Build the binding above the boundary so a suspended reader retries the same resource (#1707).”; `quick-filter-preview.tsx:73–74`, “Debouncing keeps search and price typing from rebuilding the device query on every keystroke.” — platform: all.
-11. Visibility/reordering save immediately, while deletion requires confirmation and closes an editor for the deleted filter — prevents accidental deletion and stale-editor resurrection — evidence: `840ba67b08 2026-09-04 feat(pos): merchant-ordered filter bar with multi-condition quick filters (model, bar, settings, modal shell)`; `a025da3008 2026-09-03 fix(pos): address quick-filter review findings`; test name: `modal.test.tsx`, “closes the editor when the filter being edited is deleted” — platform: all.
+11. Visibility/reordering save immediately, while deletion requires confirmation and closes an editor for the deleted filter — prevents accidental deletion and stale-editor resurrection — evidence: `840ba67b08 2026-09-04 feat(pos): merchant-ordered filter bar with multi-condition quick filters (model, bar, settings, modal shell)`; `a025da3008 2026-09-03 fix(pos): address quick-filter review findings`; test name: `modal.test.tsx`, “pops to the list when the filter being edited is removed” — platform: all.
 12. Price-condition summaries use the store currency formatter — presets must not display a hardcoded dollar currency — evidence: `61e988f8e5 2026-09-04 feat(pos): quick-filter editor pane with live device-match preview` — platform: all.
+
+13. Long-press / right-click opens a chip menu: quick filters offer Edit, Customise filter bar, then Remove from bar (last, destructive); built-ins offer Hide from bar and Customise filter bar. The Customise chip is gone — evidence: this commit; `filter-bar.test.tsx` — platform: all (right-click: web).
 
 ## Query-handle compat removal (added 2026-10-13)
 

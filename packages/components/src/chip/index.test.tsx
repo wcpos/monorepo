@@ -10,11 +10,13 @@ import { Chip } from './index';
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const presses = new Map();
+	const longPresses = new Map();
 	const slops = new Map();
 	const layouts = new Map();
 	return {
 		...actual,
 		presses,
+		longPresses,
 		slops,
 		layouts,
 		View: ({ testID, ...props }: { testID?: string }) =>
@@ -26,6 +28,7 @@ jest.mock('react-native', () => {
 			ref?: React.Ref<import('react-native').View>;
 		}) => {
 			presses.set(props.testID, props.onPress);
+			longPresses.set(props.testID, props.onLongPress);
 			slops.set(props.testID, props.hitSlop);
 			layouts.set(props.testID, props.onLayout);
 			return React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } });
@@ -288,3 +291,28 @@ describe('action', () => {
 		);
 	});
 });
+
+it('delivers long press to the label half of a clearable chip', () => {
+	const onLongPress = jest.fn();
+	render(<Chip label="Menu" testID="chip" onClear={jest.fn()} onLongPress={onLongPress} />);
+	expect(jest.requireMock('react-native').longPresses.get('chip-label')).toBe(onLongPress);
+});
+it.each([false, true])(
+	'right-click opens once and prevents the browser menu (split=%s)',
+	(split) => {
+		const onLongPress = jest.fn();
+		const onPress = jest.fn();
+		render(
+			<Chip
+				label="Menu"
+				testID="chip"
+				onPress={onPress}
+				onClear={split ? jest.fn() : undefined}
+				onLongPress={onLongPress}
+			/>
+		);
+		expect(fireEvent.contextMenu(screen.getByTestId(split ? 'chip-label' : 'chip'))).toBe(false);
+		expect(onLongPress).toHaveBeenCalledTimes(1);
+		expect(onPress).not.toHaveBeenCalled();
+	}
+);

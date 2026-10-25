@@ -10,6 +10,15 @@ export const BUILT_IN_PILL_IDS = [
 	'brands',
 ] as const;
 
+export const getFilterPillIcon = (id: (typeof BUILT_IN_PILL_IDS)[number]) =>
+	id === 'featured'
+		? 'featured'
+		: id === 'on_sale'
+			? 'currency'
+			: id === 'stock_status'
+				? 'warehouse'
+				: 'category';
+
 export const SORT_FIELD_VALUES = [
 	'name',
 	'sku',

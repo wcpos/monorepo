@@ -4,7 +4,7 @@
  * Store-agnostic per CLAUDE.md: nothing here depends on what the store sells. The quick
  * filter authored below uses conditions that exist on every store (on sale, sorted by
  * price), the assertions read the app's own query state through the built-in pill's
- * remove affordance, and every change the spec makes to the device's filter-bar setting is
+ * selected state, and every change the spec makes to the device's filter-bar setting is
  * undone in a `finally` so the profile is left as it was found.
  */
 import { expect, type Page } from '@playwright/test';
@@ -14,7 +14,8 @@ import { authenticatedTest as test } from './fixtures';
 const QUICK_FILTER_TESTID = /^quick-filter-[0-9a-f-]{36}$/;
 
 async function openFilterBarEditor(page: Page): Promise<void> {
-	await page.getByTestId('filter-bar-customize').click();
+	await page.getByTestId('products-settings-button').click();
+	await page.getByTestId('customize-filter-bar').click();
 	await expect(page.getByTestId('filter-bar-add-quick-filter')).toBeVisible({ timeout: 10_000 });
 }
 
@@ -23,14 +24,11 @@ async function closeFilterBarEditor(page: Page): Promise<void> {
 	await expect(page.getByTestId('filter-bar-add-quick-filter')).toBeHidden({ timeout: 10_000 });
 }
 
-test('the filter bar renders the built-in pills and the customise affordance', async ({
-	posPage: page,
-}) => {
+test('the filter bar renders the built-in pills', async ({ posPage: page }) => {
 	await expect(page.getByTestId('filter-pill-stock_status')).toBeVisible();
 	await expect(page.getByTestId('filter-pill-featured')).toBeVisible();
 	await expect(page.getByTestId('filter-pill-on_sale')).toBeVisible();
 	await expect(page.getByTestId('filter-pill-categories')).toBeVisible();
-	await expect(page.getByTestId('filter-bar-customize')).toBeVisible();
 });
 
 test('a quick filter authored in the editor applies and clears its conditions from the bar', async ({
@@ -74,17 +72,22 @@ test('a quick filter authored in the editor applies and clears its conditions fr
 		await expect(button).toBeVisible();
 		expect(await button.textContent()).toContain(label);
 
-		// Press → the On sale pill goes active (its remove affordance appears).
-		await expect(page.getByTestId('filter-pill-remove-on_sale')).toBeHidden();
+		// Press → the On sale pill announces its active state.
+		await expect(page.getByTestId('filter-pill-on_sale')).toHaveAttribute('aria-pressed', 'false');
 		await button.click();
-		await expect(page.getByTestId('filter-pill-remove-on_sale')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('filter-pill-on_sale')).toHaveAttribute('aria-pressed', 'true', {
+			timeout: 10_000,
+		});
 
 		// Press again → back to the baseline.
 		await button.click();
-		await expect(page.getByTestId('filter-pill-remove-on_sale')).toBeHidden({ timeout: 10_000 });
+		await expect(page.getByTestId('filter-pill-on_sale')).toHaveAttribute('aria-pressed', 'false', {
+			timeout: 10_000,
+		});
 	} finally {
 		if (quickFilterId) {
 			await openFilterBarEditor(page);
+			await page.getByTestId(`filter-bar-edit-${quickFilterId}`).click();
 			await page.getByTestId(`filter-bar-delete-${quickFilterId}`).click();
 			await page.getByTestId('filter-bar-delete-confirm').click();
 			await expect(page.getByTestId(`filter-bar-edit-${quickFilterId}`)).toBeHidden();
