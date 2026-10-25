@@ -11,6 +11,7 @@ let items: FilterBarItem[] = [];
 const patchUI = jest.fn((patch: { filterBar: FilterBarItem[] }) => {
 	items = patch.filterBar;
 });
+const modifyUI = jest.fn();
 const onEdit = jest.fn();
 const onDelete = jest.fn();
 
@@ -22,10 +23,17 @@ jest.mock('@wcpos/components/dnd', () => ({
 	SortableList: ({
 		items: list,
 		renderItem,
+		onOrderChange,
 	}: {
 		items: FilterBarItem[];
+		onOrderChange: (event: { items: FilterBarItem[] }) => void;
 		renderItem: (item: FilterBarItem, index: number) => React.ReactNode;
-	}) => <>{list.map(renderItem)}</>,
+	}) => (
+		<>
+			{list.map(renderItem)}
+			<button onClick={() => onOrderChange({ items: [...list].reverse() })}>Reorder</button>
+		</>
+	),
 	DragHandle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -94,7 +102,7 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: {}, getUILabel: (id: string) => id, patchUI }),
+	useUISettings: () => ({ uiSettings: {}, getUILabel: (id: string) => id, patchUI, modifyUI }),
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `€${value.toFixed(2)}` }),
@@ -127,18 +135,23 @@ beforeEach(() => {
 it('writes a pill visibility toggle immediately', () => {
 	render(<FilterBarList onEdit={onEdit} />);
 	fireEvent.click(screen.getByTestId('filter-bar-toggle-featured'));
-	expect(patchUI).toHaveBeenCalledWith({
-		filterBar: expect.arrayContaining([{ id: 'featured', type: 'pill', show: false }]),
-	});
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	const old = items.map((item) => (item.type === 'quick' ? { ...item, label: 'Renamed' } : item));
+	expect(modifier(old)).toEqual([{ ...old[0], show: false }, ...old.slice(1)]);
+	expect(patchUI).not.toHaveBeenCalled();
 });
 
 it('removes a quick filter only after delete confirmation and reports the deletion', () => {
 	render(<FilterBarList onEdit={onEdit} onDelete={onDelete} />);
 	fireEvent.click(screen.getByTestId('filter-bar-delete-saved'));
+	expect(modifyUI).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
-	expect(
-		patchUI.mock.calls.at(-1)?.[0].filterBar.some((item: FilterBarItem) => item.id === 'saved')
-	).toBe(false);
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	const old = [{ ...items[0], show: false }, ...items.slice(1)];
+	expect(modifier(old)).toEqual([old[0], ...old.slice(2)]);
+	expect(patchUI).not.toHaveBeenCalled();
 	expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'saved' }));
 });
 
@@ -157,4 +170,12 @@ it('formats price summaries with the store currency formatter', () => {
 	};
 	render(<FilterBarList onEdit={onEdit} />);
 	expect(screen.getByText('Price €10.00+')).toBeTruthy();
+});
+
+it('writes the whole reordered list with patchUI', () => {
+	render(<FilterBarList onEdit={onEdit} />);
+	const reordered = [...items].reverse();
+	fireEvent.click(screen.getByText('Reorder'));
+	expect(patchUI).toHaveBeenCalledWith({ filterBar: reordered });
+	expect(modifyUI).not.toHaveBeenCalled();
 });

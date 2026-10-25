@@ -1455,6 +1455,7 @@
 	"settings.setup_open_guide": "Open the printer guide",
 	"settings.setup_copy_report": "Copy setup report",
 	"settings.setup_report_copied": "Setup report copied",
+	"settings.add_anyway": "Add without testing",
 	"settings.add_printer": "Add Printer",
 	"settings.having_trouble": "Having trouble?",
 	"settings.open_printer_settings": "Open printer settings",

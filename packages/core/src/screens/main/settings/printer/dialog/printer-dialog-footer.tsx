@@ -7,6 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../../contexts/translations';
 
 interface PrinterDialogFooterProps {
+	isEditing: boolean;
 	/** Offer "Save without testing" after a failed test print. */
 	showSaveAnyway: boolean;
 	showOpenDrawer: boolean;
@@ -24,6 +25,7 @@ interface PrinterDialogFooterProps {
  * TestPrintError, not here.
  */
 export function PrinterDialogFooter({
+	isEditing,
 	showSaveAnyway,
 	showOpenDrawer,
 	testLoading,
@@ -44,7 +46,9 @@ export function PrinterDialogFooter({
 					className="mr-auto"
 					onPress={onSaveAnyway}
 				>
-					<Text className="text-muted-foreground text-sm">{t('settings.save_anyway')}</Text>
+					<Text className="text-muted-foreground text-sm">
+						{isEditing ? t('settings.save_anyway') : t('settings.add_anyway')}
+					</Text>
 				</Button>
 			)}
 			{showOpenDrawer && (
@@ -66,7 +70,7 @@ export function PrinterDialogFooter({
 				<Text>{t('settings.test_print')}</Text>
 			</Button>
 			<Button testID="add-printer-save-button" onPress={onSave} loading={saveLoading}>
-				<Text>{t('common.save')}</Text>
+				<Text>{isEditing ? t('common.save') : t('settings.add_printer')}</Text>
 			</Button>
 		</HStack>
 	);

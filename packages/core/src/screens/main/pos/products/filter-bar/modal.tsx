@@ -11,7 +11,6 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
-import { useDocField } from '@wcpos/query';
 
 import { FilterBarList } from './filter-bar-list';
 import { normalizeFilterBar } from './filter-bar-layout';
@@ -25,15 +24,17 @@ type Editing = { mode: 'new' } | { mode: 'edit'; quickFilter: QuickFilter } | nu
 
 export function FilterBarModal() {
 	const t = useT();
-	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const filterBar = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const { modifyUI } = useUISettings('pos-products');
 	const [editing, setEditing] = React.useState<Editing>(null);
 	const handleSave = (quickFilter: QuickFilter) => {
-		const exists = filterBar.some((item) => item.id === quickFilter.id);
-		const next = exists
-			? filterBar.map((item) => (item.id === quickFilter.id ? quickFilter : item))
-			: [...filterBar, quickFilter];
-		void patchUI({ filterBar: next } as never);
+		void modifyUI('filterBar', (old) => {
+			const items = normalizeFilterBar(old);
+			return (
+				items.some((item) => item.id === quickFilter.id)
+					? items.map((item) => (item.id === quickFilter.id ? quickFilter : item))
+					: [...items, quickFilter]
+			) as never;
+		});
 		setEditing(null);
 	};
 
@@ -47,14 +48,14 @@ export function FilterBarModal() {
 					<View className="flex-col gap-4 md:flex-row">
 						<View className="md:w-2/5">
 							<FilterBarList
-								onEdit={(quickFilter) =>
-									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' })
-								}
-								onDelete={(quickFilter) =>
+								onEdit={(quickFilter) => {
+									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' });
+								}}
+								onDelete={(quickFilter) => {
 									setEditing((value) =>
 										value?.mode === 'edit' && value.quickFilter.id === quickFilter.id ? null : value
-									)
-								}
+									);
+								}}
 							/>
 						</View>
 						<View className="border-border md:flex-1 md:border-l md:pl-4">
@@ -62,6 +63,18 @@ export function FilterBarModal() {
 								<QuickFilterEditor
 									key={editing.mode === 'new' ? 'new' : editing.quickFilter.id}
 									initial={editing.mode === 'edit' ? editing.quickFilter : null}
+									onChange={
+										editing.mode === 'edit'
+											? (quickFilter) =>
+													modifyUI(
+														'filterBar',
+														(old) =>
+															normalizeFilterBar(old).map((item) =>
+																item.id === quickFilter.id ? quickFilter : item
+															) as never
+													)
+											: undefined
+									}
 									onSave={handleSave}
 									onCancel={() => setEditing(null)}
 								/>

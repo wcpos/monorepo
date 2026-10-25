@@ -170,3 +170,13 @@ export const patchState = async <T extends UISettingID>(
 	}
 	return state;
 };
+
+export const modifyState = async <T extends UISettingID, K extends keyof UISettingSchema<T>>(
+	state: UISettingState<T>,
+	key: K,
+	modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+) => {
+	// @ts-expect-error: RxState.set path type is too narrow for dynamic keys
+	await state.set(key, (old: UISettingSchema<T>[K] | undefined) => modifier(old));
+	return state;
+};

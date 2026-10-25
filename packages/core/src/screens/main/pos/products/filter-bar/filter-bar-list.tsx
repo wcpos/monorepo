@@ -35,7 +35,7 @@ export function FilterBarList({
 	onEdit: (quickFilter: QuickFilter | null) => void;
 	onDelete?: (quickFilter: QuickFilter) => void;
 }) {
-	const { uiSettings, getUILabel, patchUI } = useUISettings('pos-products');
+	const { uiSettings, getUILabel, patchUI, modifyUI } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const t = useT();
@@ -60,7 +60,13 @@ export function FilterBarList({
 						testID={`filter-bar-toggle-${item.id}`}
 						checked={item.show}
 						onCheckedChange={(show) =>
-							save(items.map((entry) => (entry.id === item.id ? { ...item, show } : entry)))
+							void modifyUI(
+								'filterBar',
+								(old) =>
+									normalizeFilterBar(old).map((entry) =>
+										entry.id === item.id ? { ...entry, show } : entry
+									) as never
+							)
 						}
 					/>
 				</>
@@ -119,7 +125,11 @@ export function FilterBarList({
 							testID="filter-bar-delete-confirm"
 							onPress={() => {
 								if (deleting) {
-									save(items.filter((item) => item.id !== deleting.id));
+									void modifyUI(
+										'filterBar',
+										(old) =>
+											normalizeFilterBar(old).filter((item) => item.id !== deleting.id) as never
+									);
 									onDelete?.(deleting);
 								}
 								setDeleting(null);
