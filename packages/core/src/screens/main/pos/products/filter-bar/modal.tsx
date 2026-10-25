@@ -11,7 +11,6 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
-import { useDocField } from '@wcpos/query';
 
 import { FilterBarList } from './filter-bar-list';
 import { normalizeFilterBar } from './filter-bar-layout';
@@ -25,25 +24,17 @@ type Editing = { mode: 'new' } | { mode: 'edit'; quickFilter: QuickFilter } | nu
 
 export function FilterBarModal() {
 	const t = useT();
-	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const filterBar = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const { modifyUI } = useUISettings('pos-products');
 	const [editing, setEditing] = React.useState<Editing>(null);
-	// A debounced edit from the editor lands after other list changes (a pill toggled, a reorder);
-	// it replaces its own item in the list as it stands then, never the list at keystroke time.
-	const filterBarRef = React.useRef(filterBar);
-	React.useEffect(() => {
-		filterBarRef.current = filterBar;
-	});
-	// Deleting the filter being edited unmounts its editor, and the unmount flushes a pending text
-	// edit before the delete's write has landed; a deleted id is not written back. A filter opened
-	// for editing again (the delete's write failed, the row is still there) leaves the set.
-	const deletedIds = React.useRef(new Set<string>());
 	const handleSave = (quickFilter: QuickFilter) => {
-		const exists = filterBar.some((item) => item.id === quickFilter.id);
-		const next = exists
-			? filterBar.map((item) => (item.id === quickFilter.id ? quickFilter : item))
-			: [...filterBar, quickFilter];
-		void patchUI({ filterBar: next } as never);
+		void modifyUI('filterBar', (old) => {
+			const items = normalizeFilterBar(old);
+			return (
+				items.some((item) => item.id === quickFilter.id)
+					? items.map((item) => (item.id === quickFilter.id ? quickFilter : item))
+					: [...items, quickFilter]
+			) as never;
+		});
 		setEditing(null);
 	};
 
@@ -58,11 +49,9 @@ export function FilterBarModal() {
 						<View className="md:w-2/5">
 							<FilterBarList
 								onEdit={(quickFilter) => {
-									if (quickFilter) deletedIds.current.delete(quickFilter.id);
 									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' });
 								}}
 								onDelete={(quickFilter) => {
-									deletedIds.current.add(quickFilter.id);
 									setEditing((value) =>
 										value?.mode === 'edit' && value.quickFilter.id === quickFilter.id ? null : value
 									);
@@ -77,13 +66,13 @@ export function FilterBarModal() {
 									onChange={
 										editing.mode === 'edit'
 											? (quickFilter) =>
-													deletedIds.current.has(quickFilter.id)
-														? undefined
-														: patchUI({
-																filterBar: filterBarRef.current.map((item) =>
-																	item.id === quickFilter.id ? quickFilter : item
-																),
-															} as never)
+													modifyUI(
+														'filterBar',
+														(old) =>
+															normalizeFilterBar(old).map((item) =>
+																item.id === quickFilter.id ? quickFilter : item
+															) as never
+													)
 											: undefined
 									}
 									onSave={handleSave}

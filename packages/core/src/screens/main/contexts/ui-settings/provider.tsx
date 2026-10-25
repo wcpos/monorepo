@@ -11,6 +11,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useUILabel } from './use-ui-label';
 import {
 	mergeWithInitalValues,
+	modifyState,
 	patchState,
 	resetToInitialValues,
 	UISettingID,
@@ -41,6 +42,11 @@ export interface UISettingsContextValue {
 		id: T,
 		data: Partial<UISettingSchema<T>>
 	) => Promise<UISettingState<T>>;
+	modifySettings: <T extends UISettingID, K extends keyof UISettingSchema<T>>(
+		id: T,
+		key: K,
+		modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+	) => Promise<UISettingState<T>>;
 }
 
 export const UISettingsContext = React.createContext<UISettingsContextValue | null>(null);
@@ -66,24 +72,42 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	/**
 	 * Patch UI Settings
 	 */
-	const patchSettings = React.useCallback(
-		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
+	const writeSettings = React.useCallback(
+		async <T extends UISettingID>(
+			id: T,
+			keys: string[],
+			write: (state: UISettingState<T>) => Promise<UISettingState<T>>
+		) => {
 			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
 			try {
-				return (await patchState(state, data)) as UISettingState<T>;
+				return await write(state);
 			} catch (error) {
 				// Every caller fires this and moves on (`void patchUI(...)`), so a lost device
 				// setting was silent: reported here once, then rethrown for the caller that waits.
 				uiLogger.error(`Failed to save the ${id} settings`, {
 					showToast: true,
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-					context: { settingsId: id, keys: Object.keys(data), error: String(error) },
+					context: { settingsId: id, keys, error: String(error) },
 				});
 				markErrorReported(error);
 				throw error;
 			}
 		},
 		[storeDB]
+	);
+
+	const patchSettings = React.useCallback(
+		<T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) =>
+			writeSettings(id, Object.keys(data), (state) => patchState(state, data)),
+		[writeSettings]
+	);
+	const modifySettings = React.useCallback(
+		<T extends UISettingID, K extends keyof UISettingSchema<T>>(
+			id: T,
+			key: K,
+			modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+		) => writeSettings(id, [String(key)], (state) => modifyState(state, key, modifier)),
+		[writeSettings]
 	);
 
 	/**
@@ -158,8 +182,9 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			getLabel,
 			reset,
 			patchSettings,
+			modifySettings,
 		}),
-		[resources, getLabel, reset, patchSettings]
+		[resources, getLabel, reset, patchSettings, modifySettings]
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;

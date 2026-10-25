@@ -96,3 +96,52 @@ it('opens the screen slot for initial reads, patchUI and resetUI', async () => {
 	act(() => jest.advanceTimersByTime(5000));
 	expect(getLogger(['wcpos', 'ui', 'settings']).warn).not.toHaveBeenCalled();
 });
+
+it('passes a modifier through modifyUI to state.set without capturing the old value', async () => {
+	const state = { get: () => ({}), set: jest.fn().mockResolvedValue(undefined) };
+	mockOpenStoreState.mockResolvedValue(state);
+	const { result } = renderHook(() => useUISettings('products'), {
+		wrapper: ({ children }) => (
+			<UISettingsProvider>
+				<React.Suspense fallback={null}>{children}</React.Suspense>
+			</UISettingsProvider>
+		),
+	});
+	await act(async () => {});
+	state.set.mockClear();
+	await act(async () => {
+		await result.current.modifyUI('sortBy', (old) => (old === 'name' ? 'price' : 'name'));
+	});
+	expect(mockOpenStoreState).toHaveBeenLastCalledWith(mockStoreDB, 'products_v2');
+	expect(state.set).toHaveBeenCalledTimes(1);
+	expect(state.set).toHaveBeenCalledWith('sortBy', expect.any(Function));
+	const [, modifier] = state.set.mock.calls[0];
+	expect(modifier('name')).toBe('price');
+	expect(modifier('price')).toBe('name');
+	expect(modifier(undefined)).toBe('name');
+});
+
+it('reports a rejected modifier write with a toast and rethrows it', async () => {
+	const state = { get: () => ({}), set: jest.fn().mockResolvedValue(undefined) };
+	mockOpenStoreState.mockResolvedValue(state);
+	const { result } = renderHook(() => useUISettings('products'), {
+		wrapper: ({ children }) => (
+			<UISettingsProvider>
+				<React.Suspense fallback={null}>{children}</React.Suspense>
+			</UISettingsProvider>
+		),
+	});
+	await act(async () => {});
+	const error = new Error('write failed');
+	state.set.mockRejectedValueOnce(error);
+	await act(async () => {
+		await expect(result.current.modifyUI('sortBy', () => 'price')).rejects.toBe(error);
+	});
+	expect(getLogger(['wcpos', 'ui', 'settings']).error).toHaveBeenCalledWith(
+		'Failed to save the products settings',
+		expect.objectContaining({
+			showToast: true,
+			context: { settingsId: 'products', keys: ['sortBy'], error: String(error) },
+		})
+	);
+});

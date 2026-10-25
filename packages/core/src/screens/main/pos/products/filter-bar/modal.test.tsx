@@ -1,8 +1,9 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { DEFAULT_FILTER_BAR } from './filter-bar-layout';
 import { FilterBarModal } from './modal';
 
 const saved = {
@@ -22,18 +23,27 @@ jest.mock('./filter-bar-list', () => ({
 		onEdit,
 		onDelete,
 	}: {
-		onEdit: (value: typeof saved) => void;
+		onEdit: (value: typeof saved | null) => void;
 		onDelete: (value: typeof saved) => void;
 	}) => (
 		<>
 			<button onClick={() => onEdit(saved)}>Edit</button>
+			<button onClick={() => onEdit(null)}>Add</button>
 			<button onClick={() => onDelete(saved)}>Delete</button>
 		</>
 	),
 }));
 let editorOnChange: ((quickFilter: typeof saved) => unknown) | undefined;
+let editorOnSave: (quickFilter: typeof saved) => void;
 jest.mock('./quick-filter-editor', () => ({
-	QuickFilterEditor: ({ onChange }: { onChange?: (quickFilter: typeof saved) => unknown }) => {
+	QuickFilterEditor: ({
+		onChange,
+		onSave,
+	}: {
+		onChange?: (quickFilter: typeof saved) => unknown;
+		onSave: (quickFilter: typeof saved) => void;
+	}) => {
+		editorOnSave = onSave;
 		editorOnChange = onChange;
 		return <div>Editor open</div>;
 	},
@@ -57,14 +67,15 @@ jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 const patchUI = jest.fn();
+const modifyUI = jest.fn();
 jest.mock('../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: {}, patchUI }),
+	useUISettings: () => ({ uiSettings: {}, patchUI, modifyUI }),
 }));
 
 beforeEach(() => {
 	filterBar = [saved];
 	editorOnChange = undefined;
-	patchUI.mockClear();
+	jest.clearAllMocks();
 });
 
 it('closes the editor when the filter being edited is deleted', () => {
@@ -76,43 +87,51 @@ it('closes the editor when the filter being edited is deleted', () => {
 	expect(screen.queryByText('Editor open')).toBeNull();
 });
 
-it('applies a delayed edit to the list as it stands, not the list at keystroke time', () => {
-	const pill = { id: 'on_sale', type: 'pill' as const, show: true };
-	filterBar = [pill, saved];
-	const { rerender } = render(<FilterBarModal />);
+it('edits its item without overwriting a pill toggled off meanwhile', () => {
+	render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Edit'));
-	const onChange = editorOnChange!;
+	editorOnChange!({ ...saved, label: 'Renamed' });
 
-	// The pill is hidden while the rename's debounce is still running.
-	filterBar = [{ ...pill, show: false }, saved];
-	rerender(<FilterBarModal />);
-	onChange({ ...saved, label: 'Renamed' });
-
-	// The normalizer appends the built-in pills the list lacks; the first two are the ones asserted.
-	const written = patchUI.mock.calls[0][0].filterBar;
-	expect(written.slice(0, 2)).toEqual([
-		{ ...pill, show: false },
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	const old = [{ id: 'on_sale', type: 'pill', show: false }, saved];
+	expect(modifier(old).slice(0, 2)).toEqual([
+		{ id: 'on_sale', type: 'pill', show: false },
 		{ ...saved, label: 'Renamed' },
 	]);
 });
 
-it('a pending edit flushed by the delete of its own filter is not written back', () => {
+it('leaves the current list unchanged when the edited filter has been deleted', () => {
 	render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Edit'));
 	const onChange = editorOnChange!;
 	fireEvent.click(screen.getByText('Delete'));
-	// The editor's unmount flush arrives after the delete, before the delete's write has landed.
 	onChange({ ...saved, label: 'Renamed' });
-	expect(patchUI).not.toHaveBeenCalled();
+
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	const old = [...DEFAULT_FILTER_BAR, { ...saved, id: 'another' }];
+	expect(modifier(old)).toEqual(old);
 });
 
-it('a filter opened for editing again after a failed delete writes its edits', () => {
+it('appends a created filter to the current list', () => {
 	render(<FilterBarModal />);
-	fireEvent.click(screen.getByText('Edit'));
-	fireEvent.click(screen.getByText('Delete'));
-	// The delete's write failed: the row is still listed and the cashier opens it again.
-	fireEvent.click(screen.getByText('Edit'));
-	editorOnChange!({ ...saved, label: 'Renamed' });
-	expect(patchUI).toHaveBeenCalledTimes(1);
-	expect(patchUI.mock.calls[0][0].filterBar.slice(0, 1)).toEqual([{ ...saved, label: 'Renamed' }]);
+	fireEvent.click(screen.getByText('Add'));
+	act(() => editorOnSave(saved));
+
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	const old = [...DEFAULT_FILTER_BAR, { ...saved, id: 'another' }];
+	expect(modifier(old)).toEqual([...old, saved]);
+});
+
+it('replaces a created filter whose id is already in the current list', () => {
+	render(<FilterBarModal />);
+	fireEvent.click(screen.getByText('Add'));
+	const created = { ...saved, label: 'Replaced' };
+	act(() => editorOnSave(created));
+
+	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
+	const [, modifier] = modifyUI.mock.calls[0];
+	expect(modifier([saved, ...DEFAULT_FILTER_BAR])).toEqual([created, ...DEFAULT_FILTER_BAR]);
 });
