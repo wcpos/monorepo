@@ -1396,6 +1396,127 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		]);
 	});
 
+	describe('a later acknowledged write of the same record supersedes its dead letter', () => {
+		// The cashier's own retry: a decimal quantity the store refused (400), then the
+		// line set back to a whole number and the order synced again. The accepted write
+		// carries every field the dead letter carried, so there is nothing left for a
+		// requeue to recover (`fieldsOwnedByLiveRows` would subtract it to nothing) and
+		// the hold it keeps on the checkout is stale.
+		const refused = async () => {
+			throw Object.assign(new Error('Invalid parameter(s): line_items'), {
+				status: 400,
+				code: 'rest_invalid_param',
+			});
+		};
+		const order = (mutationId: string, payload: Record<string, unknown>) =>
+			mut({
+				mutationId,
+				collectionName: 'orders',
+				recordId: 'order-A',
+				payload: { id: 'order-A', ...payload },
+			});
+
+		it('settles the rejected row once a write carrying every field it carried is acknowledged', async () => {
+			const q = await queueWith(order('dead', { line_items: [{ quantity: 1.5 }], total: '15' }));
+			await drainMutationQueue({ queue: q, push: refused });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue(order('again', { line_items: [{ quantity: 2 }], total: '20' }));
+			const events: SyncEvent[] = [];
+			const result = await drainMutationQueue({
+				queue: q,
+				push: async (m) => ok(m),
+				observe: (e) => events.push(e),
+			});
+			expect(result.pushed).toBe(1);
+			expect(await q.all()).toEqual([]);
+			expect(events.find((e) => e.type === 'queue.write.resolve')?.fields).toMatchObject({
+				recordId: 'order-A',
+				mutationId: 'dead',
+				resolution: 'superseded-by-ack',
+				supersededBy: 'again',
+			});
+		});
+
+		it('keeps a dead letter that still carries a field the acknowledged write did not', async () => {
+			// A refused sale completion names `status`; a plain re-sync of the lines does
+			// not (ADR 0040 strips it), so that intent is still only in the dead letter.
+			const q = await queueWith(order('dead', { status: 'completed', line_items: [] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it('judges coverage by the fields ON THE WIRE, not the queue row (Codex, #2939)', async () => {
+			// A refused completion (`status: 'completed'`) queued again still carries the
+			// status on its row, but `toOrderWirePayload` strips it before the push: the
+			// server never saw it, so the dead letter's intent is NOT covered and it stays.
+			const q = await queueWith(order('dead', { status: 'completed', line_items: [] }));
+			const server = createFakeWriteServer();
+			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
+			server.script((env) =>
+				env.mutationId === 'dead'
+					? { kind: 'invalid_param', code: 'rest_invalid_param', message: 'refused' }
+					: undefined
+			);
+			const push = (mutation: RecordMutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: server.fetch,
+				});
+			await drainMutationQueue({ queue: q, push });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue({
+				...order('again', { status: 'completed', line_items: [] }),
+				baseRevision: 'sha256:r0',
+			});
+			const result = await drainMutationQueue({ queue: q, push });
+			expect(result.pushed).toBe(1);
+			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('status');
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it('does not count a born-twice create (200: payload ignored) as acceptance (Codex, #2939)', async () => {
+			const q = await queueWith(order('dead', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue({ ...order('again', { line_items: [] }), operation: 'create' });
+			await drainMutationQueue({
+				queue: q,
+				push: async (m) => ({ ...ok(m), outcome: 'created', httpStatus: 200 }),
+			});
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it('ignores `meta_data`, which no recovery ever takes from a dead letter', async () => {
+			const q = await queueWith(order('dead', { line_items: [], meta_data: [{ key: 'x' }] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect(await q.all()).toEqual([]);
+		});
+
+		it("leaves another record's dead letter and a refused delete alone", async () => {
+			const q = await queueWith(
+				mut({ mutationId: 'other', recordId: 'rec-B', payload: { id: 'rec-B', name: 'x' } }),
+				order('dead-delete', {})
+			);
+			await q.replace({ ...(await q.all())[1], operation: 'delete' });
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect((await q.all()).map((row) => row.mutationId).sort()).toEqual(['dead-delete', 'other']);
+		});
+	});
+
 	it("a rejected push keeps the server's error data", async () => {
 		// ADR 0040: a refused reopen names the leg in `data`; the cashier's toast needs it.
 		const q = await queueWith(mut({ mutationId: 'm-reopen', collectionName: 'orders' }));

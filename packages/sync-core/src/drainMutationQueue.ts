@@ -592,6 +592,66 @@ export async function drainMutationQueue(input: {
 		}
 	};
 
+	// A dead letter whose every field the server has since ACCEPTED in a later write of
+	// the same record has nothing left to recover: a requeue would subtract all of it
+	// (`fieldsOwnedByLiveRows`, the same rule read against an accepted row instead of a
+	// live one), and the hold it keeps on the checkout is stale — the till's own retry
+	// IS the resolution. Settle it here, where the ack is known, as 'superseded-by-ack'.
+	// `meta_data` never counts (no recovery takes it from a dead letter). A refused
+	// DELETE is a statement about existence, not fields, and stays. A dead letter still
+	// carrying a field the accepted write omitted (a refused completion's `status` under
+	// a plain re-sync, which ADR 0040 strips) keeps that intent and stays listed. "Carried"
+	// means ON THE WIRE (`sentFields`): the push adapter's sanitizers drop fields the queue
+	// row still holds — a refused `status: 'completed'` queued again is stripped before it is
+	// sent, so reading the row's payload would count a field the server never saw.
+	const settleSupersededDeadLetters = async (
+		acked: QueuedMutation,
+		result: PushResult
+	): Promise<void> => {
+		if (acked.operation === 'delete') return;
+		// A born-twice create (gate2 #516 item 1): 200, not 201, means the uuid already
+		// existed and the server IGNORED this payload — nothing was accepted, and the write
+		// lane's follow-up update is the write whose ack may settle the record's dead letters.
+		if (acked.operation === 'create' && result.httpStatus === 200) return;
+		const accepted = new Set(result.sentFields ?? Object.keys(acked.payload ?? {}));
+		let rows: QueuedMutation[];
+		try {
+			rows = await input.queue.all();
+		} catch {
+			return; // the ack is durable; a dead letter it could not read stays for Store health
+		}
+		for (const row of rows) {
+			if (
+				row.status !== 'rejected' ||
+				row.operation === 'delete' ||
+				row.mutationId === acked.mutationId ||
+				recordKey(row) !== recordKey(acked)
+			)
+				continue;
+			const carried = Object.keys(row.payload ?? {}).filter((key) => key !== 'meta_data');
+			if (!carried.every((key) => accepted.has(key))) continue;
+			let settled = false;
+			try {
+				// CAS: a Store health resolution racing this settles exactly once either way.
+				settled = await input.queue.removeIfStatus(row.mutationId, 'rejected');
+			} catch {
+				settled = false;
+			}
+			if (!settled) continue;
+			emit({
+				type: 'queue.write.resolve',
+				level: 'info',
+				collection: row.collectionName,
+				fields: {
+					recordId: row.recordId,
+					mutationId: row.mutationId,
+					resolution: 'superseded-by-ack',
+					supersededBy: acked.mutationId,
+				},
+			});
+		}
+	};
+
 	// An unrecoverable 428 (gate2 #516 item 4): the server demands a precondition
 	// and no current revision could be determined. Park the row as durable
 	// 'needs-revision' — an HONEST distinct state (no fake null-truth 'conflicted'
@@ -1103,6 +1163,7 @@ export async function drainMutationQueue(input: {
 			}
 			continue;
 		}
+		await settleSupersededDeadLetters(draining, result);
 		input.onAcknowledged?.(draining);
 	}
 
