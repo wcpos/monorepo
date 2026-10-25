@@ -342,12 +342,16 @@ jest.mock('@wcpos/components/list-row', () => ({
 		onPress,
 		leading,
 		children,
+		role,
+		'aria-checked': checked,
 	}: React.PropsWithChildren<{
 		testID: string;
 		onPress: () => void;
 		leading: React.ReactNode;
+		role?: React.AriaRole;
+		'aria-checked'?: boolean;
 	}>) => (
-		<div data-testid={testID} onClick={onPress}>
+		<div data-testid={testID} onClick={onPress} role={role} aria-checked={checked}>
 			{leading}
 			{children}
 		</div>
@@ -381,6 +385,9 @@ it('opens capture with conditions checked except search and sort, and saves only
 	render(<FilterBarModal />);
 	expect(screen.getByRole('heading').textContent).toBe('pos_products.save_as_button');
 	for (const field of ['categories', 'on_sale', 'search', 'sort']) {
+		const row = screen.getByTestId(`quick-filter-capture-${field}`);
+		expect(row.getAttribute('role')).toBe('checkbox');
+		expect(row.getAttribute('aria-checked')).toBe(String(field !== 'search' && field !== 'sort'));
 		expect(
 			screen.getByTestId(`quick-filter-capture-${field}`).querySelector('input')!.checked
 		).toBe(field !== 'search' && field !== 'sort');
@@ -388,6 +395,9 @@ it('opens capture with conditions checked except search and sort, and saves only
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: ' Sale wine ' } });
 	fireEvent.click(screen.getByTestId('quick-filter-capture-on_sale'));
+	expect(screen.getByTestId('quick-filter-capture-on_sale').getAttribute('aria-checked')).toBe(
+		'false'
+	);
 	expect(JSON.parse(screen.getByTestId('effective').textContent!).conditions).toEqual([
 		captured.conditions[0],
 	]);
@@ -417,6 +427,7 @@ it('allows explicitly keeping search and sort, and disables an empty capture', (
 	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: 'Mugs' } });
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 	fireEvent.click(screen.getByTestId('quick-filter-capture-sort'));
+	expect(screen.getByTestId('quick-filter-capture-sort').getAttribute('aria-checked')).toBe('true');
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
 	fireEvent.click(screen.getByTestId('quick-filter-capture-search'));
 	expect(JSON.parse(screen.getByTestId('effective').textContent!)).toMatchObject({
@@ -424,9 +435,12 @@ it('allows explicitly keeping search and sort, and disables an empty capture', (
 		sort: captured.sort,
 	});
 });
-it('shows the home list for a malformed capture param', () => {
-	params = { capture: '{broken' };
-	render(<FilterBarModal />);
-	expect(screen.getByText('Add')).toBeTruthy();
-	expect(screen.queryByTestId('quick-filter-name')).toBeNull();
-});
+it.each(['{broken', '{}', 'null'])(
+	'shows the home list for an invalid capture param %s',
+	(capture) => {
+		params = { capture };
+		render(<FilterBarModal />);
+		expect(screen.getByText('Add')).toBeTruthy();
+		expect(screen.queryByTestId('quick-filter-name')).toBeNull();
+	}
+);

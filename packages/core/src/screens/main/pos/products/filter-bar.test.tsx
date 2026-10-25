@@ -370,6 +370,28 @@ it('clears an applied built-in before hiding it', () => {
 	expect(JSON.parse(screen.getByTestId('state').textContent!).filters.featured).toBeUndefined();
 	expect(modifyUI).toHaveBeenCalled();
 });
+it.each(['instock', 'outofstock'] as const)(
+	'restores the in-stock baseline when hiding the stock pill set to %s',
+	(stock_status) => {
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+				initialFilters={{ status: 'publish', stock_status }}
+			>
+				<POSFilterBar initialFilters={{ status: 'publish', stock_status: 'instock' }} />
+				<State />
+			</QueryStateProvider>
+		);
+		fireEvent.contextMenu(screen.getByTestId('filter-pill-stock_status').querySelector('button')!);
+		fireEvent.click(screen.getByTestId('filter-bar-menu-hide-stock_status'));
+		expect(JSON.parse(screen.getByTestId('state').textContent!).filters.stock_status).toBe(
+			'instock'
+		);
+		expect(modifyUI).toHaveBeenCalled();
+	}
+);
 it('restores the baseline when removal of an active quick filter is confirmed', () => {
 	filterBar = [
 		{

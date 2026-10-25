@@ -48,6 +48,8 @@ export function CaptureQuickFilter({
 			size="sm"
 			testID={`quick-filter-capture-${field}`}
 			onPress={toggle}
+			role="checkbox"
+			aria-checked={checked}
 			accessibilityRole="checkbox"
 			accessibilityState={{ checked }}
 			leading={

@@ -155,7 +155,11 @@ function BarSlot({
 						<DropdownMenuItem
 							testID={`filter-bar-menu-hide-${item.id}`}
 							onPress={() => {
-								if (state.filters[item.id]) actions.clearFilter(item.id);
+								const baselineValue = resetState.filters[item.id];
+								if (JSON.stringify(state.filters[item.id]) !== JSON.stringify(baselineValue)) {
+									if (baselineValue !== undefined) actions.setFilter(item.id, baselineValue);
+									else actions.clearFilter(item.id);
+								}
 								void showPill(item.id, false);
 							}}
 						>

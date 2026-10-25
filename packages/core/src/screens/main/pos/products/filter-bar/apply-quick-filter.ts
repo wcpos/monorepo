@@ -1,6 +1,6 @@
 import type { FiltersOf, QueryStateOf } from '@wcpos/query/query-state';
 
-import { quickFilterConditionSchema } from './filter-bar-layout';
+import { quickFilterConditionSchema, quickFilterSortSchema } from './filter-bar-layout';
 
 import type { QuickFilter, QuickFilterCondition, QuickFilterSort } from './filter-bar-layout';
 
@@ -102,16 +102,19 @@ export function captureQuickFilter(
 			);
 			if (!Object.keys(value).length) continue;
 		}
-		if (!value || (Array.isArray(value) && !value.length)) continue;
+		if (value === undefined || value === null) continue;
+		if (Array.isArray(value) && !value.length) continue;
 		if (JSON.stringify(value) !== JSON.stringify(baseline[field]))
 			conditions.push({ field, value } as QuickFilterCondition);
 	}
 	const search = state.search.trim();
 	if (search) conditions.push({ field: 'search', value: search });
+	const sort = quickFilterSortSchema.safeParse(state.sort);
 	return {
 		conditions,
-		...(state.sort.field !== settingsSort.field || state.sort.direction !== settingsSort.direction
-			? { sort: state.sort as QuickFilterSort }
+		...(sort.success &&
+		(state.sort.field !== settingsSort.field || state.sort.direction !== settingsSort.direction)
+			? { sort: sort.data }
 			: {}),
 	};
 }

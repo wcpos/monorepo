@@ -203,7 +203,7 @@ it('captures only set conditions outside the POS baseline, trimming search and f
 		],
 	});
 });
-it('omits baseline, empty groups, false booleans and nonfinite price bounds', () => {
+it('omits baseline, empty groups and nonfinite price bounds', () => {
 	expect(
 		captureQuickFilter(
 			{
@@ -211,12 +211,37 @@ it('omits baseline, empty groups, false booleans and nonfinite price bounds', ()
 				sort: resetState.sort,
 				filters: {
 					...baseline,
-					on_sale: false,
-					featured: false,
 					price: { min: NaN, max: Infinity },
 				},
 			},
 			baseline,
+			resetState.sort
+		)
+	).toEqual({ conditions: [] });
+});
+it('captures an explicit false condition alongside a category', () => {
+	expect(
+		captureQuickFilter(
+			{
+				search: '',
+				filters: { ...baseline, on_sale: false, categories: [3] },
+				sort: resetState.sort,
+			},
+			baseline,
+			resetState.sort
+		)
+	).toEqual({
+		conditions: [
+			{ field: 'categories', value: [3] },
+			{ field: 'on_sale', value: false },
+		],
+	});
+});
+it('omits an explicit false condition already in the baseline', () => {
+	expect(
+		captureQuickFilter(
+			{ search: '', filters: { ...baseline, featured: false }, sort: resetState.sort },
+			{ ...baseline, featured: false },
 			resetState.sort
 		)
 	).toEqual({ conditions: [] });
@@ -228,6 +253,15 @@ it.each([
 	expect(
 		captureQuickFilter({ search: '', filters: baseline, sort }, baseline, resetState.sort)
 	).toEqual({ conditions: [], sort });
+});
+it('omits a differing sort that cannot be saved in a quick filter', () => {
+	expect(
+		captureQuickFilter(
+			{ search: '', filters: baseline, sort: { field: 'id', direction: 'asc' } },
+			baseline,
+			resetState.sort
+		)
+	).toEqual({ conditions: [] });
 });
 it.each([
 	{ ...baseline, categories: [1, 2], on_sale: true },

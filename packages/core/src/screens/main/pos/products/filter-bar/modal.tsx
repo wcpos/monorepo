@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as z from 'zod';
 
 import {
 	Dialog,
@@ -18,7 +19,13 @@ import { useDocField } from '@wcpos/query';
 import { CaptureQuickFilter } from './capture-quick-filter';
 import { useFilterBarCommands } from './use-filter-bar-commands';
 import { FilterBarList } from './filter-bar-list';
-import { createQuickFilterId, isQuickFilterValid, normalizeFilterBar } from './filter-bar-layout';
+import {
+	createQuickFilterId,
+	isQuickFilterValid,
+	normalizeFilterBar,
+	quickFilterConditionSchema,
+	quickFilterSortSchema,
+} from './filter-bar-layout';
 import { usePanelSide } from '../../contexts/overlay-side';
 import { QuickFilterEditor } from './quick-filter-editor';
 import { useT } from '../../../../../contexts/translations';
@@ -44,7 +51,13 @@ export function FilterBarModal() {
 	const [editing, setEditing] = React.useState<Editing>(() => {
 		if (params.capture) {
 			try {
-				return { mode: 'capture', captured: JSON.parse(params.capture) };
+				const captured = z
+					.object({
+						conditions: quickFilterConditionSchema.array(),
+						sort: quickFilterSortSchema.optional(),
+					})
+					.safeParse(JSON.parse(params.capture));
+				return captured.success ? { mode: 'capture', captured: captured.data } : null;
 			} catch {
 				return null;
 			}
