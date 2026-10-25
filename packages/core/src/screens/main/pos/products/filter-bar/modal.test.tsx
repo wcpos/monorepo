@@ -18,9 +18,13 @@ let filterBar: unknown[] = [saved];
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, read: (value: unknown) => unknown) => read({ filterBar }),
 }));
-let params: { edit?: string } = {};
+let params: { edit?: string; capture?: string } = {};
+const back = jest.fn();
 let retainLeaving = false;
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => params }));
+jest.mock('expo-router', () => ({
+	useLocalSearchParams: () => params,
+	useRouter: () => ({ back }),
+}));
 jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ testID, onPress }: { testID: string; onPress: () => void }) => (
@@ -59,6 +63,19 @@ let editorOnChange: ((quickFilter: typeof saved) => unknown) | undefined;
 let editorOnDraftChange: (quickFilter: typeof saved) => void;
 const flush = jest.fn();
 jest.mock('./quick-filter-editor', () => ({
+	CONDITION_FIELDS: [
+		'categories',
+		'tags',
+		'brands',
+		'price',
+		'on_sale',
+		'featured',
+		'stock_status',
+		'type',
+		'search',
+	],
+	KIND_ICONS: {},
+	TermSummary: jest.requireActual('./quick-filter-editor').TermSummary,
 	QuickFilterEditor: ({
 		onChange,
 		onDraftChange,
@@ -142,6 +159,20 @@ jest.mock('react-native', () => ({
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
+jest.mock('@wcpos/query/record-readers', () => ({
+	useEngineRecordsByWooId: (taxonomy: string, ids: number[]) => ({ taxonomy, ids }),
+}));
+jest.mock('observable-hooks', () => ({
+	useObservableSuspense: ({ taxonomy, ids }: { taxonomy: string; ids: number[] }) =>
+		ids.map((id) => ({ payload: { id, name: `${taxonomy} ${id} &amp; more` } })),
+}));
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
+jest.mock('@wcpos/components/select', () => ({}));
+jest.mock('@wcpos/components/tree-combobox', () => ({}));
+jest.mock('../../../components/currency-input', () => ({}));
+jest.mock('../../../components/product/category-select', () => ({}));
+jest.mock('../../../components/product/tag-select', () => ({}));
+jest.mock('../../../components/product/brand-select', () => ({}));
 const patchUI = jest.fn();
 const modifyUI = jest.fn();
 jest.mock('../../../contexts/ui-settings', () => ({
@@ -280,3 +311,136 @@ it('starts a fresh draft when Add reopens during the leaving animation', () => {
 	expect((screen.getByTestId('draft-name') as HTMLInputElement).value).toBe('');
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });
+
+jest.mock('@wcpos/components/input', () => ({
+	Input: ({
+		value,
+		onChangeText,
+		testID,
+	}: {
+		value: string;
+		onChangeText: (value: string) => void;
+		testID: string;
+	}) => (
+		<input
+			data-testid={testID}
+			value={value}
+			onChange={(event) => onChangeText(event.target.value)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/chip', () => ({ Chip: () => null }));
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({ checked }: { checked: boolean }) => (
+		<input type="checkbox" checked={checked} readOnly />
+	),
+}));
+jest.mock('@wcpos/components/list-row', () => ({
+	ListRow: ({
+		testID,
+		onPress,
+		leading,
+		children,
+		role,
+		'aria-checked': checked,
+	}: React.PropsWithChildren<{
+		testID: string;
+		onPress: () => void;
+		leading: React.ReactNode;
+		role?: React.AriaRole;
+		'aria-checked'?: boolean;
+	}>) => (
+		<div data-testid={testID} onClick={onPress} role={role} aria-checked={checked}>
+			{leading}
+			{children}
+		</div>
+	),
+}));
+jest.mock('../../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: (value: number) => `£${value.toFixed(2)}` }),
+}));
+jest.mock('./quick-filter-preview', () => ({
+	QuickFilterPreview: ({ draft }: { draft: unknown }) => (
+		<output data-testid="effective">{JSON.stringify(draft)}</output>
+	),
+}));
+const captured = {
+	conditions: [
+		{ field: 'categories', value: [1] },
+		{ field: 'on_sale', value: true },
+		{ field: 'search', value: 'mug' },
+	],
+	sort: { field: 'sortable_price', direction: 'asc' },
+};
+it.each(['categories', 'tags', 'brands'])('names the captured %s terms', (field) => {
+	params = { capture: JSON.stringify({ conditions: [{ field, value: [1, 2] }] }) };
+	render(<FilterBarModal />);
+	expect(screen.getByTestId(`quick-filter-capture-${field}`).textContent).toBe(
+		`pos_products.kind_${field}: ${field} 1 & more, ${field} 2 & more`
+	);
+});
+it('opens capture with conditions checked except search and sort, and saves only checked lines', () => {
+	params = { capture: JSON.stringify(captured) };
+	render(<FilterBarModal />);
+	expect(screen.getByRole('heading').textContent).toBe('pos_products.save_as_button');
+	for (const field of ['categories', 'on_sale', 'search', 'sort']) {
+		const row = screen.getByTestId(`quick-filter-capture-${field}`);
+		expect(row.getAttribute('role')).toBe('checkbox');
+		expect(row.getAttribute('aria-checked')).toBe(String(field !== 'search' && field !== 'sort'));
+		expect(
+			screen.getByTestId(`quick-filter-capture-${field}`).querySelector('input')!.checked
+		).toBe(field !== 'search' && field !== 'sort');
+	}
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
+	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: ' Sale wine ' } });
+	fireEvent.click(screen.getByTestId('quick-filter-capture-on_sale'));
+	expect(screen.getByTestId('quick-filter-capture-on_sale').getAttribute('aria-checked')).toBe(
+		'false'
+	);
+	expect(JSON.parse(screen.getByTestId('effective').textContent!).conditions).toEqual([
+		captured.conditions[0],
+	]);
+	expect(modifyUI).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
+	const [, modifier] = modifyUI.mock.calls[0];
+	expect(modifier([saved, ...DEFAULT_FILTER_BAR])).toEqual([
+		saved,
+		...DEFAULT_FILTER_BAR,
+		{
+			id: 'quick-filter-id',
+			type: 'quick',
+			label: 'Sale wine',
+			conditions: [captured.conditions[0]],
+		},
+	]);
+	expect(back).toHaveBeenCalledTimes(1);
+});
+it('allows explicitly keeping search and sort, and disables an empty capture', () => {
+	params = {
+		capture: JSON.stringify({
+			conditions: [{ field: 'search', value: 'mug' }],
+			sort: captured.sort,
+		}),
+	};
+	render(<FilterBarModal />);
+	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: 'Mugs' } });
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
+	fireEvent.click(screen.getByTestId('quick-filter-capture-sort'));
+	expect(screen.getByTestId('quick-filter-capture-sort').getAttribute('aria-checked')).toBe('true');
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
+	fireEvent.click(screen.getByTestId('quick-filter-capture-search'));
+	expect(JSON.parse(screen.getByTestId('effective').textContent!)).toMatchObject({
+		conditions: [{ field: 'search', value: 'mug' }],
+		sort: captured.sort,
+	});
+});
+it.each(['{broken', '{}', 'null'])(
+	'shows the home list for an invalid capture param %s',
+	(capture) => {
+		params = { capture };
+		render(<FilterBarModal />);
+		expect(screen.getByText('Add')).toBeTruthy();
+		expect(screen.queryByTestId('quick-filter-name')).toBeNull();
+	}
+);

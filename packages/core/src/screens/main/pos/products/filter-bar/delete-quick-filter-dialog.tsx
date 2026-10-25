@@ -9,19 +9,21 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 
-import { normalizeFilterBar, type QuickFilter } from './filter-bar-layout';
-import { useUISettings } from '../../../contexts/ui-settings';
+import { type QuickFilter } from './filter-bar-layout';
+import { useFilterBarCommands } from './use-filter-bar-commands';
 import { useT } from '../../../../../contexts/translations';
 
 export function DeleteQuickFilterDialog({
 	quickFilter,
 	onClose,
+	onConfirm,
 }: {
 	quickFilter: QuickFilter | null;
 	onClose: () => void;
+	onConfirm?: () => void;
 }) {
 	const t = useT();
-	const { modifyUI } = useUISettings('pos-products');
+	const { dropQuickFilter } = useFilterBarCommands();
 	return (
 		<AlertDialog open={!!quickFilter} onOpenChange={(open) => !open && onClose()}>
 			<AlertDialogContent>
@@ -39,11 +41,8 @@ export function DeleteQuickFilterDialog({
 						testID: 'filter-bar-delete-confirm',
 						onPress: () => {
 							if (quickFilter) {
-								void modifyUI(
-									'filterBar',
-									(old) =>
-										normalizeFilterBar(old).filter((item) => item.id !== quickFilter.id) as never
-								);
+								onConfirm?.();
+								void dropQuickFilter(quickFilter.id);
 							}
 							onClose();
 						},

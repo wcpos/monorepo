@@ -347,3 +347,92 @@ it('puts Remove last and removes the quick filter only after confirmation', () =
 		expect.arrayContaining([expect.objectContaining({ id: 'saved' })])
 	);
 });
+
+it('offers Save as button at one group, not zero, and routes the captured group without writing', () => {
+	mount();
+	expect(screen.queryByTestId('filter-bar-save-as-button')).toBeNull();
+	press('filter-pill-featured');
+	expect(screen.queryByTestId('filter-bar-clear-all')).toBeNull();
+	fireEvent.click(screen.getByTestId('filter-bar-save-as-button'));
+	expect(push).toHaveBeenCalledWith({
+		pathname: '/(app)/(modals)/filter-bar',
+		params: {
+			capture: JSON.stringify({ conditions: [{ field: 'featured', value: true }] }),
+		},
+	});
+	expect(modifyUI).not.toHaveBeenCalled();
+});
+it('counts an explicit false predicate as a set group, so Save as button offers it', () => {
+	render(
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish', on_sale: false }}
+		>
+			<POSFilterBar initialFilters={{ status: 'publish' }} />
+			<State />
+		</QueryStateProvider>
+	);
+	fireEvent.click(screen.getByTestId('filter-bar-save-as-button'));
+	expect(push).toHaveBeenCalledWith({
+		pathname: '/(app)/(modals)/filter-bar',
+		params: { capture: JSON.stringify({ conditions: [{ field: 'on_sale', value: false }] }) },
+	});
+});
+it('clears an applied built-in before hiding it', () => {
+	mount();
+	press('filter-pill-featured');
+	fireEvent.contextMenu(screen.getByTestId('filter-pill-featured').querySelector('button')!);
+	fireEvent.click(screen.getByTestId('filter-bar-menu-hide-featured'));
+	expect(JSON.parse(screen.getByTestId('state').textContent!).filters.featured).toBeUndefined();
+	expect(modifyUI).toHaveBeenCalled();
+});
+it.each(['instock', 'outofstock'] as const)(
+	'restores the in-stock baseline when hiding the stock pill set to %s',
+	(stock_status) => {
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+				initialFilters={{ status: 'publish', stock_status }}
+			>
+				<POSFilterBar initialFilters={{ status: 'publish', stock_status: 'instock' }} />
+				<State />
+			</QueryStateProvider>
+		);
+		fireEvent.contextMenu(screen.getByTestId('filter-pill-stock_status').querySelector('button')!);
+		fireEvent.click(screen.getByTestId('filter-bar-menu-hide-stock_status'));
+		expect(JSON.parse(screen.getByTestId('state').textContent!).filters.stock_status).toBe(
+			'instock'
+		);
+		expect(modifyUI).toHaveBeenCalled();
+	}
+);
+it('restores the baseline when removal of an active quick filter is confirmed', () => {
+	filterBar = [
+		{
+			id: 'saved',
+			type: 'quick',
+			label: 'Saved',
+			conditions: [
+				{ field: 'featured', value: true },
+				{ field: 'search', value: 'mug' },
+			],
+			sort: { field: 'sortable_price', direction: 'desc' },
+		},
+	];
+	mount();
+	press('quick-filter-saved');
+	fireEvent.contextMenu(screen.getByTestId('quick-filter-saved').querySelector('button')!);
+	fireEvent.click(screen.getByTestId('filter-bar-menu-remove-saved'));
+	expect(JSON.parse(screen.getByTestId('state').textContent!).search).toBe('mug');
+	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
+	expect(JSON.parse(screen.getByTestId('state').textContent!)).toMatchObject({
+		search: '',
+		filters: { status: 'publish', categories: [], tags: [], brands: [] },
+		sort: { field: 'name', direction: 'asc' },
+	});
+	expect(JSON.parse(screen.getByTestId('state').textContent!).filters.featured).toBeUndefined();
+});

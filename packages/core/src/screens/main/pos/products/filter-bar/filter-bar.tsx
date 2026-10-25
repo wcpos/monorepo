@@ -11,6 +11,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
+import { IconButton } from '@wcpos/components/icon-button';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
 import { Chip } from '@wcpos/components/chip';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -35,6 +37,7 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 import type { FiltersOf } from '@wcpos/query/query-state';
 
+import { useFilterBarCommands } from './use-filter-bar-commands';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { ChipRow } from '../../../components/chip-row';
@@ -49,7 +52,11 @@ import {
 	normalizeFilterBar,
 	type QuickFilter,
 } from '../filter-bar/filter-bar-layout';
-import { isQuickFilterActive, quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
+import {
+	captureQuickFilter,
+	isQuickFilterActive,
+	quickFilterToQueryPatch,
+} from '../filter-bar/apply-quick-filter';
 import { clearConditions, isPlaceCondition, type LevelPlace } from '../browse/level-place';
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { getPOSProductSort } from '../pos-product-sort';
@@ -60,16 +67,18 @@ function BarSlot({
 	touched,
 	onLayout,
 	onRemove,
+	resetState,
 }: {
 	item: FilterBarItem;
 	dimmed: boolean;
 	touched: () => void;
 	onLayout: React.ComponentProps<typeof View>['onLayout'];
 	onRemove: (item: QuickFilter) => void;
+	resetState: Parameters<typeof isQuickFilterActive>[2];
 }) {
 	const t = useT();
 	const router = useRouter();
-	const { modifyUI } = useUISettings('pos-products');
+	const { showPill } = useFilterBarCommands();
 	const triggerRef = React.useRef<React.ComponentRef<typeof DropdownMenuTrigger>>(null);
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -79,7 +88,12 @@ function BarSlot({
 	const content = dimmed ? (
 		<DimmedChip item={item} />
 	) : item.type === 'quick' ? (
-		<QuickChip quickFilter={item} touched={touched} onLongPress={onLongPress} />
+		<QuickChip
+			quickFilter={item}
+			touched={touched}
+			onLongPress={onLongPress}
+			resetState={resetState}
+		/>
 	) : item.id === 'stock_status' ? (
 		<StockChip touched={touched} onLongPress={onLongPress} />
 	) : item.id === 'featured' || item.id === 'on_sale' ? (
@@ -140,15 +154,14 @@ function BarSlot({
 					) : (
 						<DropdownMenuItem
 							testID={`filter-bar-menu-hide-${item.id}`}
-							onPress={() =>
-								void modifyUI(
-									'filterBar',
-									(old) =>
-										normalizeFilterBar(old).map((entry) =>
-											entry.id === item.id ? { ...entry, show: false } : entry
-										) as never
-								)
-							}
+							onPress={() => {
+								const baselineValue = resetState.filters[item.id];
+								if (JSON.stringify(state.filters[item.id]) !== JSON.stringify(baselineValue)) {
+									if (baselineValue !== undefined) actions.setFilter(item.id, baselineValue);
+									else actions.clearFilter(item.id);
+								}
+								void showPill(item.id, false);
+							}}
 						>
 							<Icon name="hide" />
 							<Text>{t('pos_products.hide_from_bar')}</Text>
@@ -181,31 +194,20 @@ function BarSlot({
 }
 
 function QuickChip({
+	resetState,
 	quickFilter,
 	touched,
 	onLongPress,
 }: {
 	quickFilter: QuickFilter;
+	resetState: Parameters<typeof isQuickFilterActive>[2];
 	touched: () => void;
 	onLongPress?: () => void;
 }) {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	const { uiSettings } = useUISettings('pos-products');
-	const settingsSort = useDocField(uiSettings, (value) =>
-		getPOSProductSort(value.sortBy, value.sortDirection)
-	);
-	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
-	const active = isQuickFilterActive(quickFilter, state, {
-		filters: {
-			categories: [],
-			tags: [],
-			brands: [],
-			status: 'publish',
-			...(showOutOfStock ? {} : { stock_status: 'instock' }),
-		},
-		sort: settingsSort,
-	});
+	const settingsSort = resetState.sort;
+	const active = isQuickFilterActive(quickFilter, state, resetState);
 	return (
 		<Chip
 			testID={`quick-filter-${quickFilter.id}`}
@@ -402,7 +404,7 @@ export function POSFilterBar({
 	 * out-of-stock). A group counts as "on" only when it differs from this baseline, so the
 	 * hidden in-stock default never makes Clear all appear after a single chip.
 	 */
-	initialFilters?: Record<string, unknown>;
+	initialFilters?: Partial<FiltersOf<'products'>>;
 	/**
 	 * The place a browse level's crumb owns while one is open (a Categories level, a shortcut).
 	 * The crumb is the place and the pills are the conditions, so the source's own pill folds
@@ -416,13 +418,31 @@ export function POSFilterBar({
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const t = useT();
+	const router = useRouter();
+	const isPhone = useIsPhone();
+	const settingsSort = useDocField(uiSettings, (value) =>
+		getPOSProductSort(value.sortBy, value.sortDirection)
+	);
+	const resetState = {
+		filters: { categories: [], tags: [], brands: [], ...initialFilters },
+		sort: settingsSort,
+	};
+	const capture = () =>
+		router.push({
+			pathname: '/(app)/(modals)/filter-bar',
+			params: { capture: JSON.stringify(captureQuickFilter(state, initialFilters, settingsSort)) },
+		});
 	const scroll = React.useRef<ScrollViewInstance>(null);
 	const positions = React.useRef(new Map<string, number>());
 	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const active = Object.entries(state.filters).filter(([key, value]) => {
 		if (isPlaceCondition(place, key, value)) return false;
-		const set = Array.isArray(value) ? value.length > 0 : !!value;
-		return set && JSON.stringify(value) !== JSON.stringify(initialFilters[key]);
+		// Absence, not falsiness: `on_sale: false` from a "No" quick filter is a set group too.
+		const set = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null;
+		return (
+			set &&
+			JSON.stringify(value) !== JSON.stringify(initialFilters[key as keyof typeof initialFilters])
+		);
 	}).length;
 	return (
 		<ChipRow ref={scroll}>
@@ -435,6 +455,7 @@ export function POSFilterBar({
 					<BarSlot
 						key={item.id}
 						item={item}
+						resetState={resetState}
 						dimmed={dimmed}
 						touched={touched}
 						onLayout={(event) => positions.current.set(item.id, event.nativeEvent.layout.x)}
@@ -452,7 +473,36 @@ export function POSFilterBar({
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>
 			)}
-			<DeleteQuickFilterDialog quickFilter={deleting} onClose={() => setDeleting(null)} />
+			{active >= 1 &&
+				(isPhone ? (
+					<IconButton
+						name="bookmark"
+						accessibilityLabel={t('pos_products.save_as_button')}
+						testID="filter-bar-save-as-button"
+						onPress={capture}
+					/>
+				) : (
+					<Button
+						variant="ghost"
+						size="sm"
+						leftIcon="bookmark"
+						testID="filter-bar-save-as-button"
+						onPress={capture}
+					>
+						<ButtonText>{t('pos_products.save_as_button')}</ButtonText>
+					</Button>
+				))}
+			<DeleteQuickFilterDialog
+				quickFilter={deleting}
+				onClose={() => setDeleting(null)}
+				onConfirm={() => {
+					if (deleting && isQuickFilterActive(deleting, state, resetState)) {
+						actions.resetFilters();
+						actions.clearSearch();
+						actions.setSort(settingsSort.field, settingsSort.direction);
+					}
+				}}
+			/>
 		</ChipRow>
 	);
 }

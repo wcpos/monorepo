@@ -2,6 +2,7 @@ import { createTestT } from '../../../../../../jest/translate';
 import {
 	BUILT_IN_PILL_IDS,
 	DEFAULT_FILTER_BAR,
+	describeCondition,
 	describeQuickFilter,
 	getNamedOrderLabel,
 	getQuickFilterSortLabel,
@@ -134,4 +135,18 @@ it('names a known order and preserves a fallback for other stored sorts', () => 
 		'Price, low to high'
 	);
 	expect(getNamedOrderLabel({ field: 'sku', direction: 'desc' }, t)).toBe('SKU ↓');
+});
+
+it('keeps the existing description when mapping extracted condition sentences', () => {
+	const filter = quick({
+		conditions: [
+			{ field: 'categories', value: [2, 5] },
+			{ field: 'on_sale', value: true },
+			{ field: 'price', value: { min: 10, max: 50 } },
+		],
+	});
+	const format = (value: number) => `£${value.toFixed(2)}`;
+	expect(
+		filter.conditions.map((condition) => describeCondition(condition, t, format)).join(' · ')
+	).toBe(describeQuickFilter(filter, t, format));
 });

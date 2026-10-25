@@ -1,6 +1,8 @@
 import type { FiltersOf, QueryStateOf } from '@wcpos/query/query-state';
 
-import type { QuickFilter } from './filter-bar-layout';
+import { quickFilterConditionSchema, quickFilterSortSchema } from './filter-bar-layout';
+
+import type { QuickFilter, QuickFilterCondition, QuickFilterSort } from './filter-bar-layout';
 
 export function quickFilterToQueryPatch(quickFilter: QuickFilter): {
 	filters: Partial<FiltersOf<'products'>>;
@@ -80,4 +82,39 @@ export function isQuickFilterActive(
 		}
 		return actual === expected;
 	});
+}
+
+export function captureQuickFilter(
+	state: { search: string; filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] },
+	baseline: Partial<FiltersOf<'products'>>,
+	settingsSort: QueryStateOf<'products'>['sort']
+): { conditions: QuickFilterCondition[]; sort?: QuickFilterSort } {
+	const conditions: QuickFilterCondition[] = [];
+	for (const schema of quickFilterConditionSchema.options) {
+		const field = schema.shape.field.value;
+		if (field === 'search') continue;
+		let value = state.filters[field];
+		if (field === 'price') {
+			value = Object.fromEntries(
+				Object.entries(state.filters.price ?? {}).filter(
+					([, bound]) => typeof bound === 'number' && Number.isFinite(bound)
+				)
+			);
+			if (!Object.keys(value).length) continue;
+		}
+		if (value === undefined || value === null) continue;
+		if (Array.isArray(value) && !value.length) continue;
+		if (JSON.stringify(value) !== JSON.stringify(baseline[field]))
+			conditions.push({ field, value } as QuickFilterCondition);
+	}
+	const search = state.search.trim();
+	if (search) conditions.push({ field: 'search', value: search });
+	const sort = quickFilterSortSchema.safeParse(state.sort);
+	return {
+		conditions,
+		...(sort.success &&
+		(state.sort.field !== settingsSort.field || state.sort.direction !== settingsSort.direction)
+			? { sort: sort.data }
+			: {}),
+	};
 }
