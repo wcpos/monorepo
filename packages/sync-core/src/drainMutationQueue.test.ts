@@ -1483,6 +1483,19 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 			]);
 		});
 
+		it('does not count a born-twice create (200: payload ignored) as acceptance (Codex, #2939)', async () => {
+			const q = await queueWith(order('dead', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue({ ...order('again', { line_items: [] }), operation: 'create' });
+			await drainMutationQueue({
+				queue: q,
+				push: async (m) => ({ ...ok(m), outcome: 'created', httpStatus: 200 }),
+			});
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
 		it('ignores `meta_data`, which no recovery ever takes from a dead letter', async () => {
 			const q = await queueWith(order('dead', { line_items: [], meta_data: [{ key: 'x' }] }));
 			await drainMutationQueue({ queue: q, push: refused });

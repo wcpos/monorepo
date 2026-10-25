@@ -609,6 +609,10 @@ export async function drainMutationQueue(input: {
 		result: PushResult
 	): Promise<void> => {
 		if (acked.operation === 'delete') return;
+		// A born-twice create (gate2 #516 item 1): 200, not 201, means the uuid already
+		// existed and the server IGNORED this payload — nothing was accepted, and the write
+		// lane's follow-up update is the write whose ack may settle the record's dead letters.
+		if (acked.operation === 'create' && result.httpStatus === 200) return;
 		const accepted = new Set(result.sentFields ?? Object.keys(acked.payload ?? {}));
 		let rows: QueuedMutation[];
 		try {
