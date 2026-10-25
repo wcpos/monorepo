@@ -5,13 +5,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 
-import {
-	DeleteProductDialog,
-	DeleteVariationDialog,
-	RecordFooterActions,
-	useProductActions,
-	useVariationActions,
-} from './product-actions';
+import { EditProductForm } from './edit/product/form';
+import { EditVariationForm } from './edit/variation/form';
 
 const mockEngine = { id: 'engine' };
 const mockRequestServerDelete = jest.fn(async (..._args: unknown[]) => ({ annihilated: true }));
@@ -72,11 +67,75 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 });
 
 type Kind = 'product' | 'variation';
-const record = (id?: number) =>
-	({ uuid: 'uuid-1', payload: { id, name: 'Hoodie' } }) as unknown as EngineRecord<'products'> &
-		EngineRecord<'variations'>;
+const record = (id?: number) => {
+	const item = {
+		uuid: 'uuid-1',
+		payload: { id, name: 'Hoodie', categories: [], meta_data: [] },
+		toMutableJSON: () => item,
+		getLatest: () => item,
+	};
+	return item as unknown as EngineRecord<'products'> & EngineRecord<'variations'>;
+};
+const mockCallbacksContext = React.createContext<{
+	onDeleted: () => void;
+	onSynced?: () => void;
+	beforeSync?: () => Promise<boolean>;
+}>({ onDeleted: () => {} });
+jest.mock('react-hook-form', () => ({
+	useForm: () => {
+		const { onSynced } = React.useContext(mockCallbacksContext);
+		return { reset: () => onSynced?.() };
+	},
+}));
+jest.mock('./edit/use-catalogue-autosave', () => ({
+	useCatalogueAutosave: () => {
+		const { beforeSync } = React.useContext(mockCallbacksContext);
+		return { flush: async () => (beforeSync ? beforeSync() : true) };
+	},
+}));
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: true } }),
+}));
+jest.mock('@wcpos/components/form', () => ({
+	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormField: () => null,
+	SavedMark: () => null,
+}));
+jest.mock('@wcpos/components/dialog', () => ({
+	useDialog: () => ({ close: React.useContext(mockCallbacksContext).onDeleted }),
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({
+		destructive,
+		record,
+		close,
+	}: import('@wcpos/components/dialog').DialogFooterProps) => (
+		<>
+			{[destructive, record, typeof close === 'object' ? { ...close, label: 'Close' } : undefined]
+				.flat()
+				.filter(Boolean)
+				.map((action) => (
+					<button
+						key={action!.testID}
+						data-testid={action!.testID}
+						onClick={action!.onPress as unknown as React.MouseEventHandler}
+					>
+						{action!.label}
+					</button>
+				))}
+		</>
+	),
+}));
+jest.mock('../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
+jest.mock('../components/meta-data-form', () => ({ MetaDataForm: () => null, metaDataSchema: {} }));
+jest.mock('../components/number-input', () => ({ NumberInput: () => null }));
+jest.mock('../components/product/status-select', () => ({ ProductStatusSelect: () => null }));
+jest.mock('../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
+jest.mock('../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
+jest.mock('../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
 
-// Wired the way the edit forms wire the footer and the dialog.
+// Render the migrated forms with their real action hooks and confirmation dialogs.
 function Harness({
 	kind,
 	item,
@@ -90,21 +149,14 @@ function Harness({
 	onSynced?: () => void;
 	beforeSync?: () => Promise<boolean>;
 }) {
-	const callbacks = { onDeleted, onSynced, beforeSync };
-	const productActions = useProductActions(item, callbacks);
-	const variationActions = useVariationActions(item, callbacks);
-	const actions = kind === 'product' ? productActions : variationActions;
-	const Dialog = kind === 'product' ? DeleteProductDialog : DeleteVariationDialog;
 	return (
-		<>
-			<RecordFooterActions actions={actions} testIDPrefix={kind} />
-			<Dialog
-				record={item}
-				open={actions.deleteOpen}
-				onOpenChange={actions.setDeleteOpen}
-				onConfirm={() => void actions.confirmDelete()}
-			/>
-		</>
+		<mockCallbacksContext.Provider value={{ onDeleted, onSynced, beforeSync }}>
+			{kind === 'product' ? (
+				<EditProductForm product={item} />
+			) : (
+				<EditVariationForm variation={item} />
+			)}
+		</mockCallbacksContext.Provider>
 	);
 }
 
@@ -139,12 +191,12 @@ describe.each([
 		expect(screen.getByTestId(`${kind}-modal-sync`)).toBeTruthy();
 	});
 
-	it('Sync refreshes by the Woo id, and only a pushed record offers it', () => {
+	it('Sync refreshes by the Woo id, and only a pushed record offers it', async () => {
 		const { unmount } = render(<Harness kind={kind} item={record()} onDeleted={jest.fn()} />);
 		expect(screen.queryByTestId(`${kind}-modal-sync`)).toBeNull();
 		unmount();
 		render(<Harness kind={kind} item={record(42)} onDeleted={jest.fn()} />);
-		fireEvent.click(screen.getByTestId(`${kind}-modal-sync`));
+		await act(async () => fireEvent.click(screen.getByTestId(`${kind}-modal-sync`)));
 		expect(mockRefresh).toHaveBeenCalledWith(mockEngine, {
 			id: `${kind}-actions:refresh:42`,
 			collection,

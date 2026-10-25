@@ -6,6 +6,7 @@ import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'reac
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
 
+import { Text } from '../text';
 import { Button } from '../button';
 import { Input } from '../input';
 import { DeviceScope } from '../lib/device';
@@ -541,7 +542,9 @@ it.each(['right', 'center'] as const)(
 				<DialogContent inline side={side}>
 					<DialogHeader testID="header" />
 					<DialogBody testID="body" />
-					<DialogFooter testID="footer" />
+					<DialogFooter testID="footer">
+						<Text>Legacy footer</Text>
+					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 		);
@@ -562,7 +565,9 @@ it.each([true, false])(
 			<DeviceScope phone={phone}>
 				<Dialog open>
 					<DialogContent inline side="right">
-						<DialogFooter testID="footer" />
+						<DialogFooter testID="footer">
+							<Text>Legacy footer</Text>
+						</DialogFooter>
 					</DialogContent>
 				</Dialog>
 			</DeviceScope>
@@ -730,10 +735,16 @@ it('15. uses provider close labels, falls back to English, and lets closeLabel w
 	);
 	const { rerender } = render(dialog());
 	expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
-	rerender(<DialogLabelsProvider labels={{ close: 'Fermer' }}>{dialog()}</DialogLabelsProvider>);
+	rerender(
+		<DialogLabelsProvider labels={{ cancel: 'Cancel', close: 'Fermer' }}>
+			{dialog()}
+		</DialogLabelsProvider>
+	);
 	expect(screen.getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
 	rerender(
-		<DialogLabelsProvider labels={{ close: 'Fermer' }}>{dialog('Dismiss')}</DialogLabelsProvider>
+		<DialogLabelsProvider labels={{ cancel: 'Cancel', close: 'Fermer' }}>
+			{dialog('Dismiss')}
+		</DialogLabelsProvider>
 	);
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
 	rerender(dialog('Dismiss'));

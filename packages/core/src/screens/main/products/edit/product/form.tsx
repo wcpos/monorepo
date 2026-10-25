@@ -20,7 +20,7 @@ import {
 	SavedMark,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, ProductPayload } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
@@ -35,7 +35,7 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { DeleteProductDialog, RecordFooterActions, useProductActions } from '../../product-actions';
+import { DeleteProductDialog, useProductActions } from '../../product-actions';
 import { taxClassFromWire } from '../../../hooks/tax-class';
 import { useCatalogueAutosave } from '../use-catalogue-autosave';
 
@@ -131,8 +131,6 @@ function EditProductFormFields({ product }: Props) {
 		beforeSync: flush,
 		onSynced: () => form.reset(formValues(product.getLatest().payload as ProductPayload)),
 	});
-	// The record's actions on the left, Close on the right.
-	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
 	 *
@@ -363,10 +361,23 @@ function EditProductFormFields({ product }: Props) {
 					</View>
 				</View>
 			</DialogBody>
-			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
-				{leading && <RecordFooterActions actions={actions} testIDPrefix="product" />}
-				<DialogClose testID="product-edit-close-button">{t('common.close')}</DialogClose>
-			</DialogFooter>
+			<DialogFooter
+				destructive={
+					!readOnly && actions.canDelete
+						? {
+								label: t('common.delete'),
+								testID: 'product-modal-delete',
+								onPress: actions.requestDelete,
+							}
+						: undefined
+				}
+				record={
+					!readOnly && actions.canSync
+						? { label: t('common.sync'), testID: 'product-modal-sync', onPress: actions.sync }
+						: undefined
+				}
+				close={{ testID: 'product-edit-close-button' }}
+			/>
 			{!readOnly && actions.canDelete && (
 				<DeleteProductDialog
 					record={product}

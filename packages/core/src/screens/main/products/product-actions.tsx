@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import {
 	AlertDialog,
@@ -11,7 +10,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Button } from '@wcpos/components/button';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -94,38 +92,6 @@ export const useProductActions = (record: EngineRecord<'products'>, callbacks?: 
 
 export const useVariationActions = (record: EngineRecord<'variations'>, callbacks?: Callbacks) =>
 	useCatalogueActions('variations', record, callbacks);
-
-/**
- * The footer's left group: the record's own actions, destructive first (orders #2904), beside
- * the form's Close.
- */
-export function RecordFooterActions({
-	actions,
-	testIDPrefix,
-}: {
-	actions: ReturnType<typeof useCatalogueActions>;
-	testIDPrefix: 'product' | 'variation';
-}) {
-	const t = useT();
-	return (
-		<View className="min-w-0 shrink flex-row flex-wrap gap-2">
-			{actions.canDelete && (
-				<Button
-					variant="outline-destructive"
-					testID={`${testIDPrefix}-modal-delete`}
-					onPress={actions.requestDelete}
-				>
-					{t('common.delete')}
-				</Button>
-			)}
-			{actions.canSync && (
-				<Button variant="outline" testID={`${testIDPrefix}-modal-sync`} onPress={actions.sync}>
-					{t('common.sync')}
-				</Button>
-			)}
-		</View>
-	);
-}
 
 type DialogProps<R> = {
 	record: R;

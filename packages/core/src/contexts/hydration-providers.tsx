@@ -18,7 +18,10 @@ interface HydrationProvidersProps {
 function TranslatedDialogLabels({ children }: HydrationProvidersProps) {
 	const t = useT();
 	// One object per locale, so every dialog does not re-render when the root does.
-	const labels = React.useMemo(() => ({ close: t('common.close') }), [t]);
+	const labels = React.useMemo(
+		() => ({ close: t('common.close'), cancel: t('common.cancel') }),
+		[t]
+	);
 	return <DialogLabelsProvider labels={labels}>{children}</DialogLabelsProvider>;
 }
 

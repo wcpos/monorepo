@@ -73,7 +73,22 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({
+		destructive,
+		record,
+		close,
+	}: import('@wcpos/components/dialog').DialogFooterProps) => (
+		<>
+			{[destructive, record, typeof close === 'object' ? { ...close, label: 'Close' } : undefined]
+				.flat()
+				.filter(Boolean)
+				.map((action) => (
+					<button key={action!.testID} data-testid={action!.testID}>
+						{action!.label}
+					</button>
+				))}
+		</>
+	),
 	useDialog: () => ({ close: jest.fn() }),
 }));
 
@@ -122,9 +137,6 @@ jest.mock('../../product-actions', () => {
 	return {
 		useProductActions: (_record: unknown, callbacks: ActionCallbacks) => actions(callbacks),
 		useVariationActions: (_record: unknown, callbacks: ActionCallbacks) => actions(callbacks),
-		RecordFooterActions: ({ testIDPrefix }: { testIDPrefix: string }) => (
-			<div data-testid={`${testIDPrefix}-record-actions`} />
-		),
 		DeleteProductDialog: () => null,
 		DeleteVariationDialog: () => null,
 	};
@@ -178,13 +190,13 @@ describe('catalogue form autosave', () => {
 
 	it('puts the record actions in the footer on Pro only, and Sync resets the form from the store copy', () => {
 		const { unmount } = render(<EditProductForm product={product} />);
-		expect(screen.getByTestId('product-record-actions')).toBeTruthy();
+		expect(screen.getByTestId('product-modal-delete')).toBeTruthy();
 		mockOnSynced!();
 		expect(form.reset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test product' }));
 		unmount();
 		mockIsPro = false;
 		render(<EditProductForm product={product} />);
-		expect(screen.queryByTestId('product-record-actions')).toBeNull();
+		expect(screen.queryByTestId('product-modal-delete')).toBeNull();
 	});
 
 	it('a name edit writes only the name and marks it saved', async () => {

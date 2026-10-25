@@ -18,7 +18,7 @@ import {
 	SavedMark,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogBody, DialogClose, DialogFooter, useDialog } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, VariationPayload } from '@wcpos/query';
 
@@ -31,11 +31,7 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
-import {
-	DeleteVariationDialog,
-	RecordFooterActions,
-	useVariationActions,
-} from '../../product-actions';
+import { DeleteVariationDialog, useVariationActions } from '../../product-actions';
 import { taxClassFromWire } from '../../../hooks/tax-class';
 import { useCatalogueAutosave } from '../use-catalogue-autosave';
 
@@ -110,8 +106,6 @@ function EditVariationFormFields({ variation }: Props) {
 		beforeSync: flush,
 		onSynced: () => form.reset(formValues(variation.getLatest().payload as VariationPayload)),
 	});
-	// The record's actions on the left, Close on the right.
-	const leading = !readOnly && (actions.canDelete || actions.canSync);
 
 	/**
 	 *
@@ -269,10 +263,23 @@ function EditVariationFormFields({ variation }: Props) {
 					</View>
 				</View>
 			</DialogBody>
-			<DialogFooter className={leading ? 'flex-wrap justify-between' : undefined}>
-				{leading && <RecordFooterActions actions={actions} testIDPrefix="variation" />}
-				<DialogClose testID="variation-edit-close-button">{t('common.close')}</DialogClose>
-			</DialogFooter>
+			<DialogFooter
+				destructive={
+					!readOnly && actions.canDelete
+						? {
+								label: t('common.delete'),
+								testID: 'variation-modal-delete',
+								onPress: actions.requestDelete,
+							}
+						: undefined
+				}
+				record={
+					!readOnly && actions.canSync
+						? { label: t('common.sync'), testID: 'variation-modal-sync', onPress: actions.sync }
+						: undefined
+				}
+				close={{ testID: 'variation-edit-close-button' }}
+			/>
 			{!readOnly && actions.canDelete && (
 				<DeleteVariationDialog
 					record={variation}

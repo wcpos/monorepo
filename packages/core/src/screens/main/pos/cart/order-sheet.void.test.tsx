@@ -7,8 +7,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { VoidButton } from './void';
-import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
+import { OrderSheet } from './order-sheet';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../extensions/commands/surfaces';
 
 /** Scripted engine event for one real outcome watch, consumed in order. */
 type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
@@ -117,18 +117,19 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
-jest.mock('../../../../../contexts/translations', () => ({
+jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../../../../../../../query/src/mutations/resident', () => ({
+jest.mock('../../../../../../query/src/mutations/resident', () => ({
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	patchEngineResident: (...args: unknown[]) => mockPatchEngineResident(...args),
 	patchAndEnqueueEngineResident: (...args: unknown[]) => mockPatchAndEnqueueEngineResident(...args),
 }));
 
-jest.mock('../../contexts/current-order', () => ({
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord: mockCurrentOrder }),
 	useCurrentOrderRecord: () => mockCurrentOrder,
 	useCurrentOrderActions: () => ({
 		getCurrentOrderRecord: () => ({ uuid: mockShownOrderUuid }),
@@ -144,12 +145,12 @@ let mockResolveSession: () => Promise<{
 	registerId: string | null;
 	sessionId: string | null;
 }> = async () => ({ registerId: 'till', sessionId: 'session-1' });
-jest.mock('../../../../../services/terminal-payments', () => ({
+jest.mock('../../../../services/terminal-payments', () => ({
 	getTerminalPaymentsService: () => ({ get: () => mockHeldLeg }),
 }));
 
 const mockActionLog = jest.fn();
-jest.mock('../../hooks/use-action-context', () => ({
+jest.mock('../hooks/use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {
 			log: mockActionLog,
@@ -164,7 +165,7 @@ jest.mock('../../hooks/use-action-context', () => ({
 	}),
 }));
 
-describe('VoidButton', () => {
+describe('OrderSheet void', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockOutcomes = [];
@@ -184,7 +185,7 @@ describe('VoidButton', () => {
 
 	it('deletes a permitted void without enqueueing an update', async () => {
 		mockOutcomes = ['acknowledged'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -205,7 +206,7 @@ describe('VoidButton', () => {
 
 	it('skips the outcome watch for an annihilated local order', async () => {
 		mockEngine.write.mockResolvedValueOnce({ mutationId: 'delete-1', annihilated: true });
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
@@ -220,7 +221,7 @@ describe('VoidButton', () => {
 	it('reports conversion without waiting for discard to finish', async () => {
 		mockOutcomes = ['rejected'];
 		mockEngine.resolveConflict.mockReturnValueOnce(new Promise(() => {}));
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
@@ -233,7 +234,7 @@ describe('VoidButton', () => {
 
 	it('cancels a refused void on the store and enqueues the update', async () => {
 		mockOutcomes = ['rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -258,7 +259,7 @@ describe('VoidButton', () => {
 
 	it('Undo of a kept-cancelled void selects the order again', async () => {
 		mockOutcomes = ['rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() => expect(mockSetCurrentOrderID).toHaveBeenCalledWith(''));
 
@@ -270,7 +271,7 @@ describe('VoidButton', () => {
 	it('leaves the cart alone when the cashier moved to another order before the store answered', async () => {
 		mockOutcomes = ['rejected'];
 		mockShownOrderUuid = 'order-2';
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -285,7 +286,7 @@ describe('VoidButton', () => {
 	it('a refused delete that cannot be settled still reports the conversion', async () => {
 		mockOutcomes = ['rejected'];
 		mockEngine.resolveConflict.mockRejectedValueOnce(new Error('claim taken'));
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() => expect(mockCartLogger.warn).toHaveBeenCalled());
@@ -300,7 +301,7 @@ describe('VoidButton', () => {
 	it('converts a refused void while connectivity is degraded — the drain still pushes', async () => {
 		mockConnectivity = 'degraded';
 		mockOutcomes = ['rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -314,7 +315,7 @@ describe('VoidButton', () => {
 
 	it('skips the outcome watch entirely when offline (accepted gap)', async () => {
 		mockConnectivity = 'offline';
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -328,7 +329,7 @@ describe('VoidButton', () => {
 
 	it('converts on a refusal that arrives after the helper timeout', async () => {
 		mockOutcomes = ['timeout', 'rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		// Optimistic toast fires at the timeout, then the late refusal converts.
@@ -364,7 +365,7 @@ describe('VoidButton', () => {
 		});
 
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 
 			await waitFor(() =>
@@ -394,7 +395,7 @@ describe('VoidButton', () => {
 		mockPatchAndEnqueueEngineResident.mockImplementationOnce(
 			() => new Promise<void>((resolve) => (releaseConversion = resolve))
 		);
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		// The late refusal has arrived and its conversion is waiting on the enqueue.
@@ -414,7 +415,7 @@ describe('VoidButton', () => {
 
 	it('surfaces an error toast and no success toast when the delete write fails', async () => {
 		mockEngine.write.mockRejectedValueOnce(new Error('delete enqueue failed'));
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -431,7 +432,7 @@ describe('VoidButton', () => {
 	it('surfaces an error toast and no success toast when the fallback enqueue fails', async () => {
 		mockOutcomes = ['rejected'];
 		mockPatchAndEnqueueEngineResident.mockRejectedValue(new Error('enqueue failed'));
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -443,7 +444,7 @@ describe('VoidButton', () => {
 	it('reports a failed late conversion as a failed void, after the optimistic toast', async () => {
 		mockOutcomes = ['timeout', 'rejected'];
 		mockPatchAndEnqueueEngineResident.mockRejectedValueOnce(new Error('resident patch failed'));
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
@@ -467,7 +468,7 @@ describe('VoidButton', () => {
 		mockInsertEngineResident.mockResolvedValue({
 			toMutableJSON: () => ({ payload: { ...mockOrderJson, id: 0 } }),
 		});
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
@@ -491,8 +492,8 @@ describe('VoidButton', () => {
 
 	it('dispatches cart.order.void with the counted ledger, and the audit row records the outcome', async () => {
 		const { registerActionHook } = jest.requireActual<
-			typeof import('../../../../../extensions/actions')
-		>('../../../../../extensions/actions');
+			typeof import('../../../../extensions/actions')
+		>('../../../../extensions/actions');
 		const seen: unknown[] = [];
 		registerActionHook(
 			'cart.order.void',
@@ -502,7 +503,7 @@ describe('VoidButton', () => {
 			},
 			{ id: 'test.observer', tier: 'extension', order: 1 }
 		);
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
@@ -571,7 +572,7 @@ describe('VoidButton', () => {
 			]
 		);
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockActionLog).toHaveBeenCalledWith(
@@ -597,8 +598,8 @@ describe('VoidButton', () => {
 		const { withLedger } =
 			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 		const { enqueueOrderMutation } = jest.requireActual<
-			typeof import('../../hooks/order-mutation-queue')
-		>('../../hooks/order-mutation-queue');
+			typeof import('../hooks/order-mutation-queue')
+		>('../hooks/order-mutation-queue');
 		let release!: () => void;
 		const gate = new Promise<void>((resolve) => (release = resolve));
 		void enqueueOrderMutation('order-1', async () => {
@@ -628,7 +629,7 @@ describe('VoidButton', () => {
 			);
 		});
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			release();
 			await waitFor(() =>
@@ -647,7 +648,7 @@ describe('VoidButton', () => {
 	it('a card leg the terminal service still holds counts as live and refuses the void', async () => {
 		mockHeldLeg = { phase: 'polling', row: { id: 'held-leg', capture_mode: 'device' } };
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockActionLog).toHaveBeenCalledWith(
@@ -668,7 +669,7 @@ describe('VoidButton', () => {
 			row: { id: 'held-leg', capture_mode: 'device', status: 'captured' },
 		};
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockActionLog).toHaveBeenCalledWith(
@@ -711,7 +712,7 @@ describe('VoidButton', () => {
 			]
 		);
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockActionLog).toHaveBeenCalledWith(
@@ -728,7 +729,7 @@ describe('VoidButton', () => {
 
 	it('a late refusal that keeps the order writes a correcting audit row', async () => {
 		mockOutcomes = ['timeout', 'rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
@@ -759,7 +760,7 @@ describe('VoidButton', () => {
 			throw new RegisterSessionRequiredError();
 		};
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockCartLogger.success).toHaveBeenCalledWith(
@@ -780,8 +781,8 @@ describe('VoidButton', () => {
 
 	it('Undo restores the order as a write queued ahead of the void left it, not the press-time snapshot', async () => {
 		const { enqueueOrderMutation } = jest.requireActual<
-			typeof import('../../hooks/order-mutation-queue')
-		>('../../hooks/order-mutation-queue');
+			typeof import('../hooks/order-mutation-queue')
+		>('../hooks/order-mutation-queue');
 		let release!: () => void;
 		const gate = new Promise<void>((resolve) => (release = resolve));
 		void enqueueOrderMutation('order-1', async () => {
@@ -789,7 +790,7 @@ describe('VoidButton', () => {
 			mockOrderJson.customer_note = 'added while the void waited';
 		});
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			release();
 			await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
@@ -807,11 +808,11 @@ describe('VoidButton', () => {
 
 	it('refuses to void at all when the payments gate is not registered', async () => {
 		const { resetActionRegistry } = jest.requireActual<
-			typeof import('../../../../../extensions/actions')
-		>('../../../../../extensions/actions');
+			typeof import('../../../../extensions/actions')
+		>('../../../../extensions/actions');
 		resetActionRegistry();
 		try {
-			render(<VoidButton />);
+			render(<Sheet />);
 			fireEvent.click(screen.getByTestId('void-button'));
 			await waitFor(() =>
 				expect(mockActionLog).toHaveBeenCalledWith(
@@ -824,12 +825,11 @@ describe('VoidButton', () => {
 		} finally {
 			// Re-register the gate and the audit hook, on the real registry, for the cases after this.
 			const { registerActionHook, ORDER_VOID_EVENT } = jest.requireActual<
-				typeof import('../../../../../extensions/actions')
-			>('../../../../../extensions/actions');
-			const { paymentsGate } =
-				jest.requireActual<typeof import('../void-guards')>('../void-guards');
+				typeof import('../../../../extensions/actions')
+			>('../../../../extensions/actions');
+			const { paymentsGate } = jest.requireActual<typeof import('./void-guards')>('./void-guards');
 			const { auditOrderVoided } =
-				jest.requireActual<typeof import('../void-audit-hook')>('../void-audit-hook');
+				jest.requireActual<typeof import('./void-audit-hook')>('./void-audit-hook');
 			registerActionHook(ORDER_VOID_EVENT, paymentsGate, {
 				id: 'payments.gate',
 				tier: 'guard',
@@ -845,7 +845,7 @@ describe('VoidButton', () => {
 
 	it('undo after fallback restores pos-open and enqueues an update', async () => {
 		mockOutcomes = ['rejected'];
-		render(<VoidButton />);
+		render(<Sheet />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
@@ -868,7 +868,7 @@ describe('VoidButton', () => {
 	});
 });
 
-jest.mock('../../../../../contexts/app-state', () => ({
+jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: { uuid: 'site' }, store: { id: 1 } }),
 }));
 
@@ -877,7 +877,7 @@ it('stamps the original register through the real writer when binding switches d
 	const realQuery = jest.requireActual('@wcpos/query');
 	query.COLLECTION_VOCABULARY = realQuery.COLLECTION_VOCABULARY;
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
-		'../../../../../../../query/src/mutations/resident'
+		'../../../../../../query/src/mutations/resident'
 	);
 	const { readBoundRegister } = jest.requireActual('@wcpos/query/register-session');
 	await readBoundRegister(
@@ -920,7 +920,7 @@ it('stamps the original register through the real writer when binding switches d
 		refuse = () => listener(mockRefusal);
 		return jest.fn();
 	});
-	render(<VoidButton />);
+	render(<Sheet />);
 	fireEvent.click(screen.getByTestId('void-button'));
 	await waitFor(() => expect(mockEngine.events).toHaveBeenCalled());
 	await readBoundRegister(
@@ -955,12 +955,12 @@ it('stamps the original register through the real writer when binding switches d
 
 jest.mock('@wcpos/query/temporary-order', () => ({}));
 
-jest.mock('../../../../../hooks/use-local-date', () => ({}));
+jest.mock('../../../../hooks/use-local-date', () => ({}));
 
 it('closes the sheet synchronously before starting the existing void flow', async () => {
 	const before = jest.fn(() => expect(mockEngine.write).not.toHaveBeenCalled());
 	mockEngine.write.mockClear();
-	render(<VoidButton onBeforeVoid={before} />);
+	render(<Sheet onBeforeVoid={before} />);
 	fireEvent.click(screen.getByTestId('void-button'));
 	expect(before).toHaveBeenCalledTimes(1);
 	// The delete follows the order's queue slot and the gate, so it lands a tick later.
@@ -968,7 +968,44 @@ it('closes the sheet synchronously before starting the existing void flow', asyn
 });
 
 it('registers no void surface: the cart column owns it (roadmap#428, PR 1b)', async () => {
-	const { unmount } = render(<VoidButton />);
+	const { unmount } = render(<Sheet />);
 	await expect(invokeSurface('void')).rejects.toBeInstanceOf(SurfaceNotMountedError);
 	unmount();
 });
+
+// Exercise the real sheet and void hook; the form and unrelated sync action are outside these assertions.
+jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
+jest.mock('../../hooks/use-sync-order', () => ({ useSyncOrder: () => ({ sync: jest.fn() }) }));
+jest.mock('@wcpos/components/dialog', () => {
+	function Pass({ children }: React.PropsWithChildren) {
+		return <>{children}</>;
+	}
+	return {
+		Dialog: Pass,
+		DialogContent: Pass,
+		DialogHeader: Pass,
+		DialogTitle: Pass,
+		DialogFooter: ({ destructive }: import('@wcpos/components/dialog').DialogFooterProps) => {
+			const action = Array.isArray(destructive) ? destructive[0] : destructive;
+			return (
+				<button
+					data-testid={action?.testID}
+					disabled={action?.disabled}
+					onClick={action?.onPress as unknown as React.MouseEventHandler}
+				>
+					{action?.label}
+				</button>
+			);
+		},
+	};
+});
+function Sheet({ onBeforeVoid = () => {} }: { onBeforeVoid?: () => void }) {
+	return (
+		<OrderSheet
+			open
+			onOpenChange={onBeforeVoid}
+			order={mockCurrentOrder as unknown as React.ComponentProps<typeof OrderSheet>['order']}
+		/>
+	);
+}
