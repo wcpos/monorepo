@@ -208,7 +208,12 @@ export function CustomerForm(props: CustomerFormProps) {
 					</VStack>
 					<SavedMark name="tax_ids" label={t('settings.saved')} />
 				</HStack>
-				<MetaDataForm />
+				<View className="relative">
+					<MetaDataForm />
+					<View className="pointer-events-none absolute top-0 right-0">
+						<SavedMark name="meta_data" label={t('settings.saved')} />
+					</View>
+				</View>
 			</VStack>
 		</Form>
 	);

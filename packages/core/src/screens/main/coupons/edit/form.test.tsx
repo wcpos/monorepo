@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 
@@ -29,9 +29,27 @@ const form = {
 	reset: jest.fn(),
 };
 const mockUseForm = jest.fn(() => form);
-jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm() }));
+jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm(), useWatch: () => formValues }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('@wcpos/components/form', () => ({
+	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormField: ({
+		name,
+		render: renderField,
+	}: {
+		name: string;
+		render: (props: {
+			field: { name: string; value: string; onChange: () => void };
+		}) => React.ReactNode;
+	}) => renderField({ field: { name, value: '', onChange: jest.fn() } }),
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
+	FormInput: () => null,
+	FormMessage: () => null,
+	FormSegmentedControl: () => null,
+	FormSelect: () => null,
+	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
@@ -39,7 +57,11 @@ jest.mock('@wcpos/components/form', () => ({
 		return { flush: mockFlush };
 	},
 }));
-jest.mock('@wcpos/components/dialog', () => ({ useDialog: () => ({ close: jest.fn() }) }));
+jest.mock('@wcpos/components/dialog', () => ({
+	useDialog: () => ({ close: jest.fn() }),
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
 jest.mock('../../components/coupon/coupon-form', () => ({
 	CouponForm: () => null,
@@ -161,4 +183,50 @@ it('writes the meta root without blank rows and tombstones a removed earlier wri
 		document: record,
 		data: { meta_data: [{ id: 9, key: 'colour', value: null }] },
 	});
+});
+
+// Render the real shared form only in the placement case; existing writer tests stay isolated.
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/collapsible', () => ({
+	Collapsible: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	CollapsibleContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
+jest.mock('../../components/meta-data-form', () => ({
+	MetaDataForm: () => null,
+	metaDataSchema: {},
+}));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: String }),
+}));
+jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/coupon/discount-amount-input', () => ({
+	DiscountAmountInput: () => null,
+}));
+jest.mock('../../components/coupon/expiry-preset-chips', () => ({ ExpiryPresetChips: () => null }));
+jest.mock('../../components/coupon/status-select', () => ({ StatusSelect: () => null }));
+it('renders the newly covered Saved roots after their matching writes', async () => {
+	const { CouponForm } = jest.requireActual('../../components/coupon/coupon-form');
+	renderForm();
+	render(<CouponForm form={form} footer={null} />);
+	for (const [root, value] of Object.entries({
+		discount_type: 'percent',
+		usage_limit: 1,
+		individual_use: true,
+		free_shipping: true,
+		status: 'draft',
+		meta_data: [{ key: 'colour', value: 'red' }],
+	})) {
+		formValues[root] = value;
+		await capturedChange({ [root]: value });
+		expect(mockLocalPatch).toHaveBeenLastCalledWith({ document: record, data: { [root]: value } });
+		expect(mockMarkSaved).toHaveBeenLastCalledWith([root]);
+		expect(screen.getAllByTestId(`saved-${root}`)).toHaveLength(root === 'usage_limit' ? 2 : 1);
+	}
 });

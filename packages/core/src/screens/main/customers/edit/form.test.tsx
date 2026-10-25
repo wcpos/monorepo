@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import type { ReadonlyEngineRecord } from '@wcpos/query';
 
@@ -33,6 +33,24 @@ const mockUseForm = jest.fn(() => form);
 jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm() }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('@wcpos/components/form', () => ({
+	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormField: ({
+		name,
+		render: renderField,
+	}: {
+		name: string;
+		render: (props: {
+			field: { name: string; value: string; onChange: () => void };
+		}) => React.ReactNode;
+	}) => renderField({ field: { name, value: '', onChange: jest.fn() } }),
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
+	FormInput: () => null,
+	FormMessage: () => null,
+	FormSegmentedControl: () => null,
+	FormSelect: () => null,
+	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
@@ -40,7 +58,11 @@ jest.mock('@wcpos/components/form', () => ({
 		return { flush: mockFlush };
 	},
 }));
-jest.mock('@wcpos/components/dialog', () => ({ useDialog: () => ({ close: jest.fn() }) }));
+jest.mock('@wcpos/components/dialog', () => ({
+	useDialog: () => ({ close: jest.fn() }),
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
 jest.mock('../../components/customer/customer-form', () => ({
 	CustomerForm: () => null,
@@ -139,6 +161,38 @@ it('a billing identity typed while the write was in flight is not levelled away'
 	await expect(capturedChange({ first_name: 'Ada' })).resolves.toBe(true);
 	expect(form.setValue).not.toHaveBeenCalled();
 });
+it('a password write overlapping a first-name write does not evict the name mirror', async () => {
+	(payload as { first_name?: string }).first_name = 'Jo';
+	formValues.first_name = 'John';
+	formValues.password = 'secret';
+	formValues.billing = { first_name: 'Jo', city: 'London' };
+	let release: (value: { document: unknown; changes: object }) => void = () => {};
+	mockLocalPatch.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+	renderForm();
+	const nameWrite = capturedChange({ first_name: 'John' });
+	await Promise.resolve();
+	await expect(capturedChange({ password: 'secret' })).resolves.toBe(true);
+	release({ document: record, changes: {} });
+	await expect(nameWrite).resolves.toBe(true);
+	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'John');
+});
+it('two overlapping writes of one root keep their own captures: a failed first does not rob the second', async () => {
+	(payload as { first_name?: string }).first_name = 'Jo';
+	formValues.first_name = 'John';
+	formValues.billing = { first_name: 'Jo', city: 'London' };
+	let failFirst: (value: undefined) => void = () => {};
+	mockLocalPatch.mockImplementationOnce(() => new Promise((resolve) => (failFirst = resolve)));
+	renderForm();
+	const first = capturedChange({ first_name: 'John' });
+	await Promise.resolve();
+	formValues.first_name = 'Johnny';
+	const second = capturedChange({ first_name: 'Johnny' });
+	await Promise.resolve();
+	failFirst(undefined);
+	await expect(first).resolves.toBe(false);
+	await expect(second).resolves.toBe(true);
+	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'Johnny');
+});
 it('does not overwrite a billing identity the cashier set apart', async () => {
 	formValues.billing = { first_name: 'Grace' };
 	renderForm();
@@ -225,4 +279,48 @@ it('writes the meta root without blank rows and tombstones a removed earlier wri
 		document: record,
 		data: { meta_data: [{ id: 9, key: 'colour', value: null }] },
 	});
+});
+
+// Render the real shared form only in the placement case; existing writer tests stay isolated.
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/collapsible', () => ({
+	Collapsible: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	CollapsibleContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
+jest.mock('../../components/meta-data-form', () => ({
+	MetaDataForm: () => null,
+	metaDataSchema: {},
+}));
+jest.mock('../../components/billing-address-form', () => ({
+	BillingAddressForm: () => null,
+	billingAddressSchema: { shape: {} },
+}));
+jest.mock('../../components/shipping-address-form', () => ({
+	ShippingAddressForm: () => null,
+	shippingAddressSchema: { shape: {} },
+}));
+jest.mock('../../components/customer/tax-ids-form', () => ({
+	TaxIdsForm: () => null,
+	taxIdsFormSchema: {},
+}));
+it('renders the meta_data Saved root after its matching write, but none for read-only role', async () => {
+	const { CustomerForm } = jest.requireActual('../../components/customer/customer-form');
+	renderForm();
+	render(<CustomerForm form={form} footer={null} />);
+	formValues.meta_data = [{ key: 'colour', value: 'red' }];
+	await capturedChange({ 'meta_data.0.value': 'red' });
+	expect(mockLocalPatch).toHaveBeenLastCalledWith({
+		document: record,
+		data: { meta_data: [{ key: 'colour', value: 'red' }] },
+	});
+	expect(mockMarkSaved).toHaveBeenLastCalledWith(['meta_data']);
+	expect(screen.getByTestId('saved-meta_data')).toBeTruthy();
+	expect(screen.queryByTestId('saved-role')).toBeNull();
 });

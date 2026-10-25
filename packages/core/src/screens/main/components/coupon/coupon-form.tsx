@@ -107,22 +107,27 @@ export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 					control={form.control}
 					name="discount_type"
 					render={({ field }) => (
-						<FormSegmentedControl
-							testID="coupon-discount-type"
-							label={t('coupons.discount')}
-							segments={[
-								{ value: 'percent', label: t('coupons.percent_short') },
-								{ value: 'fixed_cart', label: t('coupons.amount_off_order') },
-								{ value: 'fixed_product', label: t('coupons.amount_off_products') },
-							]}
-							{...field}
-							onChange={(value) => {
-								field.onChange(value);
-								if (value === 'fixed_cart') {
-									form.setValue('limit_usage_to_x_items', 0, { shouldDirty: true });
-								}
-							}}
-						/>
+						<FormItem>
+							<HStack className="justify-between">
+								<FormLabel>{t('coupons.discount')}</FormLabel>
+								<SavedMark name="discount_type" label={t('settings.saved')} />
+							</HStack>
+							<FormSegmentedControl
+								testID="coupon-discount-type"
+								segments={[
+									{ value: 'percent', label: t('coupons.percent_short') },
+									{ value: 'fixed_cart', label: t('coupons.amount_off_order') },
+									{ value: 'fixed_product', label: t('coupons.amount_off_products') },
+								]}
+								{...field}
+								onChange={(value) => {
+									field.onChange(value);
+									if (value === 'fixed_cart') {
+										form.setValue('limit_usage_to_x_items', 0, { shouldDirty: true });
+									}
+								}}
+							/>
+						</FormItem>
 					)}
 				/>
 				<FormField
@@ -161,14 +166,17 @@ export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 					control={form.control}
 					name="usage_limit"
 					render={({ field }) => (
-						<FormSwitch
-							{...field}
-							label={t('coupons.one_time_use')}
-							description={t('coupons.one_time_use_help')}
-							testID="coupon-one-time-use"
-							value={isOneTimeUse(field.value)}
-							onChange={(checked: boolean) => field.onChange(toggleOneTimeUse(checked))}
-						/>
+						<HStack className="items-center justify-between">
+							<FormSwitch
+								{...field}
+								label={t('coupons.one_time_use')}
+								description={t('coupons.one_time_use_help')}
+								testID="coupon-one-time-use"
+								value={isOneTimeUse(field.value)}
+								onChange={(checked: boolean) => field.onChange(toggleOneTimeUse(checked))}
+							/>
+							<SavedMark name="usage_limit" label={t('settings.saved')} />
+						</HStack>
 					)}
 				/>
 
@@ -223,18 +231,24 @@ export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 						control={form.control}
 						name="individual_use"
 						render={({ field }) => (
-							<FormSwitch
-								label={t('coupons.cannot_be_combined')}
-								description={t('coupons.cannot_be_combined_help')}
-								{...field}
-							/>
+							<HStack className="items-center justify-between">
+								<FormSwitch
+									label={t('coupons.cannot_be_combined')}
+									description={t('coupons.cannot_be_combined_help')}
+									{...field}
+								/>
+								<SavedMark name="individual_use" label={t('settings.saved')} />
+							</HStack>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="free_shipping"
 						render={({ field }) => (
-							<FormSwitch label={t('coupons.grants_free_shipping')} {...field} />
+							<HStack className="items-center justify-between">
+								<FormSwitch label={t('coupons.grants_free_shipping')} {...field} />
+								<SavedMark name="free_shipping" label={t('settings.saved')} />
+							</HStack>
 						)}
 					/>
 				</CollapsibleSection>
@@ -341,16 +355,26 @@ export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 						control={form.control}
 						name="status"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<FormSelect
-								customComponent={StatusSelect}
-								label={t('coupons.status')}
-								value={value as string}
-								onChange={onChange}
-								{...rest}
-							/>
+							<FormItem>
+								<HStack className="justify-between">
+									<FormLabel>{t('coupons.status')}</FormLabel>
+									<SavedMark name="status" label={t('settings.saved')} />
+								</HStack>
+								<FormSelect
+									customComponent={StatusSelect}
+									value={value as string}
+									onChange={onChange}
+									{...rest}
+								/>
+							</FormItem>
 						)}
 					/>
-					<MetaDataForm />
+					<View className="relative">
+						<MetaDataForm />
+						<View className="pointer-events-none absolute top-0 right-0">
+							<SavedMark name="meta_data" label={t('settings.saved')} />
+						</View>
+					</View>
 				</CollapsibleSection>
 			</DialogBody>
 			{footerLeading ? (
