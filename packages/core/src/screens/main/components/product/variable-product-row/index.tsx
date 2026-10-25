@@ -18,7 +18,6 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useT } from '../../../../../contexts/translations';
 import { getColumnStyle } from '../../data-table/column-style';
 import { DataTableRow } from '../../data-table/rows';
 import { VariationRowProvider } from './context';
@@ -177,19 +176,7 @@ function ToggleRow({
 }) {
 	// The same column-visibility hazard as above: the row element must not be cached on `item`.
 	'use no memo';
-	const t = useT();
-	const { expanded, toggle } = useRowExpansion(item, table);
-	// The row's name when it is the only control (the Actions column hidden).
-	return (
-		<DataTableRow
-			item={item}
-			testID={testID}
-			onPress={toggle}
-			accessibilityLabel={
-				expanded
-					? t('products.hide_variations', { _: 'Hide variations' })
-					: t('products.show_variations', { _: 'Show variations' })
-			}
-		/>
-	);
+	const { toggle } = useRowExpansion(item, table);
+	// No button name: the row holds inline controls (the name opener), which may not nest in one.
+	return <DataTableRow item={item} testID={testID} onPress={toggle} />;
 }

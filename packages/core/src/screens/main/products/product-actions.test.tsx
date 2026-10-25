@@ -15,7 +15,8 @@ import {
 
 const mockEngine = { id: 'engine' };
 const mockRequestServerDelete = jest.fn(async (..._args: unknown[]) => ({ annihilated: true }));
-const mockRefresh = jest.fn(async (..._args: unknown[]) => undefined);
+// The engine's answer: true when the store's copy was applied.
+const mockRefresh = jest.fn(async (..._args: unknown[]) => true);
 let mockCanDelete = true;
 
 jest.mock('@wcpos/query', () => ({
@@ -72,12 +73,8 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 
 type Kind = 'product' | 'variation';
 const record = (id?: number) =>
-	// Every read of the latest copy is a new revision: the refresh landed.
-	({
-		uuid: 'uuid-1',
-		payload: { id, name: 'Hoodie' },
-		getLatest: () => ({}),
-	}) as unknown as EngineRecord<'products'> & EngineRecord<'variations'>;
+	({ uuid: 'uuid-1', payload: { id, name: 'Hoodie' } }) as unknown as EngineRecord<'products'> &
+		EngineRecord<'variations'>;
 
 // Wired the way the edit forms wire the footer and the dialog.
 function Harness({
@@ -162,11 +159,10 @@ describe.each([
 		expect(onSynced).toHaveBeenCalledTimes(1);
 	});
 
-	it('a refresh that resolves without applying the row keeps what the cashier typed', async () => {
+	it('a refresh that settles without applying the row keeps what the cashier typed', async () => {
 		const onSynced = jest.fn();
-		const latest = {};
-		const unchanged = { ...record(42), getLatest: () => latest } as ReturnType<typeof record>;
-		render(<Harness kind={kind} item={unchanged} onDeleted={jest.fn()} onSynced={onSynced} />);
+		mockRefresh.mockResolvedValueOnce(false);
+		render(<Harness kind={kind} item={record(42)} onDeleted={jest.fn()} onSynced={onSynced} />);
 		await act(async () => fireEvent.click(screen.getByTestId(`${kind}-modal-sync`)));
 		expect(onSynced).not.toHaveBeenCalled();
 	});

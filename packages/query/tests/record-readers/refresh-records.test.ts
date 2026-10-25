@@ -64,8 +64,8 @@ describe('refreshRecordByWooId', () => {
 	it.each(['customers', 'orders', 'products', 'variations'] as const)(
 		'forces one %s record refresh and holds the handle until ready',
 		async (collection) => {
-			let finish!: () => void;
-			const ready = new Promise<void>((resolve) => {
+			let finish!: (outcome: unknown) => void;
+			const ready = new Promise<unknown>((resolve) => {
 				finish = resolve;
 			});
 			const release = jest.fn();
@@ -84,11 +84,27 @@ describe('refreshRecordByWooId', () => {
 				forceRefresh: true,
 			});
 			expect(release).not.toHaveBeenCalled();
-			finish();
-			await expect(pending).resolves.toBeUndefined();
+			finish({ action: 'fetched', appliedRecordIds: ['37'], missingRecordIds: [], reason: '' });
+			await expect(pending).resolves.toBe(true);
 			expect(release).toHaveBeenCalledTimes(1);
 		}
 	);
+
+	it.each([
+		['kept back for pending local work', { action: 'fetched', appliedRecordIds: [] }],
+		['served from the device', { action: 'serve-local' }],
+		['released', { action: 'released' }],
+	])('answers false when the record was %s', async (_case, outcome) => {
+		const engine = {
+			require: () => ({
+				ready: Promise.resolve({ missingRecordIds: [], reason: '', ...outcome }),
+				release: jest.fn(),
+			}),
+		} as unknown as RxdbSyncEngine;
+		await expect(
+			refreshRecordByWooId(engine, { id: 'refresh', collection: 'customers', wooId: 37 })
+		).resolves.toBe(false);
+	});
 
 	it('releases the handle and forwards readiness failure', async () => {
 		const error = new Error('refresh failed');

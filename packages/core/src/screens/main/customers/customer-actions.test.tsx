@@ -9,7 +9,8 @@ import { DeleteCustomerDialog, useCustomerActions } from './customer-actions';
 
 const mockEngine = { id: 'engine' };
 const mockRequestServerDelete = jest.fn(async (..._args: unknown[]) => ({ annihilated: true }));
-const mockRefresh = jest.fn(async (..._args: unknown[]) => undefined);
+// The engine's answer: true when the store's copy was applied.
+const mockRefresh = jest.fn(async (..._args: unknown[]) => true);
 let mockCanDelete = true;
 
 jest.mock('@wcpos/query', () => ({
@@ -73,11 +74,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 
 const record = (id?: number) =>
-	// Every read of the latest copy is a new revision: the refresh landed.
-	({
-		...{ uuid: 'uuid-1', payload: { id, first_name: 'Jane' } },
-		getLatest: () => ({}),
-	}) as unknown as ReadonlyEngineRecord<'customers'>;
+	({ uuid: 'uuid-1', payload: { id, first_name: 'Jane' } }) as ReadonlyEngineRecord<'customers'>;
 
 // Wired the way `edit/form.tsx` wires the footer and the dialog.
 function Harness({
@@ -176,13 +173,10 @@ it('a refresh that lands hands the form the store copy; a failed one does not', 
 	expect(onSynced).toHaveBeenCalledTimes(1);
 });
 
-it('a refresh that resolves without applying the row keeps what the cashier typed', async () => {
+it('a refresh that settles without applying the row keeps what the cashier typed', async () => {
 	const onSynced = jest.fn();
-	const latest = {};
-	const unchanged = { ...record(42), getLatest: () => latest } as unknown as ReturnType<
-		typeof record
-	>;
-	render(<Harness customer={unchanged} onDeleted={jest.fn()} onSynced={onSynced} />);
+	mockRefresh.mockResolvedValueOnce(false);
+	render(<Harness customer={record(42)} onDeleted={jest.fn()} onSynced={onSynced} />);
 	await act(async () => fireEvent.click(screen.getByTestId('sync')));
 	expect(onSynced).not.toHaveBeenCalled();
 });

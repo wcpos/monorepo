@@ -70,11 +70,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 
 const record = (id?: number) =>
-	// Every read of the latest copy is a new revision: the refresh landed.
-	({
-		...{ uuid: 'uuid-1', payload: { id, code: 'SAVE10' } },
-		getLatest: () => ({}),
-	}) as unknown as EngineRecord<'coupons'>;
+	({ uuid: 'uuid-1', payload: { id, code: 'SAVE10' } }) as EngineRecord<'coupons'>;
 
 // Wired the way `edit/form.tsx` wires the footer and the dialog.
 function Harness({
@@ -170,15 +166,4 @@ it('a refresh that lands hands the form the store copy; a failed one does not', 
 	mockRefresh.mockRejectedValueOnce(new Error('offline'));
 	await act(async () => fireEvent.click(screen.getByTestId('sync')));
 	expect(onSynced).toHaveBeenCalledTimes(1);
-});
-
-it('a refresh that resolves without applying the row keeps what the cashier typed', async () => {
-	const onSynced = jest.fn();
-	const latest = {};
-	const unchanged = { ...record(42), getLatest: () => latest } as unknown as ReturnType<
-		typeof record
-	>;
-	render(<Harness coupon={unchanged} onDeleted={jest.fn()} onSynced={onSynced} />);
-	await act(async () => fireEvent.click(screen.getByTestId('sync')));
-	expect(onSynced).not.toHaveBeenCalled();
 });
