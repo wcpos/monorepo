@@ -135,13 +135,15 @@ describe('buildReceiptData', () => {
 		const result = buildReceiptData(
 			{
 				...mockOrder,
-				needs_payment: true,
+				status: 'pending',
+				needs_payment: false,
 				payment_url: 'https://example.test/checkout/order-pay/1234',
 			},
 			mockStore
 		);
 
 		expect(result.order.needs_payment).toBe(true);
+		expect(result.payments).toEqual([]);
 		expect(result.order.payment_url).toBe('https://example.test/checkout/order-pay/1234');
 	});
 
@@ -149,7 +151,25 @@ describe('buildReceiptData', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 
 		expect(result.order.needs_payment).toBe(false);
+		expect(result.payments).toHaveLength(1);
 		expect(result.order.payment_url).toBe('');
+	});
+
+	it('omits payment for an unsaved pos-open cart', () => {
+		const { id, number, ...unsavedOrder } = mockOrder;
+		const result = buildReceiptData({ ...unsavedOrder, status: 'pos-open' }, mockStore);
+
+		expect(result.order.id).toBe(0);
+		expect(result.order.number).toBe('');
+		expect(result.order.needs_payment).toBe(true);
+		expect(result.payments).toEqual([]);
+	});
+
+	it('does not need payment for a pending order with a zero total', () => {
+		const result = buildReceiptData({ ...mockOrder, status: 'pending', total: '0.00' }, mockStore);
+
+		expect(result.order.needs_payment).toBe(false);
+		expect(result.payments).toHaveLength(1);
 	});
 
 	it('emits a render-time order.printed datetime', () => {

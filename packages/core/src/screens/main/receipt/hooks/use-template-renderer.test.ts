@@ -105,6 +105,20 @@ describe('useTemplateRenderer', () => {
 		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
 	});
 
+	it('keeps the chosen template when Sync assigns a server id to the same record', () => {
+		mockUseActiveTemplates.mockReturnValue([{ id: 1 }, { id: 2 }] as never);
+		const { result, rerender } = renderHook(
+			({ orderId }: { orderId: number | undefined }) =>
+				useTemplateRenderer({ ...defaultOptions, orderId, orderUuid: 'local-order' }),
+			{ initialProps: { orderId: undefined as number | undefined } }
+		);
+
+		act(() => result.current.setSelectedTemplateId(2));
+		expect(result.current.selectedTemplateId).toBe(2);
+		rerender({ orderId: 42 });
+		expect(result.current.selectedTemplateId).toBe(2);
+	});
+
 	describe('receiptData selection', () => {
 		it('uses API data when available', () => {
 			const apiData = { source: 'api', meta: { order_number: '123' } };

@@ -51,6 +51,20 @@ describe('useReceiptData', () => {
 		}
 	);
 
+	it('requests the receipt only after an unsaved order receives its server id', async () => {
+		mockGet.mockResolvedValueOnce({ data: { data: { order_id: 42 } } });
+		const { result, rerender } = renderHook(
+			({ orderId }: { orderId: number | undefined }) => useReceiptData({ orderId }),
+			{ initialProps: { orderId: undefined as number | undefined } }
+		);
+
+		expect(mockGet).not.toHaveBeenCalled();
+		rerender({ orderId: 42 });
+		await waitFor(() => expect(result.current.data).toEqual({ order_id: 42 }));
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/receipts/42', { params: { mode: 'live' } });
+	});
+
 	it('does not expose the previous response while the next order is pending', async () => {
 		const nextResponse = createDeferred<Record<string, unknown>>();
 		mockGet

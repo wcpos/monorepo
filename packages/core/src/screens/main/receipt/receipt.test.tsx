@@ -130,6 +130,10 @@ jest.mock('./email', () => ({
 	EmailForm: () => <div>Email form</div>,
 }));
 
+jest.mock('../hooks/use-sync-order', () => ({
+	useSyncOrder: () => ({ sync: jest.fn(), loading: false, disabled: false }),
+}));
+
 jest.mock('./mismatch-badge', () => ({
 	MismatchBadge: () => null,
 }));
@@ -173,7 +177,6 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({}),
 }));
 
-// No sale awaits the store here (its own suites cover the mark).
 let mockAwaiting: boolean | null = false;
 jest.mock('../pos/checkout/use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -202,6 +205,8 @@ jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 }));
 
 jest.mock('@wcpos/printer', () => ({
+	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
+		.isOrderBasedCloudProfile,
 	usePrint: (options: { onBeforePrint?: () => void }) => ({
 		print: async () => {
 			options.onBeforePrint?.();
@@ -391,11 +396,41 @@ describe('Receipt PDF download action', () => {
 describe('Receipt email action', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockAwaiting = false;
 		mockSuspenseValue = mockOrder;
 		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 	});
 
 	const emailButton = () => screen.getByTestId('receipt-email-button') as HTMLButtonElement;
+
+	it('offers Sync order when the order has no server id', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.getByTestId('receipt-sync-order-button').textContent).toBe('pos_cart.sync_order');
+	});
+
+	it('does not offer Sync order when the order has a server id', () => {
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.queryByTestId('receipt-sync-order-button')).toBeNull();
+	});
+
+	it('disables Email when the order has no server id', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(true);
+	});
+
+	it('leaves replay in charge of an order without a server id awaiting the store', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		mockAwaiting = true;
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.queryByTestId('receipt-sync-order-button')).toBeNull();
+		expect(emailButton().disabled).toBe(false);
+	});
 
 	it('opens the email dialog when the store is reachable', () => {
 		render(<Receipt resource={{} as never} />);
