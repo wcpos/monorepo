@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
+import { HStack } from '@wcpos/components/hstack';
+import { SavedMark } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -21,7 +23,10 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{t('settings.bluetooth_printer')}</Text>
+			<HStack className="justify-between">
+				<Text className="text-sm font-medium">{t('settings.bluetooth_printer')}</Text>
+				<SavedMark name="address" label={t('settings.saved')} />
+			</HStack>
 			{devices.length === 0 && (
 				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
 			)}

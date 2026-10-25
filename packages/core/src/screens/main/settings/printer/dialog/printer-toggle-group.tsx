@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { FormField, FormSwitch } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { FormField, FormSwitch, SavedMark } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
@@ -16,33 +17,42 @@ export function PrinterToggleGroup({ form }: { form: UseFormReturn<PrinterFormVa
 				control={form.control}
 				name="autoCut"
 				render={({ field }) => (
-					<FormSwitch
-						testID="add-printer-autocut-toggle"
-						label={t('settings.auto_cut_paper')}
-						{...field}
-					/>
+					<HStack className="items-center justify-between">
+						<FormSwitch
+							testID="add-printer-autocut-toggle"
+							label={t('settings.auto_cut_paper')}
+							{...field}
+						/>
+						<SavedMark name="autoCut" label={t('settings.saved')} />
+					</HStack>
 				)}
 			/>
 			<FormField
 				control={form.control}
 				name="autoOpenDrawer"
 				render={({ field }) => (
-					<FormSwitch
-						testID="add-printer-autodrawer-toggle"
-						label={t('settings.auto_open_cash_drawer')}
-						{...field}
-					/>
+					<HStack className="items-center justify-between">
+						<FormSwitch
+							testID="add-printer-autodrawer-toggle"
+							label={t('settings.auto_open_cash_drawer')}
+							{...field}
+						/>
+						<SavedMark name="autoOpenDrawer" label={t('settings.saved')} />
+					</HStack>
 				)}
 			/>
 			<FormField
 				control={form.control}
 				name="isDefault"
 				render={({ field }) => (
-					<FormSwitch
-						testID="add-printer-default-toggle"
-						label={t('settings.set_as_default_printer')}
-						{...field}
-					/>
+					<HStack className="items-center justify-between">
+						<FormSwitch
+							testID="add-printer-default-toggle"
+							label={t('settings.set_as_default_printer')}
+							{...field}
+						/>
+						<SavedMark name="isDefault" label={t('settings.saved')} />
+					</HStack>
 				)}
 			/>
 		</VStack>

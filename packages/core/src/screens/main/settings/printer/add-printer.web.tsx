@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
+import { SavedFieldProvider } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { HStack } from '@wcpos/components/hstack';
@@ -43,21 +44,28 @@ const WEB_DEFAULTS: PrinterFormValues = { ...DEFAULT_FORM_VALUES, vendor: 'epson
 interface PrinterDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSave: () => void;
+	onClose: () => void;
 	printer?: PrinterProfile;
 	printerCount?: number;
 	prefill?: PrinterDialogPrefill;
 }
 
 export function PrinterDialog(props: PrinterDialogProps) {
-	if (!props.printer) return props.open ? <PrinterSetupDialog {...props} platform="web" /> : null;
-	return <EditPrinterDialog {...props} />;
+	if (!props.printer)
+		return props.open ? (
+			<PrinterSetupDialog {...props} onSave={props.onClose} platform="web" />
+		) : null;
+	return (
+		<SavedFieldProvider>
+			<EditPrinterDialog {...props} />
+		</SavedFieldProvider>
+	);
 }
 
 function EditPrinterDialog({
 	open,
 	onOpenChange,
-	onSave,
+	onClose,
 	printer,
 	printerCount = 0,
 	prefill,
@@ -67,10 +75,8 @@ function EditPrinterDialog({
 	const { connectUsbDevice, connectBluetoothDevice } = discovery;
 	const {
 		form,
-		isEditing,
 		testLoading,
 		drawerLoading,
-		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
@@ -78,8 +84,7 @@ function EditPrinterDialog({
 		setManualVendor,
 		handleOpenDrawer,
 		handleTestPrint,
-		handleSave,
-		handleSaveAnyway,
+		handleClose,
 	} = usePrinterDialogForm({
 		open,
 		schema: webPrinterSchema,
@@ -88,7 +93,7 @@ function EditPrinterDialog({
 		printer,
 		prefill,
 		printerCount,
-		onSave,
+		onClose,
 	});
 
 	const vendor = useWatch({
@@ -211,8 +216,10 @@ function EditPrinterDialog({
 		<PrinterDialogLayout
 			form={form}
 			open={open}
-			onOpenChange={onOpenChange}
-			isEditing={isEditing}
+			onOpenChange={(next) => {
+				if (!next) void handleClose();
+				else onOpenChange(next);
+			}}
 			banner={banner}
 			connectionSection={
 				<>
@@ -262,16 +269,12 @@ function EditPrinterDialog({
 			errorSection={<TestPrintError error={testError} />}
 			footer={
 				<PrinterDialogFooter
-					isEditing={isEditing}
-					showSaveAnyway={!!testError}
 					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}
 					drawerLoading={drawerLoading}
-					saveLoading={saveLoading}
 					onOpenDrawer={handleOpenDrawer}
 					onTestPrint={handleTestPrint}
-					onSave={form.handleSubmit(handleSave)}
-					onSaveAnyway={handleSaveAnyway}
+					onClose={handleClose}
 				/>
 			}
 		/>

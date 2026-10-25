@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormSelect } from '@wcpos/components/form';
+import { FormField, FormItem, FormLabel, FormSelect, SavedMark } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -52,10 +51,13 @@ export function AdvancedSettings({
 								control={form.control}
 								name="vendor"
 								render={({ field: { value, onChange, ...rest } }) => (
-									<View className="flex-1">
+									<FormItem className="flex-1">
+										<HStack className="justify-between">
+											<FormLabel>{t('settings.printer_vendor')}</FormLabel>
+											<SavedMark name="vendor" label={t('settings.saved')} />
+										</HStack>
 										<FormSelect
 											customComponent={(p: any) => <VendorSelect {...p} options={vendorOptions} />}
-											label={t('settings.printer_vendor')}
 											value={value}
 											onChange={(v: string) => {
 												onVendorManualChange?.();
@@ -63,7 +65,7 @@ export function AdvancedSettings({
 											}}
 											{...rest}
 										/>
-									</View>
+									</FormItem>
 								)}
 							/>
 						</HStack>
@@ -73,30 +75,36 @@ export function AdvancedSettings({
 							control={form.control}
 							name="language"
 							render={({ field: { value, onChange, ...rest } }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('settings.printer_language')}</FormLabel>
+										<SavedMark name="language" label={t('settings.saved')} />
+									</HStack>
 									<FormSelect
 										customComponent={LanguageSelect}
-										label={t('settings.printer_language')}
 										value={value}
 										onChange={onChange}
 										{...rest}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="columns"
 							render={({ field: { value, onChange, ...rest } }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('settings.printer_text_width')}</FormLabel>
+										<SavedMark name="columns" label={t('settings.saved')} />
+									</HStack>
 									<FormSelect
 										customComponent={PaperWidthSelect}
-										label={t('settings.printer_text_width')}
 										value={value != null ? String(value) : undefined}
 										onChange={(val: string) => onChange(Number(val))}
 										{...rest}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 					</HStack>
@@ -105,13 +113,18 @@ export function AdvancedSettings({
 							control={form.control}
 							name="codePage"
 							render={({ field: { value, onChange, ...rest } }) => (
-								<FormSelect
-									customComponent={CodePageSelect}
-									label={t('settings.printer_code_page')}
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
+								<FormItem>
+									<HStack className="justify-between">
+										<FormLabel>{t('settings.printer_code_page')}</FormLabel>
+										<SavedMark name="codePage" label={t('settings.saved')} />
+									</HStack>
+									<FormSelect
+										customComponent={CodePageSelect}
+										value={value}
+										onChange={onChange}
+										{...rest}
+									/>
+								</FormItem>
 							)}
 						/>
 					)}

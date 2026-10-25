@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { HStack } from '@wcpos/components/hstack';
 import {
 	Dialog,
 	DialogBody,
@@ -8,7 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput } from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
 import { PrinterToggleGroup } from './printer-toggle-group';
@@ -22,11 +23,10 @@ interface PrinterDialogLayoutProps {
 	form: UseFormReturn<PrinterFormValues>;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	isEditing: boolean;
 	banner?: React.ReactNode;
 	connectionSection: React.ReactNode;
 	advancedSettings: React.ReactNode;
-	/** Test/save failure alert, rendered inside the form body above the footer. */
+	/** Test failure alert, rendered inside the form body above the footer. */
 	errorSection?: React.ReactNode;
 	footer: React.ReactNode;
 }
@@ -35,7 +35,6 @@ export function PrinterDialogLayout({
 	form,
 	open,
 	onOpenChange,
-	isEditing,
 	banner,
 	connectionSection,
 	advancedSettings,
@@ -47,9 +46,7 @@ export function PrinterDialogLayout({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side="right" size="2xl" closeLabel={t('common.close')}>
 				<DialogHeader>
-					<DialogTitle>
-						{isEditing ? t('settings.edit_printer') : t('settings.add_printer')}
-					</DialogTitle>
+					<DialogTitle>{t('settings.edit_printer')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<Form {...form}>
@@ -60,12 +57,17 @@ export function PrinterDialogLayout({
 								control={form.control}
 								name="name"
 								render={({ field }) => (
-									<FormInput
-										testID="add-printer-name-input"
-										label={t('settings.printer_name')}
-										placeholder={t('settings.printer_name_placeholder')}
-										{...field}
-									/>
+									<FormItem>
+										<HStack className="justify-between">
+											<FormLabel>{t('settings.printer_name')}</FormLabel>
+											<SavedMark name="name" label={t('settings.saved')} />
+										</HStack>
+										<FormInput
+											testID="add-printer-name-input"
+											placeholder={t('settings.printer_name_placeholder')}
+											{...field}
+										/>
+									</FormItem>
 								)}
 							/>
 							{connectionSection}

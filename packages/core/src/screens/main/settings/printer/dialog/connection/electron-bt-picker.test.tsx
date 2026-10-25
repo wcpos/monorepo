@@ -8,6 +8,7 @@ import { ElectronBtPicker } from './electron-bt-picker';
 
 // ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
 // ListItem reads the pointer, and this suite's react-native mock has no Platform.
+jest.mock('@wcpos/components/form', () => ({ SavedMark: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('react-native', () => ({

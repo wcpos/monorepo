@@ -3,6 +3,8 @@ import * as React from 'react';
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Toast } from '@wcpos/components/toast';
 import {
 	canPrintLane,
@@ -80,7 +82,7 @@ interface UsePrinterDialogFormArgs {
 	prefill?: PrinterDialogPrefill;
 	cloudEnqueueFactory?: PrinterServiceOptions['cloudEnqueueFactory'];
 	printerCount: number;
-	onSave: () => void;
+	onClose: () => void;
 }
 
 export function usePrinterDialogForm({
@@ -92,16 +94,15 @@ export function usePrinterDialogForm({
 	prefill,
 	cloudEnqueueFactory,
 	printerCount,
-	onSave,
+	onClose,
 }: UsePrinterDialogFormArgs) {
 	const t = useT();
 	const { storeDB } = useStoreSession();
 	const printerService = React.useMemo(() => new PrinterService(), []);
-	const isEditing = !!printer;
+	const markSaved = useMarkSaved();
 
 	const [testLoading, setTestLoading] = React.useState(false);
 	const [drawerLoading, setDrawerLoading] = React.useState(false);
-	const [saveLoading, setSaveLoading] = React.useState(false);
 	const [testError, setTestError] = React.useState<TestPrintFailure | null>(null);
 	const [probing, setProbing] = React.useState(false);
 	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
@@ -390,49 +391,45 @@ export function usePrinterDialogForm({
 		[storeDB, printer, prefill]
 	);
 
-	const handleSave = React.useCallback(
-		async (data: PrinterFormValues) => {
-			setSaveLoading(true);
-			setTestError(null);
-			try {
-				await printerService.testPrint(buildProfile(data), { openDrawer: false });
-			} catch (err) {
-				logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
-				setTestError(toTestPrintFailure(err));
-				setSaveLoading(false);
-				return;
+	// The profile is written whole and `savePrinterProfile` patches the document non-incrementally,
+	// so two writes in flight (a picker sets several fields at once) would race on one revision:
+	// each write waits for the one before it.
+	const writeQueue = React.useRef<Promise<unknown>>(Promise.resolve());
+	const { flush } = useFormChangeHandler({
+		form,
+		onChange: async (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0];
+			const result = schema.safeParse(form.getValues());
+			if (!result.success) {
+				void form.trigger();
+				return false;
 			}
+			const write = writeQueue.current.then(() => persistProfile(result.data));
+			writeQueue.current = write.catch(() => undefined);
 			try {
-				await persistProfile(data);
-				form.reset();
-				Toast.show({ title: t('settings.printer_saved'), type: 'success' });
-				onSave();
-			} finally {
-				setSaveLoading(false);
+				await write;
+			} catch (error) {
+				printerLogger.error('Failed to save printer profile', {
+					showToast: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					context: { printerId: printer?.id, root, error: getErrorMessage(error) },
+				});
+				return false;
 			}
+			markSaved([root]);
+			return true;
 		},
-		[buildProfile, printerService, persistProfile, form, onSave, t]
-	);
+	});
 
-	const handleSaveAnyway = React.useCallback(async () => {
-		const result = schema.safeParse(form.getValues());
-		if (!result.success) return;
-		setSaveLoading(true);
-		try {
-			await persistProfile(result.data);
-			form.reset();
-			onSave();
-		} finally {
-			setSaveLoading(false);
-		}
-	}, [form, schema, persistProfile, onSave]);
+	const handleClose = async () => {
+		await flush();
+		onClose();
+	};
 
 	return {
 		form,
-		isEditing,
 		testLoading,
 		drawerLoading,
-		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
@@ -440,7 +437,7 @@ export function usePrinterDialogForm({
 		setManualVendor,
 		handleOpenDrawer,
 		handleTestPrint,
-		handleSave,
-		handleSaveAnyway,
+		flush,
+		handleClose,
 	};
 }

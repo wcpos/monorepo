@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { SavedMark } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import type { BluetoothCandidate } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -57,7 +57,10 @@ export function ElectronBtPicker({
 		</ListItem>
 	);
 	return (
-		<VStack className="gap-2">
+		<View className="relative gap-2">
+			<View className="pointer-events-none absolute top-0 right-0">
+				<SavedMark name="address" label={t('settings.saved')} />
+			</View>
 			{/* An office shows dozens of devices: the list scrolls inside a fixed height so the
 			    dialog's own buttons stay in reach. */}
 			<ScrollView className="max-h-64" contentContainerClassName="gap-2">
@@ -80,6 +83,6 @@ export function ElectronBtPicker({
 					</Text>
 				</Button>
 			)}
-		</VStack>
+		</View>
 	);
 }

@@ -2,12 +2,15 @@ import * as React from 'react';
 
 import { useWatch } from 'react-hook-form';
 
+import { HStack } from '@wcpos/components/hstack';
+import { SavedMark } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { ListItem } from '@wcpos/components/list-item';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { hasTargetKind, type OsPrinterTargetKind } from './discovered-printer-filters';
+import { useT } from '../../../../../../contexts/translations';
 import { RadioDot } from '../../components/radio-dot';
 
 import type { PrinterFormValues } from '../../schema';
@@ -53,6 +56,7 @@ export function OsPrintersSection({
 	loadingText,
 	testIdPrefix,
 }: OsPrintersSectionProps) {
+	const t = useT();
 	const selectedAddress = useWatch({ control: form.control, name: 'address' });
 	const filtered = printers.filter((p) => hasTargetKind(p, targetKind));
 
@@ -65,7 +69,10 @@ export function OsPrintersSection({
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{heading}</Text>
+			<HStack className="justify-between">
+				<Text className="text-sm font-medium">{heading}</Text>
+				<SavedMark name="address" label={t('settings.saved')} />
+			</HStack>
 			<Text className="text-muted-foreground text-xs">{hint}</Text>
 			{scanning && <Text className="text-muted-foreground text-xs">{loadingText}</Text>}
 			{!scanning && filtered.length === 0 && (

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Progress } from '@wcpos/components/progress';
@@ -80,12 +80,13 @@ export function NetworkFields({
 						control={form.control}
 						name="address"
 						render={({ field }) => (
-							<FormInput
-								testID="add-printer-ip-input"
-								label={t('settings.printer_address')}
-								placeholder="192.168.1.100"
-								{...field}
-							/>
+							<FormItem>
+								<HStack className="justify-between">
+									<FormLabel>{t('settings.printer_address')}</FormLabel>
+									<SavedMark name="address" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="add-printer-ip-input" placeholder="192.168.1.100" {...field} />
+							</FormItem>
 						)}
 					/>
 				</VStack>
@@ -94,13 +95,18 @@ export function NetworkFields({
 						control={form.control}
 						name="port"
 						render={({ field: { value, ...rest } }) => (
-							<FormInput
-								testID="add-printer-port-input"
-								label={t('settings.printer_port')}
-								type="numeric"
-								value={value != null ? String(value) : undefined}
-								{...rest}
-							/>
+							<FormItem>
+								<HStack className="justify-between">
+									<FormLabel>{t('settings.printer_port')}</FormLabel>
+									<SavedMark name="port" label={t('settings.saved')} />
+								</HStack>
+								<FormInput
+									testID="add-printer-port-input"
+									type="numeric"
+									value={value != null ? String(value) : undefined}
+									{...rest}
+								/>
+							</FormItem>
 						)}
 					/>
 				</VStack>

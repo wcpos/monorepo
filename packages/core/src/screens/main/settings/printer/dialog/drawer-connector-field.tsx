@@ -3,7 +3,8 @@ import { View } from 'react-native';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
-import { FormField, FormSelect } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { FormField, FormItem, FormLabel, FormSelect, SavedMark } from '@wcpos/components/form';
 
 import { DrawerConnectorSelect } from '../components/drawer-connector-select';
 import { useT } from '../../../../../contexts/translations';
@@ -22,13 +23,18 @@ export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterForm
 				control={form.control}
 				name="drawerConnector"
 				render={({ field: { value, onChange, ...rest } }) => (
-					<FormSelect
-						customComponent={DrawerConnectorSelect}
-						label={t('settings.drawer_connector')}
-						value={value}
-						onChange={onChange}
-						{...rest}
-					/>
+					<FormItem>
+						<HStack className="justify-between">
+							<FormLabel>{t('settings.drawer_connector')}</FormLabel>
+							<SavedMark name="drawerConnector" label={t('settings.saved')} />
+						</HStack>
+						<FormSelect
+							customComponent={DrawerConnectorSelect}
+							value={value}
+							onChange={onChange}
+							{...rest}
+						/>
+					</FormItem>
 				)}
 			/>
 		</View>

@@ -312,7 +312,7 @@ export function PrintingSettings() {
 			<PrinterDialog
 				open={dialogOpen}
 				onOpenChange={setDialogOpen}
-				onSave={() => {
+				onClose={() => {
 					setDialogOpen(false);
 					setEditingPrinter(undefined);
 					setPrefilledPrinter(undefined);

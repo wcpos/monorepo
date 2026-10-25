@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useWatch } from 'react-hook-form';
 
+import { SavedFieldProvider } from '@wcpos/components/form';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
@@ -36,7 +37,7 @@ function deriveVendorDefaults(vendor: PrinterFormValues['vendor']): VendorDefaul
 interface PrinterDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSave: () => void;
+	onClose: () => void;
 	printer?: PrinterProfile;
 	printerCount?: number;
 	prefill?: PrinterDialogPrefill;
@@ -44,14 +45,20 @@ interface PrinterDialogProps {
 
 export function PrinterDialog(props: PrinterDialogProps) {
 	if (!props.printer)
-		return props.open ? <PrinterSetupDialog {...props} platform="native" /> : null;
-	return <EditPrinterDialog {...props} />;
+		return props.open ? (
+			<PrinterSetupDialog {...props} onSave={props.onClose} platform="native" />
+		) : null;
+	return (
+		<SavedFieldProvider>
+			<EditPrinterDialog {...props} />
+		</SavedFieldProvider>
+	);
 }
 
 function EditPrinterDialog({
 	open,
 	onOpenChange,
-	onSave,
+	onClose,
 	printer,
 	printerCount = 0,
 	prefill,
@@ -65,10 +72,8 @@ function EditPrinterDialog({
 	} = usePrinterDiscovery();
 	const {
 		form,
-		isEditing,
 		testLoading,
 		drawerLoading,
-		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
@@ -76,8 +81,7 @@ function EditPrinterDialog({
 		setManualVendor,
 		handleOpenDrawer,
 		handleTestPrint,
-		handleSave,
-		handleSaveAnyway,
+		handleClose,
 	} = usePrinterDialogForm({
 		open,
 		schema: nativePrinterSchema,
@@ -86,7 +90,7 @@ function EditPrinterDialog({
 		printer,
 		prefill,
 		printerCount,
-		onSave,
+		onClose,
 	});
 
 	const connectionType = useWatch({
@@ -142,8 +146,10 @@ function EditPrinterDialog({
 		<PrinterDialogLayout
 			form={form}
 			open={open}
-			onOpenChange={onOpenChange}
-			isEditing={isEditing}
+			onOpenChange={(next) => {
+				if (!next) void handleClose();
+				else onOpenChange(next);
+			}}
 			connectionSection={
 				<>
 					<ConnectionTypeSegmented
@@ -171,16 +177,12 @@ function EditPrinterDialog({
 			errorSection={<TestPrintError error={testError} />}
 			footer={
 				<PrinterDialogFooter
-					isEditing={isEditing}
-					showSaveAnyway={!!testError}
 					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}
 					drawerLoading={drawerLoading}
-					saveLoading={saveLoading}
 					onOpenDrawer={handleOpenDrawer}
 					onTestPrint={handleTestPrint}
-					onSave={form.handleSubmit(handleSave)}
-					onSaveAnyway={handleSaveAnyway}
+					onClose={handleClose}
 				/>
 			}
 		/>
