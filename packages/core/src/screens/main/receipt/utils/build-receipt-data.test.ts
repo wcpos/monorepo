@@ -127,25 +127,45 @@ describe('buildReceiptData', () => {
 		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
-	it('maps order payment-state fields from order', () => {
+	it('a payable order needs payment and carries no payment row', () => {
 		const result = buildReceiptData(
 			{
 				...mockOrder,
-				needs_payment: true,
+				status: 'pending',
+				needs_payment: false,
 				payment_url: 'https://example.test/checkout/order-pay/1234',
 			},
 			mockStore
 		);
 
 		expect(result.order.needs_payment).toBe(true);
+		expect(result.payments).toEqual([]);
 		expect(result.order.payment_url).toBe('https://example.test/checkout/order-pay/1234');
 	});
 
-	it('defaults order payment-state fields when omitted', () => {
+	it('a completed order does not need payment and keeps its payment row', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 
 		expect(result.order.needs_payment).toBe(false);
+		expect(result.payments).toHaveLength(1);
 		expect(result.order.payment_url).toBe('');
+	});
+
+	it('an order never pushed (pos-open, no id, no number) needs payment and carries no payment row', () => {
+		const { id, number, ...unsavedOrder } = mockOrder;
+		const result = buildReceiptData({ ...unsavedOrder, status: 'pos-open' }, mockStore);
+
+		expect(result.order.id).toBe(0);
+		expect(result.order.number).toBe('');
+		expect(result.order.needs_payment).toBe(true);
+		expect(result.payments).toEqual([]);
+	});
+
+	it('a pending order with a zero total does not need payment', () => {
+		const result = buildReceiptData({ ...mockOrder, status: 'pending', total: '0.00' }, mockStore);
+
+		expect(result.order.needs_payment).toBe(false);
+		expect(result.payments).toHaveLength(1);
 	});
 
 	it('emits a render-time order.printed datetime', () => {
