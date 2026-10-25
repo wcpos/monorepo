@@ -145,7 +145,7 @@ function EditOrderFormFields({ order }: Props) {
 	const { flush } = useRecordAutosave({
 		form,
 		stored: () => order.getLatest().payload,
-		save: (patch) => saveOrderFields(order, patch),
+		persist: (data) => saveOrderFields(order, data),
 		before: (root) => {
 			if (READ_ONLY_ROOTS.includes(root)) return false;
 			// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.

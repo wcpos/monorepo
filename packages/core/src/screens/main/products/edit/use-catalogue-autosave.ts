@@ -24,7 +24,7 @@ export function useCatalogueAutosave<T extends FieldValues>({
 		form,
 		readOnly,
 		stored: () => record.getLatest().payload,
-		save: (patch) => saveCatalogueFields(record, patch),
+		persist: (data) => saveCatalogueFields(record, data),
 		wire: (root, value) =>
 			root === 'tax_class'
 				? taxClassToWire(value as string | null | undefined)

@@ -61,8 +61,8 @@ function EditCustomerFormFields({ customer }: Props) {
 		form,
 		readOnly,
 		stored: () => customer.getLatest().payload,
-		save: (patch) => saveCustomerFields(customer, patch),
-		patch: async (root, value) => {
+		persist: (data) => saveCustomerFields(customer, data),
+		compose: async (root, value) => {
 			const identity = root === 'first_name' || root === 'last_name' || root === 'email';
 			const mirrored = identity ? String(form.getValues(`billing.${root}`) ?? '') : null;
 			const follows =

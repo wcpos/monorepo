@@ -45,7 +45,7 @@ function EditCouponFormFields({ coupon }: Props) {
 		form,
 		readOnly,
 		stored: () => coupon.getLatest().payload,
-		save: (patch) => saveCouponFields(coupon, patch),
+		persist: (data) => saveCouponFields(coupon, data),
 	});
 	// Sync flushes pending edits before taking the store's copy.
 	const actions = useCouponActions(coupon, {

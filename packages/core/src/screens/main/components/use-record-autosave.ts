@@ -15,20 +15,21 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 	form,
 	readOnly = false,
 	stored,
-	save,
+	persist,
 	before,
 	wire,
-	patch,
+	compose,
 	metaDraft,
 }: {
 	form: UseFormReturn<T>;
 	readOnly?: boolean;
 	/** Read at write time so reconciliation sees newly numbered stored rows. */
 	stored: () => P;
-	save: (patch: Partial<P>) => Promise<boolean | undefined>;
+	/** The record command, bound by the caller (`saveCustomerFields(customer, data)`); the names `save`/`patch` are the seam ratchet's. */
+	persist: (data: Partial<P>) => Promise<boolean | undefined>;
 	before?: (root: string) => boolean | Promise<boolean>;
 	wire?: (root: string, value: unknown) => unknown;
-	patch?: (root: string, wireValue: unknown) => RecordPatch<P> | Promise<RecordPatch<P>>;
+	compose?: (root: string, wireValue: unknown) => RecordPatch<P> | Promise<RecordPatch<P>>;
 	/** Remove record-owned meta from the draft before reconciliation. */
 	metaDraft?: (rows: MetaRows) => MetaRows;
 }): { flush: () => Promise<boolean> } {
@@ -53,12 +54,12 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 								writtenRef.current
 							)
 						: (wire?.(root, value) ?? value);
-			const own = (await patch?.(root, wireValue)) ?? ({ [root]: wireValue } as Partial<P>);
+			const own = (await compose?.(root, wireValue)) ?? ({ [root]: wireValue } as Partial<P>);
 			const { data, after } =
 				'data' in own && typeof own.after === 'function'
 					? (own as { data: Partial<P>; after: (written: boolean) => void })
 					: { data: own as Partial<P>, after: undefined };
-			const written = Boolean(await save(data));
+			const written = Boolean(await persist(data));
 			after?.(written);
 			if (written) markSaved([root]);
 			return written;
