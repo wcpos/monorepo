@@ -80,7 +80,7 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		await dialog.getByTestId('customer-first-name-input').fill(probe);
 		await dialog.getByTestId('customer-last-name-input').fill('Probe');
 		await dialog.getByTestId('customer-email-input').fill(`${probe}@example.com`);
-		await dialog.getByTestId('customer-form-save').click();
+		await dialog.getByTestId('customer-form-add').click();
 
 		// The cart attaches the customer from its local record without waiting
 		// for the Woo id (#1523), so the dialog closing is the enqueue and the

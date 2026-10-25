@@ -38,18 +38,31 @@ export const customerFormSchema = z.object({
 /**
  *
  */
+export type CustomerFormValues = z.infer<typeof customerFormSchema>;
+
+/** Billing identity filled from the top-level fields when empty (ledger line 3); the creation screens apply it on submit. */
+export function fillBillingFromIdentity(data: CustomerFormValues): CustomerFormValues {
+	return {
+		...data,
+		billing: {
+			...data.billing,
+			first_name: data.billing?.first_name || data.first_name || '',
+			last_name: data.billing?.last_name || data.last_name || '',
+			email: data.billing?.email || data.email || '',
+		},
+	};
+}
+
 interface CustomerFormProps {
 	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof customerFormSchema>>>;
-	onClose: () => void;
-	onSubmit: (data: z.infer<typeof customerFormSchema>) => void;
-	loading: boolean;
+	footer: React.ReactNode;
 	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
 	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
 	footerLeading?: React.ReactNode;
 }
 
 export function CustomerForm(props: CustomerFormProps) {
-	const { form, onClose, onSubmit, loading, renderLayout, footerLeading } = props;
+	const { form, footer, renderLayout, footerLeading } = props;
 	const t = useT();
 
 	/**
@@ -65,28 +78,6 @@ export function CustomerForm(props: CustomerFormProps) {
 	 * We can check whether the customer has an ID to determine if we are on an edit.
 	 */
 	const hasUsername = !!(form.getValues() as Record<string, unknown>).id;
-
-	/**
-	 * Intercept handleSubmit to populate billing fields if empty.
-	 */
-	const handleSubmit = async (data: z.infer<typeof customerFormSchema>) => {
-		// Create billing object if it doesn't exist
-		if (!data.billing) {
-			data.billing = {};
-		}
-
-		// Populate billing fields with top-level values if they are empty
-		data.billing.first_name = data.billing.first_name || data.first_name || '';
-		data.billing.last_name = data.billing.last_name || data.last_name || '';
-		data.billing.email = data.billing.email || data.email || '';
-
-		onSubmit(data);
-	};
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSubmit);
 
 	/**
 	 *
@@ -203,33 +194,22 @@ export function CustomerForm(props: CustomerFormProps) {
 			</VStack>
 		</Form>
 	);
-	// Siblings, not an HStack: the footer owns the row/column direction per breakpoint.
-	const formActions = (
-		<>
-			<Button testID="customer-form-close" variant="outline" onPress={onClose}>
-				<ButtonText>{t('common.close')}</ButtonText>
-			</Button>
-			<Button testID="customer-form-save" loading={loading} onPress={() => void onSave()}>
-				<ButtonText>{t('common.save')}</ButtonText>
-			</Button>
-		</>
-	);
-	// With record actions, two wrapping groups: the record's on the left, Close/Save on the right.
-	const footer = footerLeading ? (
+	// With record actions, two wrapping groups: the record's on the left, the footer on the right.
+	const footerContent = footerLeading ? (
 		<>
 			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
-			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footer}</View>
 		</>
 	) : (
-		formActions
+		footer
 	);
 
-	if (renderLayout) return renderLayout(body, footer);
+	if (renderLayout) return renderLayout(body, footerContent);
 	return (
 		<>
 			<DialogBody>{body}</DialogBody>
 			<DialogFooter className={footerLeading ? 'flex-wrap justify-between' : undefined}>
-				{footer}
+				{footerContent}
 			</DialogFooter>
 		</>
 	);
