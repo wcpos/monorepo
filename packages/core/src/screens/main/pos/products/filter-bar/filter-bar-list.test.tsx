@@ -87,18 +87,22 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogCancel: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<button data-testid={testID}>{children}</button>
-	),
-	AlertDialogAction: ({
-		children,
-		testID,
-		onPress,
-	}: React.PropsWithChildren<{ testID: string; onPress: () => void }>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
+	// The footer takes confirm/cancel slots (#2954); the stand-in renders them as buttons.
+	AlertDialogFooter: ({
+		confirm,
+		cancel,
+	}: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => (
+		<>
+			{cancel !== false && (
+				<button data-testid={typeof cancel === 'object' ? cancel.testID : undefined}>Cancel</button>
+			)}
+			<button
+				data-testid={confirm.testID}
+				onClick={confirm.onPress as unknown as React.MouseEventHandler}
+			>
+				{confirm.label}
+			</button>
+		</>
 	),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({

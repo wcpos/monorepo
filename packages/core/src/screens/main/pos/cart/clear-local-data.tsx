@@ -3,8 +3,6 @@ import { View } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -13,7 +11,6 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { GateScreen } from '@wcpos/components/gate-screen';
 import { Portal } from '@wcpos/components/portal';
-import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { clearLocalDataNow, scheduleLocalDataReset } from '@wcpos/query/local-data-reset';
 import { useQueryRuntime } from '@wcpos/query';
@@ -114,18 +111,15 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 							{confirmingReset ? describeResetConfirm(confirmingReset, t) : null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="clear-all-local-data-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="clear-all-local-data-confirm"
-							onPress={() => void handleReset()}
-						>
-							<Text>{t('common.clear_all_local_data_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={{ testID: 'clear-all-local-data-cancel' }}
+						confirm={{
+							destructive: true,
+							label: t('common.clear_all_local_data_confirm'),
+							testID: 'clear-all-local-data-confirm',
+							onPress: () => void handleReset(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

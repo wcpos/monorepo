@@ -11,13 +11,7 @@ import {
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -93,16 +87,15 @@ export function AddCoupon() {
 					</ComboboxContent>
 				</Combobox>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					testID="add-coupon-submit"
-					onPress={handleApply}
-					disabled={!selected || isApplying}
-				>
-					{t('common.apply')}
-				</DialogAction>
-			</DialogFooter>
+			<DialogFooter
+				close
+				intent={{
+					label: t('common.apply'),
+					testID: 'add-coupon-submit',
+					onPress: () => void handleApply(),
+					disabled: !selected || isApplying,
+				}}
+			/>
 		</>
 	);
 }

@@ -6,13 +6,7 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -194,16 +188,15 @@ export function AddFee() {
 					/>
 				</HStack>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					disabled={form.formState.isSubmitting}
-					testID="add-to-cart-submit"
-					onPress={() => void onAdd()}
-				>
-					{t('common.add_to_cart')}
-				</DialogAction>
-			</DialogFooter>
+			<DialogFooter
+				close
+				intent={{
+					label: t('common.add_to_cart'),
+					disabled: form.formState.isSubmitting,
+					testID: 'add-to-cart-submit',
+					onPress: () => void onAdd(),
+				}}
+			/>
 		</Form>
 	);
 }

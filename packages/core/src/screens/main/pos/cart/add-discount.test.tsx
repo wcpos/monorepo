@@ -40,7 +40,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogClose: () => null,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	useDialog: () => ({ close: mockClose }),
 }));
 jest.mock('@wcpos/components/form', () => {

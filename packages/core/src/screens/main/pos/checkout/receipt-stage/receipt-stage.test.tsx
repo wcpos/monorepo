@@ -52,7 +52,13 @@ jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoPrintReceipt: mockAutoPrint } }),
 }));
 jest.mock('../../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
-jest.mock('../../../receipt/receipt-actions', () => ({ ReceiptActions: () => null }));
+jest.mock('../../../receipt/receipt-actions', () => ({
+	useReceiptActions: () => ({
+		sync: undefined,
+		choices: [],
+		dialog: null,
+	}),
+}));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
 		methods: [

@@ -6,7 +6,7 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	SavedFieldProvider,
@@ -212,19 +212,19 @@ function EditCartCustomerFields() {
 					</HStack>
 				</VStack>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.close')}</DialogClose>
-				{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
-					<Button
-						testID="cart-address-update-customer"
-						variant="outline"
-						onPress={() => void onUpdateCustomer()}
-						loading={loading}
-					>
-						{t('pos_cart.update_customer_too')}
-					</Button>
-				)}
-			</DialogFooter>
+			<DialogFooter
+				close
+				secondary={
+					customerID != null &&
+					!isGuestCustomer(customerID) &&
+					caps.canEditCustomers && {
+						label: t('pos_cart.update_customer_too'),
+						testID: 'cart-address-update-customer',
+						onPress: () => void onUpdateCustomer(),
+						loading,
+					}
+				}
+			/>
 		</Form>
 	);
 }

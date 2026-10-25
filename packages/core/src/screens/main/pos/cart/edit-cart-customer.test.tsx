@@ -80,9 +80,16 @@ jest.mock('@wcpos/components/dialog', () => ({
 			{children}
 		</button>
 	),
-	DialogClose: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
+	DialogClose: () => <button>common.close</button>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <footer>{children}</footer>,
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return (
+			<footer>
+				<Footer {...props} />
+			</footer>
+		);
+	},
 	useDialog: () => ({ close: mockClose }),
 }));
 

@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 
 import type { ClosureRow } from '@wcpos/database';
 
-import { ReceiptActions } from './receipt/receipt-actions';
+import { useReceiptActions } from './receipt/receipt-actions';
 import { Version } from './components/drawer-content/version';
 import { ClosurePanel } from './reports/closures/closure-panel';
 import { DetailPanel } from './reports/panels/panel';
@@ -271,7 +271,7 @@ it.each([false, true])(
 	'receipt email opens centred and closes independently (phone=%s)',
 	(phone) => {
 		mockPhone = phone;
-		type Props = React.ComponentProps<typeof ReceiptActions>;
+		type Args = Parameters<typeof useReceiptActions>;
 		const doc = {
 			document: null,
 			unsaved: false,
@@ -282,18 +282,23 @@ it.each([false, true])(
 			downloadReceiptPdf: jest.fn(),
 			print: jest.fn(async () => true),
 			printedTo: null,
-		} as unknown as Props['doc'];
-		render(
-			<ReceiptActions
-				doc={doc}
-				order={{} as Props['order']}
-				buttonComponent={({ children, ...props }) => (
-					<Pressable {...props}>
-						{(state) => <span>{typeof children === 'function' ? children(state) : children}</span>}
-					</Pressable>
-				)}
-			/>
-		);
+		} as unknown as Args[0];
+		function ReceiptActionsHost() {
+			const order = {} as Args[1];
+			const { sync, choices, dialog } = useReceiptActions(doc, order);
+			const actions = sync ? [sync, ...choices] : choices;
+			return (
+				<>
+					{actions.map(({ label, icon: _icon, ref: _ref, ...action }) => (
+						<Pressable key={action.testID} {...action}>
+							<span>{label}</span>
+						</Pressable>
+					))}
+					{dialog}
+				</>
+			);
+		}
+		render(<ReceiptActionsHost />);
 		expect(screen.queryByRole('dialog')).toBeNull();
 		fireEvent.click(screen.getByTestId('receipt-email-button'));
 		expect(screen.getByRole('dialog')).toHaveClass('w-96', 'rounded-lg');

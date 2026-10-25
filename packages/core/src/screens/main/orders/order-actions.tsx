@@ -4,8 +4,6 @@ import { useRouter } from 'expo-router';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -157,17 +155,15 @@ export function DeleteOrderDialog({
 							: t('orders.are_you_sure_you_want_to_2')}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-					<AlertDialogAction
-						testID="order-delete-confirm-button"
-						variant="destructive"
-						onPress={onConfirm}
-						disabled={disabled}
-					>
-						{t('common.delete')}
-					</AlertDialogAction>
-				</AlertDialogFooter>
+				<AlertDialogFooter
+					confirm={{
+						destructive: true,
+						label: t('common.delete'),
+						testID: 'order-delete-confirm-button',
+						onPress: onConfirm,
+						disabled,
+					}}
+				/>
 			</AlertDialogContent>
 		</AlertDialog>
 	);

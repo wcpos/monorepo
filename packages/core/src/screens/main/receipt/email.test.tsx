@@ -36,13 +36,14 @@ function createQueue() {
 }
 
 jest.mock('@wcpos/components/dialog', () => ({
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogAction: ({ children, testID, onPress }: PressProps) => (
 		<button data-testid={testID} onClick={onPress} type="button">
 			{children}
 		</button>
 	),
 	DialogClose: ({ children }: Kids) => <span>{children}</span>,
-	DialogFooter: ({ children }: Kids) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('@wcpos/components/form', () => {
 	const actualReact = jest.requireActual<typeof import('react')>('react');

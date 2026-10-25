@@ -5,11 +5,8 @@ import { useRouter } from 'expo-router';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button } from '@wcpos/components/button';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -18,7 +15,7 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogAction, DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Table,
 	TableBody,
@@ -574,17 +571,16 @@ export function RefundOrderForm({ order }: Props) {
 					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
 				</HStack>
 			</DialogBody>
-			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					testID="process-refund-button"
-					asChild
-					disabled={!isValid || storageDegraded || awaitingGateway}
-					onPress={() => setConfirmOpen(true)}
-				>
-					<Button loading={loading || awaitingGateway}>{t('orders.process_refund')}</Button>
-				</DialogAction>
-			</DialogFooter>
+			<DialogFooter
+				close
+				intent={{
+					label: t('orders.process_refund'),
+					testID: 'process-refund-button',
+					disabled: !isValid || storageDegraded || awaitingGateway,
+					onPress: () => setConfirmOpen(true),
+					loading: loading || awaitingGateway,
+				}}
+			/>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>
@@ -597,17 +593,15 @@ export function RefundOrderForm({ order }: Props) {
 							})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="confirm-process-refund-button"
-							onPress={handleSubmit}
-							disabled={loading || storageDegraded || awaitingGateway}
-						>
-							{t('orders.process_refund')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						confirm={{
+							destructive: true,
+							label: t('orders.process_refund'),
+							testID: 'confirm-process-refund-button',
+							onPress: () => void handleSubmit(),
+							disabled: loading || storageDegraded || awaitingGateway,
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</Form>

@@ -35,85 +35,10 @@
   "packages/core/src/screens/main/health/rejected-mutations.tsx": {
     "footer-children": 2
   },
-  "packages/core/src/screens/main/orders/edit/form.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/orders/edit/view.tsx": {
-    "footer-children": 2
-  },
-  "packages/core/src/screens/main/orders/order-actions.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/orders/refund/form.tsx": {
-    "footer-children": 2
-  },
-  "packages/core/src/screens/main/pos/cart/add-coupon.tsx": {
-    "footer-children": 1
-  },
   "packages/core/src/screens/main/pos/cart/add-customer.tsx": {
     "footer-children": 1
   },
-  "packages/core/src/screens/main/pos/cart/add-discount.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/add-fee.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/add-misc-product.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/add-shipping.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/buttons/edit-order-meta/form.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/cells/edit-fee-line/form.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/cells/edit-line-item/form.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/cells/edit-shipping-line/form.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/clear-local-data.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/closure-sheet.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/edit-cart-customer.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/movement-sheet.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/register-panel.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/cart/user-sheet.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/checkout.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/use-confirm.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/products/filter-bar/filter-bar-list.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/pos/products/filter-bar/modal.tsx": {
-    "footer-children": 1
-  },
   "packages/core/src/screens/main/products/product-actions.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/receipt/email.tsx": {
-    "footer-children": 1
-  },
-  "packages/core/src/screens/main/receipt/receipt.tsx": {
     "footer-children": 1
   },
   "packages/core/src/screens/main/settings/customer-display/paired-displays.tsx": {

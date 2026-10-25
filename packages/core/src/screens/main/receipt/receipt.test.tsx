@@ -59,7 +59,8 @@ function TestButton({ children, disabled, loading, onPress, testID }: TestButton
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	Dialog: ({ children, open = true }: React.PropsWithChildren<{ open?: boolean }>) =>
+		open ? <div>{children}</div> : null,
 	DialogAction: (props: TestButtonProps) => <TestButton {...props} />,
 	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogClose: (props: TestButtonProps) => <TestButton {...props} />,
@@ -68,7 +69,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 			{children}
 		</div>
 	),
-	DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
 }));
@@ -408,6 +409,7 @@ describe('Receipt email action', () => {
 		render(<Receipt resource={{} as never} />);
 
 		expect(screen.getByTestId('receipt-sync-order-button').textContent).toBe('pos_cart.sync_order');
+		expect(screen.getByTestId('receipt-close-button').textContent).toBe('Close');
 	});
 
 	it('does not offer Sync order when the order has a server id', () => {
@@ -436,6 +438,8 @@ describe('Receipt email action', () => {
 		render(<Receipt resource={{} as never} />);
 
 		expect(emailButton().disabled).toBe(false);
+		expect(screen.queryByText('Email form')).toBeNull();
+		fireEvent.click(emailButton());
 		expect(screen.getByText('Email form')).toBeTruthy();
 	});
 
@@ -451,6 +455,8 @@ describe('Receipt email action', () => {
 		render(<Receipt resource={{} as never} />);
 
 		expect(emailButton().disabled).toBe(false);
+		expect(screen.queryByText('Email form')).toBeNull();
+		fireEvent.click(emailButton());
 		expect(screen.getByText('Email form')).toBeTruthy();
 	});
 

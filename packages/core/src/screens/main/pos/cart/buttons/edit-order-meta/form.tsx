@@ -7,8 +7,6 @@ import * as z from 'zod';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -412,23 +410,20 @@ export function EditOrderMetaForm({
 						<AlertDialogTitle>{t('pos_cart.send_order_title')}</AlertDialogTitle>
 						<AlertDialogDescription>{t('pos_cart.send_order_description')}</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel
-							testID="order-meta-send-cancel"
-							disabled={loading}
-							onPress={() => setPending(null)}
-						>
-							{t('common.cancel')}
-						</AlertDialogCancel>
-						<AlertDialogAction
-							testID="order-meta-send-confirm"
-							loading={loading}
-							disabled={loading}
-							onPress={handleSend}
-						>
-							{t('common.send')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={{
+							testID: 'order-meta-send-cancel',
+							disabled: loading,
+							onPress: () => setPending(null),
+						}}
+						confirm={{
+							label: t('common.send'),
+							testID: 'order-meta-send-confirm',
+							loading,
+							disabled: loading,
+							onPress: () => void handleSend(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</Form>

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { type TextInputInstance, View } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 import {
 	Dialog,
@@ -265,18 +264,16 @@ export function MovementSheet({
 					{!!error && <Text className="text-destructive text-sm">{error}</Text>}
 					{type !== 'no_sale' && <Keypad rows={keypadRows} onPress={press} fit="tile" />}
 				</DialogBody>
-				<DialogFooter>
-					<Button
-						testID="movement-confirm"
-						size="lg"
-						className="flex-1"
-						loading={busy}
-						disabled={!!invalid}
-						onPress={confirm}
-					>
-						{verb}
-					</Button>
-				</DialogFooter>
+				<DialogFooter
+					size="lg"
+					intent={{
+						label: verb,
+						testID: 'movement-confirm',
+						loading: busy,
+						disabled: !!invalid,
+						onPress: () => void confirm(),
+					}}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

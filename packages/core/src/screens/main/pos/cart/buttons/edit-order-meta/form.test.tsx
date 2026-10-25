@@ -90,7 +90,7 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: mockClose }),
 	DialogBody: mockWrap,
-	DialogFooter: mockWrap,
+	DialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils').DialogFooter,
 	DialogClose: mockButton,
 	DialogAction: mockButton,
 }));
@@ -99,7 +99,8 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 		open ? <>{children}</> : null,
 	AlertDialogContent: mockWrap,
 	AlertDialogHeader: mockWrap,
-	AlertDialogFooter: mockWrap,
+	AlertDialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils')
+		.AlertDialogFooter,
 	AlertDialogTitle: mockWrap,
 	AlertDialogDescription: mockWrap,
 	AlertDialogAction: mockButton,

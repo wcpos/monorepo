@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import type { FooterButton } from '@wcpos/components/dialog';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { AwaitingCustomerStamp } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
@@ -20,12 +20,12 @@ const logger = getLogger(['wcpos', 'orders', 'invoice']);
  * already chosen, so the pane comes up on its helpers (a new attempt replaces the stamp's);
  * *Cancel invoice* names the attempt the store holds, and the order comes back pos-open.
  */
-export function InvoiceActions({
+export function useInvoiceActions({
 	order,
 	stamp,
 }: {
 	order: EngineRecord<'orders'>;
-	stamp: AwaitingCustomerStamp;
+	stamp: AwaitingCustomerStamp | null;
 }) {
 	const t = useT();
 	const { reopen, reopening } = useReopenOrder(order);
@@ -33,6 +33,7 @@ export function InvoiceActions({
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { busy, exclusive } = useExclusive();
 	const runCancel = React.useCallback(async () => {
+		if (!stamp) return;
 		try {
 			const outcome = await gateway.cancel(order, stamp);
 			if (outcome.kind === 'refused') {
@@ -84,31 +85,28 @@ export function InvoiceActions({
 		}
 	}, [gateway, order, stamp, t]);
 	const cancel = () => exclusive('cancel', runCancel);
-	return (
-		<>
-			{/* Destructive sits apart from constructive: a red outline on the left, never filled. */}
-			<Button
-				variant="outline-destructive"
-				className="mr-auto"
-				testID="orders-cancel-invoice"
-				disabled={busy || !online}
-				loading={busy}
-				onPress={() => void cancel()}
-			>
-				<ButtonText>{t('pos_checkout.cancel_invoice')}</ButtonText>
-			</Button>
-			<Button
-				variant="outline"
-				testID="orders-send-again"
-				disabled={busy || reopening}
-				loading={reopening}
-				onPress={() => {
+	if (!stamp) return { destructive: [], secondary: [] };
+	return {
+		destructive: [
+			{
+				label: t('pos_checkout.cancel_invoice'),
+				testID: 'orders-cancel-invoice',
+				disabled: busy || !online,
+				loading: busy,
+				onPress: () => void cancel(),
+			},
+		] satisfies FooterButton[],
+		secondary: [
+			{
+				label: t('pos_checkout.send_again'),
+				testID: 'orders-send-again',
+				disabled: busy || reopening,
+				loading: reopening,
+				onPress: () => {
 					setTenderMethod(order.uuid, stamp.method_id);
 					void reopen();
-				}}
-			>
-				<ButtonText>{t('pos_checkout.send_again')}</ButtonText>
-			</Button>
-		</>
-	);
+				},
+			},
+		] satisfies FooterButton[],
+	};
 }

@@ -52,7 +52,18 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: any) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+	AlertDialogFooter: (props: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter;
+		return (
+			<Footer
+				{...props}
+				confirm={{
+					...props.confirm,
+					disabled: mockEnableRefundActions ? false : props.confirm.disabled,
+				}}
+			/>
+		);
+	},
 	AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
 }));
@@ -105,9 +116,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</button>
 	),
 	DialogClose: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => (
-		<div data-testid="modal-footer">{children}</div>
-	),
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return (
+			<div data-testid="modal-footer">
+				<Footer
+					{...props}
+					intent={{
+						...props.intent,
+						disabled: mockEnableRefundActions ? false : (props.intent || undefined)?.disabled,
+					}}
+				/>
+			</div>
+		);
+	},
 }));
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,

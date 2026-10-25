@@ -30,7 +30,8 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogHeader: Box,
 		AlertDialogTitle: Box,
 		AlertDialogDescription: Box,
-		AlertDialogFooter: Box,
+		AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils')
+			.AlertDialogFooter,
 		AlertDialogAction: Box,
 		AlertDialogCancel: Box,
 	};
@@ -127,7 +128,7 @@ jest.mock('@wcpos/components/dialog', () => {
 		DialogHeader: Box,
 		DialogTitle: Box,
 		DialogBody: Box,
-		DialogFooter: Box,
+		DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	};
 });
 jest.mock('@wcpos/components/button', () => ({

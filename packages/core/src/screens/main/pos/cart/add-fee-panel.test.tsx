@@ -90,7 +90,7 @@ it('a body inside a side panel flexes and its footer is pinned', () => {
 		</Dialog>
 	);
 	const body = screen.getByTestId('panel-body');
-	const footer = screen.getByTestId('add-to-cart-submit').parentElement;
+	const footer = screen.getByTestId('add-to-cart-submit').parentElement?.parentElement;
 	expect(body).toHaveClass('flex-1');
 	expect(footer).toHaveClass('border-border', 'border-t', 'pt-4');
 	expect(body.nextElementSibling).toBe(footer);

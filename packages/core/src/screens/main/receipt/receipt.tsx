@@ -4,9 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -16,7 +14,7 @@ import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
 import { ReceiptBody } from './receipt-body';
-import { ReceiptActions } from './receipt-actions';
+import { useReceiptActions } from './receipt-actions';
 import { useReceiptDocument } from './use-receipt-document';
 import { useT } from '../../../contexts/translations';
 
@@ -68,6 +66,7 @@ function ReceiptDocument({
 }) {
 	const t = useT();
 	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
+	const { sync, choices, dialog } = useReceiptActions(doc, order);
 	return (
 		<Dialog route>
 			<DialogContent side={side} size="xl">
@@ -79,10 +78,12 @@ function ReceiptDocument({
 				<DialogBody contentContainerStyle={{ height: '100%' }}>
 					<ReceiptBody doc={doc} />
 				</DialogBody>
-				<DialogFooter>
-					<DialogClose testID="receipt-close-button">{t('common.close')}</DialogClose>
-					<ReceiptActions doc={doc} order={order} buttonComponent={DialogAction} />
-				</DialogFooter>
+				<DialogFooter
+					close={{ testID: 'receipt-close-button' }}
+					record={sync}
+					secondary={choices}
+				/>
+				{dialog}
 			</DialogContent>
 		</Dialog>
 	);

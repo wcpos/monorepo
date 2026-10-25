@@ -36,7 +36,8 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogDescription: ({ children }: React.PropsWithChildren) => (
 			<div data-testid="body">{children}</div>
 		),
-		AlertDialogFooter: div,
+		AlertDialogFooter: jest.requireActual('../../../../../../jest/footer.test-utils')
+			.AlertDialogFooter,
 		AlertDialogCancel: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => {
 			const onOpenChange = React.useContext(mockOpenChange);
 			return (

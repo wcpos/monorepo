@@ -63,6 +63,18 @@ export function ClosureSheet({
 		['expected', t('register.expected_label'), format(Number(expected))],
 		['variance', t('register.variance'), varianceText(countVariance(counted, expected), format, t)],
 	].filter(([key]) => !blind || key === 'counted');
+	const printReport = async () => {
+		setBusy(true);
+		setError('');
+		try {
+			setPrintedAt(await report.print());
+		} catch {
+			setError(t('register.print_failed'));
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	return (
 		<Dialog
 			open
@@ -142,40 +154,20 @@ export function ClosureSheet({
 						})}
 					</Text>
 				) : null}
-				<DialogFooter className="flex-row items-center gap-2">
-					<Button
-						testID="closure-done"
-						className={blind || printedAt ? 'w-full' : undefined}
-						size="lg"
-						onPress={onDone}
-					>
-						{t('register.done')}
-					</Button>
-					{!blind && !printedAt && <View className="flex-1" />}
-					{!blind && !printedAt && (
-						<Button
-							testID="closure-print"
-							// Done is the sheet's one primary; printing the Z report is the alternative beside it.
-							variant="outline"
-							leftIcon="print"
-							size="lg"
-							loading={busy}
-							onPress={async () => {
-								setBusy(true);
-								setError('');
-								try {
-									setPrintedAt(await report.print());
-								} catch {
-									setError(t('register.print_failed'));
-								} finally {
-									setBusy(false);
-								}
-							}}
-						>
-							{t('register.print_z_report')}
-						</Button>
-					)}
-				</DialogFooter>
+				<DialogFooter
+					size="lg"
+					intent={{ label: t('register.done'), testID: 'closure-done', onPress: onDone }}
+					secondary={
+						!blind &&
+						!printedAt && {
+							label: t('register.print_z_report'),
+							testID: 'closure-print',
+							icon: 'print',
+							loading: busy,
+							onPress: () => void printReport(),
+						}
+					}
+				/>
 				{!!error && (
 					<Text testID="closure-print-error" className="text-destructive">
 						{error}

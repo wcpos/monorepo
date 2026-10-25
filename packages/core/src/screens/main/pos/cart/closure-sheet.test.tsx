@@ -46,14 +46,24 @@ jest.mock('@wcpos/components/button', () => ({
 		testID,
 		disabled,
 		loading,
+		className,
+		size,
 	}: {
 		children: React.ReactNode;
 		onPress: () => void;
 		testID: string;
 		disabled?: boolean;
 		loading?: boolean;
+		className?: string;
+		size?: string;
 	}) => (
-		<button data-testid={testID} disabled={disabled || loading} onClick={onPress}>
+		<button
+			data-testid={testID}
+			className={className}
+			data-size={size}
+			disabled={disabled || loading}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),
@@ -91,7 +101,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 		open ? <>{children}</> : null,
 	DialogContent: jest.requireActual('react-native').View,
 	DialogHeader: jest.requireActual('react-native').View,
-	DialogFooter: jest.requireActual('react-native').View,
+	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
@@ -190,3 +200,22 @@ it('updates the title to the server number once acknowledged', () => {
 	);
 	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });
+
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	useOverlay: () => ({ presentation: 'right' }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+it('fills a lone Done at register height and puts Done after Print Z report', () => {
+	const { rerender } = render(
+		<ClosureSheet closure={closure} counted="100" expected="100" blind onDone={jest.fn()} />
+	);
+	expect(screen.getByTestId('closure-done').getAttribute('data-size')).toBe('lg');
+	expect(screen.getByTestId('closure-done').className).toContain('flex-1');
+	rerender(
+		<ClosureSheet closure={closure} counted="100" expected="100" blind={false} onDone={jest.fn()} />
+	);
+	const buttons = screen.getAllByRole('button').map((button) => button.getAttribute('data-testid'));
+	expect(buttons.indexOf('closure-print')).toBeLessThan(buttons.indexOf('closure-done'));
+});
+
+jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));

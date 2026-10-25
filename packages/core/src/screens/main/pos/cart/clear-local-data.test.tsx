@@ -46,7 +46,7 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogCancel: passthrough,
 	AlertDialogContent: passthrough,
 	AlertDialogDescription: passthrough,
-	AlertDialogFooter: passthrough,
+	AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter,
 	AlertDialogHeader: passthrough,
 	AlertDialogTitle: passthrough,
 }));

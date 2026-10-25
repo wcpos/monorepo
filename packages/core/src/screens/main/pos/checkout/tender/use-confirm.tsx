@@ -2,16 +2,12 @@ import * as React from 'react';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-
-import { useT } from '../../../../../contexts/translations';
 
 /** `testID` prefixes the dialog's own: `-dialog`, `-cancel`, `-confirm`. */
 type Facts = { title: string; body: string; action: string; destructive?: boolean; testID: string };
@@ -28,7 +24,6 @@ export function useConfirm({
 	/** The host's overlay layer: the checkout column paints in the POS host, the modal at the root. */
 	portalHost?: string;
 }) {
-	const t = useT();
 	// The facts stay while the dialog animates out; `open` is the question.
 	const [question, setQuestion] = React.useState<{ facts: Facts; open: boolean } | null>(null);
 	const resolver = React.useRef<((confirmed: boolean) => void) | null>(null);
@@ -55,19 +50,15 @@ export function useConfirm({
 					<AlertDialogTitle>{facts.title}</AlertDialogTitle>
 					<AlertDialogDescription>{facts.body}</AlertDialogDescription>
 				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel testID={`${facts.testID}-cancel`}>
-						{t('common.cancel')}
-					</AlertDialogCancel>
-					{/* Red only for a loss (the clear): taking the sale is the constructive act. */}
-					<AlertDialogAction
-						variant={facts.destructive ? 'destructive' : 'default'}
-						testID={`${facts.testID}-confirm`}
-						onPress={() => answer(true)}
-					>
-						{facts.action}
-					</AlertDialogAction>
-				</AlertDialogFooter>
+				<AlertDialogFooter
+					cancel={{ testID: `${facts.testID}-cancel` }}
+					confirm={{
+						destructive: facts.destructive,
+						label: facts.action,
+						testID: `${facts.testID}-confirm`,
+						onPress: () => answer(true),
+					}}
+				/>
 			</AlertDialogContent>
 		</AlertDialog>
 	) : null;
