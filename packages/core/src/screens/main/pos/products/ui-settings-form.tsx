@@ -7,6 +7,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { useDialog } from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
@@ -75,6 +76,7 @@ export function UISettingsForm() {
 	const { setButtonPressHandler } = useDialogContext();
 	const t = useT();
 	const router = useRouter();
+	const { close } = useDialog();
 
 	/**
 	 *
@@ -335,7 +337,10 @@ export function UISettingsForm() {
 						<Button
 							variant="outline"
 							testID="customize-filter-bar"
-							onPress={() => router.push('/(app)/(modals)/filter-bar')}
+							onPress={() => {
+								close();
+								router.push('/(app)/(modals)/filter-bar');
+							}}
 						>
 							<ButtonText>{t('pos_products.customize_filter_bar')}</ButtonText>
 						</Button>

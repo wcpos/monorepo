@@ -54,6 +54,8 @@ const settings$ = new BehaviorSubject<Settings>(initialSettings);
 const mockUISettings = { $: settings$, get: () => settings$.getValue() };
 const patchSpy = jest.fn();
 const pushSpy = jest.fn();
+const closeSpy = jest.fn();
+jest.mock('@wcpos/components/dialog', () => ({ useDialog: () => ({ close: closeSpy }) }));
 
 // uuid ships ESM only; the house pattern is to stub it per suite.
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
@@ -400,10 +402,12 @@ it('persists a Panel Position toggle', async () => {
 	await settle();
 });
 
-it('opens the filter-bar customisation modal', () => {
+it('closes its settings panel before opening filter-bar customisation', () => {
 	render(<UISettingsForm />);
 	fireEvent.click(screen.getByTestId('customize-filter-bar'));
 	expect(pushSpy).toHaveBeenCalledWith('/(app)/(modals)/filter-bar');
+	expect(closeSpy).toHaveBeenCalledTimes(1);
+	expect(closeSpy.mock.invocationCallOrder[0]).toBeLessThan(pushSpy.mock.invocationCallOrder[0]);
 });
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

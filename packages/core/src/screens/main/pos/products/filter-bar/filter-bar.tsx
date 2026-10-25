@@ -54,27 +54,79 @@ import { clearConditions, isPlaceCondition, type LevelPlace } from '../browse/le
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { getPOSProductSort } from '../pos-product-sort';
 
-function ChipMenu({
+function BarSlot({
 	item,
-	children,
+	dimmed,
+	touched,
+	onLayout,
+	onRemove,
 }: {
 	item: FilterBarItem;
-	children: (onLongPress: () => void) => React.ReactNode;
+	dimmed: boolean;
+	touched: () => void;
+	onLayout: React.ComponentProps<typeof View>['onLayout'];
+	onRemove: (item: QuickFilter) => void;
 }) {
 	const t = useT();
 	const router = useRouter();
 	const { modifyUI } = useUISettings('pos-products');
 	const triggerRef = React.useRef<React.ComponentRef<typeof DropdownMenuTrigger>>(null);
-	const [deleting, setDeleting] = React.useState(false);
-	const onLongPress = React.useCallback(() => triggerRef.current?.open?.(), []);
+	const state = useQueryState<'products'>();
+	const actions = useQueryStateActions<'products'>();
+	const onLongPress = () => triggerRef.current?.open?.();
+	// A dimmed chip opens nothing: it is the tooltip's trigger itself (one pressable, no
+	// menu around it; a trigger wrapping a chip renders a button inside a button on web).
+	const content = dimmed ? (
+		<DimmedChip item={item} />
+	) : item.type === 'quick' ? (
+		<QuickChip quickFilter={item} touched={touched} onLongPress={onLongPress} />
+	) : item.id === 'stock_status' ? (
+		<StockChip touched={touched} onLongPress={onLongPress} />
+	) : item.id === 'featured' || item.id === 'on_sale' ? (
+		<Chip
+			label={item.id === 'featured' ? t('common.featured') : t('common.on_sale')}
+			icon={item.id === 'featured' ? 'featured' : 'currency'}
+			on={!!state.filters[item.id]}
+			dimmed={dimmed}
+			testID={`filter-pill-${item.id}`}
+			onLongPress={onLongPress}
+			onPress={() => {
+				const field = item.id as 'featured' | 'on_sale';
+				if (state.filters[field]) actions.clearFilter(field);
+				else actions.setFilter(field, true);
+				touched();
+			}}
+		/>
+	) : (
+		// The chip reads its records before it can draw: it holds a chip's frame
+		// meanwhile, so the chips beside it never shift.
+		<Suspense fallback={<Skeleton shape="chip" />}>
+			<SetChip field={item.id} dimmed={dimmed} touched={touched} onLongPress={onLongPress} />
+		</Suspense>
+	);
+	if (dimmed)
+		return (
+			<View onLayout={onLayout}>
+				<Tooltip>
+					<TooltipTrigger asChild>{content}</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('pos_products.product_filter_not_in_variations')}</Text>
+					</TooltipContent>
+				</Tooltip>
+			</View>
+		);
 	return (
-		<>
+		<View onLayout={onLayout}>
 			<DropdownMenu>
-				<DropdownMenuTrigger ref={triggerRef} />
-				{/* The render callback only attaches the handler; it never invokes it during render. */}
-				{/* eslint-disable-next-line react-hooks/refs */}
-				{children(onLongPress)}
-				<DropdownMenuContent>
+				{content}
+				<DropdownMenuTrigger
+					ref={triggerRef}
+					tabIndex={-1}
+					aria-hidden
+					accessibilityElementsHidden
+					importantForAccessibility="no-hide-descendants"
+				/>
+				<DropdownMenuContent onCloseAutoFocus={(event) => event.preventDefault()}>
 					{item.type === 'quick' ? (
 						<>
 							<DropdownMenuItem
@@ -83,14 +135,6 @@ function ChipMenu({
 							>
 								<Icon name="edit" />
 								<Text>{t('pos_products.edit_quick_filter', { label: item.label })}</Text>
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								testID={`filter-bar-menu-remove-${item.id}`}
-								variant="destructive"
-								onPress={() => setDeleting(true)}
-							>
-								<Icon name="delete" />
-								<Text>{t('pos_products.remove_from_bar')}</Text>
 							</DropdownMenuItem>
 						</>
 					) : (
@@ -110,7 +154,6 @@ function ChipMenu({
 							<Text>{t('pos_products.hide_from_bar')}</Text>
 						</DropdownMenuItem>
 					)}
-					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						testID={`filter-bar-menu-customize-${item.id}`}
 						onPress={() => router.push('/(app)/(modals)/filter-bar')}
@@ -118,13 +161,22 @@ function ChipMenu({
 						<Icon name="filters" />
 						<Text>{t('pos_products.customize_filter_bar')}</Text>
 					</DropdownMenuItem>
+					{item.type === 'quick' && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								testID={`filter-bar-menu-remove-${item.id}`}
+								variant="destructive"
+								onPress={() => onRemove(item)}
+							>
+								<Icon name="delete" />
+								<Text>{t('pos_products.remove_from_bar')}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<DeleteQuickFilterDialog
-				quickFilter={deleting && item.type === 'quick' ? item : null}
-				onClose={() => setDeleting(false)}
-			/>
-		</>
+		</View>
 	);
 }
 
@@ -366,6 +418,7 @@ export function POSFilterBar({
 	const t = useT();
 	const scroll = React.useRef<ScrollViewInstance>(null);
 	const positions = React.useRef(new Map<string, number>());
+	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const active = Object.entries(state.filters).filter(([key, value]) => {
 		if (isPlaceCondition(place, key, value)) return false;
 		const set = Array.isArray(value) ? value.length > 0 : !!value;
@@ -378,58 +431,15 @@ export function POSFilterBar({
 				const touched = () =>
 					scroll.current?.scrollTo({ x: positions.current.get(item.id) ?? 0, animated: false });
 				const dimmed = level === 'variations' && item.id !== 'stock_status';
-				// A dimmed chip opens nothing: it is the tooltip's trigger itself (one pressable, no
-				// menu around it; a trigger wrapping a chip renders a button inside a button on web).
-				const content = (onLongPress?: () => void) =>
-					dimmed ? (
-						<DimmedChip item={item} />
-					) : item.type === 'quick' ? (
-						<QuickChip quickFilter={item} touched={touched} onLongPress={onLongPress} />
-					) : item.id === 'stock_status' ? (
-						<StockChip touched={touched} onLongPress={onLongPress} />
-					) : item.id === 'featured' || item.id === 'on_sale' ? (
-						<Chip
-							label={item.id === 'featured' ? t('common.featured') : t('common.on_sale')}
-							icon={item.id === 'featured' ? 'featured' : 'currency'}
-							on={!!state.filters[item.id]}
-							dimmed={dimmed}
-							testID={`filter-pill-${item.id}`}
-							onLongPress={onLongPress}
-							onPress={() => {
-								const field = item.id as 'featured' | 'on_sale';
-								if (state.filters[field]) actions.clearFilter(field);
-								else actions.setFilter(field, true);
-								touched();
-							}}
-						/>
-					) : (
-						// The chip reads its records before it can draw: it holds a chip's frame
-						// meanwhile, so the chips beside it never shift.
-						<Suspense fallback={<Skeleton shape="chip" />}>
-							<SetChip
-								field={item.id}
-								dimmed={dimmed}
-								touched={touched}
-								onLongPress={onLongPress}
-							/>
-						</Suspense>
-					);
 				return (
-					<View
+					<BarSlot
 						key={item.id}
+						item={item}
+						dimmed={dimmed}
+						touched={touched}
 						onLayout={(event) => positions.current.set(item.id, event.nativeEvent.layout.x)}
-					>
-						{dimmed ? (
-							<Tooltip>
-								<TooltipTrigger asChild>{content()}</TooltipTrigger>
-								<TooltipContent>
-									<Text>{t('pos_products.product_filter_not_in_variations')}</Text>
-								</TooltipContent>
-							</Tooltip>
-						) : (
-							<ChipMenu item={item}>{content}</ChipMenu>
-						)}
-					</View>
+						onRemove={setDeleting}
+					/>
 				);
 			})}
 			{active >= 2 && (
@@ -442,6 +452,7 @@ export function POSFilterBar({
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>
 			)}
+			<DeleteQuickFilterDialog quickFilter={deleting} onClose={() => setDeleting(null)} />
 		</ChipRow>
 	);
 }

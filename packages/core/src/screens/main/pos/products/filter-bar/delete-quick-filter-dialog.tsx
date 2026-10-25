@@ -16,11 +16,9 @@ import { useT } from '../../../../../contexts/translations';
 export function DeleteQuickFilterDialog({
 	quickFilter,
 	onClose,
-	onDelete,
 }: {
 	quickFilter: QuickFilter | null;
 	onClose: () => void;
-	onDelete?: () => void;
 }) {
 	const t = useT();
 	const { modifyUI } = useUISettings('pos-products');
@@ -46,7 +44,6 @@ export function DeleteQuickFilterDialog({
 									(old) =>
 										normalizeFilterBar(old).filter((item) => item.id !== quickFilter.id) as never
 								);
-								onDelete?.();
 							}
 							onClose();
 						},

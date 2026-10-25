@@ -13,12 +13,13 @@ const saved = {
 	conditions: [{ field: 'featured' as const, value: true }],
 };
 
-jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
+jest.mock('uuid', () => ({ v4: jest.fn(() => 'quick-filter-id') }));
 let filterBar: unknown[] = [saved];
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, read: (value: unknown) => unknown) => read({ filterBar }),
 }));
-let params: { edit?: string; new?: string } = {};
+let params: { edit?: string } = {};
+let retainLeaving = false;
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => params }));
 jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/icon-button', () => ({
@@ -34,7 +35,17 @@ jest.mock('@wcpos/components/pane-stack', () => ({
 	}: React.PropsWithChildren<{
 		detail: unknown;
 		renderDetail: (detail: unknown) => React.ReactNode;
-	}>) => (detail ? renderDetail(detail) : children),
+	}>) => {
+		// Match PaneStack retaining the outgoing detail until its pop animation finishes.
+		const [staged, setStaged] = React.useState(detail);
+		if (detail && detail !== staged) setStaged(detail);
+		return (
+			<>
+				{!detail && children}
+				{detail || (retainLeaving && staged) ? renderDetail(detail || staged) : null}
+			</>
+		);
+	},
 }));
 jest.mock('./filter-bar-list', () => ({
 	FilterBarList: ({ onEdit }: { onEdit: (value: typeof saved | null) => void }) => (
@@ -45,30 +56,34 @@ jest.mock('./filter-bar-list', () => ({
 	),
 }));
 let editorOnChange: ((quickFilter: typeof saved) => unknown) | undefined;
-let editorOnDraftChange: (quickFilter: typeof saved, valid: boolean) => void;
+let editorOnDraftChange: (quickFilter: typeof saved) => void;
 const flush = jest.fn();
 jest.mock('./quick-filter-editor', () => ({
 	QuickFilterEditor: ({
 		onChange,
 		onDraftChange,
-		onDelete,
 		flushRef,
 		initial,
 	}: {
 		onChange?: (quickFilter: typeof saved) => unknown;
 		onDraftChange: typeof editorOnDraftChange;
-		onDelete: () => void;
 		flushRef: React.Ref<() => void>;
 		initial: typeof saved | null;
 	}) => {
 		const { DeleteQuickFilterDialog } = jest.requireActual('./delete-quick-filter-dialog');
 		const [deleting, setDeleting] = React.useState(false);
+		const [name, setName] = React.useState('');
 		React.useImperativeHandle(flushRef, () => flush);
 		editorOnChange = onChange;
 		editorOnDraftChange = onDraftChange;
 		return (
 			<>
 				<div>Editor open</div>
+				<input
+					data-testid="draft-name"
+					value={name}
+					onChange={(event) => setName(event.target.value)}
+				/>
 				{initial && (
 					<>
 						<button
@@ -78,7 +93,6 @@ jest.mock('./quick-filter-editor', () => ({
 						<DeleteQuickFilterDialog
 							quickFilter={deleting ? initial : null}
 							onClose={() => setDeleting(false)}
-							onDelete={onDelete}
 						/>
 					</>
 				)}
@@ -117,7 +131,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</>
 	),
 	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -137,18 +151,21 @@ jest.mock('../../../contexts/ui-settings', () => ({
 beforeEach(() => {
 	filterBar = [saved];
 	params = {};
+	retainLeaving = false;
 	editorOnChange = undefined;
 	jest.clearAllMocks();
 });
 
 it('pops to the list when the filter being edited is removed', () => {
-	render(<FilterBarModal />);
+	const view = render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Edit'));
 	expect(screen.getByText('Editor open')).toBeTruthy();
 
 	fireEvent.click(screen.getByTestId('filter-bar-delete-saved'));
 	expect(modifyUI).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
+	filterBar = [];
+	view.rerender(<FilterBarModal />);
 	expect(screen.queryByText('Editor open')).toBeNull();
 });
 
@@ -184,9 +201,9 @@ it('leaves the current list unchanged when the edited filter has been deleted', 
 it('appends a created filter to the current list', () => {
 	render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Add'));
-	act(() => editorOnDraftChange(saved, true));
+	act(() => editorOnDraftChange(saved));
 	fireEvent.click(screen.getByTestId('quick-filter-add'));
-	expect(flush).toHaveBeenCalled();
+	expect(flush).not.toHaveBeenCalled();
 	expect(screen.queryByText('Editor open')).toBeNull();
 
 	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
@@ -199,7 +216,7 @@ it('replaces a created filter whose id is already in the current list', () => {
 	render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Add'));
 	const created = { ...saved, label: 'Replaced' };
-	act(() => editorOnDraftChange({ ...created, label: ' Replaced ' }, true));
+	act(() => editorOnDraftChange({ ...created, label: ' Replaced ' }));
 	fireEvent.click(screen.getByTestId('quick-filter-add'));
 
 	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
@@ -211,21 +228,18 @@ it('disables the footer intent until the editor reports a valid draft', () => {
 	render(<FilterBarModal />);
 	fireEvent.click(screen.getByText('Add'));
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
-	act(() => editorOnDraftChange(saved, true));
+	act(() => editorOnDraftChange(saved));
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
-	act(() => editorOnDraftChange(saved, false));
+	act(() => editorOnDraftChange({ ...saved, label: '' }));
 	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });
-it.each([{ edit: 'saved' }, { new: '1' }])(
-	'opens the routed editor %j and Back pops to the list',
-	(route) => {
-		params = route;
-		render(<FilterBarModal />);
-		expect(screen.getByText('Editor open')).toBeTruthy();
-		fireEvent.click(screen.getByTestId('filter-bar-back'));
-		expect(screen.getByText('Add')).toBeTruthy();
-	}
-);
+it.each([{ edit: 'saved' }])('opens the routed editor %j and Back pops to the list', (route) => {
+	params = route;
+	render(<FilterBarModal />);
+	expect(screen.getByText('Editor open')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('filter-bar-back'));
+	expect(screen.getByText('Add')).toBeTruthy();
+});
 it('falls back to the list for an unknown edit id', () => {
 	params = { edit: 'missing' };
 	render(<FilterBarModal />);
@@ -233,12 +247,36 @@ it('falls back to the list for an unknown edit id', () => {
 });
 it('pops a routed editor after removal without closing the panel', () => {
 	params = { edit: 'saved' };
-	render(<FilterBarModal />);
+	const view = render(<FilterBarModal />);
 	fireEvent.click(screen.getByTestId('filter-bar-delete-saved'));
 	expect(modifyUI).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
 	const [, modifier] = modifyUI.mock.calls[0];
 	expect(modifier([saved, ...DEFAULT_FILTER_BAR])).toEqual(DEFAULT_FILTER_BAR);
+	filterBar = [];
+	view.rerender(<FilterBarModal />);
 	expect(screen.queryByText('Editor open')).toBeNull();
 	expect(screen.getByTestId('filter-bar-modal-close')).toBeTruthy();
+});
+
+it('reads an autosaved rename live in the header', () => {
+	const view = render(<FilterBarModal />);
+	fireEvent.click(screen.getByText('Edit'));
+	filterBar = [{ ...saved, label: 'Renamed' }];
+	view.rerender(<FilterBarModal />);
+	expect(screen.getByRole('heading').textContent).toBe('Renamed');
+});
+
+it('starts a fresh draft when Add reopens during the leaving animation', () => {
+	const { v4 } = jest.requireMock('uuid');
+	v4.mockReturnValueOnce('first').mockReturnValueOnce('second');
+	retainLeaving = true;
+	render(<FilterBarModal />);
+	fireEvent.click(screen.getByText('Add'));
+	fireEvent.change(screen.getByTestId('draft-name'), { target: { value: 'Previous draft' } });
+	act(() => editorOnDraftChange(saved));
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
+	fireEvent.click(screen.getByText('Add'));
+	expect((screen.getByTestId('draft-name') as HTMLInputElement).value).toBe('');
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });

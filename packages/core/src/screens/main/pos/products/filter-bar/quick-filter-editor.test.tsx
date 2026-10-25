@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+import { isQuickFilterValid } from './filter-bar-layout';
 import { QuickFilterEditor } from './quick-filter-editor';
 
 const onDraftChange = jest.fn();
@@ -156,9 +157,9 @@ function nameDraft() {
 	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: ' Sale wines ' } });
 }
 
-it('keeps Add disabled for a new empty draft', () => {
+it('does not publish an unchanged empty draft on mount', () => {
 	renderEditor();
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), false);
+	expect(onDraftChange).not.toHaveBeenCalled();
 });
 
 it('reports the current name and an On sale condition', () => {
@@ -167,16 +168,13 @@ it('reports the current name and an On sale condition', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-on_sale'));
 
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), true);
-	expect(onDraftChange).toHaveBeenLastCalledWith(
-		{
-			id: 'quick-filter-id',
-			type: 'quick',
-			label: ' Sale wines ',
-			conditions: [{ field: 'on_sale', value: true }],
-		},
-		true
-	);
+	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(true);
+	expect(onDraftChange).toHaveBeenLastCalledWith({
+		id: 'quick-filter-id',
+		type: 'quick',
+		label: ' Sale wines ',
+		conditions: [{ field: 'on_sale', value: true }],
+	});
 	expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -194,10 +192,10 @@ it('disables Add after removing the only condition when there is no sort', () =>
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-on_sale'));
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), true);
+	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(true);
 
 	fireEvent.click(screen.getByTestId('quick-filter-condition-remove-0'));
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), false);
+	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(false);
 });
 
 it('enables Add when a named draft has only a sort field', () => {
@@ -205,7 +203,7 @@ it('enables Add when a named draft has only a sort field', () => {
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-name'));
 
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), true);
+	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(true);
 });
 
 it('saves product type as a sort field', () => {
@@ -214,8 +212,7 @@ it('saves product type as a sort field', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-type'));
 
 	expect(onDraftChange).toHaveBeenLastCalledWith(
-		expect.objectContaining({ conditions: [], sort: { field: 'type', direction: 'asc' } }),
-		true
+		expect.objectContaining({ conditions: [], sort: { field: 'type', direction: 'asc' } })
 	);
 });
 
@@ -227,8 +224,7 @@ it('preserves a finite negative price bound', () => {
 	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '-5' } });
 
 	expect(onDraftChange).toHaveBeenLastCalledWith(
-		expect.objectContaining({ conditions: [{ field: 'price', value: { min: -5 } }] }),
-		true
+		expect.objectContaining({ conditions: [{ field: 'price', value: { min: -5 } }] })
 	);
 });
 
@@ -239,7 +235,7 @@ it('keeps a zero price bound unbounded', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-price'));
 	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '0' } });
 
-	expect(onDraftChange).toHaveBeenLastCalledWith(expect.any(Object), false);
+	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(false);
 });
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -356,3 +352,12 @@ describe('editing an existing quick filter', () => {
 });
 
 jest.mock('./delete-quick-filter-dialog', () => ({ DeleteQuickFilterDialog: () => null }));
+
+it('only renders a remove row for an existing quick filter', () => {
+	const view = renderEditor();
+	expect(screen.queryByTestId('filter-bar-delete-quick-filter-id')).toBeNull();
+	view.rerender(
+		<QuickFilterEditor initial={{ id: 'saved', type: 'quick', label: 'Saved', conditions: [] }} />
+	);
+	expect(screen.getByTestId('filter-bar-delete-saved')).toBeTruthy();
+});

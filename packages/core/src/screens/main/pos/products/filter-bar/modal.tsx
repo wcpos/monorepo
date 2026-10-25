@@ -16,7 +16,7 @@ import { PaneStack } from '@wcpos/components/pane-stack';
 import { useDocField } from '@wcpos/query';
 
 import { FilterBarList } from './filter-bar-list';
-import { normalizeFilterBar } from './filter-bar-layout';
+import { createQuickFilterId, isQuickFilterValid, normalizeFilterBar } from './filter-bar-layout';
 import { usePanelSide } from '../../contexts/overlay-side';
 import { QuickFilterEditor } from './quick-filter-editor';
 import { useT } from '../../../../../contexts/translations';
@@ -24,21 +24,20 @@ import { useUISettings } from '../../../contexts/ui-settings';
 
 import type { QuickFilter } from './filter-bar-layout';
 
-type Editing = { mode: 'new' } | { mode: 'edit'; quickFilter: QuickFilter } | null;
+type Editing = { mode: 'new'; key: string } | { mode: 'edit'; quickFilter: QuickFilter } | null;
 
 export function FilterBarModal() {
 	const t = useT();
 	const { uiSettings, modifyUI } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const side = usePanelSide('products');
-	const params = useLocalSearchParams<{ edit?: string; new?: string }>();
+	const params = useLocalSearchParams<{ edit?: string }>();
 	const [editing, setEditing] = React.useState<Editing>(() => {
-		if (params.new === '1') return { mode: 'new' };
 		const quickFilter = items.find((item) => item.type === 'quick' && item.id === params.edit);
 		return quickFilter?.type === 'quick' ? { mode: 'edit', quickFilter } : null;
 	});
 	const [draft, setDraft] = React.useState<QuickFilter | null>(null);
-	const [valid, setValid] = React.useState(false);
+	const valid = draft !== null && isQuickFilterValid(draft);
 	const flushRef = React.useRef<() => void>(null);
 	if (editing?.mode === 'edit' && !items.some((item) => item.id === editing.quickFilter.id))
 		setEditing(null);
@@ -73,7 +72,10 @@ export function FilterBarModal() {
 						<DialogTitle>
 							{editing
 								? editing.mode === 'edit'
-									? editing.quickFilter.label
+									? (items.find(
+											(item): item is QuickFilter =>
+												item.type === 'quick' && item.id === editing.quickFilter.id
+										)?.label ?? editing.quickFilter.label)
 									: t('pos_products.new_quick_filter')
 								: t('common.filter_bar')}
 						</DialogTitle>
@@ -85,13 +87,10 @@ export function FilterBarModal() {
 					renderDetail={(detail) => (
 						<DialogBody>
 							<QuickFilterEditor
-								key={detail.mode === 'new' ? 'new' : detail.quickFilter.id}
+								key={detail.mode === 'new' ? detail.key : detail.quickFilter.id}
 								initial={detail.mode === 'edit' ? detail.quickFilter : null}
 								flushRef={flushRef}
-								onDraftChange={(value, isValid) => {
-									setDraft(value);
-									setValid(isValid);
-								}}
+								onDraftChange={setDraft}
 								onChange={
 									detail.mode === 'edit'
 										? (quickFilter) =>
@@ -104,7 +103,6 @@ export function FilterBarModal() {
 												)
 										: undefined
 								}
-								onDelete={() => setEditing(null)}
 							/>
 						</DialogBody>
 					)}
@@ -113,8 +111,11 @@ export function FilterBarModal() {
 						<FilterBarList
 							onEdit={(quickFilter) => {
 								setDraft(null);
-								setValid(false);
-								setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' });
+								setEditing(
+									quickFilter
+										? { mode: 'edit', quickFilter }
+										: { mode: 'new', key: createQuickFilterId() }
+								);
 							}}
 						/>
 					</DialogBody>
@@ -128,7 +129,6 @@ export function FilterBarModal() {
 									testID: 'quick-filter-add',
 									disabled: !valid,
 									onPress: () => {
-										flushRef.current?.();
 										if (draft && valid) handleSave({ ...draft, label: draft.label.trim() });
 									},
 								}

@@ -273,8 +273,16 @@ jest.mock('@wcpos/components/lib/overlay', () => ({
 	OVERLAY_MOTION: { anchored: {} },
 	OverlayShell: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('./filter-bar/delete-quick-filter-dialog', () => ({
-	DeleteQuickFilterDialog: () => null,
+jest.mock('@wcpos/components/alert-dialog', () => ({
+	AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	AlertDialogContent: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogHeader: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogTitle: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogDescription: ({ children }: React.PropsWithChildren) => children,
+	AlertDialogFooter: ({ confirm }: { confirm: { testID: string; onPress: () => void } }) => (
+		<button data-testid={confirm.testID} onClick={confirm.onPress} />
+	),
 }));
 beforeEach(() => {
 	filterBar = undefined;
@@ -305,4 +313,37 @@ it('hides a built-in pill from its menu without changing other items', () => {
 		type: 'pill',
 		show: false,
 	});
+});
+
+it('keeps the empty menu trigger out of the tab order and after the chip', () => {
+	mount();
+	const chip = screen.getByTestId('filter-pill-featured');
+	const trigger = chip.parentElement!.querySelector('[aria-haspopup="menu"]')!;
+	expect(trigger.getAttribute('tabindex')).toBe('-1');
+	expect(trigger.getAttribute('aria-hidden')).toBe('true');
+	expect(chip.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+it('puts Remove last and removes the quick filter only after confirmation', () => {
+	filterBar = [
+		{
+			id: 'saved',
+			type: 'quick',
+			label: 'Saved',
+			conditions: [{ field: 'featured', value: true }],
+		},
+	];
+	mount();
+	fireEvent.contextMenu(screen.getByTestId('quick-filter-saved').querySelector('button')!);
+	expect(screen.getAllByRole('menuitem').map((row) => row.getAttribute('data-testid'))).toEqual([
+		'filter-bar-menu-edit-saved',
+		'filter-bar-menu-customize-saved',
+		'filter-bar-menu-remove-saved',
+	]);
+	fireEvent.click(screen.getByTestId('filter-bar-menu-remove-saved'));
+	expect(modifyUI).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
+	const [, remove] = modifyUI.mock.calls[0];
+	expect(remove(filterBar)).not.toEqual(
+		expect.arrayContaining([expect.objectContaining({ id: 'saved' })])
+	);
 });

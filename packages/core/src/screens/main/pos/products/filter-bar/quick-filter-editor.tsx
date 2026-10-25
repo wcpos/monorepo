@@ -372,13 +372,11 @@ function QuickFilterEditorBody({
 	onDraftChange,
 	flushRef,
 	onChange,
-	onDelete,
 }: {
 	initial: QuickFilter | null;
-	onDraftChange?: (draft: QuickFilter, valid: boolean) => void;
+	onDraftChange?: (draft: QuickFilter) => void;
 	flushRef?: React.Ref<() => void>;
 	onChange?: (quickFilter: QuickFilter) => void | Promise<unknown>;
-	onDelete?: () => void;
 }) {
 	const t = useT();
 	const [draft, setDraft] = React.useState<QuickFilter>(
@@ -398,18 +396,12 @@ function QuickFilterEditorBody({
 		void queued.write();
 	}, []);
 	React.useImperativeHandle(flushRef, () => flush, [flush]);
-	const mountedDraft = React.useRef({ draft, onDraftChange });
-	// The host needs initial validity before the first edit; later notifications come from updateDraft.
-	React.useEffect(() => {
-		const { draft, onDraftChange } = mountedDraft.current;
-		onDraftChange?.(draft, isQuickFilterValid(draft));
-	}, []);
 	// Closing the host must land the pending text edit, even without pressing Close.
 	React.useEffect(() => flush, [flush]);
 	const updateDraft = (update: (value: QuickFilter) => QuickFilter, text = false) => {
 		const next = update(draft);
 		setDraft(next);
-		onDraftChange?.(next, isQuickFilterValid(next));
+		onDraftChange?.(next);
 		if (!initial || !onChange) return;
 		// An edit that leaves the draft invalid is held, not written; the valid edit still pending
 		// (a rename before an unfinished condition) lands now rather than being dropped with it.
@@ -619,7 +611,6 @@ function QuickFilterEditorBody({
 					<DeleteQuickFilterDialog
 						quickFilter={deleting ? initial : null}
 						onClose={() => setDeleting(false)}
-						onDelete={onDelete}
 					/>
 				</>
 			)}
