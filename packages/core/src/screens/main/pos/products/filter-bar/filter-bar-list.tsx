@@ -9,6 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { useFilterBarCommands } from './use-filter-bar-commands';
 import { describeQuickFilter, getFilterPillIcon, normalizeFilterBar } from './filter-bar-layout';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -17,9 +18,10 @@ import { useT } from '../../../../../contexts/translations';
 import type { FilterBarItem, QuickFilter } from './filter-bar-layout';
 
 export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | null) => void }) {
-	const { uiSettings, getUILabel, patchUI, modifyUI } = useUISettings('pos-products');
+	const { uiSettings, getUILabel, patchUI } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const t = useT();
+	const { showPill } = useFilterBarCommands();
 	const { format: formatPrice } = useCurrencyFormat();
 	const save = (filterBar: FilterBarItem[]) => void patchUI({ filterBar } as never);
 
@@ -44,15 +46,7 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 					<Switch
 						testID={`filter-bar-toggle-${item.id}`}
 						checked={item.show}
-						onCheckedChange={(show) =>
-							void modifyUI(
-								'filterBar',
-								(old) =>
-									normalizeFilterBar(old).map((entry) =>
-										entry.id === item.id ? { ...entry, show } : entry
-									) as never
-							)
-						}
+						onCheckedChange={(show) => void showPill(item.id, show)}
 					/>
 				) : (
 					<Icon name="chevronRight" className="text-muted-foreground" />

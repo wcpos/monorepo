@@ -271,47 +271,55 @@ export function getNamedOrderLabel(sort: QuickFilterSort | undefined, t: Transla
 		: `${getQuickFilterSortLabel(sort!.field, t)} ${sort!.direction === 'asc' ? '↑' : '↓'}`;
 }
 
+export function describeCondition(
+	condition: QuickFilterCondition,
+	t: Translate,
+	formatPrice: (value: number) => string
+): string {
+	if (
+		condition.field === 'categories' ||
+		condition.field === 'tags' ||
+		condition.field === 'brands'
+	) {
+		return t('pos_products.quick_filter_selected', {
+			label: t(LABEL_KEYS[condition.field]),
+			count: condition.value.length,
+		});
+	}
+	if (condition.field === 'on_sale') {
+		return condition.value ? t('common.on_sale') : t('pos_products.quick_filter_not_on_sale');
+	}
+	if (condition.field === 'featured') {
+		return condition.value ? t('common.featured') : t('pos_products.quick_filter_not_featured');
+	}
+	if (condition.field === 'stock_status' || condition.field === 'type') {
+		return t(LABEL_KEYS[condition.value]);
+	}
+	if (condition.field === 'search') {
+		return t('pos_products.quick_filter_search', { term: condition.value });
+	}
+
+	const { min, max } = condition.value;
+	if (min !== undefined && max !== undefined) {
+		return t('pos_products.quick_filter_price_range', {
+			min: formatPrice(min),
+			max: formatPrice(max),
+		});
+	}
+	if (min !== undefined) {
+		return t('pos_products.quick_filter_price_min', { min: formatPrice(min) });
+	}
+	return t('pos_products.quick_filter_price_max', { max: formatPrice(max as number) });
+}
+
 export function describeQuickFilter(
 	quickFilter: QuickFilter,
 	t: Translate,
 	formatPrice: (value: number) => string
 ): string {
-	const parts = quickFilter.conditions.map((condition) => {
-		if (
-			condition.field === 'categories' ||
-			condition.field === 'tags' ||
-			condition.field === 'brands'
-		) {
-			return t('pos_products.quick_filter_selected', {
-				label: t(LABEL_KEYS[condition.field]),
-				count: condition.value.length,
-			});
-		}
-		if (condition.field === 'on_sale') {
-			return condition.value ? t('common.on_sale') : t('pos_products.quick_filter_not_on_sale');
-		}
-		if (condition.field === 'featured') {
-			return condition.value ? t('common.featured') : t('pos_products.quick_filter_not_featured');
-		}
-		if (condition.field === 'stock_status' || condition.field === 'type') {
-			return t(LABEL_KEYS[condition.value]);
-		}
-		if (condition.field === 'search') {
-			return t('pos_products.quick_filter_search', { term: condition.value });
-		}
-
-		const { min, max } = condition.value;
-		if (min !== undefined && max !== undefined) {
-			return t('pos_products.quick_filter_price_range', {
-				min: formatPrice(min),
-				max: formatPrice(max),
-			});
-		}
-		if (min !== undefined) {
-			return t('pos_products.quick_filter_price_min', { min: formatPrice(min) });
-		}
-		return t('pos_products.quick_filter_price_max', { max: formatPrice(max as number) });
-	});
+	const parts = quickFilter.conditions.map((condition) =>
+		describeCondition(condition, t, formatPrice)
+	);
 
 	if (quickFilter.sort) parts.push(getNamedOrderLabel(quickFilter.sort, t));
 	return parts.join(' · ');

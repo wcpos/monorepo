@@ -1,6 +1,12 @@
-import { isQuickFilterActive, quickFilterToQueryPatch } from './apply-quick-filter';
+import {
+	captureQuickFilter,
+	isQuickFilterActive,
+	quickFilterToQueryPatch,
+} from './apply-quick-filter';
 
 import type { QuickFilter } from './filter-bar-layout';
+
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 
 const resetState = {
 	filters: { categories: [], tags: [], brands: [], status: 'publish' as const },
@@ -159,4 +165,80 @@ it('is active only while its sort is applied, so a sort-only button can be press
 			resetState
 		)
 	).toBe(true);
+});
+
+const baseline = { ...resetState.filters, stock_status: 'instock' as const };
+it('captures only set conditions outside the POS baseline, trimming search and finite price bounds', () => {
+	expect(
+		captureQuickFilter(
+			{
+				search: ' mug ',
+				sort: resetState.sort,
+				filters: {
+					...baseline,
+					categories: [1],
+					tags: [2],
+					brands: [3],
+					on_sale: true,
+					featured: true,
+					stock_status: 'outofstock',
+					type: 'simple',
+					price: { min: Infinity, max: 20 },
+				},
+			},
+			baseline,
+			resetState.sort
+		)
+	).toEqual({
+		conditions: [
+			{ field: 'categories', value: [1] },
+			{ field: 'tags', value: [2] },
+			{ field: 'brands', value: [3] },
+			{ field: 'price', value: { max: 20 } },
+			{ field: 'on_sale', value: true },
+			{ field: 'featured', value: true },
+			{ field: 'stock_status', value: 'outofstock' },
+			{ field: 'type', value: 'simple' },
+			{ field: 'search', value: 'mug' },
+		],
+	});
+});
+it('omits baseline, empty groups, false booleans and nonfinite price bounds', () => {
+	expect(
+		captureQuickFilter(
+			{
+				search: ' ',
+				sort: resetState.sort,
+				filters: {
+					...baseline,
+					on_sale: false,
+					featured: false,
+					price: { min: NaN, max: Infinity },
+				},
+			},
+			baseline,
+			resetState.sort
+		)
+	).toEqual({ conditions: [] });
+});
+it.each([
+	{ field: 'name', direction: 'desc' },
+	{ field: 'sortable_price', direction: 'asc' },
+] as const)('captures a differing sort %j', (sort) => {
+	expect(
+		captureQuickFilter({ search: '', filters: baseline, sort }, baseline, resetState.sort)
+	).toEqual({ conditions: [], sort });
+});
+it.each([
+	{ ...baseline, categories: [1, 2], on_sale: true },
+	{ ...baseline, tags: [3], brands: [4], price: { min: 0, max: 20 }, type: 'variable' as const },
+])('round trips captured filters over their baseline %#', (filters) => {
+	const captured = captureQuickFilter(
+		{ search: '', sort: resetState.sort, filters },
+		baseline,
+		resetState.sort
+	);
+	expect({ ...baseline, ...quickFilterToQueryPatch({ ...filter, ...captured }).filters }).toEqual(
+		filters
+	);
 });

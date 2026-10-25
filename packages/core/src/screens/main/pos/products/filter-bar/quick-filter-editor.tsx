@@ -40,6 +40,7 @@ import {
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { QUICK_FILTER_STARTERS } from './quick-filter-starters';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { QuickFilterBarPreview } from './quick-filter-bar-preview';
 import { QuickFilterPreview } from './quick-filter-preview';
 import { CurrencyInput } from '../../../components/currency-input';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
@@ -54,7 +55,7 @@ import type { ObservableResource } from 'observable-hooks';
 type ConditionField = QuickFilterCondition['field'];
 type ChangeCondition = (condition: QuickFilterCondition) => void;
 
-const CONDITION_FIELDS: ConditionField[] = [
+export const CONDITION_FIELDS: ConditionField[] = [
 	'categories',
 	'tags',
 	'brands',
@@ -82,7 +83,7 @@ const DEFAULT_ORDER = 'default';
 const priceBound = (value: number): number | undefined =>
 	Number.isFinite(value) && value !== 0 ? value : undefined;
 
-const KIND_ICONS = {
+export const KIND_ICONS = {
 	categories: 'category',
 	tags: 'tag',
 	brands: 'category',
@@ -239,7 +240,7 @@ function TermNames<C extends 'categories' | 'tags' | 'brands'>({
 		.join(', ');
 }
 
-function TermSummary({
+export function TermSummary({
 	taxonomy,
 	ids,
 }: {
@@ -630,19 +631,7 @@ function QuickFilterEditorBody({
 					testID="quick-filter-name"
 				/>
 			</VStack>
-			<VStack className="gap-2">
-				<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-					{t('pos_products.on_the_bar')}
-				</Text>
-				<HStack className="bg-background rounded-lg p-2" testID="quick-filter-bar-preview">
-					<Chip
-						label={draft.label.trim() || t('pos_products.quick_filter_name_placeholder')}
-						count={draft.conditions.length || undefined}
-						on={isQuickFilterValid(draft)}
-						add={!draft.label.trim()}
-					/>
-				</HStack>
-			</VStack>
+			<QuickFilterBarPreview draft={draft} />
 			<VStack className="gap-2">
 				<HStack className="justify-between">
 					<Text className="font-medium">{t('pos_products.quick_filter_conditions_heading')}</Text>
