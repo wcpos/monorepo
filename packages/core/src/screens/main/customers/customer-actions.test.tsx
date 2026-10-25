@@ -81,12 +81,14 @@ function Harness({
 	customer,
 	onDeleted,
 	onSynced,
+	beforeSync,
 }: {
 	customer: ReturnType<typeof record>;
 	onDeleted: () => void;
 	onSynced?: () => void;
+	beforeSync?: () => Promise<boolean>;
 }) {
-	const actions = useCustomerActions(customer, { onDeleted, onSynced });
+	const actions = useCustomerActions(customer, { onDeleted, onSynced, beforeSync });
 	return (
 		<>
 			{actions.canDelete && <button data-testid="delete" onClick={actions.requestDelete} />}
@@ -179,4 +181,17 @@ it('a refresh that settles without applying the row keeps what the cashier typed
 	render(<Harness customer={record(42)} onDeleted={jest.fn()} onSynced={onSynced} />);
 	await act(async () => fireEvent.click(screen.getByTestId('sync')));
 	expect(onSynced).not.toHaveBeenCalled();
+});
+
+it('Sync waits for autosave and only pulls when it succeeds', async () => {
+	const beforeSync = jest.fn().mockResolvedValue(false);
+	render(<Harness customer={record(42)} onDeleted={jest.fn()} beforeSync={beforeSync} />);
+	fireEvent.click(screen.getByTestId('sync'));
+	await act(async () => {});
+	expect(mockRefresh).not.toHaveBeenCalled();
+	beforeSync.mockResolvedValue(true);
+	fireEvent.click(screen.getByTestId('sync'));
+	expect(mockRefresh).not.toHaveBeenCalled();
+	await act(async () => {});
+	expect(mockRefresh).toHaveBeenCalledTimes(1);
 });

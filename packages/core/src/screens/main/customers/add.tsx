@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
@@ -12,7 +13,11 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
-import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
+import {
+	CustomerForm,
+	customerFormSchema,
+	fillBillingFromIdentity,
+} from '../components/customer/customer-form';
 import { useCustomerRecord } from './commands/use-customer-record';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 
@@ -77,6 +82,8 @@ export function AddCustomerScreen() {
 	/**
 	 *
 	 */
+	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
+
 	return (
 		<Dialog route>
 			<DialogContent side="right" size="xl">
@@ -88,9 +95,24 @@ export function AddCustomerScreen() {
 				<ErrorBoundary>
 					<CustomerForm
 						form={form}
-						onSubmit={handleSave}
-						onClose={() => router.back()}
-						loading={loading}
+						footer={
+							<>
+								<Button
+									testID="customer-form-close"
+									variant="outline"
+									onPress={() => router.back()}
+								>
+									<ButtonText>{t('common.close')}</ButtonText>
+								</Button>
+								<Button
+									testID="customer-form-add"
+									loading={loading}
+									onPress={() => void onSubmit()}
+								>
+									<ButtonText>{t('customers.add_customer')}</ButtonText>
+								</Button>
+							</>
+						}
 					/>
 				</ErrorBoundary>
 			</DialogContent>

@@ -29,7 +29,16 @@ const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 /** The customer's record actions, for the customer modal's footer (the row only opens it). */
 export function useCustomerActions(
 	record: ReadonlyEngineRecord<'customers'>,
-	{ onDeleted, onSynced }: { onDeleted?: () => void; onSynced?: () => void } = {}
+	{
+		onDeleted,
+		onSynced,
+		beforeSync,
+	}: {
+		onDeleted?: () => void;
+		onSynced?: () => void;
+		/** Land pending autosave before pulling; false stops a pull from resetting over a failed draft. */
+		beforeSync?: () => Promise<boolean>;
+	} = {}
 ) {
 	const id = useRecordField(record, ({ payload }) => payload.id);
 	const t = useT();
@@ -40,29 +49,32 @@ export function useCustomerActions(
 
 	const sync = React.useCallback(() => {
 		if (!id) return;
-		void refreshRecordByWooId(runtime.engine, {
-			id: `customer-actions:refresh:${id}`,
-			collection: 'customers',
-			wooId: id,
-		})
-			// Only the engine's applied answer hands the form the store's copy: a pull can settle
-			// with the row kept back for its pending local work.
-			.then((applied) => {
-				if (applied) onSynced?.();
+		void (async () => {
+			if (beforeSync && !(await beforeSync())) return;
+			await refreshRecordByWooId(runtime.engine, {
+				id: `customer-actions:refresh:${id}`,
+				collection: 'customers',
+				wooId: id,
 			})
-			.catch((error) => {
-				// The engine already wrote the coded row for this require (SYNC321), and the
-				// device's copy is untouched: the cashier only needs to know it didn't refresh.
-				syncLogger.debug('Failed to refresh customer', {
-					showToast: true,
-					toast: { title: t('common.refresh_failed'), type: 'warning' },
-					context: {
-						customerId: id,
-						error: getErrorMessage(error),
-					},
+				// Only the engine's applied answer hands the form the store's copy: a pull can settle
+				// with the row kept back for its pending local work.
+				.then((applied) => {
+					if (applied) onSynced?.();
+				})
+				.catch((error) => {
+					// The engine already wrote the coded row for this require (SYNC321), and the
+					// device's copy is untouched: the cashier only needs to know it didn't refresh.
+					syncLogger.debug('Failed to refresh customer', {
+						showToast: true,
+						toast: { title: t('common.refresh_failed'), type: 'warning' },
+						context: {
+							customerId: id,
+							error: getErrorMessage(error),
+						},
+					});
 				});
-			});
-	}, [id, runtime, t, onSynced]);
+		})();
+	}, [id, runtime, t, beforeSync, onSynced]);
 
 	const confirmDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
