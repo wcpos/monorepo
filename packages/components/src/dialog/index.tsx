@@ -261,16 +261,21 @@ export type FooterButton = {
 	/** Drawn as the Button's `leftIcon`. */
 	icon?: IconName;
 	accessibilityLabel?: string;
+	/** The rendered Button, for a caller that must return focus to it (a dialog it opened closing). */
+	ref?: React.Ref<View>;
 };
+/** A slot entry; `false`/`null` is skipped, so a conditional button needs no array juggling. */
+export type FooterSlot = FooterButton | false | null | undefined;
+const isButton = (entry: FooterSlot): entry is FooterButton => !!entry;
 export type DialogFooterProps = {
 	/** The one primary: creating, moving money, sending, or a status intent. */
-	intent?: FooterButton;
+	intent?: FooterButton | false | null;
 	/** Reversible alternatives beside the intent. */
-	secondary?: FooterButton | FooterButton[];
+	secondary?: FooterSlot | FooterSlot[];
 	/** The record's own non-losing actions, never primary. */
-	record?: FooterButton | FooterButton[];
+	record?: FooterSlot | FooterSlot[];
 	/** What loses something, outlined and apart from the intent. */
-	destructive?: FooterButton | FooterButton[];
+	destructive?: FooterSlot | FooterSlot[];
 	/** The footer chooses Cancel with an intent, Close otherwise, from DialogLabels. */
 	close?: boolean | Pick<FooterButton, 'testID' | 'onPress' | 'disabled'>;
 	/** Non-button content leading the footer. Never a Button. */
@@ -308,9 +313,9 @@ export function DialogFooter(
 	}
 	const { intent, secondary, record, destructive, close, aside } = allProps;
 	const { size = 'default', testID } = allProps;
-	const alternatives = [secondary ?? []].flat();
-	const records = [record ?? []].flat();
-	const losses = [destructive ?? []].flat();
+	const alternatives = [secondary ?? []].flat().filter(isButton);
+	const records = [record ?? []].flat().filter(isButton);
+	const losses = [destructive ?? []].flat().filter(isButton);
 	const count =
 		alternatives.length + records.length + losses.length + Number(!!intent) + Number(!!close);
 	const fill = size === 'lg' && count === 1;

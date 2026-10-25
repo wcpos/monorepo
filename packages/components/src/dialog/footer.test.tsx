@@ -33,8 +33,10 @@ jest.mock('react-native', () => ({
 		onPress,
 		disabled,
 		accessibilityLabel,
-	}: PressableProps) => (
+		ref,
+	}: PressableProps & { ref?: React.Ref<HTMLButtonElement> }) => (
 		<button
+			ref={ref}
 			className={className}
 			data-testid={testID}
 			disabled={disabled ?? false}
@@ -200,3 +202,35 @@ void [
 	forbiddenAlertStyle,
 	missingAlertChildren,
 ];
+
+it('skips false and null slot entries, so a conditional button needs no array juggling', () => {
+	render(
+		<Dialog open onOpenChange={() => {}}>
+			<DialogFooter
+				intent={false}
+				secondary={[{ label: 'Print', testID: 'print' }, false, null]}
+				record={null}
+				destructive={[undefined, { label: 'Void', testID: 'void' }]}
+				close
+			/>
+		</Dialog>
+	);
+	expect(screen.getByTestId('print')).toBeTruthy();
+	expect(screen.getByTestId('void')).toBeTruthy();
+	expect(screen.getAllByRole('button')).toHaveLength(3);
+	// No intent survived, so the dismiss reads Close.
+	expect(screen.getByText('Close')).toBeTruthy();
+});
+
+it('hands a slot ref to the rendered button, so a caller can return focus to it', () => {
+	const ref = React.createRef<HTMLButtonElement>();
+	render(
+		<Dialog open onOpenChange={() => {}}>
+			<DialogFooter
+				secondary={{ label: 'Email receipt', testID: 'email', ref: ref as never }}
+				close
+			/>
+		</Dialog>
+	);
+	expect(ref.current).toBe(screen.getByTestId('email'));
+});

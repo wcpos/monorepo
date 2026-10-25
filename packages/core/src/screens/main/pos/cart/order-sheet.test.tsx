@@ -54,15 +54,15 @@ jest.mock('@wcpos/components/dialog', () => {
 			<>
 				{[destructive, secondary, intent]
 					.flat()
-					.filter(Boolean)
+					.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
 					.map((action) => (
 						<button
-							key={action!.testID}
-							data-testid={action!.testID}
-							disabled={action!.disabled || action!.loading}
-							onClick={action!.onPress as unknown as React.MouseEventHandler}
+							key={action.testID}
+							data-testid={action.testID}
+							disabled={action.disabled || action.loading}
+							onClick={action.onPress as unknown as React.MouseEventHandler}
 						>
-							{action!.label}
+							{action.label}
 						</button>
 					))}
 			</>

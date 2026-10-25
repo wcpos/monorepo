@@ -81,10 +81,10 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<>
 			{[destructive, record, typeof close === 'object' ? { ...close, label: 'Close' } : undefined]
 				.flat()
-				.filter(Boolean)
+				.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
 				.map((action) => (
-					<button key={action!.testID} data-testid={action!.testID}>
-						{action!.label}
+					<button key={action.testID} data-testid={action.testID}>
+						{action.label}
 					</button>
 				))}
 		</>

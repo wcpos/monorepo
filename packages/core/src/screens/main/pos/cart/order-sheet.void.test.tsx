@@ -987,7 +987,8 @@ jest.mock('@wcpos/components/dialog', () => {
 		DialogHeader: Pass,
 		DialogTitle: Pass,
 		DialogFooter: ({ destructive }: import('@wcpos/components/dialog').DialogFooterProps) => {
-			const action = Array.isArray(destructive) ? destructive[0] : destructive;
+			const first = Array.isArray(destructive) ? destructive[0] : destructive;
+			const action = first || undefined;
 			return (
 				<button
 					data-testid={action?.testID}
