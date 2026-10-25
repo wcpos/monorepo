@@ -83,12 +83,15 @@ export function VariationsFilterBar({ row }: Props) {
 						);
 					})}
 			</HStack>
-			<IconButton
-				size="sm"
-				name="chevronUp"
-				accessibilityLabel={t('common.collapse')}
-				onPress={() => setRowExpanded?.(rowId, false)}
-			/>
+			{/* A drilled pane has no row to collapse: its crumb goes back. */}
+			{setRowExpanded && (
+				<IconButton
+					size="sm"
+					name="chevronUp"
+					accessibilityLabel={t('common.collapse')}
+					onPress={() => setRowExpanded(rowId, false)}
+				/>
+			)}
 		</HStack>
 	);
 }

@@ -103,6 +103,9 @@ for (const [device, viewport] of Object.entries({
 					};
 					await root.getByTestId('products-bar-display').click();
 					await page.getByTestId('products-display-restore').click();
+					// Restore resets the page's own doc; the variations style is the POS panel's, and
+					// the expanded state below is the inline one.
+					await page.getByTestId('products-variations-style-inline').click();
 					await closePopover();
 					await expect(
 						root.getByTestId('data-table-count').or(root.getByTestId('no-data-message')).first()

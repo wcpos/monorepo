@@ -24,6 +24,7 @@ export function DrillIn({
 	stockStatus,
 	tiles = false,
 	parents,
+	renderPane,
 }: {
 	parent: EngineRecord<'products'>;
 	back: () => void;
@@ -32,6 +33,9 @@ export function DrillIn({
 	/** The crumb's ancestors before the product; the last one is the way back (its `onPress` is
 	 * `back`). Default: Products. */
 	parents?: Crumb[];
+	/** The caller's own variations under the crumb, bringing their own query state (the
+	 * products page's management rows); the POS pane when absent. */
+	renderPane?: (parent: EngineRecord<'products'>) => React.ReactNode;
 }) {
 	const name = useDocField(parent, (value) => value.payload.name);
 	const count = useDocField(parent, (value) => value.payload.variations?.length ?? 0);
@@ -72,23 +76,27 @@ export function DrillIn({
 			{/* The grid and the table size themselves to their parent, so they get one that
 			    excludes the crumb; each brings its own card. */}
 			<View className="flex-1">
-				<QueryStateProvider
-					collection="variations"
-					initialPageSize={Number.MAX_SAFE_INTEGER}
-					initialSort={{ field: 'name', direction: 'asc' }}
-					initialFilters={{ status: 'publish' }}
-				>
-					{/* Keyed by product: the PaneStack reuses its detail across a pop and a tap on
-					    another product mid-slide, which would draw the first product's rows (the
-					    pane's stale-while-loading) under the second one's crumb until it answered.
-					    The dealt grid is already remounted per deal. */}
-					<VariationsPane
-						key={parent.uuid}
-						parent={parent}
-						stockStatus={stockStatus}
-						back={tiles ? back : undefined}
-					/>
-				</QueryStateProvider>
+				{renderPane ? (
+					renderPane(parent)
+				) : (
+					<QueryStateProvider
+						collection="variations"
+						initialPageSize={Number.MAX_SAFE_INTEGER}
+						initialSort={{ field: 'name', direction: 'asc' }}
+						initialFilters={{ status: 'publish' }}
+					>
+						{/* Keyed by product: the PaneStack reuses its detail across a pop and a tap on
+						    another product mid-slide, which would draw the first product's rows (the
+						    pane's stale-while-loading) under the second one's crumb until it answered.
+						    The dealt grid is already remounted per deal. */}
+						<VariationsPane
+							key={parent.uuid}
+							parent={parent}
+							stockStatus={stockStatus}
+							back={tiles ? back : undefined}
+						/>
+					</QueryStateProvider>
+				)}
 			</View>
 		</LevelBack>
 	);

@@ -126,6 +126,16 @@ it('Escape returns to products', () => {
 	fireEvent.keyDown(screen.getByTestId('products-variations-pane'), { key: 'Escape' });
 	expect(screen.getByTestId('products-list')).not.toBeNull();
 });
+it('draws the caller’s pane under the crumb instead of the POS variations', () => {
+	const renderPane = jest.fn((product: { uuid: string }) => (
+		<div data-testid="caller-pane">{product.uuid}</div>
+	));
+	render(<DrillIn parent={parent} back={jest.fn()} renderPane={renderPane} />);
+	expect(screen.getByTestId('caller-pane').textContent).toBe('parent');
+	expect(renderPane).toHaveBeenCalledWith(parent);
+	expect(screen.queryByTestId('variations')).toBeNull();
+	expect(screen.getByTestId('products-breadcrumb')).toBeTruthy();
+});
 it('renders the given ancestors before the product and keeps the last one as the way back', () => {
 	const back = jest.fn();
 	const toRoot = jest.fn();

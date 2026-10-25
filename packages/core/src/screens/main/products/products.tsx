@@ -1,20 +1,21 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import get from 'lodash/get';
 import omit from 'lodash/omit';
 import { useRouter } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 
-import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
+import { PaneStack } from '@wcpos/components/pane-stack';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
 import { ManagementBar } from '../components/management-bar';
-import { DisplayOptions } from '../components/display-options';
 import { ListColumn, ListPage } from '../components/list-frame';
-import { ProductRow as TouchRow, VariableRow } from './row';
+import { ProductsDisplayOptions } from './display-options';
+import { InlineVariations, ProductRow as TouchRow, VariableRow } from './row';
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
 import { EditablePrice } from './cells/editable-price';
@@ -38,6 +39,13 @@ import { TaxBasedOn } from '../components/product/tax-based-on';
 import { VariableProductImage } from '../components/product/variable-image';
 import { VariableProductPrice } from '../components/product/variable-price';
 import { VariableProductRow } from '../components/product/variable-product-row';
+import { VariationRowProvider } from '../components/product/variable-product-row/context';
+import { Variations } from '../components/product/variable-product-row/variations';
+import { setVariationMatch } from '../components/product/variation-matches';
+// The POS panel's drill, shared across screens for now (LEDGER, 2026-10-25).
+import { DrillIn } from '../pos/products/drill-in';
+import { useSystemBack } from '../pos/products/browse/use-system-back';
+import { useUISettings } from '../contexts/ui-settings';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useProAccess } from '../contexts/pro-access';
@@ -55,11 +63,25 @@ import {
 } from '../../../query';
 
 import type { ExpandedState } from '@tanstack/react-table';
-import type { QueryStateActions, SnapshotFields } from '../../../query';
+import type { QueryStateActions, SnapshotFields, VariationMatch } from '../../../query';
 import type { DataTableFeatures, DataTableFooterProps } from '../components/data-table';
 import type { Row, Table } from '../../../table-types';
 
-type ProductRow = { record: EngineRecord<'products'> };
+type ProductRow = {
+	record: EngineRecord<'products'>;
+	childrenSearchCount?: number;
+	parentSearchTerm?: string;
+};
+
+/** A variable product drilled into (the POS panel's drill style), and where its pane starts. */
+type Drill = {
+	row: Row<ProductRow, DataTableFeatures>;
+	/** The products search it opened under: a new search returns to the products. */
+	search: string;
+	/** A chip's attribute, or the products search that matched its variations. */
+	matches?: VariationMatch[];
+	variationSearch?: string;
+};
 
 const cells = {
 	simple: {
@@ -211,6 +233,42 @@ function ProductsList({
 					})
 			: undefined;
 	const canOpenVariation = !readOnly && caps.canEditVariations;
+	const openVariation = React.useMemo(
+		() =>
+			canOpenVariation
+				? (record: EngineRecord<'variations'>) =>
+						router.push({
+							pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+							params: { variationId: record.uuid },
+						})
+				: undefined,
+		[canOpenVariation, router]
+	);
+
+	// One setting for both product lists: the POS panel's `variationsStyle`.
+	const { uiSettings: posSettings } = useUISettings('pos-products');
+	const drillStyle =
+		(useDocField(posSettings, (value) => value.variationsStyle) ?? 'drill') === 'drill';
+	const [drill, setDrill] = React.useState<Drill | null>(null);
+	const drilled = drillStyle && drill && drill.search === state.search ? drill : null;
+	const drillTo = React.useCallback(
+		(row: Row<ProductRow, DataTableFeatures>, match?: VariationMatch) => {
+			const found = !match && (row.original.childrenSearchCount ?? 0) > 0;
+			setDrill({
+				row,
+				search: state.search,
+				matches: match ? setVariationMatch([], match) : undefined,
+				variationSearch: found ? row.original.parentSearchTerm : undefined,
+			});
+		},
+		[state.search]
+	);
+	// Android's back closes the drill; with none open the press goes on to the system.
+	useSystemBack(() => {
+		if (!drilled) return false;
+		setDrill(null);
+		return true;
+	});
 
 	/**
 	 * Barcode
@@ -240,6 +298,10 @@ function ProductsList({
 	 * Uses lodash/omit which doesn't have this issue.
 	 */
 	/* eslint-disable react-compiler/react-compiler -- expandedRef is a mutable ref from useObservableRef */
+	// No row stays expanded in the drill style.
+	React.useEffect(() => {
+		if (drillStyle) expandedRef.current = {};
+	}, [drillStyle, expandedRef]);
 	const setRowExpanded = React.useCallback(
 		(rowId: string, expanded: boolean) => {
 			if (expanded) {
@@ -262,7 +324,7 @@ function ProductsList({
 				expandedRef.current = value;
 			},
 			getRowCanExpand: (row: Row<ProductRow, DataTableFeatures>) =>
-				row.original.record.payload.type === 'variable',
+				!drillStyle && row.original.record.payload.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,
@@ -277,13 +339,9 @@ function ProductsList({
 					void saveCatalogueChange(document, changes);
 				},
 				variationRenderCell,
-				openVariation: canOpenVariation
-					? (record: EngineRecord<'variations'>) =>
-							router.push({
-								pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-								params: { variationId: record.uuid },
-							})
-					: undefined,
+				openVariation,
+				// Read by the variable row, its caret and its attribute chips instead of expanding.
+				drill: drillStyle ? drillTo : undefined,
 				/**
 				 * Expanded variation rows answer to the same Stock Status pill as the rows around
 				 * them. `extraData` carries it into FlashList so rendered rows refresh when the
@@ -299,68 +357,105 @@ function ProductsList({
 			setRowExpanded,
 			saveCatalogueChange,
 			state.filters.stock_status,
-			canOpenVariation,
-			router,
+			openVariation,
+			drillStyle,
+			drillTo,
 		]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 
+	// The management variations under the crumb, as the row's inline expand draws them; keyed by
+	// product so a tap on another product mid-slide never shows the last one's rows.
+	const renderVariations = (target: Drill) => (
+		<VariationRowProvider
+			key={target.row.id}
+			row={target.row}
+			initialMatches={target.matches}
+			initialSearch={target.variationSearch}
+		>
+			<ScrollView>
+				{pointer === 'fine' ? (
+					<Variations
+						row={target.row}
+						stockStatus={state.filters.stock_status}
+						openVariation={openVariation}
+					/>
+				) : (
+					<InlineVariations row={target.row} stockStatus={state.filters.stock_status} />
+				)}
+			</ScrollView>
+		</VariationRowProvider>
+	);
+
 	return (
 		<>
 			{pending && <View testID="products-searching-line" className="bg-primary h-0.5" />}
-			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
-				<DataTable<ProductRow>
-					id="products"
-					collectionName="products"
-					handle={handle}
-					sort={state.sort}
-					actions={tableActions}
-					renderItem={(props) =>
-						pointer === 'fine' ? (
-							renderFineItem(props, openProduct)
-						) : (
-							<VirtualizedList.Item>
-								<View
-									testID={`data-table-row-${props.item.original.record.payload.slug ?? props.item.original.record.uuid}`}
-								>
-									{props.item.original.record.payload.type === 'variable' ? (
-										<VariableRow {...props} />
-									) : (
-										<TouchRow record={props.item.original.record} />
-									)}
-								</View>
-							</VirtualizedList.Item>
-						)
-					}
-					cellsForRow={cellsForRow}
-					noDataMessage={
-						<EmptyState
-							testID="no-data-message"
-							size="surface"
-							kind={emptyStore ? 'empty' : 'no-results'}
-							title={t(
-								emptyStore ? 'products.no_products_yet' : 'pos_products.nothing_matches_filters'
-							)}
-							description={emptyStore ? t('products.no_products_yet_description') : undefined}
-							action={
-								emptyStore
-									? undefined
-									: {
-											label: t('pos_products.clear_filters'),
-											onPress: () => {
-												actions.resetFilters();
-												actions.clearSearch();
-											},
-										}
-							}
-						/>
-					}
-					estimatedItemSize={56}
-					TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-					getItemType={(row) => row.original.record.payload.type}
-					tableConfig={tableConfig}
-				/>
-			</View>
+			<PaneStack
+				detail={drilled}
+				renderDetail={(target) => (
+					<DrillIn
+						parent={target.row.original.record}
+						back={() => setDrill(null)}
+						renderPane={() => renderVariations(target)}
+					/>
+				)}
+				paneClassName="bg-background"
+				testID="products-pane-stack"
+			>
+				<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
+					<DataTable<ProductRow>
+						id="products"
+						collectionName="products"
+						handle={handle}
+						sort={state.sort}
+						actions={tableActions}
+						renderItem={(props) =>
+							pointer === 'fine' ? (
+								renderFineItem(props, openProduct)
+							) : (
+								<VirtualizedList.Item>
+									<View
+										testID={`data-table-row-${props.item.original.record.payload.slug ?? props.item.original.record.uuid}`}
+									>
+										{props.item.original.record.payload.type === 'variable' ? (
+											<VariableRow {...props} />
+										) : (
+											<TouchRow record={props.item.original.record} />
+										)}
+									</View>
+								</VirtualizedList.Item>
+							)
+						}
+						cellsForRow={cellsForRow}
+						noDataMessage={
+							<EmptyState
+								testID="no-data-message"
+								size="surface"
+								kind={emptyStore ? 'empty' : 'no-results'}
+								title={t(
+									emptyStore ? 'products.no_products_yet' : 'pos_products.nothing_matches_filters'
+								)}
+								description={emptyStore ? t('products.no_products_yet_description') : undefined}
+								action={
+									emptyStore
+										? undefined
+										: {
+												label: t('pos_products.clear_filters'),
+												onPress: () => {
+													actions.resetFilters();
+													actions.clearSearch();
+												},
+											}
+								}
+							/>
+						}
+						estimatedItemSize={56}
+						TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
+						getItemType={(row) => row.original.record.payload.type}
+						tableConfig={tableConfig}
+					/>
+				</View>
+			</PaneStack>
 		</>
 	);
 }
@@ -403,7 +498,7 @@ export function Products() {
 						/>
 					}
 				>
-					<DisplayOptions id="products" title={t('common.product_settings')} />
+					<ProductsDisplayOptions title={t('common.product_settings')} />
 				</ManagementBar>
 			}
 		>

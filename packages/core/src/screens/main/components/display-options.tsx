@@ -20,10 +20,13 @@ export function DisplayOptions({
 	id,
 	title,
 	testID = id,
+	before,
 }: {
 	id: 'orders' | 'products' | 'customers' | 'coupons';
 	title: string;
 	testID?: string;
+	/** A page's own settings above its columns. */
+	before?: React.ReactNode;
 }) {
 	const t = useT();
 	return (
@@ -35,7 +38,7 @@ export function DisplayOptions({
 			closeTestID={`${testID}-display-close`}
 			restoreTestID={`${testID}-display-restore`}
 		>
-			<UISettingsColumnsOnlyForm id={id} />
+			<UISettingsColumnsOnlyForm id={id} before={before} />
 		</UISettingsDialog>
 	);
 }

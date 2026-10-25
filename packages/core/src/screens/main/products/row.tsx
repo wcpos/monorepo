@@ -84,7 +84,8 @@ export function ProductRow({
 			testID={`products-row-${record.uuid}`}
 			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
 			// lost the expanded state of a variable product.
-			aria-expanded={variable ? !!expanded : undefined}
+			// A drilling row (no `expanded`) opens a pane, so it is not an expander.
+			aria-expanded={variable && expanded !== undefined ? expanded : undefined}
 			// A row the cashier cannot open is inert, as the customers and coupons rows are.
 			onPress={
 				variable
@@ -129,7 +130,13 @@ export function ProductRow({
 						/>
 					</View>
 					<Icon
-						name={variable ? (expanded ? 'chevronUp' : 'chevronDown') : 'chevronRight'}
+						name={
+							variable && expanded !== undefined
+								? expanded
+									? 'chevronUp'
+									: 'chevronDown'
+								: 'chevronRight'
+						}
 						className="text-muted-foreground"
 					/>
 				</>
@@ -152,7 +159,13 @@ type VariableRowProps = {
 export function VariableRow(props: VariableRowProps) {
 	const meta = props.table.options.meta as unknown as {
 		setRowExpanded: (id: string, expanded: boolean) => void;
+		drill?: (row: VariableRowProps['item']) => void;
 	};
+	// The drill style: the press slides the variations in; nothing renders under the row.
+	if (meta.drill) {
+		const drill = meta.drill;
+		return <ProductRow record={props.item.original.record} onToggle={() => drill(props.item)} />;
+	}
 	return (
 		<VariationRowProvider row={props.item} setRowExpanded={meta.setRowExpanded}>
 			<VariableRowContent {...props} />
@@ -169,7 +182,7 @@ function VariableRowContent({ item, table }: VariableRowProps) {
 		</>
 	);
 }
-function InlineVariations({
+export function InlineVariations({
 	row,
 	stockStatus,
 }: {

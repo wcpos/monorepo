@@ -13,6 +13,8 @@ import { useQueryState, useQueryStateActions } from '../../../../query';
 import { setVariationMatch } from './variation-matches';
 import { useT } from '../../../../contexts/translations';
 
+import type { VariationMatch } from '../../../../query';
+
 /**
  *
  */
@@ -59,13 +61,15 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 	const meta = table.options.meta as unknown as {
 		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 		setRowExpanded?: (id: string, expanded: boolean) => void;
+		/** The drill style: a chip opens the variations pane at its option instead of expanding. */
+		drill?: (row: unknown, match?: VariationMatch) => void;
 	};
 	const isExpanded$ = React.useMemo(
 		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
 		[meta.expanded$, row.id]
 	);
 	const isExpanded = useObservableEagerState(isExpanded$);
-	const matches = useQueryState<'variations', import('../../../../query').VariationMatch[]>(
+	const matches = useQueryState<'variations', VariationMatch[]>(
 		(state) => state.filters.attributeMatches
 	);
 	const actions = useQueryStateActions<'variations'>();
@@ -82,18 +86,13 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 	 */
 	const handleSelect = React.useCallback(
 		(attribute: { id?: number; name?: string }, option: string) => {
+			const match = { id: attribute.id ?? 0, name: attribute.name ?? '', option };
+			if (meta.drill) return meta.drill(row, match);
 			setRowExpanded?.(row.id, true);
 			actions.clearSearch();
-			actions.setFilter(
-				'attributeMatches',
-				setVariationMatch(matches, {
-					id: attribute.id ?? 0,
-					name: attribute.name ?? '',
-					option,
-				})
-			);
+			actions.setFilter('attributeMatches', setVariationMatch(matches, match));
 		},
-		[actions, matches, row.id, setRowExpanded]
+		[actions, matches, row, setRowExpanded, meta]
 	);
 
 	/**
@@ -102,6 +101,7 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 	 * with the parent search term before mounting its variations table.
 	 */
 	const handleExpand = React.useCallback(() => {
+		if (meta.drill) return meta.drill(row);
 		if (isExpanded) {
 			setRowExpanded?.(row.id, false);
 			return;
@@ -113,7 +113,8 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 		setRowExpanded?.(row.id, true);
 	}, [
 		actions,
-		row.id,
+		row,
+		meta,
 		original.childrenSearchCount,
 		original.parentSearchTerm,
 		setRowExpanded,
@@ -125,7 +126,9 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 	 */
 	const expandText = React.useMemo(() => {
 		let text = '';
-		if (isExpanded) {
+		if (meta.drill) {
+			text += t('products.show_variations', { _: 'Show variations' });
+		} else if (isExpanded) {
 			text += t('common.collapse');
 		} else {
 			text += t('common.expand');
@@ -138,7 +141,7 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 			});
 		}
 		return text;
-	}, [isExpanded, original.childrenSearchCount, original.parentSearchTerm, t]);
+	}, [isExpanded, meta.drill, original.childrenSearchCount, original.parentSearchTerm, t]);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
