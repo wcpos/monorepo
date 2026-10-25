@@ -237,10 +237,9 @@ function Printer({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 			form={form}
 			open
 			onOpenChange={onOpenChange}
-			isEditing
 			connectionSection={<span>Connection</span>}
 			advancedSettings={<span>Options</span>}
-			footer={<span>Save printer</span>}
+			footer={<span>Close printer</span>}
 		/>
 	);
 }
@@ -251,7 +250,7 @@ it.each([false, true])('printer keeps its wide desktop panel or phone page (phon
 	const close = jest.fn();
 	render(<Printer onOpenChange={close} />);
 	expect(screen.getByRole('dialog')).toHaveClass(phone ? 'w-full' : 'w-200');
-	expect(screen.getByText('Save printer').parentElement).toHaveClass('border-t');
+	expect(screen.getByText('Close printer').parentElement).toHaveClass('border-t');
 	fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
 	expect(close).toHaveBeenCalledWith(false);
 });

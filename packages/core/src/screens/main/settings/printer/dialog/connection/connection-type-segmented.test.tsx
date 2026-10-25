@@ -12,6 +12,15 @@ import { ConnectionTypeSegmented } from './connection-type-segmented';
 import type { PrinterFormValues } from '../../schema';
 import type { Resolver } from 'react-hook-form';
 
+jest.mock('@wcpos/components/form', () => ({
+	FormItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	SavedMark: () => null,
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 }));

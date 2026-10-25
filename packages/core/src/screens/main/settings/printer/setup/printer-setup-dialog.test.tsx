@@ -30,7 +30,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: 'Header',
 	DialogTitle: 'Title',
 }));
-jest.mock('@wcpos/components/form', () => ({ Form: 'Form', FormField: () => null }));
+jest.mock('@wcpos/components/form', () => ({
+	Form: 'Form',
+	FormField: () => null,
+	SavedMark: () => null,
+}));
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: 'Select' }));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: 'Collapsible',

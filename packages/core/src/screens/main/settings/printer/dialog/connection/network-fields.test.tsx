@@ -30,6 +30,9 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('@wcpos/components/form', () => ({
+	FormItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	SavedMark: () => null,
 	FormField: ({
 		render,
 		name,

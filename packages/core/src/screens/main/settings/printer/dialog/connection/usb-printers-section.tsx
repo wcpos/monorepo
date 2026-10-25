@@ -1,8 +1,9 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import { SavedMark } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 
@@ -31,7 +32,10 @@ export function UsbPrintersSection({
 	}, [onScan]);
 
 	return (
-		<VStack className="gap-2">
+		<View className="relative gap-2">
+			<View className="pointer-events-none absolute top-0 right-0">
+				<SavedMark name="address" label={t('settings.saved')} />
+			</View>
 			{onScan && (
 				<Button
 					testID="add-printer-electron-usb-scan-button"
@@ -46,6 +50,6 @@ export function UsbPrintersSection({
 				</Button>
 			)}
 			{children}
-		</VStack>
+		</View>
 	);
 }

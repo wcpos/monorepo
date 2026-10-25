@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { HStack } from '@wcpos/components/hstack';
+import { FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -55,17 +57,23 @@ export function ConnectionTypeSegmented({
 
 	// A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10).
 	return (
-		<SegmentedControl
-			testID="add-printer-connection-type-segmented"
-			className="w-full"
-			segments={segments}
-			value={current}
-			onValueChange={(next) => {
-				if (isConnectionType(next)) {
-					onChange(next);
-					form.clearErrors('address');
-				}
-			}}
-		/>
+		<FormItem>
+			<HStack className="justify-between">
+				<FormLabel>{t('settings.printer_connection')}</FormLabel>
+				<SavedMark name="connectionType" label={t('settings.saved')} />
+			</HStack>
+			<SegmentedControl
+				testID="add-printer-connection-type-segmented"
+				className="w-full"
+				segments={segments}
+				value={current}
+				onValueChange={(next) => {
+					if (isConnectionType(next)) {
+						onChange(next);
+						form.clearErrors('address');
+					}
+				}}
+			/>
+		</FormItem>
 	);
 }
