@@ -155,7 +155,12 @@ function EditPrinterDialog({
 					<ConnectionTypeSegmented
 						form={form}
 						value={connectionType}
-						onChange={(v) => form.setValue('connectionType', v)}
+						onChange={(v) => {
+							form.setValue('connectionType', v);
+							// The old lane's address must not ride into the new one (a network IP would
+							// autosave as a Bluetooth target); the draft is held until a device is picked.
+							form.setValue('address', '', { shouldDirty: true });
+						}}
 					/>
 					{connectionSection}
 					{discoveryError && (
