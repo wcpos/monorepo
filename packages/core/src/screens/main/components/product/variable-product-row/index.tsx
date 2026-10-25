@@ -19,9 +19,7 @@ import { TableCell, TableRow } from '@wcpos/components/table';
 import type { EngineRecord } from '@wcpos/query';
 
 import { getColumnStyle } from '../../data-table/column-style';
-import { DataTableRow } from '../../data-table/rows';
 import { VariationRowProvider } from './context';
-import { useRowExpansion } from './use-row-expansion';
 import { Variations } from './variations';
 
 import type { DataTableFeatures } from '../../data-table';
@@ -38,14 +36,13 @@ export function VariableProductRow({
 	item,
 	index,
 	table,
-	toggleOnPress,
+	row,
 }: {
 	item: Row<ProductRow, DataTableFeatures>;
 	index: number;
 	table: Table<ProductRow, DataTableFeatures>;
-	/** The products page: a press on the row (not on a control in it) toggles its variations, or
-	 * drills into them when the table's meta carries `drill`. */
-	toggleOnPress?: boolean;
+	/** The products page's own row (its press opens the product); without it, the plain row. */
+	row?: React.ReactNode;
 }) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
@@ -60,7 +57,6 @@ export function VariableProductRow({
 				setRowExpanded?: (rowId: string, expanded: boolean) => void;
 				variationStockStatus?: string;
 				openVariation?: (record: EngineRecord<'variations'>) => void;
-				drill?: (row: Row<ProductRow, DataTableFeatures>) => void;
 		  }
 		| undefined;
 	/**
@@ -120,16 +116,7 @@ export function VariableProductRow({
 	return (
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
-				{toggleOnPress && meta?.drill ? (
-					// The drill style: the press slides the variations in; no row expands.
-					<DataTableRow
-						item={item}
-						testID={`data-table-row-${stableId}`}
-						onPress={() => meta.drill?.(item)}
-					/>
-				) : toggleOnPress ? (
-					<ToggleRow item={item} table={table} testID={`data-table-row-${stableId}`} />
-				) : (
+				{row ?? (
 					<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
 						{item.getVisibleCells().map((cell: Cell<ProductRow, unknown, DataTableFeatures>) => {
 							return (
@@ -171,21 +158,4 @@ export function VariableProductRow({
 			</VariationRowProvider>
 		</VirtualizedList.Item>
 	);
-}
-
-/** Inside the row's provider, so the toggle seeds the row's own variations query. */
-function ToggleRow({
-	item,
-	table,
-	testID,
-}: {
-	item: Row<ProductRow, DataTableFeatures>;
-	table: Table<ProductRow, DataTableFeatures>;
-	testID: string;
-}) {
-	// The same column-visibility hazard as above: the row element must not be cached on `item`.
-	'use no memo';
-	const { toggle } = useRowExpansion(item, table);
-	// No button name: the row holds inline controls (the name opener), which may not nest in one.
-	return <DataTableRow item={item} testID={testID} onPress={toggle} />;
 }

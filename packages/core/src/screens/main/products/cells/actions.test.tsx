@@ -2,7 +2,6 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
 
 import { Actions } from './actions';
 
@@ -10,12 +9,8 @@ let mockReadOnly = false;
 let mockCanEdit = true;
 let mockTooltipShown = false;
 const mockPush = jest.fn();
-const mockSetSearch = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../../query', () => ({
-	useQueryStateActions: () => ({ setSearch: mockSetSearch, clearFilter: jest.fn() }),
-}));
 jest.mock('../../contexts/pro-access', () => ({
 	useProAccess: () => ({ readOnly: mockReadOnly }),
 }));
@@ -52,21 +47,20 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	),
 }));
 
+const drill = jest.fn();
 const setRowExpanded = jest.fn();
-const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
-const props = (type: string, original: object = {}) =>
+const props = (type: string) =>
 	({
-		row: { id: 'row-1', original: { record: { uuid: 'one', payload: { type } }, ...original } },
-		table: { options: { meta: { expanded$, setRowExpanded } } },
+		row: { id: 'row-1', original: { record: { uuid: 'one', payload: { type } } } },
+		table: { options: { meta: { drill, setRowExpanded } } },
 	}) as unknown as React.ComponentProps<typeof Actions>;
 
 beforeEach(() => {
 	mockReadOnly = false;
 	mockCanEdit = true;
 	mockPush.mockClear();
-	mockSetSearch.mockClear();
+	drill.mockClear();
 	setRowExpanded.mockClear();
-	expanded$.next({});
 });
 
 it('the caret opens the product edit route', () => {
@@ -94,30 +88,25 @@ it('is disabled when read-only', () => {
 	expect((screen.getByTestId('product-open-button') as HTMLButtonElement).disabled).toBe(true);
 });
 
-it("a variable product's caret toggles its variations and never opens the modal", () => {
-	mockCanEdit = false;
+// A variable product is a record like any other: its caret opens it; the variations open
+// from the button under its name.
+it("a variable product's caret opens the product, never its variations", () => {
 	render(<Actions {...props('variable')} />);
-	const caret = screen.getByTestId('product-expand-button');
-	expect(caret.getAttribute('aria-label')).toBe('products.show_variations');
-	expect((caret as HTMLButtonElement).disabled).toBe(false);
+	const caret = screen.getByTestId('product-open-button');
 	expect(caret.getAttribute('data-icon')).toBe('chevronRight');
 	fireEvent.click(caret);
-	expect(setRowExpanded).toHaveBeenCalledWith('row-1', true);
-	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+		params: { productId: 'one' },
+	});
+	expect(drill).not.toHaveBeenCalled();
+	expect(setRowExpanded).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('product-expand-button')).toBeNull();
 });
 
-it('an open variable row shows the down caret and collapses', () => {
-	expanded$.next({ 'row-1': true });
+it("a variable product's caret is disabled, with the hint, without the edit capability", () => {
+	mockCanEdit = false;
 	render(<Actions {...props('variable')} />);
-	const caret = screen.getByTestId('product-expand-button');
-	expect(caret.getAttribute('data-icon')).toBe('chevronDown');
-	fireEvent.click(caret);
-	expect(setRowExpanded).toHaveBeenCalledWith('row-1', false);
-});
-
-it('opening a row whose variations matched the search seeds the variations search', () => {
-	render(<Actions {...props('variable', { childrenSearchCount: 2, parentSearchTerm: 'blue' })} />);
-	fireEvent.click(screen.getByTestId('product-expand-button'));
-	expect(mockSetSearch).toHaveBeenCalledWith('blue');
-	expect(setRowExpanded).toHaveBeenCalledWith('row-1', true);
+	expect((screen.getByTestId('product-open-button') as HTMLButtonElement).disabled).toBe(true);
+	expect(mockTooltipShown).toBe(true);
 });
