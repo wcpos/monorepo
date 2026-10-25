@@ -1,7 +1,9 @@
+import { createTestT } from '../../../../../../jest/translate';
 import {
 	BUILT_IN_PILL_IDS,
 	DEFAULT_FILTER_BAR,
 	describeQuickFilter,
+	getNamedOrderLabel,
 	getQuickFilterSortLabel,
 	isQuickFilterValid,
 	migrateLegacyQuickFilters,
@@ -13,21 +15,7 @@ import type { QuickFilter } from './filter-bar-layout';
 
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 
-const t = (key: string, values?: Record<string, string | number>) => {
-	const messages: Record<string, string> = {
-		'common.category': 'Category',
-		'common.on_sale': 'On sale',
-		'common.price': 'Price',
-		'common.type': 'Type',
-		'pos_products.quick_filter_selected': '{label}: {count} selected',
-		'pos_products.quick_filter_price_range': 'Price {min}–{max}',
-		'pos_products.quick_filter_sort': 'Sort: {field} {direction}',
-	};
-	return Object.entries(values ?? {}).reduce(
-		(message, [name, value]) => message.replace(`{${name}}`, String(value)),
-		messages[key] ?? key
-	);
-};
+const t = createTestT();
 
 const quick = (over: Partial<QuickFilter> = {}): QuickFilter => ({
 	id: 'quick-1',
@@ -133,10 +121,17 @@ it('describes conditions and sort in one muted summary', () => {
 			t,
 			(value) => `€${value.toFixed(2)}`
 		)
-	).toBe('Category: 2 selected · On sale · Price €10.00–€50.00 · Sort: Price ↑');
+	).toBe('Category: 2 selected · On Sale · Price €10.00–€50.00 · Price, low to high');
 });
 
 it('supports product type as a saved sort field', () => {
 	expect(quickFilterSortSchema.safeParse({ field: 'type', direction: 'asc' }).success).toBe(true);
 	expect(getQuickFilterSortLabel('type', t)).toBe('Type');
+});
+
+it('names a known order and preserves a fallback for other stored sorts', () => {
+	expect(getNamedOrderLabel({ field: 'sortable_price', direction: 'asc' }, t)).toBe(
+		'Price, low to high'
+	);
+	expect(getNamedOrderLabel({ field: 'sku', direction: 'desc' }, t)).toBe('SKU ↓');
 });

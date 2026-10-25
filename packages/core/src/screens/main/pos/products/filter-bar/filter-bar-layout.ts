@@ -213,6 +213,64 @@ export function getQuickFilterSortLabel(field: QuickFilterSort['field'], t: Tran
 	return t(SORT_LABEL_KEYS[field]);
 }
 
+export const NAMED_ORDERS: { value: string; labelKey: string; sort?: QuickFilterSort }[] = [
+	{ value: 'default', labelKey: 'pos_products.order_default' },
+	{
+		value: 'sortable_price-asc',
+		labelKey: 'pos_products.order_price_asc',
+		sort: { field: 'sortable_price', direction: 'asc' },
+	},
+	{
+		value: 'sortable_price-desc',
+		labelKey: 'pos_products.order_price_desc',
+		sort: { field: 'sortable_price', direction: 'desc' },
+	},
+	{
+		value: 'total_sales-desc',
+		labelKey: 'pos_products.order_popularity',
+		sort: { field: 'total_sales', direction: 'desc' },
+	},
+	{
+		value: 'date_created_gmt-desc',
+		labelKey: 'pos_products.order_newest',
+		sort: { field: 'date_created_gmt', direction: 'desc' },
+	},
+	{
+		value: 'date_modified_gmt-desc',
+		labelKey: 'pos_products.order_recently_changed',
+		sort: { field: 'date_modified_gmt', direction: 'desc' },
+	},
+	{
+		value: 'name-asc',
+		labelKey: 'pos_products.order_name_asc',
+		sort: { field: 'name', direction: 'asc' },
+	},
+	{
+		value: 'name-desc',
+		labelKey: 'pos_products.order_name_desc',
+		sort: { field: 'name', direction: 'desc' },
+	},
+	{
+		value: 'stock_quantity-asc',
+		labelKey: 'pos_products.order_fewest_left',
+		sort: { field: 'stock_quantity', direction: 'asc' },
+	},
+	{
+		value: 'menu_order-asc',
+		labelKey: 'pos_products.order_menu',
+		sort: { field: 'menu_order', direction: 'asc' },
+	},
+];
+
+export function getNamedOrderLabel(sort: QuickFilterSort | undefined, t: Translate): string {
+	const named = NAMED_ORDERS.find(
+		(order) => order.sort?.field === sort?.field && order.sort?.direction === sort?.direction
+	);
+	return named
+		? t(named.labelKey)
+		: `${getQuickFilterSortLabel(sort!.field, t)} ${sort!.direction === 'asc' ? '↑' : '↓'}`;
+}
+
 export function describeQuickFilter(
 	quickFilter: QuickFilter,
 	t: Translate,
@@ -255,13 +313,6 @@ export function describeQuickFilter(
 		return t('pos_products.quick_filter_price_max', { max: formatPrice(max as number) });
 	});
 
-	if (quickFilter.sort) {
-		parts.push(
-			t('pos_products.quick_filter_sort', {
-				field: getQuickFilterSortLabel(quickFilter.sort.field, t),
-				direction: quickFilter.sort.direction === 'asc' ? '↑' : '↓',
-			})
-		);
-	}
+	if (quickFilter.sort) parts.push(getNamedOrderLabel(quickFilter.sort, t));
 	return parts.join(' · ');
 }
