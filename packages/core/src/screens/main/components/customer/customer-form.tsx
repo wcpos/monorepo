@@ -5,7 +5,7 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { Form, FormField, FormInput } from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
@@ -91,28 +91,30 @@ export function CustomerForm(props: CustomerFormProps) {
 						control={form.control}
 						name="first_name"
 						render={({ field }) => (
-							<View className="flex-1">
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.first_name')}</FormLabel>
+									<SavedMark name="first_name" label={t('settings.saved')} />
+								</HStack>
 								<FormInput
 									testID="customer-first-name-input"
-									label={t('common.first_name')}
 									{...field}
 									value={field.value ?? ''}
 								/>
-							</View>
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="last_name"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									testID="customer-last-name-input"
-									label={t('common.last_name')}
-									{...field}
-									value={field.value ?? ''}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.last_name')}</FormLabel>
+									<SavedMark name="last_name" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="customer-last-name-input" {...field} value={field.value ?? ''} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
@@ -121,9 +123,13 @@ export function CustomerForm(props: CustomerFormProps) {
 						control={form.control}
 						name="email"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput testID="customer-email-input" label={t('common.email')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.email')}</FormLabel>
+									<SavedMark name="email" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="customer-email-input" {...field} />
+							</FormItem>
 						)}
 					/>
 					<FormField
@@ -146,39 +152,46 @@ export function CustomerForm(props: CustomerFormProps) {
 						control={form.control}
 						name="username"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('common.username')}
-									{...field}
-									value={field.value ?? ''}
-									editable={!hasUsername}
-								/>
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.username')}</FormLabel>
+									<SavedMark name="username" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} value={field.value ?? ''} editable={!hasUsername} />
+							</FormItem>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="password"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.password')} {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('common.password')}</FormLabel>
+									<SavedMark name="password" label={t('settings.saved')} />
+								</HStack>
+								<FormInput {...field} />
+							</FormItem>
 						)}
 					/>
 				</HStack>
 				<Collapsible>
-					<CollapsibleTrigger testID="customer-billing-address-toggle">
-						<Text>{t('common.billing_address')}</Text>
-					</CollapsibleTrigger>
+					<HStack className="justify-between">
+						<CollapsibleTrigger testID="customer-billing-address-toggle">
+							<Text>{t('common.billing_address')}</Text>
+						</CollapsibleTrigger>
+						<SavedMark name="billing" label={t('settings.saved')} />
+					</HStack>
 					<CollapsibleContent>
 						<BillingAddressForm />
 					</CollapsibleContent>
 				</Collapsible>
 				<Collapsible>
-					<HStack>
+					<HStack className="justify-between">
 						<CollapsibleTrigger>
 							<Text>{t('common.shipping_address')}</Text>
 						</CollapsibleTrigger>
+						<SavedMark name="shipping" label={t('settings.saved')} />
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
@@ -189,7 +202,12 @@ export function CustomerForm(props: CustomerFormProps) {
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>
-				<TaxIdsForm />
+				<HStack className="items-start justify-between">
+					<VStack className="flex-1">
+						<TaxIdsForm />
+					</VStack>
+					<SavedMark name="tax_ids" label={t('settings.saved')} />
+				</HStack>
 				<MetaDataForm />
 			</VStack>
 		</Form>

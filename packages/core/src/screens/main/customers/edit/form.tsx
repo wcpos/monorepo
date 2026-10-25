@@ -6,24 +6,19 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
+import { SavedFieldProvider, useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
 import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
-import { getLogger, isErrorReported } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
+import { metaForWrite } from '../../components/meta-for-write';
 import {
 	CustomerForm,
 	customerFormSchema,
-	fillBillingFromIdentity,
+	type CustomerFormValues,
 } from '../../components/customer/customer-form';
-import { reportPushFailure } from '../../contexts/push-failure-code';
-import { usePushDocument } from '../../contexts/use-push-document';
 import { useCustomerRecord } from '../commands/use-customer-record';
 import { DeleteCustomerDialog, useCustomerActions } from '../customer-actions';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
 interface Props {
 	customer: ReadonlyEngineRecord<'customers'>;
@@ -32,12 +27,17 @@ interface Props {
 /**
  *
  */
-export function EditCustomerForm({ customer }: Props) {
+export function EditCustomerForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditCustomerFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditCustomerFormFields({ customer }: Props) {
 	const t = useT();
-	const [loading, setLoading] = React.useState(false);
 	const { saveCustomerFields } = useCustomerRecord();
-	const pushDocument = usePushDocument();
-	const { format } = useCustomerNameFormat();
 	const { close } = useDialog();
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
 	const readOnly = !(useAppInfo().license?.isPro ?? false);
@@ -51,68 +51,58 @@ export function EditCustomerForm({ customer }: Props) {
 			...customer.toMutableJSON().payload,
 		} as z.infer<typeof customerFormSchema>,
 	});
-	// Sync means "take the store's copy": the landed refresh replaces unsaved edits, so a later
-	// Save cannot write the stale defaults back over it.
+	const markSaved = useMarkSaved();
+	const writtenMetaKeys = React.useRef(new Set<string>());
+	const { flush } = useFormChangeHandler({
+		form,
+		onChange: async (changes) => {
+			if (readOnly) return false;
+			const root = Object.keys(changes)[0].split('.')[0] as keyof CustomerFormValues;
+			// An address writes as a whole, so the whole address is validated before it goes (the cart
+			// address sheet's rule): an invalid email left in one field must not ride along with a city.
+			if ((root === 'billing' || root === 'shipping') && !(await form.trigger(root))) return false;
+			const value = form.getValues(root);
+			// The billing identity follows the top-level one (ledger line 3) while it is empty OR still
+			// equal to the value the record held before this write: an autosave writes on every pause,
+			// so "fill when empty" alone would pin the first partial word ("Jo") into billing for good.
+			// Billing rides in the SAME patch, so a close or a Sync cannot drop it; the setValue after
+			// the write only brings the draft level with the record.
+			const identity = root === 'first_name' || root === 'last_name' || root === 'email';
+			const mirrored = identity ? String(form.getValues(`billing.${root}`) ?? '') : null;
+			const follows =
+				identity &&
+				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
+			const wire =
+				root === 'tax_ids' && Array.isArray(value)
+					? value.filter((row) => String(row?.value ?? '') !== '')
+					: root === 'meta_data' && Array.isArray(value)
+						? metaForWrite(
+								value,
+								customer.getLatest().payload.meta_data ?? [],
+								writtenMetaKeys.current
+							)
+						: value;
+			const written = await saveCustomerFields(customer, {
+				[root]: wire,
+				...(follows ? { billing: { ...form.getValues('billing'), [root]: value } } : {}),
+			} as Partial<CustomerPayload>);
+			if (written && follows) form.setValue(`billing.${root}`, value as string);
+			if (written) markSaved([root]);
+			return written;
+		},
+	});
+	// Sync flushes pending edits before taking the store's copy.
 	const actions = useCustomerActions(customer, {
 		onDeleted: close,
+		beforeSync: flush,
 		onSynced: () =>
 			form.reset({ ...customer.getLatest().payload } as z.infer<typeof customerFormSchema>),
 	});
 
 	/**
-	 * Save to server
-	 *
-	 * NOTE: There's an issue if we just patch the form changes, other changes such as customer or if the
-	 * order has been reopened will be lost. We need to push the whole order object.
-	 */
-	const handleSave = React.useCallback(
-		async (data: z.infer<typeof customerFormSchema>) => {
-			setLoading(true);
-			try {
-				const patched = await saveCustomerFields(customer, data as Partial<CustomerPayload>);
-				// localPatch reports its own failure (row + toast) and resolves undefined.
-				// Pushing anyway would sync the unchanged resident and report success;
-				// reporting it again put a second row and toast on one failed save.
-				if (!patched) return;
-				await pushDocument(customer).then((savedDoc: unknown) => {
-					if (savedDoc) {
-						const saved = customer.getLatest().payload;
-						mutationLogger.success(
-							t('common.saved', {
-								name: format(saved),
-							}),
-							{
-								showToast: true,
-								context: {
-									customerId: saved.id,
-									customerName: format(saved),
-								},
-							}
-						);
-						close();
-					}
-				});
-			} catch (error) {
-				// A localPatch rethrow (the scope moved twice) is already reported.
-				if (isErrorReported(error)) return;
-				// The customer push only enqueues (it does not await the store), so what
-				// fails here is the local write, not a store refusal: SYNC101, not SYNC999.
-				reportPushFailure(mutationLogger, 'Failed to save customer', error, {
-					fallback: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-					title: t('common.failed_to_save_customer'),
-					context: { customerId: customer.getLatest().payload.id },
-				});
-			} finally {
-				setLoading(false);
-			}
-		},
-		[saveCustomerFields, customer, pushDocument, t, format, close]
-	);
-
-	/**
 	 *
 	 */
-	// The record's actions sit left of Close/Save: destructive first (orders #2904).
+	// The record's actions sit left of Close: destructive first (orders #2904).
 	const footerLeading =
 		!readOnly && (actions.canDelete || actions.canSync) ? (
 			<>
@@ -133,21 +123,14 @@ export function EditCustomerForm({ customer }: Props) {
 			</>
 		) : undefined;
 
-	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
-
 	return (
 		<>
 			<CustomerForm
 				form={form}
 				footer={
-					<>
-						<Button testID="customer-form-close" variant="outline" onPress={close}>
-							<ButtonText>{t('common.close')}</ButtonText>
-						</Button>
-						<Button testID="customer-form-save" loading={loading} onPress={() => void onSubmit()}>
-							<ButtonText>{t('common.save')}</ButtonText>
-						</Button>
-					</>
+					<Button testID="customer-form-close" variant="outline" onPress={close}>
+						<ButtonText>{t('common.close')}</ButtonText>
+					</Button>
 				}
 				footerLeading={footerLeading}
 			/>
