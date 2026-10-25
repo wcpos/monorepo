@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
@@ -95,24 +94,15 @@ export function AddCustomerScreen() {
 				<ErrorBoundary>
 					<CustomerForm
 						form={form}
-						footer={
-							<>
-								<Button
-									testID="customer-form-close"
-									variant="outline"
-									onPress={() => router.back()}
-								>
-									<ButtonText>{t('common.close')}</ButtonText>
-								</Button>
-								<Button
-									testID="customer-form-add"
-									loading={loading}
-									onPress={() => void onSubmit()}
-								>
-									<ButtonText>{t('customers.add_customer')}</ButtonText>
-								</Button>
-							</>
-						}
+						footer={{
+							intent: {
+								label: t('customers.add_customer'),
+								testID: 'customer-form-add',
+								loading,
+								onPress: () => void onSubmit(),
+							},
+							close: { testID: 'customer-form-close' },
+						}}
 					/>
 				</ErrorBoundary>
 			</DialogContent>

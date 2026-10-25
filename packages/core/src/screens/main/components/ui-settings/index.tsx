@@ -7,13 +7,11 @@ import * as z from 'zod';
 import {
 	Dialog,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -153,16 +151,14 @@ function UISettingsDialog({
 					<DialogBody>
 						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
-					<DialogFooter>
-						<DialogClose testID={closeTestID}>{t('common.close')}</DialogClose>
-						<Button
-							testID={restoreTestID}
-							variant="outline-destructive"
-							onPress={handleButtonPress}
-						>
-							{t('common.restore_default_settings')}
-						</Button>
-					</DialogFooter>
+					<DialogFooter
+						destructive={{
+							label: t('common.restore_default_settings'),
+							testID: restoreTestID,
+							onPress: handleButtonPress,
+						}}
+						close={{ testID: closeTestID }}
+					/>
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>

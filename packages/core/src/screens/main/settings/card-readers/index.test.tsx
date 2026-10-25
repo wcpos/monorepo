@@ -114,19 +114,9 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <div data-testid="forget-dialog">{children}</div> : null,
-	AlertDialogAction: ({
-		children,
-		onPress,
-		testID,
-	}: React.PropsWithChildren<{ onPress?: () => void; testID?: string }>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	AlertDialogCancel: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter,
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
@@ -135,6 +125,24 @@ jest.mock('@wcpos/components/portal', () => ({
 	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		const close = typeof props.close === 'object' ? props.close : {};
+		return (
+			<Footer
+				{...props}
+				close={
+					props.close && {
+						...close,
+						onPress: (event: Parameters<NonNullable<typeof close.onPress>>[0]) => {
+							close.onPress?.(event);
+							mockProviderClose?.();
+						},
+					}
+				}
+			/>
+		);
+	},
 	Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
 		mockProviderClose = onClose;
 		return <>{children}</>;
@@ -144,11 +152,6 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DialogClose: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<button data-testid={testID} onClick={() => mockProviderClose?.()}>
-			{children}
-		</button>
-	),
 }));
 jest.mock('@wcpos/components/badge', () => ({
 	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (

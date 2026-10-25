@@ -408,6 +408,12 @@ export const tintedAlertSelector = {
  * beside its own selector, or this rule silently stops applying there.
  */
 export const designSystemOwnershipSelectors = [
+	{
+		selector:
+			'JSXElement:has(> JSXOpeningElement:matches([name.name=/^(DialogFooter|AlertDialogFooter)$/],[name.property.name=/^(DialogFooter|AlertDialogFooter)$/])) JSXOpeningElement:matches([name.name=/^(Button|IconButton|Pressable|TouchableOpacity)$/],[name.property.name=/^(Button|IconButton|Pressable|TouchableOpacity)$/])',
+		message:
+			"A footer's buttons are its slots (intent/secondary/record/destructive/close; confirm/cancel); never a Button inside a footer (CODING_STANDARDS § Footers, ruled 2026-10-25).",
+	},
 	tintedAlertSelector,
 	{
 		// `>` (direct child) deliberately limits this to the STATIC form,
@@ -436,15 +442,6 @@ export const designSystemOwnershipSelectors = [
 			' > Literal[value=/(^|\\s|:)!?(h-|min-h-|max-h-|size-|rounded)/]',
 		message:
 			'Height and radius on this component are owned by its size prop; pick a size (sm/default/lg) or add one in packages/components.',
-	},
-	{
-		selector:
-			'JSXElement:has(> JSXOpeningElement[name.name=/^(AlertDialogAction|ModalAction)$/])' +
-			' > JSXElement > JSXOpeningElement[name.name="Text"]' +
-			' > JSXAttribute[name.name="className"]' +
-			' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
-		message:
-			'Colour and type on an action label are owned by the action variant/size props. Use the right variant or size instead of a Text className.',
 	},
 ];
 

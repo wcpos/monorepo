@@ -295,18 +295,15 @@ export function PrintingSettings() {
 							{t('settings.delete_printer_description')}
 						</Alert.AlertDialogDescription>
 					</Alert.AlertDialogHeader>
-					<Alert.AlertDialogFooter>
-						<Alert.AlertDialogCancel testID={`printer-row-${deleteTarget?.id}-delete-cancel`}>
-							{t('common.cancel')}
-						</Alert.AlertDialogCancel>
-						<Alert.AlertDialogAction
-							variant="destructive"
-							testID={`printer-row-${deleteTarget?.id}-delete-confirm`}
-							onPress={confirmDelete}
-						>
-							{t('common.delete')}
-						</Alert.AlertDialogAction>
-					</Alert.AlertDialogFooter>
+					<Alert.AlertDialogFooter
+						cancel={{ testID: `printer-row-${deleteTarget?.id}-delete-cancel` }}
+						confirm={{
+							label: t('common.delete'),
+							destructive: true,
+							testID: `printer-row-${deleteTarget?.id}-delete-confirm`,
+							onPress: () => void confirmDelete(),
+						}}
+					/>
 				</Alert.AlertDialogContent>
 			</Alert.AlertDialog>
 			<PrinterDialog

@@ -68,11 +68,11 @@ function Confirm({ phone = false, onCancel = () => {} }) {
 				<C.AlertDialogContent inline testID="panel">
 					<C.AlertDialogTitle>Delete printer?</C.AlertDialogTitle>
 					<C.AlertDialogDescription>Remove it.</C.AlertDialogDescription>
-					<C.AlertDialogFooter testID="footer">
-						<C.AlertDialogCancel testID="cancel" onPress={onCancel}>
-							Cancel
-						</C.AlertDialogCancel>
-					</C.AlertDialogFooter>
+					<C.AlertDialogFooter
+						testID="footer"
+						cancel={{ testID: 'cancel', onPress: onCancel }}
+						confirm={{ label: 'Delete', destructive: true }}
+					/>
 				</C.AlertDialogContent>
 			</C.AlertDialog>
 		</DeviceScope>
@@ -121,7 +121,7 @@ it('calls the user cancel handler before dismissing', () => {
 	expect(screen.queryByTestId('panel')).toBeNull();
 });
 it('allows a footer outside the shell', () => {
-	render(<C.AlertDialogFooter testID="footer">Legacy footer</C.AlertDialogFooter>);
+	render(<C.AlertDialogFooter testID="footer" confirm={{ label: 'Delete' }} />);
 	expect(screen.getByTestId('footer')).not.toHaveClass('border-t');
 });
 

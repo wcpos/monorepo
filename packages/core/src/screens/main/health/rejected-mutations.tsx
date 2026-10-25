@@ -3,8 +3,6 @@ import { View } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -278,22 +276,19 @@ export function RejectedMutationsPanel() {
 								: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-rejected-requeue-delete-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-rejected-requeue-delete-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-rejected-requeue-delete-cancel' }}
+						confirm={{
+							label: t('health.database.rejected.requeue_delete_confirm'),
+							destructive: true,
+							testID: 'db-rejected-requeue-delete-confirm',
+							onPress: () => {
 								const row = requeueingDelete;
 								setRequeueingDelete(null);
 								if (row) void settle(row, 'requeue-rebuilt');
-							}}
-						>
-							<Text>{t('health.database.rejected.requeue_delete_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 
@@ -333,26 +328,21 @@ export function RejectedMutationsPanel() {
 									: t('health.database.rejected.discard_body')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-rejected-discard-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-rejected-discard-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-rejected-discard-cancel' }}
+						confirm={{
+							label: discarding?.destroysRecord
+								? t('health.database.rejected.discard_destroy_confirm')
+								: t('health.database.rejected.discard_confirm'),
+							destructive: true,
+							testID: 'db-rejected-discard-confirm',
+							onPress: () => {
 								const row = discarding;
 								setDiscarding(null);
 								if (row) void settle(row, 'discard');
-							}}
-						>
-							<Text>
-								{discarding?.destroysRecord
-									? t('health.database.rejected.discard_destroy_confirm')
-									: t('health.database.rejected.discard_confirm')}
-							</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</VStack>

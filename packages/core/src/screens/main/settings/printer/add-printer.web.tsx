@@ -23,7 +23,7 @@ import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
-import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
+import { usePrinterFooter } from './dialog/use-printer-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm } from './dialog/use-printer-dialog-form';
@@ -212,6 +212,14 @@ function EditPrinterDialog({
 		[form, setManualVendor]
 	);
 
+	const footer = usePrinterFooter({
+		showOpenDrawer: canOpenDrawer,
+		testLoading,
+		drawerLoading,
+		onOpenDrawer: () => void handleOpenDrawer(),
+		onTestPrint: () => void handleTestPrint(),
+	});
+
 	return (
 		<PrinterDialogLayout
 			form={form}
@@ -267,16 +275,7 @@ function EditPrinterDialog({
 				<AdvancedSettings form={form} showVendor={false} vendorOptions={[]} defaultOpen={false} />
 			}
 			errorSection={<TestPrintError error={testError} />}
-			footer={
-				<PrinterDialogFooter
-					showOpenDrawer={canOpenDrawer}
-					testLoading={testLoading}
-					drawerLoading={drawerLoading}
-					onOpenDrawer={handleOpenDrawer}
-					onTestPrint={handleTestPrint}
-					onClose={handleClose}
-				/>
-			}
+			footer={footer}
 		/>
 	);
 }

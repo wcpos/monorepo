@@ -12,8 +12,6 @@ import {
 } from '@wcpos/components/accordion';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -217,12 +215,14 @@ function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: Readonl
 							{t('auth.remove_store_and_associated_users')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('auth.remove')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('auth.remove'),
+							destructive: true,
+							onPress: () => void handleRemoveSite(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

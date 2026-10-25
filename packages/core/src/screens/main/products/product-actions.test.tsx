@@ -52,17 +52,7 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogHeader: Pass,
 		AlertDialogTitle: Pass,
 		AlertDialogDescription: Pass,
-		AlertDialogFooter: Pass,
-		AlertDialogCancel: Pass,
-		AlertDialogAction: ({
-			children,
-			onPress,
-			testID,
-		}: React.PropsWithChildren<{ onPress: () => void; testID: string }>) => (
-			<button data-testid={testID} onClick={onPress}>
-				{children}
-			</button>
-		),
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 	};
 });
 

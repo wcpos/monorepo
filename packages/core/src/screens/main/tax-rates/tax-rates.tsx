@@ -10,7 +10,6 @@ import { Suspense } from '@wcpos/components/suspense';
 import {
 	Dialog,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -183,15 +182,17 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 					</Tabs>
 				</View>
 				{/* One bottom bar: the count and sync left, Close right (a phone stacks it, Close on top). */}
-				<DialogFooter className="justify-between">
-					<TaxRatesFooter
-						shownCount={rates.length}
-						handle={handle}
-						shown={shown}
-						applies={applies}
-					/>
-					<DialogClose className="shrink-0">{t('common.close')}</DialogClose>
-				</DialogFooter>
+				<DialogFooter
+					close
+					aside={
+						<TaxRatesFooter
+							shownCount={rates.length}
+							handle={handle}
+							shown={shown}
+							applies={applies}
+						/>
+					}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

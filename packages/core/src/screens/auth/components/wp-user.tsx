@@ -7,8 +7,6 @@ import {
 } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -240,12 +238,14 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 						<AlertDialogTitle>{t('auth.remove_2', { name: wpUser.display_name })}</AlertDialogTitle>
 						<AlertDialogDescription>{t('auth.are_you_sure_you_want_to')}</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveWpUser}>
-							{t('auth.remove')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('auth.remove'),
+							destructive: true,
+							onPress: () => void handleRemoveWpUser(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

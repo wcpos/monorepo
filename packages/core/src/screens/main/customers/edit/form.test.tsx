@@ -61,9 +61,29 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: jest.fn() }),
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
 }));
-jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		variant,
+	}: React.PropsWithChildren<{ testID?: string; variant?: string }>) => (
+		<button data-testid={testID} data-variant={variant}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	useOverlay: () => ({ presentation: 'right' }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('@rn-primitives/dialog', () => ({
+	Close: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
 jest.mock('../../components/customer/customer-form', () => ({
 	CustomerForm: () => null,
 	customerFormSchema: {},
@@ -313,7 +333,7 @@ jest.mock('../../components/customer/tax-ids-form', () => ({
 it('renders the meta_data Saved root after its matching write, but none for read-only role', async () => {
 	const { CustomerForm } = jest.requireActual('../../components/customer/customer-form');
 	renderForm();
-	render(<CustomerForm form={form} footer={null} />);
+	render(<CustomerForm form={form} footer={{}} />);
 	formValues.meta_data = [{ key: 'colour', value: 'red' }];
 	await capturedChange({ 'meta_data.0.value': 'red' });
 	expect(mockLocalPatch).toHaveBeenLastCalledWith({
@@ -323,4 +343,41 @@ it('renders the meta_data Saved root after its matching write, but none for read
 	expect(mockMarkSaved).toHaveBeenLastCalledWith(['meta_data']);
 	expect(screen.getByTestId('saved-meta_data')).toBeTruthy();
 	expect(screen.queryByTestId('saved-role')).toBeNull();
+});
+
+// A shared form must hand roles to the real footer, not render the descriptor as a child.
+it('renders add intent with Cancel, and edit Delete/Sync apart from Close', () => {
+	const { CustomerForm } = jest.requireActual('../../components/customer/customer-form');
+	const view = render(
+		<CustomerForm
+			form={form}
+			footer={{
+				intent: { label: 'Add customer', testID: 'customer-form-add' },
+				close: { testID: 'customer-form-close' },
+			}}
+		/>
+	);
+	expect(screen.getByTestId('customer-form-close').textContent).toBe('Cancel');
+	expect(screen.getByTestId('customer-form-add').dataset.variant).toBe('default');
+	view.rerender(
+		<CustomerForm
+			form={form}
+			footer={{
+				destructive: { label: 'Delete', testID: 'customer-modal-delete' },
+				record: { label: 'Sync', testID: 'customer-modal-sync' },
+				close: { testID: 'customer-form-close' },
+			}}
+		/>
+	);
+	expect(screen.getByTestId('customer-form-close').textContent).toBe('Close');
+	const remove = screen.getByTestId('customer-modal-delete');
+	const sync = screen.getByTestId('customer-modal-sync');
+	expect(remove.dataset.variant).toBe('outline-destructive');
+	expect(sync.dataset.variant).toBe('outline');
+	expect(remove.parentElement).toBe(sync.parentElement);
+	expect(sync.parentElement).not.toBe(screen.getByTestId('customer-form-close').parentElement);
+	expect(Array.from(sync.parentElement!.children).map((el) => el.textContent)).toEqual([
+		'Delete',
+		'Sync',
+	]);
 });

@@ -41,18 +41,7 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogHeader: Pass,
 		AlertDialogTitle: Pass,
 		AlertDialogDescription: Pass,
-		AlertDialogFooter: Pass,
-		AlertDialogCancel: Pass,
-		AlertDialogAction: ({
-			children,
-			onPress,
-			testID,
-			disabled,
-		}: React.PropsWithChildren<{ onPress: () => void; testID: string; disabled: boolean }>) => (
-			<button data-testid={testID} disabled={disabled} onClick={onPress}>
-				{children}
-			</button>
-		),
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 	};
 });
 jest.mock('@wcpos/components/checkbox', () => ({ Checkbox: () => null }));

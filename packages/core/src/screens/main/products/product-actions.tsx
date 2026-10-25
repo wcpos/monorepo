@@ -2,8 +2,6 @@ import * as React from 'react';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -123,16 +121,15 @@ function DeleteCatalogueDialog({
 						)}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-					<AlertDialogAction
-						testID={product ? 'product-delete-confirm-button' : 'variation-delete-confirm-button'}
-						variant="destructive"
-						onPress={onConfirm}
-					>
-						{t('common.delete')}
-					</AlertDialogAction>
-				</AlertDialogFooter>
+				<AlertDialogFooter
+					cancel={true}
+					confirm={{
+						label: t('common.delete'),
+						testID: product ? 'product-delete-confirm-button' : 'variation-delete-confirm-button',
+						destructive: true,
+						onPress: onConfirm,
+					}}
+				/>
 			</AlertDialogContent>
 		</AlertDialog>
 	);

@@ -7,7 +7,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Form, FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, type DialogFooterProps } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -55,14 +55,12 @@ export function fillBillingFromIdentity(data: CustomerFormValues): CustomerFormV
 
 interface CustomerFormProps {
 	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof customerFormSchema>>>;
-	footer: React.ReactNode;
+	footer: DialogFooterProps;
 	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
-	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
-	footerLeading?: React.ReactNode;
 }
 
 export function CustomerForm(props: CustomerFormProps) {
-	const { form, footer, renderLayout, footerLeading } = props;
+	const { form, footer, renderLayout } = props;
 	const t = useT();
 
 	/**
@@ -217,23 +215,13 @@ export function CustomerForm(props: CustomerFormProps) {
 			</VStack>
 		</Form>
 	);
-	// With record actions, two wrapping groups: the record's on the left, the footer on the right.
-	const footerContent = footerLeading ? (
-		<>
-			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
-			<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footer}</View>
-		</>
-	) : (
-		footer
-	);
+	const footerElement = <DialogFooter {...footer} />;
 
-	if (renderLayout) return renderLayout(body, footerContent);
+	if (renderLayout) return renderLayout(body, footerElement);
 	return (
 		<>
 			<DialogBody>{body}</DialogBody>
-			<DialogFooter className={footerLeading ? 'flex-wrap justify-between' : undefined}>
-				{footerContent}
-			</DialogFooter>
+			{footerElement}
 		</>
 	);
 }

@@ -55,11 +55,9 @@ jest.mock('react-native', () => ({
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <div>{children}</div> : null,
-	AlertDialogAction: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
-	AlertDialogCancel: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter,
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));

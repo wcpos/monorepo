@@ -1,11 +1,11 @@
 import * as React from 'react';
-import type { GestureResponderEvent, ViewProps } from 'react-native';
+import type { ViewProps } from 'react-native';
 import { View } from 'react-native';
 
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import { Slot } from '@rn-primitives/slot';
 
-import { Button, type ButtonProps } from '../button';
+import { Button } from '../button';
 import { useDialogLabels } from '../dialog/labels';
 import { useIsPhone } from '../lib/device';
 import {
@@ -86,31 +86,16 @@ export type AlertDialogFooterProps = {
 	size?: 'default' | 'lg';
 	testID?: string;
 };
-type LegacyFooterProps = ViewProps & { children: React.ReactNode };
-function AlertDialogFooter(
-	allProps:
-		| (AlertDialogFooterProps & { children?: never; className?: never; style?: never })
-		| LegacyFooterProps
-) {
+function AlertDialogFooter({
+	confirm,
+	cancel = true,
+	size = 'default',
+	testID,
+}: AlertDialogFooterProps) {
 	const presentation = useOverlayPresentation() ?? 'center';
 	const phone = useIsPhone();
 	const labels = useDialogLabels();
-	if ('children' in allProps) {
-		const { children, className, ...props } = allProps;
-		return (
-			<View
-				className={cn(
-					'flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
-					presentation === 'bottom' && 'border-border border-t pt-4',
-					className
-				)}
-				{...props}
-			>
-				{children}
-			</View>
-		);
-	}
-	const { confirm, cancel = true, size = 'default', testID } = allProps;
+	const { onOpenChange } = AlertDialogPrimitive.useRootContext();
 	const { label, icon, destructive, ...button } = confirm;
 	const buttonClass = cn(phone && 'w-full', size === 'lg' && !cancel && 'flex-1');
 	const action = (
@@ -124,12 +109,20 @@ function AlertDialogFooter(
 			{label}
 		</Button>
 	);
+	const cancelProps = typeof cancel === 'object' ? cancel : {};
 	const dismiss = cancel ? (
-		<AlertDialogCancel asChild {...(typeof cancel === 'object' ? cancel : {})}>
-			<Button variant="outline" size={size} className={buttonClass}>
-				{labels.cancel}
-			</Button>
-		</AlertDialogCancel>
+		<Button
+			{...cancelProps}
+			variant="outline"
+			size={size}
+			className={buttonClass}
+			onPress={(event) => {
+				cancelProps.onPress?.(event);
+				onOpenChange(false);
+			}}
+		>
+			{labels.cancel}
+		</Button>
 	) : null;
 	return (
 		<View
@@ -183,63 +176,8 @@ function AlertDialogDescription({
 	);
 }
 
-/** @deprecated Use AlertDialogFooter's confirm slot. */
-function AlertDialogAction({
-	asChild,
-	disabled,
-	...props
-}: AlertDialogPrimitive.ActionProps & Partial<ButtonProps>) {
-	return asChild ? (
-		<Slot
-			aria-disabled={disabled ?? undefined}
-			role="button"
-			disabled={disabled ?? undefined}
-			{...props}
-		/>
-	) : (
-		<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
-	);
-}
-
-/** @deprecated Use AlertDialogFooter's cancel slot. */
-function AlertDialogCancel({
-	asChild,
-	disabled,
-	onPress: userOnPress,
-	...props
-}: AlertDialogPrimitive.CancelProps) {
-	const { onOpenChange } = AlertDialogPrimitive.useRootContext();
-
-	function onPress(ev: GestureResponderEvent) {
-		if (userOnPress) {
-			userOnPress(ev);
-		}
-		onOpenChange(false);
-	}
-
-	return asChild ? (
-		<Slot
-			onPress={onPress}
-			aria-disabled={disabled ?? undefined}
-			role="button"
-			disabled={disabled ?? undefined}
-			{...props}
-		/>
-	) : (
-		<Button
-			aria-disabled={disabled ?? undefined}
-			disabled={disabled ?? undefined}
-			onPress={onPress}
-			variant="outline"
-			{...props}
-		/>
-	);
-}
-
 export {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,

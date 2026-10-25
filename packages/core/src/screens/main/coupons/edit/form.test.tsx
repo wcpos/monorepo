@@ -60,9 +60,29 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: jest.fn() }),
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
 }));
-jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		variant,
+	}: React.PropsWithChildren<{ testID?: string; variant?: string }>) => (
+		<button data-testid={testID} data-variant={variant}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	useOverlay: () => ({ presentation: 'right' }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('@rn-primitives/dialog', () => ({
+	Close: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
 jest.mock('../../components/coupon/coupon-form', () => ({
 	CouponForm: () => null,
 	couponFormSchema: {},
@@ -214,7 +234,7 @@ jest.mock('../../components/coupon/status-select', () => ({ StatusSelect: () => 
 it('renders the newly covered Saved roots after their matching writes', async () => {
 	const { CouponForm } = jest.requireActual('../../components/coupon/coupon-form');
 	renderForm();
-	render(<CouponForm form={form} footer={null} />);
+	render(<CouponForm form={form} footer={{}} />);
 	for (const [root, value] of Object.entries({
 		discount_type: 'percent',
 		usage_limit: 1,
@@ -229,4 +249,41 @@ it('renders the newly covered Saved roots after their matching writes', async ()
 		expect(mockMarkSaved).toHaveBeenLastCalledWith([root]);
 		expect(screen.getAllByTestId(`saved-${root}`)).toHaveLength(root === 'usage_limit' ? 2 : 1);
 	}
+});
+
+// A shared form must hand roles to the real footer, not render the descriptor as a child.
+it('renders add intent with Cancel, and edit Delete/Sync apart from Close', () => {
+	const { CouponForm } = jest.requireActual('../../components/coupon/coupon-form');
+	const view = render(
+		<CouponForm
+			form={form}
+			footer={{
+				intent: { label: 'Add coupon', testID: 'coupon-form-add' },
+				close: { testID: 'coupon-form-close' },
+			}}
+		/>
+	);
+	expect(screen.getByTestId('coupon-form-close').textContent).toBe('Cancel');
+	expect(screen.getByTestId('coupon-form-add').dataset.variant).toBe('default');
+	view.rerender(
+		<CouponForm
+			form={form}
+			footer={{
+				destructive: { label: 'Delete', testID: 'coupon-modal-delete' },
+				record: { label: 'Sync', testID: 'coupon-modal-sync' },
+				close: { testID: 'coupon-form-close' },
+			}}
+		/>
+	);
+	expect(screen.getByTestId('coupon-form-close').textContent).toBe('Close');
+	const remove = screen.getByTestId('coupon-modal-delete');
+	const sync = screen.getByTestId('coupon-modal-sync');
+	expect(remove.dataset.variant).toBe('outline-destructive');
+	expect(sync.dataset.variant).toBe('outline');
+	expect(remove.parentElement).toBe(sync.parentElement);
+	expect(sync.parentElement).not.toBe(screen.getByTestId('coupon-form-close').parentElement);
+	expect(Array.from(sync.parentElement!.children).map((el) => el.textContent)).toEqual([
+		'Delete',
+		'Sync',
+	]);
 });

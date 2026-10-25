@@ -12,8 +12,8 @@ import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
 import {
 	Dialog,
-	DialogClose,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -213,10 +213,8 @@ export function CardReadersSettings() {
 										/>
 									))}
 								</MenuRowGroup>
-								<DialogClose className="mt-2 h-14" testID="card-readers-provider-cancel">
-									<ButtonText>{t('common.cancel')}</ButtonText>
-								</DialogClose>
 							</VStack>
+							<DialogFooter close={{ testID: 'card-readers-provider-cancel' }} />
 						</DialogContent>
 					</Dialog>
 				</Portal>
@@ -235,18 +233,15 @@ export function CardReadersSettings() {
 							{t('settings.card_readers.forget_description')}
 						</Alert.AlertDialogDescription>
 					</Alert.AlertDialogHeader>
-					<Alert.AlertDialogFooter>
-						<Alert.AlertDialogCancel testID="card-readers-forget-cancel">
-							{t('common.cancel')}
-						</Alert.AlertDialogCancel>
-						<Alert.AlertDialogAction
-							variant="destructive"
-							testID="card-readers-forget-confirm"
-							onPress={actions.confirmForget}
-						>
-							{t('settings.card_readers.forget')}
-						</Alert.AlertDialogAction>
-					</Alert.AlertDialogFooter>
+					<Alert.AlertDialogFooter
+						cancel={{ testID: 'card-readers-forget-cancel' }}
+						confirm={{
+							label: t('settings.card_readers.forget'),
+							destructive: true,
+							testID: 'card-readers-forget-confirm',
+							onPress: actions.confirmForget,
+						}}
+					/>
 				</Alert.AlertDialogContent>
 			</Alert.AlertDialog>
 		</VStack>

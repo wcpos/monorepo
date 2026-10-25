@@ -3,8 +3,6 @@ import * as React from 'react';
 import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -174,12 +172,14 @@ export function Site({ user, site }: Props) {
 							{t('auth.remove_store_and_associated_users')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('auth.remove')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('auth.remove'),
+							destructive: true,
+							onPress: () => void handleRemoveSite(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

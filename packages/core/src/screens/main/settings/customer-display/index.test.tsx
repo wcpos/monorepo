@@ -89,15 +89,9 @@ const mockPlatform = jest.requireMock<{ Platform: { OS: string } }>('react-nativ
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <div>{children}</div> : null,
-	AlertDialogAction: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
-		<button type="button" onClick={onPress}>
-			{children}
-		</button>
-	),
-	AlertDialogCancel: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter,
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));

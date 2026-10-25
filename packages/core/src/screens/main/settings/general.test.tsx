@@ -58,26 +58,29 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		),
 		AlertDialogContent: Part,
 		AlertDialogHeader: Part,
-		AlertDialogFooter: Part,
-		AlertDialogTitle: Part,
-		AlertDialogDescription: Part,
-		AlertDialogAction: ({
-			children,
-			testID,
-			onPress,
-		}: React.PropsWithChildren<{ testID: string; onPress: () => void }>) => (
-			<button data-testid={testID} onClick={onPress}>
-				{children}
-			</button>
-		),
-		AlertDialogCancel: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => {
+		AlertDialogFooter: (props: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
 			const close = React.useContext(Context);
+			const Footer = jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter;
+			const cancel = typeof props.cancel === 'object' ? props.cancel : {};
 			return (
-				<button data-testid={testID} onClick={() => close(false)}>
-					{children}
-				</button>
+				<Footer
+					{...props}
+					cancel={
+						props.cancel === false
+							? false
+							: {
+									...cancel,
+									onPress: (event: Parameters<NonNullable<typeof cancel.onPress>>[0]) => {
+										cancel.onPress?.(event);
+										close(false);
+									},
+								}
+					}
+				/>
 			);
 		},
+		AlertDialogTitle: Part,
+		AlertDialogDescription: Part,
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
