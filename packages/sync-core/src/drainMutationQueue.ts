@@ -6,6 +6,7 @@ import {
 	type RetryBackoffPolicy,
 	retryJitterSeed,
 } from './recordRetryBackoff';
+import { toOrderWirePayload } from './woo/orderWriteContract';
 
 import type { RecordMutation } from './recordMutation';
 import type { QueuedMutation, RecordMutationQueue } from './recordMutationQueue';
@@ -613,7 +614,20 @@ export async function drainMutationQueue(input: {
 		// existed and the server IGNORED this payload — nothing was accepted, and the write
 		// lane's follow-up update is the write whose ack may settle the record's dead letters.
 		if (acked.operation === 'create' && result.httpStatus === 200) return;
-		const accepted = new Set(result.sentFields ?? Object.keys(acked.payload ?? {}));
+		// Wire against wire. The till queues the WHOLE resident payload (`total`,
+		// `payment_method`, `date_paid`…) and the adapter strips the server-authored and
+		// server-owned fields from every push — the refused one as much as the accepted
+		// one — so the dead letter is judged by what IT sent, never by its raw row (the
+		// first cut did that and settled nothing: #2939 live on 2026-10-25). Catalogue rows
+		// keep their raw keys: their adapter maps rename fields, which only makes this
+		// stricter, and they auto-discard anyway (#1082).
+		const onWire = (row: QueuedMutation): string[] =>
+			Object.keys(
+				row.collectionName === 'orders'
+					? toOrderWirePayload(row.payload ?? {})
+					: (row.payload ?? {})
+			);
+		const accepted = new Set(result.sentFields ?? onWire(acked));
 		let rows: QueuedMutation[];
 		try {
 			rows = await input.queue.all();
@@ -628,7 +642,7 @@ export async function drainMutationQueue(input: {
 				recordKey(row) !== recordKey(acked)
 			)
 				continue;
-			const carried = Object.keys(row.payload ?? {}).filter((key) => key !== 'meta_data');
+			const carried = onWire(row).filter((key) => key !== 'meta_data');
 			if (!carried.every((key) => accepted.has(key))) continue;
 			let settled = false;
 			try {
