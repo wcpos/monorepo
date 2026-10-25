@@ -34,6 +34,9 @@ export function FilterBarModal() {
 	React.useEffect(() => {
 		filterBarRef.current = filterBar;
 	});
+	// Deleting the filter being edited unmounts its editor, and the unmount flushes a pending text
+	// edit before the delete's write has landed; a deleted id is never written back (ids are uuids).
+	const deletedIds = React.useRef(new Set<string>());
 	const handleSave = (quickFilter: QuickFilter) => {
 		const exists = filterBar.some((item) => item.id === quickFilter.id);
 		const next = exists
@@ -56,11 +59,12 @@ export function FilterBarModal() {
 								onEdit={(quickFilter) =>
 									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' })
 								}
-								onDelete={(quickFilter) =>
+								onDelete={(quickFilter) => {
+									deletedIds.current.add(quickFilter.id);
 									setEditing((value) =>
 										value?.mode === 'edit' && value.quickFilter.id === quickFilter.id ? null : value
-									)
-								}
+									);
+								}}
 							/>
 						</View>
 						<View className="border-border md:flex-1 md:border-l md:pl-4">
@@ -71,11 +75,13 @@ export function FilterBarModal() {
 									onChange={
 										editing.mode === 'edit'
 											? (quickFilter) =>
-													patchUI({
-														filterBar: filterBarRef.current.map((item) =>
-															item.id === quickFilter.id ? quickFilter : item
-														),
-													} as never)
+													deletedIds.current.has(quickFilter.id)
+														? undefined
+														: patchUI({
+																filterBar: filterBarRef.current.map((item) =>
+																	item.id === quickFilter.id ? quickFilter : item
+																),
+															} as never)
 											: undefined
 									}
 									onSave={handleSave}

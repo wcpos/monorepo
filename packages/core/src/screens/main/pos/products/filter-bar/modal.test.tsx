@@ -95,3 +95,13 @@ it('applies a delayed edit to the list as it stands, not the list at keystroke t
 		{ ...saved, label: 'Renamed' },
 	]);
 });
+
+it('a pending edit flushed by the delete of its own filter is not written back', () => {
+	render(<FilterBarModal />);
+	fireEvent.click(screen.getByText('Edit'));
+	const onChange = editorOnChange!;
+	fireEvent.click(screen.getByText('Delete'));
+	// The editor's unmount flush arrives after the delete, before the delete's write has landed.
+	onChange({ ...saved, label: 'Renamed' });
+	expect(patchUI).not.toHaveBeenCalled();
+});
