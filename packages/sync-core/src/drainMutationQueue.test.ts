@@ -1439,9 +1439,10 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		});
 
 		it('keeps a dead letter that still carries a field the acknowledged write did not', async () => {
-			// A refused sale completion names `status`; a plain re-sync of the lines does
-			// not (ADR 0040 strips it), so that intent is still only in the dead letter.
-			const q = await queueWith(order('dead', { status: 'completed', line_items: [] }));
+			// A refused cancellation names a PUSHABLE `status`; a plain re-sync of the lines
+			// does not carry one (ADR 0040 strips it), so that intent is still only in the
+			// dead letter and a requeue would still send it.
+			const q = await queueWith(order('dead', { status: 'cancelled', line_items: [] }));
 			await drainMutationQueue({ queue: q, push: refused });
 			await q.enqueue(order('again', { line_items: [] }));
 			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
@@ -1451,10 +1452,12 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		});
 
 		it('judges coverage by the fields ON THE WIRE, not the queue row (Codex, #2939)', async () => {
-			// A refused completion (`status: 'completed'`) queued again still carries the
-			// status on its row, but `toOrderWirePayload` strips it before the push: the
-			// server never saw it, so the dead letter's intent is NOT covered and it stays.
-			const q = await queueWith(order('dead', { status: 'completed', line_items: [] }));
+			// A refused cancellation queued again WITHOUT its status: the row that is
+			// accepted carries `status` on neither its row nor the wire, so the dead
+			// letter's `status: 'cancelled'` — which a requeue would still send — is not
+			// covered and it stays. (A NON-pushable status such as `completed` is stripped
+			// from the refused push too, so it keeps nothing alive: see the snapshot case.)
+			const q = await queueWith(order('dead', { status: 'cancelled', line_items: [] }));
 			const server = createFakeWriteServer();
 			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
 			server.script((env) =>
@@ -1471,16 +1474,56 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 			await drainMutationQueue({ queue: q, push });
 			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
 
-			await q.enqueue({
-				...order('again', { status: 'completed', line_items: [] }),
-				baseRevision: 'sha256:r0',
-			});
+			await q.enqueue({ ...order('again', { line_items: [] }), baseRevision: 'sha256:r0' });
 			const result = await drainMutationQueue({ queue: q, push });
 			expect(result.pushed).toBe(1);
 			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('status');
 			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
 				{ id: 'dead', status: 'rejected' },
 			]);
+		});
+
+		it("settles a REAL order snapshot: the dead letter's own server-authored fields never reached the wire either", async () => {
+			// What the till actually queues is the whole resident payload — `total`,
+			// `payment_method`, `date_paid` and friends included. The adapter strips those
+			// from every push, the refused one as much as the accepted one, so coverage must
+			// be judged wire against wire: a dead letter is not kept alive by fields it never
+			// sent itself (2026-10-25: the first cut compared the raw row and never settled).
+			const snapshot = (quantity: number) => ({
+				line_items: [{ product_id: 3, quantity }],
+				billing: { first_name: 'A' },
+				customer_id: 0,
+				payment_method: 'pos_cash',
+				payment_method_title: 'Cash',
+				date_paid: null,
+				total: '15.00',
+				total_tax: '0.00',
+				discount_total: '0.00',
+				tax_lines: [],
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'order-A' }],
+			});
+			const q = await queueWith(order('dead', snapshot(1.5)));
+			const server = createFakeWriteServer();
+			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
+			server.script((env) =>
+				env.mutationId === 'dead'
+					? { kind: 'invalid_param', code: 'rest_invalid_param', message: 'not integer' }
+					: undefined
+			);
+			const push = (mutation: RecordMutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: server.fetch,
+				});
+			await drainMutationQueue({ queue: q, push });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue({ ...order('again', snapshot(2)), baseRevision: 'sha256:r0' });
+			const result = await drainMutationQueue({ queue: q, push });
+			expect(result.pushed).toBe(1);
+			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('total');
+			expect(await q.all()).toEqual([]);
 		});
 
 		it('does not count a born-twice create (200: payload ignored) as acceptance (Codex, #2939)', async () => {
