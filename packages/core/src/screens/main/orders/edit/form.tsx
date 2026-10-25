@@ -20,7 +20,6 @@ import {
 	FormTextarea,
 	SavedFieldProvider,
 	SavedMark,
-	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
@@ -29,7 +28,6 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
 	type EngineRecord,
-	type OrderPayload,
 	useRecordField,
 	WriteDeferredError,
 	WriteOutcomeTimeoutError,
@@ -52,7 +50,7 @@ import { CustomerSelect } from '../../components/customer-select';
 import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
-import { metaForWrite } from '../../components/meta-for-write';
+import { useRecordAutosave } from '../../components/use-record-autosave';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
@@ -144,34 +142,17 @@ function EditOrderFormFields({ order }: Props) {
 		defaultValues: formData as FormValues,
 	});
 	const markSaved = useMarkSaved();
-	const writtenMetaKeys = React.useRef(new Set<string>());
-	const { flush } = useFormChangeHandler({
+	const { flush } = useRecordAutosave({
 		form,
-		onChange: async (changes) => {
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+		stored: () => order.getLatest().payload,
+		save: (patch) => saveOrderFields(order, patch),
+		before: (root) => {
 			if (READ_ONLY_ROOTS.includes(root)) return false;
 			// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.
-			if (blockIfDegraded('save-order', { orderId: order.uuid })) return false;
-			// An address writes as a whole, so the whole address is validated before it goes (the cart
-			// address sheet's rule): an invalid email left in one field must not ride along with a city.
-			if ((root === 'billing' || root === 'shipping') && !(await form.trigger(root))) return false;
-			const value = form.getValues(root);
-			const wire =
-				root === 'tax_ids' && Array.isArray(value)
-					? value.filter((row) => String(row?.value ?? '') !== '')
-					: root === 'meta_data' && Array.isArray(value)
-						? metaForWrite(
-								(value as NonNullable<FormValues['meta_data']>).filter(
-									(row) => !PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? ''))
-								),
-								order.getLatest().payload.meta_data ?? [],
-								writtenMetaKeys.current
-							)
-						: value;
-			const written = await saveOrderFields(order, { [root]: wire } as Partial<OrderPayload>);
-			if (written) markSaved([root]);
-			return written;
+			return !blockIfDegraded('save-order', { orderId: order.uuid });
 		},
+		metaDraft: (rows) =>
+			rows.filter((row) => !PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? ''))),
 	});
 
 	// Status is read, never written, until Update status: reactive values are right here.

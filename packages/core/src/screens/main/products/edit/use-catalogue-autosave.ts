@@ -1,13 +1,10 @@
-import * as React from 'react';
-
-import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
 import type { ReadonlyEngineRecord } from '@wcpos/query';
 
-import { metaForWrite } from '../../components/meta-for-write';
+import { useRecordAutosave } from '../../components/use-record-autosave';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useCatalogueRecord } from '../commands/use-catalogue-record';
 
-import type { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
+import type { FieldValues, UseFormReturn } from 'react-hook-form';
 
 export function useCatalogueAutosave<T extends FieldValues>({
 	record,
@@ -23,26 +20,14 @@ export function useCatalogueAutosave<T extends FieldValues>({
 	wire?: (root: string, value: unknown) => unknown;
 }): { flush: () => Promise<boolean> } {
 	const { saveCatalogueFields } = useCatalogueRecord();
-	const markSaved = useMarkSaved();
-	const writtenRef = React.useRef(new Set<string>());
-	const { flush } = useFormChangeHandler({
+	return useRecordAutosave({
 		form,
-		onChange: async (changes) => {
-			if (readOnly) return false;
-			const root = Object.keys(changes)[0].split('.')[0] as FieldPath<T>;
-			const value = form.getValues(root);
-			const wireValue =
-				root === 'tax_class'
-					? taxClassToWire(value)
-					: root === 'meta_data' && Array.isArray(value)
-						? metaForWrite(value, record.getLatest().payload.meta_data ?? [], writtenRef.current)
-						: wire
-							? wire(root, value)
-							: value;
-			const written = await saveCatalogueFields(record, { [root]: wireValue });
-			if (written) markSaved([root]);
-			return written;
-		},
+		readOnly,
+		stored: () => record.getLatest().payload,
+		save: (patch) => saveCatalogueFields(record, patch),
+		wire: (root, value) =>
+			root === 'tax_class'
+				? taxClassToWire(value as string | null | undefined)
+				: (wire?.(root, value) ?? value),
 	});
-	return { flush };
 }

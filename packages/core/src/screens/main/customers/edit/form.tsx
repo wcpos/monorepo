@@ -6,12 +6,12 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
-import { SavedFieldProvider, useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
+import { SavedFieldProvider } from '@wcpos/components/form';
 import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
-import { metaForWrite } from '../../components/meta-for-write';
+import { useRecordAutosave } from '../../components/use-record-autosave';
 import {
 	CustomerForm,
 	customerFormSchema,
@@ -51,54 +51,42 @@ function EditCustomerFormFields({ customer }: Props) {
 			...customer.toMutableJSON().payload,
 		} as z.infer<typeof customerFormSchema>,
 	});
-	const markSaved = useMarkSaved();
-	const writtenMetaKeys = React.useRef(new Set<string>());
-	const { flush } = useFormChangeHandler({
+	// The billing identity follows the top-level one (ledger line 9) while it is empty OR still equal
+	// to the value the record held before the write: an autosave writes on every pause, so "fill when
+	// empty" alone would pin the first partial word ("Jo") into billing for good. It rides in the SAME
+	// patch, so a close or a Sync cannot drop it. `mirrors` carries each identity write's capture to
+	// its own `after`, keyed by root: writes overlap, and a password save must not evict a name's.
+	type Identity = 'first_name' | 'last_name' | 'email';
+	const mirrors = React.useRef(new Map<Identity, { was: string; value: string }>());
+	const { flush } = useRecordAutosave({
 		form,
-		onChange: async (changes) => {
-			if (readOnly) return false;
-			const root = Object.keys(changes)[0].split('.')[0] as keyof CustomerFormValues;
-			// An address writes as a whole, so the whole address is validated before it goes (the cart
-			// address sheet's rule): an invalid email left in one field must not ride along with a city.
-			if ((root === 'billing' || root === 'shipping') && !(await form.trigger(root))) return false;
-			const value = form.getValues(root);
-			// The billing identity follows the top-level one (ledger line 3) while it is empty OR still
-			// equal to the value the record held before this write: an autosave writes on every pause,
-			// so "fill when empty" alone would pin the first partial word ("Jo") into billing for good.
-			// Billing rides in the SAME patch, so a close or a Sync cannot drop it; the setValue after
-			// the write only brings the draft level with the record.
+		readOnly,
+		stored: () => customer.getLatest().payload,
+		save: (patch) => saveCustomerFields(customer, patch),
+		patch: async (root, value) => {
 			const identity = root === 'first_name' || root === 'last_name' || root === 'email';
 			const mirrored = identity ? String(form.getValues(`billing.${root}`) ?? '') : null;
 			const follows =
 				identity &&
 				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
-			const wire =
-				root === 'tax_ids' && Array.isArray(value)
-					? value.filter((row) => String(row?.value ?? '') !== '')
-					: root === 'meta_data' && Array.isArray(value)
-						? metaForWrite(
-								value,
-								customer.getLatest().payload.meta_data ?? [],
-								writtenMetaKeys.current
-							)
-						: value;
+			if (!follows) return { [root]: value } as Partial<CustomerPayload>;
+			mirrors.current.set(root as Identity, { was: mirrored as string, value: value as string });
 			// The mirror rides on the billing draft only while that draft is valid; otherwise on the
 			// stored billing, so an invalid email left in the draft never enters by the side door.
-			const billingBase = follows
-				? (await form.trigger('billing'))
-					? form.getValues('billing')
-					: customer.getLatest().payload.billing
-				: undefined;
-			const written = await saveCustomerFields(customer, {
-				[root]: wire,
-				...(follows ? { billing: { ...billingBase, [root]: value } } : {}),
-			} as Partial<CustomerPayload>);
+			const base = (await form.trigger('billing'))
+				? form.getValues('billing')
+				: customer.getLatest().payload.billing;
+			return { [root]: value, billing: { ...base, [root]: value } } as Partial<CustomerPayload>;
+		},
+		after: (root, written) => {
+			const captured = mirrors.current.get(root as Identity);
+			if (!captured) return;
+			mirrors.current.delete(root as Identity);
+			if (!written) return;
 			// Level the draft only if the cashier has not typed into the billing field meanwhile.
-			if (written && follows && String(form.getValues(`billing.${root}`) ?? '') === mirrored) {
-				form.setValue(`billing.${root}`, value as string);
+			if (String(form.getValues(`billing.${root as Identity}`) ?? '') === captured.was) {
+				form.setValue(`billing.${root as Identity}`, captured.value);
 			}
-			if (written) markSaved([root]);
-			return written;
 		},
 	});
 	// Sync flushes pending edits before taking the store's copy.
