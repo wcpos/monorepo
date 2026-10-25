@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 import ts from 'typescript';
 
@@ -28,7 +28,8 @@ export function scanSource(text, path) {
 	const sites = [];
 	function hasButton(node) {
 		if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-			if (BUTTONS.test(node.tagName.getText(source))) return true;
+			// The last segment of a qualified tag (`UI.Button`) is the component's name.
+			if (BUTTONS.test(node.tagName.getText(source).split('.').pop())) return true;
 		}
 		return ts.forEachChild(node, hasButton);
 	}
@@ -66,7 +67,8 @@ export function scanRepository() {
 		return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
 			const path = join(directory, entry.name);
 			if (entry.isDirectory()) return SKIP.test(entry.name) ? [] : walk(path);
-			const name = relative(ROOT, path);
+			// Repo-relative with forward slashes on every platform; `included` compares against them.
+			const name = relative(ROOT, path).split(sep).join('/');
 			return included(name) ? scanSource(readFileSync(path, 'utf8'), name) : [];
 		});
 	}

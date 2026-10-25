@@ -34,6 +34,11 @@ test('a footer containing a Button in a new file is a violation', () => {
 		]);
 	}
 });
+test('a qualified button tag in aside is still a footer-aside-button site', () => {
+	assert.deepEqual(scanSource('<DialogFooter aside={<UI.Button/>} close />', path), [
+		`${path}:1:1:footer-aside-button`,
+	]);
+});
 test('slot-only and whitespace-only footers are not sites', () => {
 	assert.deepEqual(scanSource('<DialogFooter intent={{ label: "Send" }} />', path), []);
 	assert.deepEqual(scanSource('<DialogFooter> \n </DialogFooter>', path), []);
