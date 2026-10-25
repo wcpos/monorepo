@@ -11,6 +11,7 @@ import type { FormItemProps } from '@wcpos/components/form';
 
 import { UISettingsForm } from './ui-settings-form';
 import { useBrowseCounts } from './browse/use-browse-terms';
+import { SORT_FIELD_VALUES } from './filter-bar/filter-bar-layout';
 
 import type { ControllerProps, FieldValues } from 'react-hook-form';
 
@@ -372,6 +373,14 @@ it('persists a Sort By selection', async () => {
 	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortBy: 'sku' });
 	await settle();
+});
+
+it('labels every Sort By option (the product-type sort once rendered blank)', () => {
+	render(<UISettingsForm />);
+	for (const value of SORT_FIELD_VALUES) {
+		expect(screen.getByTestId(`option-${value}`).textContent).not.toBe('');
+	}
+	expect(screen.getByTestId('option-type')).toHaveTextContent('common.type');
 });
 
 it('persists a Sort Direction toggle', async () => {

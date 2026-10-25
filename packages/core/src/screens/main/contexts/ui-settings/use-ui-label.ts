@@ -48,8 +48,6 @@ export const useUILabel = () => {
 					openOrdersPosition: t('pos_cart.open_orders_position'),
 					autoShowReceipt: t('common.automatically_show_receipt_after_checkout'),
 					autoPrintReceipt: t('common.automatically_print_receipt_after_checkout'),
-					receiptOutputType: t('receipt.output_type'),
-					openCashDrawer: t('receipt.open_cash_drawer'),
 					quickDiscounts: t('common.quick_discounts'),
 					quantity: t('pos_cart.qty_abbrev'),
 					image: t('common.image'),

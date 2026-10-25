@@ -205,6 +205,7 @@ export function UISettingsForm() {
 									name: t('common.name'),
 									sku: t('common.sku'),
 									barcode: t('common.barcode'),
+									type: t('common.type'),
 									sortable_price: t('common.price'),
 									date_created_gmt: t('common.date_created'),
 									date_modified_gmt: t('common.date_modified'),

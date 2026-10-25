@@ -86,6 +86,8 @@ jest.mock('react-hook-form', () => ({
 		const { onSynced } = React.useContext(mockCallbacksContext);
 		return { reset: () => onSynced?.() };
 	},
+	// The forms watch Manage Stock to disable the quantity; the actions under test do not care.
+	useWatch: () => undefined,
 }));
 jest.mock('./edit/use-catalogue-autosave', () => ({
 	useCatalogueAutosave: () => {
