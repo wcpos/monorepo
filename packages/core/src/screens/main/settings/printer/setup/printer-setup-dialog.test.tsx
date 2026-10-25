@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { savePrinterProfile } from '@wcpos/query';
 
 import { PrinterSetupDialog } from './printer-setup-dialog';
+import { PRINTER_TEXT_WIDTHS } from '../components/paper-width-select';
 import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
@@ -139,6 +140,27 @@ it('pre-selects the sole printer, prints on the button, then asks with three ans
 	expect(renderer.root.findByProps({ testID: 'printer-setup-footer' }).props.children).toBe(
 		'Test page 1 · 48 characters per line'
 	);
+	act(() => renderer.unmount());
+});
+
+it('asks the width with the shared printer text widths after a short test page', async () => {
+	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_print_test' }).props.onPress();
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_short' }).props.onPress();
+	});
+	const widths = renderer.root
+		.findAllByType('Button' as React.ElementType)
+		.map((node) => String(node.props.testID))
+		.filter((testID) => testID.startsWith('printer-setup-setup_width_'))
+		.map((testID) => Number(testID.replace('printer-setup-setup_width_', '')));
+	expect(widths).toEqual([...PRINTER_TEXT_WIDTHS]);
 	act(() => renderer.unmount());
 });
 

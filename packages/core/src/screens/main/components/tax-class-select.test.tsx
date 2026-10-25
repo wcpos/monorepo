@@ -59,7 +59,7 @@ describe('TaxClassSelect', () => {
 		expect(onValueChange).toHaveBeenCalledWith({ label: 'Standard', value: 'standard' });
 	});
 
-	it('offers no inherit option by default', () => {
+	it('offers no parent option by default', () => {
 		render(
 			<TaxClassSelect value={{ label: 'Standard', value: 'standard' }}>{null}</TaxClassSelect>
 		);
@@ -69,18 +69,17 @@ describe('TaxClassSelect', () => {
 	});
 
 	/**
-	 * 'inherit' is a WooCommerce sentinel, not a tax class, so the server's tax-class
-	 * list never contains it — and a new store's shipping tax class defaults to it. A
-	 * select without the option renders that store's setting as a blank field, and the
-	 * merchant cannot get back to it once they pick anything else.
+	 * 'parent' is WooCommerce's variation sentinel, not a tax class, so the server's
+	 * tax-class list never contains it — and a new variation defaults to it. A select
+	 * without the option rendered that variation as the empty "Select Tax Class".
 	 */
-	it('offers the inherit sentinel when asked, ahead of the server classes', () => {
+	it('offers "Same as parent" when asked, selected for a parent variation, and writes parent', () => {
 		const onValueChange = jest.fn();
 
 		render(
 			<TaxClassSelect
-				includeInherit
-				value={{ label: 'stale label', value: 'inherit' }}
+				includeParent
+				value={{ label: 'stale label', value: 'parent' }}
 				onValueChange={onValueChange}
 			>
 				{null}
@@ -88,14 +87,17 @@ describe('TaxClassSelect', () => {
 		);
 
 		const props = mockOptionSelect.mock.calls[0][0];
-		expect(props.options.map((option) => option.value)).toEqual(['inherit', 'standard']);
-		expect(props.value).toBe('inherit');
+		expect(props.options.map((option) => option.value)).toEqual(['parent', 'standard']);
+		expect(props.value).toBe('parent');
+		expect(props.options.find((option) => option.value === props.value)?.label).toBe(
+			'common.tax_class_same_as_parent'
+		);
 
-		const inherit = props.options[0];
-		props.onChange?.(inherit.value, inherit);
+		const parent = props.options[0];
+		props.onChange?.(parent.value, parent);
 		expect(onValueChange).toHaveBeenCalledWith({
-			label: 'common.tax_class_based_on_cart_items',
-			value: 'inherit',
+			label: 'common.tax_class_same_as_parent',
+			value: 'parent',
 		});
 	});
 });

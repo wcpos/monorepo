@@ -18,7 +18,6 @@ import {
 import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { Icon, type IconName } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
-import { OptionSelect, type SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
@@ -30,6 +29,7 @@ import {
 import { savePrinterProfile } from '@wcpos/query';
 
 import { CodePageSelect } from '../components/code-page-select';
+import { PaperWidthSelect, PRINTER_TEXT_WIDTHS } from '../components/paper-width-select';
 import { VendorSelect } from '../components/vendor-select';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
@@ -71,22 +71,6 @@ const openBluetoothSettings = () => {
 	void Linking.sendIntent(ANDROID_BLUETOOTH_SETTINGS).catch(() => undefined);
 };
 
-function SetupWidthSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
-	const t = useT();
-	const options = [32, 42, 48, 64].map((width) => ({
-		value: String(width),
-		label: t(`settings.setup_width_${width}`),
-	}));
-	return (
-		<OptionSelect
-			{...props}
-			options={options}
-			placeholder={t('settings.select_printer_text_width')}
-			value={value?.value}
-			onChange={(_, option) => onValueChange?.(option)}
-		/>
-	);
-}
 /** A caller's prefill is a discovered-printer shape; the draft wants form values. */
 function prefillDraft(prefill?: PrinterDialogPrefill): Partial<PrinterFormValues> | undefined {
 	if (!prefill) return undefined;
@@ -535,7 +519,7 @@ export function PrinterSetupDialog({
 						{...field}
 						value={String(field.value)}
 						onChange={(value: string) => field.onChange(Number(value))}
-						customComponent={SetupWidthSelect}
+						customComponent={PaperWidthSelect}
 						label={t('settings.printer_text_width')}
 					/>
 				)}
@@ -651,7 +635,7 @@ export function PrinterSetupDialog({
 								<>
 									{heading('width_question')}
 									<VStack className="gap-2.5">
-										{([32, 42, 48, 64] as const).map((n) =>
+										{PRINTER_TEXT_WIDTHS.map((n) =>
 											action(`setup_width_${n}`, () => void flow.chooseWidth(n), {
 												variant: columns === n ? 'default' : 'outline',
 												full: true,

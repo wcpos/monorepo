@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import {
@@ -115,6 +115,8 @@ function EditProductFormFields({ product }: Props) {
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(product.toMutableJSON().payload),
 	});
+	// Woo ignores a quantity on a record that does not manage stock; the list cell's rule.
+	const manageStock = useWatch({ control: form.control, name: 'manage_stock' });
 	const { flush } = useCatalogueAutosave({
 		record: product,
 		form,
@@ -302,6 +304,7 @@ function EditProductFormFields({ product }: Props) {
 										type="numeric"
 										value={value != null ? String(value) : undefined}
 										{...rest}
+										disabled={!manageStock}
 									/>
 								</FormItem>
 							)}

@@ -38,7 +38,16 @@ const mockUseForm = jest.fn((_options: unknown) => form);
 
 jest.mock('react-hook-form', () => ({
 	useForm: (options: unknown) => mockUseForm(options),
+	// The watched field reads the current form value, so a test "toggles" it by setting it.
+	useWatch: ({ name }: { name: string }) => formValues[name],
 }));
+
+/** The props each field's control rendered with, by field name. */
+const mockControlProps: Record<string, Record<string, unknown>> = {};
+const mockControl = (props: Record<string, unknown>) => {
+	mockControlProps[props.name as string] = props;
+	return null;
+};
 
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -58,9 +67,9 @@ jest.mock('@wcpos/components/form', () => ({
 		capturedChange = options.onChange;
 		return { flush: mockFlush };
 	},
-	FormInput: () => null,
+	FormInput: (props: Record<string, unknown>) => mockControl(props),
 	FormRadioGroup: () => null,
-	FormSelect: () => null,
+	FormSelect: (props: Record<string, unknown>) => mockControl(props),
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
 }));
@@ -163,6 +172,8 @@ describe('catalogue form autosave', () => {
 		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
 		formValues.name = 'Test product';
 		formValues.meta_data = [];
+		formValues.manage_stock = true;
+		formValues.tax_class = 'standard';
 		productData.meta_data = [];
 		mockBeforeSync = undefined;
 		mockIsPro = true;
@@ -254,12 +265,52 @@ describe('catalogue form autosave', () => {
 			}
 		});
 
+		it('disables Stock Quantity while Manage Stock is off, and enables it when it is on', () => {
+			formValues.manage_stock = false;
+			const { rerender } = renderForm();
+			expect(mockControlProps.stock_quantity.disabled).toBe(true);
+
+			formValues.manage_stock = true;
+			formValues.tax_class = 'standard';
+			rerender(
+				kind === 'product' ? (
+					<EditProductForm product={product} />
+				) : (
+					<EditVariationForm variation={product as unknown as EngineRecord<'variations'>} />
+				)
+			);
+			expect(mockControlProps.stock_quantity.disabled).toBe(false);
+		});
+
+		it("offers Woo's 'parent' tax class on a variation only", () => {
+			renderForm();
+			expect(mockControlProps.tax_class.includeParent).toBe(kind === 'variation' || undefined);
+		});
+
 		it('tax_class leaves as the wire spelling', async () => {
 			renderForm();
 
 			await capturedChange({ tax_class: 'standard' });
 
 			expect(mockLocalPatch).toHaveBeenCalledWith({ document: product, data: { tax_class: '' } });
+		});
+
+		it("a variation's 'parent' tax class opens as 'parent' and leaves as 'parent'", async () => {
+			const data = productData as typeof productData & { tax_class?: string };
+			data.tax_class = 'parent';
+			renderForm();
+			delete data.tax_class;
+			expect(mockUseForm).toHaveBeenCalledWith(
+				expect.objectContaining({ defaultValues: expect.objectContaining({ tax_class: 'parent' }) })
+			);
+
+			formValues.tax_class = 'parent';
+			await capturedChange({ tax_class: 'parent' });
+
+			expect(mockLocalPatch).toHaveBeenCalledWith({
+				document: product,
+				data: { tax_class: 'parent' },
+			});
 		});
 
 		it('a nested meta path writes the root without a just-added blank row', async () => {

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import {
@@ -94,6 +94,8 @@ function EditVariationFormFields({ variation }: Props) {
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(variation.toMutableJSON().payload),
 	});
+	// Woo ignores a quantity on a record that does not manage stock; the list cell's rule.
+	const manageStock = useWatch({ control: form.control, name: 'manage_stock' });
 	const { flush } = useCatalogueAutosave({
 		record: variation,
 		form,
@@ -204,6 +206,7 @@ function EditVariationFormFields({ variation }: Props) {
 										type="numeric"
 										value={value != null ? String(value) : undefined}
 										{...rest}
+										disabled={!manageStock}
 									/>
 								</FormItem>
 							)}
@@ -234,6 +237,7 @@ function EditVariationFormFields({ variation }: Props) {
 								</HStack>
 								<FormSelect
 									customComponent={TaxClassSelect}
+									includeParent
 									value={value}
 									onChange={onChange}
 									{...rest}

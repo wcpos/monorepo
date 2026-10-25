@@ -6,23 +6,22 @@ import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
-import { INHERIT_TAX_CLASS } from '../hooks/tax-class';
+import { PARENT_TAX_CLASS } from '../hooks/tax-class';
 
 interface Props extends SelectSingleRootProps {
 	/**
-	 * Offer WooCommerce's 'inherit' sentinel — "based on the cart items" — alongside the
+	 * Offer WooCommerce's 'parent' sentinel — a variation's "same as parent" — alongside the
 	 * server's tax classes. It is not a class, so it is not in the server's list, and a
-	 * select that omits it cannot render a store whose shipping tax class is set to it
-	 * (the default for a new store): the field just reads blank. Only the shipping tax
-	 * class setting owns the sentinel, so only that one opts in.
+	 * select that omits it renders a variation set to it (Woo's default for a new one) as
+	 * the empty placeholder. Only the variation form owns the sentinel, so only it opts in.
 	 */
-	includeInherit?: boolean;
+	includeParent?: boolean;
 }
 
 /**
  *
  */
-export function TaxClassSelect({ value, onValueChange, includeInherit, ...props }: Props) {
+export function TaxClassSelect({ value, onValueChange, includeParent, ...props }: Props) {
 	const t = useT();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses);
@@ -41,13 +40,10 @@ export function TaxClassSelect({ value, onValueChange, includeInherit, ...props 
 			})
 		);
 
-		return includeInherit
-			? [
-					{ label: t('common.tax_class_based_on_cart_items'), value: INHERIT_TAX_CLASS },
-					...classOptions,
-				]
+		return includeParent
+			? [{ label: t('common.tax_class_same_as_parent'), value: PARENT_TAX_CLASS }, ...classOptions]
 			: classOptions;
-	}, [includeInherit, t, taxClasses]);
+	}, [includeParent, t, taxClasses]);
 
 	/**
 	 *

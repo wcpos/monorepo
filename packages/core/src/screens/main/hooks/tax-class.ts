@@ -23,7 +23,14 @@ export function taxClassToWire(value?: string | null): string {
  *
  * It is NOT a spelling of the standard class. `@wcpos/order-math` resolves it against
  * the order's line items, mirroring `WC_Abstract_Order::calculate_taxes()`, so it must
- * survive the UI ⇄ wire codec untouched in both directions. Selects that can hold it
- * pass `includeInherit` to `TaxClassSelect`.
+ * survive the UI ⇄ wire codec untouched in both directions. The shipping tax class is
+ * read-only in the app, so no select offers it; `settings/tax.tsx` names it.
  */
 export const INHERIT_TAX_CLASS = 'inherit';
+
+/**
+ * A variation's tax class carries its own sentinel: `'parent'` — "same as parent", the
+ * class Woo gives a new variation. Like `'inherit'` it is not a slug and passes the codec
+ * untouched; the variation form's `TaxClassSelect` offers it via `includeParent`.
+ */
+export const PARENT_TAX_CLASS = 'parent';

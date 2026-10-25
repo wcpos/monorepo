@@ -5,26 +5,22 @@ import type { SelectSingleRootProps } from '@wcpos/components/select';
 
 import { useT } from '../../../../../contexts/translations';
 
+/**
+ * The printer text widths (characters per line, not paper millimetres) the app offers:
+ * 58 mm paper is 32; 80 mm printers run 42, 48 or 64 depending on model and font. The
+ * setup wizard and the Edit Printer dialog both offer exactly these.
+ */
+export const PRINTER_TEXT_WIDTHS = [32, 42, 48, 64] as const;
+
 export function PaperWidthSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 
 	const options = React.useMemo(
-		() => [
-			// This field stores printer character capacity (CPL), not physical paper width.
-			// 80mm printers are commonly configured as either 42 or 48 columns, so expose both.
-			{
-				value: '42',
-				label: t('settings.printer_width_80mm_standard'),
-			},
-			{
-				value: '48',
-				label: t('settings.printer_width_80mm_wide'),
-			},
-			{
-				value: '32',
-				label: t('settings.printer_width_58mm'),
-			},
-		],
+		() =>
+			PRINTER_TEXT_WIDTHS.map((width) => ({
+				value: String(width),
+				label: t(`settings.setup_width_${width}`),
+			})),
 		[t]
 	);
 
