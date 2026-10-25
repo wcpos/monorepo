@@ -14,20 +14,26 @@ import {
 	FormCombobox,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormSelect,
 	FormTextarea,
+	SavedFieldProvider,
+	SavedMark,
+	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import {
-	DialogAction,
-	DialogBody,
-	DialogClose,
-	DialogFooter,
-	useDialog,
-} from '@wcpos/components/dialog';
+import { DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, type OrderPayload, useRecordField } from '@wcpos/query';
+import {
+	type EngineRecord,
+	type OrderPayload,
+	useRecordField,
+	WriteDeferredError,
+	WriteOutcomeTimeoutError,
+} from '@wcpos/query';
 import {
 	GUEST_CUSTOMER_ID,
 	isGuestCustomer,
@@ -46,9 +52,10 @@ import { CustomerSelect } from '../../components/customer-select';
 import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
+import { metaForWrite } from '../../components/meta-for-write';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import { reportPushFailure } from '../../contexts/push-failure-code';
+import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useOrderRecord } from '../commands/use-order-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -62,7 +69,6 @@ interface Props {
 }
 
 const formSchema = z.object({
-	status: z.string(),
 	parent_id: z.number().optional(),
 	customer_id: z.number().default(GUEST_CUSTOMER_ID),
 	customer_note: z.string().optional(),
@@ -76,15 +82,23 @@ const formSchema = z.object({
 	tax_ids: taxIdsFormSchema,
 });
 
-/**
- *
- */
+const statusSchema = z.object({ status: z.string() });
+const READ_ONLY_ROOTS = ['parent_id', 'payment_method', 'payment_method_title', 'transaction_id'];
+type FormValues = z.infer<typeof formSchema>;
+
 export function EditOrderForm({ order }: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditOrderFormFields order={order} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditOrderFormFields({ order }: Props) {
 	const pushDocument = usePushDocument();
 	const { saveOrderFields } = useOrderRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { close } = useDialog();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
@@ -108,13 +122,10 @@ export function EditOrderForm({ order }: Props) {
 		throw new Error(t('orders.order_not_found'));
 	}
 
-	/**
-	 * We need to refresh the component when the order data changes
-	 */
-	const formData = useRecordField(order, (record) => {
-		const latest = record.payload;
+	// The draft opens once per order (the modal keys this form). Write echoes must not reset it.
+	const [formData] = React.useState(() => {
+		const latest = order.toMutableJSON().payload;
 		return {
-			status: latest.status,
 			parent_id: latest.parent_id,
 			currency: latest.currency,
 			customer_id: latest.customer_id,
@@ -125,87 +136,116 @@ export function EditOrderForm({ order }: Props) {
 			payment_method_title: latest.payment_method_title,
 			transaction_id: latest.transaction_id,
 			meta_data: latest.meta_data,
-			tax_ids: (latest as { tax_ids?: unknown[] }).tax_ids ?? [],
+			tax_ids: latest.tax_ids ?? [],
 		};
 	});
-
-	/**
-	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
-	 * This makes the form reactive to external data changes (react-hook-form best practice).
-	 */
-	type FormValues = z.infer<typeof formSchema>;
 	const form = useForm<FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: formData as FormValues,
+		defaultValues: formData as FormValues,
+	});
+	const markSaved = useMarkSaved();
+	const writtenMetaKeys = React.useRef(new Set<string>());
+	const { flush } = useFormChangeHandler({
+		form,
+		onChange: async (changes) => {
+			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
+			if (READ_ONLY_ROOTS.includes(root)) return false;
+			// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.
+			if (blockIfDegraded('save-order', { orderId: order.uuid })) return false;
+			// An address writes as a whole, so the whole address is validated before it goes (the cart
+			// address sheet's rule): an invalid email left in one field must not ride along with a city.
+			if ((root === 'billing' || root === 'shipping') && !(await form.trigger(root))) return false;
+			const value = form.getValues(root);
+			const wire =
+				root === 'tax_ids' && Array.isArray(value)
+					? value.filter((row) => String(row?.value ?? '') !== '')
+					: root === 'meta_data' && Array.isArray(value)
+						? metaForWrite(
+								(value as NonNullable<FormValues['meta_data']>).filter(
+									(row) => !PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? ''))
+								),
+								order.getLatest().payload.meta_data ?? [],
+								writtenMetaKeys.current
+							)
+						: value;
+			const written = await saveOrderFields(order, { [root]: wire } as Partial<OrderPayload>);
+			if (written) markSaved([root]);
+			return written;
+		},
 	});
 
-	/**
-	 * Handle save button click
-	 */
-	const handleSaveToServer = React.useCallback(
-		async (data: z.infer<typeof formSchema>) => {
-			// #163 ruling R5: this is an order save. `localPatch` swallows storage
-			// failures, so without this guard the push would go out built on a local
-			// patch that never landed.
+	// Status is read, never written, until Update status: reactive values are right here.
+	const currentStatus = useRecordField(order, (record) => record.payload.status) ?? '';
+	const statusForm = useForm<{ status: string }>({
+		resolver: zodResolver(statusSchema),
+		values: { status: currentStatus },
+	});
+	const status = useWatch({ control: statusForm.control, name: 'status' });
+	const onUpdateStatus = statusForm.handleSubmit(handleUpdateStatus);
+
+	async function handleUpdateStatus(data: { status: string }) {
+		if (loading) return;
+		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
+		setLoading(true);
+		if (!(await flush())) {
+			setLoading(false);
+			return;
+		}
+		const previous = order.getLatest().payload.status;
+		if (data.status === previous) {
+			setLoading(false);
+			return;
+		}
+		let patched = false;
+		try {
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-
-			setLoading(true);
-			try {
-				// ADR 0040: the payment fields are the server's (read-only here), and a status is
-				// written only when the cashier changed it — re-sending it would be a reopen.
-				const {
-					status,
-					payment_method: _method,
-					payment_method_title: _title,
-					transaction_id: _transaction,
-					...fields
-				} = data;
-				const changes =
-					status === order.getLatest().payload.status ? fields : { ...fields, status };
-				const patched = await saveOrderFields(order, changes as unknown as Partial<OrderPayload>);
-				// localPatch reports its own failure (row + toast) and resolves undefined.
-				// Pushing anyway would sync the unchanged resident and report success;
-				// reporting it again would put a second row and toast on one failure.
-				if (!patched) return;
-				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-				await pushDocument(order).then((savedDoc) => {
-					if (savedDoc) {
-						const saved = order.getLatest().payload;
-						mutationLogger.success(t('common.order_saved', { number: saved.number }), {
-							showToast: true,
+			if (!(await saveOrderFields(order, { status: data.status }))) return;
+			patched = true;
+			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
+			await pushDocument(order);
+			mutationLogger.success(t('orders.status_updated'), {
+				showToast: true,
+				context: { orderId: order.getLatest().payload.id, status: data.status },
+			});
+		} catch (error) {
+			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
+			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
+			// old Save left it, and the cashier is told it is still on its way. Only a refusal rolls
+			// the status back (the cart sheet's rule) and pushes the revert.
+			const pending =
+				error instanceof WriteOutcomeTimeoutError || error instanceof WriteDeferredError;
+			if (patched && !pending && !blockIfDegraded('save-order', { orderId: order.uuid })) {
+				const reverted = await saveOrderFields(order, { status: previous });
+				if (reverted) {
+					void pushDocument(order).catch((revertError) =>
+						mutationLogger.warn('Failed to send the reverted order', {
+							code: pushFailureCode(revertError),
 							context: {
-								orderId: saved.id,
-								orderNumber: saved.number,
+								orderId: order.getLatest().payload.id,
+								error: getErrorMessage(revertError),
 							},
-						});
-						close();
-					}
-				});
-			} catch (error) {
-				// A localPatch rethrow (the scope moved twice) is already reported.
-				if (isErrorReported(error)) return;
-				reportPushFailure(mutationLogger, 'Failed to save order', error, {
-					title: t('common.failed_to_save_order'),
-					stillSendingTitle: t('common.order_still_sending'),
-					context: { orderId: order.getLatest().payload.id },
-				});
-			} finally {
-				setLoading(false);
+						})
+					);
+				}
 			}
-		},
-		[blockIfDegraded, close, saveOrderFields, order, pushDocument, t]
-	);
-
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSaveToServer);
+			if (isErrorReported(error)) return;
+			// "Still on its way" only when the intent is still queued; after a rollback the cashier
+			// must not be told the change is still arriving.
+			reportPushFailure(mutationLogger, 'Failed to update order status', error, {
+				title: t('common.failed_to_save_order'),
+				...(pending ? { stillSendingTitle: t('common.order_still_sending') } : {}),
+				context: { orderId: order.getLatest().payload.id },
+			});
+		} finally {
+			setLoading(false);
+		}
+	}
 
 	/**
 	 * Fetch customer record and update form fields.
 	 */
 	const handleCustomerChange = React.useCallback(
-		(
+		async (
 			customerId: number,
 			selectedCustomer: EngineRecord<'customers'> | ReturnType<typeof useGuestCustomer>
 		) => {
@@ -213,6 +253,8 @@ export function EditOrderForm({ order }: Props) {
 			if (customerId === undefined || customerId === null) return;
 
 			try {
+				if (!(await flush())) return;
+				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 				const customerData = (
 					'getLatest' in selectedCustomer ? selectedCustomer.getLatest().payload : selectedCustomer
 				) as EngineRecord<'customers'>['payload'];
@@ -228,23 +270,24 @@ export function EditOrderForm({ order }: Props) {
 					email: customerData.billing?.email || customerData.email,
 				};
 
-				form.setValue('billing', billing, { shouldValidate: true });
-				form.setValue('shipping', customerData.shipping, {
-					shouldValidate: true,
-				});
-				// Snapshot the customer's tax IDs onto the order at attach time
-				// (mirrors `transformCustomerJSONToOrderJSON`). Empty array
-				// when the customer has none — overrides the prior snapshot.
-				form.setValue(
-					'tax_ids',
-					(Array.isArray(customerData.tax_ids) ? customerData.tax_ids : []) as z.infer<
-						typeof formSchema
-					>['tax_ids'],
-					{ shouldValidate: true }
-				);
-
-				form.setValue('customer_id', customerId);
+				const patch = {
+					customer_id: customerId,
+					billing,
+					shipping: customerData.shipping,
+					// Replace the sale-time snapshot, including clearing the prior customer's IDs.
+					tax_ids: Array.isArray(customerData.tax_ids) ? customerData.tax_ids : [],
+				};
+				const written = await saveOrderFields(order, patch);
+				if (!written) return;
+				// A reset updates the draft without feeding the compound write back into autosave. It
+				// also cancels a debounced write, so a note typed while the patch was in flight is
+				// started first; the reset keeps its text (getValues) and the write lands.
+				void flush();
+				form.reset({ ...form.getValues(), ...patch } as FormValues);
+				markSaved(['billing', 'shipping', 'tax_ids', 'customer_id']);
 			} catch (error) {
+				// A localPatch rethrow (the scope moved twice) is already reported.
+				if (isErrorReported(error)) return;
 				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Error fetching customer', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -255,7 +298,7 @@ export function EditOrderForm({ order }: Props) {
 				});
 			}
 		},
-		[form]
+		[blockIfDegraded, flush, form, markSaved, order, saveOrderFields]
 	);
 
 	/**
@@ -281,7 +324,7 @@ export function EditOrderForm({ order }: Props) {
 			setCustomerIdToLoad(null);
 			return;
 		}
-		handleCustomerChange(customerIdToLoad, selectedCustomer);
+		void handleCustomerChange(customerIdToLoad, selectedCustomer);
 		setCustomerIdToLoad(null);
 	}, [customerIdToLoad, customerLookup, guestCustomer, handleCustomerChange, t]);
 
@@ -300,10 +343,10 @@ export function EditOrderForm({ order }: Props) {
 	}, [customer_id, billing, shipping, format]);
 
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
-	const statusPushable = isPushableOrderStatus(formData.status);
+	const statusPushable = isPushableOrderStatus(currentStatus);
 	const allowedStatuses = statusPushable
 		? PUSHABLE_ORDER_STATUSES
-		: [...PUSHABLE_ORDER_STATUSES, ...(formData.status ? [formData.status] : [])];
+		: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
 
 	/**
 	 *
@@ -316,26 +359,15 @@ export function EditOrderForm({ order }: Props) {
 					<HStack className="gap-4">
 						<FormField
 							control={form.control}
-							name="status"
-							render={({ field: { value, ...fieldRest } }) => (
-								<View className="flex-1">
-									<FormSelect
-										label={t('common.status')}
-										customComponent={OrderStatusSelect}
-										allowed={allowedStatuses}
-										disabled={!statusPushable}
-										value={value}
-										{...fieldRest}
-									/>
-								</View>
-							)}
-						/>
-						<FormField
-							control={form.control}
 							name="parent_id"
 							render={({ field: { value, ...fieldRest } }) => (
 								<View className="flex-1">
-									<FormInput label={t('orders.parent_id')} value={value as never} {...fieldRest} />
+									<FormInput
+										label={t('orders.parent_id')}
+										editable={false}
+										value={value as never}
+										{...fieldRest}
+									/>
 								</View>
 							)}
 						/>
@@ -345,46 +377,88 @@ export function EditOrderForm({ order }: Props) {
 							control={form.control}
 							name="customer_id"
 							render={({ field }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('common.customer')}</FormLabel>
+										<SavedMark name="customer_id" label={t('settings.saved')} />
+									</HStack>
 									<FormCombobox
 										customComponent={CustomerSelect}
-										label={t('common.customer')}
 										withGuest
 										{...field}
 										onChange={(value: string) => {
 											const customerId = Number(value);
-											field.onChange(customerId);
 											setCustomerIdToLoad(customerId);
 										}}
 										// The field holds a customer id; its label is resolved separately, so
 										// the pair is passed through rather than derived from the scalar.
 										value={{ value: String(field.value), label: customerLabel }}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="customer_note"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormTextarea label={t('common.customer_note')} {...field} />
-								</View>
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('common.customer_note')}</FormLabel>
+										<SavedMark name="customer_note" label={t('settings.saved')} />
+									</HStack>
+									<FormTextarea {...field} />
+								</FormItem>
 							)}
 						/>
 					</HStack>
+					<Form {...statusForm}>
+						{/* The intent's own card (the cart sheet's Hand over): the select's label names it. */}
+						<View className="border-border gap-3 rounded-lg border p-4">
+							<FormField
+								control={statusForm.control}
+								name="status"
+								render={({ field }) => (
+									<View testID="order-edit-status">
+										<FormSelect
+											label={t('common.status')}
+											customComponent={OrderStatusSelect}
+											allowed={allowedStatuses}
+											disabled={!statusPushable}
+											{...field}
+										/>
+									</View>
+								)}
+							/>
+							<HStack className="justify-end">
+								<Button
+									variant="outline"
+									testID="order-edit-update-status"
+									disabled={loading || storageDegraded || status === currentStatus}
+									onPress={() => void onUpdateStatus()}
+								>
+									{t('orders.update_status')}
+								</Button>
+							</HStack>
+						</View>
+					</Form>
 					<Collapsible>
-						<CollapsibleTrigger>
-							<Text>{t('common.billing_address')}</Text>
-						</CollapsibleTrigger>
+						<HStack className="justify-between">
+							<CollapsibleTrigger>
+								<Text>{t('common.billing_address')}</Text>
+							</CollapsibleTrigger>
+							<SavedMark name="billing" label={t('settings.saved')} />
+						</HStack>
 						<CollapsibleContent>
 							<BillingAddressForm />
 						</CollapsibleContent>
 					</Collapsible>
 					<Collapsible>
-						<CollapsibleTrigger>
-							<Text>{t('common.shipping_address')}</Text>
-						</CollapsibleTrigger>
+						<HStack className="justify-between">
+							<CollapsibleTrigger>
+								<Text>{t('common.shipping_address')}</Text>
+							</CollapsibleTrigger>
+							<SavedMark name="shipping" label={t('settings.saved')} />
+						</HStack>
 						<CollapsibleContent>
 							<ShippingAddressForm />
 						</CollapsibleContent>
@@ -414,14 +488,13 @@ export function EditOrderForm({ order }: Props) {
 							control={form.control}
 							name="currency"
 							render={({ field: { value, ...fieldRest } }) => (
-								<View className="flex-1">
-									<FormSelect
-										customComponent={CurrencySelect}
-										label={t('common.currency')}
-										value={value}
-										{...fieldRest}
-									/>
-								</View>
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('common.currency')}</FormLabel>
+										<SavedMark name="currency" label={t('settings.saved')} />
+									</HStack>
+									<FormSelect customComponent={CurrencySelect} value={value} {...fieldRest} />
+								</FormItem>
 							)}
 						/>
 						<FormField
@@ -434,20 +507,23 @@ export function EditOrderForm({ order }: Props) {
 							)}
 						/>
 					</HStack>
-					<TaxIdsForm name="tax_ids" />
-					<MetaDataForm name="meta_data" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					<HStack className="items-start justify-between">
+						<View className="flex-1">
+							<TaxIdsForm name="tax_ids" />
+						</View>
+						<SavedMark name="tax_ids" label={t('settings.saved')} />
+					</HStack>
+					<View className="relative">
+						<MetaDataForm name="meta_data" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+						{/* Out of flow, beside the component's own heading: the mark never moves the rows. */}
+						<View className="pointer-events-none absolute top-0 right-0">
+							<SavedMark name="meta_data" label={t('settings.saved')} />
+						</View>
+					</View>
 				</VStack>
 			</DialogBody>
 			<DialogFooter>
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					testID="order-edit-save-button"
-					asChild
-					onPress={() => void onSave()}
-					disabled={storageDegraded}
-				>
-					<Button loading={loading}>{t('common.save')}</Button>
-				</DialogAction>
+				<DialogClose testID="order-edit-close-button">{t('common.close')}</DialogClose>
 			</DialogFooter>
 		</Form>
 	);

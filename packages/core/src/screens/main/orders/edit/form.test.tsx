@@ -11,7 +11,7 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger, markErrorReported } from '@wcpos/utils/logger';
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, WriteOutcomeTimeoutError } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 
@@ -42,29 +42,32 @@ type CustomerRecord = {
 type CustomerValueRef = { current: CustomerRecord | null };
 
 const customerResources = new Map<number, { valueRef$$: Subject<CustomerValueRef> }>();
-const setValue = jest.fn();
+const mockMarkSaved = jest.fn();
+const mockFlush = jest.fn();
+let capturedChange: ((changes: Record<string, unknown>) => Promise<boolean>) | undefined;
+let draft: Record<string, unknown>;
+let mockStatus = 'processing';
 const fieldOnChange = jest.fn();
 let selectCustomer: (value: string) => void = () => undefined;
 
-const mockWatch = (name: string) => {
-	if (name === 'customer_id') return 1;
-	if (name === 'billing') return { first_name: 'Previous' };
-	if (name === 'shipping') return { first_name: 'Previous' };
-	return undefined;
-};
+const mockWatch = (name: string) => (name === 'status' ? mockStatus : draft[name]);
 
 const form = {
 	control: {},
-	// The form's values are the order's own: the save drops what is unchanged.
-	handleSubmit: jest.fn(
-		(callback: (data: unknown) => unknown) => () => callback({ ...orderPayload })
-	),
-	setValue,
-	watch: jest.fn(mockWatch),
+	trigger: jest.fn(async () => true),
+	getValues: jest.fn((name?: string) => (name ? draft[name] : draft)),
+	reset: jest.fn((values: Record<string, unknown>) => {
+		draft = values;
+	}),
+};
+const statusForm = {
+	control: {},
+	handleSubmit: (callback: (data: { status: string }) => unknown) => () =>
+		callback({ status: mockStatus }),
 };
 
 jest.mock('react-hook-form', () => ({
-	useForm: () => form,
+	useForm: (options: { values?: unknown }) => (options.values ? statusForm : form),
 	useWatch: ({ name }: { name: string }) => mockWatch(name),
 }));
 
@@ -89,6 +92,15 @@ jest.mock('@wcpos/components/form', () => ({
 		renderField({
 			field: { name, value: name === 'customer_id' ? 1 : '', onChange: fieldOnChange },
 		}),
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	SavedMark: () => null,
+	useMarkSaved: () => mockMarkSaved,
+	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
+		capturedChange = options.onChange;
+		return { flush: mockFlush };
+	},
 	FormInput: () => null,
 	FormSelect: () => null,
 	FormTextarea: () => null,
@@ -102,27 +114,24 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
+function mockAction({
+	children,
+	onPress,
+	disabled,
+	testID,
+}: React.PropsWithChildren<{
+	onPress?: () => unknown;
+	disabled?: boolean;
+	testID?: string;
+}>) {
+	if (testID) modalActions.set(testID, { onPress, disabled: !!disabled });
+	return <>{children}</>;
+}
+jest.mock('@wcpos/components/button', () => ({ Button: mockAction }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogAction: ({
-		children,
-		onPress,
-		disabled,
-		testID,
-	}: React.PropsWithChildren<{
-		onPress?: () => unknown;
-		disabled?: boolean;
-		testID?: string;
-	}>) => {
-		if (testID) {
-			modalActions.set(testID, { onPress, disabled: !!disabled });
-		}
-		return <>{children}</>;
-	},
-	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogAction: mockAction,
+	DialogClose: mockAction,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useDialog: () => ({ close: mockDialogClose }),
 }));
@@ -250,158 +259,290 @@ async function degradeStorage(databaseName: string) {
 	});
 }
 
-describe('EditOrderForm customer lookup', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		customerResources.clear();
-		const initialCustomer$ = new BehaviorSubject<CustomerValueRef>({ current: null });
-		customerResources.set(0, { valueRef$$: initialCustomer$ });
+beforeEach(() => {
+	jest.clearAllMocks();
+	mockLocalPatch.mockReset().mockResolvedValue({ changes: {}, document: order });
+	mockPushDocument.mockReset().mockResolvedValue(order);
+	mockFlush.mockReset().mockResolvedValue(true);
+	mockStatus = 'processing';
+	draft = { ...orderPayload };
+	capturedChange = undefined;
+	modalActions.clear();
+	customerResources.clear();
+	customerResources.set(0, {
+		valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
 	});
+});
 
-	it('waits for the selected customer result instead of consuming the previous lookup value', () => {
+afterEach(() => {
+	act(() => clearStorageDegradation());
+});
+
+async function updateStatus() {
+	await act(async () => {
+		await modalActions.get('order-edit-update-status')!.onPress!();
+	});
+}
+
+async function editField(name: string, value: unknown) {
+	let written: boolean | undefined;
+	await act(async () => {
+		written = await capturedChange!({ [name]: value });
+	});
+	return written;
+}
+
+describe('EditOrderForm customer lookup', () => {
+	it('writes one customer snapshot after flushing and resets the draft when the selected lookup resolves', async () => {
 		const selectedCustomer$ = new Subject<CustomerValueRef>();
 		customerResources.set(2, { valueRef$$: selectedCustomer$ });
 		render(<EditOrderForm order={order} />);
-
 		act(() => selectCustomer('2'));
-
-		expect(fieldOnChange).toHaveBeenCalledWith(2);
-		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());
+		expect(fieldOnChange).not.toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(form.reset).not.toHaveBeenCalled();
 		expect(testLogger.error).not.toHaveBeenCalled();
 
-		act(() => selectedCustomer$.next({ current: customer(2) }));
+		await act(async () => {
+			selectedCustomer$.next({ current: customer(2) });
+		});
 
-		expect(setValue).toHaveBeenCalledWith(
-			'billing',
-			expect.objectContaining({ first_name: 'Billing 2', email: '2@example.com' }),
-			{ shouldValidate: true }
+		const patch = {
+			customer_id: 2,
+			billing: { first_name: 'Billing 2', last_name: '', email: '2@example.com' },
+			shipping: { first_name: 'Shipping 2' },
+			tax_ids: [{ id: 2 }],
+		};
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: order, data: patch });
+		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
+			mockLocalPatch.mock.invocationCallOrder[0]
 		);
-		expect(setValue).toHaveBeenCalledWith(
-			'shipping',
-			{ first_name: 'Shipping 2' },
-			{ shouldValidate: true }
-		);
-		expect(setValue).toHaveBeenCalledWith('tax_ids', [{ id: 2 }], { shouldValidate: true });
-		expect(setValue).toHaveBeenCalledWith('customer_id', 2);
+		expect(form.reset).toHaveBeenCalledWith({ ...orderPayload, ...patch });
+		expect(mockMarkSaved).toHaveBeenCalledWith(['billing', 'shipping', 'tax_ids', 'customer_id']);
+		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 
 	it('reports a missing customer only when the selected lookup resolves null', () => {
 		const selectedCustomer$ = new Subject<CustomerValueRef>();
 		customerResources.set(3, { valueRef$$: selectedCustomer$ });
 		render(<EditOrderForm order={order} />);
-
 		act(() => selectCustomer('3'));
 		expect(testLogger.info).not.toHaveBeenCalled();
-
 		act(() => selectedCustomer$.next({ current: null }));
-
-		// Not yet synced is not an error, but the cashier is told why nothing happened.
 		expect(testLogger.error).not.toHaveBeenCalled();
 		expect(testLogger.info).toHaveBeenCalledWith('Selected customer is not on this device', {
 			showToast: true,
 			toast: { title: 'orders.customer_not_on_device', type: 'warning' },
 			context: { customerId: 3 },
 		});
-		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(form.reset).not.toHaveBeenCalled();
+	});
+
+	it('attaches the guest and clears the previous tax-ID snapshot', async () => {
+		render(<EditOrderForm order={order} />);
+		await act(async () => selectCustomer('0'));
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: {
+				customer_id: 0,
+				billing: { first_name: undefined, last_name: undefined, email: undefined },
+				shipping: {},
+				tax_ids: [],
+			},
+		});
+	});
+
+	it.each(['flush', 'write'])(
+		'does not reset the customer draft when the %s fails',
+		async (failure) => {
+			if (failure === 'flush') mockFlush.mockResolvedValue(false);
+			else mockLocalPatch.mockResolvedValue(undefined);
+			render(<EditOrderForm order={order} />);
+			await act(async () => selectCustomer('0'));
+			expect(form.reset).not.toHaveBeenCalled();
+			expect(mockMarkSaved).not.toHaveBeenCalled();
+			if (failure === 'flush') expect(mockLocalPatch).not.toHaveBeenCalled();
+		}
+	);
+});
+
+describe('EditOrderForm autosave', () => {
+	it('writes and marks a customer_note edit without pushing', async () => {
+		draft.customer_note = 'Leave at reception';
+		render(<EditOrderForm order={order} />);
+		expect(await editField('customer_note', draft.customer_note)).toBe(true);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { customer_note: 'Leave at reception' },
+		});
+		expect(mockMarkSaved).toHaveBeenCalledWith(['customer_note']);
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(modalActions.has('order-edit-close-button')).toBe(true);
+		expect(modalActions.has('order-edit-save-button')).toBe(false);
+	});
+
+	it('validates and writes the whole billing root for a billing.city edit', async () => {
+		draft.billing = { first_name: 'Previous', city: 'Madrid' };
+		render(<EditOrderForm order={order} />);
+		expect(await editField('billing.city', 'Madrid')).toBe(true);
+		expect(form.trigger).toHaveBeenCalledWith('billing');
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { billing: { first_name: 'Previous', city: 'Madrid' } },
+		});
+		expect(mockMarkSaved).toHaveBeenCalledWith(['billing']);
+	});
+
+	it('an address with an invalid field elsewhere in it is not written for a sibling edit', async () => {
+		form.trigger.mockResolvedValueOnce(false);
+		draft.billing = { email: 'not-an-email', city: 'Madrid' };
+		render(<EditOrderForm order={order} />);
+		expect(await editField('billing.city', 'Madrid')).toBe(false);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockMarkSaved).not.toHaveBeenCalled();
+	});
+
+	it('writes meta_data without protected keys or blank rows', async () => {
+		draft.meta_data = [
+			{ key: '_pos_user', value: '7' },
+			{ key: 'custom', value: 'edited' },
+			{ key: '', value: '' },
+		];
+		render(<EditOrderForm order={order} />);
+		await editField('meta_data.1.value', 'edited');
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: [{ key: 'custom', value: 'edited' }] },
+		});
+	});
+
+	it('writes tax_ids without blank rows', async () => {
+		draft.tax_ids = [
+			{ type: 'vat', value: 'ABC' },
+			{ type: 'vat', value: '' },
+		];
+		render(<EditOrderForm order={order} />);
+		await editField('tax_ids.0.value', 'ABC');
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { tax_ids: [{ type: 'vat', value: 'ABC' }] },
+		});
+	});
+
+	it.each(['parent_id', 'payment_method', 'payment_method_title', 'transaction_id'])(
+		'refuses the read-only %s root',
+		async (root) => {
+			render(<EditOrderForm order={order} />);
+			expect(await editField(root, 'changed')).toBe(false);
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockMarkSaved).not.toHaveBeenCalled();
+		}
+	);
+
+	it('does not mark an edit when its local patch fails', async () => {
+		mockLocalPatch.mockResolvedValue(undefined);
+		render(<EditOrderForm order={order} />);
+		expect(await editField('customer_note', 'note')).toBe(false);
+		expect(mockMarkSaved).not.toHaveBeenCalled();
 	});
 });
 
-/**
- * #163 ruling R5: the Orders-screen edit form is an order save. `localPatch`
- * swallows storage failures, so without the guard the push would go out built on
- * a local patch that never landed.
- */
 describe('EditOrderForm while storage is degraded', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		modalActions.clear();
-		customerResources.clear();
-		customerResources.set(0, {
-			valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
-		});
-	});
-
-	afterEach(() => {
-		act(() => clearStorageDegradation());
-	});
-
-	it('disables save and refuses the write', async () => {
+	it('disables Update status and refuses field, customer and status writes', async () => {
 		render(<EditOrderForm order={order} />);
-		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(false);
-
+		expect(modalActions.get('order-edit-update-status')?.disabled).toBe(false);
 		await degradeStorage('degraded-order-edit');
-
-		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(true);
-
-		await act(async () => {
-			await modalActions.get('order-edit-save-button')!.onPress!();
-		});
-
+		expect(modalActions.get('order-edit-update-status')?.disabled).toBe(true);
+		expect(await editField('customer_note', 'note')).toBe(false);
+		await updateStatus();
+		await act(async () => selectCustomer('0'));
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 
 	it('stops before pushing when storage degrades during the local patch', async () => {
-		let resolveLocalPatch!: () => void;
+		let resolveLocalPatch!: (value: unknown) => void;
 		mockLocalPatch.mockImplementation(
-			() => new Promise<void>((resolve) => (resolveLocalPatch = resolve))
+			() =>
+				new Promise((resolve) => {
+					resolveLocalPatch = resolve;
+				})
 		);
-		mockPushDocument.mockResolvedValue(undefined);
 		render(<EditOrderForm order={order} />);
-
-		let savePromise!: Promise<unknown>;
-		act(() => {
-			savePromise = modalActions.get('order-edit-save-button')!.onPress!() as Promise<unknown>;
-		});
+		await updateStatus();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-
 		await degradeStorage('degraded-order-edit-during-patch');
 		await act(async () => {
-			resolveLocalPatch();
-			await savePromise;
+			resolveLocalPatch({ document: order });
 		});
-
 		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 });
 
-/**
- * The edit modal must dismiss itself after a successful save, but a failed
- * save has to keep the form on screen so the cashier can correct and retry.
- */
-describe('EditOrderForm save', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		modalActions.clear();
-		customerResources.clear();
-		customerResources.set(0, {
-			valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
-		});
-	});
-
-	it('closes the modal after a successful save', async () => {
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: order });
-		mockPushDocument.mockResolvedValue(order);
+describe('EditOrderForm Update status', () => {
+	it('flushes, writes only the changed status and pushes without closing the modal', async () => {
 		render(<EditOrderForm order={order} />);
-
-		await act(async () => {
-			await modalActions.get('order-edit-save-button')!.onPress!();
+		await updateStatus();
+		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
+			mockLocalPatch.mock.invocationCallOrder[0]
+		);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { status: 'processing' },
 		});
-
-		expect(mockDialogClose).toHaveBeenCalledTimes(1);
-	});
-
-	it('keeps the modal open when the push fails', async () => {
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: order });
-		mockPushDocument.mockRejectedValue(new Error('HTTP 500'));
-		render(<EditOrderForm order={order} />);
-
-		await act(async () => {
-			await modalActions.get('order-edit-save-button')!.onPress!();
-		});
-
+		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
+			mockPushDocument.mock.invocationCallOrder[0]
+		);
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(testLogger.success).toHaveBeenCalledWith('orders.status_updated', {
+			showToast: true,
+			context: { orderId: 50, status: 'processing' },
+		});
 		expect(mockDialogClose).not.toHaveBeenCalled();
+	});
+
+	it('does not write an unchanged status', async () => {
+		mockStatus = 'pending';
+		render(<EditOrderForm order={order} />);
+		expect(modalActions.get('order-edit-update-status')?.disabled).toBe(true);
+		await updateStatus();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+
+	it('restores the previous status and pushes the revert when a push fails', async () => {
+		mockPushDocument.mockRejectedValueOnce(new Error('HTTP 500'));
+		render(<EditOrderForm order={order} />);
+		await updateStatus();
+		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
+		expect(mockLocalPatch).toHaveBeenNthCalledWith(2, {
+			document: order,
+			data: { status: 'pending' },
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(2);
+		expect(testLogger.error).toHaveBeenCalledWith(
+			'Failed to update order status',
+			expect.anything()
+		);
+		expect(testLogger.success).not.toHaveBeenCalled();
+		expect(mockDialogClose).not.toHaveBeenCalled();
+	});
+
+	it('keeps the status when the push is still pending (offline, slow store): no revert, "still on its way"', async () => {
+		mockPushDocument.mockRejectedValueOnce(new WriteOutcomeTimeoutError('m-1', {}));
+		render(<EditOrderForm order={order} />);
+		await updateStatus();
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(testLogger.warn).toHaveBeenCalledWith(
+			'Failed to update order status',
+			expect.objectContaining({
+				toast: expect.objectContaining({ title: 'common.order_still_sending' }),
+			})
+		);
+		expect(testLogger.error).not.toHaveBeenCalled();
 	});
 
 	it('does not report a localPatch rethrow a second time', async () => {
@@ -409,31 +550,25 @@ describe('EditOrderForm save', () => {
 		markErrorReported(reported);
 		mockLocalPatch.mockRejectedValue(reported);
 		render(<EditOrderForm order={order} />);
-
-		await act(async () => {
-			await modalActions.get('order-edit-save-button')!.onPress!();
-		});
-
+		await updateStatus();
 		expect(testLogger.error).not.toHaveBeenCalled();
-		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
+		expect(testLogger.debug).not.toHaveBeenCalledWith(
+			'Failed to update order status',
+			expect.anything()
+		);
+		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 
-	it('does not push or close when the local patch fails', async () => {
-		// localPatch swallows write errors and resolves undefined
-		mockLocalPatch.mockResolvedValue(undefined);
-		mockPushDocument.mockResolvedValue(order);
+	it.each(['flush', 'write'])('does not push or close when the %s fails', async (failure) => {
+		if (failure === 'flush') mockFlush.mockResolvedValue(false);
+		else mockLocalPatch.mockResolvedValue(undefined);
 		render(<EditOrderForm order={order} />);
-
-		await act(async () => {
-			await modalActions.get('order-edit-save-button')!.onPress!();
-		});
-
+		await updateStatus();
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockDialogClose).not.toHaveBeenCalled();
-		// localPatch already wrote its SYNC101 row and toast; no second report here.
 		expect(testLogger.error).not.toHaveBeenCalled();
-		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
+		if (failure === 'flush') expect(mockLocalPatch).not.toHaveBeenCalled();
 	});
 });
 
@@ -458,20 +593,12 @@ it('management save preserves a tombstoned money-owner hint at the mutation boun
 			initial: { resident, scope: { scopeId: 'scope' } },
 		}),
 	}));
-	form.handleSubmit.mockImplementation(
-		(callback: unknown) => () =>
-			(callback as (data: unknown) => unknown)({
-				meta_data: [
-					{ ...hint, value: null },
-					{ key: 'custom', value: 'edited' },
-				],
-			})
-	);
-	mockPushDocument.mockResolvedValue(order);
+	draft.meta_data = [
+		{ ...hint, value: null },
+		{ key: 'custom', value: 'edited' },
+	];
 	render(<EditOrderForm order={order} />);
-	await act(async () => {
-		await modalActions.get('order-edit-save-button')!.onPress!();
-	});
+	await editField('meta_data.1.value', 'edited');
 	expect(testLogger.error).not.toHaveBeenCalled();
 	expect(stored.payload.meta_data).toEqual([hint, { key: 'custom', value: 'edited' }]);
 });

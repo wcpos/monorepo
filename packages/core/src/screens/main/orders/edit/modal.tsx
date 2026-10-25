@@ -85,7 +85,7 @@ export function OrderModal({ resource }: Props) {
 						</TabsContent>
 						{!readOnly && (
 							<TabsContent value="edit" className="min-h-0 flex-1">
-								<EditOrderForm order={order} />
+								<EditOrderForm key={order.uuid} order={order} />
 							</TabsContent>
 						)}
 						<TabsContent value="json" className="min-h-0 flex-1">
