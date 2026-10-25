@@ -309,6 +309,7 @@ function EditPrinterDialog({
 			errorSection={<TestPrintError error={testError} />}
 			footer={
 				<PrinterDialogFooter
+					isEditing={isEditing}
 					showSaveAnyway={!!testError}
 					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}

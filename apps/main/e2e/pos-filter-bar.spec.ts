@@ -44,8 +44,8 @@ test('a quick filter authored in the editor applies and clears its conditions fr
 		await page.getByTestId('filter-bar-add-quick-filter').click();
 		await page.getByTestId('quick-filter-name').fill(label);
 
-		// Save stays disabled until the button has something to apply.
-		await expect(page.getByTestId('quick-filter-save')).toBeDisabled();
+		// Add stays disabled until the button has something to apply.
+		await expect(page.getByTestId('quick-filter-add')).toBeDisabled();
 
 		// One condition: "On sale" — the first row defaults to Category, so switch its field.
 		await page.getByTestId('quick-filter-add-condition').click();
@@ -61,8 +61,8 @@ test('a quick filter authored in the editor applies and clears its conditions fr
 		// The preview reports a device-local count; its exact value is the store's business.
 		await expect(page.getByTestId('quick-filter-preview-count')).toBeVisible({ timeout: 15_000 });
 
-		await expect(page.getByTestId('quick-filter-save')).toBeEnabled();
-		await page.getByTestId('quick-filter-save').click();
+		await expect(page.getByTestId('quick-filter-add')).toBeEnabled();
+		await page.getByTestId('quick-filter-add').click();
 
 		// The new button is appended, so it is the last quick filter on the list pane.
 		const editRow = page.getByTestId(/^filter-bar-edit-[0-9a-f-]{36}$/).last();

@@ -6,6 +6,8 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
+// The deep path on purpose: the form barrel pulls the combobox into this jsdom-tested editor.
+import { SavedFieldProvider, SavedMark, useMarkSaved } from '@wcpos/components/form/saved-mark';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Input } from '@wcpos/components/input';
@@ -355,40 +357,102 @@ function ConditionValueEditor({
 	);
 }
 
-export function QuickFilterEditor({
+export function QuickFilterEditor(props: React.ComponentProps<typeof QuickFilterEditorBody>) {
+	return (
+		<SavedFieldProvider>
+			<QuickFilterEditorBody {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function QuickFilterEditorBody({
 	initial,
 	onSave,
+	onChange,
 	onCancel,
 }: {
 	initial: QuickFilter | null;
 	onSave: (quickFilter: QuickFilter) => void;
+	onChange?: (quickFilter: QuickFilter) => void | Promise<unknown>;
 	onCancel: () => void;
 }) {
 	const t = useT();
 	const [draft, setDraft] = React.useState<QuickFilter>(
 		() => initial ?? { id: createQuickFilterId(), type: 'quick', label: '', conditions: [] }
 	);
+	const markSaved = useMarkSaved();
+	const pending = React.useRef<{
+		timer: ReturnType<typeof setTimeout>;
+		write: () => Promise<void>;
+	} | null>(null);
+	const flush = React.useCallback(() => {
+		const queued = pending.current;
+		if (!queued) return;
+		clearTimeout(queued.timer);
+		pending.current = null;
+		void queued.write();
+	}, []);
+	// Closing the host must land the pending text edit, even without pressing Close.
+	React.useEffect(() => flush, [flush]);
+	const updateDraft = (update: (value: QuickFilter) => QuickFilter, text = false) => {
+		const next = update(draft);
+		setDraft(next);
+		if (!initial || !onChange) return;
+		// An edit that leaves the draft invalid is held, not written; the valid edit still pending
+		// (a rename before an unfinished condition) lands now rather than being dropped with it.
+		if (!isQuickFilterValid(next)) {
+			flush();
+			return;
+		}
+		if (pending.current) clearTimeout(pending.current.timer);
+		pending.current = null;
+		const section =
+			next.label !== draft.label
+				? 'label'
+				: next.conditions !== draft.conditions
+					? 'conditions'
+					: 'sort';
+		const write = async () => {
+			try {
+				await onChange({ ...next, label: next.label.trim() });
+				markSaved([section]);
+			} catch {
+				// patchSettings has reported it; the section is simply not marked saved.
+			}
+		};
+		if (text) pending.current = { timer: setTimeout(flush, 300), write };
+		else void write();
+	};
 	const usedFields = draft.conditions.map((condition) => condition.field);
 	const firstUnused = CONDITION_FIELDS.find((field) => !usedFields.includes(field));
-	const updateCondition = (index: number, condition: QuickFilterCondition) =>
-		setDraft((value) => ({
-			...value,
-			conditions: value.conditions.map((entry, row) => (row === index ? condition : entry)),
-		}));
+	const updateCondition = (index: number, condition: QuickFilterCondition, text = false) =>
+		updateDraft(
+			(value) => ({
+				...value,
+				conditions: value.conditions.map((entry, row) => (row === index ? condition : entry)),
+			}),
+			text
+		);
 
 	return (
 		<VStack className="gap-4">
 			<VStack className="gap-1">
-				<Text>{t('pos_products.quick_filter_button_name')}</Text>
+				<HStack className="justify-between">
+					<Text>{t('pos_products.quick_filter_button_name')}</Text>
+					<SavedMark name="label" label={t('settings.saved')} />
+				</HStack>
 				<Input
 					value={draft.label}
-					onChangeText={(label) => setDraft((value) => ({ ...value, label }))}
+					onChangeText={(label) => updateDraft((value) => ({ ...value, label }), true)}
 					placeholder={t('pos_products.quick_filter_name_placeholder')}
 					testID="quick-filter-name"
 				/>
 			</VStack>
 			<VStack className="gap-2">
-				<Text className="font-medium">{t('pos_products.quick_filter_conditions_heading')}</Text>
+				<HStack className="justify-between">
+					<Text className="font-medium">{t('pos_products.quick_filter_conditions_heading')}</Text>
+					<SavedMark name="conditions" label={t('settings.saved')} />
+				</HStack>
 				{draft.conditions.map((condition, index) => (
 					<React.Fragment key={`${index}-${condition.field}`}>
 						{index > 0 && (
@@ -421,14 +485,14 @@ export function QuickFilterEditor({
 							</Select>
 							<ConditionValueEditor
 								condition={condition}
-								onChange={(value) => updateCondition(index, value)}
+								onChange={(value) => updateCondition(index, value, value.field === 'search')}
 							/>
 							<IconButton
 								name="close"
 								accessibilityLabel={t('common.remove')}
 								testID={`quick-filter-condition-remove-${index}`}
 								onPress={() =>
-									setDraft((value) => ({
+									updateDraft((value) => ({
 										...value,
 										conditions: value.conditions.filter((_, row) => row !== index),
 									}))
@@ -444,7 +508,7 @@ export function QuickFilterEditor({
 					disabled={!firstUnused}
 					onPress={() =>
 						firstUnused &&
-						setDraft((value) => ({
+						updateDraft((value) => ({
 							...value,
 							conditions: [...value.conditions, createCondition(firstUnused)],
 						}))
@@ -454,7 +518,10 @@ export function QuickFilterEditor({
 				</Button>
 			</VStack>
 			<VStack className="gap-2">
-				<Text className="font-medium">{t('pos_products.quick_filter_order_by')}</Text>
+				<HStack className="justify-between">
+					<Text className="font-medium">{t('pos_products.quick_filter_order_by')}</Text>
+					<SavedMark name="sort" label={t('settings.saved')} />
+				</HStack>
 				<Select
 					value={
 						draft.sort
@@ -462,7 +529,7 @@ export function QuickFilterEditor({
 							: { value: DEFAULT_ORDER, label: t('pos_products.quick_filter_default_order') }
 					}
 					onValueChange={(option) =>
-						setDraft((value) => ({
+						updateDraft((value) => ({
 							...value,
 							sort:
 								option?.value && option.value !== DEFAULT_ORDER
@@ -501,7 +568,7 @@ export function QuickFilterEditor({
 						testID="quick-filter-sort-direction"
 						onValueChange={(direction) =>
 							direction &&
-							setDraft((value) =>
+							updateDraft((value) =>
 								value.sort
 									? { ...value, sort: { ...value.sort, direction: direction as 'asc' | 'desc' } }
 									: value
@@ -526,16 +593,25 @@ export function QuickFilterEditor({
 			</VStack>
 			<QuickFilterPreview draft={draft} />
 			<HStack className="justify-end">
-				<Button variant="outline" testID="quick-filter-cancel" onPress={onCancel}>
-					<ButtonText>{t('common.cancel')}</ButtonText>
-				</Button>
 				<Button
-					testID="quick-filter-save"
-					disabled={!isQuickFilterValid(draft)}
-					onPress={() => onSave({ ...draft, label: draft.label.trim() })}
+					variant="outline"
+					testID={initial ? 'quick-filter-close' : 'quick-filter-cancel'}
+					onPress={() => {
+						flush();
+						onCancel();
+					}}
 				>
-					<ButtonText>{t('common.save')}</ButtonText>
+					<ButtonText>{initial ? t('common.close') : t('common.cancel')}</ButtonText>
 				</Button>
+				{!initial && (
+					<Button
+						testID="quick-filter-add"
+						disabled={!isQuickFilterValid(draft)}
+						onPress={() => onSave({ ...draft, label: draft.label.trim() })}
+					>
+						<ButtonText>{t('pos_products.add_quick_filter')}</ButtonText>
+					</Button>
+				)}
 			</HStack>
 		</VStack>
 	);

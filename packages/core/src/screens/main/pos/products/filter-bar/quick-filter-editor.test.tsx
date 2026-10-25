@@ -1,12 +1,18 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { QuickFilterEditor } from './quick-filter-editor';
 
 const onSave = jest.fn();
+const onChange = jest.fn();
 const onCancel = jest.fn();
+
+jest.mock('react-native-reanimated', () => ({
+	...jest.requireActual('react-native-reanimated'),
+	useReducedMotion: () => true,
+}));
 
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 jest.mock('./quick-filter-preview', () => ({ QuickFilterPreview: () => null }));
@@ -136,16 +142,18 @@ jest.mock('../../../components/currency-input', () => ({
 beforeEach(() => jest.clearAllMocks());
 
 function renderEditor() {
-	return render(<QuickFilterEditor initial={null} onSave={onSave} onCancel={onCancel} />);
+	return render(
+		<QuickFilterEditor initial={null} onSave={onSave} onChange={onChange} onCancel={onCancel} />
+	);
 }
 
 function nameDraft() {
 	fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: ' Sale wines ' } });
 }
 
-it('keeps Save disabled for a new empty draft', () => {
+it('keeps Add disabled for a new empty draft', () => {
 	renderEditor();
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });
 
 it('saves a trimmed name and an On sale condition', () => {
@@ -154,14 +162,15 @@ it('saves a trimmed name and an On sale condition', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-on_sale'));
 
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(false);
-	fireEvent.click(screen.getByTestId('quick-filter-save'));
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
 	expect(onSave).toHaveBeenCalledWith({
 		id: 'quick-filter-id',
 		type: 'quick',
 		label: 'Sale wines',
 		conditions: [{ field: 'on_sale', value: true }],
 	});
+	expect(onChange).not.toHaveBeenCalled();
 });
 
 it('does not offer a field already used by another row', () => {
@@ -173,30 +182,30 @@ it('does not offer a field already used by another row', () => {
 	expect(screen.queryByTestId('quick-filter-condition-option-1-on_sale')).toBeNull();
 });
 
-it('disables Save after removing the only condition when there is no sort', () => {
+it('disables Add after removing the only condition when there is no sort', () => {
 	renderEditor();
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-on_sale'));
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(false);
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
 
 	fireEvent.click(screen.getByTestId('quick-filter-condition-remove-0'));
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });
 
-it('enables Save when a named draft has only a sort field', () => {
+it('enables Add when a named draft has only a sort field', () => {
 	renderEditor();
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-name'));
 
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(false);
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(false);
 });
 
 it('saves product type as a sort field', () => {
 	renderEditor();
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-type'));
-	fireEvent.click(screen.getByTestId('quick-filter-save'));
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
 
 	expect(onSave).toHaveBeenCalledWith(
 		expect.objectContaining({ conditions: [], sort: { field: 'type', direction: 'asc' } })
@@ -209,7 +218,7 @@ it('preserves a finite negative price bound', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-price'));
 	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '-5' } });
-	fireEvent.click(screen.getByTestId('quick-filter-save'));
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
 
 	expect(onSave).toHaveBeenCalledWith(
 		expect.objectContaining({ conditions: [{ field: 'price', value: { min: -5 } }] })
@@ -223,7 +232,120 @@ it('keeps a zero price bound unbounded', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-price'));
 	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '0' } });
 
-	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('quick-filter-add') as HTMLButtonElement).disabled).toBe(true);
 });
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
+describe('editing an existing quick filter', () => {
+	const initial = {
+		id: 'saved',
+		type: 'quick' as const,
+		label: 'Sale',
+		conditions: [{ field: 'on_sale' as const, value: true }],
+	};
+	const edit = () =>
+		render(
+			<QuickFilterEditor
+				initial={initial}
+				onSave={onSave}
+				onChange={onChange}
+				onCancel={onCancel}
+			/>
+		);
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => {
+		cleanup();
+		jest.useRealTimers();
+	});
+
+	it('writes a toggle immediately without a Save button', async () => {
+		edit();
+		fireEvent.click(screen.getByTestId('quick-filter-toggle-on_sale-no'));
+		expect(onChange).toHaveBeenCalledWith({
+			...initial,
+			conditions: [{ field: 'on_sale', value: false }],
+		});
+		expect(screen.queryByTestId('quick-filter-add')).toBeNull();
+		expect(screen.queryByTestId('quick-filter-save')).toBeNull();
+		await act(async () => {});
+		expect(screen.getByTestId('saved-conditions')).toBeTruthy();
+	});
+	it('writes the trimmed name once 300 ms after the last keystroke', async () => {
+		edit();
+		nameDraft();
+		act(() => jest.advanceTimersByTime(200));
+		fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: ' Sale wine ' } });
+		act(() => jest.advanceTimersByTime(299));
+		expect(onChange).not.toHaveBeenCalled();
+		await act(async () => {
+			jest.advanceTimersByTime(1);
+		});
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange).toHaveBeenCalledWith({ ...initial, label: 'Sale wine' });
+		expect(screen.getByTestId('saved-label')).toBeTruthy();
+	});
+	it('keeps the last valid write when the name is emptied', async () => {
+		edit();
+		nameDraft();
+		await act(async () => {
+			jest.advanceTimersByTime(300);
+		});
+		fireEvent.change(screen.getByTestId('quick-filter-name'), { target: { value: '' } });
+		await act(async () => {
+			jest.advanceTimersByTime(300);
+		});
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange).toHaveBeenLastCalledWith({ ...initial, label: 'Sale wines' });
+	});
+	it('lands a pending rename when the next edit leaves the draft invalid', async () => {
+		edit();
+		nameDraft();
+		// A new condition row starts as an empty category list: the draft is invalid until it is filled.
+		fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange).toHaveBeenCalledWith({ ...initial, label: 'Sale wines' });
+		await act(async () => {
+			jest.advanceTimersByTime(300);
+		});
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+	it('flushes the pending name before Close', async () => {
+		edit();
+		nameDraft();
+		fireEvent.click(screen.getByTestId('quick-filter-close'));
+		expect(onChange).toHaveBeenCalledWith({ ...initial, label: 'Sale wines' });
+		expect(onCancel).toHaveBeenCalledTimes(1);
+		expect(onChange.mock.invocationCallOrder[0]).toBeLessThan(onCancel.mock.invocationCallOrder[0]);
+		await act(async () => {
+			jest.advanceTimersByTime(300);
+		});
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+	it('flushes a pending search edit on unmount', () => {
+		const { unmount } = render(
+			<QuickFilterEditor
+				initial={{ ...initial, conditions: [{ field: 'search', value: 'wine' }] }}
+				onSave={onSave}
+				onChange={onChange}
+				onCancel={onCancel}
+			/>
+		);
+		fireEvent.change(screen.getByTestId('quick-filter-search-term'), { target: { value: 'red' } });
+		expect(onChange).not.toHaveBeenCalled();
+		unmount();
+		expect(onChange).toHaveBeenCalledWith({
+			...initial,
+			conditions: [{ field: 'search', value: 'red' }],
+		});
+		act(() => jest.advanceTimersByTime(300));
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+	it('does not acknowledge a rejected write', async () => {
+		onChange.mockRejectedValueOnce(new Error('write failed'));
+		edit();
+		fireEvent.click(screen.getByTestId('quick-filter-toggle-on_sale-no'));
+		await act(async () => {});
+		expect(screen.queryByTestId('saved-conditions')).toBeNull();
+	});
+});

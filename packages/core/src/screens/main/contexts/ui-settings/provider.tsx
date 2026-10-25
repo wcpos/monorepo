@@ -69,7 +69,19 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	const patchSettings = React.useCallback(
 		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
 			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
-			return patchState(state, data) as Promise<UISettingState<T>>;
+			try {
+				return (await patchState(state, data)) as UISettingState<T>;
+			} catch (error) {
+				// Every caller fires this and moves on (`void patchUI(...)`), so a lost device
+				// setting was silent: reported here once, then rethrown for the caller that waits.
+				uiLogger.error(`Failed to save the ${id} settings`, {
+					showToast: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					context: { settingsId: id, keys: Object.keys(data), error: String(error) },
+				});
+				markErrorReported(error);
+				throw error;
+			}
 		},
 		[storeDB]
 	);

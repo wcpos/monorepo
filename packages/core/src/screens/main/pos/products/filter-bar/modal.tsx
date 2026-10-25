@@ -28,6 +28,12 @@ export function FilterBarModal() {
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const filterBar = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const [editing, setEditing] = React.useState<Editing>(null);
+	// A debounced edit from the editor lands after other list changes (a pill toggled, a reorder);
+	// it replaces its own item in the list as it stands then, never the list at keystroke time.
+	const filterBarRef = React.useRef(filterBar);
+	React.useEffect(() => {
+		filterBarRef.current = filterBar;
+	});
 	const handleSave = (quickFilter: QuickFilter) => {
 		const exists = filterBar.some((item) => item.id === quickFilter.id);
 		const next = exists
@@ -62,6 +68,16 @@ export function FilterBarModal() {
 								<QuickFilterEditor
 									key={editing.mode === 'new' ? 'new' : editing.quickFilter.id}
 									initial={editing.mode === 'edit' ? editing.quickFilter : null}
+									onChange={
+										editing.mode === 'edit'
+											? (quickFilter) =>
+													patchUI({
+														filterBar: filterBarRef.current.map((item) =>
+															item.id === quickFilter.id ? quickFilter : item
+														),
+													} as never)
+											: undefined
+									}
 									onSave={handleSave}
 									onCancel={() => setEditing(null)}
 								/>
