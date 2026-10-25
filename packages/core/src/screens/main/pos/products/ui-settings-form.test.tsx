@@ -287,6 +287,14 @@ it('persists a View Mode selection', async () => {
 	await settle();
 });
 
+it('names the inline Variations style after the view: expanded rows under a table, a popover on a tile', () => {
+	render(<UISettingsForm />);
+	const inline = () => screen.getByTestId('products-variations-style-inline');
+	expect(inline().textContent).toBe('pos_products.variations_expanded_rows');
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
+	expect(inline().textContent).toBe('pos_products.variations_popover');
+});
+
 it('persists the inline Variations selection', async () => {
 	render(<UISettingsForm />);
 	fireEvent.click(screen.getByTestId('products-variations-style-inline'));

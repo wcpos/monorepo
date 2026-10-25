@@ -37,10 +37,13 @@ const mockProductsDoc = {
 };
 let mockDocVersion = 0;
 const mockDocListeners = new Set<() => void>();
-function patchColumns(columns: { key: string; show: boolean }[]) {
-	mockProductsDoc.columns = columns;
+function bumpDoc() {
 	mockDocVersion += 1;
 	mockDocListeners.forEach((listener) => listener());
+}
+function patchColumns(columns: { key: string; show: boolean }[]) {
+	mockProductsDoc.columns = columns;
+	bumpDoc();
 }
 let mockPointer = 'fine';
 let mockTableProps: Record<string, unknown> = {};
@@ -457,6 +460,18 @@ it.each(['drill', 'inline'])(
 		expect(variations().getAttribute('aria-expanded')).toBe(style === 'inline' ? 'false' : null);
 	}
 );
+
+it('carries the style in extraData, so rendered rows re-read meta.drill when it flips', () => {
+	render(<ProductsScreen />);
+	const extraData = () => (mockTableProps.tableConfig as { extraData: unknown }).extraData;
+	const before = extraData();
+	expect(meta().drill).toBeDefined();
+	mockStyle = 'inline';
+	act(() => bumpDoc());
+	// FlashList refreshes rendered rows on an extraData change only; meta alone is invisible to it.
+	expect(extraData()).not.toEqual(before);
+	expect(meta().drill).toBeUndefined();
+});
 
 it('never expands a row in the drill style', () => {
 	render(<ProductsScreen />);

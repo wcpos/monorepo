@@ -147,7 +147,12 @@ export function UISettingsForm() {
 										},
 										{
 											value: 'inline',
-											label: t('pos_products.variations_popover_and_rows'),
+											// What the inline style does in the view the form is set to: a popover on
+											// a tile, expanded rows under a table row.
+											label:
+												viewMode === 'grid'
+													? t('pos_products.variations_popover')
+													: t('pos_products.variations_expanded_rows'),
 											testID: 'products-variations-style-inline',
 										},
 									]}
