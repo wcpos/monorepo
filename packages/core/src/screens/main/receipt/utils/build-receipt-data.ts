@@ -9,6 +9,17 @@
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { TaxId } from '@wcpos/database';
 
+/**
+ * Statuses WooCommerce still accepts payment for: its own `pending` and `failed`, plus the two
+ * the plugin adds in `Orders::valid_order_statuses_for_payment` (`pos-open`, `pos-partial`).
+ */
+const PAYABLE_ORDER_STATUSES: ReadonlySet<string> = new Set([
+	'pending',
+	'failed',
+	'pos-open',
+	'pos-partial',
+]);
+
 interface ReceiptOrder {
 	id: number;
 	number: string;
@@ -734,6 +745,10 @@ export function buildReceiptData(
 	const taxSummary = buildTaxSummary(order);
 
 	const rawStatus = String(order.status ?? '');
+	// Mirrors WC_Order::needs_payment(): a payable status with a positive total. The record's own
+	// needs_payment is not read: the local status is fresher after an offline capture, and an
+	// order never pushed carries no such field.
+	const needsPayment = PAYABLE_ORDER_STATUSES.has(rawStatus) && toNum(order.total) > 0;
 	// `useOrderStatusLabel.getLabel` returns the raw status when the
 	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
 	// instead of printing the lowercase identifier.
@@ -793,7 +808,7 @@ export function buildReceiptData(
 			customer_note: order.customer_note || '',
 			wc_status: rawStatus,
 			status_label: statusLabel,
-			needs_payment: Boolean(order.needs_payment),
+			needs_payment: needsPayment,
 			payment_url: typeof order.payment_url === 'string' ? order.payment_url : '',
 			created: { datetime: order.date_created || '' },
 			printed: { datetime: printedDatetime },
@@ -875,13 +890,17 @@ export function buildReceiptData(
 		tax: buildTaxSection(store, displayTax),
 		tax_summary: taxSummary,
 		has_tax_summary: taxSummary.length > 0,
-		payments: [
-			{
-				method: order.payment_method_title || order.payment_method || '',
-				amount: order.total || '0.00',
-				transaction_id: order.transaction_id || '',
-			},
-		],
+		// A payable order has taken no payment: an empty list, so templates skip their PAID block
+		// ({{#payments.0}}) instead of printing the total as if it had been received.
+		payments: needsPayment
+			? []
+			: [
+					{
+						method: order.payment_method_title || order.payment_method || '',
+						amount: order.total || '0.00',
+						transaction_id: order.transaction_id || '',
+					},
+				],
 		fiscal: {
 			submission_status: '',
 			fiscal_id: '',
