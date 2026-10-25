@@ -41,6 +41,20 @@ it('reads a change only in what the till would send again', () => {
 	expect(orderChangedSinceRefusal(order, null)).toBe(true);
 });
 
+it('compares a sparse refusal (a refused cart edit) on the fields it carried', () => {
+	// A cart edit enqueues only its changes; its dead letter has no billing or customer.
+	const refused = refusedWireOf({ line_items: order.line_items });
+	expect(orderChangedSinceRefusal(order, refused)).toBe(false);
+	expect(
+		orderChangedSinceRefusal(
+			{ ...order, line_items: [{ ...order.line_items[0], quantity: 3 }] },
+			refused
+		)
+	).toBe(true);
+	// Nothing Pay could change was refused: the retry is a different write.
+	expect(orderChangedSinceRefusal(order, {})).toBe(true);
+});
+
 it("a guest sale's empty billing email projects as the queue row did: absent", () => {
 	// The enqueue seam drops `billing.email: ''`, so the refused row never carries it;
 	// the resident still does. Both sides go through that seam, or an unchanged guest

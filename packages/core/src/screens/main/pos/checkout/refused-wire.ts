@@ -17,10 +17,20 @@ export function refusedWireOf(payload: Record<string, unknown> | null | undefine
 	return omit(sanitizeOutboundOrderPayload(payload ?? {}), ['status', 'meta_data']);
 }
 
-/** A refusal whose payload is unknown (`null`) counts as changed: Pay may retry it. */
+/**
+ * Changed means some field the refusal carried now reads differently on the resident.
+ * A refused row is often sparse (a cart edit enqueues only its changes), so the fields
+ * it did not carry are not compared: they are not what the store refused. A refusal
+ * whose payload is unknown (`null`) or carried nothing Pay could change counts as
+ * changed, and Pay may retry it.
+ */
 export function orderChangedSinceRefusal(
 	current: Record<string, unknown>,
 	refused: RefusedWire | null
 ): boolean {
-	return refused === null || !isEqual(refusedWireOf(current), refused);
+	if (refused === null) return true;
+	const keys = Object.keys(refused);
+	if (keys.length === 0) return true;
+	const wire = refusedWireOf(current);
+	return keys.some((key) => !isEqual(wire[key], refused[key]));
 }
