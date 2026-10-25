@@ -600,10 +600,16 @@ export async function drainMutationQueue(input: {
 	// `meta_data` never counts (no recovery takes it from a dead letter). A refused
 	// DELETE is a statement about existence, not fields, and stays. A dead letter still
 	// carrying a field the accepted write omitted (a refused completion's `status` under
-	// a plain re-sync, which ADR 0040 strips) keeps that intent and stays listed.
-	const settleSupersededDeadLetters = async (acked: QueuedMutation): Promise<void> => {
+	// a plain re-sync, which ADR 0040 strips) keeps that intent and stays listed. "Carried"
+	// means ON THE WIRE (`sentFields`): the push adapter's sanitizers drop fields the queue
+	// row still holds — a refused `status: 'completed'` queued again is stripped before it is
+	// sent, so reading the row's payload would count a field the server never saw.
+	const settleSupersededDeadLetters = async (
+		acked: QueuedMutation,
+		result: PushResult
+	): Promise<void> => {
 		if (acked.operation === 'delete') return;
-		const accepted = new Set(Object.keys(acked.payload ?? {}));
+		const accepted = new Set(result.sentFields ?? Object.keys(acked.payload ?? {}));
 		let rows: QueuedMutation[];
 		try {
 			rows = await input.queue.all();
@@ -1153,7 +1159,7 @@ export async function drainMutationQueue(input: {
 			}
 			continue;
 		}
-		await settleSupersededDeadLetters(draining);
+		await settleSupersededDeadLetters(draining, result);
 		input.onAcknowledged?.(draining);
 	}
 

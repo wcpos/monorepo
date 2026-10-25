@@ -1450,6 +1450,39 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 			]);
 		});
 
+		it('judges coverage by the fields ON THE WIRE, not the queue row (Codex, #2939)', async () => {
+			// A refused completion (`status: 'completed'`) queued again still carries the
+			// status on its row, but `toOrderWirePayload` strips it before the push: the
+			// server never saw it, so the dead letter's intent is NOT covered and it stays.
+			const q = await queueWith(order('dead', { status: 'completed', line_items: [] }));
+			const server = createFakeWriteServer();
+			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
+			server.script((env) =>
+				env.mutationId === 'dead'
+					? { kind: 'invalid_param', code: 'rest_invalid_param', message: 'refused' }
+					: undefined
+			);
+			const push = (mutation: RecordMutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: server.fetch,
+				});
+			await drainMutationQueue({ queue: q, push });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue({
+				...order('again', { status: 'completed', line_items: [] }),
+				baseRevision: 'sha256:r0',
+			});
+			const result = await drainMutationQueue({ queue: q, push });
+			expect(result.pushed).toBe(1);
+			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('status');
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
 		it('ignores `meta_data`, which no recovery ever takes from a dead letter', async () => {
 			const q = await queueWith(order('dead', { line_items: [], meta_data: [{ key: 'x' }] }));
 			await drainMutationQueue({ queue: q, push: refused });

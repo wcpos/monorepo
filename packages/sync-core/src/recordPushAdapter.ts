@@ -77,6 +77,14 @@ export type PushResult = {
 	currentRevision: string | null;
 	/** Present only on a 409 conflict — the server's current state to drive resolution. */
 	conflict?: { current: ServerDocument | null; currentRevision: string | null };
+	/**
+	 * The top-level payload fields that were actually ON THE WIRE (absent for a delete
+	 * or a drain-synthesized result). The outbound sanitizers (`toOrderWirePayload`,
+	 * the barcode and coupon maps) can drop fields the queue row still carries — a
+	 * refused `status: 'completed'` never leaves the till — so anything judging what
+	 * the server accepted reads this, never `mutation.payload`.
+	 */
+	sentFields?: readonly string[];
 };
 
 export class RecordPushError extends Error {
@@ -466,7 +474,16 @@ export async function pushRecordMutation(input: {
 		collection: mutation.collectionName,
 		fields: { ...baseFields, outcome },
 	});
-	return { outcome, mutation, httpStatus: response.status, document, currentRevision };
+	return {
+		outcome,
+		mutation,
+		httpStatus: response.status,
+		document,
+		currentRevision,
+		...(envelope.payload !== undefined
+			? { sentFields: Object.keys(envelope.payload as Record<string, unknown>) }
+			: {}),
+	};
 }
 
 async function safeJson(response: Response): Promise<Record<string, unknown> | null> {
