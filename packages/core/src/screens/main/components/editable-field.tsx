@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import type { InputProps } from '@wcpos/components/input';
 import { cn } from '@wcpos/components/lib/utils';
+import { PROPERTY_PLACEHOLDER_CLASS } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { Textarea } from '@wcpos/components/textarea';
 
@@ -11,6 +12,7 @@ import { Textarea } from '@wcpos/components/textarea';
  *
  * This component maintains internal editing state separate from the controlled value.
  * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke.
+ * At rest an empty value shows its `placeholder` in the property rows' placeholder ink.
  */
 export function EditableField({
 	value: valueProp,
@@ -20,9 +22,16 @@ export function EditableField({
 	bold = true,
 	variant = 'outline',
 	numberOfLines = 1,
+	startEditing = false,
 	...props
-}: InputProps & { bold?: boolean; variant?: 'outline' | 'ghost'; numberOfLines?: number }) {
-	const [editing, setEditing] = React.useState(false);
+}: InputProps & {
+	bold?: boolean;
+	variant?: 'outline' | 'ghost';
+	numberOfLines?: number;
+	/** Mount in edit mode, focused: a field the owner has just added. */
+	startEditing?: boolean;
+}) {
+	const [editing, setEditing] = React.useState(startEditing);
 	// Internal editing value - separate from controlled prop
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
 
@@ -94,6 +103,7 @@ export function EditableField({
 	/**
 	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
+	const empty = !editValue && !!props.placeholder;
 	return (
 		<Button
 			variant={variant}
@@ -108,11 +118,15 @@ export function EditableField({
 			{/* The field's value is data, not a quiet action: on a ghost it keeps the foreground
 			    over the variant's muted label (a cart line's name must not read as disabled). */}
 			<Text
-				className={cn(variant === 'ghost' && 'text-foreground font-normal', bold && 'font-bold')}
+				className={cn(
+					variant === 'ghost' && 'text-foreground font-normal',
+					bold && 'font-bold',
+					empty && PROPERTY_PLACEHOLDER_CLASS
+				)}
 				numberOfLines={numberOfLines}
 				decodeHtml
 			>
-				{editValue}
+				{empty ? props.placeholder : editValue}
 			</Text>
 		</Button>
 	);

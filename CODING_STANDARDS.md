@@ -467,6 +467,25 @@ line 1 the name (16 px semibold) with an optional chip at the right edge, line 2
 the action slot as a full-width row under the lines. Nothing shares a line with free text, so
 nothing wraps. The same shape is the Printers row and the Card readers row.
 
+#### Property rows
+
+A record's edit form is a list of facts, one row per fact: key · value · verb (Paul, 2026-10-25; boards `~/Projects/wcpos-handoffs/2026-10-25-property-rows-system.html` and `…-every-form.html`). Components: `PropertyList`, `PropertyRow`, `PropertyVerb`, `PropertyAddRow`, `PropertyAdd`, `PropertyPlaceholder` (`@wcpos/components/property-row`); which facts are rows is `useFieldPresence` in core. Nothing folds: no Collapsible, Accordion or chevron heading on a record form.
+
+1. **The name test.** A field is offered behind an add button only if its label alone tells a shop owner what they get (Sale price, Barcode, Tax ID). One that fails stays a row with a help line, or leaves the form.
+2. **Settings have no add buttons.** A setting always has a value; offering is for records (customer, product, order line, coupon).
+3. **Asked is identity, the till's job, or what Woo requires** (customer: name, email, phone). Asked facts are rows even when empty, with a placeholder (`Add Email`); the rest are offered and, once added, sit in their canonical place until their Remove.
+4. **One row, one fact.** Woo's pairs merge: First + Last → Name; Tax status + Tax class → Tax; Manage stock + Quantity → Stock.
+5. **A copy is derived**, never a checkbox and a hidden form: Shipping reads _Same as billing_ with the verb that breaks the link (_Use a different address_), and the write carries the copy.
+6. **Set elsewhere is locked:** the value, where it is set, and _Open ↗_.
+7. **An off-by-default exceptional switch is offered** (Featured, Virtual); adding it adds the row switched on. A switch whose default matters is a row.
+8. **Conditional settings nest** under their switch, indented one gutter, never behind a fold.
+9. **Troubleshooting rows stay findable:** a row at the end with a one-line help, never offered, never folded.
+10. **Developer facts go to the JSON tab** (Parent ID, Meta IDs, raw meta), not the form.
+11. **Lists are one row per item plus an add button,** in Woo's words: _Custom field_, not Meta Data.
+12. **Explicit intent keeps its verb button** (Update status, Send, Generate, Process refund): an action, not a fact.
+
+A compound fact (an address) is one line closed and its parts as indented rows open; open lasts for the dialog's life. Verbs are link Buttons, add buttons outline `sm` Buttons with a plus, never Chips.
+
 #### Sheets, modals and menus on a phone
 
 - A full-size modal IS the screen: no scrim gutter, no radius, card colour to the safe-area

@@ -68,6 +68,7 @@
     "./log-view": "./src/log-view/index.tsx",
     "./price-keypad": "./src/price-keypad/index.tsx",
     "./progress": "./src/progress/index.tsx",
+    "./property-row": "./src/property-row/index.tsx",
     "./quantity-keypad": "./src/quantity-keypad/index.tsx",
     "./quantity-keypad/reducer": "./src/quantity-keypad/reducer.ts",
     "./radio-group": "./src/radio-group/index.tsx",
