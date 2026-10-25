@@ -1,9 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import type { CellContext } from '@wcpos/core/table-types';
+import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -11,6 +9,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useQueryState, useQueryStateActions } from '../../../../query';
 import { setVariationMatch } from './variation-matches';
+import { useRowExpansion } from './variable-product-row/use-row-expansion';
 import { useT } from '../../../../contexts/translations';
 
 import type { VariationMatch } from '../../../../query';
@@ -56,24 +55,16 @@ type ProductRowOriginal = {
 };
 
 export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal, 'name'>) {
-	const original = row.original as ProductRowOriginal;
 	const attributes = useRecordField(row.original.record, (product) => product.payload.attributes);
 	const meta = table.options.meta as unknown as {
-		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 		setRowExpanded?: (id: string, expanded: boolean) => void;
 		/** The drill style: a chip opens the variations pane at its option instead of expanding. */
 		drill?: (row: unknown, match?: VariationMatch) => void;
 	};
-	const isExpanded$ = React.useMemo(
-		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
-		[meta.expanded$, row.id]
-	);
-	const isExpanded = useObservableEagerState(isExpanded$);
 	const matches = useQueryState<'variations', VariationMatch[]>(
 		(state) => state.filters.attributeMatches
 	);
 	const actions = useQueryStateActions<'variations'>();
-	const t = useT();
 
 	/**
 	 * Use setRowExpanded from table meta to bypass TanStack's buggy updater function
@@ -94,54 +85,6 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 		},
 		[actions, matches, row, setRowExpanded, meta]
 	);
-
-	/**
-	 * Expand the row
-	 * Also, when relational search found child variations, seed this row's query state
-	 * with the parent search term before mounting its variations table.
-	 */
-	const handleExpand = React.useCallback(() => {
-		if (meta.drill) return meta.drill(row);
-		if (isExpanded) {
-			setRowExpanded?.(row.id, false);
-			return;
-		}
-		if ((original.childrenSearchCount ?? 0) > 0) {
-			actions.setSearch(original.parentSearchTerm ?? '');
-			actions.clearFilter('attributeMatches');
-		}
-		setRowExpanded?.(row.id, true);
-	}, [
-		actions,
-		row,
-		meta,
-		original.childrenSearchCount,
-		original.parentSearchTerm,
-		setRowExpanded,
-		isExpanded,
-	]);
-
-	/**
-	 * Expand text string
-	 */
-	const expandText = React.useMemo(() => {
-		let text = '';
-		if (meta.drill) {
-			text += t('products.show_variations', { _: 'Show variations' });
-		} else if (isExpanded) {
-			text += t('common.collapse');
-		} else {
-			text += t('common.expand');
-		}
-		if ((original.childrenSearchCount ?? 0) > 0) {
-			text += ' - ';
-			text += t('common.variation_found_for_term', {
-				count: original.childrenSearchCount ?? 0,
-				term: original.parentSearchTerm,
-			});
-		}
-		return text;
-	}, [isExpanded, meta.drill, original.childrenSearchCount, original.parentSearchTerm, t]);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -169,14 +112,44 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 						))}
 					</HStack>
 				))}
-			<Text
-				testID="variable-product-expand"
-				className="text-primary text-xs"
-				variant="link"
-				onPress={handleExpand}
-			>
-				{expandText}
-			</Text>
+			<VariationsButton row={row} table={table} />
 		</VStack>
+	);
+}
+
+/**
+ * "n variations" under a variable product's name, the way in to its variations: it drills into
+ * them (the drill style, chevron after) or toggles the row open (chevron before), seeding the
+ * products search its variations matched. Inside the row's `VariationRowProvider`.
+ */
+export function VariationsButton({
+	row,
+	table,
+}: {
+	row: { id: string; original: ProductRowOriginal };
+	table: { options: { meta?: unknown } };
+}) {
+	const t = useT();
+	const drill = (table.options.meta as { drill?: (row: unknown) => void } | undefined)?.drill;
+	const { expanded, toggle } = useRowExpansion(row, table);
+	const { childrenSearchCount = 0, parentSearchTerm, record } = row.original;
+	const count = useRecordField(record, (product) => product.payload.variations?.length ?? 0);
+	let label = t('products.n_variations', { count });
+	if (childrenSearchCount > 0) {
+		label += ` - ${t('common.variation_found_for_term', { count: childrenSearchCount, term: parentSearchTerm })}`;
+	}
+	return (
+		<Button
+			testID="variable-product-expand"
+			variant="ghost"
+			size="sm"
+			className="self-start"
+			leftIcon={drill ? undefined : expanded ? 'chevronDown' : 'chevronRight'}
+			rightIcon={drill ? 'chevronRight' : undefined}
+			aria-expanded={drill ? undefined : expanded}
+			onPress={drill ? () => drill(row) : toggle}
+		>
+			{label}
+		</Button>
 	);
 }

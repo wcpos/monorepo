@@ -24,6 +24,7 @@ import { getVariablePrices } from '../components/product/get-variable-prices';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../components/product/product-image-placeholder';
 import { VariationRowProvider } from '../components/product/variable-product-row/context';
 import { useRowExpansion } from '../components/product/variable-product-row/use-row-expansion';
+import { VariationsButton } from '../components/product/attributes';
 import { VariationsFilterBar } from '../components/product/variable-product-row/variations/filters';
 import { VariationTableFooter } from '../components/product/variable-product-row/variations/footer';
 import { matchesStockStatusFilter } from '../components/product/stock-filter';
@@ -47,11 +48,11 @@ type Product = {
 export function ProductRow({
 	record,
 	expanded,
-	onToggle,
+	className,
 }: {
 	record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	expanded?: boolean;
-	onToggle?: () => void;
+	className?: string;
 }) {
 	const product = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
@@ -82,28 +83,28 @@ export function ProductRow({
 	return (
 		<ListRow
 			testID={`products-row-${record.uuid}`}
+			className={className}
 			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
 			// lost the expanded state of a variable product.
-			// A drilling row (no `expanded`) opens a pane, so it is not an expander.
+			// The drill style's row (no `expanded`) is no expander.
 			aria-expanded={variable && expanded !== undefined ? expanded : undefined}
-			// A row the cashier cannot open is inert, as the customers and coupons rows are.
+			// The press opens the record, a variable product's too; a row the cashier cannot open is
+			// inert, as the customers and coupons rows are.
 			onPress={
-				variable
-					? onToggle
-					: editable
-						? () =>
-								router.push(
-									variation
-										? {
-												pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-												params: { variationId: record.uuid },
-											}
-										: {
-												pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-												params: { productId: record.uuid },
-											}
-								)
-						: undefined
+				editable
+					? () =>
+							router.push(
+								variation
+									? {
+											pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+											params: { variationId: record.uuid },
+										}
+									: {
+											pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+											params: { productId: record.uuid },
+										}
+							)
+					: undefined
 			}
 			leading={
 				<Image
@@ -129,16 +130,7 @@ export function ProductRow({
 							quantity={product.manage_stock === true ? product.stock_quantity : undefined}
 						/>
 					</View>
-					<Icon
-						name={
-							variable && expanded !== undefined
-								? expanded
-									? 'chevronUp'
-									: 'chevronDown'
-								: 'chevronRight'
-						}
-						className="text-muted-foreground"
-					/>
+					<Icon name="chevronRight" className="text-muted-foreground" />
 				</>
 			}
 		>
@@ -159,13 +151,7 @@ type VariableRowProps = {
 export function VariableRow(props: VariableRowProps) {
 	const meta = props.table.options.meta as unknown as {
 		setRowExpanded: (id: string, expanded: boolean) => void;
-		drill?: (row: VariableRowProps['item']) => void;
 	};
-	// The drill style: the press slides the variations in; nothing renders under the row.
-	if (meta.drill) {
-		const drill = meta.drill;
-		return <ProductRow record={props.item.original.record} onToggle={() => drill(props.item)} />;
-	}
 	return (
 		<VariationRowProvider row={props.item} setRowExpanded={meta.setRowExpanded}>
 			<VariableRowContent {...props} />
@@ -173,12 +159,25 @@ export function VariableRow(props: VariableRowProps) {
 	);
 }
 function VariableRowContent({ item, table }: VariableRowProps) {
-	const meta = table.options.meta as unknown as { variationStockStatus?: string };
-	const { expanded, toggle } = useRowExpansion(item, table);
+	const meta = table.options.meta as unknown as { variationStockStatus?: string; drill?: unknown };
+	const { expanded } = useRowExpansion(item, table);
+	// The drill style slides the variations in from the button; nothing renders under the row.
+	const inline = !meta.drill;
 	return (
 		<>
-			<ProductRow record={item.original.record} expanded={expanded} onToggle={toggle} />
-			{expanded && <InlineVariations row={item} stockStatus={meta.variationStockStatus} />}
+			<ProductRow
+				record={item.original.record}
+				expanded={inline ? expanded : undefined}
+				className="border-b-0"
+			/>
+			{/* The button sits under the row, not in it: a button may not nest in the row's button. */}
+			{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
+			<View className="border-border border-b pb-2 pl-16">
+				<VariationsButton row={item} table={table} />
+			</View>
+			{inline && expanded && (
+				<InlineVariations row={item} stockStatus={meta.variationStockStatus} />
+			)}
 		</>
 	);
 }

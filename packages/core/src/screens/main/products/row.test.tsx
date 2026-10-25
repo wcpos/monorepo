@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import type { EngineRecord } from '@wcpos/query';
@@ -14,6 +14,9 @@ let mockCanEdit = true;
 let mockCanEditVariations = true;
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('expo-haptics', () => ({}));
+jest.mock('../../../contexts/translations', () => ({
+	useT: () => (key: string, options?: { count?: number }) => `${key}:${options?.count}`,
+}));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));
@@ -58,6 +61,10 @@ const record = {
 		stock_status: 'instock',
 	},
 } as EngineRecord<'products'>;
+const productRoute = {
+	pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+	params: { productId: 'one' },
+};
 beforeEach(() => {
 	mockPush.mockClear();
 	mockReadOnly = false;
@@ -88,20 +95,20 @@ it.each([
 			params: { productId: 'one' },
 		});
 });
-it('toggles variable expansion instead of editing, including in preview', () => {
-	mockReadOnly = true;
-	const toggle = jest.fn();
+// A variable product is a record like any other: the row opens it, and is inert in preview.
+it.each([
+	[false, 1],
+	[true, 0],
+])("a variable product's row opens the product (readOnly %s)", (readOnly, calls) => {
+	mockReadOnly = readOnly;
 	render(
-		<ProductRow
-			record={{ ...record, payload: { ...record.payload, type: 'variable' } }}
-			expanded
-			onToggle={toggle}
-		/>
+		<ProductRow record={{ ...record, payload: { ...record.payload, type: 'variable' } }} expanded />
 	);
 	fireEvent.click(screen.getByTestId('products-row-one'));
-	expect(toggle).toHaveBeenCalledTimes(1);
-	expect(mockPush).not.toHaveBeenCalled();
-	expect(screen.getByTestId('icon-chevronUp')).toBeTruthy();
+	expect(mockPush).toHaveBeenCalledTimes(calls);
+	if (calls) expect(mockPush).toHaveBeenCalledWith(productRoute);
+	expect(screen.getByTestId('products-row-one').getAttribute('aria-expanded')).toBe('true');
+	expect(screen.getByTestId('icon-chevronRight')).toBeTruthy();
 });
 it('names the variation from its attributes and respects the variation capability', () => {
 	const variation = {
@@ -209,7 +216,16 @@ it('keeps touch variations inline, seeds relational matches and follows stock fi
 		table: { options: { meta } },
 	} as unknown as React.ComponentProps<typeof VariableRow>;
 	const { rerender } = render(<VariableRow {...props} />);
+	// The row opens the product; the variations open from the button under it.
 	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+	expect(mockPush).toHaveBeenCalledWith(productRoute);
+	expect(screen.queryByTestId('products-row-variation')).toBeNull();
+	const button = screen.getByTestId('variable-product-expand');
+	expect(button.textContent).toBe('products.n_variations:1 - common.variation_found_for_term:1');
+	expect(button.getAttribute('aria-expanded')).toBe('false');
+	await act(async () => fireEvent.click(button));
+	expect(button.getAttribute('aria-expanded')).toBe('true');
+	expect(screen.getByTestId('products-row-one').getAttribute('aria-expanded')).toBe('true');
 	expect(screen.getByTestId('products-row-variation').textContent).toContain('Large');
 	expect(mockVariationState).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'large' }));
 	expect(mockVariationOptions).toHaveBeenLastCalledWith({ remoteIds: ['22'] });
@@ -223,7 +239,7 @@ it('keeps touch variations inline, seeds relational matches and follows stock fi
 	meta.variationStockStatus = 'outofstock';
 	rerender(<VariableRow {...props} />);
 	expect(screen.queryByTestId('products-row-variation')).toBeNull();
-	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+	await act(async () => fireEvent.click(screen.getByTestId('variable-product-expand')));
 	expect(expanded$.value.one).toBe(false);
 });
 
@@ -261,7 +277,7 @@ it('keeps a failed variations read inside the row; its reset retries the variati
 				<VariableRow {...props} />
 			</ErrorBoundary>
 		);
-		await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+		await act(async () => fireEvent.click(screen.getByTestId('variable-product-expand')));
 		expect(screen.getByTestId('variations-error-reset')).toBeTruthy();
 		expect(screen.queryByTestId('products-list-fallback')).toBeNull();
 		expect(screen.getByTestId('products-row-other')).toBeTruthy();
@@ -296,9 +312,9 @@ it('keeps a failed variations read inside the row; its reset retries the variati
 	}
 });
 
-// The drill style (the POS panel's `variationsStyle`): the touch row hands itself to the
-// screen's drill and draws nothing under it; it is a way in, not an expander.
-it('drills on press in the drill style, with no inline variations and no expanded state', async () => {
+// The drill style (the POS panel's `variationsStyle`): the row opens the product, the button
+// under it hands the row to the screen's drill and nothing draws under it; no expander.
+it('opens on press and drills from the button in the drill style, with no expanded state', async () => {
 	const drill = jest.fn();
 	const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
 	const item = {
@@ -314,9 +330,17 @@ it('drills on press in the drill style, with no inline variations and no expande
 		/>
 	);
 	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+	expect(mockPush).toHaveBeenCalledWith(productRoute);
+	expect(drill).not.toHaveBeenCalled();
+	const button = screen.getByTestId('variable-product-expand');
+	expect(button.textContent).toBe('products.n_variations:0');
+	expect(button.hasAttribute('aria-expanded')).toBe(false);
+	await act(async () => fireEvent.click(button));
 	expect(drill).toHaveBeenCalledWith(item);
 	expect(expanded$.value).toEqual({});
 	expect(screen.queryByTestId('products-row-variation')).toBeNull();
 	expect(screen.getByTestId('products-row-one').hasAttribute('aria-expanded')).toBe(false);
-	expect(screen.getByTestId('icon-chevronRight')).toBeTruthy();
+	expect(
+		within(screen.getByTestId('products-row-one')).getByTestId('icon-chevronRight')
+	).toBeTruthy();
 });

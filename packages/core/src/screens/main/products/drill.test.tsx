@@ -3,12 +3,13 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { ProductsScreen } from './index';
 
 // The Products page drills into a variable product's variations the way the POS panel does
-// (one `variationsStyle`, read from the `pos-products` doc), or expands them inline.
+// (one `variationsStyle`, read from the `pos-products` doc), or expands them inline, from the
+// "n variations" button under its name; its row and caret open the product like any other.
 type FakeHandle = import('@wcpos/query').QueryHandle;
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
 	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
@@ -44,8 +45,13 @@ function patchColumns(columns: { key: string; show: boolean }[]) {
 let mockPointer = 'fine';
 let mockTableProps: Record<string, unknown> = {};
 let mockTable: unknown;
+const mockPush = jest.fn();
+const productRoute = {
+	pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+	params: { productId: 'hoodie' },
+};
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
 jest.mock('../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({ caps: { canEditProducts: true, canEditVariations: true } }),
@@ -58,6 +64,7 @@ jest.mock('../../../query', () => ({
 	useProductsQueryHandle: () => mockHandle,
 }));
 jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: object, select: (value: object) => unknown) => select(record),
 	useDocField: (doc: object, select: (value: object) => unknown) => {
 		jest.requireActual('react').useSyncExternalStore(
 			(listener: () => void) => {
@@ -165,9 +172,10 @@ jest.mock('../components/data-table', () => ({
 	DataTableFooter: () => null,
 	getColumnStyle: () => ({}),
 }));
-// A row: its press, and its real actions cell (the caret).
+// A row: its press, the real variations button under the name, and its real actions cell.
 jest.mock('../components/data-table/rows', () => {
 	const { Actions } = jest.requireActual('./cells/actions');
+	const { VariationsButton } = jest.requireActual('../components/product/attributes');
 	return {
 		DataTableRow: ({
 			item,
@@ -180,6 +188,7 @@ jest.mock('../components/data-table/rows', () => {
 		}) => (
 			<div data-testid={testID}>
 				<button data-testid={`press-${item.id}`} onClick={onPress} />
+				<VariationsButton row={item} table={item.table} />
 				<Actions row={item} table={item.table} />
 			</div>
 		),
@@ -272,10 +281,23 @@ jest.mock('react-native-gesture-handler', () => ({
 jest.mock('@wcpos/components/button', () => ({
 	Button: React.forwardRef<
 		HTMLButtonElement,
-		React.PropsWithChildren<{ testID: string; onPress: () => void }>
-	>(function Button({ children, testID, onPress }, ref) {
+		React.PropsWithChildren<{
+			testID: string;
+			onPress: () => void;
+			leftIcon?: string;
+			rightIcon?: string;
+			'aria-expanded'?: boolean;
+		}>
+	>(function Button({ children, testID, onPress, leftIcon, rightIcon, ...props }, ref) {
 		return (
-			<button ref={ref} data-testid={testID} onClick={onPress}>
+			<button
+				ref={ref}
+				data-testid={testID}
+				data-left-icon={leftIcon}
+				data-right-icon={rightIcon}
+				aria-expanded={props['aria-expanded']}
+				onClick={onPress}
+			>
 				{children}
 			</button>
 		);
@@ -383,6 +405,7 @@ jest.mock('../components/product/variable-price', () => ({ VariableProductPrice:
 jest.mock('../components/product/variation-image', () => ({ ProductVariationImage: () => null }));
 
 beforeEach(() => {
+	mockPush.mockClear();
 	mockStyle = 'drill';
 	mockPointer = 'fine';
 	mockProductsDoc.columns = [
@@ -400,10 +423,17 @@ const meta = () =>
 		}
 	).meta;
 
-it('drills from the row press into the product’s variations, and the crumb comes back', () => {
+const variations = () => screen.getByTestId('variable-product-expand');
+
+it('drills from the variations button into the product’s variations, and the crumb comes back', () => {
 	render(<ProductsScreen />);
 	expect(crumb()).toBeNull();
-	fireEvent.click(screen.getByTestId('press-hoodie'));
+	// "n variations, ›": a way in, not an expander.
+	expect(variations().textContent).toBe('products.n_variations');
+	expect(variations().dataset.rightIcon).toBe('chevronRight');
+	expect(variations().hasAttribute('aria-expanded')).toBe(false);
+	fireEvent.click(variations());
+	expect(mockPush).not.toHaveBeenCalled();
 	expect(crumb()?.textContent).toContain('Hoodie');
 	expect(screen.getByTestId('pane-variations').dataset.parent).toBe('hoodie');
 	// The caller's pane, never the POS one.
@@ -413,14 +443,23 @@ it('drills from the row press into the product’s variations, and the crumb com
 	expect(screen.queryByTestId('pane-variations')).toBeNull();
 });
 
-it('drills from the caret too, which is a way in rather than an expander', () => {
+it.each(['drill', 'inline'])(
+	'the row press and the caret open the product in the %s style, never its variations',
+	(style) => {
+		mockStyle = style;
+		render(<ProductsScreen />);
+		expect(screen.queryByTestId('product-expand-button')).toBeNull();
+		fireEvent.click(screen.getByTestId('press-hoodie'));
+		fireEvent.click(screen.getByTestId('product-open-button'));
+		expect(mockPush.mock.calls).toEqual([[productRoute], [productRoute]]);
+		expect(crumb()).toBeNull();
+		expect(screen.queryByTestId('pane-variations')).toBeNull();
+		expect(variations().getAttribute('aria-expanded')).toBe(style === 'inline' ? 'false' : null);
+	}
+);
+
+it('never expands a row in the drill style', () => {
 	render(<ProductsScreen />);
-	const caret = screen.getByTestId('product-expand-button');
-	expect(caret.dataset.icon).toBe('chevronRight');
-	expect(caret.hasAttribute('aria-expanded')).toBe(false);
-	fireEvent.click(caret);
-	expect(crumb()?.textContent).toContain('Hoodie');
-	// No row ever expands in the drill style.
 	const tableConfig = mockTableProps.tableConfig as { getRowCanExpand: (row: unknown) => boolean };
 	expect(tableConfig.getRowCanExpand({ original: hoodie })).toBe(false);
 });
@@ -429,7 +468,7 @@ it('returns to the products when the search changes', () => {
 	jest.useFakeTimers();
 	try {
 		render(<ProductsScreen />);
-		fireEvent.click(screen.getByTestId('press-hoodie'));
+		fireEvent.click(variations());
 		expect(crumb()).not.toBeNull();
 		fireEvent.change(screen.getByTestId('search-products'), { target: { value: 'hat' } });
 		act(() => jest.advanceTimersByTime(250));
@@ -457,18 +496,21 @@ it('starts the pane at a chip’s option, or at the products search its variatio
 	expect(screen.getByTestId('pane-variations').dataset.search).toBe('red');
 });
 
-it('expands inline as before in the inline style, with no crumb', () => {
+it('expands inline from the variations button in the inline style, with no crumb', () => {
 	mockStyle = 'inline';
 	render(<ProductsScreen />);
 	expect(meta().drill).toBeUndefined();
-	const caret = screen.getByTestId('product-expand-button');
-	expect(caret.getAttribute('aria-expanded')).toBe('false');
-	fireEvent.click(screen.getByTestId('press-hoodie'));
-	expect(screen.getByTestId('product-expand-button').getAttribute('aria-expanded')).toBe('true');
+	expect(variations().dataset.leftIcon).toBe('chevronRight');
+	fireEvent.click(variations());
+	expect(variations().getAttribute('aria-expanded')).toBe('true');
+	expect(variations().dataset.leftIcon).toBe('chevronDown');
+	fireEvent.click(variations());
+	expect(variations().getAttribute('aria-expanded')).toBe('false');
+	expect(mockPush).not.toHaveBeenCalled();
 	expect(crumb()).toBeNull();
 });
 
-it('drills from the touch row on a coarse pointer, into the touch variations', () => {
+it('drills from the touch row’s variations button on a coarse pointer, into the touch variations', () => {
 	mockPointer = 'coarse';
 	render(<ProductsScreen />);
 	fireEvent.click(screen.getByTestId('touch-hoodie'));
@@ -480,7 +522,7 @@ it('drops a drill the search left, so restoring the search does not bring it bac
 	jest.useFakeTimers();
 	try {
 		render(<ProductsScreen />);
-		fireEvent.click(screen.getByTestId('press-hoodie'));
+		fireEvent.click(variations());
 		fireEvent.change(screen.getByTestId('search-products'), { target: { value: 'hat' } });
 		act(() => jest.advanceTimersByTime(250));
 		expect(crumb()).toBeNull();
@@ -495,7 +537,7 @@ it('drops a drill the search left, so restoring the search does not bring it bac
 
 it('draws the products head row over the pane rows, and follows a column change', () => {
 	render(<ProductsScreen />);
-	fireEvent.click(screen.getByTestId('press-hoodie'));
+	fireEvent.click(variations());
 	expect(screen.getByTestId('pane-head-row').textContent).toBe('namesale_price');
 	expect(screen.getByTestId('pane-cell-sale_price')).toBeTruthy();
 	act(() =>
@@ -516,4 +558,12 @@ it('starts afresh when the same product is reopened from another chip', () => {
 	expect(JSON.parse(screen.getByTestId('pane-variations').dataset.matches ?? '')).toEqual([
 		{ id: 1, name: 'Size', option: 'M' },
 	]);
+});
+
+it('sits the drilled pane’s head row and variations on the table card, as the POS pane does', () => {
+	render(<ProductsScreen />);
+	fireEvent.click(variations());
+	const surface = screen.getByTestId('products-variations-surface');
+	expect(within(surface).getByTestId('pane-head-row')).toBeTruthy();
+	expect(within(surface).getByTestId('pane-variations').dataset.parent).toBe('hoodie');
 });

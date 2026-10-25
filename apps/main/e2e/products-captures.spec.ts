@@ -111,22 +111,15 @@ for (const [device, viewport] of Object.entries({
 						root.getByTestId('data-table-count').or(root.getByTestId('no-data-message')).first()
 					).toBeVisible({ timeout: 30_000 });
 					await state('list', async () => {});
-					const variable = root.locator('[data-testid^="products-row-"][aria-expanded="false"]');
-					const expand =
-						device === 'phone'
-							? variable.first()
-							: root.getByTestId('variable-product-expand').first();
+					// The row opens the product on every device; its variations open from the
+					// "n variations" button under the name (the touch row carries it too).
+					const expand = root.getByTestId('variable-product-expand').first();
 					if (await expand.count()) {
 						await state('variable-expanded', async () => {
 							await expand.click();
 							await expect(root.getByTestId(/^data-table-row-variation-/).first()).toBeVisible();
 						});
-						if (device === 'phone')
-							await root
-								.locator('[data-testid^="products-row-"][aria-expanded="true"]')
-								.first()
-								.click();
-						else await expand.click();
+						await expand.click();
 					} else skipState('No resident variable product: inline expansion unavailable');
 					await state('chip-set', async () => {
 						await root.getByTestId('filter-pill-featured').click();

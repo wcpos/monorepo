@@ -8,41 +8,16 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
-import { useRowExpansion } from '../../components/product/variable-product-row/use-row-expansion';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 type Props = CellContext<{ record: EngineRecord<'products'> }, 'actions'>;
 
-// The orders caret (#2897): it opens the product like the row does. The cell sits beside the
-// row's pressable (a button cannot nest in a button), so it needs its own. Sync and Delete
-// live in the modal's footer. A variable product's caret opens its variations instead.
-export function Actions(props: Props) {
-	if (props.row.original.record.payload.type !== 'variable') return <OpenCaret {...props} />;
-	const meta = props.table.options.meta as { drill?: (row: Props['row']) => void } | undefined;
-	// The drill style (`variationsStyle`): the caret slides the product's variations in.
-	return meta?.drill ? (
-		<DrillCaret onPress={() => meta.drill?.(props.row)} />
-	) : (
-		<VariationsCaret {...props} />
-	);
-}
-
-function DrillCaret({ onPress }: { onPress: () => void }) {
-	const t = useT();
-	return (
-		<IconButton
-			testID="product-expand-button"
-			name="chevronRight"
-			size="sm"
-			variant="muted"
-			accessibilityLabel={t('products.show_variations', { _: 'Show variations' })}
-			onPress={onPress}
-		/>
-	);
-}
-
-function OpenCaret({ row }: Props) {
+// The orders caret (#2897): it opens the product like the row does, a variable product's too
+// (its variations open from the button under its name). The cell sits beside the row's
+// pressable (a button cannot nest in a button), so it needs its own. Sync and Delete live in
+// the modal's footer.
+export function Actions({ row }: Props) {
 	const router = useRouter();
 	const t = useT();
 	const { readOnly } = useProAccess();
@@ -65,22 +40,5 @@ function OpenCaret({ row }: Props) {
 				}
 			/>
 		</CapabilityTooltip>
-	);
-}
-
-// Showing variations edits nothing, so it takes no capability.
-function VariationsCaret({ row, table }: Props) {
-	const t = useT();
-	const { expanded, toggle } = useRowExpansion(row, table);
-	return (
-		<IconButton
-			testID="product-expand-button"
-			name={expanded ? 'chevronDown' : 'chevronRight'}
-			size="sm"
-			variant="muted"
-			aria-expanded={expanded}
-			accessibilityLabel={t('products.show_variations', { _: 'Show variations' })}
-			onPress={toggle}
-		/>
 	);
 }

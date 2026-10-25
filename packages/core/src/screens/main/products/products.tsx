@@ -33,6 +33,7 @@ import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter, getColumnStyle } from '../components/data-table';
 import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
+import { TableSurface } from '../components/data-table/surface';
 import { RecordDateCell } from '../components/record-date-cell';
 import { ProductCategories } from '../components/product/categories';
 import { FilterBar } from '../components/product/filter-bar';
@@ -170,19 +171,18 @@ function renderFineItem(
 	},
 	openProduct?: (uuid: string) => void
 ) {
-	// The row is the open control on every pointer, as the touch row is: a variable product's
-	// toggles its variations, a simple one's opens the product when the cashier may edit it.
-	if (item.original.record.payload.type === 'variable') {
-		return <VariableProductRow item={item} index={index} table={table} toggleOnPress />;
-	}
-	return (
-		<VirtualizedList.Item>
-			<DataTableRow
-				item={item}
-				onPress={openProduct ? () => openProduct(item.original.record.uuid) : undefined}
-			/>
-		</VirtualizedList.Item>
+	// The row opens the product on every pointer, as the touch row does, a variable one's too
+	// (its variations open from the button under its name); inert when the cashier may not edit.
+	const row = (
+		<DataTableRow
+			item={item}
+			onPress={openProduct ? () => openProduct(item.original.record.uuid) : undefined}
+		/>
 	);
+	if (item.original.record.payload.type === 'variable') {
+		return <VariableProductRow item={item} index={index} table={table} row={row} />;
+	}
+	return <VirtualizedList.Item>{row}</VirtualizedList.Item>;
 }
 
 /**
@@ -216,14 +216,17 @@ function DrillPane({
 			initialMatches={target.matches}
 			initialSearch={target.variationSearch}
 		>
-			{pointer === 'fine' && <PaneHeadRow table={table} />}
-			<ScrollView>
-				{pointer === 'fine' ? (
-					<Variations row={row} stockStatus={stockStatus} openVariation={openVariation} />
-				) : (
-					<InlineVariations row={row} stockStatus={stockStatus} />
-				)}
-			</ScrollView>
+			{/* On the table's card, as the POS pane's DataTable is (DrillIn: each pane brings its own). */}
+			<TableSurface testID="products-variations-surface">
+				{pointer === 'fine' && <PaneHeadRow table={table} />}
+				<ScrollView>
+					{pointer === 'fine' ? (
+						<Variations row={row} stockStatus={stockStatus} openVariation={openVariation} />
+					) : (
+						<InlineVariations row={row} stockStatus={stockStatus} />
+					)}
+				</ScrollView>
+			</TableSurface>
 		</VariationRowProvider>
 	);
 }
@@ -421,7 +424,7 @@ function ProductsList({
 				},
 				variationRenderCell,
 				openVariation,
-				// Read by the variable row, its caret and its attribute chips instead of expanding.
+				// Read by the variations button and the attribute chips instead of expanding.
 				drill: drillStyle ? drillTo : undefined,
 				/**
 				 * Expanded variation rows answer to the same Stock Status pill as the rows around
