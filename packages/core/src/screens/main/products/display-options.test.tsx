@@ -38,12 +38,14 @@ jest.mock('@wcpos/components/segmented-control', () => ({
 		value,
 		onValueChange,
 		segments,
+		'aria-label': label,
 	}: {
+		'aria-label'?: string;
 		value: string;
 		onValueChange: (value: string) => void;
 		segments: { value: string; label: string; testID: string }[];
 	}) => (
-		<div>
+		<div role="radiogroup" aria-label={label}>
 			{segments.map((segment) => (
 				<button
 					key={segment.value}
@@ -77,6 +79,10 @@ it('shows the POS panel’s variations style above the columns and writes it to 
 			Node.DOCUMENT_POSITION_FOLLOWING
 	).toBeTruthy();
 	expect(inline.getAttribute('aria-pressed')).toBe('true');
+	// The group is named: a radiogroup with no name reads as a bare list of choices.
+	expect(screen.getByRole('radiogroup').getAttribute('aria-label')).toBe(
+		'pos_products.variations_style'
+	);
 	fireEvent.click(drill);
 	expect(mockSettingsIds).toContain('pos-products');
 	expect(mockPatch).toHaveBeenCalledWith({ variationsStyle: 'drill' });

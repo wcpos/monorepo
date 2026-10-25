@@ -26,8 +26,24 @@ const mockHandle = fakeQueryHandle({
 	total: 1,
 });
 let mockStyle: string | undefined = 'drill';
+// The products columns doc, and a store its readers subscribe to (a column change re-renders them).
+const mockProductsDoc = {
+	sortBy: 'name',
+	columns: [
+		{ key: 'name', show: true },
+		{ key: 'sale_price', show: true },
+	],
+};
+let mockDocVersion = 0;
+const mockDocListeners = new Set<() => void>();
+function patchColumns(columns: { key: string; show: boolean }[]) {
+	mockProductsDoc.columns = columns;
+	mockDocVersion += 1;
+	mockDocListeners.forEach((listener) => listener());
+}
 let mockPointer = 'fine';
 let mockTableProps: Record<string, unknown> = {};
+let mockTable: unknown;
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
@@ -42,11 +58,20 @@ jest.mock('../../../query', () => ({
 	useProductsQueryHandle: () => mockHandle,
 }));
 jest.mock('@wcpos/query', () => ({
-	useDocField: (doc: object, select: (value: object) => unknown) => select(doc),
+	useDocField: (doc: object, select: (value: object) => unknown) => {
+		jest.requireActual('react').useSyncExternalStore(
+			(listener: () => void) => {
+				mockDocListeners.add(listener);
+				return () => mockDocListeners.delete(listener);
+			},
+			() => mockDocVersion
+		);
+		return select(doc);
+	},
 }));
 jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: (id: string) => ({
-		uiSettings: id === 'pos-products' ? { variationsStyle: mockStyle } : { sortBy: 'name' },
+		uiSettings: id === 'pos-products' ? { variationsStyle: mockStyle } : mockProductsDoc,
 	}),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
@@ -94,14 +119,41 @@ jest.mock('../components/data-table', () => ({
 		mockTableProps = props;
 		const actual = jest.requireActual('../../../query');
 		const snapshot = actual.useQuerySnapshot(props.handle, []);
-		const table = { options: { meta: (props.tableConfig as { meta: unknown }).meta } };
+		// A row's cells are the visible columns WHEN it was built; the live table builds afresh.
+		const row = (hit: { id: string }) => {
+			const cells = mockProductsDoc.columns
+				.filter((column) => column.show)
+				.map((column) => ({ column: { id: column.key } }));
+			return { id: hit.id, original: hit, table, getVisibleCells: () => cells };
+		};
+		const table: Record<string, unknown> = {
+			options: { meta: (props.tableConfig as { meta: unknown }).meta },
+			getHeaderGroups: () => [
+				{
+					id: 'head',
+					headers: mockProductsDoc.columns
+						.filter((column) => column.show)
+						.map((column) => ({
+							id: column.key,
+							column: { id: column.key, columnDef: { header: column.key, meta: {} } },
+							getContext: () => ({}),
+						})),
+				},
+			],
+			getRowModel: () => ({
+				rowsById: Object.fromEntries(
+					(snapshot.result.hits as { id: string }[]).map((hit) => [hit.id, row(hit)])
+				),
+			}),
+		};
+		mockTable = table;
 		const renderItem = props.renderItem as (args: object) => React.ReactNode;
 		return (
 			<div data-testid="products-table">
 				{(snapshot.result.hits as { id: string }[]).map((hit, index) => (
 					<React.Fragment key={hit.id}>
 						{renderItem({
-							item: { id: hit.id, original: hit, table, getVisibleCells: () => [] },
+							item: row(hit),
 							index,
 							table,
 						})}
@@ -111,6 +163,7 @@ jest.mock('../components/data-table', () => ({
 		);
 	},
 	DataTableFooter: () => null,
+	getColumnStyle: () => ({}),
 }));
 // A row: its press, and its real actions cell (the caret).
 jest.mock('../components/data-table/rows', () => {
@@ -154,7 +207,14 @@ jest.mock('@wcpos/components/icon-button', () => ({
 }));
 // The pane's management variations: which product, and the query they start from.
 jest.mock('../components/product/variable-product-row/variations', () => ({
-	Variations: ({ row }: { row: { original: { record: { uuid: string } } } }) => {
+	Variations: ({
+		row,
+	}: {
+		row: {
+			original: { record: { uuid: string } };
+			getVisibleCells: () => { column: { id: string } }[];
+		};
+	}) => {
 		const { useQueryState } = jest.requireActual('../../../query');
 		const state = useQueryState();
 		return (
@@ -163,7 +223,11 @@ jest.mock('../components/product/variable-product-row/variations', () => ({
 				data-parent={row.original.record.uuid}
 				data-search={state.search}
 				data-matches={JSON.stringify(state.filters.attributeMatches)}
-			/>
+			>
+				{row.getVisibleCells().map((cell) => (
+					<span key={cell.column.id} data-testid={`pane-cell-${cell.column.id}`} />
+				))}
+			</div>
 		);
 	},
 }));
@@ -224,6 +288,14 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(undefined),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/table', () => ({
+	TableHeader: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="pane-head-row">{children}</div>
+	),
+	TableRow: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	TableHead: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	TableCell: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
@@ -313,6 +385,10 @@ jest.mock('../components/product/variation-image', () => ({ ProductVariationImag
 beforeEach(() => {
 	mockStyle = 'drill';
 	mockPointer = 'fine';
+	mockProductsDoc.columns = [
+		{ key: 'name', show: true },
+		{ key: 'sale_price', show: true },
+	];
 });
 
 const crumb = () => screen.queryByTestId('products-breadcrumb');
@@ -365,7 +441,7 @@ it('returns to the products when the search changes', () => {
 
 it('starts the pane at a chip’s option, or at the products search its variations matched', () => {
 	render(<ProductsScreen />);
-	const row = { id: 'hoodie', original: hoodie };
+	const row = { id: 'hoodie', original: hoodie, table: mockTable };
 	act(() => meta().drill?.(row, { id: 1, name: 'Size', option: 'L' }));
 	expect(JSON.parse(screen.getByTestId('pane-variations').dataset.matches ?? '')).toEqual([
 		{ id: 1, name: 'Size', option: 'L' },
@@ -374,6 +450,7 @@ it('starts the pane at a chip’s option, or at the products search its variatio
 	act(() =>
 		meta().drill?.({
 			id: 'hoodie',
+			table: mockTable,
 			original: { ...hoodie, childrenSearchCount: 2, parentSearchTerm: 'red' },
 		})
 	);
@@ -397,4 +474,46 @@ it('drills from the touch row on a coarse pointer, into the touch variations', (
 	fireEvent.click(screen.getByTestId('touch-hoodie'));
 	expect(crumb()?.textContent).toContain('Hoodie');
 	expect(screen.getByTestId('pane-inline-variations').dataset.parent).toBe('hoodie');
+});
+
+it('drops a drill the search left, so restoring the search does not bring it back', () => {
+	jest.useFakeTimers();
+	try {
+		render(<ProductsScreen />);
+		fireEvent.click(screen.getByTestId('press-hoodie'));
+		fireEvent.change(screen.getByTestId('search-products'), { target: { value: 'hat' } });
+		act(() => jest.advanceTimersByTime(250));
+		expect(crumb()).toBeNull();
+		fireEvent.change(screen.getByTestId('search-products'), { target: { value: '' } });
+		act(() => jest.advanceTimersByTime(250));
+		expect(crumb()).toBeNull();
+		expect(screen.queryByTestId('pane-variations')).toBeNull();
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
+it('draws the products head row over the pane rows, and follows a column change', () => {
+	render(<ProductsScreen />);
+	fireEvent.click(screen.getByTestId('press-hoodie'));
+	expect(screen.getByTestId('pane-head-row').textContent).toBe('namesale_price');
+	expect(screen.getByTestId('pane-cell-sale_price')).toBeTruthy();
+	act(() =>
+		patchColumns([
+			{ key: 'name', show: true },
+			{ key: 'sale_price', show: false },
+		])
+	);
+	expect(screen.queryByTestId('pane-cell-sale_price')).toBeNull();
+	expect(screen.getByTestId('pane-cell-name')).toBeTruthy();
+});
+
+it('starts afresh when the same product is reopened from another chip', () => {
+	render(<ProductsScreen />);
+	const row = { id: 'hoodie', original: hoodie, table: mockTable };
+	act(() => meta().drill?.(row, { id: 1, name: 'Size', option: 'L' }));
+	act(() => meta().drill?.(row, { id: 1, name: 'Size', option: 'M' }));
+	expect(JSON.parse(screen.getByTestId('pane-variations').dataset.matches ?? '')).toEqual([
+		{ id: 1, name: 'Size', option: 'M' },
+	]);
 });

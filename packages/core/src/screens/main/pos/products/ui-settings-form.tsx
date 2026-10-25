@@ -136,6 +136,7 @@ export function UISettingsForm() {
 							<View className="gap-1 px-1">
 								<Text>{t('pos_products.variations_style')}</Text>
 								<SegmentedControl
+									aria-label={t('pos_products.variations_style')}
 									value={value ?? 'drill'}
 									onValueChange={onChange}
 									segments={[

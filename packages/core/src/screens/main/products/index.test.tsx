@@ -65,6 +65,7 @@ jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('../pos/products/drill-in', () => ({ DrillIn: () => null }));
+jest.mock('@wcpos/components/table', () => ({}));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));

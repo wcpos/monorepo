@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { flexRender } from '@tanstack/react-table';
 import get from 'lodash/get';
 import omit from 'lodash/omit';
 import { useRouter } from 'expo-router';
@@ -10,6 +11,8 @@ import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
 import { PaneStack } from '@wcpos/components/pane-stack';
+import { Text } from '@wcpos/components/text';
+import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
 import { ManagementBar } from '../components/management-bar';
@@ -27,7 +30,7 @@ import { VariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
-import { DataTable, DataTableFooter } from '../components/data-table';
+import { DataTable, DataTableFooter, getColumnStyle } from '../components/data-table';
 import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { RecordDateCell } from '../components/record-date-cell';
@@ -182,6 +185,78 @@ function renderFineItem(
 	);
 }
 
+/**
+ * The management variations under the crumb, as the row's inline expand draws them, under the
+ * products table's head row (a fine pointer): the editable price cells need their labels.
+ */
+function DrillPane({
+	target,
+	stockStatus,
+	openVariation,
+}: {
+	target: Drill;
+	stockStatus?: string;
+	openVariation?: (record: EngineRecord<'variations'>) => void;
+}) {
+	// The rows' columns are the products table's: re-read on a column change, with the row
+	// taken from the live table each render, since the row captured at drill time keeps its
+	// cells. No memo, so the rows below re-render with it (facebook/react#33057).
+	'use no memo';
+	const pointer = usePointer();
+	const { uiSettings } = useUISettings('products');
+	useDocField(uiSettings, (value) => value.columns);
+	const table = target.row.table;
+	const row = table.getRowModel().rowsById[target.row.id] ?? target.row;
+	return (
+		// Keyed by product and its starting query: another product, or the same one from another
+		// chip, is a fresh query, never the last one's rows or filters.
+		<VariationRowProvider
+			key={`${row.id}:${JSON.stringify([target.matches, target.variationSearch])}`}
+			row={row}
+			initialMatches={target.matches}
+			initialSearch={target.variationSearch}
+		>
+			{pointer === 'fine' && <PaneHeadRow table={table} />}
+			<ScrollView>
+				{pointer === 'fine' ? (
+					<Variations row={row} stockStatus={stockStatus} openVariation={openVariation} />
+				) : (
+					<InlineVariations row={row} stockStatus={stockStatus} />
+				)}
+			</ScrollView>
+		</VariationRowProvider>
+	);
+}
+
+/** The products table's head over the pane's rows: plain labels at the rows' widths. */
+function PaneHeadRow({ table }: { table: Drill['row']['table'] }) {
+	// Mirrors `DataTableBody`'s head row (components/data-table), without its sort and resize.
+	return (
+		<TableHeader>
+			{table.getHeaderGroups().map((group) => (
+				<TableRow key={group.id} className="min-h-row border-border border-b">
+					{group.headers.map((header, index) => (
+						<TableHead
+							key={header.id}
+							className="min-h-row"
+							style={getColumnStyle(
+								index === group.headers.length - 1 &&
+									!group.headers.some((h) => h.column.id === 'actions')
+									? { ...header.column.columnDef.meta, width: undefined, flex: 1 }
+									: header.column.columnDef.meta
+							)}
+						>
+							<Text numberOfLines={1}>
+								{flexRender(header.column.columnDef.header, header.getContext())}
+							</Text>
+						</TableHead>
+					))}
+				</TableRow>
+			))}
+		</TableHeader>
+	);
+}
+
 /** The table's caption row with the tax notice beside the counts. */
 function TableFooter(props: DataTableFooterProps) {
 	return (
@@ -251,6 +326,9 @@ function ProductsList({
 		(useDocField(posSettings, (value) => value.variationsStyle) ?? 'drill') === 'drill';
 	const [drill, setDrill] = React.useState<Drill | null>(null);
 	const drilled = drillStyle && drill && drill.search === state.search ? drill : null;
+	// Dropped, not parked: restoring the search (or the style) must not bring the pane back.
+	// Reset while rendering (React's "previous render" pattern), as `variations-pane.tsx` does.
+	if (drill && !drilled) setDrill(null);
 	const drillTo = React.useCallback(
 		(row: Row<ProductRow, DataTableFeatures>, match?: VariationMatch) => {
 			const found = !match && (row.original.childrenSearchCount ?? 0) > 0;
@@ -364,29 +442,6 @@ function ProductsList({
 	);
 	/* eslint-enable react-compiler/react-compiler */
 
-	// The management variations under the crumb, as the row's inline expand draws them; keyed by
-	// product so a tap on another product mid-slide never shows the last one's rows.
-	const renderVariations = (target: Drill) => (
-		<VariationRowProvider
-			key={target.row.id}
-			row={target.row}
-			initialMatches={target.matches}
-			initialSearch={target.variationSearch}
-		>
-			<ScrollView>
-				{pointer === 'fine' ? (
-					<Variations
-						row={target.row}
-						stockStatus={state.filters.stock_status}
-						openVariation={openVariation}
-					/>
-				) : (
-					<InlineVariations row={target.row} stockStatus={state.filters.stock_status} />
-				)}
-			</ScrollView>
-		</VariationRowProvider>
-	);
-
 	return (
 		<>
 			{pending && <View testID="products-searching-line" className="bg-primary h-0.5" />}
@@ -396,7 +451,13 @@ function ProductsList({
 					<DrillIn
 						parent={target.row.original.record}
 						back={() => setDrill(null)}
-						renderPane={() => renderVariations(target)}
+						renderPane={() => (
+							<DrillPane
+								target={target}
+								stockStatus={state.filters.stock_status}
+								openVariation={openVariation}
+							/>
+						)}
 					/>
 				)}
 				paneClassName="bg-background"
