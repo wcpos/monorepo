@@ -222,9 +222,46 @@ it('rejection is final, idempotent by fields, and can be cleared', () => {
 	clearOrderSaveIfMutation('a', 'm');
 	expect(getCheckoutModeSnapshot()).toBe(held);
 	markOrderSaveRejected('a', { ...rejection, message: 'Changed' });
-	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, message: 'Changed' });
+	expect(getOrderSaveState('a')).toEqual({
+		kind: 'rejected',
+		...rejection,
+		message: 'Changed',
+		refused: null,
+		parked: false,
+	});
 	clearOrderSaving('a');
 	expect(getOrderSaveState('a')).toBeNull();
+});
+it('a retry replaces a rejection; a plain save still holds', () => {
+	markOrderSaveRejected('a', { status: 403, reason: 'refused', message: null });
+	markOrderSaving('a');
+	expect(getOrderSaveState('a')?.kind).toBe('rejected');
+	markOrderSaving('a', { retry: true });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
+});
+it('a rejection without a payload keeps the refused payload already known', () => {
+	const rejection = { status: 400, reason: 'rest_invalid_param', message: null };
+	const refused = { line_items: [{ product_id: 1, quantity: 2 }] };
+	markOrderSaveRejected('a', { ...rejection, refused });
+	markOrderSaveRejected('a', rejection);
+	const held = { kind: 'rejected', ...rejection, refused, parked: false };
+	expect(getOrderSaveState('a')).toEqual(held);
+	markOrderSaveRejected('a', { ...rejection, refused: null });
+	expect(getOrderSaveState('a')).toEqual(held);
+	const next = { line_items: [{ product_id: 1, quantity: 3 }] };
+	markOrderSaveRejected('a', { ...rejection, refused: next });
+	expect(getOrderSaveState('a')).toEqual({ ...held, refused: next });
+});
+it('a rejection without a row status keeps a parked record parked', () => {
+	const rejection = { status: 409, reason: 'conflict', message: null };
+	markOrderSaveRejected('a', { ...rejection, refused: {}, parked: true });
+	markOrderSaveRejected('a', rejection);
+	expect(getOrderSaveState('a')).toEqual({
+		kind: 'rejected',
+		...rejection,
+		refused: {},
+		parked: true,
+	});
 });
 it('derives offline immediately without changing the stored saving state', () => {
 	markOrderSaving('a');

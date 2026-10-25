@@ -29,6 +29,7 @@ import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { type CheckoutRejection, useCheckoutSave } from '../../checkout/hooks/use-checkout-save';
 import { showOrderRefusedToast } from '../../checkout/refusal-toast';
+import { orderChangedSinceRefusal } from '../../checkout/refused-wire';
 import { returnToTill } from '../../checkout/till-route';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -93,9 +94,21 @@ export function PayButton() {
 		// legacy webview checkout has no such gate, so that lane still waits for the save.
 		const tenderFlow = loaded && !unsupportedSchema;
 		const state = getOrderSaveState(uuid);
-		if (state?.kind === 'rejected') {
-			showRefusal(state);
-			return;
+		// Pay never resends the save the store just refused; a cart changed since is a new
+		// save, and its accepted write settles the dead letter in the drain (#2946). A parked
+		// record (conflict) blocks every later write until it is resolved, so it is never retried.
+		const retry = state?.kind === 'rejected';
+		if (retry) {
+			if (state.parked || !orderChangedSinceRefusal(currentOrderRecord.payload, state.refused)) {
+				// The refusal alone: the state also carries the refused payload (billing included),
+				// which belongs in neither the toast nor the log context.
+				const { status, reason, message } = state;
+				showRefusal({ status, reason, message });
+				return;
+			}
+			orderLogger.info('Checkout retries a refused save', {
+				context: { orderId: uuid, refusedStatus: state.status, refusedReason: state.reason },
+			});
 		}
 		if (state?.kind === 'saving') {
 			// The earlier press is still waiting on the store. Show that wait again
@@ -104,7 +117,7 @@ export function PayButton() {
 			if (tenderFlow && screenSize === 'sm') router.push(sheetRoute);
 			return;
 		}
-		markOrderSaving(uuid);
+		markOrderSaving(uuid, { retry });
 		// Every width enters checkout: the phone's sheet is a checkout member too, so a paid
 		// sale stays the current order while its sheet is up (the provider holds members only).
 		if (tenderFlow) {
