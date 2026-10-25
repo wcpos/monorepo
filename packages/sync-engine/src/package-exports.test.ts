@@ -22,6 +22,9 @@ describe('package exports', () => {
 				'BACKLOG_QUEUE_STATUSES',
 				// The dead-letter panel selects permanent refusals.
 				'REJECTED_QUEUE_STATUSES',
+				// The checkout hold projects the resident through the enqueue seam to compare
+				// it with a refused row (#2952).
+				'sanitizeOutboundOrderPayload',
 				// Register accounting shares the engine's definition of pending local work.
 				'hasPendingLocalWork',
 				// The one protected-order-meta rule (identity re-stamps, the one-way money-owner
