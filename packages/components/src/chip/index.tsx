@@ -15,6 +15,7 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	on?: boolean;
 	dimmed?: boolean;
 	add?: boolean;
+	onLongPress?: PressableProps['onLongPress'];
 	onClear?: () => void;
 	clearLabel?: string;
 	clearTestID?: string;
@@ -68,11 +69,22 @@ export function Chip({
 	testID,
 	className,
 	onPress,
+	onLongPress,
 	...props
 }: ChipProps) {
 	// A boolean, never undefined: Android keeps a view accessibility-disabled when the
 	// state key is absent, which is what `button` ledger line 1 records.
 	const inactive = !!(disabled || dimmed);
+	const contextMenu =
+		Platform.OS === 'web' && onLongPress
+			? ({
+					onContextMenu: (event: Parameters<NonNullable<PressableProps['onLongPress']>>[0]) => {
+						if (inactive || event.defaultPrevented) return;
+						event.preventDefault();
+						onLongPress(event);
+					},
+				} as PressableProps)
+			: {};
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const sm = size === 'sm';
 	// `sm` is drawn under 44 for a dense cell; the press target still gets 44 (§ Design 2). The
@@ -133,6 +145,8 @@ export function Chip({
 			// With a trailing cell the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
 			onPress={rootPress}
+			onLongPress={onLongPress}
+			{...contextMenu}
 			role={trail ? undefined : 'button'}
 			{...(trail ? {} : selectedState(on))}
 			tabIndex={trail ? -1 : 0}
@@ -156,6 +170,8 @@ export function Chip({
 				<>
 					<Pressable
 						testID={id('label')}
+						onLongPress={onLongPress}
+						{...contextMenu}
 						role="button"
 						{...selectedState(on)}
 						disabled={inactive}

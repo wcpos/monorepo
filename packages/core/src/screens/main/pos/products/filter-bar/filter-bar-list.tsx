@@ -1,59 +1,46 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import {
-	AlertDialog,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@wcpos/components/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/button';
 import { DragHandle, SortableList } from '@wcpos/components/dnd';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { IconButton } from '@wcpos/components/icon-button';
+import { ListRow } from '@wcpos/components/list-row';
 import { Switch } from '@wcpos/components/switch';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
-import { describeQuickFilter, normalizeFilterBar } from './filter-bar-layout';
+import { describeQuickFilter, getFilterPillIcon, normalizeFilterBar } from './filter-bar-layout';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useT } from '../../../../../contexts/translations';
 
 import type { FilterBarItem, QuickFilter } from './filter-bar-layout';
 
-export function FilterBarList({
-	onEdit,
-	onDelete,
-}: {
-	onEdit: (quickFilter: QuickFilter | null) => void;
-	onDelete?: (quickFilter: QuickFilter) => void;
-}) {
+export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | null) => void }) {
 	const { uiSettings, getUILabel, patchUI, modifyUI } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
-	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const t = useT();
 	const { format: formatPrice } = useCurrencyFormat();
 	const save = (filterBar: FilterBarItem[]) => void patchUI({ filterBar } as never);
 
 	const renderItem = (item: FilterBarItem) => (
-		<HStack
+		<ListRow
 			key={item.id}
-			// At least a row tall on native: the toggle's 44 pt square stays inside its own row.
-			className="web:hover:shadow-md native:min-h-row items-center rounded p-2"
-		>
-			<DragHandle className="mr-2">
-				<View testID={`filter-bar-drag-${item.id}`}>
-					<Icon name="dragHandleVertical" size="xs" className="cursor-grab" />
-				</View>
-			</DragHandle>
-			{item.type === 'pill' ? (
+			size={item.type === 'pill' ? 'sm' : 'default'}
+			testID={item.type === 'quick' ? `filter-bar-edit-${item.id}` : undefined}
+			onPress={item.type === 'quick' ? () => onEdit(item) : undefined}
+			leading={
 				<>
-					<Text className="flex-1">{getUILabel(item.id)}</Text>
+					<DragHandle className="mr-2">
+						<View testID={`filter-bar-drag-${item.id}`}>
+							<Icon name="dragHandleVertical" size="xs" className="cursor-grab" />
+						</View>
+					</DragHandle>
+					{item.type === 'pill' && <Icon name={getFilterPillIcon(item.id)} />}
+				</>
+			}
+			trailing={
+				item.type === 'pill' ? (
 					<Switch
 						testID={`filter-bar-toggle-${item.id}`}
 						checked={item.show}
@@ -67,35 +54,23 @@ export function FilterBarList({
 							)
 						}
 					/>
-				</>
-			) : (
-				<>
-					<VStack className="flex-1 gap-0">
-						<Text>{item.label}</Text>
-						<Text numberOfLines={1} className="text-muted-foreground text-sm">
-							{describeQuickFilter(item, t, formatPrice)}
-						</Text>
-					</VStack>
-					<IconButton
-						name="edit"
-						accessibilityLabel={t('common.edit')}
-						testID={`filter-bar-edit-${item.id}`}
-						onPress={() => onEdit(item)}
-					/>
-					<IconButton
-						name="delete"
-						variant="destructive"
-						accessibilityLabel={t('common.delete')}
-						testID={`filter-bar-delete-${item.id}`}
-						onPress={() => setDeleting(item)}
-					/>
-				</>
+				) : (
+					<Icon name="chevronRight" className="text-muted-foreground" />
+				)
+			}
+		>
+			<Text numberOfLines={1}>{item.type === 'pill' ? getUILabel(item.id) : item.label}</Text>
+			{item.type === 'quick' && (
+				<Text numberOfLines={1} className="text-muted-foreground text-sm">
+					{describeQuickFilter(item, t, formatPrice)}
+				</Text>
 			)}
-		</HStack>
+		</ListRow>
 	);
 
 	return (
 		<VStack>
+			<Text className="text-muted-foreground text-sm">{t('pos_products.filter_bar_hint')}</Text>
 			<SortableList
 				listId="filter-bar"
 				items={items}
@@ -103,38 +78,14 @@ export function FilterBarList({
 				renderItem={renderItem}
 				onOrderChange={({ items: reordered }) => save(reordered)}
 			/>
-			<Button variant="outline" testID="filter-bar-add-quick-filter" onPress={() => onEdit(null)}>
-				<ButtonText>{t('pos_products.add_quick_filter')}</ButtonText>
-			</Button>
-			<AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>{t('pos_products.delete_quick_filter')}</AlertDialogTitle>
-						<AlertDialogDescription>
-							{t('pos_products.delete_quick_filter_description')}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter
-						cancel={{ testID: 'filter-bar-delete-cancel' }}
-						confirm={{
-							destructive: true,
-							label: t('common.delete'),
-							testID: 'filter-bar-delete-confirm',
-							onPress: () => {
-								if (deleting) {
-									void modifyUI(
-										'filterBar',
-										(old) =>
-											normalizeFilterBar(old).filter((item) => item.id !== deleting.id) as never
-									);
-									onDelete?.(deleting);
-								}
-								setDeleting(null);
-							},
-						}}
-					/>
-				</AlertDialogContent>
-			</AlertDialog>
+			<ListRow
+				size="sm"
+				leading={<Icon name="plus" className="text-primary" />}
+				testID="filter-bar-add-quick-filter"
+				onPress={() => onEdit(null)}
+			>
+				<Text className="text-primary font-medium">{t('pos_products.add_quick_filter')}</Text>
+			</ListRow>
 		</VStack>
 	);
 }

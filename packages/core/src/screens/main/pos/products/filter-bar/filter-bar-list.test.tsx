@@ -13,7 +13,6 @@ const patchUI = jest.fn((patch: { filterBar: FilterBarItem[] }) => {
 });
 const modifyUI = jest.fn();
 const onEdit = jest.fn();
-const onDelete = jest.fn();
 
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 jest.mock('@wcpos/query', () => ({
@@ -37,11 +36,7 @@ jest.mock('@wcpos/components/dnd', () => ({
 	DragHandle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ testID, onPress }: { testID: string; onPress: () => void }) => (
-		<button data-testid={testID} onClick={onPress} />
-	),
-}));
+
 jest.mock('@wcpos/components/switch', () => ({
 	Switch: ({
 		testID,
@@ -60,51 +55,14 @@ jest.mock('@wcpos/components/switch', () => ({
 		/>
 	),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		testID,
-		onPress,
-	}: React.PropsWithChildren<{ testID: string; onPress: () => void }>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
-}));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-}));
+
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/alert-dialog', () => ({
-	AlertDialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	AlertDialogDescription: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	// The footer takes confirm/cancel slots (#2954); the stand-in renders them as buttons.
-	AlertDialogFooter: ({
-		confirm,
-		cancel,
-	}: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => (
-		<>
-			{cancel !== false && (
-				<button data-testid={typeof cancel === 'object' ? cancel.testID : undefined}>Cancel</button>
-			)}
-			<button
-				data-testid={confirm.testID}
-				onClick={confirm.onPress as unknown as React.MouseEventHandler}
-			>
-				{confirm.label}
-			</button>
-		</>
-	),
-}));
+
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: {}, getUILabel: (id: string) => id, patchUI, modifyUI }),
 }));
@@ -146,17 +104,10 @@ it('writes a pill visibility toggle immediately', () => {
 	expect(patchUI).not.toHaveBeenCalled();
 });
 
-it('removes a quick filter only after delete confirmation and reports the deletion', () => {
-	render(<FilterBarList onEdit={onEdit} onDelete={onDelete} />);
-	fireEvent.click(screen.getByTestId('filter-bar-delete-saved'));
-	expect(modifyUI).not.toHaveBeenCalled();
-	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
-	expect(modifyUI).toHaveBeenCalledWith('filterBar', expect.any(Function));
-	const [, modifier] = modifyUI.mock.calls[0];
-	const old = [{ ...items[0], show: false }, ...items.slice(1)];
-	expect(modifier(old)).toEqual([old[0], ...old.slice(2)]);
-	expect(patchUI).not.toHaveBeenCalled();
-	expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'saved' }));
+it('opens an existing filter from its row', () => {
+	render(<FilterBarList onEdit={onEdit} />);
+	fireEvent.click(screen.getByTestId('filter-bar-edit-saved'));
+	expect(onEdit).toHaveBeenCalledWith(items[1]);
 });
 
 it('opens the empty editor request from Add quick filter', () => {

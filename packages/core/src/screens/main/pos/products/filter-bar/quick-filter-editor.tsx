@@ -11,6 +11,7 @@ import { SavedFieldProvider, SavedMark, useMarkSaved } from '@wcpos/components/f
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Input } from '@wcpos/components/input';
+import { ListRow } from '@wcpos/components/list-row';
 import {
 	Select,
 	SelectContent,
@@ -39,6 +40,7 @@ import {
 	isQuickFilterValid,
 	SORT_FIELD_VALUES,
 } from './filter-bar-layout';
+import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { QuickFilterPreview } from './quick-filter-preview';
 import { CurrencyInput } from '../../../components/currency-input';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
@@ -367,19 +369,22 @@ export function QuickFilterEditor(props: React.ComponentProps<typeof QuickFilter
 
 function QuickFilterEditorBody({
 	initial,
-	onSave,
+	onDraftChange,
+	flushRef,
 	onChange,
-	onCancel,
+	onDelete,
 }: {
 	initial: QuickFilter | null;
-	onSave: (quickFilter: QuickFilter) => void;
+	onDraftChange?: (draft: QuickFilter, valid: boolean) => void;
+	flushRef?: React.Ref<() => void>;
 	onChange?: (quickFilter: QuickFilter) => void | Promise<unknown>;
-	onCancel: () => void;
+	onDelete?: () => void;
 }) {
 	const t = useT();
 	const [draft, setDraft] = React.useState<QuickFilter>(
 		() => initial ?? { id: createQuickFilterId(), type: 'quick', label: '', conditions: [] }
 	);
+	const [deleting, setDeleting] = React.useState(false);
 	const markSaved = useMarkSaved();
 	const pending = React.useRef<{
 		timer: ReturnType<typeof setTimeout>;
@@ -392,11 +397,19 @@ function QuickFilterEditorBody({
 		pending.current = null;
 		void queued.write();
 	}, []);
+	React.useImperativeHandle(flushRef, () => flush, [flush]);
+	const mountedDraft = React.useRef({ draft, onDraftChange });
+	// The host needs initial validity before the first edit; later notifications come from updateDraft.
+	React.useEffect(() => {
+		const { draft, onDraftChange } = mountedDraft.current;
+		onDraftChange?.(draft, isQuickFilterValid(draft));
+	}, []);
 	// Closing the host must land the pending text edit, even without pressing Close.
 	React.useEffect(() => flush, [flush]);
 	const updateDraft = (update: (value: QuickFilter) => QuickFilter, text = false) => {
 		const next = update(draft);
 		setDraft(next);
+		onDraftChange?.(next, isQuickFilterValid(next));
 		if (!initial || !onChange) return;
 		// An edit that leaves the draft invalid is held, not written; the valid edit still pending
 		// (a rename before an unfinished condition) lands now rather than being dropped with it.
@@ -592,27 +605,24 @@ function QuickFilterEditorBody({
 				)}
 			</VStack>
 			<QuickFilterPreview draft={draft} />
-			<HStack className="justify-end">
-				<Button
-					variant="outline"
-					testID={initial ? 'quick-filter-close' : 'quick-filter-cancel'}
-					onPress={() => {
-						flush();
-						onCancel();
-					}}
-				>
-					<ButtonText>{initial ? t('common.close') : t('common.cancel')}</ButtonText>
-				</Button>
-				{!initial && (
-					<Button
-						testID="quick-filter-add"
-						disabled={!isQuickFilterValid(draft)}
-						onPress={() => onSave({ ...draft, label: draft.label.trim() })}
+			{initial && (
+				<>
+					<ListRow
+						size="sm"
+						testID={`filter-bar-delete-${initial.id}`}
+						onPress={() => setDeleting(true)}
 					>
-						<ButtonText>{t('pos_products.add_quick_filter')}</ButtonText>
-					</Button>
-				)}
-			</HStack>
+						<Text className="text-destructive font-medium">
+							{t('pos_products.remove_from_bar')}
+						</Text>
+					</ListRow>
+					<DeleteQuickFilterDialog
+						quickFilter={deleting ? initial : null}
+						onClose={() => setDeleting(false)}
+						onDelete={onDelete}
+					/>
+				</>
+			)}
 		</VStack>
 	);
 }
