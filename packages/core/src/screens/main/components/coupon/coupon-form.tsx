@@ -15,6 +15,7 @@ import {
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
+	SavedMark,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
@@ -42,28 +43,14 @@ export { couponFormSchema } from './coupon-schema';
 
 interface CouponFormProps {
 	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof couponFormSchema>>>;
-	onClose: () => void;
-	onSubmit: (data: z.infer<typeof couponFormSchema>) => void;
-	loading: boolean;
+	footer: React.ReactNode;
 	/** The record's own actions (the edit modal's Delete, Sync), on the footer's left. */
 	footerLeading?: React.ReactNode;
 }
 
-export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: CouponFormProps) {
+export function CouponForm({ form, footer, footerLeading }: CouponFormProps) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
-
-	const onSave = form.handleSubmit(onSubmit);
-	const formActions = (
-		<>
-			<Button variant="outline" onPress={onClose}>
-				<ButtonText>{t('common.close')}</ButtonText>
-			</Button>
-			<Button loading={loading} onPress={() => void onSave()}>
-				<ButtonText>{t('common.save')}</ButtonText>
-			</Button>
-		</>
-	);
 
 	// Live values drive affixes, conditional fields, and collapsed summaries.
 	const values = useWatch({ control: form.control });
@@ -97,9 +84,13 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 					name="code"
 					render={({ field }) => (
 						<HStack className="w-full items-end gap-2">
-							<View className="flex-1">
-								<FormInput label={t('coupons.code')} testID="coupon-code" {...field} />
-							</View>
+							<FormItem className="flex-1">
+								<HStack className="justify-between">
+									<FormLabel>{t('coupons.code')}</FormLabel>
+									<SavedMark name="code" label={t('settings.saved')} />
+								</HStack>
+								<FormInput testID="coupon-code" {...field} />
+							</FormItem>
 							<Button
 								variant="outline"
 								testID="coupon-generate-code"
@@ -155,7 +146,10 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 					name="date_expires_gmt"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>{t('coupons.expires')}</FormLabel>
+							<HStack className="justify-between">
+								<FormLabel>{t('coupons.expires')}</FormLabel>
+								<SavedMark name="date_expires_gmt" label={t('settings.saved')} />
+							</HStack>
 							<ExpiryPresetChips value={field.value} onChange={field.onChange} />
 							<FormMessage />
 						</FormItem>
@@ -190,32 +184,38 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 							control={form.control}
 							name="minimum_amount"
 							render={({ field }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('coupons.minimum_spend')}</FormLabel>
+										<SavedMark name="minimum_amount" label={t('settings.saved')} />
+									</HStack>
 									<FormInput
 										customComponent={CurrencyInput}
-										label={t('coupons.minimum_spend')}
 										placeholder={t('coupons.no_minimum')}
 										{...field}
 										value={field.value ?? ''}
 										onChange={field.onChange}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="maximum_amount"
 							render={({ field }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('coupons.maximum_spend')}</FormLabel>
+										<SavedMark name="maximum_amount" label={t('settings.saved')} />
+									</HStack>
 									<FormInput
 										customComponent={CurrencyInput}
-										label={t('coupons.maximum_spend')}
 										placeholder={t('coupons.no_maximum')}
 										{...field}
 										value={field.value ?? ''}
 										onChange={field.onChange}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 					</HStack>
@@ -251,32 +251,38 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 							control={form.control}
 							name="usage_limit"
 							render={({ field }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('coupons.total_uses')}</FormLabel>
+										<SavedMark name="usage_limit" label={t('settings.saved')} />
+									</HStack>
 									<FormInput
-										label={t('coupons.total_uses')}
 										placeholder={t('coupons.unlimited')}
 										keyboardType="number-pad"
 										{...field}
 										value={fromUsageLimit(field.value)}
 										onChange={(text) => field.onChange(toUsageLimit(text))}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="usage_limit_per_user"
 							render={({ field }) => (
-								<View className="flex-1">
+								<FormItem className="flex-1">
+									<HStack className="justify-between">
+										<FormLabel>{t('coupons.uses_per_customer')}</FormLabel>
+										<SavedMark name="usage_limit_per_user" label={t('settings.saved')} />
+									</HStack>
 									<FormInput
-										label={t('coupons.uses_per_customer')}
 										placeholder={t('coupons.unlimited')}
 										keyboardType="number-pad"
 										{...field}
 										value={fromUsageLimit(field.value)}
 										onChange={(text) => field.onChange(toUsageLimit(text))}
 									/>
-								</View>
+								</FormItem>
 							)}
 						/>
 					</HStack>
@@ -286,16 +292,19 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 								control={form.control}
 								name="limit_usage_to_x_items"
 								render={({ field }) => (
-									<View className="flex-1">
+									<FormItem className="flex-1">
+										<HStack className="justify-between">
+											<FormLabel>{t('coupons.max_discounted_items')}</FormLabel>
+											<SavedMark name="limit_usage_to_x_items" label={t('settings.saved')} />
+										</HStack>
 										<FormInput
-											label={t('coupons.max_discounted_items')}
 											placeholder={t('coupons.all_eligible_items')}
 											keyboardType="number-pad"
 											{...field}
 											value={fromUsageLimit(field.value)}
 											onChange={(text) => field.onChange(toUsageLimit(text))}
 										/>
-									</View>
+									</FormItem>
 								)}
 							/>
 							<View className="flex-1" />
@@ -314,13 +323,18 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 						control={form.control}
 						name="description"
 						render={({ field }) => (
-							<FormInput
-								label={t('coupons.internal_note')}
-								description={t('coupons.internal_note_help')}
-								{...field}
-								value={field.value ?? ''}
-								multiline
-							/>
+							<FormItem>
+								<HStack className="justify-between">
+									<FormLabel>{t('coupons.internal_note')}</FormLabel>
+									<SavedMark name="description" label={t('settings.saved')} />
+								</HStack>
+								<FormInput
+									description={t('coupons.internal_note_help')}
+									{...field}
+									value={field.value ?? ''}
+									multiline
+								/>
+							</FormItem>
 						)}
 					/>
 					<FormField
@@ -340,13 +354,13 @@ export function CouponForm({ form, onClose, onSubmit, loading, footerLeading }: 
 				</CollapsibleSection>
 			</DialogBody>
 			{footerLeading ? (
-				// Two wrapping groups: the record's actions on the left, Close/Save on the right.
+				// Two wrapping groups: the record's actions on the left, the footer on the right.
 				<DialogFooter className="flex-wrap justify-between">
 					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footerLeading}</View>
-					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{formActions}</View>
+					<View className="min-w-0 shrink flex-row flex-wrap gap-2">{footer}</View>
 				</DialogFooter>
 			) : (
-				<DialogFooter>{formActions}</DialogFooter>
+				<DialogFooter>{footer}</DialogFooter>
 			)}
 		</Form>
 	);

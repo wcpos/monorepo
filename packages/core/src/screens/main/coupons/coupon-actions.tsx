@@ -28,7 +28,16 @@ const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
 /** The coupon's record actions, for the coupon modal's footer (the row only opens it). */
 export function useCouponActions(
 	record: EngineRecord<'coupons'>,
-	{ onDeleted, onSynced }: { onDeleted?: () => void; onSynced?: () => void } = {}
+	{
+		onDeleted,
+		onSynced,
+		beforeSync,
+	}: {
+		onDeleted?: () => void;
+		onSynced?: () => void;
+		/** Land pending autosave before pulling; false stops a pull from resetting over a failed draft. */
+		beforeSync?: () => Promise<boolean>;
+	} = {}
 ) {
 	const id = useRecordField(record, ({ payload }) => payload.id);
 	const t = useT();
@@ -38,25 +47,28 @@ export function useCouponActions(
 	const [force, setForce] = React.useState(!id);
 
 	const sync = React.useCallback(() => {
-		void refreshCollection(runtime.engine, {
-			id: 'coupon-actions:refresh',
-			collection: 'coupons',
-		})
-			// A collection refresh has no single-record answer: a settled one hands the form the
-			// store's copy.
-			.then(() => onSynced?.())
-			.catch((error) => {
-				// The engine already wrote the coded row for this require (SYNC321), and the
-				// device's copy is untouched: the cashier only needs to know it didn't refresh.
-				syncLogger.debug('Failed to refresh coupons', {
-					showToast: true,
-					toast: { title: t('common.refresh_failed'), type: 'warning' },
-					context: {
-						error: getErrorMessage(error),
-					},
+		void (async () => {
+			if (beforeSync && !(await beforeSync())) return;
+			await refreshCollection(runtime.engine, {
+				id: 'coupon-actions:refresh',
+				collection: 'coupons',
+			})
+				// A collection refresh has no single-record answer: a settled one hands the form the
+				// store's copy.
+				.then(() => onSynced?.())
+				.catch((error) => {
+					// The engine already wrote the coded row for this require (SYNC321), and the
+					// device's copy is untouched: the cashier only needs to know it didn't refresh.
+					syncLogger.debug('Failed to refresh coupons', {
+						showToast: true,
+						toast: { title: t('common.refresh_failed'), type: 'warning' },
+						context: {
+							error: getErrorMessage(error),
+						},
+					});
 				});
-			});
-	}, [runtime, t, onSynced]);
+		})();
+	}, [runtime, t, beforeSync, onSynced]);
 
 	// Each opening starts from the default: a coupon never pushed is force-deleted.
 	const setDeleteOpen = React.useCallback(

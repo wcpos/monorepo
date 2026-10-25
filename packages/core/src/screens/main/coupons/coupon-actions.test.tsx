@@ -77,12 +77,14 @@ function Harness({
 	coupon,
 	onDeleted,
 	onSynced,
+	beforeSync,
 }: {
 	coupon: ReturnType<typeof record>;
 	onDeleted: () => void;
 	onSynced?: () => void;
+	beforeSync?: () => Promise<boolean>;
 }) {
-	const actions = useCouponActions(coupon, { onDeleted, onSynced });
+	const actions = useCouponActions(coupon, { onDeleted, onSynced, beforeSync });
 	return (
 		<>
 			{actions.canDelete && <button data-testid="delete" onClick={actions.requestDelete} />}
@@ -166,4 +168,17 @@ it('a refresh that lands hands the form the store copy; a failed one does not', 
 	mockRefresh.mockRejectedValueOnce(new Error('offline'));
 	await act(async () => fireEvent.click(screen.getByTestId('sync')));
 	expect(onSynced).toHaveBeenCalledTimes(1);
+});
+
+it('Sync waits for autosave and only pulls when it succeeds', async () => {
+	const beforeSync = jest.fn().mockResolvedValue(false);
+	render(<Harness coupon={record(42)} onDeleted={jest.fn()} beforeSync={beforeSync} />);
+	fireEvent.click(screen.getByTestId('sync'));
+	await act(async () => {});
+	expect(mockRefresh).not.toHaveBeenCalled();
+	beforeSync.mockResolvedValue(true);
+	fireEvent.click(screen.getByTestId('sync'));
+	expect(mockRefresh).not.toHaveBeenCalled();
+	await act(async () => {});
+	expect(mockRefresh).toHaveBeenCalledTimes(1);
 });
