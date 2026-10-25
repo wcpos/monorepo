@@ -471,7 +471,7 @@ it.each([
 	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(true);
 });
 
-it('shows and retains a stored sort outside the named orders until changed', () => {
+it('shows and retains a stored sort outside the named orders until changed', async () => {
 	const initial = {
 		id: 'stored',
 		type: 'quick' as const,
@@ -488,6 +488,7 @@ it('shows and retains a stored sort outside the named orders until changed', () 
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-default'));
 	expect(onDraftChange).toHaveBeenLastCalledWith(expect.objectContaining({ sort: undefined }));
 	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(false);
+	await act(async () => {});
 });
 
 it('clears the waiting category after selection and removes it when cleared', () => {
