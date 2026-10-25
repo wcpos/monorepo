@@ -58,15 +58,20 @@ function EditCustomerFormFields({ customer }: Props) {
 		onChange: async (changes) => {
 			if (readOnly) return false;
 			const root = Object.keys(changes)[0].split('.')[0] as keyof CustomerFormValues;
+			// An address writes as a whole, so the whole address is validated before it goes (the cart
+			// address sheet's rule): an invalid email left in one field must not ride along with a city.
+			if ((root === 'billing' || root === 'shipping') && !(await form.trigger(root))) return false;
 			const value = form.getValues(root);
-			// The billing identity follows the top-level one while it is empty (ledger line 3): the named
-			// setValue is a change the hook sees, so billing writes itself and takes its own mark.
-			if (
-				(root === 'first_name' || root === 'last_name' || root === 'email') &&
-				!form.getValues(`billing.${root}`)
-			) {
-				form.setValue(`billing.${root}`, value as string);
-			}
+			// The billing identity follows the top-level one (ledger line 3) while it is empty OR still
+			// equal to the value the record held before this write: an autosave writes on every pause,
+			// so "fill when empty" alone would pin the first partial word ("Jo") into billing for good.
+			// Billing rides in the SAME patch, so a close or a Sync cannot drop it; the setValue after
+			// the write only brings the draft level with the record.
+			const identity = root === 'first_name' || root === 'last_name' || root === 'email';
+			const mirrored = identity ? String(form.getValues(`billing.${root}`) ?? '') : null;
+			const follows =
+				identity &&
+				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
 			const wire =
 				root === 'tax_ids' && Array.isArray(value)
 					? value.filter((row) => String(row?.value ?? '') !== '')
@@ -79,7 +84,9 @@ function EditCustomerFormFields({ customer }: Props) {
 						: value;
 			const written = await saveCustomerFields(customer, {
 				[root]: wire,
+				...(follows ? { billing: { ...form.getValues('billing'), [root]: value } } : {}),
 			} as Partial<CustomerPayload>);
+			if (written && follows) form.setValue(`billing.${root}`, value as string);
 			if (written) markSaved([root]);
 			return written;
 		},

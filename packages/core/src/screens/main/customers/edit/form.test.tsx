@@ -27,6 +27,7 @@ const form = {
 	),
 	setValue: jest.fn(),
 	reset: jest.fn(),
+	trigger: jest.fn(async () => true),
 };
 const mockUseForm = jest.fn(() => form);
 jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm() }));
@@ -84,37 +85,66 @@ beforeEach(() => {
 	Object.assign(formValues, {
 		first_name: 'Ada',
 		billing: { first_name: '', city: 'London' },
-		code: 'SAVE20',
-		usage_limit: 3,
 		meta_data: [],
 	});
+	delete (payload as { first_name?: string }).first_name;
 	payload.meta_data = [];
 	mockIsPro = true;
 	mockBeforeSync = undefined;
 	mockLocalPatch.mockResolvedValue({ document: record, changes: {} });
 });
 
-it('a first-name edit writes only that root, marks it and fills empty billing identity', async () => {
+it('a first-name edit fills an empty billing identity in the SAME patch, then levels the draft', async () => {
 	renderForm();
 	await expect(capturedChange({ first_name: 'Ada' })).resolves.toBe(true);
-	expect(mockLocalPatch).toHaveBeenCalledWith({ document: record, data: { first_name: 'Ada' } });
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: record,
+		data: { first_name: 'Ada', billing: { first_name: 'Ada', city: 'London' } },
+	});
 	expect(mockMarkSaved).toHaveBeenCalledWith(['first_name']);
 	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'Ada');
 });
-it('does not overwrite an existing billing identity', async () => {
+it('billing keeps following while it still equals the value the record held: a pause mid-word does not pin "Jo"', async () => {
+	(payload as { first_name?: string }).first_name = 'Jo';
+	formValues.first_name = 'John';
+	formValues.billing = { first_name: 'Jo', city: 'London' };
+	renderForm();
+	await capturedChange({ first_name: 'John' });
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: record,
+		data: { first_name: 'John', billing: { first_name: 'John', city: 'London' } },
+	});
+	expect(form.setValue).toHaveBeenCalledWith('billing.first_name', 'John');
+});
+it('does not overwrite a billing identity the cashier set apart', async () => {
 	formValues.billing = { first_name: 'Grace' };
+	renderForm();
+	await capturedChange({ first_name: 'Ada' });
+	expect(mockLocalPatch).toHaveBeenCalledWith({ document: record, data: { first_name: 'Ada' } });
+	expect(form.setValue).not.toHaveBeenCalled();
+});
+it('a failed write does not level the draft', async () => {
+	mockLocalPatch.mockResolvedValue(undefined);
 	renderForm();
 	await capturedChange({ first_name: 'Ada' });
 	expect(form.setValue).not.toHaveBeenCalled();
 });
-it('a nested billing path writes the whole address root', async () => {
+it('a nested billing path validates and writes the whole address root', async () => {
 	renderForm();
 	await capturedChange({ 'billing.city': 'London' });
+	expect(form.trigger).toHaveBeenCalledWith('billing');
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: record,
 		data: { billing: { first_name: '', city: 'London' } },
 	});
 	expect(mockMarkSaved).toHaveBeenCalledWith(['billing']);
+});
+it('an address with an invalid field elsewhere in it is not written for a sibling edit', async () => {
+	form.trigger.mockResolvedValueOnce(false);
+	renderForm();
+	await expect(capturedChange({ 'billing.city': 'London' })).resolves.toBe(false);
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(mockMarkSaved).not.toHaveBeenCalled();
 });
 it('drops a tax id row with an empty value', async () => {
 	formValues.tax_ids = [
