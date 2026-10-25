@@ -4,12 +4,11 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormCombobox, FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
-import { CountryCombobox } from './country-state-select/country-combobox';
-import { StateFormInput } from './country-state-select/state-forminput';
+import { AddressCountryField, AddressStateField } from './billing-address-form';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -36,10 +35,8 @@ export const shippingAddressSchema = z.object({
  *
  */
 export function ShippingAddressForm() {
-	const { control, watch, getValues } = useFormContext();
+	const { control } = useFormContext();
 	const t = useT();
-
-	const countryCode = watch('shipping.country', getValues('shipping.country'));
 
 	return (
 		<VStack className="gap-4">
@@ -104,35 +101,14 @@ export function ShippingAddressForm() {
 						</View>
 					)}
 				/>
-				<FormField
-					control={control}
-					name="shipping.state"
-					render={({ field }) => (
-						<View className="flex-1">
-							<FormInput
-								customComponent={StateFormInput}
-								label={t('common.state')}
-								{...field}
-								{...({ countryCode } as Record<string, unknown>)}
-							/>
-						</View>
-					)}
-				/>
+				<View className="flex-1">
+					<AddressStateField prefix="shipping" label={t('common.state')} />
+				</View>
 			</HStack>
 			<HStack className="gap-4">
-				<FormField
-					control={control}
-					name="shipping.country"
-					render={({ field }) => (
-						<View className="flex-1">
-							<FormCombobox
-								customComponent={CountryCombobox}
-								label={t('common.country')}
-								{...field}
-							/>
-						</View>
-					)}
-				/>
+				<View className="flex-1">
+					<AddressCountryField prefix="shipping" label={t('common.country')} />
+				</View>
 				<FormField
 					control={control}
 					name="shipping.postcode"

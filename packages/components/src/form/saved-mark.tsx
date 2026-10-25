@@ -48,6 +48,11 @@ export function useMarkSaved() {
 	return React.useContext(SavedFieldContext).markSaved;
 }
 
+/** The name whose SavedMark is showing ('' when none): a row's verbs hide while its mark shows. */
+export function useSavedName() {
+	return React.useContext(SavedFieldContext).name;
+}
+
 export function SavedMark({ name, label }: { name: string; label: string }) {
 	const saved = React.useContext(SavedFieldContext);
 	const reduced = useReducedMotion();

@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
 
-import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './saved-mark';
+import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved, useSavedName } from './saved-mark';
 const mockDuration = jest.fn((_duration: number) => 'fade');
 let mockReduced = false;
 jest.mock('react-native-reanimated', () => ({
@@ -49,6 +49,22 @@ it('shows only the last saved field, holds for 1200ms and uses the short opacity
 	act(() => jest.advanceTimersByTime(1));
 	expect(queryByTestId('saved-name')).toBeNull();
 	expect(mockDuration).toHaveBeenCalledWith(220);
+});
+it('useSavedName reads the name whose mark shows, and clears with it', () => {
+	function Name() {
+		return <span data-testid="saved-name-value">{useSavedName()}</span>;
+	}
+	const { getByText, getByTestId } = render(
+		<SavedFieldProvider>
+			<Marks />
+			<Name />
+		</SavedFieldProvider>
+	);
+	expect(getByTestId('saved-name-value').textContent).toBe('');
+	fireEvent.click(getByText('Save name'));
+	expect(getByTestId('saved-name-value').textContent).toBe('name');
+	act(() => jest.advanceTimersByTime(1200));
+	expect(getByTestId('saved-name-value').textContent).toBe('');
 });
 it('supports a result label and switches to the latest saved field', () => {
 	const { getByText, getByTestId, queryByTestId } = render(

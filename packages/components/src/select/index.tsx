@@ -439,6 +439,8 @@ type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange
 	valueClassName?: string;
 	/** The trigger's testID; each option takes `${triggerTestID}-option-${value}`. */
 	triggerTestID?: string;
+	/** The root takes no aria props, so a field's label reference goes to the trigger. */
+	'aria-labelledby'?: string;
 };
 
 function OptionSelect({
@@ -451,6 +453,7 @@ function OptionSelect({
 	triggerClassName,
 	valueClassName,
 	triggerTestID,
+	'aria-labelledby': labelledBy,
 	...props
 }: OptionSelectProps) {
 	const selected = options.find((option) => option.value === value);
@@ -467,7 +470,12 @@ function OptionSelect({
 		>
 			{/* The trigger owns the dimmed look and the touch/native press guard: a root-only
 			    `disabled` neither dims it nor stops a press from opening it. */}
-			<SelectTrigger testID={triggerTestID} className={triggerClassName} disabled={props.disabled}>
+			<SelectTrigger
+				testID={triggerTestID}
+				className={triggerClassName}
+				disabled={props.disabled}
+				aria-labelledby={labelledBy}
+			>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
 			<SelectContent matchWidth={matchWidth}>

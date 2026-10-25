@@ -19,7 +19,9 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-function StateComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
+/** The root takes no aria props, so the field's label reference goes to the trigger. */
+type StateComboboxProps = ComboboxSingleRootProps & { 'aria-labelledby'?: string };
+function StateComboboxBase({ value, disabled, ...props }: StateComboboxProps) {
 	const t = useT();
 	const states = useStates();
 	const options = React.useMemo(
@@ -44,7 +46,11 @@ function StateComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProp
 			}}
 			{...props}
 		>
-			<ComboboxTrigger testID="state-select-trigger" disabled={disabled}>
+			<ComboboxTrigger
+				testID="state-select-trigger"
+				disabled={disabled}
+				aria-labelledby={props['aria-labelledby']}
+			>
 				<ComboboxValue placeholder={t('common.select_state')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
@@ -69,7 +75,7 @@ function StateComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProp
 export function StateCombobox({
 	countryCode,
 	...props
-}: ComboboxSingleRootProps & { countryCode?: string }) {
+}: StateComboboxProps & { countryCode?: string }) {
 	return (
 		<StatesProvider countryCode={countryCode ?? ''}>
 			<StateComboboxBase {...props} />

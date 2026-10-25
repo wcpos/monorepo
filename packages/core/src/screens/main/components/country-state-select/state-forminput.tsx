@@ -38,6 +38,7 @@ function StateFormInputBase({
 					value={{ value: value ?? '', label: '' }}
 					onValueChange={handleSelect}
 					countryCode={countryCode}
+					aria-labelledby={props['aria-labelledby']}
 				/>
 			);
 		}
@@ -46,6 +47,7 @@ function StateFormInputBase({
 				value={{ value: value ?? '', label: '' }}
 				onValueChange={handleSelect}
 				countryCode={countryCode ?? ''}
+				aria-labelledby={props['aria-labelledby']}
 			/>
 		);
 	}

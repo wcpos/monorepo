@@ -18,10 +18,9 @@ import {
 import { CountriesProvider, useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 
-/**
- *
- */
-function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
+/** The root takes no aria props, so the field's label reference goes to the trigger. */
+type CountryComboboxProps = ComboboxSingleRootProps & { 'aria-labelledby'?: string };
+function CountryComboboxBase({ value, disabled, ...props }: CountryComboboxProps) {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -50,7 +49,11 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 	 */
 	return (
 		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger disabled={disabled} testID="country-select-trigger">
+			<ComboboxTrigger
+				disabled={disabled}
+				testID="country-select-trigger"
+				aria-labelledby={props['aria-labelledby']}
+			>
 				<ComboboxValue placeholder={t('common.select_country')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
@@ -77,7 +80,7 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CountryCombobox(props: ComboboxSingleRootProps) {
+export function CountryCombobox(props: CountryComboboxProps) {
 	return (
 		<CountriesProvider>
 			<CountryComboboxBase {...props} />
