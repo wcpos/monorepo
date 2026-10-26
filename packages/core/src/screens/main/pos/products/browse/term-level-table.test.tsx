@@ -5,6 +5,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { TermLevelTable } from './term-table';
 
+// The shared loading row stays real; its animated native leaf does not run in jsdom.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => <span /> }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { columns: [{ key: 'image', show: true }] } }),
 }));
@@ -613,4 +615,15 @@ it('uses the place size until conditions narrow the level to local matches', () 
 	expect(screen.getByTestId('products-footer').dataset.total).toBe('200');
 	rerender(<TermLevelTable {...props} narrowed />);
 	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
+});
+
+it('shows loading for a short place, but not narrowed or empty answers', () => {
+	const props = level({ term: { ...drinks, count: 200 }, children: [] });
+	const { rerender } = render(<TermLevelTable {...props} />);
+	expect(screen.getByTestId('pos-products-grid-loading')).toBeTruthy();
+	rerender(<TermLevelTable {...props} narrowed />);
+	expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+	rerender(<TermLevelTable {...props} answer={{ hits: [], total: 0 }} />);
+	expect(screen.getByTestId('no-data-message')).toBeTruthy();
+	expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
 });

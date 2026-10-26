@@ -41,6 +41,21 @@ const settings = (value: Record<string, unknown>) =>
 const NONE_CARRIED = new Set<number>();
 
 describe('projectTerms', () => {
+	it('prefers the POS count and falls back to the Woo count when absent', () => {
+		const records = [
+			{ payload: { id: 1, name: 'POS', pos_count: 3, count: 9 } },
+			{ payload: { id: 2, name: 'Older plugin', count: 9 } },
+			{ payload: { id: 3, name: 'Hidden', pos_count: 0, count: 9 } },
+			{ payload: { id: 4, name: 'POS only', pos_count: 2, count: 0 } },
+		];
+		const terms = projectTerms(records, 'categories', NONE_CARRIED);
+		expect(terms.all).toEqual([
+			expect.objectContaining({ id: 2, count: 9 }),
+			expect.objectContaining({ id: 1, count: 3 }),
+			expect.objectContaining({ id: 4, count: 2 }),
+		]);
+	});
+
 	const records = [
 		rec({
 			id: 1,

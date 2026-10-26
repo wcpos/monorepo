@@ -53,7 +53,7 @@ const toTerm = (term: TermRecord['payload']): BrowseTerm & { kind: 'term' } => (
 	kind: 'term',
 	id: term.id,
 	name: term.name,
-	count: term.count ?? 0,
+	count: term.pos_count ?? term.count ?? 0,
 	imageSrc: term.image?.src || undefined,
 	display: term.display,
 	parent: term.parent || undefined,
@@ -174,7 +174,7 @@ function useTaxonomyTerms(
 	const zeroCountIds = React.useMemo(
 		() =>
 			(hits ?? [])
-				.filter((hit) => !((hit.record.payload.count ?? 0) > 0))
+				.filter((hit) => !((hit.record.payload.pos_count ?? hit.record.payload.count ?? 0) > 0))
 				.map((hit) => hit.record.payload.id),
 		[hits]
 	);
@@ -232,7 +232,9 @@ function useTaxonomyTerms(
 	const settledKey = React.useMemo(() => {
 		if (hits === undefined || existence === undefined) return undefined;
 		const ids = new Set<number>(existence);
-		for (const hit of hits) if ((hit.record.payload.count ?? 0) > 0) ids.add(hit.record.payload.id);
+		for (const hit of hits)
+			if ((hit.record.payload.pos_count ?? hit.record.payload.count ?? 0) > 0)
+				ids.add(hit.record.payload.id);
 		return [...ids].sort((a, b) => a - b).join(',');
 	}, [hits, existence]);
 	const [shownBefore, setShownBefore] = React.useState<{ taxonomy: TaxonomySource; key: string }>();

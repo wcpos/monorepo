@@ -45,6 +45,8 @@ const mockActions = {
 	}),
 };
 const queryActions = mockActions;
+// The shared loading row stays real; its animated native leaf does not run in jsdom.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => <span /> }));
 jest.mock('../../../../../query', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
 	return {

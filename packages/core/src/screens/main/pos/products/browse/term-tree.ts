@@ -10,6 +10,7 @@ export type TermLike = {
 	parent?: number;
 	menu_order?: number;
 	count?: number;
+	pos_count?: number;
 	display?: string;
 };
 
@@ -39,7 +40,7 @@ export function visibleTerms<T extends TermLike>(
 	const byId = new Map(terms.map((term) => [term.id, term]));
 	const visible = new Set<number>();
 	for (const term of terms) {
-		if (!((term.count ?? 0) > 0 || knownNonEmpty?.has(term.id))) continue;
+		if (!((term.pos_count ?? term.count ?? 0) > 0 || knownNonEmpty?.has(term.id))) continue;
 		// The term and every ancestor; a cycle ends where it started.
 		for (
 			let cursor: TermLike | undefined = term;
