@@ -163,6 +163,12 @@ function EditOrderFormFields({ order }: Props) {
 	});
 	const markSaved = useMarkSaved();
 	const { linked, ...address } = useAddressFacts(form, 'order');
+	// Read at write time, like `stored`: a debounced billing write lands after the verb that
+	// broke the link, and must not copy billing over the shipping the owner is now editing.
+	const linkedRef = React.useRef(linked);
+	React.useEffect(() => {
+		linkedRef.current = linked;
+	}, [linked]);
 	const { flush } = useRecordAutosave({
 		form,
 		stored: () => order.getLatest().payload,
@@ -170,7 +176,7 @@ function EditOrderFormFields({ order }: Props) {
 		persist: (data) =>
 			saveOrderFields(
 				order,
-				linked && data.billing ? { ...data, shipping: asShipping(data.billing) } : data
+				linkedRef.current && data.billing ? { ...data, shipping: asShipping(data.billing) } : data
 			),
 		// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.
 		before: () => !blockIfDegraded('save-order', { orderId: order.uuid }),
